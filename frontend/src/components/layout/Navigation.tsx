@@ -1,0 +1,57 @@
+/**
+ * Navigation component with dark mode styling
+ * CRITICAL: Maintain consistent navigation across all pages
+ */
+
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+
+const Navigation: React.FC = () => {
+  const location = useLocation();
+  
+  // Dark mode navigation styling - maintain consistency
+  const navStyles = {
+    container: 'bg-slate-900 border-b border-slate-700 shadow-sm',
+    inner: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8',
+    logo: 'text-xl font-bold text-slate-50',
+    links: 'flex space-x-8',
+    link: 'text-slate-300 hover:text-slate-50 px-3 py-2 text-sm font-medium transition-colors',
+    activeLink: 'text-blue-400 hover:text-blue-300 px-3 py-2 text-sm font-medium'
+  };
+
+  const isActive = (path: string) => location.pathname === path;
+
+  return (
+    <nav className={navStyles.container}>
+      <div className={navStyles.inner}>
+        <div className="flex justify-between items-center h-16">
+          <div className={navStyles.logo}>
+            Workload Tracker
+          </div>
+          <div className={navStyles.links}>
+            <Link 
+              to="/dashboard" 
+              className={isActive('/dashboard') ? navStyles.activeLink : navStyles.link}
+            >
+              Dashboard
+            </Link>
+            <Link 
+              to="/people" 
+              className={isActive('/people') ? navStyles.activeLink : navStyles.link}
+            >
+              People
+            </Link>
+            <Link 
+              to="/projects" 
+              className={isActive('/projects') ? navStyles.activeLink : navStyles.link}
+            >
+              Projects
+            </Link>
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+};
+
+export default Navigation;
