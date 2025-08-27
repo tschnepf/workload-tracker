@@ -4,6 +4,7 @@ URL configuration for workload-tracker project.
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
+from dashboard.views import DashboardView
 import os
 
 def health_check(request):
@@ -17,6 +18,7 @@ def health_check(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/health/', health_check, name='health_check'),
+    path('api/dashboard/', DashboardView.as_view(), name='dashboard'),
     path('api/people/', include('people.urls')),
     path('api/projects/', include('projects.urls')),
     path('api/assignments/', include('assignments.urls')),

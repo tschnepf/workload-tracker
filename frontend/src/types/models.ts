@@ -92,3 +92,39 @@ export interface PaginatedResponse<T> {
   next?: string;
   previous?: string;
 }
+
+// Dashboard types
+export interface DashboardData {
+  summary: {
+    total_people: number;
+    avg_utilization: number;
+    total_assignments: number;
+    overallocated_count: number;
+  };
+  utilization_distribution: {
+    underutilized: number;
+    optimal: number;
+    high: number;
+    overallocated: number;
+  };
+  team_overview: Array<{
+    id: number;
+    name: string;
+    role: string;
+    utilization_percent: number;
+    allocated_hours: number;
+    capacity: number;
+    is_overallocated: boolean;
+  }>;
+  available_people: Array<{
+    id: number;
+    name: string;
+    available_hours: number;
+    utilization_percent: number;
+  }>;
+  recent_assignments: Array<{
+    person: string;
+    project: string;
+    created: string;
+  }>;
+}

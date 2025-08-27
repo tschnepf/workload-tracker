@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Assignment, PersonUtilization, ApiResponse, PaginatedResponse } from '@/types/models';
+import { Person, Assignment, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -134,6 +134,13 @@ export const utilizationApi = {
   // Get person utilization
   getPersonUtilization: (personId: number) =>
     fetchApi<PersonUtilization>(`/people/${personId}/utilization/`),
+};
+
+// Dashboard API
+export const dashboardApi = {
+  // Get dashboard data
+  getDashboard: () =>
+    fetchApi<DashboardData>('/dashboard/'),
 };
 
 export { ApiError };
