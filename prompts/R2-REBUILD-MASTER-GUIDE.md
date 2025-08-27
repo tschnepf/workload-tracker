@@ -203,32 +203,32 @@ class Deliverable(models.Model):
 6. Health check endpoint
 7. **🔒 CRITICAL: Naming Prevention System** - Bulletproof field mapping system
 
-**Dark Mode Design System:**
+**VSCode Dark Mode Design System:**
 ```typescript
 // frontend/src/theme/tokens.ts
 export const darkTheme = {
   colors: {
-    // Dark mode background hierarchy
+    // VSCode-style background hierarchy
     background: {
-      primary: '#0f172a',    // slate-900 - Main app background
-      secondary: '#1e293b',  // slate-800 - Card/panel background  
-      tertiary: '#334155',   // slate-700 - Elevated elements
-      elevated: '#475569',   // slate-600 - Hover states
+      primary: '#1e1e1e',    // VSCode editor background - Main app background
+      secondary: '#2d2d30',  // VSCode sidebar background - Card/panel background  
+      tertiary: '#3e3e42',   // VSCode border color - Elevated elements/borders
+      elevated: '#4e4e52',   // VSCode hover state - Interactive hover states
     },
     
-    // Text hierarchy for dark mode
+    // VSCode text color hierarchy
     text: {
-      primary: '#f8fafc',    // slate-50 - Primary text
-      secondary: '#cbd5e1',  // slate-300 - Secondary text
-      muted: '#94a3b8',      // slate-400 - Muted/placeholder text
-      inverse: '#1e293b',    // slate-800 - Text on light backgrounds
+      primary: '#cccccc',    // VSCode primary text - Main content text
+      secondary: '#969696',  // VSCode secondary text - Labels, descriptions
+      muted: '#757575',      // VSCode muted text - Placeholders, less important
+      accent: '#007acc',     // VSCode blue - Links, focused elements
     },
     
-    // Brand colors optimized for dark mode
+    // Brand colors optimized for VSCode dark mode
     brand: {
-      primary: '#3b82f6',    // blue-500 - Primary actions (brighter for dark)
-      secondary: '#6366f1',  // indigo-500 - Secondary actions
-      accent: '#8b5cf6',     // violet-500 - Accent elements
+      primary: '#007acc',    // VSCode blue - Primary actions, focus states
+      secondary: '#0e639c',  // Darker VSCode blue - Secondary actions
+      accent: '#1e90ff',     // Brighter blue - Hover states for primary
     },
     
     // Semantic colors for dark mode
@@ -239,7 +239,7 @@ export const darkTheme = {
       info: '#06b6d4',       // cyan-500 - Info states
     },
     
-    // Utilization-specific colors
+    // Utilization-specific colors (keep semantic colors)
     utilization: {
       available: '#10b981',   // emerald-500 - Under 70%
       optimal: '#3b82f6',     // blue-500 - 70-85%
@@ -247,11 +247,11 @@ export const darkTheme = {
       overallocated: '#ef4444' // red-500 - Over 100%
     },
     
-    // Border colors
+    // VSCode-style border colors
     border: {
-      primary: '#475569',     // slate-600 - Default borders
-      secondary: '#64748b',   // slate-500 - Subtle borders
-      focus: '#3b82f6',       // blue-500 - Focus rings
+      primary: '#3e3e42',     // VSCode border - Default borders, form inputs
+      secondary: '#2d2d30',   // VSCode panel background - Subtle dividers
+      focus: '#007acc',       // VSCode blue - Focus rings
     }
   },
   
@@ -299,34 +299,34 @@ interface ButtonProps {
   // ... other props
 }
 
-// Dark mode button styles
+// VSCode dark mode button styles
 const buttonVariants = {
-  primary: 'bg-blue-500 hover:bg-blue-400 text-white',
-  secondary: 'bg-slate-600 hover:bg-slate-500 text-slate-50', 
+  primary: 'bg-[#007acc] hover:bg-[#1e90ff] text-white',
+  secondary: 'bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc]', 
   danger: 'bg-red-500 hover:bg-red-400 text-white',
-  ghost: 'bg-transparent hover:bg-slate-700 text-slate-300'
+  ghost: 'bg-transparent hover:bg-[#3e3e42] text-[#969696] border border-[#3e3e42]'
 }
 
 // frontend/src/components/ui/Input.tsx
-// Dark mode input with proper contrast
+// VSCode dark mode input with proper contrast
 const inputStyles = `
-  bg-slate-800 border-slate-600 text-slate-50 
-  placeholder-slate-400 focus:border-blue-500 
-  focus:ring-blue-500/20
+  bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] 
+  placeholder-[#969696] focus:border-[#007acc] 
+  focus:ring-[#007acc]/20
 `
 
 // frontend/src/components/ui/Card.tsx  
-// Dark mode card with proper elevation
+// VSCode dark mode card with proper elevation
 const cardStyles = `
-  bg-slate-800 border border-slate-700 
+  bg-[#2d2d30] border border-[#3e3e42] 
   shadow-lg shadow-black/10
 `
 
 // frontend/src/components/layout/Navigation.tsx
-// Dark mode navigation shell
+// VSCode dark mode navigation shell
 const navStyles = `
-  bg-slate-900 border-b border-slate-700
-  text-slate-50
+  bg-[#2d2d30] border-b border-[#3e3e42]
+  text-[#cccccc]
 `
 ```
 
@@ -498,23 +498,23 @@ make test-naming        # Run comprehensive naming tests
 5. Form validation and error handling with dark mode styling
 6. Establish form patterns for all future chunks
 
-**Dark Mode Form Components:**
+**VSCode Dark Mode Form Components:**
 ```typescript
 // Use existing components from Chunk 1
-<Card className="bg-slate-800 border-slate-700">
+<Card className="bg-[#2d2d30] border-[#3e3e42]">
   <Form onSubmit={handleCreatePerson}>
     <Input 
       label="Name" 
       name="name" 
       required 
-      className="bg-slate-700 border-slate-600 text-slate-50"
+      className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
     />
     <Input 
       label="Weekly Capacity" 
       name="weeklyCapacity" 
       type="number" 
       defaultValue={36}
-      className="bg-slate-700 border-slate-600 text-slate-50"
+      className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
     />
     <Button variant="primary" type="submit">
       Create Person
@@ -522,21 +522,21 @@ make test-naming        # Run comprehensive naming tests
   </Form>
 </Card>
 
-// Dark mode table styling
-<div className="bg-slate-800 border border-slate-700 rounded-lg">
+// VSCode dark mode table styling
+<div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg">
   <table className="w-full">
-    <thead className="bg-slate-700 border-b border-slate-600">
+    <thead className="bg-[#3e3e42] border-b border-[#3e3e42]">
       <tr>
-        <th className="text-slate-200 font-medium">Name</th>
-        <th className="text-slate-200 font-medium">Capacity</th>
-        <th className="text-slate-200 font-medium">Actions</th>
+        <th className="text-[#cccccc] font-medium">Name</th>
+        <th className="text-[#cccccc] font-medium">Capacity</th>
+        <th className="text-[#cccccc] font-medium">Actions</th>
       </tr>
     </thead>
-    <tbody className="divide-y divide-slate-600">
+    <tbody className="divide-y divide-[#3e3e42]">
       {people.map(person => (
-        <tr key={person.id} className="hover:bg-slate-700/50">
-          <td className="text-slate-50">{person.name}</td>
-          <td className="text-slate-300">{person.weeklyCapacity}h</td>
+        <tr key={person.id} className="hover:bg-[#3e3e42]/50">
+          <td className="text-[#cccccc]">{person.name}</td>
+          <td className="text-[#969696]">{person.weeklyCapacity}h</td>
           <td>
             <Button variant="ghost" size="sm">Edit</Button>
             <Button variant="danger" size="sm">Delete</Button>
@@ -725,37 +725,37 @@ const UtilizationBadge: React.FC<{percentage: number}> = ({percentage}) => {
 4. Available people finder using existing components
 5. Quick assignment creation using existing form patterns
 
-**Dark Mode Dashboard Layout:**
+**VSCode Dark Mode Dashboard Layout:**
 ```typescript
 // Dashboard using existing Card components in grid layout
 <Layout>
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     
     {/* Summary Stats Cards */}
-    <Card className="bg-slate-800 border-slate-700">
-      <div className="text-slate-400 text-sm">Total Team Members</div>
-      <div className="text-2xl font-bold text-slate-50">{totalPeople}</div>
+    <Card className="bg-[#2d2d30] border-[#3e3e42]">
+      <div className="text-[#969696] text-sm">Total Team Members</div>
+      <div className="text-2xl font-bold text-[#cccccc]">{totalPeople}</div>
     </Card>
     
-    <Card className="bg-slate-800 border-slate-700">
-      <div className="text-slate-400 text-sm">Average Utilization</div>
+    <Card className="bg-[#2d2d30] border-[#3e3e42]">
+      <div className="text-[#969696] text-sm">Average Utilization</div>
       <div className="text-2xl font-bold text-blue-400">{avgUtilization}%</div>
     </Card>
     
-    <Card className="bg-slate-800 border-slate-700">
-      <div className="text-slate-400 text-sm">Overallocated</div>
+    <Card className="bg-[#2d2d30] border-[#3e3e42]">
+      <div className="text-[#969696] text-sm">Overallocated</div>
       <div className="text-2xl font-bold text-red-400">{overallocatedCount}</div>
     </Card>
     
     {/* Team List */}
-    <Card className="md:col-span-2 bg-slate-800 border-slate-700">
-      <h3 className="text-lg font-semibold text-slate-50 mb-4">Team Overview</h3>
+    <Card className="md:col-span-2 bg-[#2d2d30] border-[#3e3e42]">
+      <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Team Overview</h3>
       <div className="space-y-3">
         {people.map(person => (
-          <div key={person.id} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+          <div key={person.id} className="flex items-center justify-between p-3 bg-[#3e3e42]/50 rounded-lg">
             <div>
-              <div className="font-medium text-slate-50">{person.name}</div>
-              <div className="text-sm text-slate-400">{person.role}</div>
+              <div className="font-medium text-[#cccccc]">{person.name}</div>
+              <div className="text-sm text-[#969696]">{person.role}</div>
             </div>
             <UtilizationBadge percentage={person.utilization} />
           </div>
@@ -764,12 +764,12 @@ const UtilizationBadge: React.FC<{percentage: number}> = ({percentage}) => {
     </Card>
     
     {/* Available People */}
-    <Card className="bg-slate-800 border-slate-700">
-      <h3 className="text-lg font-semibold text-slate-50 mb-4">Available</h3>
+    <Card className="bg-[#2d2d30] border-[#3e3e42]">
+      <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Available</h3>
       <div className="space-y-2">
         {availablePeople.map(person => (
           <div key={person.id} className="text-sm">
-            <div className="text-slate-50">{person.name}</div>
+            <div className="text-[#cccccc]">{person.name}</div>
             <div className="text-emerald-400">{person.availableHours}h available</div>
           </div>
         ))}
@@ -780,7 +780,7 @@ const UtilizationBadge: React.FC<{percentage: number}> = ({percentage}) => {
 </Layout>
 ```
 
-**Dark Mode Color Usage:**
+**VSCode Dark Mode Color Usage:**
 ```typescript
 // Utilization color scheme (consistent with Chunk 3)
 const utilizationColors = {
@@ -790,9 +790,9 @@ const utilizationColors = {
   overallocated: 'text-red-400 bg-red-500/20'        // >100%
 }
 
-// Stats use brand colors
-- Total counts: text-slate-50 (primary text)
-- Percentages: text-blue-400 (brand primary) 
+// Stats use VSCode brand colors
+- Total counts: text-[#cccccc] (VSCode primary text)
+- Percentages: text-blue-400 (semantic optimal) 
 - Warnings: text-red-400 (semantic error)
 - Success: text-emerald-400 (semantic success)
 ```
@@ -1043,19 +1043,20 @@ else:
 7. **R2-REBUILD-CONTRACTS.md** - API specifications
 8. **R2-REBUILD-000-DOCKER-FIRST.md** - Docker setup guide
 
-## 🎨 Dark Mode UI Confirmation
+## 🎨 VSCode Dark Mode UI Confirmation
 
-✅ **CONFIRMED: This application will use DARK MODE as the primary and only theme**
+✅ **CONFIRMED: This application uses VSCode DARK MODE as the primary and only theme**
 
 **Visual Design:**
-- **Background**: Deep slate (slate-900/800/700 hierarchy)
-- **Text**: Light slate (slate-50/300/400 hierarchy) 
-- **Primary Actions**: Blue-500 (optimized for dark backgrounds)
+- **Background**: VSCode Editor Dark (`#1e1e1e` app, `#2d2d30` cards, `#3e3e42` borders)
+- **Text**: VSCode Text Hierarchy (`#cccccc` primary, `#969696` secondary, `#757575` muted) 
+- **Primary Actions**: VSCode Blue (`#007acc` primary, `#1e90ff` hover)
 - **Semantic Colors**: Emerald (success), Amber (warning), Red (error)
 - **Utilization Colors**: Emerald (available), Blue (optimal), Amber (high), Red (overallocated)
 
-**Typography**: Inter font family for modern, clean appearance
-**Component Style**: Clean, minimal, professional appearance suitable for business applications
+**Typography**: Inter font family for modern, clean appearance (matches VSCode)
+**Component Style**: VSCode-inspired, minimal, professional appearance for developer tools
+**Icons**: Minimalistic SVG icons matching VSCode design language
 
 ## 🎯 Next Steps
 

@@ -154,6 +154,76 @@ docker-compose exec frontend npm list react react-router-dom
 
 ❌ **Never ignore** version mismatch warnings
 
+### **Network Access Configuration Errors**
+✅ **Use single source of truth for HOST_IP:**
+```env
+# .env file - ONLY place to define network IP
+HOST_IP=10.20.30.40
+```
+
+### **Color Scheme Consistency Errors**
+✅ **CRITICAL: Use ONLY our established VSCode colors - NOT the Master Guide colors:**
+```typescript
+// ✅ CORRECT: Our VSCode Dark Theme (Use these EXACT colors)
+Background: '#1e1e1e'              // App background
+Cards: 'bg-[#2d2d30] border-[#3e3e42]'  // Card styling
+Primary text: 'text-[#cccccc]'     // Main text color
+Secondary text: 'text-[#969696]'   // Muted text
+Primary button: 'bg-[#007acc]'     // VSCode blue
+```
+
+```typescript
+// ❌ WRONG: Do NOT use these Master Guide colors (will break consistency)
+Background: '#0f172a'              // Too light for VSCode theme
+Cards: 'bg-slate-800 border-slate-700'  // Doesn't match VSCode
+Text: 'text-slate-50'             // Wrong text hierarchy
+Primary: 'bg-blue-500'            // Wrong blue shade
+```
+
+✅ **For Chunk 4 Dashboard components, use EXACT existing patterns:**
+```typescript
+// Summary cards - use existing Card component styling
+<Card className="bg-[#2d2d30] border-[#3e3e42]">
+  <div className="text-[#969696] text-sm">Label</div>
+  <div className="text-2xl font-bold text-[#cccccc]">Value</div>
+</Card>
+
+// Utilization colors (keep consistent with current system)
+available: 'text-emerald-400'      // Under 70%
+optimal: 'text-blue-400'          // 70-85%  
+high: 'text-amber-400'            // 85-100%
+overallocated: 'text-red-400'     // Over 100%
+```
+
+❌ **Never use slate-* Tailwind classes** - they don't match our VSCode theme
+❌ **Never change our established color palette** - it's been carefully implemented
+❌ **Never follow Master Guide color examples** - they're outdated
+
+✅ **Let Django handle ALLOWED_HOSTS and CORS dynamically:**
+```python
+# Django settings.py - automatically includes HOST_IP
+HOST_IP = os.getenv('HOST_IP')
+if HOST_IP and HOST_IP not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(HOST_IP)
+```
+
+✅ **Use environment variables in docker-compose.yml:**
+```yaml
+# docker-compose.yml - construct URLs from HOST_IP
+environment:
+  - VITE_API_URL=http://${HOST_IP}:8000/api
+```
+
+✅ **Test network access after IP changes:**
+```bash
+# Verify CORS headers include network IP
+curl -I -H "Origin: http://${HOST_IP}:3000" http://${HOST_IP}:8000/api/people/
+```
+
+❌ **Never hardcode IP addresses** in source code or config files
+❌ **Never assume** localhost/127.0.0.1 will work from other computers
+❌ **Never forget** to update CORS origins when changing network configuration
+
 ## 🧪 Testing Workflow (Run After Every Change)
 
 ### **Mandatory Test Sequence**
@@ -174,7 +244,13 @@ echo "✅ Should return: <title>Workload Tracker</title>"
 curl -s http://localhost:8000/api/people/ | grep "count"
 echo "✅ Should return people data"
 
-# 5. Console Warning Check
+# 5. Network Access Test (if HOST_IP is configured)
+if [ ! -z "$HOST_IP" ]; then
+  curl -s http://$HOST_IP:8000/api/health/ | grep "healthy"
+  echo "✅ Should return: healthy (network access)"
+fi
+
+# 6. Console Warning Check
 echo "🖥️  Open browser dev tools - should be NO warnings"
 ```
 
@@ -197,17 +273,69 @@ docker-compose up -d
 - Version mismatch warnings
 - Docker container restart loops
 
-## 🎨 Component Usage Examples
+## 🎨 Component Usage Examples - CHUNK 4 DASHBOARD COLORS
 ```typescript
-// ✅ Correct dark mode component usage
-<Card className="bg-slate-800 border-slate-700">
-  <Input 
-    label="Name" 
-    className="bg-slate-700 border-slate-600 text-slate-50"
-    error={validationError}
-  />
-  <Button variant="primary">Save</Button>
+// ✅ CRITICAL: Use these EXACT color patterns for Chunk 4 Dashboard
+// (Matches our established VSCode theme)
+
+// Dashboard summary cards
+<Card className="bg-[#2d2d30] border-[#3e3e42]">
+  <div className="text-[#969696] text-sm">Total Team Members</div>
+  <div className="text-2xl font-bold text-[#cccccc]">12</div>
+</Card>
+
+// Team overview section  
+<Card className="md:col-span-2 bg-[#2d2d30] border-[#3e3e42]">
+  <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Team Overview</h3>
+  <div className="space-y-3">
+    {people.map(person => (
+      <div key={person.id} className="flex items-center justify-between p-3 bg-[#3e3e42]/50 rounded-lg">
+        <div>
+          <div className="font-medium text-[#cccccc]">{person.name}</div>
+          <div className="text-sm text-[#969696]">{person.role}</div>
+        </div>
+        <UtilizationBadge percentage={person.utilization} />
+      </div>
+    ))}
+  </div>
+</Card>
+
+// Utilization badge component (create for Chunk 4)
+const UtilizationBadge = ({ percentage }: { percentage: number }) => {
+  const getUtilizationStyle = (percent: number) => {
+    if (percent < 70) return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+    if (percent <= 85) return 'bg-blue-500/20 text-blue-400 border-blue-500/30'  
+    if (percent <= 100) return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+    return 'bg-red-500/20 text-red-400 border-red-500/30'
+  }
+  
+  return (
+    <span className={`px-2 py-1 rounded border text-xs font-medium ${getUtilizationStyle(percentage)}`}>
+      {percentage}% utilized
+    </span>
+  )
+}
+
+// Available people section
+<Card className="bg-[#2d2d30] border-[#3e3e42]">
+  <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Available</h3>
+  <div className="space-y-2">
+    {availablePeople.map(person => (
+      <div key={person.id} className="text-sm">
+        <div className="text-[#cccccc]">{person.name}</div>
+        <div className="text-emerald-400">{person.availableHours}h available</div>
+      </div>
+    ))}
+  </div>
 </Card>
 ```
 
-**Last Updated**: After Chunk 2 completion with package version fixes
+```typescript
+// ❌ WRONG: Never use these patterns (from outdated Master Guide)
+<Card className="bg-slate-800 border-slate-700">  // WRONG COLORS
+  <div className="text-slate-400 text-sm">Label</div>  // WRONG TEXT COLOR
+  <div className="text-2xl font-bold text-slate-50">Value</div>  // WRONG TEXT COLOR
+</Card>
+```
+
+**Last Updated**: After implementing network access configuration and documenting color scheme consistency for Chunk 4
