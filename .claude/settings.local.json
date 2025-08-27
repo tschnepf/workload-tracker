@@ -6,9 +6,20 @@
       "Bash(docker-compose up:*)",
       "Bash(docker-compose exec:*)",
       "Bash(docker-compose:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(timeout 30s docker-compose exec frontend npm run build)",
+      "Bash(git commit:*)",
+      "Bash(find:*)",
+      "Bash(sed:*)",
+      "Bash(git add:*)",
+      "Bash(dir /a *.env*)",
+      "Bash(del \"C:\\Users\\tim\\VScode\\workload-tracker\\frontend\\.env\")",
+      "Bash(time curl:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\tim\\VScode\\workload-tracker"
+    ]
   }
 }

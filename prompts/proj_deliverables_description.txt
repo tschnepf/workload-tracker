@@ -1,0 +1,22 @@
+Each project will have a series of deliverables This are represented typically by any of the 3 following elements
+
+A Percentage
+A Description
+A Date
+Notes
+
+These should all be optional fields as each deliverable may use any of the 4. For example a deliverable could be 
+
+Percentage	Description	Date		Notes
+35% 		SD 		09/08/2025	Owner Review
+
+I want the ability to add, change, delete or modify any of the deliverables. The quantity of deliverables should be able to grow as needed, some projects may only have 1 or 2, others 7 or 8 30, Do not cap the quantity of deliverables per project it varies.
+
+When created, each project should default to having the following deliverables with dates and notes to be filled in either within project creation or later. The date should be able to exist or be deleted. It is not uncommon for a project to go on hold and the date to be removed for a time. These deliverables can be added to, edited or deleted as project requirements dictate, the user should be able to add deliverables before, in between or after any of these either withing the context of the project creation window or later. The order of the deliverables should be able to be sorted manually 
+
+Percentage	Description	Date	Notes
+35% 		SD 		
+75%		DD		
+95%		IFP		
+100%		IFC
+
