@@ -42,10 +42,23 @@ const Navigation: React.FC = () => {
               People
             </Link>
             <Link 
+              to="/assignments" 
+              className={isActive('/assignments') ? navStyles.activeLink : navStyles.link}
+            >
+              Assignments
+            </Link>
+            <Link 
               to="/projects" 
               className={isActive('/projects') ? navStyles.activeLink : navStyles.link}
             >
               Projects
+            </Link>
+            <Link 
+              to="/mockup" 
+              className={isActive('/mockup') ? navStyles.activeLink : navStyles.link}
+              style={{ fontSize: '12px', padding: '6px 12px' }}
+            >
+              📋 Mockup
             </Link>
           </div>
         </div>

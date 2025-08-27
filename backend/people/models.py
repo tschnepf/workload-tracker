@@ -44,17 +44,45 @@ class Person(models.Model):
         return self.name
     
     def get_current_utilization(self):
-        """Calculate current utilization - implement in Chunk 3"""
+        """Calculate current utilization based on weekly hours (RETROFIT)"""
+        from datetime import datetime, timedelta
+        
         active_assignments = self.assignments.filter(is_active=True)
-        total_allocation = sum(a.allocation_percentage for a in active_assignments)
+        
+        # Get current week (Sunday)
+        today = datetime.now().date()
+        current_sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        current_week_key = current_sunday.strftime('%Y-%m-%d')
+        
+        # Calculate total hours for current week across all assignments
+        total_allocated_hours = 0
+        assignment_details = []
+        
+        for assignment in active_assignments:
+            week_hours = assignment.weekly_hours.get(current_week_key, 0) if assignment.weekly_hours else 0
+            total_allocated_hours += week_hours
+            
+            if week_hours > 0:
+                assignment_details.append({
+                    'project_name': assignment.project_name,
+                    'weekly_hours': week_hours,
+                    'allocation_percentage': min(100, (week_hours / self.weekly_capacity * 100)) if self.weekly_capacity > 0 else 0
+                })
+        
+        # Calculate percentage and availability
+        total_percentage = (total_allocated_hours / self.weekly_capacity * 100) if self.weekly_capacity > 0 else 0
+        available_hours = max(0, self.weekly_capacity - total_allocated_hours)
+        
         return {
-            'total_percentage': total_allocation,
-            'allocated_hours': (self.weekly_capacity * total_allocation) / 100,
-            'available_hours': self.weekly_capacity - ((self.weekly_capacity * total_allocation) / 100),
-            'is_overallocated': total_allocation > 100
+            'total_percentage': round(total_percentage, 1),
+            'allocated_hours': total_allocated_hours,
+            'available_hours': available_hours,
+            'is_overallocated': total_allocated_hours > self.weekly_capacity,
+            'current_week': current_week_key,
+            'assignments': assignment_details
         }
     
     @property
     def is_available(self):
-        """Check availability - implement in Chunk 4"""
-        return self.get_current_utilization()['total_percentage'] < 100
+        """Check availability based on current week hours"""
+        return self.get_current_utilization()['allocated_hours'] < self.weekly_capacity

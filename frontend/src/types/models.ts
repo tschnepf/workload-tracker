@@ -33,9 +33,15 @@ export interface Project {
 
 export interface Assignment {
   id?: number;
-  person?: number; // Person ID
-  allocationPercentage?: number;
-  projectName?: string;
+  person: number; // Person ID
+  personName?: string; // Read-only person name
+  personWeeklyCapacity?: number; // Read-only person capacity
+  projectName: string;
+  weeklyHours: { [weekKey: string]: number }; // Weekly hours allocation
+  totalHours?: number; // Read-only calculated total
+  averageWeeklyHours?: number; // Read-only calculated average
+  allocationPercentage?: number; // Legacy field
+  availableWeeks?: string[]; // Read-only list of available weeks
   roleOnProject?: string;
   startDate?: string;
   endDate?: string;
@@ -54,6 +60,23 @@ export interface Department {
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface PersonUtilization {
+  person: string;
+  weeklyCapacity: number;
+  utilization: {
+    total_percentage: number;
+    allocated_hours: number;
+    available_hours: number;
+    is_overallocated: boolean;
+    current_week: string;
+    assignments: Array<{
+      project_name: string;
+      weekly_hours: number;
+      allocation_percentage: number;
+    }>;
+  };
 }
 
 // API Response types

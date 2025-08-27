@@ -3,6 +3,9 @@ Assignment model - The heart of workload tracking.
 """
 
 from django.db import models
+from django.utils import timezone
+from datetime import datetime, timedelta
+import json
 
 class Assignment(models.Model):
     """Assignment model - the heart of workload tracking"""
@@ -14,8 +17,13 @@ class Assignment(models.Model):
     # Chunk 5: Migrate to project FK, keep project_name as backup
     project_name = models.CharField(max_length=200, blank=True, null=True)
     
-    # === ALLOCATION (Core feature) ===
-    allocation_percentage = models.IntegerField(default=100)
+    # === WEEKLY HOURS ALLOCATION (Retrofit from percentage) ===
+    # Store hours per week as JSON: {"2024-08-25": 10, "2024-09-01": 8, ...}
+    # Key format: "YYYY-MM-DD" for the Sunday of each week
+    weekly_hours = models.JSONField(default=dict, help_text="Hours per week for 12-week period")
+    
+    # Legacy field - keep for migration compatibility
+    allocation_percentage = models.IntegerField(default=0, help_text="Legacy percentage field")
     
     # === OPTIONAL DETAILS (Add usage per chunk) ===
     role_on_project = models.CharField(max_length=100, blank=True, null=True)
@@ -33,13 +41,56 @@ class Assignment(models.Model):
     
     def __str__(self):
         project_display = self.project_name or "Unknown Project"
-        return f"{self.person.name} on {project_display} ({self.allocation_percentage}%)"
+        total_hours = sum(self.weekly_hours.values()) if self.weekly_hours else 0
+        return f"{self.person.name} on {project_display} ({total_hours}h total)"
     
     # === BUSINESS LOGIC ===
+    @staticmethod
+    def get_week_starting_sunday(date):
+        """Get the Sunday date for the week containing the given date"""
+        days_since_sunday = date.weekday() + 1  # Monday=0 -> 1, Sunday=6 -> 0
+        if days_since_sunday == 7:  # Sunday
+            days_since_sunday = 0
+        sunday = date - timedelta(days=days_since_sunday)
+        return sunday.strftime('%Y-%m-%d')
+    
+    @classmethod
+    def get_next_12_weeks(cls, start_date=None):
+        """Get list of Sunday dates for the next 12 weeks"""
+        if start_date is None:
+            start_date = timezone.now().date()
+        
+        week_sundays = []
+        current_sunday = start_date - timedelta(days=(start_date.weekday() + 1) % 7)
+        
+        for i in range(12):
+            week_sundays.append(current_sunday.strftime('%Y-%m-%d'))
+            current_sunday += timedelta(days=7)
+        
+        return week_sundays
+    
+    def get_hours_for_week(self, week_sunday):
+        """Get hours allocated for a specific week (Sunday date string)"""
+        return self.weekly_hours.get(week_sunday, 0)
+    
+    def set_hours_for_week(self, week_sunday, hours):
+        """Set hours for a specific week"""
+        if self.weekly_hours is None:
+            self.weekly_hours = {}
+        self.weekly_hours[week_sunday] = max(0, float(hours))
+    
     @property
-    def weekly_hours(self):
-        """Calculate weekly hours based on person's capacity"""
-        return (self.person.weekly_capacity * self.allocation_percentage) / 100
+    def total_hours(self):
+        """Total hours across all weeks"""
+        return sum(self.weekly_hours.values()) if self.weekly_hours else 0
+    
+    @property
+    def average_weekly_hours(self):
+        """Average hours per week (non-zero weeks only)"""
+        if not self.weekly_hours:
+            return 0
+        non_zero_weeks = [h for h in self.weekly_hours.values() if h > 0]
+        return sum(non_zero_weeks) / len(non_zero_weeks) if non_zero_weeks else 0
     
     @property
     def project_display(self):

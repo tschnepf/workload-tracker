@@ -22,4 +22,20 @@ class PersonViewSet(viewsets.ModelViewSet):
         """Filter active people by default"""
         return Person.objects.filter(is_active=True).order_by('name')
     
-    # For Chunk 2: Simple CRUD only, utilization will be added in Chunk 3
+    @action(detail=True, methods=['get'])
+    def utilization(self, request, pk=None):
+        """Get detailed utilization breakdown for a person - Chunk 3"""
+        person = self.get_object()
+        utilization_data = person.get_current_utilization()
+        
+        # Get assignments for detail
+        assignments = person.assignments.filter(is_active=True).values(
+            'project_name', 'allocation_percentage'
+        )
+        
+        return Response({
+            'person': person.name,
+            'weeklyCapacity': person.weekly_capacity,
+            'utilization': utilization_data,
+            'assignments': list(assignments)
+        })
