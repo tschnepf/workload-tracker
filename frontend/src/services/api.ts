@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Assignment, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData } from '@/types/models';
+import { Person, Project, Assignment, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -94,6 +94,37 @@ export const peopleApi = {
   // Delete person
   delete: (id: number) => 
     fetchApi<void>(`/people/${id}/`, {
+      method: 'DELETE',
+    }),
+};
+
+// Projects API
+export const projectsApi = {
+  // Get all projects
+  list: () => 
+    fetchApi<PaginatedResponse<Project>>('/projects/'),
+
+  // Get single project
+  get: (id: number) => 
+    fetchApi<Project>(`/projects/${id}/`),
+
+  // Create project
+  create: (data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => 
+    fetchApi<Project>('/projects/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update project
+  update: (id: number, data: Partial<Project>) => 
+    fetchApi<Project>(`/projects/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete project
+  delete: (id: number) => 
+    fetchApi<void>(`/projects/${id}/`, {
       method: 'DELETE',
     }),
 };

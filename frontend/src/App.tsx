@@ -7,8 +7,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Dashboard from './pages/Dashboard';
 import { PeopleList, PersonForm } from './pages/People';
 import { AssignmentList, AssignmentForm, AssignmentGrid } from './pages/Assignments';
+import Projects from './pages/Projects';
+import ProjectForm from './pages/Projects/ProjectForm';
 import AssignmentGridMockup from './components/mockup/AssignmentGridMockup';
 import SidebarNavigationMockup from './components/mockup/SidebarNavigationMockup';
+import ProjectsListMockup from './components/mockup/ProjectsListMockup';
 
 // Enable VSCode-style dark theme globally
 document.documentElement.classList.add('dark');
@@ -29,8 +32,12 @@ function App() {
         <Route path="/assignments/list" element={<AssignmentList />} />
         <Route path="/assignments/new" element={<AssignmentForm />} />
         <Route path="/assignments/:id/edit" element={<AssignmentForm />} />
+        <Route path="/projects" element={<Projects />} />
+        <Route path="/projects/new" element={<ProjectForm />} />
+        <Route path="/projects/:id/edit" element={<ProjectForm />} />
         <Route path="/mockup" element={<AssignmentGridMockup />} />
         <Route path="/sidebar-mockup" element={<SidebarNavigationMockup />} />
+        <Route path="/projects-mockup" element={<ProjectsListMockup />} />
         {/* More routes will be added in later chunks */}
       </Routes>
     </Router>

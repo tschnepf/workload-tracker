@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Assignment, Person } from '@/types/models';
-import { assignmentsApi, peopleApi } from '@/services/api';
+import { Assignment, Person, Project } from '@/types/models';
+import { assignmentsApi, peopleApi, projectsApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -18,7 +18,7 @@ interface WeeklyHours {
 
 interface AssignmentFormData {
   person: number | '';
-  projectName: string;
+  project: number | '';
   weeklyHours: WeeklyHours;
 }
 
@@ -53,10 +53,11 @@ const AssignmentForm: React.FC = () => {
   const isEditing = !!id;
 
   const [people, setPeople] = useState<Person[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [availableWeeks] = useState<string[]>(getNext12Weeks());
   const [formData, setFormData] = useState<AssignmentFormData>({
     person: '',
-    projectName: '',
+    project: '',
     weeklyHours: {},
   });
 
@@ -67,6 +68,7 @@ const AssignmentForm: React.FC = () => {
 
   useEffect(() => {
     loadPeople();
+    loadProjects();
     if (isEditing && id) {
       // Note: For simplicity in Chunk 3, we're not implementing edit mode
       // This would require a get assignment endpoint
@@ -82,6 +84,15 @@ const AssignmentForm: React.FC = () => {
     }
   };
 
+  const loadProjects = async () => {
+    try {
+      const response = await projectsApi.list();
+      setProjects(response.results || []);
+    } catch (err: any) {
+      setError('Failed to load projects list');
+    }
+  };
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
@@ -89,8 +100,8 @@ const AssignmentForm: React.FC = () => {
       errors.person = 'Please select a person';
     }
 
-    if (!formData.projectName.trim()) {
-      errors.projectName = 'Project name is required';
+    if (!formData.project) {
+      errors.project = 'Please select a project';
     }
 
     // Validate weekly hours
@@ -128,7 +139,7 @@ const AssignmentForm: React.FC = () => {
 
       const assignmentData = {
         person: Number(formData.person),
-        projectName: formData.projectName.trim(),
+        project: Number(formData.project),
         weeklyHours: formData.weeklyHours,
       };
 
@@ -244,20 +255,28 @@ const AssignmentForm: React.FC = () => {
               )}
             </div>
 
-            {/* Project Name */}
+            {/* Project Selection */}
             <div>
-              <Input
-                label="Project Name"
-                name="projectName"
-                value={formData.projectName}
-                onChange={(e) => handleChange('projectName', e.target.value)}
-                placeholder="e.g., Website Redesign, Mobile App"
-                required
-                error={validationErrors.projectName}
-                className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
-              />
+              <label className="block text-sm font-medium text-[#cccccc] mb-2">
+                Project <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={formData.project}
+                onChange={(e) => handleChange('project', e.target.value)}
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              >
+                <option value="">Select a project...</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name} ({project.client})
+                  </option>
+                ))}
+              </select>
+              {validationErrors.project && (
+                <p className="text-sm text-red-400 mt-1">{validationErrors.project}</p>
+              )}
               <p className="text-[#969696] text-sm mt-1">
-                Enter the name of the project or initiative
+                Select the project for this assignment
               </p>
             </div>
 

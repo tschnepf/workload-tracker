@@ -1,13 +1,9 @@
-from core.serializers import AutoMappedSerializer
-from core.fields import PROJECT_FIELDS
+from rest_framework import serializers
 from .models import Project
 
-class ProjectSerializer(AutoMappedSerializer):
+class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
-        field_registry = PROJECT_FIELDS
-        fields = [field.api_name for field in PROJECT_FIELDS.values()] + ['id', 'createdAt', 'updatedAt']
-        extra_kwargs = {
-            'createdAt': {'source': 'created_at', 'read_only': True},
-            'updatedAt': {'source': 'updated_at', 'read_only': True},
-        }
+        fields = ['id', 'name', 'status', 'client', 'description', 'start_date', 'end_date', 
+                 'estimated_hours', 'project_number', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

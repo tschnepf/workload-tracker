@@ -16,6 +16,7 @@ class Assignment(models.Model):
     # Chunk 1-2: Use project_name only
     # Chunk 5: Migrate to project FK, keep project_name as backup
     project_name = models.CharField(max_length=200, blank=True, null=True)
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, blank=True, null=True)
     
     # === WEEKLY HOURS ALLOCATION (Retrofit from percentage) ===
     # Store hours per week as JSON: {"2024-08-25": 10, "2024-09-01": 8, ...}
@@ -40,7 +41,7 @@ class Assignment(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        project_display = self.project_name or "Unknown Project"
+        project_display = self.project_display
         total_hours = sum(self.weekly_hours.values()) if self.weekly_hours else 0
         return f"{self.person.name} on {project_display} ({total_hours}h total)"
     
@@ -95,4 +96,6 @@ class Assignment(models.Model):
     @property
     def project_display(self):
         """Handle both string and FK projects gracefully"""
+        if self.project:
+            return self.project.name
         return self.project_name or "Unknown Project"

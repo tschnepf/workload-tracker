@@ -36,7 +36,9 @@ export interface Assignment {
   person: number; // Person ID
   personName?: string; // Read-only person name
   personWeeklyCapacity?: number; // Read-only person capacity
-  projectName: string;
+  projectName?: string; // Legacy field - keep for migration compatibility
+  project?: number; // Project ID (FK)
+  projectDisplayName?: string; // Read-only project display name
   weeklyHours: { [weekKey: string]: number }; // Weekly hours allocation
   totalHours?: number; // Read-only calculated total
   averageWeeklyHours?: number; // Read-only calculated average
