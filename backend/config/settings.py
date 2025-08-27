@@ -17,6 +17,11 @@ DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# Get HOST_IP for network access configuration
+HOST_IP = os.getenv('HOST_IP')
+if HOST_IP and HOST_IP not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(HOST_IP)
+
 # Application definition
 DJANGO_APPS = [
     'django.contrib.admin',
@@ -130,10 +135,15 @@ REST_FRAMEWORK = {
 }
 
 # CORS
+# CORS - Build allowed origins dynamically
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+
+# Add network IP if HOST_IP is set
+if HOST_IP:
+    CORS_ALLOWED_ORIGINS.append(f"http://{HOST_IP}:3000")
 
 CORS_ALLOW_CREDENTIALS = True
 
