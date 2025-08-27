@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import { PeopleList, PersonForm } from './pages/People';
 import { AssignmentList, AssignmentForm, AssignmentGrid } from './pages/Assignments';
 import AssignmentGridMockup from './components/mockup/AssignmentGridMockup';
+import SidebarNavigationMockup from './components/mockup/SidebarNavigationMockup';
 
 // Enable VSCode-style dark theme globally
 document.documentElement.classList.add('dark');
@@ -29,6 +30,7 @@ function App() {
         <Route path="/assignments/new" element={<AssignmentForm />} />
         <Route path="/assignments/:id/edit" element={<AssignmentForm />} />
         <Route path="/mockup" element={<AssignmentGridMockup />} />
+        <Route path="/sidebar-mockup" element={<SidebarNavigationMockup />} />
         {/* More routes will be added in later chunks */}
       </Routes>
     </Router>

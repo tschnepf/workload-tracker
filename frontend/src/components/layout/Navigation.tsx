@@ -53,13 +53,6 @@ const Navigation: React.FC = () => {
             >
               Projects
             </Link>
-            <Link 
-              to="/mockup" 
-              className={isActive('/mockup') ? navStyles.activeLink : navStyles.link}
-              style={{ fontSize: '12px', padding: '6px 12px' }}
-            >
-              📋 Mockup
-            </Link>
           </div>
         </div>
       </div>

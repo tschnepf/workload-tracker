@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Assignment, Person } from '@/types/models';
 import { assignmentsApi, peopleApi } from '@/services/api';
-import Navigation from '@/components/layout/Navigation';
+import Layout from '@/components/layout/Layout';
 
 interface PersonWithAssignments extends Person {
   assignments: Assignment[];
@@ -371,30 +371,27 @@ const AssignmentGrid: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#1e1e1e]">
-        <Navigation />
+      <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="text-[#969696]">Loading assignments...</div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#1e1e1e]">
-        <Navigation />
+      <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="text-red-400">{error}</div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#1e1e1e]">
-      <Navigation />
-      <div className="px-4 sm:px-6 lg:px-8 py-8 space-y-4">
+    <Layout>
+      <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -725,7 +722,7 @@ const AssignmentGrid: React.FC = () => {
           <div>Real assignment grid - Full functionality coming next</div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 
