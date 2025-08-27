@@ -361,7 +361,7 @@ const AssignmentGrid: React.FC = () => {
 
   // Get utilization badge styling
   const getUtilizationBadgeStyle = (hours: number, capacity: number) => {
-    if (hours === 0) return 'bg-slate-600 text-slate-400';
+    if (hours === 0) return 'bg-[#3e3e42] text-[#969696]';
     const percentage = (hours / capacity) * 100;
     if (percentage <= 70) return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
     if (percentage <= 85) return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
@@ -371,10 +371,10 @@ const AssignmentGrid: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900">
+      <div className="min-h-screen bg-[#1e1e1e]">
         <Navigation />
         <div className="flex items-center justify-center h-64">
-          <div className="text-slate-400">Loading assignments...</div>
+          <div className="text-[#969696]">Loading assignments...</div>
         </div>
       </div>
     );
@@ -382,7 +382,7 @@ const AssignmentGrid: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-900">
+      <div className="min-h-screen bg-[#1e1e1e]">
         <Navigation />
         <div className="flex items-center justify-center h-64">
           <div className="text-red-400">{error}</div>
@@ -392,33 +392,33 @@ const AssignmentGrid: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen bg-[#1e1e1e]">
       <Navigation />
       <div className="px-4 sm:px-6 lg:px-8 py-8 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-50">Assignment Grid</h1>
-            <p className="text-slate-400 text-sm">Manage team workload allocation across 12 weeks</p>
+            <h1 className="text-2xl font-bold text-[#cccccc]">Assignment Grid</h1>
+            <p className="text-[#969696] text-sm">Manage team workload allocation across 12 weeks</p>
           </div>
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-[#969696]">
             {people.length} people • {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
           </div>
         </div>
 
         {/* Grid Container */}
-        <div className="bg-slate-900 border border-slate-700 rounded-lg overflow-x-auto">
+        <div className="bg-[#1e1e1e] border border-[#3e3e42] rounded-lg overflow-x-auto">
           <div className="min-w-[1400px]">
             
             {/* Sticky Header */}
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-600 z-10">
+            <div className="sticky top-0 bg-[#2d2d30] border-b border-[#3e3e42] z-10">
               <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2">
-                <div className="font-medium text-slate-200 text-sm px-2 py-1">Team Member</div>
-                <div className="text-center text-xs text-slate-400 px-1">+/-</div>
+                <div className="font-medium text-[#cccccc] text-sm px-2 py-1">Team Member</div>
+                <div className="text-center text-xs text-[#969696] px-1">+/-</div>
                 {weeks.map((week, index) => (
                   <div key={week.date} className="text-center px-1">
-                    <div className="text-xs font-medium text-slate-200">{week.display}</div>
-                    <div className="text-[10px] text-slate-500">W{index + 1}</div>
+                    <div className="text-xs font-medium text-[#cccccc]">{week.display}</div>
+                    <div className="text-[10px] text-[#757575]">W{index + 1}</div>
                   </div>
                 ))}
               </div>
@@ -427,16 +427,16 @@ const AssignmentGrid: React.FC = () => {
             {/* Data Rows */}
             <div>
               {people.map((person) => (
-                <div key={person.id} className="border-b border-slate-700 last:border-b-0">
+                <div key={person.id} className="border-b border-[#3e3e42] last:border-b-0">
                   
                   {/* Person Row */}
-                  <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2 hover:bg-slate-800/50 transition-colors">
+                  <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2 hover:bg-[#2d2d30]/50 transition-colors">
                     
                     {/* Person Info */}
                     <div className="flex items-center gap-2 pl-3 pr-2 py-1">
                       <button
                         onClick={() => togglePersonExpanded(person.id!)}
-                        className="flex-shrink-0 w-5 h-5 flex items-center justify-center hover:bg-slate-600 rounded text-slate-400 hover:text-slate-200 transition-all duration-200"
+                        className="flex-shrink-0 w-5 h-5 flex items-center justify-center hover:bg-[#3e3e42] rounded text-[#969696] hover:text-[#cccccc] transition-all duration-200"
                       >
                         <svg 
                           width="12" 
@@ -455,15 +455,15 @@ const AssignmentGrid: React.FC = () => {
                         </svg>
                       </button>
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-slate-50 text-sm truncate">{person.name}</div>
-                        <div className="text-xs text-slate-400">{person.role} • {person.weeklyCapacity}h/wk</div>
+                        <div className="font-medium text-[#cccccc] text-sm truncate">{person.name}</div>
+                        <div className="text-xs text-[#969696]">{person.role} • {person.weeklyCapacity}h/wk</div>
                       </div>
                     </div>
 
                     {/* Add Assignment Button */}
                     <div className="flex items-center justify-center">
                       <button 
-                        className="w-7 h-7 rounded text-white hover:text-slate-300 hover:bg-slate-700 transition-colors text-center text-sm font-medium leading-none font-mono"
+                        className="w-7 h-7 rounded text-white hover:text-[#969696] hover:bg-[#3e3e42] transition-colors text-center text-sm font-medium leading-none font-mono"
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Add new assignment"
                         onClick={() => {
@@ -491,12 +491,12 @@ const AssignmentGrid: React.FC = () => {
 
                   {/* Assignment Rows */}
                   {person.isExpanded && person.assignments.map((assignment) => (
-                    <div key={assignment.id} className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-slate-850 hover:bg-slate-800 transition-colors">
+                    <div key={assignment.id} className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#252526] hover:bg-[#2d2d30] transition-colors">
                       
                       {/* Assignment Name */}
                       <div className="flex items-center py-1 pl-[60px] pr-2">
                         <div className="min-w-0 flex-1">
-                          <div className="text-slate-300 text-xs truncate">{assignment.projectName}</div>
+                          <div className="text-[#cccccc] text-xs truncate">{assignment.projectName}</div>
                         </div>
                       </div>
 
@@ -533,7 +533,7 @@ const AssignmentGrid: React.FC = () => {
                                 step="0.5"
                                 value={editingValue}
                                 onChange={(e) => setEditingValue(e.target.value)}
-                                className="w-12 h-6 text-xs rounded border bg-slate-700 border-slate-500 text-slate-50 text-center focus:border-blue-400 focus:ring-1 focus:ring-blue-400 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                className="w-12 h-6 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] text-center focus:border-[#007acc] focus:ring-1 focus:ring-[#007acc] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 onBlur={() => {
                                   const numValue = parseFloat(editingValue) || 0;
                                   if (selectedCells.length > 0) {
@@ -578,10 +578,10 @@ const AssignmentGrid: React.FC = () => {
                               <div 
                                 className={`w-12 h-6 text-xs rounded flex items-center justify-center cursor-pointer transition-colors ${
                                   isMultiSelected 
-                                    ? 'ring-2 ring-purple-400 bg-purple-500/30 text-slate-50'
+                                    ? 'ring-2 ring-purple-400 bg-purple-500/30 text-[#cccccc]'
                                     : isSelected 
-                                      ? 'ring-2 ring-blue-400 bg-blue-500/20 text-slate-50'
-                                      : 'text-slate-200 hover:bg-slate-700'
+                                      ? 'ring-2 ring-blue-400 bg-blue-500/20 text-[#cccccc]'
+                                      : 'text-[#cccccc] hover:bg-[#3e3e42]'
                                 }`}
                                 onClick={(e) => {
                                   e.preventDefault();
@@ -633,7 +633,7 @@ const AssignmentGrid: React.FC = () => {
 
                   {/* Add Assignment Form */}
                   {person.isExpanded && isAddingAssignment === person.id && (
-                    <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-slate-800 border border-blue-500/30">
+                    <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#2d2d30] border border-blue-500/30">
                       <div className="flex items-center py-1 pl-[60px] pr-2">
                         <input
                           type="text"
@@ -648,7 +648,7 @@ const AssignmentGrid: React.FC = () => {
                             }
                           }}
                           placeholder="Project name..."
-                          className="w-full px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-200 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
+                          className="w-full px-2 py-1 text-xs bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                           autoFocus
                         />
                       </div>
@@ -662,7 +662,7 @@ const AssignmentGrid: React.FC = () => {
                           ✓
                         </button>
                         <button 
-                          className="w-5 h-5 rounded bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium transition-colors flex items-center justify-center"
+                          className="w-5 h-5 rounded bg-[#3e3e42] hover:bg-[#4e4e52] text-white text-xs font-medium transition-colors flex items-center justify-center"
                           title="Cancel"
                           onClick={() => {
                             setIsAddingAssignment(null);
@@ -674,7 +674,7 @@ const AssignmentGrid: React.FC = () => {
                       </div>
                       {weeks.map((week) => (
                         <div key={week.date} className="flex items-center justify-center">
-                          <div className="w-12 h-6 flex items-center justify-center text-slate-600 text-xs">—</div>
+                          <div className="w-12 h-6 flex items-center justify-center text-[#757575] text-xs">—</div>
                         </div>
                       ))}
                     </div>
@@ -682,16 +682,16 @@ const AssignmentGrid: React.FC = () => {
 
                   {/* Empty State */}
                   {person.isExpanded && person.assignments.length === 0 && (
-                    <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-slate-850">
+                    <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#252526]">
                       <div className="flex items-center py-1 pl-[60px] pr-2">
-                        <div className="text-slate-500 text-xs italic">
+                        <div className="text-[#757575] text-xs italic">
                           No assignments
                         </div>
                       </div>
                       <div></div>
                       {weeks.map((week) => (
                         <div key={week.date} className="flex items-center justify-center">
-                          <div className="w-12 h-6 flex items-center justify-center text-slate-600 text-xs">—</div>
+                          <div className="w-12 h-6 flex items-center justify-center text-[#757575] text-xs">—</div>
                         </div>
                       ))}
                     </div>
@@ -703,7 +703,7 @@ const AssignmentGrid: React.FC = () => {
         </div>
 
         {/* Status Bar */}
-        <div className="flex justify-between items-center text-xs text-slate-400 px-1">
+        <div className="flex justify-between items-center text-xs text-[#969696] px-1">
           <div className="flex gap-6">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500"></div>

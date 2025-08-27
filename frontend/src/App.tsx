@@ -9,7 +9,7 @@ import { PeopleList, PersonForm } from './pages/People';
 import { AssignmentList, AssignmentForm, AssignmentGrid } from './pages/Assignments';
 import AssignmentGridMockup from './components/mockup/AssignmentGridMockup';
 
-// Enable dark mode globally
+// Enable VSCode-style dark theme globally
 document.documentElement.classList.add('dark');
 
 function App() {

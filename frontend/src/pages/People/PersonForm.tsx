@@ -106,10 +106,10 @@ const PersonForm: React.FC = () => {
       <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-50">
+        <h1 className="text-2xl font-bold text-[#cccccc]">
           {isEditing ? 'Edit Person' : 'Add New Person'}
         </h1>
-        <p className="text-slate-400 mt-1">
+        <p className="text-[#969696] mt-1">
           {isEditing ? 'Update team member information' : 'Add a new team member to track their workload'}
         </p>
       </div>
@@ -122,7 +122,7 @@ const PersonForm: React.FC = () => {
       )}
 
       {/* Form */}
-      <Card className="bg-slate-800 border-slate-700 p-6">
+      <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           
           {/* Name Field */}
@@ -135,9 +135,9 @@ const PersonForm: React.FC = () => {
               placeholder="Enter full name"
               required
               error={validationErrors.name}
-              className="bg-slate-700 border-slate-600 text-slate-50"
+              className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
             />
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-[#969696] text-sm mt-1">
               This will be displayed in reports and assignments
             </p>
           </div>
@@ -155,9 +155,9 @@ const PersonForm: React.FC = () => {
               max="80"
               required
               error={validationErrors.weeklyCapacity}
-              className="bg-slate-700 border-slate-600 text-slate-50"
+              className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
             />
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-[#969696] text-sm mt-1">
               Typical full-time: 40h, Part-time: 20h, Contractor: 36h
             </p>
           </div>

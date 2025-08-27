@@ -196,10 +196,10 @@ const AssignmentForm: React.FC = () => {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-50">
+          <h1 className="text-2xl font-bold text-[#cccccc]">
             {isEditing ? 'Edit Assignment' : 'Create New Assignment'}
           </h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-[#969696] mt-1">
             Assign a team member to a project with weekly hour allocations for the next 12 weeks
           </p>
           {formData.person && (
@@ -219,18 +219,18 @@ const AssignmentForm: React.FC = () => {
         )}
 
         {/* Form */}
-        <Card className="bg-slate-800 border-slate-700 p-6">
+        <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             
             {/* Person Selection */}
             <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
+              <label className="block text-sm font-medium text-[#cccccc] mb-2">
                 Person <span className="text-red-400">*</span>
               </label>
               <select
                 value={formData.person}
                 onChange={(e) => handleChange('person', e.target.value)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-slate-700 border-slate-600 text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="">Select a person...</option>
                 {people.map((person) => (
@@ -254,16 +254,16 @@ const AssignmentForm: React.FC = () => {
                 placeholder="e.g., Website Redesign, Mobile App"
                 required
                 error={validationErrors.projectName}
-                className="bg-slate-700 border-slate-600 text-slate-50"
+                className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
               />
-              <p className="text-slate-400 text-sm mt-1">
+              <p className="text-[#969696] text-sm mt-1">
                 Enter the name of the project or initiative
               </p>
             </div>
 
             {/* Bulk Hours Setter */}
-            <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
-              <label className="block text-sm font-medium text-slate-200 mb-2">
+            <div className="bg-[#3e3e42]/50 p-4 rounded-lg border border-[#3e3e42]">
+              <label className="block text-sm font-medium text-[#cccccc] mb-2">
                 Quick Set All Weeks
               </label>
               <div className="flex gap-2 items-center">
@@ -273,7 +273,7 @@ const AssignmentForm: React.FC = () => {
                   step="0.5"
                   value={bulkHours}
                   onChange={(e) => setBulkHours(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="px-3 py-1 rounded border text-sm bg-slate-600 border-slate-500 text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none w-20"
+                  className="px-3 py-1 rounded border text-sm bg-slate-600 border-slate-500 text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none w-20"
                   placeholder="0"
                 />
                 <span className="text-slate-300 text-sm">hours per week</span>
@@ -286,14 +286,14 @@ const AssignmentForm: React.FC = () => {
                   Apply to All
                 </Button>
               </div>
-              <p className="text-slate-400 text-xs mt-1">
+              <p className="text-[#969696] text-xs mt-1">
                 Set the same hours for all 12 weeks, then adjust individual weeks as needed
               </p>
             </div>
 
             {/* Weekly Hours Grid */}
             <div>
-              <label className="block text-sm font-medium text-slate-200 mb-3">
+              <label className="block text-sm font-medium text-[#cccccc] mb-3">
                 Weekly Hours Allocation <span className="text-red-400">*</span>
               </label>
               
@@ -314,7 +314,7 @@ const AssignmentForm: React.FC = () => {
                       className={`p-3 rounded-lg border ${
                         isOverCapacity 
                           ? 'bg-red-500/20 border-red-500/50' 
-                          : 'bg-slate-700 border-slate-600'
+                          : 'bg-[#3e3e42] border-[#3e3e42]'
                       }`}
                     >
                       <div className="text-xs text-slate-300 mb-1">
@@ -330,11 +330,11 @@ const AssignmentForm: React.FC = () => {
                           className={`w-full px-2 py-1 text-sm rounded border ${
                             isOverCapacity
                               ? 'bg-red-900/50 border-red-500 text-red-300'
-                              : 'bg-slate-600 border-slate-500 text-slate-50'
+                              : 'bg-slate-600 border-slate-500 text-[#cccccc]'
                           } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none`}
                           placeholder="0"
                         />
-                        <span className="text-xs text-slate-400">h</span>
+                        <span className="text-xs text-[#969696]">h</span>
                       </div>
                       {weekError && (
                         <p className="text-xs text-red-400 mt-1">{weekError}</p>
@@ -344,7 +344,7 @@ const AssignmentForm: React.FC = () => {
                 })}
               </div>
               
-              <p className="text-slate-400 text-sm mt-2">
+              <p className="text-[#969696] text-sm mt-2">
                 Enter hours per week for each of the next 12 weeks. Red highlighting indicates hours exceed the person's capacity.
               </p>
             </div>

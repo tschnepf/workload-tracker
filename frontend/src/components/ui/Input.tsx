@@ -16,12 +16,12 @@ const Input: React.FC<InputProps> = ({
   className = '',
   ...props 
 }) => {
-  // Dark mode input styling - consistent across all forms
+  // VSCode-style dark theme input styling - consistent across all forms
   const baseStyles = `
     w-full px-3 py-2 rounded-md border text-sm transition-colors
-    bg-slate-700 border-slate-600 text-slate-50 
-    placeholder-slate-400 focus:border-blue-500 
-    focus:ring-1 focus:ring-blue-500 focus:outline-none
+    bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] 
+    placeholder-[#969696] focus:border-[#007acc] 
+    focus:ring-1 focus:ring-[#007acc] focus:outline-none
   `;
 
   const errorStyles = error 
@@ -31,7 +31,7 @@ const Input: React.FC<InputProps> = ({
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-slate-200">
+        <label className="block text-sm font-medium text-[#cccccc]">
           {label}
           {props.required && <span className="text-red-400 ml-1">*</span>}
         </label>

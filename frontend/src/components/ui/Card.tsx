@@ -1,5 +1,5 @@
 /**
- * Card component with dark mode styling
+ * Card component with VSCode-style dark theme styling
  * CRITICAL: Use consistent card styling everywhere
  */
 
@@ -12,9 +12,9 @@ interface CardProps {
 }
 
 const Card: React.FC<CardProps> = ({ children, className = '', title }) => {
-  // Dark mode card styling - consistent across all cards
+  // VSCode-style dark theme card styling - consistent across all cards
   const baseStyles = `
-    bg-slate-800 border border-slate-700 
+    bg-[#2d2d30] border border-[#3e3e42] 
     rounded-lg shadow-lg shadow-black/5
     p-6
   `;
@@ -22,7 +22,7 @@ const Card: React.FC<CardProps> = ({ children, className = '', title }) => {
   return (
     <div className={`${baseStyles} ${className}`}>
       {title && (
-        <h3 className="text-lg font-semibold text-slate-50 mb-4">
+        <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
           {title}
         </h3>
       )}

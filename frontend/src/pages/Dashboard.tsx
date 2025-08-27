@@ -13,17 +13,17 @@ const Dashboard: React.FC = () => {
     <Layout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-50">
+          <h1 className="text-3xl font-bold text-[#cccccc]">
             Workload Tracker Dashboard
           </h1>
-          <p className="text-slate-300 mt-2">
+          <p className="text-[#969696] mt-2">
             Welcome to the workload management system
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card title="People">
-            <p className="text-slate-300 mb-4">
+            <p className="text-[#969696] mb-4">
               Manage your team members and their capacity
             </p>
             <Button 
@@ -36,7 +36,7 @@ const Dashboard: React.FC = () => {
           </Card>
 
           <Card title="Projects">
-            <p className="text-slate-300 mb-4">
+            <p className="text-[#969696] mb-4">
               Track project progress and assignments
             </p>
             <Button variant="secondary" size="sm">
@@ -45,7 +45,7 @@ const Dashboard: React.FC = () => {
           </Card>
 
           <Card title="Assignments">
-            <p className="text-slate-300 mb-4">
+            <p className="text-[#969696] mb-4">
               Monitor workload allocation and utilization
             </p>
             <Button variant="ghost" size="sm">
@@ -59,19 +59,19 @@ const Dashboard: React.FC = () => {
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span className="text-slate-300">Backend API: Connected</span>
+              <span className="text-[#969696]">Backend API: Connected</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span className="text-slate-300">Database: Online</span>
+              <span className="text-[#969696]">Database: Online</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-              <span className="text-slate-300">Dark Mode: Active</span>
+              <span className="text-[#969696]">VSCode Theme: Active</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-              <span className="text-slate-300">Naming System: Enabled</span>
+              <span className="text-[#969696]">Naming System: Enabled</span>
             </div>
           </div>
         </Card>

@@ -50,7 +50,7 @@ const PeopleList: React.FC = () => {
   if (loading) {
     return (
       <div className="p-6">
-        <Card className="bg-slate-800 border-slate-700 p-6">
+        <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
           <div className="text-slate-300">Loading people...</div>
         </Card>
       </div>
@@ -62,7 +62,7 @@ const PeopleList: React.FC = () => {
       <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-50">Team Members</h1>
+        <h1 className="text-2xl font-bold text-[#cccccc]">Team Members</h1>
         <Button
           variant="primary"
           onClick={() => navigate('/people/new')}
@@ -79,10 +79,10 @@ const PeopleList: React.FC = () => {
       )}
 
       {/* People Table */}
-      <Card className="bg-slate-800 border-slate-700 overflow-hidden">
+      <Card className="bg-[#2d2d30] border-[#3e3e42] overflow-hidden">
         {people.length === 0 ? (
           <div className="p-6 text-center">
-            <div className="text-slate-400 mb-4">No team members yet</div>
+            <div className="text-[#969696] mb-4">No team members yet</div>
             <Button
               variant="primary"
               onClick={() => navigate('/people/new')}
@@ -93,33 +93,33 @@ const PeopleList: React.FC = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-700 border-b border-slate-600">
+              <thead className="bg-[#3e3e42] border-b border-[#3e3e42]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-200 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#cccccc] uppercase tracking-wider">
                     Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-200 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#cccccc] uppercase tracking-wider">
                     Weekly Capacity
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-200 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#cccccc] uppercase tracking-wider">
                     Added
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-200 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-[#cccccc] uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-600">
                 {people.map((person) => (
-                  <tr key={person.id} className="hover:bg-slate-700/50 transition-colors">
+                  <tr key={person.id} className="hover:bg-[#3e3e42]/50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-slate-50">{person.name}</div>
+                      <div className="font-medium text-[#cccccc]">{person.name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-slate-300">{person.weeklyCapacity}h</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-slate-400 text-sm">
+                      <div className="text-[#969696] text-sm">
                         {person.createdAt ? new Date(person.createdAt).toLocaleDateString() : '-'}
                       </div>
                     </td>
@@ -148,9 +148,9 @@ const PeopleList: React.FC = () => {
       </Card>
 
       {/* Summary */}
-      <Card className="bg-slate-800 border-slate-700 p-4">
-        <div className="text-slate-400 text-sm">
-          Total: <span className="text-slate-50 font-medium">{people.length}</span> team members
+      <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
+        <div className="text-[#969696] text-sm">
+          Total: <span className="text-[#cccccc] font-medium">{people.length}</span> team members
         </div>
       </Card>
       </div>

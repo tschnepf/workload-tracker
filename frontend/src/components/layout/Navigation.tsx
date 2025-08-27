@@ -9,14 +9,14 @@ import { Link, useLocation } from 'react-router-dom';
 const Navigation: React.FC = () => {
   const location = useLocation();
   
-  // Dark mode navigation styling - maintain consistency
+  // VSCode-style dark theme navigation styling - maintain consistency
   const navStyles = {
-    container: 'bg-slate-900 border-b border-slate-700 shadow-sm',
+    container: 'bg-[#2d2d30] border-b border-[#3e3e42] shadow-sm',
     inner: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8',
-    logo: 'text-xl font-bold text-slate-50',
+    logo: 'text-xl font-bold text-[#cccccc]',
     links: 'flex space-x-8',
-    link: 'text-slate-300 hover:text-slate-50 px-3 py-2 text-sm font-medium transition-colors',
-    activeLink: 'text-blue-400 hover:text-blue-300 px-3 py-2 text-sm font-medium'
+    link: 'text-[#969696] hover:text-[#cccccc] px-3 py-2 text-sm font-medium transition-colors',
+    activeLink: 'text-[#007acc] hover:text-[#1e90ff] px-3 py-2 text-sm font-medium'
   };
 
   const isActive = (path: string) => location.pathname === path;

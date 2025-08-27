@@ -18,12 +18,12 @@ const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props 
 }) => {
-  // Dark mode button variants - NEVER hardcode colors
+  // VSCode-style dark theme button variants - NEVER hardcode colors
   const variants = {
-    primary: 'bg-blue-500 hover:bg-blue-400 text-white shadow-sm',
-    secondary: 'bg-slate-600 hover:bg-slate-500 text-slate-50 shadow-sm',
+    primary: 'bg-[#007acc] hover:bg-[#1e90ff] text-white shadow-sm',
+    secondary: 'bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] shadow-sm',
     danger: 'bg-red-500 hover:bg-red-400 text-white shadow-sm',
-    ghost: 'bg-transparent hover:bg-slate-700 text-slate-300 border border-slate-600'
+    ghost: 'bg-transparent hover:bg-[#3e3e42] text-[#969696] border border-[#3e3e42]'
   };
 
   const sizes = {
@@ -32,7 +32,7 @@ const Button: React.FC<ButtonProps> = ({
     lg: 'px-6 py-3 text-base'
   };
 
-  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:pointer-events-none';
+  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:ring-offset-2 focus:ring-offset-[#1e1e1e] disabled:opacity-50 disabled:pointer-events-none';
 
   return (
     <button
