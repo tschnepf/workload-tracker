@@ -36,6 +36,7 @@ export interface Assignment {
   person: number; // Person ID
   personName?: string; // Read-only person name
   personWeeklyCapacity?: number; // Read-only person capacity
+  personSkills?: PersonSkill[]; // Read-only person skills for matching
   projectName?: string; // Legacy field - keep for migration compatibility
   project?: number; // Project ID (FK)
   projectDisplayName?: string; // Read-only project display name
@@ -45,6 +46,7 @@ export interface Assignment {
   allocationPercentage?: number; // Legacy field
   availableWeeks?: string[]; // Read-only list of available weeks
   roleOnProject?: string;
+  requiredSkills?: string[]; // Required skills for this assignment (skill tag names)
   startDate?: string;
   endDate?: string;
   notes?: string;
@@ -75,6 +77,29 @@ export interface Deliverable {
   isCompleted?: boolean; // Completion tracking
   completedDate?: string | null; // When actually completed (YYYY-MM-DD)
   createdAt?: string; // System timestamps
+  updatedAt?: string;
+}
+
+export interface SkillTag {
+  id?: number;
+  name: string;
+  category?: string;
+  description?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PersonSkill {
+  id?: number;
+  person: number; // Person ID
+  skillTagId?: number; // For write operations
+  skillTagName?: string; // Read-only skill tag name
+  skillType: 'strength' | 'development' | 'learning';
+  proficiencyLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  notes?: string;
+  lastUsed?: string | null;
+  createdAt?: string;
   updatedAt?: string;
 }
 

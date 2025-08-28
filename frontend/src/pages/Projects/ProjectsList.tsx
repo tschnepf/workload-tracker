@@ -4,10 +4,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Project, Person, Assignment, Deliverable } from '@/types/models';
+import { Project, Person, Assignment, Deliverable, PersonSkill } from '@/types/models';
 import { projectsApi, peopleApi, assignmentsApi, deliverablesApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
 import DeliverablesSection from '@/components/deliverables/DeliverablesSection';
+import SkillsAutocomplete from '@/components/skills/SkillsAutocomplete';
 
 const ProjectsList: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -43,6 +44,7 @@ const ProjectsList: React.FC = () => {
     roleOnProject: '',
     currentWeekHours: 0,
     roleSearch: '',
+    requiredSkills: [] as string[],
   });
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [roleSearchResults, setRoleSearchResults] = useState<string[]>([]);
@@ -370,6 +372,7 @@ const ProjectsList: React.FC = () => {
       roleOnProject: existingRole,
       currentWeekHours,
       roleSearch: existingRole, // Keep the existing role in the search field
+      requiredSkills: assignment.requiredSkills || [],
     });
     // Clear any previous search results
     setRoleSearchResults([]);
@@ -425,7 +428,8 @@ const ProjectsList: React.FC = () => {
       
       const updateData = {
         roleOnProject: roleToSave,
-        weeklyHours: updatedWeeklyHours
+        weeklyHours: updatedWeeklyHours,
+        requiredSkills: editData.requiredSkills
       };
       
       console.log('Saving assignment with role:', roleToSave, 'Original editData:', editData);
@@ -453,6 +457,7 @@ const ProjectsList: React.FC = () => {
       roleOnProject: '',
       currentWeekHours: 0,
       roleSearch: '',
+      requiredSkills: [],
     });
   };
 
@@ -905,7 +910,7 @@ const ProjectsList: React.FC = () => {
                           {editingAssignment === assignment.id ? (
                             // Editing mode
                             <div className="p-3 bg-[#3e3e42]/50 rounded border border-[#3e3e42]">
-                              <div className="grid grid-cols-4 gap-4 items-center">
+                              <div className="grid grid-cols-5 gap-4 items-center">
                                 {/* Person Name (read-only) */}
                                 <div className="text-[#cccccc]">{assignment.personName || 'Unknown'}</div>
                                 
@@ -950,6 +955,31 @@ const ProjectsList: React.FC = () => {
                                   />
                                 </div>
 
+                                {/* Skills Tags */}
+                                <div className="relative">
+                                  <SkillsAutocomplete
+                                    selectedSkills={editData.requiredSkills.map((skillName): PersonSkill => ({
+                                      id: 0,
+                                      person: 0,
+                                      skillTagName: skillName,
+                                      skillType: 'strength' as const,
+                                      proficiencyLevel: 'intermediate' as const,
+                                      notes: '',
+                                      lastUsed: null,
+                                      createdAt: '',
+                                      updatedAt: ''
+                                    }))}
+                                    onSkillsChange={(skills) => {
+                                      setEditData(prev => ({
+                                        ...prev,
+                                        requiredSkills: skills.map(skill => skill.skillTagName || '')
+                                      }));
+                                    }}
+                                    placeholder="Required skills..."
+                                    className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+                                  />
+                                </div>
+
                                 {/* Action Buttons */}
                                 <div className="flex gap-1">
                                   <button
@@ -971,10 +1001,17 @@ const ProjectsList: React.FC = () => {
                             // Display mode
                             <div className="flex justify-between items-center p-2 bg-[#3e3e42]/30 rounded">
                               <div className="flex-1">
-                                <div className="grid grid-cols-3 gap-4">
+                                <div className="grid grid-cols-4 gap-4">
                                   <div className="text-[#cccccc]">{assignment.personName || 'Unknown'}</div>
                                   <div className="text-[#969696]">{assignment.roleOnProject || 'Team Member'}</div>
                                   <div className="text-[#969696]">{getCurrentWeekHours(assignment)}h</div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {assignment.requiredSkills?.map((skill, index) => (
+                                      <span key={index} className="px-2 py-0.5 rounded-full text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                        {skill}
+                                      </span>
+                                    )) || <span className="text-[#969696] text-xs">No skills specified</span>}
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex gap-1">

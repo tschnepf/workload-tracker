@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData } from '@/types/models';
+import { Person, Project, Assignment, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -213,6 +213,87 @@ export const dashboardApi = {
   // Get dashboard data
   getDashboard: () =>
     fetchApi<DashboardData>('/dashboard/'),
+};
+
+// Skills API
+export const skillTagsApi = {
+  // List skill tags
+  list: (params?: { search?: string }) => {
+    const queryParams = params ? new URLSearchParams(
+      Object.entries(params).filter(([_, value]) => value !== undefined && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString() : '';
+    const url = queryParams ? `/skills/skill-tags/?${queryParams}` : '/skills/skill-tags/';
+    return fetchApi<PaginatedResponse<SkillTag>>(url);
+  },
+
+  // Get skill tag
+  get: (id: number) =>
+    fetchApi<SkillTag>(`/skills/skill-tags/${id}/`),
+
+  // Create skill tag
+  create: (data: Omit<SkillTag, 'id' | 'isActive' | 'createdAt' | 'updatedAt'>) =>
+    fetchApi<SkillTag>('/skills/skill-tags/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update skill tag
+  update: (id: number, data: Partial<SkillTag>) =>
+    fetchApi<SkillTag>(`/skills/skill-tags/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete skill tag
+  delete: (id: number) =>
+    fetchApi<void>(`/skills/skill-tags/${id}/`, {
+      method: 'DELETE',
+    }),
+};
+
+export const personSkillsApi = {
+  // List person skills
+  list: (params?: { person?: number; skill_type?: string }) => {
+    const queryParams = params ? new URLSearchParams(
+      Object.entries(params).filter(([_, value]) => value !== undefined && value !== '')
+        .map(([key, value]) => [key, String(value)])
+    ).toString() : '';
+    const url = queryParams ? `/skills/person-skills/?${queryParams}` : '/skills/person-skills/';
+    return fetchApi<PaginatedResponse<PersonSkill>>(url);
+  },
+
+  // Get person skill
+  get: (id: number) =>
+    fetchApi<PersonSkill>(`/skills/person-skills/${id}/`),
+
+  // Create person skill
+  create: (data: Omit<PersonSkill, 'id' | 'skillTagName' | 'createdAt' | 'updatedAt'>) =>
+    fetchApi<PersonSkill>('/skills/person-skills/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update person skill
+  update: (id: number, data: Partial<PersonSkill>) =>
+    fetchApi<PersonSkill>(`/skills/person-skills/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete person skill
+  delete: (id: number) =>
+    fetchApi<void>(`/skills/person-skills/${id}/`, {
+      method: 'DELETE',
+    }),
+
+  // Get skill summary for a person
+  summary: (personId: number) =>
+    fetchApi<{
+      strengths: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+      development: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+      learning: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+    }>(`/skills/person-skills/summary/?person=${personId}`),
 };
 
 export { ApiError };

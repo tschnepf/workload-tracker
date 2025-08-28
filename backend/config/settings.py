@@ -46,6 +46,7 @@ LOCAL_APPS = [
     'deliverables',
     'departments',
     'dashboard',
+    'skills',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -152,7 +153,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Feature flags for progressive enhancement
 FEATURES = {
     'USE_PROJECT_OBJECTS': True,   # ✅ Chunk 5 Complete - Project objects implemented
-    'USE_DEPARTMENTS': False,      # Flip to True in Chunk 6
-    'USE_SKILLS': False,           # Future feature
+    'USE_DEPARTMENTS': True,       # ✅ Chunk 6 Active - Department filtering enabled
+    'USE_SKILLS': True,            # ✅ Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
 }
