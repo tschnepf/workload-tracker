@@ -22,11 +22,19 @@ const PeopleList: React.FC = () => {
   // Person skills data
   const [personSkills, setPersonSkills] = useState<PersonSkill[]>([]);
   const [editingSkills, setEditingSkills] = useState(false);
+  const [editingProficiency, setEditingProficiency] = useState<string | null>(null); // skillTagName-skillType key
   const [skillsData, setSkillsData] = useState({
     strengths: [] as PersonSkill[],
     development: [] as PersonSkill[],
     learning: [] as PersonSkill[]
   });
+
+  const proficiencyLevels = [
+    { value: 'beginner', label: 'Beginner' },
+    { value: 'intermediate', label: 'Intermediate' },
+    { value: 'advanced', label: 'Advanced' },
+    { value: 'expert', label: 'Expert' }
+  ];
 
   useEffect(() => {
     loadPeople();
@@ -37,6 +45,21 @@ const PeopleList: React.FC = () => {
       loadPersonSkills(selectedPerson.id);
     }
   }, [selectedPerson]);
+
+  // Close proficiency dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (editingProficiency) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.proficiency-dropdown')) {
+          setEditingProficiency(null);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [editingProficiency]);
 
   const loadPeople = async () => {
     try {
@@ -91,6 +114,13 @@ const PeopleList: React.FC = () => {
       // Get all current skills for this person
       const currentSkills = [...skillsData.strengths, ...skillsData.development, ...skillsData.learning];
       
+      console.log('All skills to save:', currentSkills);
+      console.log('Skills by type:', {
+        strengths: skillsData.strengths,
+        development: skillsData.development,
+        learning: skillsData.learning
+      });
+      
       // Delete all existing skills for this person
       for (const skill of personSkills) {
         if (skill.id) {
@@ -100,13 +130,23 @@ const PeopleList: React.FC = () => {
       
       // Create new skills
       for (const skill of currentSkills) {
-        await personSkillsApi.create({
+        // Skip skills with invalid skillTagId
+        if (!skill.skillTagId) {
+          console.error('Skipping skill with missing skillTagId:', skill);
+          continue;
+        }
+        
+        const skillData = {
           person: selectedPerson.id,
           skillTagId: skill.skillTagId,
           skillType: skill.skillType,
-          proficiencyLevel: skill.proficiencyLevel || 'intermediate',
+          proficiencyLevel: skill.proficiencyLevel || 'beginner',
           notes: skill.notes || ''
-        });
+        };
+        
+        console.log('Creating skill:', skillData);
+        
+        await personSkillsApi.create(skillData);
       }
       
       // Reload person skills
@@ -130,6 +170,53 @@ const PeopleList: React.FC = () => {
       ...prev,
       [skillType]: skills
     }));
+  };
+
+  const handleProficiencyClick = (skill: PersonSkill, skillType: string) => {
+    if (editingSkills) return; // Only allow proficiency editing when NOT in skills edit mode
+    const key = `${skill.skillTagName}-${skillType}`;
+    setEditingProficiency(editingProficiency === key ? null : key);
+  };
+
+  const handleProficiencyChange = async (skill: PersonSkill, skillType: 'strengths' | 'development' | 'learning', newProficiency: string) => {
+    if (!selectedPerson?.id) return;
+
+    try {
+      // Find the actual PersonSkill record to update
+      const apiSkillType = skillType === 'strengths' ? 'strength' : skillType.slice(0, -1); // Map to API format
+      const skillToUpdate = personSkills.find(s => 
+        s.skillTagName === skill.skillTagName && s.skillType === apiSkillType
+      );
+
+      if (skillToUpdate?.id) {
+        // Update in database immediately
+        await personSkillsApi.update(skillToUpdate.id, {
+          proficiencyLevel: newProficiency
+        });
+
+        // Update local state
+        const updatedSkills = skillsData[skillType].map(s => 
+          s.skillTagName === skill.skillTagName 
+            ? { ...s, proficiencyLevel: newProficiency }
+            : s
+        );
+        
+        updateSkillsByType(skillType, updatedSkills);
+        
+        // Also update the main personSkills array
+        const updatedPersonSkills = personSkills.map(s => 
+          s.id === skillToUpdate.id 
+            ? { ...s, proficiencyLevel: newProficiency }
+            : s
+        );
+        setPersonSkills(updatedPersonSkills);
+      }
+    } catch (error) {
+      console.error('Failed to update proficiency level:', error);
+      setError('Failed to update skill proficiency');
+    }
+    
+    setEditingProficiency(null);
   };
 
   // Filter people
@@ -321,18 +408,50 @@ const PeopleList: React.FC = () => {
                   {editingSkills ? (
                     <SkillsAutocomplete
                       selectedSkills={skillsData.strengths}
-                      onSkillsChange={(skills) => updateSkillsByType('strengths', skills.map(s => ({...s, skillType: 'strength'})))}
+                      onSkillsChange={(skills) => updateSkillsByType('strengths', skills)}
+                      skillType="strength"
                       placeholder="Add strengths..."
                       className="w-full px-3 py-2 text-sm bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                     />
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {skillsData.strengths.map((skill, index) => (
-                        <span key={index} className="px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                          {skill.skillTagName}
-                          <span className="ml-1 opacity-75">({skill.proficiencyLevel})</span>
-                        </span>
-                      ))}
+                      {skillsData.strengths.map((skill, index) => {
+                        const proficiencyKey = `${skill.skillTagName}-strengths`;
+                        const isEditingThisProficiency = editingProficiency === proficiencyKey;
+                        
+                        return (
+                          <div key={index} className="relative">
+                            <span className="px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                              {skill.skillTagName}
+                              <span 
+                                className={`ml-1 opacity-75 ${!editingSkills ? 'cursor-pointer hover:opacity-100 hover:underline' : ''}`}
+                                onClick={() => handleProficiencyClick(skill, 'strengths')}
+                              >
+                                ({skill.proficiencyLevel})
+                              </span>
+                            </span>
+                            
+                            {/* Proficiency Dropdown */}
+                            {isEditingThisProficiency && !editingSkills && (
+                              <div className="proficiency-dropdown absolute top-full left-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 min-w-32">
+                                {proficiencyLevels.map((level) => (
+                                  <button
+                                    key={level.value}
+                                    onClick={() => handleProficiencyChange(skill, 'strengths', level.value)}
+                                    className={`w-full text-left px-3 py-1 text-xs hover:bg-[#3e3e42] transition-colors border-b border-[#3e3e42] last:border-b-0 ${
+                                      skill.proficiencyLevel === level.value 
+                                        ? 'bg-emerald-500/20 text-emerald-400' 
+                                        : 'text-[#cccccc]'
+                                    }`}
+                                  >
+                                    {level.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                       {skillsData.strengths.length === 0 && (
                         <span className="text-[#969696] text-sm">No strengths listed</span>
                       )}
@@ -349,18 +468,23 @@ const PeopleList: React.FC = () => {
                   {editingSkills ? (
                     <SkillsAutocomplete
                       selectedSkills={skillsData.development}
-                      onSkillsChange={(skills) => updateSkillsByType('development', skills.map(s => ({...s, skillType: 'development'})))}
+                      onSkillsChange={(skills) => updateSkillsByType('development', skills)}
+                      skillType="development"
                       placeholder="Add development areas..."
                       className="w-full px-3 py-2 text-sm bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                     />
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {skillsData.development.map((skill, index) => (
-                        <span key={index} className="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                          {skill.skillTagName}
-                          <span className="ml-1 opacity-75">({skill.proficiencyLevel})</span>
-                        </span>
-                      ))}
+                      {skillsData.development.map((skill, index) => {
+                        const proficiencyKey = `${skill.skillTagName}-development`;
+                        const isEditingThisProficiency = editingProficiency === proficiencyKey;
+                        
+                        return (
+                          <span key={index} className="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            {skill.skillTagName}
+                          </span>
+                        );
+                      })}
                       {skillsData.development.length === 0 && (
                         <span className="text-[#969696] text-sm">No development areas listed</span>
                       )}
@@ -377,18 +501,23 @@ const PeopleList: React.FC = () => {
                   {editingSkills ? (
                     <SkillsAutocomplete
                       selectedSkills={skillsData.learning}
-                      onSkillsChange={(skills) => updateSkillsByType('learning', skills.map(s => ({...s, skillType: 'learning'})))}
+                      onSkillsChange={(skills) => updateSkillsByType('learning', skills)}
+                      skillType="learning"
                       placeholder="Add learning goals..."
                       className="w-full px-3 py-2 text-sm bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                     />
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {skillsData.learning.map((skill, index) => (
-                        <span key={index} className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                          {skill.skillTagName}
-                          <span className="ml-1 opacity-75">({skill.proficiencyLevel})</span>
-                        </span>
-                      ))}
+                      {skillsData.learning.map((skill, index) => {
+                        const proficiencyKey = `${skill.skillTagName}-learning`;
+                        const isEditingThisProficiency = editingProficiency === proficiencyKey;
+                        
+                        return (
+                          <span key={index} className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                            {skill.skillTagName}
+                          </span>
+                        );
+                      })}
                       {skillsData.learning.length === 0 && (
                         <span className="text-[#969696] text-sm">No learning goals listed</span>
                       )}

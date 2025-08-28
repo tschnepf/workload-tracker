@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Assignment, Person } from '@/types/models';
-import { assignmentsApi, peopleApi } from '@/services/api';
-import Layout from '@/components/layout/Layout';
+import { Assignment, Person, Deliverable } from '@/types/models';
+import { assignmentsApi, peopleApi, deliverablesApi } from '@/services/api';
+import Sidebar from '@/components/layout/Sidebar';
 
 interface PersonWithAssignments extends Person {
   assignments: Assignment[];
@@ -39,6 +39,7 @@ const getNext12Mondays = (): { date: string, display: string, fullDisplay: strin
 
 const AssignmentGrid: React.FC = () => {
   const [people, setPeople] = useState<PersonWithAssignments[]>([]);
+  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddingAssignment, setIsAddingAssignment] = useState<number | null>(null);
@@ -50,6 +51,25 @@ const AssignmentGrid: React.FC = () => {
   const [selectionStart, setSelectionStart] = useState<{ personId: number, assignmentId: number, week: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const weeks = getNext12Mondays();
+
+  // Helper function to determine if a date falls within a given week
+  const isDateInWeek = (date: string, weekStart: string): boolean => {
+    const deliverableDate = new Date(date);
+    const weekStartDate = new Date(weekStart);
+    const weekEndDate = new Date(weekStart);
+    weekEndDate.setDate(weekStartDate.getDate() + 6); // Week ends on Sunday
+    
+    return deliverableDate >= weekStartDate && deliverableDate <= weekEndDate;
+  };
+
+  // Get deliverables for a specific project and week
+  const getDeliverablesForProjectWeek = (projectId: number, weekStart: string): Deliverable[] => {
+    return deliverables.filter(deliverable => 
+      deliverable.project === projectId && 
+      deliverable.date && 
+      isDateInWeek(deliverable.date, weekStart)
+    );
+  };
 
   // Load data on mount
   useEffect(() => {
@@ -170,13 +190,18 @@ const AssignmentGrid: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const [peopleResponse, assignmentsResponse] = await Promise.all([
+      const [peopleResponse, assignmentsResponse, deliverablesResponse] = await Promise.all([
         peopleApi.list(),
-        assignmentsApi.list()
+        assignmentsApi.list(),
+        deliverablesApi.list()
       ]);
       
       const peopleData = peopleResponse.results || [];
       const assignmentsData = assignmentsResponse.results || [];
+      const deliverablesData = deliverablesResponse.results || [];
+
+      // Store deliverables in state
+      setDeliverables(deliverablesData);
       
       const peopleWithAssignments: PersonWithAssignments[] = peopleData.map(person => ({
         ...person,
@@ -371,55 +396,67 @@ const AssignmentGrid: React.FC = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-[#969696]">Loading assignments...</div>
+      <div className="min-h-screen bg-[#1e1e1e] flex">
+        <Sidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-[#969696]">Loading assignments...</div>
+          </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-red-400">{error}</div>
+      <div className="min-h-screen bg-[#1e1e1e] flex">
+        <Sidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-red-400">{error}</div>
+          </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[#cccccc]">Assignment Grid</h1>
-            <p className="text-[#969696] text-sm">Manage team workload allocation across 12 weeks</p>
-          </div>
-          <div className="text-xs text-[#969696]">
-            {people.length} people • {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
+    <div className="min-h-screen bg-[#1e1e1e] flex">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* Sticky Header Section */}
+        <div className="sticky top-0 bg-[#1e1e1e] border-b border-[#3e3e42] z-30 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-[#cccccc]">Assignment Grid</h1>
+              <p className="text-[#969696] text-sm">Manage team workload allocation across 12 weeks</p>
+            </div>
+            <div className="text-xs text-[#969696]">
+              {people.length} people • {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
+            </div>
           </div>
         </div>
 
-        {/* Grid Container */}
-        <div className="bg-[#1e1e1e] border border-[#3e3e42] rounded-lg overflow-x-auto">
+        {/* Sticky Week Header - positioned directly below title */}
+        <div className="sticky top-[88px] bg-[#2d2d30] border-b border-[#3e3e42] z-20 overflow-x-auto">
           <div className="min-w-[1400px]">
-            
-            {/* Sticky Header */}
-            <div className="sticky top-0 bg-[#2d2d30] border-b border-[#3e3e42] z-10">
-              <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2">
-                <div className="font-medium text-[#cccccc] text-sm px-2 py-1">Team Member</div>
-                <div className="text-center text-xs text-[#969696] px-1">+/-</div>
-                {weeks.map((week, index) => (
-                  <div key={week.date} className="text-center px-1">
-                    <div className="text-xs font-medium text-[#cccccc]">{week.display}</div>
-                    <div className="text-[10px] text-[#757575]">W{index + 1}</div>
-                  </div>
-                ))}
-              </div>
+            <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2">
+              <div className="font-medium text-[#cccccc] text-sm px-2 py-1">Team Member</div>
+              <div className="text-center text-xs text-[#969696] px-1">+/-</div>
+              {weeks.map((week, index) => (
+                <div key={week.date} className="text-center px-1">
+                  <div className="text-xs font-medium text-[#cccccc]">{week.display}</div>
+                  <div className="text-[10px] text-[#757575]">W{index + 1}</div>
+                </div>
+              ))}
             </div>
+          </div>
+        </div>
+
+        {/* Full Width Grid Container */}
+        <div className="flex-1 overflow-x-auto bg-[#1e1e1e]">
+          <div className="min-w-[1400px]">
 
             {/* Data Rows */}
             <div>
@@ -429,12 +466,12 @@ const AssignmentGrid: React.FC = () => {
                   {/* Person Row */}
                   <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2 hover:bg-[#2d2d30]/50 transition-colors">
                     
-                    {/* Person Info */}
-                    <div className="flex items-center gap-2 pl-3 pr-2 py-1">
-                      <button
-                        onClick={() => togglePersonExpanded(person.id!)}
-                        className="flex-shrink-0 w-5 h-5 flex items-center justify-center hover:bg-[#3e3e42] rounded text-[#969696] hover:text-[#cccccc] transition-all duration-200"
-                      >
+                    {/* Person Info - Entire area clickable */}
+                    <button
+                      onClick={() => togglePersonExpanded(person.id!)}
+                      className="flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left hover:bg-[#3e3e42]/50 transition-all duration-200 rounded-sm"
+                    >
+                      <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[#969696]">
                         <svg 
                           width="12" 
                           height="12" 
@@ -450,12 +487,12 @@ const AssignmentGrid: React.FC = () => {
                             strokeLinejoin="round"
                           />
                         </svg>
-                      </button>
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-[#cccccc] text-sm truncate">{person.name}</div>
                         <div className="text-xs text-[#969696]">{person.role} • {person.weeklyCapacity}h/wk</div>
                       </div>
-                    </div>
+                    </button>
 
                     {/* Add Assignment Button */}
                     <div className="flex items-center justify-center">
@@ -493,7 +530,7 @@ const AssignmentGrid: React.FC = () => {
                       {/* Assignment Name */}
                       <div className="flex items-center py-1 pl-[60px] pr-2">
                         <div className="min-w-0 flex-1">
-                          <div className="text-[#cccccc] text-xs truncate">{assignment.projectName}</div>
+                          <div className="text-[#cccccc] text-xs truncate">{assignment.projectDisplayName}</div>
                         </div>
                       </div>
 
@@ -520,6 +557,10 @@ const AssignmentGrid: React.FC = () => {
                                           selectedCell?.assignmentId === assignment.id && 
                                           selectedCell?.week === week.date;
                         const isMultiSelected = isCellSelected(person.id!, assignment.id!, week.date);
+                        
+                        // Check for deliverables in this week
+                        const weekDeliverables = assignment.project ? getDeliverablesForProjectWeek(assignment.project, week.date) : [];
+                        const hasDeliverables = weekDeliverables.length > 0;
 
                         return (
                           <div key={week.date} className="flex items-center justify-center px-1">
@@ -578,8 +619,16 @@ const AssignmentGrid: React.FC = () => {
                                     ? 'ring-2 ring-purple-400 bg-purple-500/30 text-[#cccccc]'
                                     : isSelected 
                                       ? 'ring-2 ring-blue-400 bg-blue-500/20 text-[#cccccc]'
-                                      : 'text-[#cccccc] hover:bg-[#3e3e42]'
+                                      : hasDeliverables 
+                                        ? 'text-[#cccccc] hover:bg-[#3e3e42] ring-1 ring-orange-400/80 bg-orange-500/15'
+                                        : 'text-[#cccccc] hover:bg-[#3e3e42]'
                                 }`}
+                                title={hasDeliverables ? weekDeliverables.map(d => {
+                                  const parts = [];
+                                  if (d.percentage !== null && d.percentage !== undefined) parts.push(`${d.percentage}%`);
+                                  if (d.description) parts.push(d.description);
+                                  return parts.join(' ');
+                                }).join(', ') : undefined}
                                 onClick={(e) => {
                                   e.preventDefault();
                                   // Single click should only select the cell, never start editing
@@ -719,10 +768,9 @@ const AssignmentGrid: React.FC = () => {
               <span>Overallocated (&gt;100%)</span>
             </div>
           </div>
-          <div>Real assignment grid - Full functionality coming next</div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 

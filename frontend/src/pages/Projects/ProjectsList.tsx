@@ -5,6 +5,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Project, Person, Assignment, Deliverable, PersonSkill } from '@/types/models';
+
+interface PersonWithAvailability extends Person {
+  availableHours?: number;
+  utilizationPercent?: number;
+  totalHours?: number;
+  skillMatchScore?: number;
+  hasSkillMatch?: boolean;
+}
 import { projectsApi, peopleApi, assignmentsApi, deliverablesApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
 import DeliverablesSection from '@/components/deliverables/DeliverablesSection';
@@ -19,6 +27,7 @@ const ProjectsList: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   
   // Deliverables data for all projects
@@ -35,7 +44,7 @@ const ProjectsList: React.FC = () => {
     roleSearch: '',
     weeklyHours: {} as { [key: string]: number }
   });
-  const [personSearchResults, setPersonSearchResults] = useState<Person[]>([]);
+  const [personSearchResults, setPersonSearchResults] = useState<PersonWithAvailability[]>([]);
   const [selectedPersonIndex, setSelectedPersonIndex] = useState(-1);
   
   // Inline editing
@@ -248,21 +257,118 @@ const ProjectsList: React.FC = () => {
     }
   };
 
-  const handlePersonSearch = (searchTerm: string) => {
+  const calculatePersonAvailability = async (person: Person): Promise<{ availableHours: number; utilizationPercent: number; totalHours: number }> => {
+    try {
+      const personCapacity = person.weeklyCapacity || 36;
+      
+      // Get current week key
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
+      const currentWeekKey = monday.toISOString().split('T')[0];
+      
+      let totalHours = 0;
+      
+      // Get all assignments for this person across all projects
+      for (const project of projects) {
+        try {
+          const projectAssignmentsResponse = await assignmentsApi.list({ project: project.id });
+          const projectAssignments = projectAssignmentsResponse.results || [];
+          const personAssignments = projectAssignments.filter(a => a.person === person.id);
+          
+          for (const assignment of personAssignments) {
+            const weekHours = assignment.weeklyHours?.[currentWeekKey] || 0;
+            totalHours += weekHours;
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+      
+      const availableHours = Math.max(0, personCapacity - totalHours);
+      const utilizationPercent = Math.round((totalHours / personCapacity) * 100);
+      
+      return { availableHours, utilizationPercent, totalHours };
+    } catch (error) {
+      return { availableHours: 0, utilizationPercent: 0, totalHours: 0 };
+    }
+  };
+
+  const calculateSkillMatch = (person: PersonWithAvailability, requiredSkills: string[] = []): number => {
+    if (requiredSkills.length === 0) return 0;
+    
+    // Get person's skill assignments (this would come from the assignment data)
+    const personSkills = assignments
+      .filter(a => a.person === person.id)
+      .flatMap(a => a.personSkills || [])
+      .filter(skill => skill.skillType === 'strength')
+      .map(skill => skill.skillTagName?.toLowerCase() || '');
+    
+    const matches = requiredSkills.filter(reqSkill => 
+      personSkills.some(personSkill => 
+        personSkill.includes(reqSkill.toLowerCase()) || 
+        reqSkill.toLowerCase().includes(personSkill)
+      )
+    );
+    
+    return matches.length / requiredSkills.length; // Return match ratio
+  };
+
+  const handlePersonSearch = async (searchTerm: string) => {
     setNewAssignment(prev => ({ ...prev, personSearch: searchTerm }));
     
     if (searchTerm.length < 2) {
       setPersonSearchResults([]);
+      setSelectedPersonIndex(-1);
       return;
     }
     
-    const filtered = people.filter(person =>
+    // Detect potential skill requirements from search term
+    const commonSkills = ['heat', 'lighting', 'hvac', 'autocad', 'python', 'design', 'mechanical', 'electrical'];
+    const detectedSkills = commonSkills.filter(skill => 
+      searchTerm.toLowerCase().includes(skill)
+    );
+    
+    let filtered = people.filter(person =>
       person.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       person.role?.toLowerCase().includes(searchTerm.toLowerCase())
-    ).slice(0, 5); // Limit to 5 results
+    );
     
-    setPersonSearchResults(filtered);
-    setSelectedPersonIndex(-1); // Reset selection when results change
+    // Calculate availability and skill matching for each person
+    const peopleWithData = await Promise.all(
+      filtered.map(async (person) => {
+        const availability = await calculatePersonAvailability(person);
+        const skillMatchScore = calculateSkillMatch({ ...person, ...availability }, detectedSkills);
+        return { 
+          ...person, 
+          ...availability,
+          skillMatchScore,
+          hasSkillMatch: skillMatchScore > 0
+        };
+      })
+    );
+    
+    // Sort by skill match (if any), then availability, then name
+    const sortedResults = peopleWithData
+      .sort((a, b) => {
+        // First priority: Skill match
+        if (a.skillMatchScore !== b.skillMatchScore) {
+          return b.skillMatchScore - a.skillMatchScore;
+        }
+        
+        // Second priority: Availability
+        if (b.availableHours !== a.availableHours) {
+          return b.availableHours - a.availableHours;
+        }
+        
+        // Third priority: Name
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 5);
+    
+    setPersonSearchResults(sortedResults);
+    setSelectedPersonIndex(-1);
   };
 
   const handlePersonSelect = (person: Person) => {
@@ -299,6 +405,38 @@ const ProjectsList: React.FC = () => {
     }
   };
 
+  const getSkillBasedRoleSuggestions = (person: Person | null): string[] => {
+    if (!person || !assignments) return [];
+    
+    // Get person's skills from their existing assignments
+    const personAssignments = assignments.filter(a => a.person === person.id);
+    const personSkills = personAssignments
+      .flatMap(a => a.personSkills || [])
+      .filter(skill => skill.skillType === 'strength')
+      .map(skill => skill.skillTagName?.toLowerCase() || '');
+    
+    const skillBasedRoles: string[] = [];
+    
+    // Map skills to suggested roles
+    if (personSkills.some(skill => skill.includes('heat') || skill.includes('hvac'))) {
+      skillBasedRoles.push('HVAC Engineer', 'Mechanical Designer', 'Heat Calc Specialist');
+    }
+    if (personSkills.some(skill => skill.includes('lighting') || skill.includes('electrical'))) {
+      skillBasedRoles.push('Lighting Designer', 'Electrical Engineer', 'Photometric Specialist');
+    }
+    if (personSkills.some(skill => skill.includes('autocad') || skill.includes('cad'))) {
+      skillBasedRoles.push('CAD Designer', 'Technical Drafter', 'Design Engineer');
+    }
+    if (personSkills.some(skill => skill.includes('python') || skill.includes('programming'))) {
+      skillBasedRoles.push('Automation Engineer', 'Technical Developer', 'Data Analyst');
+    }
+    if (personSkills.some(skill => skill.includes('project') || skill.includes('management'))) {
+      skillBasedRoles.push('Project Manager', 'Team Lead', 'Coordinator');
+    }
+    
+    return skillBasedRoles;
+  };
+
   const handleNewAssignmentRoleSearch = (searchTerm: string) => {
     console.log('handleNewAssignmentRoleSearch called with:', searchTerm);
     console.log('Available roles to search:', availableRoles);
@@ -313,12 +451,26 @@ const ProjectsList: React.FC = () => {
       return;
     }
     
-    const filtered = availableRoles.filter(role =>
+    // Get existing roles that match the search
+    const filteredExistingRoles = availableRoles.filter(role =>
       role.toLowerCase().includes(searchTerm.toLowerCase())
-    ).slice(0, 5);
+    );
     
-    console.log('Filtered roles for new assignment search term "' + searchTerm + '":', filtered);
-    setRoleSearchResults(filtered);
+    // Get skill-based suggestions for the selected person
+    const skillSuggestions = newAssignment.selectedPerson 
+      ? getSkillBasedRoleSuggestions(newAssignment.selectedPerson)
+      : [];
+    
+    const filteredSkillRoles = skillSuggestions.filter(role =>
+      role.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    // Combine and deduplicate, prioritizing skill-based suggestions
+    const allRoles = [...filteredSkillRoles, ...filteredExistingRoles];
+    const uniqueRoles = Array.from(new Set(allRoles)).slice(0, 5);
+    
+    console.log('Filtered role results:', uniqueRoles);
+    setRoleSearchResults(uniqueRoles);
   };
 
   const handleNewAssignmentRoleSelect = (role: string) => {
@@ -345,6 +497,25 @@ const ProjectsList: React.FC = () => {
     if (!selectedProject?.id || !newAssignment.selectedPerson?.id) return;
 
     try {
+      // Check for overallocation warnings before creating
+      const weeklyHours = newAssignment.weeklyHours || {};
+      const totalNewHours = Object.values(weeklyHours).reduce((sum, hours) => sum + (hours || 0), 0);
+      
+      if (totalNewHours > 0) {
+        // Get current week key for warning calculation
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
+        const currentWeekKey = monday.toISOString().split('T')[0];
+        
+        const currentWeekHours = weeklyHours[currentWeekKey] || 0;
+        if (currentWeekHours > 0 && selectedProject?.id) {
+          const conflictWarnings = await checkAssignmentConflicts(newAssignment.selectedPerson.id, selectedProject.id, currentWeekKey, currentWeekHours);
+          setWarnings(conflictWarnings);
+        }
+      }
+
       const assignmentData = {
         person: newAssignment.selectedPerson.id,
         project: selectedProject.id,
@@ -363,6 +534,7 @@ const ProjectsList: React.FC = () => {
 
   const handleCancelAddAssignment = () => {
     setShowAddAssignment(false);
+    setWarnings([]); // Clear warnings on cancel
     setNewAssignment({
       personSearch: '',
       selectedPerson: null,
@@ -416,17 +588,131 @@ const ProjectsList: React.FC = () => {
       return;
     }
     
-    const filtered = availableRoles.filter(role =>
+    // Get existing roles that match the search
+    const filteredExistingRoles = availableRoles.filter(role =>
       role.toLowerCase().includes(searchTerm.toLowerCase())
-    ).slice(0, 5);
+    );
     
-    console.log('Filtered roles for search term "' + searchTerm + '":', filtered);
-    setRoleSearchResults(filtered);
+    // Get skill-based suggestions for the person being edited
+    const editingAssignmentData = assignments.find(a => a.id === editingAssignment);
+    const editingPerson = editingAssignmentData ? people.find(p => p.id === editingAssignmentData.person) : null;
+    
+    const skillSuggestions = editingPerson 
+      ? getSkillBasedRoleSuggestions(editingPerson)
+      : [];
+    
+    const filteredSkillRoles = skillSuggestions.filter(role =>
+      role.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    // Combine and deduplicate, prioritizing skill-based suggestions
+    const allRoles = [...filteredSkillRoles, ...filteredExistingRoles];
+    const uniqueRoles = Array.from(new Set(allRoles)).slice(0, 5);
+    
+    console.log('Filtered roles for search term "' + searchTerm + '":', uniqueRoles);
+    setRoleSearchResults(uniqueRoles);
   };
 
   const handleRoleSelect = (role: string) => {
     setEditData(prev => ({ ...prev, roleOnProject: role, roleSearch: role }));
     setRoleSearchResults([]);
+  };
+
+  const checkAssignmentConflicts = async (personId: number, projectId: number, weekKey: string, newHours: number): Promise<string[]> => {
+    const warnings: string[] = [];
+    
+    try {
+      // Find the person to get their capacity
+      const person = people.find(p => p.id === personId);
+      if (!person) return warnings;
+      
+      const personCapacity = person.weeklyCapacity || 36;
+      
+      // Calculate total hours for this person across all assignments for this week
+      let totalHours = 0;
+      const projectAssignments: { projectName: string; hours: number }[] = [];
+      
+      // Get all assignments for this person across all projects
+      for (const project of projects) {
+        try {
+          const projectAssignmentsResponse = await assignmentsApi.list({ project: project.id });
+          const projectAssignmentsData = projectAssignmentsResponse.results || [];
+          const personAssignments = projectAssignmentsData.filter(a => a.person === personId);
+          
+          let projectHours = 0;
+          for (const assignment of personAssignments) {
+            const weekHours = assignment.weeklyHours?.[weekKey] || 0;
+            totalHours += weekHours;
+            projectHours += weekHours;
+          }
+          
+          if (projectHours > 0) {
+            projectAssignments.push({
+              projectName: project.name,
+              hours: projectHours
+            });
+          }
+        } catch (err) {
+          // Skip projects we can't load
+          continue;
+        }
+      }
+      
+      // Add the new hours we're trying to assign
+      totalHours += newHours;
+      
+      // Check for overallocation
+      if (totalHours > personCapacity) {
+        const overageHours = totalHours - personCapacity;
+        const overagePercent = Math.round((totalHours / personCapacity) * 100);
+        warnings.push(
+          `⚠️ ${person.name} would be at ${overagePercent}% capacity (${totalHours}h/${personCapacity}h) - ${overageHours}h over limit`
+        );
+        
+        // Show current project assignments for context
+        if (projectAssignments.length > 0) {
+          warnings.push(
+            `📋 Current assignments: ${projectAssignments.map(p => `${p.projectName} (${p.hours}h)`).join(', ')}`
+          );
+        }
+      } else if (totalHours > personCapacity * 0.9) {
+        // High utilization warning (over 90%)
+        const utilizationPercent = Math.round((totalHours / personCapacity) * 100);
+        warnings.push(
+          `📊 ${person.name} would be at ${utilizationPercent}% capacity (${totalHours}h/${personCapacity}h) - high utilization`
+        );
+      }
+      
+      // Check for skill mismatches (if person has development areas related to project skills)
+      const currentProject = projects.find(p => p.id === projectId);
+      if (currentProject && person.id) {
+        // Get person's skills from their existing assignments
+        const personAssignments = assignments.filter(a => a.person === person.id);
+        const personSkills = personAssignments
+          .flatMap(a => a.personSkills || [])
+          .filter(skill => skill.skillType === 'development')
+          .map(skill => skill.skillTagName?.toLowerCase() || '');
+        
+        // Simple skill gap detection based on project name
+        const projectName = currentProject.name.toLowerCase();
+        const potentialSkillGaps = personSkills.filter(skill => 
+          projectName.includes('heat') && skill.includes('heat') ||
+          projectName.includes('lighting') && skill.includes('lighting') ||
+          projectName.includes('hvac') && skill.includes('hvac')
+        );
+        
+        if (potentialSkillGaps.length > 0) {
+          warnings.push(
+            `💡 Development opportunity: ${person.name} has "${potentialSkillGaps[0]}" as a development area - consider pairing with a mentor`
+          );
+        }
+      }
+      
+    } catch (error) {
+      console.error('Failed to check assignment conflicts:', error);
+    }
+    
+    return warnings;
   };
 
   const handleSaveEdit = async (assignmentId: number) => {
@@ -440,6 +726,17 @@ const ProjectsList: React.FC = () => {
       const monday = new Date(now);
       monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
       const currentWeekKey = monday.toISOString().split('T')[0];
+
+      // Check for assignment conflicts and overallocation warnings before saving
+      const currentWeekHours = assignment.weeklyHours?.[currentWeekKey] || 0;
+      const hoursChange = editData.currentWeekHours - currentWeekHours;
+      
+      if (hoursChange > 0 && selectedProject?.id) { // Only check if we're increasing hours
+        const conflictWarnings = await checkAssignmentConflicts(assignment.person, selectedProject.id, currentWeekKey, hoursChange);
+        setWarnings(conflictWarnings);
+      } else {
+        setWarnings([]); // Clear warnings if reducing hours
+      }
 
       // Update weekly hours with current week
       const updatedWeeklyHours = {
@@ -476,6 +773,7 @@ const ProjectsList: React.FC = () => {
   const handleCancelEdit = () => {
     setEditingAssignment(null);
     setRoleSearchResults([]);
+    setWarnings([]); // Clear warnings on cancel
     setEditData({
       roleOnProject: '',
       currentWeekHours: 0,
@@ -748,6 +1046,17 @@ const ProjectsList: React.FC = () => {
           {error && (
             <div className="p-3 bg-red-500/20 border-b border-red-500/50">
               <div className="text-red-400 text-sm">{error}</div>
+            </div>
+          )}
+
+          {/* Warnings Message */}
+          {warnings.length > 0 && (
+            <div className="p-3 bg-amber-500/20 border-b border-amber-500/50">
+              {warnings.map((warning, index) => (
+                <div key={index} className="text-amber-400 text-sm flex items-center gap-2">
+                  <span>{warning}</span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -1075,8 +1384,32 @@ const ProjectsList: React.FC = () => {
                                       selectedPersonIndex === index ? 'bg-[#007acc]/30 border-[#007acc]' : ''
                                     }`}
                                   >
-                                    <div className="font-medium">{person.name}</div>
-                                    <div className="text-[#969696]">{person.role}</div>
+                                    <div className="flex items-center justify-between">
+                                      <div className="font-medium">{person.name}</div>
+                                      {person.hasSkillMatch && (
+                                        <span className="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                          🎯 Skill Match
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                      <div className="text-[#969696]">{person.role}</div>
+                                      {person.availableHours !== undefined && (
+                                        <div className="flex items-center gap-2">
+                                          <span className={`text-xs px-1 py-0.5 rounded ${
+                                            person.utilizationPercent! > 100 ? 'text-red-400 bg-red-500/20' :
+                                            person.utilizationPercent! > 85 ? 'text-amber-400 bg-amber-500/20' :
+                                            person.availableHours > 0 ? 'text-emerald-400 bg-emerald-500/20' :
+                                            'text-blue-400 bg-blue-500/20'
+                                          }`}>
+                                            {person.availableHours}h available
+                                          </span>
+                                          <span className="text-[#969696] text-xs">
+                                            ({person.utilizationPercent}% used)
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
                                   </button>
                                 ))}
                               </div>

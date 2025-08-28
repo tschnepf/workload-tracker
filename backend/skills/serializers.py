@@ -19,7 +19,7 @@ class SkillTagSerializer(serializers.ModelSerializer):
 class PersonSkillSerializer(serializers.ModelSerializer):
     """Person skill serializer with camelCase field names and related data"""
     skillTagName = serializers.CharField(source='skill_tag.name', read_only=True)
-    skillTagId = serializers.IntegerField(source='skill_tag.id', write_only=True)
+    skillTagId = serializers.IntegerField(source='skill_tag.id')
     skillType = serializers.CharField(source='skill_type')
     proficiencyLevel = serializers.CharField(source='proficiency_level')
     lastUsed = serializers.DateField(source='last_used', allow_null=True, required=False)

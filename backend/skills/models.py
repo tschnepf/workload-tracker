@@ -47,7 +47,8 @@ class PersonSkill(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ['person', 'skill_tag']
+        # Allow same skill in multiple categories (strengths, development, learning)
+        unique_together = ['person', 'skill_tag', 'skill_type']
         ordering = ['skill_type', 'skill_tag__name']
         verbose_name = 'Person Skill'
         verbose_name_plural = 'Person Skills'

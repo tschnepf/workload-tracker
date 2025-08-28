@@ -35,8 +35,8 @@ const AssignmentList: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: number, projectName: string, personName: string) => {
-    if (!window.confirm(`Remove ${personName} from ${projectName}?`)) {
+  const handleDelete = async (id: number, projectDisplayName: string, personName: string) => {
+    if (!window.confirm(`Remove ${personName} from ${projectDisplayName}?`)) {
       return;
     }
 
@@ -120,7 +120,7 @@ const AssignmentList: React.FC = () => {
                         <div className="font-medium text-[#cccccc]">{assignment.personName}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-slate-300">{assignment.projectName}</div>
+                        <div className="text-slate-300">{assignment.projectDisplayName || assignment.projectName || 'No Project'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <UtilizationBadge percentage={assignment.allocationPercentage} />
@@ -141,7 +141,7 @@ const AssignmentList: React.FC = () => {
                         <Button
                           variant="danger"
                           size="sm"
-                          onClick={() => handleDelete(assignment.id!, assignment.projectName, assignment.personName!)}
+                          onClick={() => handleDelete(assignment.id!, assignment.projectDisplayName!, assignment.personName!)}
                         >
                           Remove
                         </Button>
