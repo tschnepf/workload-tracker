@@ -36,6 +36,7 @@ const ProjectsList: React.FC = () => {
     weeklyHours: {} as { [key: string]: number }
   });
   const [personSearchResults, setPersonSearchResults] = useState<Person[]>([]);
+  const [selectedPersonIndex, setSelectedPersonIndex] = useState(-1);
   
   // Inline editing
   const [editingAssignment, setEditingAssignment] = useState<number | null>(null);
@@ -261,6 +262,7 @@ const ProjectsList: React.FC = () => {
     ).slice(0, 5); // Limit to 5 results
     
     setPersonSearchResults(filtered);
+    setSelectedPersonIndex(-1); // Reset selection when results change
   };
 
   const handlePersonSelect = (person: Person) => {
@@ -270,6 +272,31 @@ const ProjectsList: React.FC = () => {
       personSearch: person.name,
     }));
     setPersonSearchResults([]);
+    setSelectedPersonIndex(-1);
+  };
+
+  const handlePersonSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (personSearchResults.length > 0) {
+        setSelectedPersonIndex(prev => 
+          prev < personSearchResults.length - 1 ? prev + 1 : prev
+        );
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (personSearchResults.length > 0) {
+        setSelectedPersonIndex(prev => prev > -1 ? prev - 1 : -1);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedPersonIndex >= 0 && selectedPersonIndex < personSearchResults.length) {
+        handlePersonSelect(personSearchResults[selectedPersonIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setPersonSearchResults([]);
+      setSelectedPersonIndex(-1);
+    }
   };
 
   const handleNewAssignmentRoleSearch = (searchTerm: string) => {
@@ -1032,6 +1059,7 @@ const ProjectsList: React.FC = () => {
                               placeholder="Start typing name..."
                               value={newAssignment.personSearch}
                               onChange={(e) => handlePersonSearch(e.target.value)}
+                              onKeyDown={handlePersonSearchKeyDown}
                               className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                               autoFocus
                             />
@@ -1039,11 +1067,13 @@ const ProjectsList: React.FC = () => {
                             {/* Search Results Dropdown */}
                             {personSearchResults.length > 0 && (
                               <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
-                                {personSearchResults.map((person) => (
+                                {personSearchResults.map((person, index) => (
                                   <button
                                     key={person.id}
                                     onClick={() => handlePersonSelect(person)}
-                                    className="w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0"
+                                    className={`w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0 ${
+                                      selectedPersonIndex === index ? 'bg-[#007acc]/30 border-[#007acc]' : ''
+                                    }`}
                                   >
                                     <div className="font-medium">{person.name}</div>
                                     <div className="text-[#969696]">{person.role}</div>

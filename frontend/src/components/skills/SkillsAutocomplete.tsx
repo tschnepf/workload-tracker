@@ -25,6 +25,8 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
   const [skillSearch, setSkillSearch] = useState('');
   const [skillResults, setSkillResults] = useState<SkillTag[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isCreatingSkill, setIsCreatingSkill] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
 
   // Search skills using real API
   const searchSkills = async (searchTerm: string) => {
@@ -42,6 +44,7 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
 
       setSkillResults(filtered);
       setShowDropdown(filtered.length > 0);
+      setSelectedIndex(-1); // Reset selection when results change
     } catch (error) {
       console.error('Error searching skills:', error);
       setSkillResults([]);
@@ -74,12 +77,94 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
     onSkillsChange([...selectedSkills, newSkill]);
     setSkillSearch('');
     setShowDropdown(false);
+    setSelectedIndex(-1);
   };
 
   const handleSkillRemove = (skillToRemove: PersonSkill) => {
     onSkillsChange(selectedSkills.filter(skill => 
       skill.skillTagName !== skillToRemove.skillTagName
     ));
+  };
+
+  const createNewSkill = async (skillName: string) => {
+    if (!skillName.trim() || isCreatingSkill) return;
+
+    setIsCreatingSkill(true);
+    try {
+      // Create new skill tag in the database
+      const newSkillTag = await skillTagsApi.create({
+        name: skillName.trim(),
+        category: '', // Default empty category
+        description: ''
+      });
+
+      // Add the new skill to the user's skills
+      const newSkill: PersonSkill = {
+        id: 0,
+        person: 0,
+        skillTagId: newSkillTag.id,
+        skillTagName: newSkillTag.name,
+        skillType: skillType === 'all' ? 'strength' : skillType,
+        proficiencyLevel: 'intermediate',
+        notes: '',
+        lastUsed: null,
+        createdAt: '',
+        updatedAt: ''
+      };
+
+      onSkillsChange([...selectedSkills, newSkill]);
+      setSkillSearch('');
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+    } catch (error) {
+      console.error('Failed to create new skill:', error);
+    } finally {
+      setIsCreatingSkill(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const totalOptions = skillResults.length + (skillSearch.length >= 2 && !skillResults.some(skill => 
+      skill.name.toLowerCase() === skillSearch.trim().toLowerCase()
+    ) ? 1 : 0); // +1 for "Create new" option if shown
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (showDropdown || skillSearch.length >= 2) {
+        setSelectedIndex(prev => prev < totalOptions - 1 ? prev + 1 : prev);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (showDropdown || skillSearch.length >= 2) {
+        setSelectedIndex(prev => prev > -1 ? prev - 1 : -1);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && selectedIndex < skillResults.length) {
+        // Select existing skill
+        handleSkillSelect(skillResults[selectedIndex]);
+      } else if (selectedIndex === skillResults.length && skillSearch.length >= 2) {
+        // Create new skill (last option)
+        createNewSkill(skillSearch.trim());
+      }
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+    } else if (e.key === 'Tab' && skillSearch.trim()) {
+      e.preventDefault();
+      
+      // Check if the typed skill already exists (case-insensitive)
+      const existingSkill = skillResults.find(skill => 
+        skill.name.toLowerCase() === skillSearch.trim().toLowerCase()
+      );
+      
+      if (existingSkill) {
+        handleSkillSelect(existingSkill);
+      } else {
+        // Create new skill
+        createNewSkill(skillSearch.trim());
+      }
+    }
   };
 
   const getSkillTypeColor = (type: string) => {
@@ -100,17 +185,22 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
           placeholder={placeholder}
           value={skillSearch}
           onChange={(e) => setSkillSearch(e.target.value)}
-          className={className}
+          onKeyDown={handleKeyDown}
+          disabled={isCreatingSkill}
+          className={`${className} ${isCreatingSkill ? 'opacity-50 cursor-wait' : ''}`}
         />
         
-        {/* Search Results Dropdown - Same styling as existing */}
-        {showDropdown && skillResults.length > 0 && (
+        {/* Search Results Dropdown with Create New Option */}
+        {(showDropdown && skillResults.length > 0) || (skillSearch.length >= 2 && !isCreatingSkill) ? (
           <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
-            {skillResults.map((skill) => (
+            {/* Existing skills */}
+            {skillResults.map((skill, index) => (
               <button
                 key={skill.id}
                 onClick={() => handleSkillSelect(skill)}
-                className="w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0"
+                className={`w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0 ${
+                  selectedIndex === index ? 'bg-[#007acc]/30 border-[#007acc]' : ''
+                }`}
               >
                 <div className="font-medium">{skill.name}</div>
                 {skill.category && (
@@ -118,8 +208,26 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
                 )}
               </button>
             ))}
+            
+            {/* Create new skill option - show if no exact match found */}
+            {skillSearch.length >= 2 && !skillResults.some(skill => 
+              skill.name.toLowerCase() === skillSearch.trim().toLowerCase()
+            ) && (
+              <button
+                onClick={() => createNewSkill(skillSearch.trim())}
+                className={`w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#969696] border-t border-[#3e3e42] bg-[#3e3e42]/30 ${
+                  selectedIndex === skillResults.length ? 'bg-[#007acc]/30 border-[#007acc]' : ''
+                }`}
+                disabled={isCreatingSkill}
+              >
+                <div className="flex items-center gap-1">
+                  <span>+ Create "{skillSearch.trim()}"</span>
+                  <span className="text-xs opacity-75">(Enter/Tab)</span>
+                </div>
+              </button>
+            )}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Selected Skills Tags */}
