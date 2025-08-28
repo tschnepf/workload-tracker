@@ -1,8 +1,8 @@
 # Claude Code Reference - Workload Tracker
 
 ## 🚀 Project Status
-- **Current Phase**: Chunk 2 Complete (People Management)
-- **Next Phase**: Chunk 3 (Assignment Basics)
+- **Current Phase**: Chunk 5 Complete (Project Management)
+- **Next Phase**: Chunk 6 (Smart Features)
 - **Architecture**: Django REST API + React TypeScript + PostgreSQL
 - **Theme**: Dark Mode Only (slate color system)
 

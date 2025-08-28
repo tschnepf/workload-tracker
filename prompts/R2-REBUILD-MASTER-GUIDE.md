@@ -878,46 +878,264 @@ def migrate_string_projects():
 
 ---
 
-### **Chunk 6: Smart Features (Day 6 - 6 hours)**
-**Goal**: Intelligent assignment assistance
+### **Chunk 6: Smart Features + Skills Management (Day 6 - 7.5 hours)**
+**Goal**: Intelligent assignment assistance with skills-based matching
 **Reference**: `R2-REBUILD-004-MANAGER-FEATURES.md`
 
 **Database Usage:**
-- Person: Use `department` field
-- Assignment: Use validation logic
-- Add `role_on_project` usage
+- Person: Use `department` field + skills tagging system
+- Assignment: Use validation logic + skill matching
+- Add `role_on_project` usage with smart suggestions
+- SkillTag: New model for tagging system
+- PersonSkill: Junction table for skills with proficiency levels
 
-**What to build:**
-1. Overallocation warnings (soft validation)
-2. Available people finder with capacity details
-3. Smart assignment suggestions
-4. Department-based filtering
-5. Assignment conflict detection
+**Skills Tagging System (Standards-Compliant):**
+```python
+# backend/skills/models.py - Complete implementation
+class SkillTag(models.Model):
+    name = models.CharField(max_length=100, unique=True)  # "Heat Calcs", "Lighting Design"
+    category = models.CharField(max_length=50, blank=True)  # "Technical", "Design", "Management"
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-**Smart Features:**
+class PersonSkill(models.Model):
+    person = models.ForeignKey('people.Person', on_delete=models.CASCADE, related_name='skills')
+    skill_tag = models.ForeignKey(SkillTag, on_delete=models.CASCADE)
+    skill_type = models.CharField(max_length=20, choices=[
+        ('strength', 'Strength'),           # Good at this
+        ('development', 'Development'),     # Areas for improvement
+        ('learning', 'Learning'),          # Currently learning
+    ])
+    proficiency_level = models.CharField(max_length=20, choices=[
+        ('beginner', 'Beginner'),
+        ('intermediate', 'Intermediate'), 
+        ('advanced', 'Advanced'),
+        ('expert', 'Expert'),
+    ])
+    notes = models.TextField(blank=True)
+    last_used = models.DateField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['person', 'skill_tag']
+
+# backend/skills/serializers.py - CRITICAL: snake_case → camelCase transformation
+class SkillTagSerializer(serializers.ModelSerializer):
+    isActive = serializers.BooleanField(source='is_active', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    
+    class Meta:
+        model = SkillTag
+        fields = ['id', 'name', 'category', 'description', 'isActive', 'createdAt', 'updatedAt']
+
+class PersonSkillSerializer(serializers.ModelSerializer):
+    skillTagName = serializers.CharField(source='skill_tag.name', read_only=True)
+    skillType = serializers.CharField(source='skill_type')
+    proficiencyLevel = serializers.CharField(source='proficiency_level')
+    lastUsed = serializers.DateField(source='last_used', allow_null=True)
+    
+    class Meta:
+        model = PersonSkill
+        fields = ['id', 'person', 'skillTag', 'skillTagName', 'skillType', 
+                 'proficiencyLevel', 'notes', 'lastUsed', 'createdAt', 'updatedAt']
 ```
-- "Sarah has 15h available this week"
+
+**UI Pattern Integration (Following ProjectsList.tsx):**
+```typescript
+// Leverage existing split-panel pattern for skills management
+// Instead of new interfaces, enhance existing ProjectsList inline editing:
+
+// 1. Extend assignment editing grid (Line 908-968 in ProjectsList.tsx)
+<div className="grid grid-cols-5 gap-4 items-center"> // Add skills column
+  <div className="text-[#cccccc]">{assignment.personName}</div>
+  <div className="relative">
+    {/* Existing role autocomplete with skill-based suggestions */}
+    <RoleAutocompleteWithSkills 
+      value={editData.roleSearch}
+      onChange={handleRoleSearch}
+      personSkills={assignment.person.skills}
+      className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded..."
+    />
+  </div>
+  <div>
+    {/* Existing hours input */}
+  </div>
+  <div className="relative">
+    {/* NEW: Skills tags autocomplete following same pattern */}
+    <SkillsAutocomplete 
+      selectedSkills={assignment.requiredSkills}
+      onSkillsChange={handleSkillsChange}
+      className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded..."
+    />
+  </div>
+  <div className="flex gap-1">
+    {/* Existing save/cancel buttons */}
+  </div>
+</div>
+
+// 2. Enhance person search with skill matching (Line 250-273)
+const handlePersonSearchWithSkills = (searchTerm, requiredSkills = []) => {
+  // Existing name/role matching +
+  const skillFilteredPeople = people.filter(person => 
+    hasMatchingSkills(person, requiredSkills)
+  ).sort((a, b) => 
+    getSkillMatchScore(b, requiredSkills) - getSkillMatchScore(a, requiredSkills)
+  );
+}
+
+// 3. Add warning banners using existing error pattern (Line 720-725)
+{warnings.length > 0 && (
+  <div className="p-3 bg-amber-500/20 border-b border-amber-500/50">
+    {warnings.map(warning => (
+      <div className="text-amber-400 text-sm flex items-center gap-2">
+        <span>⚠️</span> {warning}
+      </div>
+    ))}
+  </div>
+)}
+
+// 4. Create PeopleList.tsx using identical split-panel pattern
+// Left Panel: People with skill-based filtering
+// Right Panel: Person details with skills management
+```
+
+**Components to Build (Following Existing Patterns):**
+1. **SkillsAutocomplete** - Reuse autocomplete pattern from role search (Line 912-937 ProjectsList.tsx)
+2. **PeopleList.tsx** - Copy split-panel pattern from ProjectsList.tsx exactly
+3. **Warning system** - Extend existing error banner pattern (Line 720-725)
+4. **Department filters** - Add to existing filter controls (Line 686-717)
+5. **Enhanced person search** - Extend existing search with skill matching (Line 250-273)
+
+**Implementation Strategy:**
+1. Overallocation warnings (soft validation) - integrate into existing save flow (Line 956 handleSaveEdit)
+2. Available people finder with capacity details + skill matching - enhance existing person search 
+3. Smart assignment suggestions + skill-based recommendations - extend role autocomplete
+4. Department-based filtering + skill-based filtering - add to existing filters
+5. Assignment conflict detection + skill mismatch warnings - add to warning system
+6. **🆕 Skills management interface** (tagging system for strengths & development areas)
+7. **🆕 Skill-based team optimization and gap analysis**  
+8. **🆕 Enhanced role-on-project with smart suggestions**
+
+**Enhanced Smart Features:**
+```
+- "Sarah has 15h available this week and Heat Calcs expertise"
 - "Warning: This assignment would put John at 110% capacity"
-- "Suggested: Move 10h from Website to Mobile App project"
-- "Available in Engineering: 3 people with 45h total capacity"
+- "🎯 Perfect skill match: Sarah has Lighting Design + AutoCAD skills"
+- "⚠️ Skill gap: John needs support with Heat Calcs (development area)"
+- "📈 Development opportunity: Pair John with Sarah for Heat Calcs mentoring"
+- "Available in Engineering: 3 people with 45h total capacity, 2 with HVAC skills"
+- "Team skill gap: No one has advanced Python skills"
+```
+
+**Skills Management UI (VSCode Theme Compliant):**
+```typescript
+// frontend/src/components/skills/SkillsSection.tsx - VSCode dark theme
+<SkillsSection person={person}>
+  <Card className="bg-[#2d2d30] border-[#3e3e42]">
+    <h3 className="text-lg font-semibold text-[#cccccc] mb-4">💪 Strengths & Skills</h3>
+    <SkillTagManager 
+      skills={strengths}
+      skillType="strength"
+      colorScheme="emerald" // bg-emerald-500/20 text-emerald-400
+    />
+  </Card>
+  
+  <Card className="bg-[#2d2d30] border-[#3e3e42]">
+    <h3 className="text-lg font-semibold text-[#cccccc] mb-4">📈 Areas for Improvement</h3>
+    <SkillTagManager
+      skills={developmentAreas} 
+      skillType="development"
+      colorScheme="amber" // bg-amber-500/20 text-amber-400
+    />
+  </Card>
+</SkillsSection>
+
+// Individual skill tags with exact color specifications
+const SkillTag: React.FC = ({ skill, skillType }) => {
+  const colors = {
+    emerald: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    amber: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    blue: 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+  };
+  
+  return (
+    <div className={`px-3 py-1 rounded-full border text-xs font-medium ${colors[skillType === 'strength' ? 'emerald' : skillType === 'development' ? 'amber' : 'blue']}`}>
+      {skill.skillTagName}
+      <ProficiencyBadge level={skill.proficiencyLevel} />
+    </div>
+  );
+};
+```
+
+**CRITICAL Implementation Requirements:**
+```bash
+# 1. Backend changes require container restart
+docker-compose restart backend
+
+# 2. Serializer field completion checklist:
+✅ Model field exists (skill_type in database) 
+✅ Serializer field defined (skillType = CharField(source='skill_type'))
+✅ Field included in Meta.fields (['skillType'])
+✅ Container restarted after serializer changes
+✅ Full cycle tested: frontend save → backend store → frontend retrieve
+
+# 3. Progressive disclosure (preserve context during editing):
+✅ Skill editing preserves existing values
+✅ Auto-complete shows existing skill names
+✅ Proficiency level maintains current selection
+
+# 4. VSCode theme compliance:
+✅ All cards use bg-[#2d2d30] border-[#3e3e42]
+✅ Text uses text-[#cccccc] and text-[#969696]
+✅ Skill tags use semantic colors (emerald/amber/blue)
+```
+
+**Enhanced Role-on-Project Features:**
+```
+- Smart role suggestions based on person's skills and project needs
+- Role conflict detection: "John is already Tech Lead on 2 projects (leadership overload)"
+- Role-based capacity planning: "Tech Lead roles require 30% more mental bandwidth"
+- Career development suggestions: "Sarah ready for Senior Developer promotion"
+- Team composition optimization: "Add UI/UX Designer for balanced team"
+```
+
+**Smart Messaging Throughout UI:**
+```
+- Contextual error messages with actionable suggestions
+- Proactive guidance: "Consider promoting Sarah to reduce John's leadership burden"  
+- Real-time validation: "💡 John selected: Senior engineer with Heat Calcs expertise!"
+- Performance coaching: "You tend to assign critical projects to John 80% of time"
+- Success messages with next steps: "Assignment created! Schedule kickoff meeting with John"
 ```
 
 **Acceptance Criteria:**
 ```
 ✅ System warns when assigning >100% (but allows override)
-✅ "Find available people" shows capacity details
-✅ Assignment suggestions consider current workload
-✅ Can filter people by department
+✅ "Find available people" shows capacity + skill details
+✅ Assignment suggestions consider workload + skill matching
+✅ Can filter people by department + required skills
 ✅ Department utilization summary works
-✅ Warnings are helpful, not annoying
+✅ Skills tagging system for strengths + development areas
+✅ Skill mismatch warnings (non-blocking) with suggestions
+✅ Team skills gap analysis and coverage reporting
+✅ Role-on-project suggestions with conflict detection
+✅ Smart contextual messaging throughout UI
+✅ All warnings are helpful, not annoying
 ```
 
-**Demo Script:**
-1. Try to assign John 50% more (would be 125% total)
-2. See warning: "This would overallocate John (125%). Continue anyway?"
-3. Use "Find Available People" 
-4. See "Sarah (Engineering): 15h available, Mike (Design): 8h available"
-5. Get suggestion: "For 20h project, consider Sarah (can handle 15h) + Mike (5h)"
+**Enhanced Demo Script:**
+1. **Skills Management**: Add "Heat Calcs" as strength for Sarah, "Lighting Design" as development area for John
+2. **Smart Assignment**: Try to assign John to Heat Calcs project - see skill mismatch warning but allow override
+3. **Overallocation Warning**: Try to assign John 50% more (would be 125% total)
+4. **Enhanced People Finder**: Use "Find Available People" with skills filter for "Heat Calcs"
+5. **Skill-Based Suggestions**: See "🎯 Sarah (Engineering, Heat Calcs expert): 15h available, perfect match!"
+6. **Development Opportunity**: See "📈 Pair John with Sarah for Heat Calcs mentoring"
+7. **Team Analysis**: View team skills dashboard showing gaps and coverage
+8. **Role Intelligence**: Get role suggestions: "Consider Sarah for Tech Lead (ready for promotion)"
 
 ---
 
