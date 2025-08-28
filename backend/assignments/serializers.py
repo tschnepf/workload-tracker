@@ -6,6 +6,7 @@ RETROFIT: Support weekly hours for 12-week planning horizon
 from rest_framework import serializers
 from .models import Assignment
 from projects.models import Project
+from skills.serializers import PersonSkillSummarySerializer
 
 class AssignmentSerializer(serializers.ModelSerializer):
     """Assignment serializer with weekly hours support"""
@@ -17,6 +18,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
     projectDisplayName = serializers.CharField(source='project_display', read_only=True)
     personName = serializers.CharField(source='person.name', read_only=True)
     personWeeklyCapacity = serializers.IntegerField(source='person.weekly_capacity', read_only=True)
+    personSkills = PersonSkillSummarySerializer(source='person.skills', many=True, read_only=True)
     roleOnProject = serializers.CharField(source='role_on_project', max_length=100, required=False, allow_blank=True)
     
     # Calculated fields
@@ -33,6 +35,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
             'person', 
             'personName', 
             'personWeeklyCapacity',
+            'personSkills',
             'projectName', 
             'project',
             'projectDisplayName',

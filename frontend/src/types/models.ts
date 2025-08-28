@@ -36,7 +36,7 @@ export interface Assignment {
   person: number; // Person ID
   personName?: string; // Read-only person name
   personWeeklyCapacity?: number; // Read-only person capacity
-  personSkills?: PersonSkill[]; // Read-only person skills for matching
+  personSkills?: PersonSkill[]; // Read-only person skills for display
   projectName?: string; // Legacy field - keep for migration compatibility
   project?: number; // Project ID (FK)
   projectDisplayName?: string; // Read-only project display name
@@ -46,7 +46,6 @@ export interface Assignment {
   allocationPercentage?: number; // Legacy field
   availableWeeks?: string[]; // Read-only list of available weeks
   roleOnProject?: string;
-  requiredSkills?: string[]; // Required skills for this assignment (skill tag names)
   startDate?: string;
   endDate?: string;
   notes?: string;
