@@ -64,6 +64,20 @@ export interface Department {
   updatedAt?: string;
 }
 
+export interface Deliverable {
+  id?: number;
+  project: number; // Project ID (FK)
+  percentage?: number | null; // 0-100, truly optional
+  description?: string; // Brief description (SD, DD, IFP, IFC)
+  date?: string | null; // YYYY-MM-DD format, can be removed for projects on hold
+  notes?: string; // Additional details
+  sortOrder?: number; // Manual ordering control
+  isCompleted?: boolean; // Completion tracking
+  completedDate?: string | null; // When actually completed (YYYY-MM-DD)
+  createdAt?: string; // System timestamps
+  updatedAt?: string;
+}
+
 export interface PersonUtilization {
   person: string;
   weeklyCapacity: number;

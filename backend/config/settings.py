@@ -43,6 +43,7 @@ LOCAL_APPS = [
     'people',
     'projects', 
     'assignments',
+    'deliverables',
     'departments',
     'dashboard',
 ]
@@ -153,5 +154,5 @@ FEATURES = {
     'USE_PROJECT_OBJECTS': False,  # Flip to True in Chunk 5
     'USE_DEPARTMENTS': False,      # Flip to True in Chunk 6
     'USE_SKILLS': False,           # Future feature
-    'USE_DELIVERABLES': False,     # Future feature
+    'USE_DELIVERABLES': True,      # Deliverables feature enabled
 }

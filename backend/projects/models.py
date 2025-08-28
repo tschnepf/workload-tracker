@@ -13,6 +13,7 @@ class Project(models.Model):
     status = models.CharField(max_length=20, choices=[
         ('planning', 'Planning'),
         ('active', 'Active'),
+        ('active_ca', 'Active CA'),
         ('on_hold', 'On Hold'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),

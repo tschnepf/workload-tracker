@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData } from '@/types/models';
+import { Person, Project, Assignment, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -165,6 +165,47 @@ export const utilizationApi = {
   // Get person utilization
   getPersonUtilization: (personId: number) =>
     fetchApi<PersonUtilization>(`/people/${personId}/utilization/`),
+};
+
+// Deliverables API - STANDARDS COMPLIANT
+export const deliverablesApi = {
+  // Get all deliverables or filter by project
+  list: (projectId?: number) =>
+    fetchApi<PaginatedResponse<Deliverable>>(`/deliverables/${projectId ? `?project=${projectId}` : ''}`),
+
+  // Get single deliverable  
+  get: (id: number) =>
+    fetchApi<Deliverable>(`/deliverables/${id}/`),
+
+  // Create deliverable
+  create: (data: Omit<Deliverable, 'id' | 'createdAt' | 'updatedAt'>) =>
+    fetchApi<Deliverable>('/deliverables/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update deliverable
+  update: (id: number, data: Partial<Deliverable>) =>
+    fetchApi<Deliverable>(`/deliverables/${id}/`, {
+      method: 'PATCH', 
+      body: JSON.stringify(data),
+    }),
+
+  // Delete deliverable
+  delete: (id: number) =>
+    fetchApi<void>(`/deliverables/${id}/`, {
+      method: 'DELETE',
+    }),
+
+  // Reorder deliverables for a project
+  reorder: (projectId: number, deliverableIds: number[]) =>
+    fetchApi<void>('/deliverables/reorder/', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        project: projectId, 
+        deliverable_ids: deliverableIds 
+      }),
+    }),
 };
 
 // Dashboard API

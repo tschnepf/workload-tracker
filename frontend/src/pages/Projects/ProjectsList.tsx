@@ -4,9 +4,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Project, Person, Assignment } from '@/types/models';
-import { projectsApi, peopleApi, assignmentsApi } from '@/services/api';
+import { Project, Person, Assignment, Deliverable } from '@/types/models';
+import { projectsApi, peopleApi, assignmentsApi, deliverablesApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
+import DeliverablesSection from '@/components/deliverables/DeliverablesSection';
 
 const ProjectsList: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -19,6 +20,9 @@ const ProjectsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  
+  // Deliverables data for all projects
+  const [projectDeliverables, setProjectDeliverables] = useState<{ [projectId: number]: Deliverable[] }>({});
   
   // Assignment management
   const [people, setPeople] = useState<Person[]>([]);
@@ -43,8 +47,8 @@ const ProjectsList: React.FC = () => {
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [roleSearchResults, setRoleSearchResults] = useState<string[]>([]);
 
-  const statusOptions = ['active', 'planning', 'on_hold', 'completed', 'cancelled', 'Show All'];
-  const editableStatusOptions = ['active', 'planning', 'on_hold', 'completed', 'cancelled'];
+  const statusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'Show All'];
+  const editableStatusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled'];
 
   useEffect(() => {
     loadProjects();
@@ -63,12 +67,114 @@ const ProjectsList: React.FC = () => {
       const response = await projectsApi.list();
       const projectsList = response.results || [];
       setProjects(projectsList);
+      
+      // Load deliverables for all projects to show next deliverable
+      await loadAllProjectDeliverables(projectsList);
+      
       // Selection will be handled by useEffect that watches sortedProjects
     } catch (err: any) {
       setError('Failed to load projects');
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadAllProjectDeliverables = async (projectsList: Project[]) => {
+    const deliverablesMap: { [projectId: number]: Deliverable[] } = {};
+    
+    // Load deliverables for each project in parallel
+    await Promise.all(
+      projectsList.map(async (project) => {
+        if (project.id) {
+          try {
+            const response = await deliverablesApi.list(project.id);
+            deliverablesMap[project.id] = response.results || [];
+          } catch (err) {
+            // If deliverables fail to load, just set empty array
+            deliverablesMap[project.id] = [];
+          }
+        }
+      })
+    );
+    
+    setProjectDeliverables(deliverablesMap);
+  };
+
+  const getNextDeliverable = (projectId: number): Deliverable | null => {
+    const deliverables = projectDeliverables[projectId] || [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time for accurate date comparison
+    
+    // Filter deliverables that:
+    // 1. Have a date set
+    // 2. Are not completed
+    // 3. Are today or in the future
+    const upcomingDeliverables = deliverables
+      .filter(d => d.date && !d.isCompleted)
+      .filter(d => {
+        // Parse date string manually to avoid timezone issues
+        const [year, month, day] = d.date!.split('-').map(Number);
+        const deliverableDate = new Date(year, month - 1, day);
+        deliverableDate.setHours(0, 0, 0, 0);
+        return deliverableDate >= today;
+      })
+      .sort((a, b) => {
+        // Sort by date, then by percentage (lower percentage = earlier milestone)
+        // Parse dates manually to avoid timezone issues
+        const [aYear, aMonth, aDay] = a.date!.split('-').map(Number);
+        const [bYear, bMonth, bDay] = b.date!.split('-').map(Number);
+        const aDate = new Date(aYear, aMonth - 1, aDay);
+        const bDate = new Date(bYear, bMonth - 1, bDay);
+        const dateCompare = aDate.getTime() - bDate.getTime();
+        if (dateCompare !== 0) return dateCompare;
+        return (a.percentage || 0) - (b.percentage || 0);
+      });
+
+    return upcomingDeliverables.length > 0 ? upcomingDeliverables[0] : null;
+  };
+
+  const formatNextDeliverable = (deliverable: Deliverable): string => {
+    const parts = [];
+    
+    if (deliverable.date) {
+      // Parse date string manually to avoid timezone issues
+      const [year, month, day] = deliverable.date.split('-').map(Number);
+      const date = new Date(year, month - 1, day); // month is 0-indexed
+      parts.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    }
+    
+    if (deliverable.percentage !== null) {
+      parts.push(`${deliverable.percentage}%`);
+    }
+    
+    if (deliverable.description) {
+      parts.push(deliverable.description);
+    }
+    
+    return parts.length > 0 ? parts.join(' • ') : '-';
+  };
+
+  const hasUpcomingDeliverableDates = (projectId: number): boolean => {
+    const deliverables = projectDeliverables[projectId] || [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return deliverables.some(d => {
+      if (!d.date || d.isCompleted) return false;
+      
+      // Parse date string manually to avoid timezone issues
+      const [year, month, day] = d.date.split('-').map(Number);
+      const deliverableDate = new Date(year, month - 1, day);
+      deliverableDate.setHours(0, 0, 0, 0);
+      return deliverableDate >= today;
+    });
+  };
+
+  const formatFilterStatus = (status: string): string => {
+    if (status === 'Show All') return 'Show All';
+    if (status === 'active_no_deliverables') return 'Active - No Dates';
+    if (status === 'active_ca') return 'Active CA';
+    return formatStatus(status);
   };
 
   const handleDelete = async (projectId: number) => {
@@ -387,6 +493,7 @@ const ProjectsList: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'active': return 'text-emerald-400';
+      case 'active_ca': return 'text-blue-400';
       case 'planning': return 'text-blue-400';
       case 'on_hold': return 'text-amber-400';
       case 'completed': return 'text-slate-400';
@@ -396,6 +503,7 @@ const ProjectsList: React.FC = () => {
   };
 
   const formatStatus = (status: string) => {
+    if (status === 'active_ca') return 'Active CA';
     return status?.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ') || 'Unknown';
@@ -412,7 +520,17 @@ const ProjectsList: React.FC = () => {
 
   // Filter projects
   const filteredProjects = projects.filter(project => {
-    const matchesStatus = statusFilter === 'Show All' || project.status === statusFilter;
+    let matchesStatus = false;
+    
+    if (statusFilter === 'Show All') {
+      matchesStatus = true;
+    } else if (statusFilter === 'active_no_deliverables') {
+      // Filter to active projects with no upcoming deliverable dates
+      matchesStatus = project.status === 'active' && project.id && !hasUpcomingDeliverableDates(project.id);
+    } else {
+      matchesStatus = project.status === statusFilter;
+    }
+    
     const matchesSearch = !searchTerm || 
       project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       project.client?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -444,9 +562,29 @@ const ProjectsList: React.FC = () => {
         bValue = b.status || '';
         break;
       case 'nextDeliverable':
-        // Using endDate as next deliverable for now
-        aValue = a.endDate ? new Date(a.endDate) : new Date('1900-01-01');
-        bValue = b.endDate ? new Date(b.endDate) : new Date('1900-01-01');
+        const aNext = a.id ? getNextDeliverable(a.id) : null;
+        const bNext = b.id ? getNextDeliverable(b.id) : null;
+        
+        // Sort by date first, then by percentage
+        if (!aNext && !bNext) {
+          aValue = '';
+          bValue = '';
+        } else if (!aNext) {
+          aValue = 'zzz'; // Sort projects without deliverables to the end
+          bValue = bNext!.date || 'zzz';
+        } else if (!bNext) {
+          aValue = aNext.date || 'zzz';
+          bValue = 'zzz';
+        } else {
+          aValue = aNext.date || 'zzz';
+          bValue = bNext.date || 'zzz';
+          
+          // If dates are the same, sort by percentage
+          if (aValue === bValue) {
+            aValue = aNext.percentage || 0;
+            bValue = bNext.percentage || 0;
+          }
+        }
         break;
       default:
         aValue = a.name || '';
@@ -560,7 +698,7 @@ const ProjectsList: React.FC = () => {
                           : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc]'
                       }`}
                     >
-                      {status === 'Show All' ? status : formatStatus(status)}
+                      {formatFilterStatus(status)}
                     </button>
                   ))}
                 </div>
@@ -596,13 +734,13 @@ const ProjectsList: React.FC = () => {
               <div className="col-span-3 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('name')}>
                 PROJECT<SortIcon column="name" />
               </div>
-              <div className="col-span-2 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('type')}>
+              <div className="col-span-1 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('type')}>
                 TYPE<SortIcon column="type" />
               </div>
               <div className="col-span-2 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('status')}>
                 STATUS<SortIcon column="status" />
               </div>
-              <div className="col-span-3 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('nextDeliverable')}>
+              <div className="col-span-4 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('nextDeliverable')}>
                 NEXT DELIVERABLE<SortIcon column="nextDeliverable" />
               </div>
             </div>
@@ -638,27 +776,29 @@ const ProjectsList: React.FC = () => {
                     </div>
                     
                     {/* Type (using status for now) */}
-                    <div className="col-span-2 text-[#969696] text-xs">
+                    <div className="col-span-1 text-[#969696] text-xs">
                       {formatStatus(project.status || '')}
                     </div>
                     
                     {/* Status */}
                     <div className="col-span-2">
-                      <span className={`${getStatusColor(project.status || '')} text-xs`}>
+                      <span className={`${getStatusColor(project.status || '')} px-2 py-0.5 rounded text-xs`}>
                         {formatStatus(project.status || '')}
                       </span>
                     </div>
                     
-                    {/* Next Deliverable (using endDate) */}
-                    <div className="col-span-3">
-                      {project.endDate && (
-                        <>
+                    {/* Next Deliverable */}
+                    <div className="col-span-4">
+                      {(() => {
+                        const nextDeliverable = project.id ? getNextDeliverable(project.id) : null;
+                        return nextDeliverable ? (
                           <div className="text-[#cccccc] text-xs leading-tight">
-                            {new Date(project.endDate).toLocaleDateString()}
+                            {formatNextDeliverable(nextDeliverable)}
                           </div>
-                          <div className="text-[#969696] text-xs leading-tight">End Date</div>
-                        </>
-                      )}
+                        ) : (
+                          <div className="text-[#969696] text-xs">-</div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))
@@ -949,22 +1089,7 @@ const ProjectsList: React.FC = () => {
                 </div>
 
                 {/* Deliverables Section */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-base font-semibold text-[#cccccc]">
-                      Deliverables
-                    </h3>
-                    <button className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
-                      + Add Deliverable
-                    </button>
-                  </div>
-
-                  {/* Placeholder for deliverables */}
-                  <div className="text-center py-8">
-                    <div className="text-[#969696] text-sm">No deliverables yet</div>
-                    <div className="text-[#969696] text-xs mt-1">Click "Add Deliverable" to get started</div>
-                  </div>
-                </div>
+                <DeliverablesSection project={selectedProject} />
               </div>
             </>
           ) : (

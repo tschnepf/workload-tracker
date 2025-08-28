@@ -2,12 +2,15 @@
 
 ## AI Agent Instructions
 **This document defines the flexible deliverable tracking system for projects.**
+**CRITICAL: Cross-referenced with R2-REBUILD-STANDARDS.md and proj_deliverables_description.txt**
 
 ## 🎯 Core Principle: Maximum Flexibility
 - Any combination of percentage, description, date, and notes
-- Unlimited deliverables per project
-- Manual ordering control
-- All fields optional except the deliverable must have at least one field
+- Unlimited deliverables per project (no artificial caps)
+- Manual ordering control with up/down arrows and drag-and-drop
+- All fields truly optional (per proj_deliverables_description.txt requirements)
+- Default deliverables created automatically on project creation
+- Seamless integration with existing Projects page split-panel layout
 
 ---
 
@@ -72,9 +75,10 @@ class Deliverable(models.Model):
         ordering = ['sort_order', 'percentage', 'date', 'created_at']
         
     def clean(self):
-        """Ensure at least one field has data"""
-        if not any([self.percentage is not None, self.description, self.date, self.notes]):
-            raise ValidationError("Deliverable must have at least one field filled")
+        """Optional validation - all fields truly optional per requirements"""
+        # NOTE: Per proj_deliverables_description.txt, all fields should be optional
+        # Validation removed to allow maximum flexibility
+        pass
     
     def __str__(self):
         parts = []
@@ -91,36 +95,38 @@ class Deliverable(models.Model):
 
 ## 🏗️ DEFAULT DELIVERABLES
 
-### Project Creation with Defaults
+### Automatic Default Deliverables (Per Requirements)
 ```python
-def create_project_with_default_deliverables(name, **kwargs):
-    """Create a project with standard deliverables"""
-    
-    # Create the project
-    project = Project.objects.create(name=name, **kwargs)
-    
-    # Default deliverables (35% SD, 75% DD, 95% IFP, 100% IFC)
-    default_deliverables = [
-        {'percentage': 35, 'description': 'SD', 'sort_order': 10},
-        {'percentage': 75, 'description': 'DD', 'sort_order': 20},
-        {'percentage': 95, 'description': 'IFP', 'sort_order': 30},
-        {'percentage': 100, 'description': 'IFC', 'sort_order': 40},
-    ]
-    
-    for deliverable_data in default_deliverables:
-        Deliverable.objects.create(
-            project=project,
-            **deliverable_data
-        )
-    
-    return project
+# STANDARDS COMPLIANT: Follows R2-REBUILD-STANDARDS.md naming conventions
 
-# Or as a model method
+# Signal to auto-create defaults when project is created
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=Project)
+def create_default_deliverables(sender, instance, created, **kwargs):
+    """Automatically create default deliverables on project creation"""
+    if created and not instance.deliverables.exists():
+        # Default deliverables per proj_deliverables_description.txt
+        default_deliverables = [
+            {'percentage': 35, 'description': 'SD', 'sort_order': 10},
+            {'percentage': 75, 'description': 'DD', 'sort_order': 20},
+            {'percentage': 95, 'description': 'IFP', 'sort_order': 30},
+            {'percentage': 100, 'description': 'IFC', 'sort_order': 40},
+        ]
+        
+        for deliverable_data in default_deliverables:
+            Deliverable.objects.create(
+                project=instance,
+                **deliverable_data
+            )
+
+# Alternative: Model method for manual initialization
 class Project(models.Model):
     # ... existing fields ...
     
     def initialize_default_deliverables(self):
-        """Add default deliverables if none exist"""
+        """Add default deliverables if none exist - for manual use"""
         if not self.deliverables.exists():
             defaults = [
                 {'percentage': 35, 'description': 'SD', 'sort_order': 10},
@@ -150,16 +156,17 @@ const createProjectWithDefaults = async (name: string) => {
 };
 ```
 
-### Deliverable CRUD Operations
+### Deliverable CRUD Operations (Standards Compliant)
 ```typescript
+// STANDARDS COMPLIANT: camelCase for frontend per R2-REBUILD-STANDARDS.md
 interface DeliverableRequest {
-    project?: string;           // Required for creation only
+    project?: number;           // Required for creation only (FK ID)
     percentage?: number | null; // Optional (0-100)
     description?: string;       // Optional
     date?: string | null;       // Optional (YYYY-MM-DD format or null)
     notes?: string;            // Optional
-    sortOrder?: number;        // Optional (for ordering)
-    isCompleted?: boolean;     // Optional
+    sortOrder?: number;        // Optional (for manual ordering)
+    isCompleted?: boolean;     // Optional (completion tracking)
 }
 
 // Create deliverable
@@ -470,16 +477,114 @@ at_risk = Deliverable.objects.filter(
 
 ---
 
+## 🔗 INTEGRATION WITH EXISTING PROJECTS PAGE
+
+### Split-Panel Layout Integration (Per R2-REBUILD-STANDARDS.md)
+```typescript
+// Integrate into existing Projects page right panel, below assignments
+const ProjectDetailsPanel: React.FC<{project: Project}> = ({project}) => {
+  return (
+    <div className="w-1/2 flex flex-col bg-[#2d2d30]">
+      {/* Project header - existing */}
+      <ProjectHeader project={project} />
+      
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Assignments section - existing */}
+        <AssignmentsSection project={project} />
+        
+        {/* NEW: Deliverables section */}
+        <DeliverablesSection project={project} />
+      </div>
+    </div>
+  );
+};
+```
+
+### VSCode Dark Theme Compliance
+```typescript
+// All components follow established design system
+const DeliverableRow = () => (
+  <div className="p-2 bg-[#3e3e42]/30 rounded text-xs">
+    {/* VSCode dark theme colors */}
+    <div className="text-[#cccccc]">Primary content</div>
+    <div className="text-[#969696]">Secondary content</div>
+    <button className="text-red-400 hover:bg-red-500/20">Delete</button>
+  </div>
+);
+```
+
+### Inline Editing Standards Compliance
+```typescript
+// Preserve existing values during edit (per R2-REBUILD-STANDARDS.md)
+const handleEditStart = (deliverable: Deliverable) => {
+  setEditData({
+    percentage: deliverable.percentage,     // Preserve existing
+    description: deliverable.description || '',  // Don't clear
+    date: deliverable.date,                 // Keep current
+    notes: deliverable.notes || ''          // Preserve context
+  });
+};
+```
+
+### Number Input Standards
+```typescript
+// Remove spinners for percentage input (per R2-REBUILD-STANDARDS.md)
+<input
+  type="number"
+  min="0" max="100"
+  className="... [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+  value={editData.percentage || ''}
+  onChange={(e) => setEditData({
+    ...editData, 
+    percentage: e.target.value ? Number(e.target.value) : null
+  })}
+/>
+```
+
+---
+
+## 🏗️ IMPLEMENTATION STANDARDS CHECKLIST
+
+### Backend Standards Compliance
+- [ ] All model fields use `snake_case` (percentage, sort_order, is_completed, etc.)
+- [ ] All model methods use `snake_case` (initialize_default_deliverables)
+- [ ] Serializer maps `snake_case` → `camelCase` for API responses
+- [ ] API endpoints use `snake_case` URLs (/api/deliverables/)
+- [ ] Feature flag integration (`USE_DELIVERABLES: True`)
+
+### Frontend Standards Compliance  
+- [ ] TypeScript interfaces use `camelCase` (sortOrder, isCompleted)
+- [ ] React components use `PascalCase` (DeliverablesSection, DeliverableRow)
+- [ ] Functions and variables use `camelCase` (handleEditStart, editData)
+- [ ] API service methods use `camelCase` (createDeliverable, updateDeliverable)
+
+### UI Standards Compliance
+- [ ] Full browser width split-panel layout (no Layout wrapper)
+- [ ] VSCode dark theme colors throughout (#1e1e1e, #2d2d30, #3e3e42, #cccccc, #969696)
+- [ ] Inline editing preserves existing values
+- [ ] Number inputs remove spinners for manual entry
+- [ ] Manual ordering with up/down arrows (keyboard accessible)
+
+### Integration Standards
+- [ ] Seamlessly integrates into existing Projects page
+- [ ] Follows established assignment CRUD patterns
+- [ ] Uses existing error handling and loading states
+- [ ] Maintains keyboard navigation compatibility
+- [ ] Auto-creates defaults via Django signals (transparent to user)
+
+---
+
 ## 📋 SUMMARY
 
-The Deliverable system provides:
+The Deliverable system provides **complete flexibility** while maintaining **full standards compliance**:
 
-1. **Complete flexibility** - Any combination of percentage, description, date, notes
-2. **Unlimited quantity** - No cap on deliverables per project
-3. **Manual ordering** - Full control over display order
-4. **Default templates** - Standard deliverables (SD, DD, IFP, IFC) auto-created
-5. **Date flexibility** - Dates can be added/removed as needed
-6. **Progress tracking** - Mark deliverables as completed
-7. **Simple data entry** - All fields optional (except need at least one)
+1. **Complete flexibility** - Any combination of percentage, description, date, notes (all truly optional)
+2. **Unlimited quantity** - No artificial cap on deliverables per project
+3. **Manual ordering** - Up/down arrows + drag-and-drop for reordering
+4. **Automatic defaults** - Standard deliverables (SD, DD, IFP, IFC) created via Django signals
+5. **Date flexibility** - Dates can be added/removed as needed (projects on hold)
+6. **Progress tracking** - Mark deliverables as completed with completion dates
+7. **Standards compliant** - Full adherence to R2-REBUILD-STANDARDS.md naming and UI patterns
+8. **Seamless integration** - Works within existing Projects page split-panel layout
 
-This system handles everything from simple 1-deliverable projects to complex 30+ milestone projects, while keeping data entry fast and flexible.
+This system handles everything from simple 1-deliverable projects to complex 30+ milestone projects, while maintaining complete consistency with established codebase standards and user experience patterns.
