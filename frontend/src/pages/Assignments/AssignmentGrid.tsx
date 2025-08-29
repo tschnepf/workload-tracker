@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Assignment, Person, Deliverable } from '@/types/models';
-import { assignmentsApi, peopleApi, deliverablesApi } from '@/services/api';
+import { Assignment, Person, Deliverable, Project } from '@/types/models';
+import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
 
 interface PersonWithAssignments extends Person {
@@ -40,10 +40,15 @@ const getNext12Mondays = (): { date: string, display: string, fullDisplay: strin
 const AssignmentGrid: React.FC = () => {
   const [people, setPeople] = useState<PersonWithAssignments[]>([]);
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddingAssignment, setIsAddingAssignment] = useState<number | null>(null);
   const [newProjectName, setNewProjectName] = useState<string>('');
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectSearchResults, setProjectSearchResults] = useState<Project[]>([]);
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const [selectedDropdownIndex, setSelectedDropdownIndex] = useState(-1);
   const [editingCell, setEditingCell] = useState<{ personId: number, assignmentId: number, week: string } | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
   const [selectedCell, setSelectedCell] = useState<{ personId: number, assignmentId: number, week: string } | null>(null);
@@ -71,6 +76,45 @@ const AssignmentGrid: React.FC = () => {
     );
   };
 
+  // Smart project search - searches name, client, projectNumber with AND logic
+  const searchProjects = (searchTerm: string): Project[] => {
+    if (!searchTerm.trim()) {
+      return [];
+    }
+
+    const searchWords = searchTerm.trim().toLowerCase().split(/\s+/);
+    
+    return projects.filter(project => {
+      const searchableText = [
+        project.name || '',
+        project.client || '',
+        project.projectNumber || ''
+      ].join(' ').toLowerCase();
+      
+      // All search words must be found in the combined searchable text
+      return searchWords.every(word => searchableText.includes(word));
+    }).slice(0, 8); // Limit results
+  };
+
+  // Handle project search input changes
+  const handleProjectSearch = (value: string) => {
+    setNewProjectName(value);
+    const results = searchProjects(value);
+    setProjectSearchResults(results);
+    setShowProjectDropdown(results.length > 0);
+    setSelectedProject(null);
+    setSelectedDropdownIndex(-1);
+  };
+
+  // Handle project selection from dropdown
+  const handleProjectSelect = (project: Project) => {
+    setSelectedProject(project);
+    setNewProjectName(project.name);
+    setShowProjectDropdown(false);
+    setProjectSearchResults([]);
+    setSelectedDropdownIndex(-1);
+  };
+
   // Load data on mount
   useEffect(() => {
     loadData();
@@ -80,7 +124,8 @@ const AssignmentGrid: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle if we have a selected cell and we're not in edit mode
-      if (!selectedCell || editingCell) return;
+      // Also ignore if user is currently adding an assignment (typing in project search)
+      if (!selectedCell || editingCell || isAddingAssignment !== null) return;
 
       const { personId, assignmentId, week } = selectedCell;
       const person = people.find(p => p.id === personId);
@@ -190,18 +235,21 @@ const AssignmentGrid: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const [peopleResponse, assignmentsResponse, deliverablesResponse] = await Promise.all([
+      const [peopleResponse, assignmentsResponse, deliverablesResponse, projectsResponse] = await Promise.all([
         peopleApi.list(),
         assignmentsApi.list(),
-        deliverablesApi.list()
+        deliverablesApi.list(),
+        projectsApi.list()
       ]);
       
       const peopleData = peopleResponse.results || [];
       const assignmentsData = assignmentsResponse.results || [];
       const deliverablesData = deliverablesResponse.results || [];
+      const projectsData = projectsResponse.results || [];
 
-      // Store deliverables in state
+      // Store deliverables and projects in state
       setDeliverables(deliverablesData);
+      setProjects(projectsData);
       
       const peopleWithAssignments: PersonWithAssignments[] = peopleData.map(person => ({
         ...person,
@@ -235,11 +283,11 @@ const AssignmentGrid: React.FC = () => {
   };
 
   // Add new assignment
-  const addAssignment = async (personId: number, projectName: string) => {
+  const addAssignment = async (personId: number, project: Project) => {
     try {
       const newAssignment = await assignmentsApi.create({
         person: personId,
-        projectName: projectName.trim(),
+        project: project.id!,
         weeklyHours: {}
       });
       
@@ -251,6 +299,9 @@ const AssignmentGrid: React.FC = () => {
       
       setIsAddingAssignment(null);
       setNewProjectName('');
+      setSelectedProject(null);
+      setProjectSearchResults([]);
+      setShowProjectDropdown(false);
       
     } catch (err: any) {
       console.error('Failed to create assignment:', err);
@@ -680,30 +731,77 @@ const AssignmentGrid: React.FC = () => {
                   {/* Add Assignment Form */}
                   {person.isExpanded && isAddingAssignment === person.id && (
                     <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#2d2d30] border border-blue-500/30">
-                      <div className="flex items-center py-1 pl-[60px] pr-2">
+                      <div className="flex items-center py-1 pl-[60px] pr-2 relative">
                         <input
                           type="text"
                           value={newProjectName}
-                          onChange={(e) => setNewProjectName(e.target.value)}
+                          onChange={(e) => handleProjectSearch(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && newProjectName.trim()) {
-                              addAssignment(person.id!, newProjectName);
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (selectedDropdownIndex >= 0 && selectedDropdownIndex < projectSearchResults.length) {
+                                // Select the highlighted project from dropdown
+                                const selectedProject = projectSearchResults[selectedDropdownIndex];
+                                handleProjectSelect(selectedProject);
+                                addAssignment(person.id!, selectedProject);
+                              } else if (selectedProject) {
+                                // Use already selected project
+                                addAssignment(person.id!, selectedProject);
+                              }
                             } else if (e.key === 'Escape') {
                               setIsAddingAssignment(null);
                               setNewProjectName('');
+                              setSelectedProject(null);
+                              setShowProjectDropdown(false);
+                              setSelectedDropdownIndex(-1);
+                            } else if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              if (projectSearchResults.length > 0) {
+                                setShowProjectDropdown(true);
+                                setSelectedDropdownIndex(prev => 
+                                  prev < projectSearchResults.length - 1 ? prev + 1 : prev
+                                );
+                              }
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              if (showProjectDropdown && projectSearchResults.length > 0) {
+                                setSelectedDropdownIndex(prev => prev > -1 ? prev - 1 : -1);
+                              }
                             }
                           }}
-                          placeholder="Project name..."
+                          placeholder="Search projects (name, client, number)..."
                           className="w-full px-2 py-1 text-xs bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                           autoFocus
                         />
+                        
+                        {/* Project Search Dropdown */}
+                        {showProjectDropdown && projectSearchResults.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-48 overflow-y-auto">
+                            {projectSearchResults.map((project, index) => (
+                              <button
+                                key={project.id}
+                                onClick={() => handleProjectSelect(project)}
+                                className={`w-full text-left px-2 py-1 text-xs transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0 ${
+                                  selectedDropdownIndex === index 
+                                    ? 'bg-[#007acc]/30 border-[#007acc]' 
+                                    : 'hover:bg-[#3e3e42]'
+                                }`}
+                              >
+                                <div className="font-medium">{project.name}</div>
+                                <div className="text-[#969696]">
+                                  {[project.client, project.projectNumber].filter(Boolean).join(' • ')}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center justify-center gap-1">
                         <button 
                           className="w-5 h-5 rounded bg-green-600 hover:bg-green-500 text-white text-xs font-medium transition-colors flex items-center justify-center"
                           title="Save assignment"
-                          onClick={() => newProjectName.trim() && addAssignment(person.id!, newProjectName)}
-                          disabled={!newProjectName.trim()}
+                          onClick={() => selectedProject && addAssignment(person.id!, selectedProject)}
+                          disabled={!selectedProject}
                         >
                           ✓
                         </button>
@@ -713,6 +811,9 @@ const AssignmentGrid: React.FC = () => {
                           onClick={() => {
                             setIsAddingAssignment(null);
                             setNewProjectName('');
+                            setSelectedProject(null);
+                            setProjectSearchResults([]);
+                            setShowProjectDropdown(false);
                           }}
                         >
                           ✕
