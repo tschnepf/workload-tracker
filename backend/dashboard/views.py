@@ -12,6 +12,10 @@ class DashboardView(APIView):
     permission_classes = [AllowAny]
     
     def get(self, request):
+        # Get weeks parameter from query string (default to 1)
+        weeks = int(request.GET.get('weeks', 1))
+        weeks = max(1, min(12, weeks))  # Clamp between 1-12 weeks
+        
         today = date.today()
         week_start = today - timedelta(days=today.weekday())
         week_end = week_start + timedelta(days=6)
@@ -31,11 +35,20 @@ class DashboardView(APIView):
         team_overview = []
         available_people = []
         total_utilization = 0
+        peak_utilization = 0
+        peak_person_name = None
         
         for person in active_people:
-            utilization_data = person.get_current_utilization()
+            # Use multi-week utilization calculation
+            utilization_data = person.get_utilization_over_weeks(weeks)
             percent = utilization_data['total_percentage']
+            peak_percent = utilization_data['peak_percentage']
             total_utilization += percent
+            
+            # Track overall peak utilization
+            if peak_percent > peak_utilization:
+                peak_utilization = peak_percent
+                peak_person_name = person.name
             
             # Categorize utilization
             if percent < 70:
@@ -61,7 +74,10 @@ class DashboardView(APIView):
                 'utilization_percent': percent,
                 'allocated_hours': utilization_data['allocated_hours'],
                 'capacity': person.weekly_capacity,
-                'is_overallocated': utilization_data['is_overallocated']
+                'is_overallocated': utilization_data['is_overallocated'],
+                'peak_utilization_percent': peak_percent,
+                'peak_week': utilization_data['peak_week_key'],
+                'is_peak_overallocated': utilization_data['is_peak_overallocated']
             })
         
         # Calculate average utilization
@@ -79,7 +95,7 @@ class DashboardView(APIView):
         for assignment in recent_assignment_qs:
             recent_assignments.append({
                 'person': assignment.person.name,
-                'project': assignment.project_name,
+                'project': assignment.project_display,
                 'created': assignment.created_at.isoformat()
             })
         
@@ -87,6 +103,8 @@ class DashboardView(APIView):
             'summary': {
                 'total_people': total_people,
                 'avg_utilization': avg_utilization,
+                'peak_utilization': round(peak_utilization, 1),
+                'peak_person': peak_person_name,
                 'total_assignments': total_assignments,
                 'overallocated_count': utilization_ranges['overallocated']
             },

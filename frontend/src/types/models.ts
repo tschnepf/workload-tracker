@@ -138,6 +138,8 @@ export interface DashboardData {
   summary: {
     total_people: number;
     avg_utilization: number;
+    peak_utilization: number;
+    peak_person: string;
     total_assignments: number;
     overallocated_count: number;
   };
@@ -155,6 +157,9 @@ export interface DashboardData {
     allocated_hours: number;
     capacity: number;
     is_overallocated: boolean;
+    peak_utilization_percent: number;
+    peak_week: string;
+    is_peak_overallocated: boolean;
   }>;
   available_people: Array<{
     id: number;

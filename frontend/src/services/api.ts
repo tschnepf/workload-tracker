@@ -210,9 +210,11 @@ export const deliverablesApi = {
 
 // Dashboard API
 export const dashboardApi = {
-  // Get dashboard data
-  getDashboard: () =>
-    fetchApi<DashboardData>('/dashboard/'),
+  // Get dashboard data with optional weeks parameter
+  getDashboard: (weeks?: number) => {
+    const params = weeks && weeks !== 1 ? `?weeks=${weeks}` : '';
+    return fetchApi<DashboardData>(`/dashboard/${params}`);
+  },
 };
 
 // Skills API

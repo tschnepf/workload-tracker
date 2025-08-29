@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Assignment, Person, Deliverable, Project } from '@/types/models';
 import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
+import Toast from '@/components/ui/Toast';
 
 interface PersonWithAssignments extends Person {
   assignments: Assignment[];
@@ -49,6 +50,7 @@ const AssignmentGrid: React.FC = () => {
   const [projectSearchResults, setProjectSearchResults] = useState<Project[]>([]);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [selectedDropdownIndex, setSelectedDropdownIndex] = useState(-1);
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
   const [editingCell, setEditingCell] = useState<{ personId: number, assignmentId: number, week: string } | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
   const [selectedCell, setSelectedCell] = useState<{ personId: number, assignmentId: number, week: string } | null>(null);
@@ -114,6 +116,12 @@ const AssignmentGrid: React.FC = () => {
     setProjectSearchResults([]);
     setSelectedDropdownIndex(-1);
   };
+
+  // Show toast notification
+  const showToast = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    setToast({ message, type });
+  };
+
 
   // Load data on mount
   useEffect(() => {
@@ -296,6 +304,24 @@ const AssignmentGrid: React.FC = () => {
           ? { ...person, assignments: [...person.assignments, newAssignment] }
           : person
       ));
+
+      // Show notification about assignment creation and potential overallocation risk
+      const person = people.find(p => p.id === personId);
+      if (person) {
+        const projectCount = person.assignments.length + 1; // Include the new assignment
+        
+        if (projectCount >= 3) {
+          showToast(
+            `⚠️ ${person.name} is now assigned to ${projectCount} projects. Monitor workload to avoid overallocation.`,
+            'warning'
+          );
+        } else {
+          showToast(
+            `✓ ${person.name} successfully assigned to ${project.name}`,
+            'success'
+          );
+        }
+      }
       
       setIsAddingAssignment(null);
       setNewProjectName('');
@@ -871,6 +897,15 @@ const AssignmentGrid: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Toast Notifications */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };

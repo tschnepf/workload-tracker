@@ -796,7 +796,7 @@ const ProjectsList: React.FC = () => {
     if (!selectedProject?.id) return;
 
     try {
-      await projectsApi.update(selectedProject.id, { ...selectedProject, status: newStatus });
+      await projectsApi.update(selectedProject.id, { status: newStatus });
       
       // Update the project in the local state
       const updatedProjects = projects.map(p => 
@@ -962,7 +962,12 @@ const ProjectsList: React.FC = () => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (statusDropdownOpen) {
-        setStatusDropdownOpen(false);
+        const target = event.target as Element;
+        // Check if the click was outside the dropdown by looking for the dropdown container
+        const dropdownContainer = target.closest('.status-dropdown-container');
+        if (!dropdownContainer) {
+          setStatusDropdownOpen(false);
+        }
       }
     };
 
@@ -1161,7 +1166,7 @@ const ProjectsList: React.FC = () => {
                       </div>
                       <div>
                         <div className="text-[#969696] text-xs">Status:</div>
-                        <div className="relative">
+                        <div className="relative status-dropdown-container">
                           <button
                             onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
                             className={`${getStatusColor(selectedProject.status || '')} hover:bg-[#3e3e42]/50 px-2 py-1 rounded text-sm transition-colors cursor-pointer flex items-center gap-1`}

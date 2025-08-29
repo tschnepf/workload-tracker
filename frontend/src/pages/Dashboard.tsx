@@ -14,21 +14,28 @@ const Dashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [weeksPeriod, setWeeksPeriod] = useState<number>(1);
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+  }, [weeksPeriod]);
 
   const loadDashboard = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await dashboardApi.getDashboard();
+      const response = await dashboardApi.getDashboard(weeksPeriod);
       setData(response);
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleWeeksPeriodChange = (newWeeks: number) => {
+    if (newWeeks >= 1 && newWeeks <= 12) {
+      setWeeksPeriod(newWeeks);
     }
   };
 
@@ -70,17 +77,55 @@ const Dashboard: React.FC = () => {
     <Layout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-[#cccccc]">
-            Team Dashboard
-          </h1>
-          <p className="text-[#969696] mt-2">
-            Overview of team utilization and workload allocation
-          </p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-[#cccccc]">
+              Team Dashboard
+            </h1>
+            <p className="text-[#969696] mt-2">
+              Overview of team utilization and workload allocation
+              {weeksPeriod === 1 ? ' (current week)' : ` (${weeksPeriod} week average)`}
+            </p>
+          </div>
+          
+          {/* Time Period Selector */}
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-[#969696]">Time Period:</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                max="12"
+                value={weeksPeriod}
+                onChange={(e) => handleWeeksPeriodChange(parseInt(e.target.value) || 1)}
+                className="w-16 px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+              />
+              <span className="text-sm text-[#969696]">
+                {weeksPeriod === 1 ? 'week' : 'weeks'}
+              </span>
+            </div>
+            
+            {/* Quick Select Buttons */}
+            <div className="flex gap-1 ml-2">
+              {[1, 2, 4, 8, 12].map((weeks) => (
+                <button
+                  key={weeks}
+                  onClick={() => handleWeeksPeriodChange(weeks)}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    weeksPeriod === weeks
+                      ? 'bg-[#007acc] text-white'
+                      : 'bg-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
+                  }`}
+                >
+                  {weeks}w
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Summary Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <Card className="bg-[#2d2d30] border-[#3e3e42]">
             <div className="text-[#969696] text-sm">Total Team Members</div>
             <div className="text-2xl font-bold text-[#cccccc]">{data.summary.total_people}</div>
@@ -89,6 +134,14 @@ const Dashboard: React.FC = () => {
           <Card className="bg-[#2d2d30] border-[#3e3e42]">
             <div className="text-[#969696] text-sm">Average Utilization</div>
             <div className="text-2xl font-bold text-blue-400">{data.summary.avg_utilization}%</div>
+          </Card>
+          
+          <Card className="bg-[#2d2d30] border-[#3e3e42]">
+            <div className="text-[#969696] text-sm">Peak Utilization</div>
+            <div className="text-2xl font-bold text-amber-400">{data.summary.peak_utilization}%</div>
+            {data.summary.peak_person && (
+              <div className="text-xs text-[#969696] mt-1">{data.summary.peak_person}</div>
+            )}
           </Card>
           
           <Card className="bg-[#2d2d30] border-[#3e3e42]">
@@ -112,8 +165,27 @@ const Dashboard: React.FC = () => {
                   <div className="flex-1">
                     <div className="font-medium text-[#cccccc]">{person.name}</div>
                     <div className="text-sm text-[#969696]">{person.role} • {person.allocated_hours}h / {person.capacity}h</div>
+                    {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (
+                      <div className="text-xs text-amber-400 mt-1">
+                        Peak: {person.peak_utilization_percent}%
+                        {person.is_peak_overallocated && ' ⚠️'}
+                      </div>
+                    )}
                   </div>
-                  <UtilizationBadge percentage={person.utilization_percent} />
+                  <div className="flex flex-col items-end gap-1">
+                    <UtilizationBadge percentage={person.utilization_percent} />
+                    {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (
+                      <div className={`text-xs px-2 py-1 rounded border ${
+                        person.is_peak_overallocated 
+                          ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                          : person.peak_utilization_percent > 85
+                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                          : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                      }`}>
+                        Peak: {person.peak_utilization_percent}%
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
