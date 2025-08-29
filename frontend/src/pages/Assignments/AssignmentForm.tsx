@@ -5,11 +5,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Assignment, Person, Project, Department } from '@/types/models';
-import { assignmentsApi, peopleApi, projectsApi, departmentsApi } from '@/services/api';
+import { Person, Project, Department, PersonSkill, SkillTag } from '@/types/models';
+import { assignmentsApi, peopleApi, projectsApi, departmentsApi, personSkillsApi, skillTagsApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 
 interface WeeklyHours {
@@ -54,47 +53,165 @@ const getDepartmentName = (person: Person, departments: Department[]): string =>
   return dept?.name || 'Unknown Department';
 };
 
-// Helper function to sort people by department preference
-const sortPeopleByDepartment = (people: Person[], selectedPersonId: number | '', departments: Department[]): Person[] => {
-  if (!selectedPersonId) return people;
-  
-  const selectedPerson = people.find(p => p.id === selectedPersonId);
-  if (!selectedPerson) return people;
-  
-  const selectedDepartment = selectedPerson.department;
-  
-  return [...people].sort((a, b) => {
-    // Same department as selected person comes first
-    const aDept = a.department;
-    const bDept = b.department;
-    
-    if (aDept === selectedDepartment && bDept !== selectedDepartment) return -1;
-    if (bDept === selectedDepartment && aDept !== selectedDepartment) return 1;
-    
-    // Then sort by department name
-    const aDeptName = getDepartmentName(a, departments);
-    const bDeptName = getDepartmentName(b, departments);
-    if (aDeptName !== bDeptName) return aDeptName.localeCompare(bDeptName);
-    
-    // Finally sort by person name
-    return a.name.localeCompare(b.name);
-  });
-};
 
 const AssignmentForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
 
+  // Helper function to calculate skill match score
+  const calculateSkillMatchScore = (_person: Person, personSkills: PersonSkill[], requiredSkills: string[]): number => {
+    if (requiredSkills.length === 0) return 0;
+    
+    const personStrengths = personSkills
+      .filter(skill => skill.skillType === 'strength')
+      .map(skill => skill.skillTagName?.toLowerCase() || '');
+    
+    const matches = requiredSkills.filter(required => 
+      personStrengths.some(strength => 
+        strength.includes(required.toLowerCase()) || required.toLowerCase().includes(strength)
+      )
+    );
+    
+    return Math.round((matches.length / requiredSkills.length) * 100);
+  };
+
+  // Helper function to extract skills from input text - will be used when skills input is processed
+  const extractSkillsFromText = (text: string, availableSkills: SkillTag[]): string[] => {
+    if (!text.trim()) return [];
+    
+    const words = text.toLowerCase().split(/[,\s]+/).filter(word => word.length > 2);
+    const foundSkills: string[] = [];
+    
+    // Match against existing skill names
+    availableSkills.forEach(skill => {
+      const skillName = skill.name.toLowerCase();
+      if (words.some(word => skillName.includes(word) || word.includes(skillName))) {
+        foundSkills.push(skill.name);
+      }
+    });
+    
+    // Also include explicit comma-separated values
+    text.split(',').forEach(skill => {
+      const trimmed = skill.trim();
+      if (trimmed.length > 2 && !foundSkills.some(existing => 
+        existing.toLowerCase().includes(trimmed.toLowerCase())
+      )) {
+        foundSkills.push(trimmed);
+      }
+    });
+    
+    return foundSkills;
+  };
+
+  // Helper function to sort people by department and skill matching
+  const sortPeopleByDepartmentAndSkills = (
+    people: Person[], 
+    selectedPersonId: number | string, 
+    departments: Department[],
+    peopleSkills: Map<number, PersonSkill[]>,
+    requiredSkills: string[]
+  ): Person[] => {
+    if (!selectedPersonId && requiredSkills.length === 0) return people;
+    
+    const selectedPerson = people.find(p => p.id === Number(selectedPersonId));
+    const selectedDepartment = selectedPerson?.department;
+    
+    return [...people].sort((a, b) => {
+      // Calculate skill match scores
+      const aSkills = peopleSkills.get(a.id!) || [];
+      const bSkills = peopleSkills.get(b.id!) || [];
+      const aSkillScore = calculateSkillMatchScore(a, aSkills, requiredSkills);
+      const bSkillScore = calculateSkillMatchScore(b, bSkills, requiredSkills);
+      
+      // If we have required skills, prioritize skill matching
+      if (requiredSkills.length > 0) {
+        if (aSkillScore !== bSkillScore) {
+          return bSkillScore - aSkillScore;  // Higher skill score first
+        }
+      }
+      
+      // Same department as selected person comes next
+      if (selectedDepartment) {
+        const aDept = a.department;
+        const bDept = b.department;
+        
+        if (aDept === selectedDepartment && bDept !== selectedDepartment) return -1;
+        if (bDept === selectedDepartment && aDept !== selectedDepartment) return 1;
+      }
+      
+      // Then sort by department name
+      const aDeptName = getDepartmentName(a, departments);
+      const bDeptName = getDepartmentName(b, departments);
+      if (aDeptName !== bDeptName) return aDeptName.localeCompare(bDeptName);
+      
+      // Finally sort by person name
+      return a.name.localeCompare(b.name);
+    });
+  };
+
+  // Helper function to get skill mismatch warnings
+  const getSkillWarnings = (
+    person: Person, 
+    personSkills: PersonSkill[], 
+    requiredSkills: string[]
+  ): string[] => {
+    const warnings: string[] = [];
+    
+    if (requiredSkills.length === 0) return warnings;
+    
+    const personStrengths = personSkills
+      .filter(skill => skill.skillType === 'strength')
+      .map(skill => skill.skillTagName || '');
+    
+    const personDevelopment = personSkills
+      .filter(skill => skill.skillType === 'development')
+      .map(skill => skill.skillTagName || '');
+    
+    const matchedSkills = requiredSkills.filter(required => 
+      personStrengths.some(strength => 
+        strength.toLowerCase().includes(required.toLowerCase()) || required.toLowerCase().includes(strength.toLowerCase())
+      )
+    );
+    
+    const developmentMatches = requiredSkills.filter(required => 
+      personDevelopment.some(dev => 
+        dev.toLowerCase().includes(required.toLowerCase()) || required.toLowerCase().includes(dev.toLowerCase())
+      )
+    );
+    
+    const unmatchedSkills = requiredSkills.filter(required => 
+      !matchedSkills.some(matched => matched.toLowerCase().includes(required.toLowerCase()))
+    );
+    
+    if (matchedSkills.length === 0 && requiredSkills.length > 0) {
+      warnings.push(`⚠️ No skill matches found for: ${requiredSkills.join(', ')}`);
+    }
+    
+    if (developmentMatches.length > 0) {
+      warnings.push(`📈 Development opportunity: ${person.name} is learning ${developmentMatches.join(', ')}`);
+    }
+    
+    if (unmatchedSkills.length > 0 && matchedSkills.length > 0) {
+      warnings.push(`⚠️ Missing skills: ${unmatchedSkills.join(', ')}`);
+    }
+    
+    return warnings;
+  };
+
   const [people, setPeople] = useState<Person[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [peopleSkills, setPeopleSkills] = useState<Map<number, PersonSkill[]>>(new Map());
+  const [skillTags, setSkillTags] = useState<SkillTag[]>([]);
+  const [projectSkills, setProjectSkills] = useState<string[]>([]);  // Skills required for this project
   const [availableWeeks] = useState<string[]>(getNext12Weeks());
   const [formData, setFormData] = useState<AssignmentFormData>({
     person: '',
     project: '',
     weeklyHours: {},
   });
+  const [skillsInput, setSkillsInput] = useState<string>('');  // Skills required input field
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,11 +222,18 @@ const AssignmentForm: React.FC = () => {
     loadPeople();
     loadProjects();
     loadDepartments();
+    loadSkillsData();
     if (isEditing && id) {
       // Note: For simplicity in Chunk 3, we're not implementing edit mode
       // This would require a get assignment endpoint
     }
   }, [isEditing, id]);
+
+  // Parse skills from input
+  useEffect(() => {
+    const skills = extractSkillsFromText(skillsInput, skillTags);
+    setProjectSkills(skills);
+  }, [skillsInput, skillTags, extractSkillsFromText]);
 
   const loadPeople = async () => {
     try {
@@ -139,6 +263,31 @@ const AssignmentForm: React.FC = () => {
     }
   };
 
+  const loadSkillsData = async () => {
+    try {
+      // Load all skill tags for autocomplete
+      const skillTagsResponse = await skillTagsApi.list();
+      setSkillTags(skillTagsResponse.results || []);
+      
+      // Load people skills in batch
+      const skillsResponse = await personSkillsApi.list();
+      const skillsMap = new Map<number, PersonSkill[]>();
+      
+      // Group skills by person ID
+      (skillsResponse.results || []).forEach(skill => {
+        if (!skillsMap.has(skill.person)) {
+          skillsMap.set(skill.person, []);
+        }
+        skillsMap.get(skill.person)!.push(skill);
+      });
+      
+      setPeopleSkills(skillsMap);
+    } catch (err: any) {
+      console.error('Failed to load skills data:', err);
+      // Don't set error for skills as it's not critical for assignment creation
+    }
+  };
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
@@ -161,8 +310,8 @@ const AssignmentForm: React.FC = () => {
       const selectedPerson = people.find(p => p.id === formData.person);
       if (selectedPerson) {
         for (const [week, hours] of Object.entries(formData.weeklyHours)) {
-          if (hours > selectedPerson.weeklyCapacity) {
-            errors[`week_${week}`] = `Hours for week ${formatWeekDisplay(week)} exceed capacity (${selectedPerson.weeklyCapacity}h)`;
+          if (hours > (selectedPerson.weeklyCapacity || 0)) {
+            errors[`week_${week}`] = `Hours for week ${formatWeekDisplay(week)} exceed capacity (${selectedPerson.weeklyCapacity || 0}h)`;
           }
         }
       }
@@ -290,14 +439,23 @@ const AssignmentForm: React.FC = () => {
                 className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="">Select a person...</option>
-                {sortPeopleByDepartment(people, formData.person, departments).map((person) => {
+                {sortPeopleByDepartmentAndSkills(people, formData.person, departments, peopleSkills, projectSkills).map((person) => {
                   const isSelectedDepartment = formData.person && 
                     people.find(p => p.id === formData.person)?.department === person.department;
                   const departmentName = getDepartmentName(person, departments);
+                  const personSkillsList = peopleSkills.get(person.id!) || [];
+                  const skillScore = calculateSkillMatchScore(person, personSkillsList, projectSkills);
+                  
+                  let prefix = '';
+                  if (skillScore >= 80) prefix = '🎯 ';  // Perfect match
+                  else if (skillScore >= 50) prefix = '⭐ ';  // Good match
+                  else if (isSelectedDepartment) prefix = '🏢 ';  // Same department
+                  
+                  const skillInfo = skillScore > 0 ? ` (${skillScore}% skill match)` : '';
                   
                   return (
                     <option key={person.id} value={person.id}>
-                      {isSelectedDepartment ? '⭐ ' : ''}{person.name} • {departmentName} • {person.weeklyCapacity}h capacity
+                      {prefix}{person.name} • {departmentName} • {person.weeklyCapacity}h capacity{skillInfo}
                     </option>
                   );
                 })}
@@ -306,33 +464,122 @@ const AssignmentForm: React.FC = () => {
                 <p className="text-sm text-red-400 mt-1">{validationErrors.person}</p>
               )}
               
-              {/* Department Information Panel */}
+              {/* Skills-Enhanced Assignment Insights */}
               {formData.person && (
-                <div className="mt-3 p-3 bg-[#3e3e42]/30 rounded border border-[#3e3e42]">
+                <div className="mt-3 space-y-3">
                   {(() => {
                     const selectedPerson = people.find(p => p.id === Number(formData.person));
                     if (!selectedPerson) return null;
                     
                     const personDept = getDepartmentName(selectedPerson, departments);
                     const sameDeptCount = people.filter(p => p.department === selectedPerson.department).length - 1;
+                    const personSkillsList = peopleSkills.get(selectedPerson.id!) || [];
+                    const skillScore = calculateSkillMatchScore(selectedPerson, personSkillsList, projectSkills);
+                    const skillWarnings = getSkillWarnings(selectedPerson, personSkillsList, projectSkills);
                     
                     return (
-                      <div className="text-sm">
-                        <div className="text-[#cccccc] font-medium mb-1">
-                          📊 Assignment Insights
-                        </div>
-                        <div className="text-[#969696]">
-                          <div>Department: <span className="text-[#cccccc]">{personDept}</span></div>
-                          <div>Capacity: <span className="text-[#cccccc]">{selectedPerson.weeklyCapacity}h/week</span></div>
-                          {sameDeptCount > 0 && (
-                            <div className="mt-1 text-blue-400">
-                              💡 {sameDeptCount} other people available in {personDept}
+                      <>
+                        {/* Basic Info Panel */}
+                        <div className="p-3 bg-[#3e3e42]/30 rounded border border-[#3e3e42]">
+                          <div className="text-sm">
+                            <div className="text-[#cccccc] font-medium mb-1">
+                              📊 Assignment Insights
                             </div>
-                          )}
+                            <div className="text-[#969696]">
+                              <div>Department: <span className="text-[#cccccc]">{personDept}</span></div>
+                              <div>Capacity: <span className="text-[#cccccc]">{selectedPerson.weeklyCapacity || 0}h/week</span></div>
+                              {projectSkills.length > 0 && (
+                                <div className={`mt-1 ${
+                                  skillScore >= 80 ? 'text-emerald-400' : 
+                                  skillScore >= 50 ? 'text-blue-400' : 
+                                  skillScore > 0 ? 'text-amber-400' : 'text-red-400'
+                                }`}>
+                                  🎯 Skill match: {skillScore}%
+                                </div>
+                              )}
+                              {sameDeptCount > 0 && (
+                                <div className="mt-1 text-blue-400">
+                                  💡 {sameDeptCount} other people available in {personDept}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                        
+                        {/* Skills Warnings */}
+                        {skillWarnings.length > 0 && (
+                          <div className="p-3 bg-amber-500/20 border border-amber-500/30 rounded">
+                            <div className="text-sm">
+                              <div className="text-amber-400 font-medium mb-1">
+                                ⚠️ Skills Assessment
+                              </div>
+                              <div className="space-y-1">
+                                {skillWarnings.map((warning, idx) => (
+                                  <div key={idx} className="text-amber-300 text-xs">
+                                    {warning}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Person's Skills Display */}
+                        {personSkillsList.length > 0 && (
+                          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded">
+                            <div className="text-sm">
+                              <div className="text-blue-400 font-medium mb-2">
+                                💪 {selectedPerson.name}'s Skills
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {personSkillsList
+                                  .filter(skill => skill.skillType === 'strength')
+                                  .slice(0, 5)
+                                  .map(skill => (
+                                    <span key={skill.id} className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
+                                      {skill.skillTagName}
+                                    </span>
+                                  ))
+                                }
+                                {personSkillsList.filter(skill => skill.skillType === 'strength').length > 5 && (
+                                  <span className="px-2 py-1 bg-slate-500/20 text-slate-400 rounded text-xs">
+                                    +{personSkillsList.filter(skill => skill.skillType === 'strength').length - 5} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     );
                   })()}
+                </div>
+              )}
+            </div>
+
+            {/* Skills Input Field */}
+            <div>
+              <label className="block text-sm font-medium text-[#cccccc] mb-2">
+                Required Skills <span className="text-[#969696]">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={skillsInput}
+                onChange={(e) => setSkillsInput(e.target.value)}
+                placeholder="e.g., React, Python, Project Management, Heat Calculations"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              />
+              <p className="text-[#969696] text-sm mt-1">
+                Enter skills needed for this assignment (comma-separated). This helps match the best person for the job.
+              </p>
+              {projectSkills.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs text-[#969696]">Detected skills:</span>
+                  {projectSkills.map((skill, idx) => (
+                    <span key={idx} className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                      {skill}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
