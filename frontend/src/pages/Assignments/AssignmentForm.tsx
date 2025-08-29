@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Assignment, Person, Project } from '@/types/models';
-import { assignmentsApi, peopleApi, projectsApi } from '@/services/api';
+import { Assignment, Person, Project, Department } from '@/types/models';
+import { assignmentsApi, peopleApi, projectsApi, departmentsApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -47,6 +47,40 @@ const formatWeekDisplay = (weekKey: string): string => {
   return `${date.toLocaleDateString('en-US', options)} - ${endDate.toLocaleDateString('en-US', options)}`;
 };
 
+// Helper function to get department name for a person
+const getDepartmentName = (person: Person, departments: Department[]): string => {
+  if (!person.department) return 'No Department';
+  const dept = departments.find(d => d.id === person.department);
+  return dept?.name || 'Unknown Department';
+};
+
+// Helper function to sort people by department preference
+const sortPeopleByDepartment = (people: Person[], selectedPersonId: number | '', departments: Department[]): Person[] => {
+  if (!selectedPersonId) return people;
+  
+  const selectedPerson = people.find(p => p.id === selectedPersonId);
+  if (!selectedPerson) return people;
+  
+  const selectedDepartment = selectedPerson.department;
+  
+  return [...people].sort((a, b) => {
+    // Same department as selected person comes first
+    const aDept = a.department;
+    const bDept = b.department;
+    
+    if (aDept === selectedDepartment && bDept !== selectedDepartment) return -1;
+    if (bDept === selectedDepartment && aDept !== selectedDepartment) return 1;
+    
+    // Then sort by department name
+    const aDeptName = getDepartmentName(a, departments);
+    const bDeptName = getDepartmentName(b, departments);
+    if (aDeptName !== bDeptName) return aDeptName.localeCompare(bDeptName);
+    
+    // Finally sort by person name
+    return a.name.localeCompare(b.name);
+  });
+};
+
 const AssignmentForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -54,6 +88,7 @@ const AssignmentForm: React.FC = () => {
 
   const [people, setPeople] = useState<Person[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [availableWeeks] = useState<string[]>(getNext12Weeks());
   const [formData, setFormData] = useState<AssignmentFormData>({
     person: '',
@@ -69,6 +104,7 @@ const AssignmentForm: React.FC = () => {
   useEffect(() => {
     loadPeople();
     loadProjects();
+    loadDepartments();
     if (isEditing && id) {
       // Note: For simplicity in Chunk 3, we're not implementing edit mode
       // This would require a get assignment endpoint
@@ -90,6 +126,16 @@ const AssignmentForm: React.FC = () => {
       setProjects(response.results || []);
     } catch (err: any) {
       setError('Failed to load projects list');
+    }
+  };
+
+  const loadDepartments = async () => {
+    try {
+      const response = await departmentsApi.list();
+      setDepartments(response.results || []);
+    } catch (err: any) {
+      console.error('Failed to load departments list:', err);
+      // Don't set error for departments as it's not critical for assignment creation
     }
   };
 
@@ -244,14 +290,50 @@ const AssignmentForm: React.FC = () => {
                 className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="">Select a person...</option>
-                {people.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name} ({person.weeklyCapacity}h capacity)
-                  </option>
-                ))}
+                {sortPeopleByDepartment(people, formData.person, departments).map((person) => {
+                  const isSelectedDepartment = formData.person && 
+                    people.find(p => p.id === formData.person)?.department === person.department;
+                  const departmentName = getDepartmentName(person, departments);
+                  
+                  return (
+                    <option key={person.id} value={person.id}>
+                      {isSelectedDepartment ? '⭐ ' : ''}{person.name} • {departmentName} • {person.weeklyCapacity}h capacity
+                    </option>
+                  );
+                })}
               </select>
               {validationErrors.person && (
                 <p className="text-sm text-red-400 mt-1">{validationErrors.person}</p>
+              )}
+              
+              {/* Department Information Panel */}
+              {formData.person && (
+                <div className="mt-3 p-3 bg-[#3e3e42]/30 rounded border border-[#3e3e42]">
+                  {(() => {
+                    const selectedPerson = people.find(p => p.id === Number(formData.person));
+                    if (!selectedPerson) return null;
+                    
+                    const personDept = getDepartmentName(selectedPerson, departments);
+                    const sameDeptCount = people.filter(p => p.department === selectedPerson.department).length - 1;
+                    
+                    return (
+                      <div className="text-sm">
+                        <div className="text-[#cccccc] font-medium mb-1">
+                          📊 Assignment Insights
+                        </div>
+                        <div className="text-[#969696]">
+                          <div>Department: <span className="text-[#cccccc]">{personDept}</span></div>
+                          <div>Capacity: <span className="text-[#cccccc]">{selectedPerson.weeklyCapacity}h/week</span></div>
+                          {sameDeptCount > 0 && (
+                            <div className="mt-1 text-blue-400">
+                              💡 {sameDeptCount} other people available in {personDept}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               )}
             </div>
 
@@ -278,6 +360,40 @@ const AssignmentForm: React.FC = () => {
               <p className="text-[#969696] text-sm mt-1">
                 Select the project for this assignment
               </p>
+              
+              {/* Department Collaboration Insights */}
+              {formData.person && formData.project && (
+                <div className="mt-3 p-3 bg-blue-500/10 rounded border border-blue-500/30">
+                  {(() => {
+                    const selectedPerson = people.find(p => p.id === Number(formData.person));
+                    const selectedProject = projects.find(p => p.id === Number(formData.project));
+                    if (!selectedPerson || !selectedProject) return null;
+                    
+                    const sameDeptPeople = people.filter(p => 
+                      p.department === selectedPerson.department && p.id !== selectedPerson.id
+                    );
+                    
+                    return (
+                      <div className="text-sm">
+                        <div className="text-blue-400 font-medium mb-1">
+                          🤝 Collaboration Opportunity
+                        </div>
+                        <div className="text-[#969696]">
+                          Assigning <span className="text-[#cccccc]">{selectedPerson.name}</span> from{' '}
+                          <span className="text-[#cccccc]">{getDepartmentName(selectedPerson, departments)}</span> to{' '}
+                          <span className="text-[#cccccc]">{selectedProject.name}</span>
+                          {sameDeptPeople.length > 0 && (
+                            <div className="mt-1">
+                              Consider also involving: {sameDeptPeople.slice(0, 3).map(p => p.name).join(', ')}
+                              {sameDeptPeople.length > 3 && ` and ${sameDeptPeople.length - 3} others`}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
             {/* Bulk Hours Setter */}

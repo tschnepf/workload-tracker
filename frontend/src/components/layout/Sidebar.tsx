@@ -58,6 +58,25 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
           <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
         </svg>
       );
+    case 'hierarchy':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
+          <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+          <path d="M16 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+          <path d="M12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+          <path d="M10.5 8.5 9.5 14.5"/>
+          <path d="M13.5 8.5 14.5 14.5"/>
+        </svg>
+      );
+    case 'manager':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
+          <circle cx="12" cy="8" r="5"/>
+          <path d="M20 21a8 8 0 0 0-16 0"/>
+          <path d="M12 13v8"/>
+          <path d="M8 17l4-4 4 4"/>
+        </svg>
+      );
     case 'settings':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
@@ -133,7 +152,32 @@ const Sidebar: React.FC = () => {
       icon: 'projects', 
       label: 'Projects',
       description: 'Project tracking'
+    }
+  ];
+
+  // Advanced department features
+  const departmentItems = [
+    { 
+      path: '/departments/manager', 
+      icon: 'manager', 
+      label: 'Manager View',
+      description: 'Department management dashboard'
     },
+    { 
+      path: '/departments/hierarchy', 
+      icon: 'hierarchy', 
+      label: 'Org Chart',
+      description: 'Department hierarchy visualization'
+    },
+    { 
+      path: '/departments/reports', 
+      icon: 'reports', 
+      label: 'Reports',
+      description: 'Department analytics and insights'
+    }
+  ];
+
+  const systemItems = [
     { 
       path: '/settings', 
       icon: 'settings', 
@@ -178,6 +222,60 @@ const Sidebar: React.FC = () => {
       <nav className="flex-1 py-4">
         <div className="space-y-1 px-3">
           {menuItems.map((item) => (
+            <Tooltip key={item.path} title={item.label} description={item.description}>
+              <Link
+                to={item.path}
+                className={`
+                  group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 justify-center
+                  ${isActive(item.path) 
+                    ? 'bg-[#007acc]/10 border-r-2 border-[#007acc] text-[#007acc]' 
+                    : 'text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50'
+                  }
+                `}
+              >
+                <div className="flex-shrink-0">
+                  <IconComponent 
+                    type={item.icon} 
+                    className="w-4 h-4" 
+                    isActive={isActive(item.path)}
+                  />
+                </div>
+              </Link>
+            </Tooltip>
+          ))}
+        </div>
+
+        {/* Department Advanced Features */}
+        <div className="my-4 mx-6 border-t border-[#3e3e42]" />
+        <div className="space-y-1 px-3">
+          {departmentItems.map((item) => (
+            <Tooltip key={item.path} title={item.label} description={item.description}>
+              <Link
+                to={item.path}
+                className={`
+                  group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 justify-center
+                  ${isActive(item.path) 
+                    ? 'bg-[#007acc]/10 border-r-2 border-[#007acc] text-[#007acc]' 
+                    : 'text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50'
+                  }
+                `}
+              >
+                <div className="flex-shrink-0">
+                  <IconComponent 
+                    type={item.icon} 
+                    className="w-4 h-4" 
+                    isActive={isActive(item.path)}
+                  />
+                </div>
+              </Link>
+            </Tooltip>
+          ))}
+        </div>
+
+        {/* System Items */}
+        <div className="my-4 mx-6 border-t border-[#3e3e42]" />
+        <div className="space-y-1 px-3">
+          {systemItems.map((item) => (
             <Tooltip key={item.path} title={item.label} description={item.description}>
               <Link
                 to={item.path}

@@ -241,10 +241,13 @@ export const deliverablesApi = {
 
 // Dashboard API
 export const dashboardApi = {
-  // Get dashboard data with optional weeks parameter
-  getDashboard: (weeks?: number) => {
-    const params = weeks && weeks !== 1 ? `?weeks=${weeks}` : '';
-    return fetchApi<DashboardData>(`/dashboard/${params}`);
+  // Get dashboard data with optional weeks and department parameters
+  getDashboard: (weeks?: number, department?: string) => {
+    const params = new URLSearchParams();
+    if (weeks && weeks !== 1) params.set('weeks', weeks.toString());
+    if (department) params.set('department', department);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return fetchApi<DashboardData>(`/dashboard/${queryString}`);
   },
 };
 

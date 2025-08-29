@@ -7,24 +7,38 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
-import { dashboardApi } from '../services/api';
-import { DashboardData } from '../types/models';
+import { dashboardApi, departmentsApi } from '../services/api';
+import { DashboardData, Department } from '../types/models';
 
 const Dashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weeksPeriod, setWeeksPeriod] = useState<number>(1);
+  
+  // Department filtering state
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>(''); // Empty string = 'All Departments'
 
   useEffect(() => {
     loadDashboard();
-  }, [weeksPeriod]);
+    loadDepartments();
+  }, [weeksPeriod, selectedDepartment]);
+  
+  const loadDepartments = async () => {
+    try {
+      const response = await departmentsApi.list();
+      setDepartments(response.results || []);
+    } catch (err) {
+      console.error('Error loading departments:', err);
+    }
+  };
 
   const loadDashboard = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await dashboardApi.getDashboard(weeksPeriod);
+      const response = await dashboardApi.getDashboard(weeksPeriod, selectedDepartment || undefined);
       setData(response);
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard data');
@@ -85,13 +99,37 @@ const Dashboard: React.FC = () => {
             <p className="text-[#969696] mt-2">
               Overview of team utilization and workload allocation
               {weeksPeriod === 1 ? ' (current week)' : ` (${weeksPeriod} week average)`}
+              {selectedDepartment && (
+                <span className="block mt-1">
+                  Filtered by: {departments.find(d => d.id?.toString() === selectedDepartment)?.name || 'Unknown Department'}
+                </span>
+              )}
             </p>
           </div>
           
-          {/* Time Period Selector */}
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-[#969696]">Time Period:</label>
-            <div className="flex items-center gap-2">
+          {/* Department and Time Period Selectors */}
+          <div className="flex items-center gap-6">
+            {/* Department Filter */}
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-[#969696]">Department:</label>
+              <select
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+                className="px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none min-w-[140px]"
+              >
+                <option value="">All Departments</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Time Period Selector */}
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-[#969696]">Time Period:</label>
+              <div className="flex items-center gap-2">
               <input
                 type="number"
                 min="1"
@@ -105,21 +143,22 @@ const Dashboard: React.FC = () => {
               </span>
             </div>
             
-            {/* Quick Select Buttons */}
-            <div className="flex gap-1 ml-2">
-              {[1, 2, 4, 8, 12].map((weeks) => (
-                <button
-                  key={weeks}
-                  onClick={() => handleWeeksPeriodChange(weeks)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    weeksPeriod === weeks
-                      ? 'bg-[#007acc] text-white'
-                      : 'bg-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
-                  }`}
-                >
-                  {weeks}w
-                </button>
-              ))}
+              {/* Quick Select Buttons */}
+              <div className="flex gap-1 ml-2">
+                {[1, 2, 4, 8, 12].map((weeks) => (
+                  <button
+                    key={weeks}
+                    onClick={() => handleWeeksPeriodChange(weeks)}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${
+                      weeksPeriod === weeks
+                        ? 'bg-[#007acc] text-white'
+                        : 'bg-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
+                    }`}
+                  >
+                    {weeks}w
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

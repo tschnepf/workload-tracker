@@ -19,7 +19,7 @@ class PersonSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Person
-        fields = ['id', 'name', 'weeklyCapacity', 'department', 'departmentName', 'createdAt', 'updatedAt']
+        fields = ['id', 'name', 'weeklyCapacity', 'department', 'departmentName', 'notes', 'createdAt', 'updatedAt']
         extra_kwargs = {
             'createdAt': {'source': 'created_at', 'read_only': True},
             'updatedAt': {'source': 'updated_at', 'read_only': True},

@@ -7,7 +7,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Dashboard from './pages/Dashboard';
 import { PeopleList, PersonForm } from './pages/People';
 import { AssignmentList, AssignmentForm, AssignmentGrid } from './pages/Assignments';
-import { DepartmentsList } from './pages/Departments';
+import { DepartmentsList, ManagerDashboard, HierarchyView, ReportsView } from './pages/Departments';
 import Projects from './pages/Projects';
 import ProjectForm from './pages/Projects/ProjectForm';
 import AssignmentGridMockup from './components/mockup/AssignmentGridMockup';
@@ -30,6 +30,9 @@ function App() {
         <Route path="/people/new" element={<PersonForm />} />
         <Route path="/people/:id/edit" element={<PersonForm />} />
         <Route path="/departments" element={<DepartmentsList />} />
+        <Route path="/departments/manager" element={<ManagerDashboard />} />
+        <Route path="/departments/hierarchy" element={<HierarchyView />} />
+        <Route path="/departments/reports" element={<ReportsView />} />
         <Route path="/assignments" element={<AssignmentGrid />} />
         <Route path="/assignments/list" element={<AssignmentList />} />
         <Route path="/assignments/new" element={<AssignmentForm />} />

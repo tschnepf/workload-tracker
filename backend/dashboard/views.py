@@ -16,12 +16,23 @@ class DashboardView(APIView):
         weeks = int(request.GET.get('weeks', 1))
         weeks = max(1, min(12, weeks))  # Clamp between 1-12 weeks
         
+        # Get department filter parameter
+        department_id = request.GET.get('department')
+        department_filter = None
+        if department_id:
+            try:
+                department_filter = int(department_id)
+            except (ValueError, TypeError):
+                department_filter = None
+        
         today = date.today()
         week_start = today - timedelta(days=today.weekday())
         week_end = week_start + timedelta(days=6)
         
-        # Get all active people with their utilization
+        # Get active people, optionally filtered by department
         active_people = Person.objects.filter(is_active=True)
+        if department_filter:
+            active_people = active_people.filter(department_id=department_filter)
         total_people = active_people.count()
         
         # Calculate utilization distribution
@@ -83,14 +94,22 @@ class DashboardView(APIView):
         # Calculate average utilization
         avg_utilization = round(total_utilization / total_people, 1) if total_people > 0 else 0
         
-        # Get total active assignments
-        total_assignments = Assignment.objects.filter(is_active=True).count()
+        # Get total active assignments, optionally filtered by department
+        assignments_qs = Assignment.objects.filter(is_active=True)
+        if department_filter:
+            assignments_qs = assignments_qs.filter(person__department_id=department_filter)
+        total_assignments = assignments_qs.count()
         
-        # Recent assignments (last 7 days)
+        # Recent assignments (last 7 days), optionally filtered by department
         recent_assignments = []
         recent_assignment_qs = Assignment.objects.filter(
             created_at__gte=today - timedelta(days=7)
-        ).select_related('person').order_by('-created_at')[:5]
+        ).select_related('person')
+        
+        if department_filter:
+            recent_assignment_qs = recent_assignment_qs.filter(person__department_id=department_filter)
+            
+        recent_assignment_qs = recent_assignment_qs.order_by('-created_at')[:5]
         
         for assignment in recent_assignment_qs:
             recent_assignments.append({

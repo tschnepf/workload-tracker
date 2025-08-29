@@ -21,6 +21,11 @@ const PeopleList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Bulk actions state
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedPeopleIds, setSelectedPeopleIds] = useState<Set<number>>(new Set());
+  const [bulkDepartment, setBulkDepartment] = useState<string>('');
+  
   // Person skills data
   const [personSkills, setPersonSkills] = useState<PersonSkill[]>([]);
   const [editingSkills, setEditingSkills] = useState(false);
@@ -232,13 +237,52 @@ const PeopleList: React.FC = () => {
     setEditingProficiency(null);
   };
 
-  // Filter people - Phase 2: Include department filtering
+  const handleBulkAssignment = async () => {
+    if (!bulkDepartment || selectedPeopleIds.size === 0) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Update each selected person
+      const updatePromises = Array.from(selectedPeopleIds).map(personId => {
+        const updateData = {
+          department: bulkDepartment === 'none' ? null : parseInt(bulkDepartment)
+        };
+        return peopleApi.update(personId, updateData);
+      });
+
+      await Promise.all(updatePromises);
+
+      // Reload people data to reflect changes
+      await loadPeople();
+      await loadDepartments();
+
+      // Clear bulk selection
+      setSelectedPeopleIds(new Set());
+      setBulkDepartment('');
+
+      // Show success message (could be improved with a proper toast)
+      const departmentName = bulkDepartment === 'none' 
+        ? 'removed from departments'
+        : departments.find(d => d.id?.toString() === bulkDepartment)?.name || 'unknown department';
+      
+      console.log(`Successfully assigned ${selectedPeopleIds.size} people to ${departmentName}`);
+    } catch (err: any) {
+      setError(`Failed to update department assignments: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter people - Phase 2: Include department filtering + notes search
   const filteredPeople = people.filter(person => {
-    // Search filter
+    // Enhanced search filter (includes notes/description search)
     const matchesSearch = !searchTerm || 
       person.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       person.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      person.departmentName?.toLowerCase().includes(searchTerm.toLowerCase());
+      person.departmentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      person.notes?.toLowerCase().includes(searchTerm.toLowerCase());
     
     // Department filter - Phase 2
     const matchesDepartment = !departmentFilter || 
@@ -286,7 +330,7 @@ const PeopleList: React.FC = () => {
             <div className="space-y-2">
               <input
                 type="text"
-                placeholder="Search people"
+                placeholder="Search people (name, role, department, notes)"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
@@ -306,6 +350,29 @@ const PeopleList: React.FC = () => {
                   </option>
                 ))}
               </select>
+              
+              {/* Bulk Actions Toggle */}
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    setBulkMode(!bulkMode);
+                    setSelectedPeopleIds(new Set());
+                  }}
+                  className={`px-2 py-1 text-xs rounded border transition-colors ${
+                    bulkMode 
+                      ? 'bg-[#007acc] border-[#007acc] text-white' 
+                      : 'bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52]'
+                  }`}
+                >
+                  {bulkMode ? 'Exit Bulk Mode' : 'Bulk Actions'}
+                </button>
+                
+                {bulkMode && selectedPeopleIds.size > 0 && (
+                  <span className="text-xs text-[#969696]">
+                    {selectedPeopleIds.size} selected
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -320,11 +387,12 @@ const PeopleList: React.FC = () => {
           <div className="flex-1 overflow-hidden">
             {/* Table Header */}
             <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[#969696] font-medium border-b border-[#3e3e42] bg-[#2d2d30]">
-              <div className="col-span-3">NAME</div>
-              <div className="col-span-2">DEPARTMENT</div>
-              <div className="col-span-2">ROLE</div>
-              <div className="col-span-2">CAPACITY</div>
-              <div className="col-span-3">TOP SKILLS</div>
+              {bulkMode && <div className="col-span-1">SELECT</div>}
+              <div className={bulkMode ? "col-span-3" : "col-span-3"}>NAME</div>
+              <div className={bulkMode ? "col-span-2" : "col-span-2"}>DEPARTMENT</div>
+              <div className={bulkMode ? "col-span-2" : "col-span-2"}>ROLE</div>
+              <div className={bulkMode ? "col-span-2" : "col-span-2"}>CAPACITY</div>
+              <div className={bulkMode ? "col-span-2" : "col-span-3"}>TOP SKILLS</div>
             </div>
 
             {/* Table Body */}
@@ -340,12 +408,36 @@ const PeopleList: React.FC = () => {
                 filteredPeople.map((person, index) => (
                   <div
                     key={person.id}
-                    onClick={() => handlePersonClick(person, index)}
-                    className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
-                      selectedPerson?.id === person.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
+                    onClick={bulkMode ? undefined : () => handlePersonClick(person, index)}
+                    className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] transition-colors focus:outline-none ${
+                      bulkMode 
+                        ? 'hover:bg-[#3e3e42]/30'
+                        : `cursor-pointer hover:bg-[#3e3e42]/50 ${
+                            selectedPerson?.id === person.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
+                          }`
                     }`}
                     tabIndex={0}
                   >
+                    {/* Bulk Select Checkbox */}
+                    {bulkMode && (
+                      <div className="col-span-1 flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedPeopleIds.has(person.id!)}
+                          onChange={(e) => {
+                            const newSelected = new Set(selectedPeopleIds);
+                            if (e.target.checked) {
+                              newSelected.add(person.id!);
+                            } else {
+                              newSelected.delete(person.id!);
+                            }
+                            setSelectedPeopleIds(newSelected);
+                          }}
+                          className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-2"
+                        />
+                      </div>
+                    )}
+                    
                     {/* Name */}
                     <div className="col-span-3 text-[#cccccc] font-medium">
                       {person.name}
@@ -367,7 +459,7 @@ const PeopleList: React.FC = () => {
                     </div>
                     
                     {/* Top Skills Preview */}
-                    <div className="col-span-3 flex flex-wrap gap-1">
+                    <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} flex flex-wrap gap-1`}>
                       {/* This will be populated when we load skills */}
                       <span className="text-[#969696] text-xs">Skills...</span>
                     </div>
@@ -376,6 +468,43 @@ const PeopleList: React.FC = () => {
               )}
             </div>
           </div>
+          
+          {/* Bulk Actions Panel */}
+          {bulkMode && selectedPeopleIds.size > 0 && (
+            <div className="p-3 border-t border-[#3e3e42] bg-[#2d2d30]">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-[#cccccc] font-medium">
+                  Assign {selectedPeopleIds.size} people to:
+                </span>
+                <select
+                  value={bulkDepartment}
+                  onChange={(e) => setBulkDepartment(e.target.value)}
+                  className="px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none"
+                >
+                  <option value="">Select Department...</option>
+                  <option value="none">Remove from Department</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleBulkAssignment}
+                  disabled={!bulkDepartment}
+                  className="px-3 py-1.5 text-sm rounded bg-[#007acc] text-white hover:bg-[#005fa3] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Assign
+                </button>
+                <button
+                  onClick={() => setSelectedPeopleIds(new Set())}
+                  className="px-3 py-1.5 text-sm rounded border border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42] transition-colors"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Panel - Person Details */}

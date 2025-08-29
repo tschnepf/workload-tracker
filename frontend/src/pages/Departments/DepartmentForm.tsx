@@ -73,9 +73,26 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
       errors.name = 'Department name is required';
     }
 
-    // Prevent circular parent department references
+    // Enhanced circular parent department validation
     if (formData.parentDepartment === department?.id) {
       errors.parentDepartment = 'Department cannot be its own parent';
+    } else if (formData.parentDepartment && department?.id) {
+      // Check for indirect circular references by walking up the hierarchy
+      const checkCircularReference = (parentId: number, visitedIds: Set<number> = new Set()): boolean => {
+        if (visitedIds.has(parentId)) return true; // Circular reference detected
+        if (visitedIds.size > 10) return true; // Prevent infinite recursion
+        
+        const parentDept = departments.find(d => d.id === parentId);
+        if (!parentDept || !parentDept.parentDepartment) return false;
+        
+        visitedIds.add(parentId);
+        return checkCircularReference(parentDept.parentDepartment, visitedIds);
+      };
+      
+      // Check if setting this parent would create a cycle
+      if (checkCircularReference(formData.parentDepartment)) {
+        errors.parentDepartment = 'This parent selection would create a circular hierarchy';
+      }
     }
 
     setValidationErrors(errors);
