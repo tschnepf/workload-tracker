@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Person } from '@/types/models';
-import { peopleApi } from '@/services/api';
+import { Person, Department } from '@/types/models';
+import { peopleApi, departmentsApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -15,6 +15,7 @@ import Card from '@/components/ui/Card';
 interface PersonFormData {
   name: string;
   weeklyCapacity: number;
+  department: number | null; // Phase 2: Department assignment
 }
 
 const PersonForm: React.FC = () => {
@@ -25,17 +26,30 @@ const PersonForm: React.FC = () => {
   const [formData, setFormData] = useState<PersonFormData>({
     name: '',
     weeklyCapacity: 36, // Default from master guide
+    department: null, // Phase 2: No department initially
   });
 
+  const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department list
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    loadDepartments(); // Phase 2: Always load departments
     if (isEditing && id) {
       loadPerson(parseInt(id));
     }
   }, [isEditing, id]);
+
+  // Phase 2: Load departments for dropdown
+  const loadDepartments = async () => {
+    try {
+      const response = await departmentsApi.list();
+      setDepartments(response.results || []);
+    } catch (err) {
+      console.error('Error loading departments:', err);
+    }
+  };
 
   const loadPerson = async (personId: number) => {
     try {
@@ -44,6 +58,7 @@ const PersonForm: React.FC = () => {
       setFormData({
         name: person.name,
         weeklyCapacity: person.weeklyCapacity || 36,
+        department: person.department || null, // Phase 2: Load department
       });
     } catch (err: any) {
       setError(err.message || 'Failed to load person');
@@ -92,7 +107,7 @@ const PersonForm: React.FC = () => {
     }
   };
 
-  const handleChange = (field: keyof PersonFormData, value: string | number) => {
+  const handleChange = (field: keyof PersonFormData, value: string | number | null) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
     // Clear validation error when user starts typing
@@ -159,6 +174,29 @@ const PersonForm: React.FC = () => {
             />
             <p className="text-[#969696] text-sm mt-1">
               Typical full-time: 40h, Part-time: 20h, Contractor: 36h
+            </p>
+          </div>
+
+          {/* Department Field - Phase 2 */}
+          <div>
+            <label className="block text-sm font-medium text-[#cccccc] mb-2">
+              Department
+            </label>
+            <select
+              value={formData.department || ''}
+              onChange={(e) => handleChange('department', e.target.value ? parseInt(e.target.value) : null)}
+              className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent"
+              disabled={loading}
+            >
+              <option value="">None Assigned</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[#969696] text-sm mt-1">
+              Assign this person to a department for organizational tracking
             </p>
           </div>
 

@@ -215,6 +215,20 @@ DEPARTMENT_FIELDS = {
         field_type='string',
         required=True
     ),
+    'parent_department': FieldDefinition(
+        python_name='parent_department',
+        api_name='parentDepartment',
+        sql_name='parent_department_id',
+        display_name='Parent Department',
+        field_type='integer'
+    ),
+    'manager': FieldDefinition(
+        python_name='manager',
+        api_name='manager',
+        sql_name='manager_id',
+        display_name='Manager',
+        field_type='integer'
+    ),
     'description': FieldDefinition(
         python_name='description',
         api_name='description',

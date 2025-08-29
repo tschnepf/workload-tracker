@@ -5,6 +5,8 @@ export interface Person {
   id?: number;
   name: string;
   weeklyCapacity?: number;
+  department?: number | null; // Department ID (Phase 2)
+  departmentName?: string; // Read-only department name (Phase 2)
   role?: string;
   email?: string;
   phone?: string;
@@ -57,9 +59,10 @@ export interface Assignment {
 export interface Department {
   id?: number;
   name: string;
+  parentDepartment?: number | null; // Department ID
+  manager?: number | null; // Person ID
+  managerName?: string; // Read-only manager name
   description?: string;
-  manager?: number; // Person ID
-  parentDepartment?: number; // Department ID
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;

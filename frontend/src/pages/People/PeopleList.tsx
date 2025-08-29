@@ -6,15 +6,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Person, PersonSkill, SkillTag } from '@/types/models';
-import { peopleApi, personSkillsApi, skillTagsApi } from '@/services/api';
+import { Person, PersonSkill, SkillTag, Department } from '@/types/models';
+import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
 import SkillsAutocomplete from '@/components/skills/SkillsAutocomplete';
 
 const PeopleList: React.FC = () => {
   const [people, setPeople] = useState<Person[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState<string>(''); // Phase 2: Department filter
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,18 @@ const PeopleList: React.FC = () => {
 
   useEffect(() => {
     loadPeople();
+    loadDepartments(); // Phase 2: Load departments for filter
   }, []);
+
+  // Phase 2: Load departments for filter dropdown
+  const loadDepartments = async () => {
+    try {
+      const response = await departmentsApi.list();
+      setDepartments(response.results || []);
+    } catch (err) {
+      console.error('Error loading departments:', err);
+    }
+  };
 
   useEffect(() => {
     if (selectedPerson?.id) {
@@ -219,12 +232,20 @@ const PeopleList: React.FC = () => {
     setEditingProficiency(null);
   };
 
-  // Filter people
-  const filteredPeople = people.filter(person =>
-    !searchTerm || 
-    person.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    person.role?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter people - Phase 2: Include department filtering
+  const filteredPeople = people.filter(person => {
+    // Search filter
+    const matchesSearch = !searchTerm || 
+      person.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      person.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      person.departmentName?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Department filter - Phase 2
+    const matchesDepartment = !departmentFilter || 
+      (departmentFilter === 'none' ? !person.department : person.department?.toString() === departmentFilter);
+    
+    return matchesSearch && matchesDepartment;
+  });
 
   // Auto-select first person from filtered list
   useEffect(() => {
@@ -261,8 +282,8 @@ const PeopleList: React.FC = () => {
               </Link>
             </div>
 
-            {/* Search */}
-            <div>
+            {/* Search and Filters - Phase 2 */}
+            <div className="space-y-2">
               <input
                 type="text"
                 placeholder="Search people"
@@ -270,6 +291,21 @@ const PeopleList: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
               />
+              
+              {/* Department Filter */}
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none"
+              >
+                <option value="">All Departments</option>
+                <option value="none">No Department</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -284,8 +320,9 @@ const PeopleList: React.FC = () => {
           <div className="flex-1 overflow-hidden">
             {/* Table Header */}
             <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[#969696] font-medium border-b border-[#3e3e42] bg-[#2d2d30]">
-              <div className="col-span-4">NAME</div>
-              <div className="col-span-3">ROLE</div>
+              <div className="col-span-3">NAME</div>
+              <div className="col-span-2">DEPARTMENT</div>
+              <div className="col-span-2">ROLE</div>
               <div className="col-span-2">CAPACITY</div>
               <div className="col-span-3">TOP SKILLS</div>
             </div>
@@ -310,12 +347,17 @@ const PeopleList: React.FC = () => {
                     tabIndex={0}
                   >
                     {/* Name */}
-                    <div className="col-span-4 text-[#cccccc] font-medium">
+                    <div className="col-span-3 text-[#cccccc] font-medium">
                       {person.name}
                     </div>
                     
+                    {/* Department - Phase 2 */}
+                    <div className="col-span-2 text-[#969696] text-xs">
+                      {person.departmentName || 'None'}
+                    </div>
+                    
                     {/* Role */}
-                    <div className="col-span-3 text-[#969696] text-xs">
+                    <div className="col-span-2 text-[#969696] text-xs">
                       {person.role || 'No Role'}
                     </div>
                     

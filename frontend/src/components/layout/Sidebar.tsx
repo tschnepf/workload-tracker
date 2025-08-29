@@ -38,6 +38,14 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
           <line x1="9" y1="18" x2="13" y2="18"/>
         </svg>
       );
+    case 'departments':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
+          <path d="M3 21h18"/>
+          <path d="M5 21V7l8-4v18"/>
+          <path d="M19 21V11l-6-4"/>
+        </svg>
+      );
     case 'projects':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
@@ -107,6 +115,12 @@ const Sidebar: React.FC = () => {
       icon: 'people', 
       label: 'People',
       description: 'Team management'
+    },
+    { 
+      path: '/departments', 
+      icon: 'departments', 
+      label: 'Departments',
+      description: 'Organization structure'
     },
     { 
       path: '/assignments', 

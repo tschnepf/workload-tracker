@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill } from '@/types/models';
+import { Person, Project, Assignment, Department, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -125,6 +125,37 @@ export const projectsApi = {
   // Delete project
   delete: (id: number) => 
     fetchApi<void>(`/projects/${id}/`, {
+      method: 'DELETE',
+    }),
+};
+
+// Departments API
+export const departmentsApi = {
+  // Get all departments
+  list: () => 
+    fetchApi<PaginatedResponse<Department>>('/departments/'),
+
+  // Get single department
+  get: (id: number) => 
+    fetchApi<Department>(`/departments/${id}/`),
+
+  // Create department
+  create: (data: Omit<Department, 'id' | 'managerName' | 'createdAt' | 'updatedAt'>) => 
+    fetchApi<Department>('/departments/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update department
+  update: (id: number, data: Partial<Department>) => 
+    fetchApi<Department>(`/departments/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete department
+  delete: (id: number) => 
+    fetchApi<void>(`/departments/${id}/`, {
       method: 'DELETE',
     }),
 };

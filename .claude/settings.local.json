@@ -25,7 +25,10 @@
       "Bash(echo $env:APPDATA)",
       "Read(C:\\Users\\tim\\AppData\\Roaming\\npm/**)",
       "Read(C:\\Users\\tim\\AppData/**)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(node:*)",
+      "Bash(python3:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": [],
