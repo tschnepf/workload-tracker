@@ -7,8 +7,9 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
-import { dashboardApi, departmentsApi } from '../services/api';
-import { DashboardData, Department } from '../types/models';
+import SkillsFilter from '../components/skills/SkillsFilter';
+import { dashboardApi, departmentsApi, personSkillsApi } from '../services/api';
+import { DashboardData, Department, PersonSkill } from '../types/models';
 
 const Dashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -19,10 +20,15 @@ const Dashboard: React.FC = () => {
   // Department filtering state
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>(''); // Empty string = 'All Departments'
+  
+  // Skills filtering state
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
 
   useEffect(() => {
     loadDashboard();
     loadDepartments();
+    loadPeopleSkills();
   }, [weeksPeriod, selectedDepartment]);
   
   const loadDepartments = async () => {
@@ -31,6 +37,15 @@ const Dashboard: React.FC = () => {
       setDepartments(response.results || []);
     } catch (err) {
       console.error('Error loading departments:', err);
+    }
+  };
+
+  const loadPeopleSkills = async () => {
+    try {
+      const response = await personSkillsApi.list();
+      setPeopleSkills(response.results || []);
+    } catch (err) {
+      console.error('Error loading people skills:', err);
     }
   };
 
@@ -51,6 +66,24 @@ const Dashboard: React.FC = () => {
     if (newWeeks >= 1 && newWeeks <= 12) {
       setWeeksPeriod(newWeeks);
     }
+  };
+
+  // Filter people based on selected skills
+  const filterPeopleBySkills = (people: any[]) => {
+    if (selectedSkills.length === 0) return people;
+
+    return people.filter(person => {
+      const personSkills = peopleSkills
+        .filter(skill => skill.person === person.id && skill.skillType === 'strength')
+        .map(skill => skill.skillTagName?.toLowerCase() || '');
+
+      return selectedSkills.some(selectedSkill =>
+        personSkills.some(personSkill =>
+          personSkill.includes(selectedSkill.toLowerCase()) ||
+          selectedSkill.toLowerCase().includes(personSkill)
+        )
+      );
+    });
   };
 
   if (loading) {
@@ -163,6 +196,24 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Skills Filter */}
+        {selectedSkills.length > 0 || (data && data.team_overview && data.team_overview.length > 0) ? (
+          <div className="flex items-center gap-4">
+            <label className="text-sm text-[#969696] flex-shrink-0">Filter by Skills:</label>
+            <SkillsFilter
+              selectedSkills={selectedSkills}
+              onSkillsChange={setSelectedSkills}
+              placeholder="Add skills filter..."
+              className="flex-grow max-w-md"
+            />
+            {selectedSkills.length > 0 && (
+              <div className="text-xs text-blue-400 flex-shrink-0">
+                Showing {filterPeopleBySkills(data?.team_overview || []).length} of {data?.team_overview?.length || 0} people
+              </div>
+            )}
+          </div>
+        ) : null}
+
         {/* Summary Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <Card className="bg-[#2d2d30] border-[#3e3e42]">
@@ -199,7 +250,7 @@ const Dashboard: React.FC = () => {
           <Card className="lg:col-span-2 bg-[#2d2d30] border-[#3e3e42]">
             <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Team Overview</h3>
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {data.team_overview.map(person => (
+              {filterPeopleBySkills(data.team_overview).map(person => (
                 <div key={person.id} className="flex items-center justify-between p-3 bg-[#3e3e42]/50 rounded-lg">
                   <div className="flex-1">
                     <div className="font-medium text-[#cccccc]">{person.name}</div>
@@ -234,10 +285,14 @@ const Dashboard: React.FC = () => {
           <Card className="bg-[#2d2d30] border-[#3e3e42]">
             <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Available People</h3>
             <div className="space-y-3">
-              {data.available_people.length === 0 ? (
-                <div className="text-[#969696] text-sm">All team members are at capacity</div>
+              {filterPeopleBySkills(data.available_people).length === 0 ? (
+                <div className="text-[#969696] text-sm">
+                  {selectedSkills.length > 0 
+                    ? `No available people found with skills: ${selectedSkills.join(', ')}`
+                    : 'All team members are at capacity'}
+                </div>
               ) : (
-                data.available_people.map(person => (
+                filterPeopleBySkills(data.available_people).map(person => (
                   <div key={person.id} className="text-sm">
                     <div className="text-[#cccccc] font-medium">{person.name}</div>
                     <div className="text-emerald-400">{person.available_hours}h available</div>
