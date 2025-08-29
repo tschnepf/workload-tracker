@@ -58,6 +58,13 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
           <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
         </svg>
       );
+    case 'skills':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
+          <path d="M12 2L2 7v10c0 5.55 3.84 10 9 11 1.16.21 2.76.21 3.92 0C20.16 27 24 22.55 24 17V7l-10-5z"/>
+          <path d="M8 11l2 2 4-4"/>
+        </svg>
+      );
     case 'hierarchy':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
@@ -152,6 +159,12 @@ const Sidebar: React.FC = () => {
       icon: 'projects', 
       label: 'Projects',
       description: 'Project tracking'
+    },
+    { 
+      path: '/skills', 
+      icon: 'skills', 
+      label: 'Skills',
+      description: 'Team skills analysis'
     }
   ];
 

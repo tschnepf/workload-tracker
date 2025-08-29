@@ -10,6 +10,7 @@ import { AssignmentList, AssignmentForm, AssignmentGrid } from './pages/Assignme
 import { DepartmentsList, ManagerDashboard, HierarchyView, ReportsView } from './pages/Departments';
 import Projects from './pages/Projects';
 import ProjectForm from './pages/Projects/ProjectForm';
+import { SkillsDashboard } from './pages/Skills';
 import AssignmentGridMockup from './components/mockup/AssignmentGridMockup';
 import SidebarNavigationMockup from './components/mockup/SidebarNavigationMockup';
 import ProjectsListMockup from './components/mockup/ProjectsListMockup';
@@ -40,6 +41,7 @@ function App() {
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/new" element={<ProjectForm />} />
         <Route path="/projects/:id/edit" element={<ProjectForm />} />
+        <Route path="/skills" element={<SkillsDashboard />} />
         <Route path="/mockup" element={<AssignmentGridMockup />} />
         <Route path="/sidebar-mockup" element={<SidebarNavigationMockup />} />
         <Route path="/projects-mockup" element={<ProjectsListMockup />} />
