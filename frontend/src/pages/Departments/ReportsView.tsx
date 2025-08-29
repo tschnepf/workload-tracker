@@ -7,8 +7,8 @@ import React, { useState, useEffect } from 'react';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
-import { dashboardApi, departmentsApi, peopleApi, assignmentsApi } from '@/services/api';
-import { DashboardData, Department, Person, Assignment } from '@/types/models';
+import { dashboardApi, departmentsApi, peopleApi, personSkillsApi } from '@/services/api';
+import { DashboardData, Department, Person, PersonSkill } from '@/types/models';
 
 interface DepartmentReport {
   department: Department;
@@ -23,6 +23,12 @@ interface DepartmentReport {
   };
   people: Person[];
   dashboardData?: DashboardData;
+  skills: {
+    totalSkills: number;
+    topSkills: Array<{ name: string; count: number }>;
+    uniqueSkills: number;
+    skillGaps: string[];
+  };
 }
 
 const ReportsView: React.FC = () => {
@@ -31,6 +37,7 @@ const ReportsView: React.FC = () => {
   const [selectedTimeframe, setSelectedTimeframe] = useState<number>(4); // weeks
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
 
   useEffect(() => {
     loadData();
@@ -41,16 +48,19 @@ const ReportsView: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Load departments and people
-      const [deptResponse, peopleResponse] = await Promise.all([
+      // Load departments, people, and skills
+      const [deptResponse, peopleResponse, skillsResponse] = await Promise.all([
         departmentsApi.list(),
-        peopleApi.list()
+        peopleApi.list(),
+        personSkillsApi.list()
       ]);
       
       const allDepartments = deptResponse.results || [];
       const allPeople = peopleResponse.results || [];
+      const allSkills = skillsResponse.results || [];
       
       setDepartments(allDepartments);
+      setPeopleSkills(allSkills);
 
       // Generate reports for each department
       const departmentReports = await Promise.all(
@@ -69,6 +79,33 @@ const ReportsView: React.FC = () => {
           const avgUtilization = dashboardData?.summary.avg_utilization || 0;
           const availableHours = totalCapacity - (totalCapacity * avgUtilization / 100);
 
+          // Calculate skills analysis
+          const deptPeopleIds = deptPeople.map(p => p.id);
+          const deptSkills = allSkills.filter(skill => deptPeopleIds.includes(skill.person));
+          
+          // Count skills by type and name
+          const skillCounts = new Map<string, number>();
+          const strengthSkills = deptSkills.filter(skill => skill.skillType === 'strength');
+          
+          strengthSkills.forEach(skill => {
+            const skillName = skill.skillTagName || 'Unknown';
+            skillCounts.set(skillName, (skillCounts.get(skillName) || 0) + 1);
+          });
+          
+          // Get top skills sorted by count
+          const topSkills = Array.from(skillCounts.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+          
+          // Find skill gaps (skills present in other departments but not here)
+          const allOtherDeptSkills = allSkills
+            .filter(skill => !deptPeopleIds.includes(skill.person) && skill.skillType === 'strength')
+            .map(skill => skill.skillTagName || '')
+            .filter(name => !skillCounts.has(name));
+          
+          const skillGaps = [...new Set(allOtherDeptSkills)].slice(0, 3);
+
           const report: DepartmentReport = {
             department: dept,
             metrics: {
@@ -81,7 +118,13 @@ const ReportsView: React.FC = () => {
               utilizationTrend: 'stable' // TODO: Calculate trend from historical data
             },
             people: deptPeople,
-            dashboardData
+            dashboardData,
+            skills: {
+              totalSkills: deptSkills.length,
+              topSkills,
+              uniqueSkills: skillCounts.size,
+              skillGaps
+            }
           };
           
           return report;
@@ -235,6 +278,8 @@ const ReportsView: React.FC = () => {
                     <th className="text-left text-sm font-medium text-[#969696] pb-3">Peak</th>
                     <th className="text-left text-sm font-medium text-[#969696] pb-3">Assignments</th>
                     <th className="text-left text-sm font-medium text-[#969696] pb-3">Available</th>
+                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Skills</th>
+                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Top Skills</th>
                     <th className="text-left text-sm font-medium text-[#969696] pb-3">Health</th>
                   </tr>
                 </thead>
@@ -267,6 +312,28 @@ const ReportsView: React.FC = () => {
                         </td>
                         <td className="py-3 text-emerald-400">
                           {Math.round(report.metrics.availableHours)}h
+                        </td>
+                        <td className="py-3">
+                          <div className="text-sm">
+                            <div className="text-[#cccccc]">{report.skills.uniqueSkills} unique</div>
+                            <div className="text-[#969696] text-xs">
+                              {report.skills.skillGaps.length > 0 && `${report.skills.skillGaps.length} gaps`}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {report.skills.topSkills.slice(0, 3).map((skill, idx) => (
+                              <span key={idx} className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                                {skill.name} ({skill.count})
+                              </span>
+                            ))}
+                            {report.skills.topSkills.length > 3 && (
+                              <span className="text-xs text-[#969696]">
+                                +{report.skills.topSkills.length - 3} more
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3">
                           <div className="flex items-center gap-2">
