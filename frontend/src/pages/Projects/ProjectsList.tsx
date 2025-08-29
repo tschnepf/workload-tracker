@@ -74,8 +74,7 @@ const ProjectsList: React.FC = () => {
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const response = await projectsApi.list();
-      const projectsList = response.results || [];
+      const projectsList = await projectsApi.listAll();
       setProjects(projectsList);
       
       // Load deliverables for all projects to show next deliverable
@@ -97,8 +96,8 @@ const ProjectsList: React.FC = () => {
       projectsList.map(async (project) => {
         if (project.id) {
           try {
-            const response = await deliverablesApi.list(project.id);
-            deliverablesMap[project.id] = response.results || [];
+            const deliverables = await deliverablesApi.listAll(project.id);
+            deliverablesMap[project.id] = deliverables;
           } catch (err) {
             // If deliverables fail to load, just set empty array
             deliverablesMap[project.id] = [];

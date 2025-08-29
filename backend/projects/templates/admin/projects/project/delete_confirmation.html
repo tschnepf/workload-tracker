@@ -1,0 +1,145 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block title %}{{ title }} | {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:projects_project_changelist' %}">Projects</a>
+&rsaquo; Delete Confirmation
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<div class="delete-confirmation">
+    <p>⚠️ <strong>WARNING: This action cannot be undone!</strong></p>
+    
+    <p>Are you sure you want to <strong>permanently delete</strong> the following {{ selected_count }} projects?</p>
+    
+    <div class="form-row">
+        <ul>
+        {% for project in queryset %}
+            <li>
+                <strong>{{ project.name }}</strong>
+                {% if project.project_number %} ({{ project.project_number }}){% endif %}
+                - {{ project.status }} - {{ project.client }}
+                <small>(ID: {{ project.id }})</small>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    
+    <div class="deletion-impact">
+        <h3>Impact of Deletion:</h3>
+        <ul>
+            <li><strong>Project records:</strong> {{ selected_count }} projects will be completely removed</li>
+            <li><strong>Related assignments:</strong> All people assignments for these projects will be removed</li>
+            <li><strong>Related deliverables:</strong> All project deliverables will be removed</li>
+            <li><strong>Weekly hours data:</strong> All weekly hour allocations will be lost</li>
+            <li><strong>Project history:</strong> All project tracking data will be permanently deleted</li>
+            <li><strong>Data recovery:</strong> This data cannot be recovered after deletion</li>
+        </ul>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <!-- Pass along the selected items -->
+        {% for project in queryset %}
+            <input type="hidden" name="{{ action_checkbox_name }}" value="{{ project.pk }}">
+        {% endfor %}
+        
+        <input type="hidden" name="action" value="bulk_delete_projects">
+        
+        <div class="submit-row">
+            <input type="submit" name="post" value="yes" class="default" 
+                   style="background-color: #dc3545; border-color: #dc3545;"
+                   onclick="return confirm('⚠️ FINAL CONFIRMATION: Are you absolutely sure you want to permanently delete these {{ selected_count }} projects and ALL their related data? This cannot be undone!')"
+                   value="⚠️ YES, DELETE {{ selected_count }} PROJECTS PERMANENTLY">
+                   
+            <a href="{% url 'admin:projects_project_changelist' %}" class="button cancel-link">
+                ✅ Cancel (Keep Projects)
+            </a>
+        </div>
+    </form>
+    
+    <div class="help">
+        <h3>Alternative Actions:</h3>
+        <p>Instead of deleting, you might want to consider:</p>
+        <ul>
+            <li><strong>Mark as Inactive:</strong> Set "is_active" to False to hide projects without deleting them</li>
+            <li><strong>Change Status:</strong> Set status to "Cancelled" or "Completed" for record keeping</li>
+            <li><strong>Export First:</strong> Use the export actions to backup the project data before deletion</li>
+            <li><strong>Archive Projects:</strong> Move projects to an "Archive" status or create backup exports</li>
+        </ul>
+        
+        <h3>What Gets Deleted:</h3>
+        <ul>
+            <li>🗂️ <strong>Project Data:</strong> Name, description, dates, client info</li>
+            <li>👥 <strong>Assignments:</strong> All people assigned to these projects</li>
+            <li>📊 <strong>Weekly Hours:</strong> All time allocation data (JSON data)</li>
+            <li>📋 <strong>Deliverables:</strong> All project milestones and completion tracking</li>
+            <li>📈 <strong>Progress Tracking:</strong> All project status history</li>
+        </ul>
+    </div>
+</div>
+
+<style>
+.delete-confirmation {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+}
+
+.delete-confirmation p {
+    margin: 10px 0;
+}
+
+.delete-confirmation ul {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 3px;
+}
+
+.deletion-impact {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 3px;
+}
+
+.submit-row input[name="post"] {
+    background-color: #dc3545 !important;
+    border-color: #dc3545 !important;
+    color: white !important;
+    font-weight: bold;
+    padding: 10px 20px;
+}
+
+.submit-row .cancel-link {
+    background-color: #28a745;
+    color: white !important;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 3px;
+    margin-left: 10px;
+}
+
+.help {
+    background-color: #d1ecf1;
+    border: 1px solid #bee5eb;
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 3px;
+}
+</style>
+
+{% endblock %}

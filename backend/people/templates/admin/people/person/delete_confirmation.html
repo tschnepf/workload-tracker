@@ -1,0 +1,134 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block title %}{{ title }} | {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:people_person_changelist' %}">People</a>
+&rsaquo; Delete Confirmation
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<div class="delete-confirmation">
+    <p>⚠️ <strong>WARNING: This action cannot be undone!</strong></p>
+    
+    <p>Are you sure you want to <strong>permanently delete</strong> the following {{ selected_count }} people?</p>
+    
+    <div class="form-row">
+        <ul>
+        {% for person in queryset %}
+            <li>
+                <strong>{{ person.name }}</strong>
+                {% if person.email %} ({{ person.email }}){% endif %}
+                - {{ person.role }}
+                {% if person.department %} - {{ person.department.name }}{% endif %}
+                <small>(ID: {{ person.id }})</small>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    
+    <div class="deletion-impact">
+        <h3>Impact of Deletion:</h3>
+        <ul>
+            <li><strong>Person records:</strong> {{ selected_count }} people will be completely removed</li>
+            <li><strong>Related assignments:</strong> All project assignments for these people will be removed</li>
+            <li><strong>Related skills:</strong> All skill records for these people will be removed</li>
+            <li><strong>Data recovery:</strong> This data cannot be recovered after deletion</li>
+        </ul>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <!-- Pass along the selected items -->
+        {% for person in queryset %}
+            <input type="hidden" name="{{ action_checkbox_name }}" value="{{ person.pk }}">
+        {% endfor %}
+        
+        <input type="hidden" name="action" value="bulk_delete_people">
+        
+        <div class="submit-row">
+            <input type="submit" name="post" value="yes" class="default" 
+                   style="background-color: #dc3545; border-color: #dc3545;"
+                   onclick="return confirm('⚠️ FINAL CONFIRMATION: Are you absolutely sure you want to permanently delete these {{ selected_count }} people? This cannot be undone!')"
+                   value="⚠️ YES, DELETE {{ selected_count }} PEOPLE PERMANENTLY">
+                   
+            <a href="{% url 'admin:people_person_changelist' %}" class="button cancel-link">
+                ✅ Cancel (Keep People)
+            </a>
+        </div>
+    </form>
+    
+    <div class="help">
+        <h3>Alternative Actions:</h3>
+        <p>Instead of deleting, you might want to consider:</p>
+        <ul>
+            <li><strong>Deactivate:</strong> Set "is_active" to False to hide people without deleting them</li>
+            <li><strong>Archive:</strong> Move people to an "Archive" department for record keeping</li>
+            <li><strong>Export first:</strong> Use the export actions to backup the data before deletion</li>
+        </ul>
+    </div>
+</div>
+
+<style>
+.delete-confirmation {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+}
+
+.delete-confirmation p {
+    margin: 10px 0;
+}
+
+.delete-confirmation ul {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 3px;
+}
+
+.deletion-impact {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 3px;
+}
+
+.submit-row input[name="post"] {
+    background-color: #dc3545 !important;
+    border-color: #dc3545 !important;
+    color: white !important;
+    font-weight: bold;
+    padding: 10px 20px;
+}
+
+.submit-row .cancel-link {
+    background-color: #28a745;
+    color: white !important;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 3px;
+    margin-left: 10px;
+}
+
+.help {
+    background-color: #d1ecf1;
+    border: 1px solid #bee5eb;
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 3px;
+}
+</style>
+
+{% endblock %}

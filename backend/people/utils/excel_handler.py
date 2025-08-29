@@ -1,0 +1,329 @@
+"""
+Excel handler for People import/export functionality.
+Follows R2-REBUILD-STANDARDS: snake_case Python, camelCase Excel headers.
+"""
+
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+from django.http import HttpResponse
+from datetime import datetime
+from ..serializers import PersonSerializer
+from ..models import Person
+
+
+def export_people_to_excel(queryset, filename=None):
+    """Export people queryset to Excel with multiple sheets."""
+    if not filename:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"people_export_{timestamp}.xlsx"
+    
+    workbook = openpyxl.Workbook()
+    
+    # Create People sheet
+    _create_people_sheet(workbook, queryset)
+    
+    # Create Template sheet
+    _create_people_template_sheet(workbook)
+    
+    # Create Instructions sheet
+    _create_people_instructions_sheet(workbook)
+    
+    # Remove default sheet
+    if 'Sheet' in workbook.sheetnames:
+        del workbook['Sheet']
+    
+    return _create_excel_response(workbook, filename)
+
+
+def _create_people_sheet(workbook, queryset):
+    """Create main people data sheet."""
+    sheet = workbook.active
+    sheet.title = "People"
+    
+    # Excel headers (camelCase to match API)
+    headers = [
+        'name', 'role', 'email', 'phone', 'location', 
+        'weeklyCapacity', 'departmentName', 'hireDate', 
+        'notes', 'isActive'
+    ]
+    
+    # Write headers with styling
+    _write_excel_headers(sheet, headers)
+    
+    # Serialize data using PersonSerializer
+    serializer = PersonSerializer(queryset, many=True)
+    serialized_data = serializer.data
+    
+    # Write data rows
+    for row_idx, person_data in enumerate(serialized_data, start=2):
+        for col_idx, header in enumerate(headers, start=1):
+            value = person_data.get(header, '')
+            sheet.cell(row=row_idx, column=col_idx, value=value)
+    
+    _auto_fit_columns(sheet)
+
+
+def _create_people_template_sheet(workbook):
+    """Create template sheet with validation."""
+    template_sheet = workbook.create_sheet("Template")
+    
+    headers = [
+        'name', 'role', 'email', 'phone', 'location',
+        'weeklyCapacity', 'departmentName', 'hireDate', 
+        'notes', 'isActive'
+    ]
+    
+    _write_excel_headers(template_sheet, headers)
+    
+    # Add example row
+    example_data = [
+        'John Smith', 'Senior Engineer', 'john@company.com',
+        '555-0123', 'New York', 40, 'Engineering',
+        '2023-01-15', 'Team lead', True
+    ]
+    
+    for col_idx, value in enumerate(example_data, start=1):
+        cell = template_sheet.cell(row=2, column=col_idx, value=value)
+        cell.fill = PatternFill(start_color="E6F3FF", 
+                               end_color="E6F3FF", 
+                               fill_type="solid")
+    
+    _auto_fit_columns(template_sheet)
+
+
+def _create_people_instructions_sheet(workbook):
+    """Create instructions sheet."""
+    instructions_sheet = workbook.create_sheet("Instructions")
+    
+    instructions = [
+        "People Import Instructions",
+        "",
+        "Required Fields:",
+        "• name - Person's full name",
+        "",
+        "Optional Fields:",
+        "• role - Job title (default: Engineer)",
+        "• email - Contact email address", 
+        "• phone - Phone number",
+        "• location - Work location",
+        "• weeklyCapacity - Hours per week (default: 36)",
+        "• departmentName - Department name",
+        "• hireDate - Start date (YYYY-MM-DD format)",
+        "• notes - Additional notes",
+        "• isActive - TRUE/FALSE (default: TRUE)",
+        "",
+        "Import Process:",
+        "1. Fill out the Template sheet",
+        "2. Save as Excel file",
+        "3. Use Django Admin import function",
+        "4. Review validation results"
+    ]
+    
+    for row_idx, instruction in enumerate(instructions, start=1):
+        cell = instructions_sheet.cell(row=row_idx, column=1, value=instruction)
+        if row_idx == 1:
+            cell.font = Font(bold=True, size=14)
+
+
+def _write_excel_headers(sheet, headers):
+    """Write headers with formatting."""
+    for col_idx, header in enumerate(headers, start=1):
+        cell = sheet.cell(row=1, column=col_idx, value=header)
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="366092", 
+                               end_color="366092", 
+                               fill_type="solid")
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center")
+
+
+def _auto_fit_columns(sheet):
+    """Auto-fit column widths."""
+    for column in sheet.columns:
+        max_length = 0
+        column_letter = get_column_letter(column[0].column)
+        
+        for cell in column:
+            if cell.value:
+                max_length = max(max_length, len(str(cell.value)))
+        
+        adjusted_width = min(max_length + 2, 50)
+        sheet.column_dimensions[column_letter].width = adjusted_width
+
+
+def _create_excel_response(workbook, filename):
+    """Create HTTP response with Excel file."""
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    workbook.save(response)
+    return response
+
+
+def import_people_from_excel(file, update_existing=True, dry_run=False):
+    """Import people from Excel file."""
+    try:
+        workbook = openpyxl.load_workbook(file, data_only=True)
+        sheet = workbook.active
+        
+        # Get headers from first row
+        headers = []
+        for cell in sheet[1]:
+            if cell.value:
+                headers.append(str(cell.value).strip())
+        
+        if not headers:
+            return {
+                'success': False,
+                'error': 'No headers found in Excel file',
+                'total_rows': 0,
+                'success_count': 0,
+                'error_count': 1,
+                'errors': ['No headers found in Excel file']
+            }
+        
+        results = {
+            'success': True,
+            'total_rows': 0,
+            'success_count': 0,
+            'updated_count': 0,
+            'error_count': 0,
+            'errors': [],
+            'warnings': [],
+            'success_items': [],
+            'dry_run': dry_run
+        }
+        
+        # Process data rows
+        for row_num, row in enumerate(sheet.iter_rows(min_row=2), start=2):
+            if not any(cell.value for cell in row):
+                continue  # Skip empty rows
+                
+            results['total_rows'] += 1
+            row_data = {}
+            
+            # Map row values to headers
+            for col_idx, header in enumerate(headers):
+                if col_idx < len(row):
+                    cell_value = row[col_idx].value
+                    if cell_value is not None:
+                        row_data[header] = cell_value
+            
+            # Process individual row
+            row_result = _process_people_row(row_data, update_existing, dry_run, row_num)
+            
+            if row_result['success']:
+                results['success_count'] += 1
+                if row_result.get('updated'):
+                    results['updated_count'] += 1
+                results['success_items'].append(row_result['message'])
+            else:
+                results['error_count'] += 1
+                results['errors'].append(f"Row {row_num}: {row_result['error']}")
+        
+        return results
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'Failed to process Excel file: {str(e)}',
+            'total_rows': 0,
+            'success_count': 0,
+            'error_count': 1,
+            'errors': [f'Failed to process Excel file: {str(e)}']
+        }
+
+
+def _process_people_row(row_data, update_existing, dry_run, row_num):
+    """Process single person row using PersonSerializer."""
+    try:
+        # Check if person exists by email OR name
+        existing_person = None
+        
+        # First try to find by email (more reliable if available)
+        if 'email' in row_data and row_data['email']:
+            try:
+                existing_person = Person.objects.get(email=row_data['email'])
+            except Person.DoesNotExist:
+                pass
+        
+        # If not found by email, try to find by name
+        if not existing_person and 'name' in row_data and row_data['name']:
+            try:
+                existing_person = Person.objects.get(name=row_data['name'])
+            except Person.DoesNotExist:
+                pass
+            except Person.MultipleObjectsReturned:
+                # If multiple people have the same name, we can't safely update
+                # Return an error to let user know they need to be more specific
+                return {
+                    'success': False,
+                    'error': f"Multiple people found with name '{row_data['name']}'. Please use unique names or add email addresses to distinguish."
+                }
+        
+        # Update existing person
+        if existing_person:
+            if not update_existing:
+                identifier = row_data.get('email', row_data.get('name', 'Unknown'))
+                return {
+                    'success': True,
+                    'updated': False,
+                    'message': f"Skipped existing person: {row_data.get('name', 'Unknown')} ({identifier})"
+                }
+            
+            if not dry_run:
+                serializer = PersonSerializer(existing_person, data=row_data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                    identifier = row_data.get('email', row_data.get('name', 'Unknown'))
+                    return {
+                        'success': True,
+                        'updated': True,
+                        'message': f"Updated: {row_data.get('name', 'Unknown')} ({identifier})"
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': f"Validation errors: {serializer.errors}"
+                    }
+            else:
+                identifier = row_data.get('email', row_data.get('name', 'Unknown'))
+                return {
+                    'success': True,
+                    'updated': True,
+                    'message': f"[DRY RUN] Would update: {row_data.get('name', 'Unknown')} ({identifier})"
+                }
+        
+        # Create new person
+        else:
+            if not dry_run:
+                serializer = PersonSerializer(data=row_data)
+                if serializer.is_valid():
+                    serializer.save()
+                    identifier = row_data.get('email', row_data.get('name', 'Unknown'))
+                    return {
+                        'success': True,
+                        'updated': False,
+                        'message': f"Created: {row_data.get('name', 'Unknown')} ({identifier})"
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': f"Validation errors: {serializer.errors}"
+                    }
+            else:
+                identifier = row_data.get('email', row_data.get('name', 'Unknown'))
+                return {
+                    'success': True,
+                    'updated': False,
+                    'message': f"[DRY RUN] Would create: {row_data.get('name', 'Unknown')} ({identifier})"
+                }
+                
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f"Unexpected error: {str(e)}"
+        }

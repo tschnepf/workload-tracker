@@ -243,17 +243,12 @@ const AssignmentGrid: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const [peopleResponse, assignmentsResponse, deliverablesResponse, projectsResponse] = await Promise.all([
-        peopleApi.list(),
-        assignmentsApi.list(),
-        deliverablesApi.list(),
-        projectsApi.list()
+      const [peopleData, assignmentsData, deliverablesData, projectsData] = await Promise.all([
+        peopleApi.listAll(),
+        assignmentsApi.listAll(),
+        deliverablesApi.listAll(),
+        projectsApi.listAll()
       ]);
-      
-      const peopleData = peopleResponse.results || [];
-      const assignmentsData = assignmentsResponse.results || [];
-      const deliverablesData = deliverablesResponse.results || [];
-      const projectsData = projectsResponse.results || [];
 
       // Store deliverables and projects in state
       setDeliverables(deliverablesData);

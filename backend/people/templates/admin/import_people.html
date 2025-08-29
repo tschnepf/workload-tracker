@@ -1,0 +1,178 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block title %}Import People | {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:people_person_changelist' %}">People</a>
+&rsaquo; Import People
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Import People</h1>
+
+<div class="form-row">
+    <p>Upload an Excel (.xlsx) or CSV file to import people data.</p>
+    
+    <div class="aligned">
+        <h2>Download Template</h2>
+        <p>
+            <a href="{% url 'admin:people_person_download_template' %}" class="button" target="_blank">
+                📊 Download Excel Template
+            </a>
+        </p>
+        <p class="help">Download a pre-formatted Excel template with examples and instructions.</p>
+    </div>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message|safe }}</div>
+    {% endfor %}
+{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    
+    <fieldset class="module aligned">
+        <h2>Import Settings</h2>
+        
+        <div class="form-row">
+            {{ form.file.label_tag }}
+            {{ form.file }}
+            {% if form.file.help_text %}
+                <p class="help">{{ form.file.help_text }}</p>
+            {% endif %}
+            {{ form.file.errors }}
+        </div>
+        
+        <div class="form-row">
+            <div class="checkbox-row">
+                {{ form.update_existing }}
+                {{ form.update_existing.label_tag }}
+                {% if form.update_existing.help_text %}
+                    <p class="help">{{ form.update_existing.help_text }}</p>
+                {% endif %}
+                <p class="help"><strong>Matching Logic:</strong> People are matched by email first, then by name if no email match is found.</p>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="checkbox-row">
+                {{ form.dry_run }}
+                {{ form.dry_run.label_tag }}
+                {% if form.dry_run.help_text %}
+                    <p class="help">{{ form.dry_run.help_text }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </fieldset>
+    
+    <div class="submit-row">
+        <input type="submit" value="Import People" class="default" name="_import">
+        <a href="{% url 'admin:people_person_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+</form>
+
+{% if import_results %}
+<fieldset class="module">
+    <h2>Import Results</h2>
+    
+    <div class="results">
+        <p><strong>File:</strong> {{ import_results.filename }}</p>
+        <p><strong>Format:</strong> {{ import_results.format }}</p>
+        <p><strong>Total rows processed:</strong> {{ import_results.total_rows }}</p>
+        <p><strong>Successfully imported:</strong> {{ import_results.success_count }}</p>
+        <p><strong>Updated existing:</strong> {{ import_results.updated_count }}</p>
+        <p><strong>Errors:</strong> {{ import_results.error_count }}</p>
+        {% if import_results.dry_run %}
+            <p><strong>⚠️ This was a preview only - no data was saved</strong></p>
+        {% endif %}
+    </div>
+    
+    {% if import_results.errors %}
+    <div class="errors">
+        <h3>Errors Found:</h3>
+        <ul>
+        {% for error in import_results.errors %}
+            <li>{{ error }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    {% if import_results.warnings %}
+    <div class="warnings">
+        <h3>Warnings:</h3>
+        <ul>
+        {% for warning in import_results.warnings %}
+            <li>{{ warning }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    {% if import_results.success_items %}
+    <div class="success-items">
+        <h3>Successfully Imported:</h3>
+        <ul>
+        {% for item in import_results.success_items %}
+            <li>{{ item }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</fieldset>
+{% endif %}
+
+<fieldset class="module">
+    <h2>Import Instructions</h2>
+    <div class="form-row">
+        <h3>Required Fields:</h3>
+        <ul>
+            <li><strong>name</strong> - Person's full name</li>
+        </ul>
+        
+        <h3>Optional Fields:</h3>
+        <ul>
+            <li><strong>role</strong> - Job title (default: Engineer)</li>
+            <li><strong>email</strong> - Contact email address</li>
+            <li><strong>phone</strong> - Phone number</li>
+            <li><strong>location</strong> - Work location</li>
+            <li><strong>weeklyCapacity</strong> - Hours per week (default: 36)</li>
+            <li><strong>departmentName</strong> - Department name</li>
+            <li><strong>hireDate</strong> - Start date (YYYY-MM-DD format)</li>
+            <li><strong>notes</strong> - Additional notes</li>
+            <li><strong>isActive</strong> - TRUE/FALSE (default: TRUE)</li>
+        </ul>
+        
+        <h3>Excel Format:</h3>
+        <ul>
+            <li>Use the first sheet for people data</li>
+            <li>Headers should be in the first row</li>
+            <li>Use camelCase for headers (e.g., weeklyCapacity, not weekly_capacity)</li>
+            <li>Date format: YYYY-MM-DD</li>
+        </ul>
+        
+        <h3>Update Matching:</h3>
+        <ul>
+            <li><strong>Email Match:</strong> If a person with the same email exists, they will be updated</li>
+            <li><strong>Name Match:</strong> If no email match, people with the same name will be updated</li>
+            <li><strong>Multiple Names:</strong> If multiple people have the same name, add emails to distinguish them</li>
+            <li><strong>New Records:</strong> People not found by email or name will be created as new records</li>
+        </ul>
+        
+        <h3>CSV Format:</h3>
+        <ul>
+            <li>Headers should be in the first row</li>
+            <li>Use camelCase for headers</li>
+            <li>Comma-separated values</li>
+            <li>UTF-8 encoding recommended</li>
+        </ul>
+    </div>
+</fieldset>
+
+{% endblock %}

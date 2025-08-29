@@ -1,0 +1,404 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block title %}Import Projects | {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:projects_project_changelist' %}">Projects</a>
+&rsaquo; Import Projects
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Import Projects</h1>
+
+<div class="import-instructions">
+    <h2>Import Instructions</h2>
+    
+    <div class="instruction-section">
+        <h3>📋 Supported Formats</h3>
+        <ul>
+            <li><strong>Excel (.xlsx)</strong> - Multi-sheet import with projects, assignments, and deliverables</li>
+            <li><strong>CSV (.csv)</strong> - Simple projects-only import</li>
+        </ul>
+    </div>
+    
+    <div class="instruction-section">
+        <h3>📊 Excel Multi-Sheet Structure</h3>
+        <ul>
+            <li><strong>Projects Sheet:</strong> Main project information (required)</li>
+            <li><strong>Assignments Sheet:</strong> People assigned to projects with weekly hours (optional)</li>
+            <li><strong>Deliverables Sheet:</strong> Project milestones and completion tracking (optional)</li>
+            <li><strong>Template Sheet:</strong> Reference for proper formatting</li>
+            <li><strong>Instructions Sheet:</strong> Detailed field descriptions</li>
+        </ul>
+    </div>
+    
+    <div class="instruction-section">
+        <h3>🔄 Import Process</h3>
+        <ol>
+            <li><strong>Projects:</strong> Imported/updated first by projectNumber or name</li>
+            <li><strong>People:</strong> Matched by email (preferred) or name</li>
+            <li><strong>Assignments:</strong> Links people to projects with weekly hour allocations</li>
+            <li><strong>Deliverables:</strong> Creates project milestones with completion tracking</li>
+        </ol>
+    </div>
+    
+    <div class="instruction-section">
+        <h3>⚠️ Important Notes</h3>
+        <ul>
+            <li>Use <strong>Dry Run</strong> first to preview changes</li>
+            <li>Ensure all referenced people exist or they will be created automatically</li>
+            <li>Weekly hours use JSON format: <code>{"2024-08-25":20,"2024-09-01":15}</code></li>
+            <li>Projects are matched by <strong>projectNumber</strong> (preferred) or <strong>name</strong></li>
+            <li>All dates should use <strong>YYYY-MM-DD</strong> format</li>
+        </ul>
+    </div>
+    
+    <div class="template-download">
+        <h3>📥 Download Template</h3>
+        <p>Download a pre-formatted Excel template with examples and validation:</p>
+        <a href="{% url 'admin:projects_project_download_template' %}" class="button default">
+            📊 Download Excel Template
+        </a>
+    </div>
+</div>
+
+<div class="import-form">
+    <h2>Upload Import File</h2>
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message|safe }}
+            </div>
+        {% endfor %}
+    {% endif %}
+    
+    <form method="post" enctype="multipart/form-data" class="import-upload-form">
+        {% csrf_token %}
+        
+        <div class="form-section">
+            <div class="form-row">
+                <div class="field-box">
+                    {{ form.file.label_tag }}
+                    {{ form.file }}
+                    {% if form.file.help_text %}
+                        <div class="help">{{ form.file.help_text }}</div>
+                    {% endif %}
+                    {% if form.file.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.file.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h3>Import Options</h3>
+            
+            <div class="form-row">
+                <div class="field-box checkbox-field">
+                    {{ form.update_existing }}
+                    {{ form.update_existing.label_tag }}
+                    {% if form.update_existing.help_text %}
+                        <div class="help">{{ form.update_existing.help_text }}</div>
+                    {% endif %}
+                    {% if form.update_existing.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.update_existing.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="field-box checkbox-field">
+                    {{ form.include_assignments }}
+                    {{ form.include_assignments.label_tag }}
+                    {% if form.include_assignments.help_text %}
+                        <div class="help">{{ form.include_assignments.help_text }}</div>
+                    {% endif %}
+                    {% if form.include_assignments.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.include_assignments.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="field-box checkbox-field">
+                    {{ form.include_deliverables }}
+                    {{ form.include_deliverables.label_tag }}
+                    {% if form.include_deliverables.help_text %}
+                        <div class="help">{{ form.include_deliverables.help_text }}</div>
+                    {% endif %}
+                    {% if form.include_deliverables.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.include_deliverables.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="field-box checkbox-field">
+                    {{ form.dry_run }}
+                    {{ form.dry_run.label_tag }}
+                    {% if form.dry_run.help_text %}
+                        <div class="help">{{ form.dry_run.help_text }}</div>
+                    {% endif %}
+                    {% if form.dry_run.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.dry_run.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="submit-row">
+            <input type="submit" class="default" value="🔍 Preview Import" name="preview">
+            <input type="submit" class="default" value="📥 Import Projects" name="import">
+            <a href="{% url 'admin:projects_project_changelist' %}" class="button cancel-link">
+                ← Back to Projects
+            </a>
+        </div>
+    </form>
+</div>
+
+{% if import_preview %}
+<div class="import-preview">
+    <h2>Import Preview</h2>
+    
+    <div class="preview-summary">
+        <h3>Summary</h3>
+        <ul>
+            <li><strong>Projects to create:</strong> {{ import_preview.projects_to_create|length }}</li>
+            <li><strong>Projects to update:</strong> {{ import_preview.projects_to_update|length }}</li>
+            {% if import_preview.assignments_to_create %}
+                <li><strong>Assignments to create:</strong> {{ import_preview.assignments_to_create|length }}</li>
+            {% endif %}
+            {% if import_preview.deliverables_to_create %}
+                <li><strong>Deliverables to create:</strong> {{ import_preview.deliverables_to_create|length }}</li>
+            {% endif %}
+            {% if import_preview.errors %}
+                <li><strong>Errors found:</strong> {{ import_preview.errors|length }}</li>
+            {% endif %}
+        </ul>
+    </div>
+    
+    {% if import_preview.errors %}
+    <div class="preview-errors">
+        <h3>⚠️ Errors</h3>
+        <ul class="errorlist">
+            {% for error in import_preview.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    {% if import_preview.projects_to_create %}
+    <div class="preview-section">
+        <h3>✅ Projects to Create</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Project Number</th>
+                    <th>Client</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for project in import_preview.projects_to_create %}
+                <tr>
+                    <td>{{ project.name }}</td>
+                    <td>{{ project.projectNumber|default:"-" }}</td>
+                    <td>{{ project.client|default:"-" }}</td>
+                    <td>{{ project.status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    {% if import_preview.projects_to_update %}
+    <div class="preview-section">
+        <h3>🔄 Projects to Update</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Project Number</th>
+                    <th>Changes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for project in import_preview.projects_to_update %}
+                <tr>
+                    <td>{{ project.name }}</td>
+                    <td>{{ project.projectNumber|default:"-" }}</td>
+                    <td>{{ project.changes }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+<style>
+.import-instructions {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+}
+
+.instruction-section {
+    margin: 15px 0;
+}
+
+.instruction-section h3 {
+    margin-bottom: 8px;
+    color: #495057;
+}
+
+.template-download {
+    background-color: #e3f2fd;
+    border: 1px solid #bbdefb;
+    padding: 15px;
+    border-radius: 3px;
+    margin: 15px 0;
+}
+
+.import-form {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+}
+
+.form-section {
+    margin: 20px 0;
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.form-section:last-child {
+    border-bottom: none;
+}
+
+.checkbox-field {
+    display: flex;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.checkbox-field input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.import-preview {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+}
+
+.preview-summary {
+    background-color: #d1ecf1;
+    border: 1px solid #bee5eb;
+    padding: 15px;
+    border-radius: 3px;
+    margin: 15px 0;
+}
+
+.preview-errors {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 15px;
+    border-radius: 3px;
+    margin: 15px 0;
+}
+
+.preview-section {
+    margin: 20px 0;
+}
+
+.preview-section table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+}
+
+.preview-section th,
+.preview-section td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.preview-section th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+.cancel-link {
+    background-color: #6c757d;
+    color: white !important;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 3px;
+    margin-left: 10px;
+}
+
+.alert {
+    padding: 15px;
+    margin: 15px 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+.alert-success {
+    background-color: #dff0d8;
+    border-color: #d0e9c6;
+    color: #3c763d;
+}
+
+.alert-error,
+.alert-danger {
+    background-color: #f2dede;
+    border-color: #ebcccc;
+    color: #a94442;
+}
+
+.alert-warning {
+    background-color: #fcf8e3;
+    border-color: #f0e68c;
+    color: #8a6d3b;
+}
+</style>

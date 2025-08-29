@@ -16,7 +16,9 @@ const PeopleList: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState<string>(''); // Phase 2: Department filter
+  const [departmentFilter, setDepartmentFilter] = useState<string[]>([]); // Multi-select department filter
+  const [locationFilter, setLocationFilter] = useState<string[]>([]); // Multi-select location filter
+  const [sortBy, setSortBy] = useState<'name' | 'location' | 'department' | 'role'>('name');
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,11 +38,36 @@ const PeopleList: React.FC = () => {
     learning: [] as PersonSkill[]
   });
 
+  // Inline editing state for person details
+  const [editingPersonData, setEditingPersonData] = useState<Person | null>(null);
+  const [isUpdatingPerson, setIsUpdatingPerson] = useState(false);
+  
+  // Gear menu state
+  const [showGearMenu, setShowGearMenu] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Dropdown states
+  const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+
   const proficiencyLevels = [
     { value: 'beginner', label: 'Beginner' },
     { value: 'intermediate', label: 'Intermediate' },
     { value: 'advanced', label: 'Advanced' },
     { value: 'expert', label: 'Expert' }
+  ];
+
+  const roleOptions = [
+    'Engineer', 'Senior Engineer', 'Lead Engineer', 'Principal Engineer',
+    'Designer', 'Senior Designer', 'Design Lead',
+    'Product Manager', 'Senior Product Manager',
+    'Project Manager', 'Program Manager',
+    'QA Engineer', 'DevOps Engineer',
+    'Data Scientist', 'Data Analyst',
+    'Marketing Specialist', 'Sales Representative',
+    'Operations Manager', 'HR Specialist',
+    'Consultant', 'Contractor', 'Intern'
   ];
 
   useEffect(() => {
@@ -51,8 +78,8 @@ const PeopleList: React.FC = () => {
   // Phase 2: Load departments for filter dropdown
   const loadDepartments = async () => {
     try {
-      const response = await departmentsApi.list();
-      setDepartments(response.results || []);
+      const departmentsList = await departmentsApi.listAll();
+      setDepartments(departmentsList);
     } catch (err) {
       console.error('Error loading departments:', err);
     }
@@ -64,32 +91,43 @@ const PeopleList: React.FC = () => {
     }
   }, [selectedPerson]);
 
-  // Close proficiency dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (editingProficiency) {
-        const target = event.target as HTMLElement;
-        if (!target.closest('.proficiency-dropdown')) {
-          setEditingProficiency(null);
-        }
+      const target = event.target as HTMLElement;
+      
+      if (editingProficiency && !target.closest('.proficiency-dropdown')) {
+        setEditingProficiency(null);
+      }
+      
+      if (showGearMenu && !target.closest('.gear-menu')) {
+        setShowGearMenu(false);
+      }
+      
+      if (showDepartmentDropdown && !target.closest('.department-filter')) {
+        setShowDepartmentDropdown(false);
+      }
+      
+      if (showLocationDropdown && !target.closest('.location-filter')) {
+        setShowLocationDropdown(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [editingProficiency]);
+  }, [editingProficiency, showGearMenu, showDepartmentDropdown, showLocationDropdown]);
 
   const loadPeople = async () => {
     try {
       setLoading(true);
-      const response = await peopleApi.list();
-      const peopleList = response.results || [];
+      const peopleList = await peopleApi.listAll();
       setPeople(peopleList);
       
       // Auto-select first person if none selected
       if (peopleList.length > 0 && !selectedPerson) {
         setSelectedPerson(peopleList[0]);
         setSelectedIndex(0);
+        setEditingPersonData({ ...peopleList[0] }); // Initialize editing data
       }
     } catch (err: any) {
       setError('Failed to load people');
@@ -119,6 +157,122 @@ const PeopleList: React.FC = () => {
   const handlePersonClick = (person: Person, index: number) => {
     setSelectedPerson(person);
     setSelectedIndex(index);
+    setEditingPersonData({ ...person }); // Initialize editing data with current person data
+  };
+
+  const handlePersonFieldChange = (field: keyof Person, value: string | number | null) => {
+    if (!editingPersonData) return;
+    setEditingPersonData(prev => ({
+      ...prev!,
+      [field]: value
+    }));
+  };
+
+  const savePersonField = async (field: keyof Person) => {
+    if (!selectedPerson?.id || !editingPersonData || isUpdatingPerson) return;
+
+    try {
+      setIsUpdatingPerson(true);
+      setError(null);
+
+      const updateData = {
+        [field]: editingPersonData[field]
+      };
+
+      // Handle special cases
+      if (field === 'weeklyCapacity') {
+        updateData.weeklyCapacity = Number(editingPersonData.weeklyCapacity) || 36;
+      }
+
+      await peopleApi.update(selectedPerson.id, updateData);
+
+      // Update local state
+      setSelectedPerson(prev => ({ ...prev!, ...updateData }));
+      
+      // Update the people list
+      setPeople(prev => prev.map(person => 
+        person.id === selectedPerson.id 
+          ? { ...person, ...updateData }
+          : person
+      ));
+
+    } catch (err: any) {
+      setError(`Failed to update ${field}: ${err.message}`);
+      // Reset editing data to original values on error
+      setEditingPersonData({ ...selectedPerson });
+    } finally {
+      setIsUpdatingPerson(false);
+    }
+  };
+
+  const handleNameEdit = () => {
+    setEditingName(true);
+    setShowGearMenu(false);
+  };
+
+  const handleNameSave = async () => {
+    if (!selectedPerson?.id || !editingPersonData?.name?.trim()) {
+      setEditingName(false);
+      return;
+    }
+
+    try {
+      setIsUpdatingPerson(true);
+      await peopleApi.update(selectedPerson.id, { name: editingPersonData.name.trim() });
+      
+      // Update local state
+      setSelectedPerson(prev => ({ ...prev!, name: editingPersonData.name.trim() }));
+      setPeople(prev => prev.map(person => 
+        person.id === selectedPerson.id 
+          ? { ...person, name: editingPersonData.name.trim() }
+          : person
+      ));
+      
+      setEditingName(false);
+    } catch (err: any) {
+      setError(`Failed to update name: ${err.message}`);
+    } finally {
+      setIsUpdatingPerson(false);
+    }
+  };
+
+  const handleNameCancel = () => {
+    if (selectedPerson) {
+      setEditingPersonData(prev => ({ ...prev!, name: selectedPerson.name }));
+    }
+    setEditingName(false);
+  };
+
+  const handleDeletePerson = async () => {
+    if (!selectedPerson?.id) return;
+
+    try {
+      setIsUpdatingPerson(true);
+      await peopleApi.delete(selectedPerson.id);
+      
+      // Remove from local state
+      const updatedPeople = people.filter(p => p.id !== selectedPerson.id);
+      setPeople(updatedPeople);
+      
+      // Select next person or clear selection
+      if (updatedPeople.length > 0) {
+        const nextIndex = Math.min(selectedIndex, updatedPeople.length - 1);
+        setSelectedPerson(updatedPeople[nextIndex]);
+        setSelectedIndex(nextIndex);
+        setEditingPersonData({ ...updatedPeople[nextIndex] });
+      } else {
+        setSelectedPerson(null);
+        setSelectedIndex(-1);
+        setEditingPersonData(null);
+      }
+      
+      setShowDeleteConfirm(false);
+      setShowGearMenu(false);
+    } catch (err: any) {
+      setError(`Failed to delete person: ${err.message}`);
+    } finally {
+      setIsUpdatingPerson(false);
+    }
   };
 
   const handleSkillsEdit = () => {
@@ -247,7 +401,7 @@ const PeopleList: React.FC = () => {
       // Update each selected person
       const updatePromises = Array.from(selectedPeopleIds).map(personId => {
         const updateData = {
-          department: bulkDepartment === 'none' ? null : parseInt(bulkDepartment)
+          department: bulkDepartment === 'unassigned' ? null : parseInt(bulkDepartment)
         };
         return peopleApi.update(personId, updateData);
       });
@@ -263,7 +417,7 @@ const PeopleList: React.FC = () => {
       setBulkDepartment('');
 
       // Show success message (could be improved with a proper toast)
-      const departmentName = bulkDepartment === 'none' 
+      const departmentName = bulkDepartment === 'unassigned' 
         ? 'removed from departments'
         : departments.find(d => d.id?.toString() === bulkDepartment)?.name || 'unknown department';
       
@@ -275,29 +429,64 @@ const PeopleList: React.FC = () => {
     }
   };
 
-  // Filter people - Phase 2: Include department filtering + notes search
-  const filteredPeople = people.filter(person => {
-    // Enhanced search filter (includes notes/description search)
-    const matchesSearch = !searchTerm || 
-      person.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      person.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      person.departmentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      person.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Department filter - Phase 2
-    const matchesDepartment = !departmentFilter || 
-      (departmentFilter === 'none' ? !person.department : person.department?.toString() === departmentFilter);
-    
-    return matchesSearch && matchesDepartment;
-  });
+  // Extract unique locations from people data
+  const uniqueLocations = Array.from(new Set(
+    people
+      .map(person => person.location?.trim())
+      .filter(location => location && location !== '')
+  )).sort();
+
+  // Filter and sort people
+  const filteredAndSortedPeople = people
+    .filter(person => {
+      // Enhanced search filter (includes notes/description + location search)
+      const matchesSearch = !searchTerm || 
+        person.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        person.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        person.departmentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        person.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        person.notes?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Department filter - Multi-select
+      const matchesDepartment = departmentFilter.length === 0 || 
+        departmentFilter.includes(person.department?.toString() || '') ||
+        (departmentFilter.includes('unassigned') && !person.department);
+      
+      // Location filter - Multi-select
+      const matchesLocation = locationFilter.length === 0 || 
+        locationFilter.includes(person.location?.trim() || '') ||
+        (locationFilter.includes('unspecified') && (!person.location || person.location.trim() === ''));
+      
+      return matchesSearch && matchesDepartment && matchesLocation;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'location':
+          const aLoc = a.location?.trim() || 'zzz_unspecified'; // Put unspecified at end
+          const bLoc = b.location?.trim() || 'zzz_unspecified';
+          return aLoc.localeCompare(bLoc);
+        case 'department':
+          const aDept = a.departmentName || 'zzz_unassigned';
+          const bDept = b.departmentName || 'zzz_unassigned';
+          return aDept.localeCompare(bDept);
+        case 'role':
+          const aRole = a.role || 'zzz_no_role';
+          const bRole = b.role || 'zzz_no_role';
+          return aRole.localeCompare(bRole);
+        case 'name':
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
 
   // Auto-select first person from filtered list
   useEffect(() => {
-    if (filteredPeople.length > 0 && !selectedPerson) {
-      setSelectedPerson(filteredPeople[0]);
+    if (filteredAndSortedPeople.length > 0 && !selectedPerson) {
+      setSelectedPerson(filteredAndSortedPeople[0]);
       setSelectedIndex(0);
+      setEditingPersonData({ ...filteredAndSortedPeople[0] }); // Initialize editing data
     }
-  }, [filteredPeople, selectedPerson]);
+  }, [filteredAndSortedPeople, selectedPerson]);
 
   if (loading) {
     return (
@@ -330,26 +519,189 @@ const PeopleList: React.FC = () => {
             <div className="space-y-2">
               <input
                 type="text"
-                placeholder="Search people (name, role, department, notes)"
+                placeholder="Search people (name, role, department, location, notes)"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
               />
               
-              {/* Department Filter */}
-              <select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none"
-              >
-                <option value="">All Departments</option>
-                <option value="none">No Department</option>
-                {departments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </option>
-                ))}
-              </select>
+              {/* Department Multi-Select Filter */}
+              <div className="department-filter relative">
+                <div 
+                  onClick={() => setShowDepartmentDropdown(!showDepartmentDropdown)}
+                  className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] min-h-[32px] flex flex-wrap items-center gap-1 cursor-pointer hover:border-[#007acc] focus:border-[#007acc]"
+                >
+                  {departmentFilter.length === 0 ? (
+                    <span className="text-[#969696]">All Departments</span>
+                  ) : (
+                    <>
+                      {departmentFilter.map((deptId, index) => {
+                        const department = departments.find(d => d.id?.toString() === deptId);
+                        const displayName = deptId === 'unassigned' ? 'Not Assigned' : department?.name || 'Unknown';
+                        return (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#007acc]/20 text-[#007acc] rounded text-xs border border-[#007acc]/30"
+                          >
+                            {displayName}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDepartmentFilter(prev => prev.filter(d => d !== deptId));
+                              }}
+                              className="hover:text-[#007acc] hover:bg-[#007acc]/30 rounded-full w-3 h-3 flex items-center justify-center"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDepartmentFilter([]);
+                        }}
+                        className="text-xs text-[#969696] hover:text-[#cccccc] ml-1"
+                      >
+                        Clear All
+                      </button>
+                    </>
+                  )}
+                  <svg className="ml-auto w-4 h-4 text-[#969696]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </div>
+                
+                {/* Department Options Dropdown */}
+                {showDepartmentDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-40 max-h-40 overflow-y-auto">
+                    <button
+                      onClick={() => {
+                        if (!departmentFilter.includes('unassigned')) {
+                          setDepartmentFilter(prev => [...prev, 'unassigned']);
+                        }
+                      }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-[#3e3e42] transition-colors ${
+                        departmentFilter.includes('unassigned') ? 'bg-[#007acc]/20 text-[#007acc]' : 'text-[#cccccc]'
+                      }`}
+                      disabled={departmentFilter.includes('unassigned')}
+                    >
+                      Not Assigned ({people.filter(p => !p.department).length})
+                    </button>
+                    {departments.map((dept) => (
+                      <button
+                        key={dept.id}
+                        onClick={() => {
+                          const deptId = dept.id?.toString() || '';
+                          if (!departmentFilter.includes(deptId)) {
+                            setDepartmentFilter(prev => [...prev, deptId]);
+                          }
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-[#3e3e42] transition-colors ${
+                          departmentFilter.includes(dept.id?.toString() || '') ? 'bg-[#007acc]/20 text-[#007acc]' : 'text-[#cccccc]'
+                        }`}
+                        disabled={departmentFilter.includes(dept.id?.toString() || '')}
+                      >
+                        {dept.name} ({people.filter(p => p.department === dept.id).length})
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Location Multi-Select Filter */}
+              <div className="location-filter relative">
+                <div 
+                  onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                  className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] min-h-[32px] flex flex-wrap items-center gap-1 cursor-pointer hover:border-[#007acc] focus:border-[#007acc]"
+                >
+                  {locationFilter.length === 0 ? (
+                    <span className="text-[#969696]">All Locations</span>
+                  ) : (
+                    <>
+                      {locationFilter.map((location, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#007acc]/20 text-[#007acc] rounded text-xs border border-[#007acc]/30"
+                        >
+                          {location === 'unspecified' ? 'Not Specified' : location}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocationFilter(prev => prev.filter(l => l !== location));
+                            }}
+                            className="hover:text-[#007acc] hover:bg-[#007acc]/30 rounded-full w-3 h-3 flex items-center justify-center"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLocationFilter([]);
+                        }}
+                        className="text-xs text-[#969696] hover:text-[#cccccc] ml-1"
+                      >
+                        Clear All
+                      </button>
+                    </>
+                  )}
+                  <svg className="ml-auto w-4 h-4 text-[#969696]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </div>
+                
+                {/* Location Options Dropdown */}
+                {showLocationDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-40 max-h-40 overflow-y-auto">
+                    <button
+                      onClick={() => {
+                        if (!locationFilter.includes('unspecified')) {
+                          setLocationFilter(prev => [...prev, 'unspecified']);
+                        }
+                      }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-[#3e3e42] transition-colors ${
+                        locationFilter.includes('unspecified') ? 'bg-[#007acc]/20 text-[#007acc]' : 'text-[#cccccc]'
+                      }`}
+                      disabled={locationFilter.includes('unspecified')}
+                    >
+                      Not Specified ({people.filter(p => !p.location || p.location.trim() === '').length})
+                    </button>
+                    {uniqueLocations.map((location) => (
+                      <button
+                        key={location}
+                        onClick={() => {
+                          if (!locationFilter.includes(location)) {
+                            setLocationFilter(prev => [...prev, location]);
+                          }
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-[#3e3e42] transition-colors ${
+                          locationFilter.includes(location) ? 'bg-[#007acc]/20 text-[#007acc]' : 'text-[#cccccc]'
+                        }`}
+                        disabled={locationFilter.includes(location)}
+                      >
+                        {location} ({people.filter(p => p.location?.trim() === location).length})
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Sort By Dropdown */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-[#969696] whitespace-nowrap">Sort by:</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'name' | 'location' | 'department' | 'role')}
+                  className="flex-1 px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none"
+                >
+                  <option value="name">Name</option>
+                  <option value="location">Location</option>
+                  <option value="department">Department</option>
+                  <option value="role">Role</option>
+                </select>
+              </div>
               
               {/* Bulk Actions Toggle */}
               <div className="flex items-center justify-between">
@@ -390,14 +742,14 @@ const PeopleList: React.FC = () => {
               {bulkMode && <div className="col-span-1">SELECT</div>}
               <div className={bulkMode ? "col-span-3" : "col-span-3"}>NAME</div>
               <div className={bulkMode ? "col-span-2" : "col-span-2"}>DEPARTMENT</div>
-              <div className={bulkMode ? "col-span-2" : "col-span-2"}>ROLE</div>
+              <div className={bulkMode ? "col-span-2" : "col-span-2"}>LOCATION</div>
               <div className={bulkMode ? "col-span-2" : "col-span-2"}>CAPACITY</div>
               <div className={bulkMode ? "col-span-2" : "col-span-3"}>TOP SKILLS</div>
             </div>
 
             {/* Table Body */}
             <div className="overflow-y-auto h-full">
-              {filteredPeople.length === 0 ? (
+              {filteredAndSortedPeople.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="text-center text-[#969696]">
                     <div className="text-lg mb-2">No people found</div>
@@ -405,7 +757,7 @@ const PeopleList: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                filteredPeople.map((person, index) => (
+                filteredAndSortedPeople.map((person, index) => (
                   <div
                     key={person.id}
                     onClick={bulkMode ? undefined : () => handlePersonClick(person, index)}
@@ -448,9 +800,9 @@ const PeopleList: React.FC = () => {
                       {person.departmentName || 'None'}
                     </div>
                     
-                    {/* Role */}
+                    {/* Location */}
                     <div className="col-span-2 text-[#969696] text-xs">
-                      {person.role || 'No Role'}
+                      {person.location || 'Not specified'}
                     </div>
                     
                     {/* Capacity */}
@@ -482,7 +834,7 @@ const PeopleList: React.FC = () => {
                   className="px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none"
                 >
                   <option value="">Select Department...</option>
-                  <option value="none">Remove from Department</option>
+                  <option value="unassigned">Remove from Department</option>
                   {departments.map((dept) => (
                     <option key={dept.id} value={dept.id}>
                       {dept.name}
@@ -514,30 +866,221 @@ const PeopleList: React.FC = () => {
               {/* Person Header */}
               <div className="p-4 border-b border-[#3e3e42]">
                 <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h2 className="text-xl font-bold text-[#cccccc] mb-2">
-                      {selectedPerson.name}
-                    </h2>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <div className="text-[#969696] text-xs">Role:</div>
-                        <div className="text-[#cccccc]">{selectedPerson.role || 'No Role'}</div>
+                  <div className="flex-1">
+                    {editingName ? (
+                      <div className="mb-2">
+                        <input
+                          type="text"
+                          value={editingPersonData?.name || ''}
+                          onChange={(e) => handlePersonFieldChange('name', e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleNameSave();
+                            } else if (e.key === 'Escape') {
+                              handleNameCancel();
+                            }
+                          }}
+                          onBlur={handleNameSave}
+                          disabled={isUpdatingPerson}
+                          className="text-xl font-bold bg-[#3e3e42] border border-[#3e3e42] rounded px-2 py-1 text-[#cccccc] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50 w-full"
+                          autoFocus
+                        />
+                        <div className="text-xs text-[#969696] mt-1">
+                          Press Enter to save, Escape to cancel
+                        </div>
                       </div>
+                    ) : (
+                      <h2 className="text-xl font-bold text-[#cccccc] mb-2">
+                        {selectedPerson.name}
+                      </h2>
+                    )}
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      {/* Role Dropdown */}
                       <div>
-                        <div className="text-[#969696] text-xs">Weekly Capacity:</div>
-                        <div className="text-[#cccccc]">{selectedPerson.weeklyCapacity || 36}h</div>
+                        <div className="text-[#969696] text-xs mb-1">Role:</div>
+                        <select
+                          value={editingPersonData?.role || ''}
+                          onChange={(e) => {
+                            handlePersonFieldChange('role', e.target.value);
+                            savePersonField('role');
+                          }}
+                          disabled={isUpdatingPerson}
+                          className="w-full px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
+                        >
+                          <option value="">Select Role...</option>
+                          {roleOptions.map((role) => (
+                            <option key={role} value={role}>
+                              {role}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {/* Weekly Capacity Input */}
+                      <div>
+                        <div className="text-[#969696] text-xs mb-1">Weekly Capacity:</div>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            max="80"
+                            value={editingPersonData?.weeklyCapacity || 36}
+                            onChange={(e) => handlePersonFieldChange('weeklyCapacity', parseInt(e.target.value) || 36)}
+                            onBlur={() => savePersonField('weeklyCapacity')}
+                            disabled={isUpdatingPerson}
+                            className="w-16 px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <span className="text-[#969696]">hours/week</span>
+                        </div>
+                      </div>
+                      
+                      {/* Department Dropdown */}
+                      <div>
+                        <div className="text-[#969696] text-xs mb-1">Department:</div>
+                        <select
+                          value={editingPersonData?.department || ''}
+                          onChange={(e) => {
+                            const deptId = e.target.value ? parseInt(e.target.value) : null;
+                            handlePersonFieldChange('department', deptId);
+                            // Also update the department name for display
+                            const selectedDept = departments.find(d => d.id === deptId);
+                            handlePersonFieldChange('departmentName', selectedDept?.name || '');
+                            savePersonField('department');
+                          }}
+                          disabled={isUpdatingPerson}
+                          className="w-full px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
+                        >
+                          <option value="">No Department</option>
+                          {departments.map((dept) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {/* Location Input */}
+                      <div>
+                        <div className="text-[#969696] text-xs mb-1">Location:</div>
+                        <input
+                          type="text"
+                          value={editingPersonData?.location || ''}
+                          onChange={(e) => handlePersonFieldChange('location', e.target.value)}
+                          onBlur={() => savePersonField('location')}
+                          placeholder="e.g., New York, NY or Remote"
+                          disabled={isUpdatingPerson}
+                          className="w-full px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
+                        />
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Link to={`/people/${selectedPerson.id}/edit`}>
-                      <button className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
-                        Edit Person
+                  <div className="flex gap-2 items-start">
+                    {isUpdatingPerson && (
+                      <div className="px-2 py-0.5 text-xs text-[#007acc] flex items-center gap-1">
+                        <div className="w-3 h-3 border border-[#007acc] border-t-transparent rounded-full animate-spin"></div>
+                        Saving...
+                      </div>
+                    )}
+                    
+                    {/* Gear Icon and Menu */}
+                    <div className="gear-menu relative">
+                      <button
+                        onClick={() => setShowGearMenu(!showGearMenu)}
+                        disabled={isUpdatingPerson}
+                        className="p-1 text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42] rounded transition-colors disabled:opacity-50"
+                        title="Person options"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+                        </svg>
                       </button>
-                    </Link>
+                      
+                      {/* Dropdown Menu */}
+                      {showGearMenu && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50">
+                          <button
+                            onClick={handleNameEdit}
+                            disabled={isUpdatingPerson || editingName}
+                            className="w-full text-left px-3 py-2 text-sm text-[#cccccc] hover:bg-[#3e3e42] transition-colors disabled:opacity-50 flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            Edit Name
+                          </button>
+                          
+                          <div className="border-t border-[#3e3e42]" />
+                          
+                          <button
+                            onClick={() => setShowDeleteConfirm(true)}
+                            disabled={isUpdatingPerson}
+                            className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path d="M3 6h18"/>
+                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                              <path d="M8 6V4c0-1 1-2 2-2h4c-1 0 2 1 2 2v2"/>
+                              <line x1="10" y1="11" x2="10" y2="17"/>
+                              <line x1="14" y1="11" x2="14" y2="17"/>
+                            </svg>
+                            Delete Person
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* Delete Confirmation Modal */}
+              {showDeleteConfirm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6 max-w-md mx-4">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center">
+                        <svg className="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-[#cccccc]">Delete Person</h3>
+                        <p className="text-sm text-[#969696]">This action cannot be undone</p>
+                      </div>
+                    </div>
+                    
+                    <p className="text-[#cccccc] mb-6">
+                      Are you sure you want to delete <strong>{selectedPerson.name}</strong>? 
+                      This will permanently remove all their data, assignments, and skills.
+                    </p>
+                    
+                    <div className="flex gap-3 justify-end">
+                      <button
+                        onClick={() => setShowDeleteConfirm(false)}
+                        disabled={isUpdatingPerson}
+                        className="px-4 py-2 text-sm border border-[#3e3e42] text-[#cccccc] hover:bg-[#3e3e42] rounded transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleDeletePerson}
+                        disabled={isUpdatingPerson}
+                        className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {isUpdatingPerson ? (
+                          <>
+                            <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin"></div>
+                            Deleting...
+                          </>
+                        ) : (
+                          'Delete Person'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Skills Section */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">

@@ -69,9 +69,32 @@ async function fetchApi<T>(
 
 // People API
 export const peopleApi = {
-  // Get all people
-  list: () => 
-    fetchApi<PaginatedResponse<Person>>('/people/'),
+  // Get all people with pagination support
+  list: (params?: { page?: number; page_size?: number; search?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    if (params?.search) queryParams.set('search', params.search);
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<PaginatedResponse<Person>>(`/people/${queryString}`);
+  },
+
+  // Get all people (loads all pages)
+  listAll: async (): Promise<Person[]> => {
+    const allPeople: Person[] = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await peopleApi.list({ page, page_size: 100 }); // Larger page size for efficiency
+      allPeople.push(...(response.results || []));
+      
+      hasMore = !!response.next; // Continue if there's a next page
+      page++;
+    }
+
+    return allPeople;
+  },
 
   // Get single person
   get: (id: number) => 
@@ -100,9 +123,31 @@ export const peopleApi = {
 
 // Projects API
 export const projectsApi = {
-  // Get all projects
-  list: () => 
-    fetchApi<PaginatedResponse<Project>>('/projects/'),
+  // Get all projects with pagination support
+  list: (params?: { page?: number; page_size?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<PaginatedResponse<Project>>(`/projects/${queryString}`);
+  },
+
+  // Get all projects (loads all pages)
+  listAll: async (): Promise<Project[]> => {
+    const allProjects: Project[] = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await projectsApi.list({ page, page_size: 100 });
+      allProjects.push(...(response.results || []));
+      
+      hasMore = !!response.next;
+      page++;
+    }
+
+    return allProjects;
+  },
 
   // Get single project
   get: (id: number) => 
@@ -131,9 +176,31 @@ export const projectsApi = {
 
 // Departments API
 export const departmentsApi = {
-  // Get all departments
-  list: () => 
-    fetchApi<PaginatedResponse<Department>>('/departments/'),
+  // Get all departments with pagination support
+  list: (params?: { page?: number; page_size?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<PaginatedResponse<Department>>(`/departments/${queryString}`);
+  },
+
+  // Get all departments (loads all pages)
+  listAll: async (): Promise<Department[]> => {
+    const allDepartments: Department[] = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await departmentsApi.list({ page, page_size: 100 });
+      allDepartments.push(...(response.results || []));
+      
+      hasMore = !!response.next;
+      page++;
+    }
+
+    return allDepartments;
+  },
 
   // Get single department
   get: (id: number) => 
@@ -162,9 +229,31 @@ export const departmentsApi = {
 
 // Assignment API
 export const assignmentsApi = {
-  // Get all assignments
-  list: () => 
-    fetchApi<PaginatedResponse<Assignment>>('/assignments/'),
+  // Get all assignments with pagination support
+  list: (params?: { page?: number; page_size?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`);
+  },
+
+  // Get all assignments (loads all pages)
+  listAll: async (): Promise<Assignment[]> => {
+    const allAssignments: Assignment[] = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await assignmentsApi.list({ page, page_size: 100 });
+      allAssignments.push(...(response.results || []));
+      
+      hasMore = !!response.next;
+      page++;
+    }
+
+    return allAssignments;
+  },
 
   // Get assignments for specific person
   byPerson: (personId: number) => 
@@ -200,9 +289,32 @@ export const utilizationApi = {
 
 // Deliverables API - STANDARDS COMPLIANT
 export const deliverablesApi = {
-  // Get all deliverables or filter by project
-  list: (projectId?: number) =>
-    fetchApi<PaginatedResponse<Deliverable>>(`/deliverables/${projectId ? `?project=${projectId}` : ''}`),
+  // Get all deliverables or filter by project with pagination support
+  list: (projectId?: number, params?: { page?: number; page_size?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (projectId) queryParams.set('project', projectId.toString());
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<PaginatedResponse<Deliverable>>(`/deliverables/${queryString}`);
+  },
+
+  // Get all deliverables (loads all pages)
+  listAll: async (projectId?: number): Promise<Deliverable[]> => {
+    const allDeliverables: Deliverable[] = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await deliverablesApi.list(projectId, { page, page_size: 100 });
+      allDeliverables.push(...(response.results || []));
+      
+      hasMore = !!response.next;
+      page++;
+    }
+
+    return allDeliverables;
+  },
 
   // Get single deliverable  
   get: (id: number) =>

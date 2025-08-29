@@ -246,8 +246,8 @@ const AssignmentForm: React.FC = () => {
 
   const loadProjects = async () => {
     try {
-      const response = await projectsApi.list();
-      setProjects(response.results || []);
+      const projectsList = await projectsApi.listAll();
+      setProjects(projectsList);
     } catch (err: any) {
       setError('Failed to load projects list');
     }
