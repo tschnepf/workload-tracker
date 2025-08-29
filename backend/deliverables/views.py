@@ -7,6 +7,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
+import logging
 from .models import Deliverable
 from .serializers import DeliverableSerializer
 
@@ -60,7 +61,8 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 return Response({"success": True}, status=status.HTTP_200_OK)
                 
         except Exception as e:
+            logging.exception("Failed to reorder deliverables")
             return Response(
-                {"error": f"Failed to reorder deliverables: {str(e)}"},
+                {"error": "Failed to reorder deliverables."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
