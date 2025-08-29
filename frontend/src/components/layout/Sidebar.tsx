@@ -199,21 +199,6 @@ const Sidebar: React.FC = () => {
     }
   ];
 
-  // Mockup items for development/testing
-  const mockupItems = [
-    {
-      path: '/mockup',
-      icon: 'assignments',
-      label: 'Grid Mockup',
-      description: 'Assignment grid prototype'
-    },
-    {
-      path: '/sidebar-mockup', 
-      icon: 'help',
-      label: 'Sidebar Mockup',
-      description: 'Navigation prototype'
-    }
-  ];
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
@@ -312,36 +297,6 @@ const Sidebar: React.FC = () => {
           ))}
         </div>
 
-        {/* Development/Testing Mockups */}
-        {(process.env.NODE_ENV === 'development') && (
-          <>
-            <div className="my-4 mx-6 border-t border-[#3e3e42]" />
-            <div className="space-y-1 px-3">
-              {mockupItems.map((item) => (
-                <Tooltip key={item.path} title={item.label} description={item.description}>
-                  <Link
-                    to={item.path}
-                    className={`
-                      group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 justify-center
-                      ${isActive(item.path) 
-                        ? 'bg-[#007acc]/10 border-r-2 border-[#007acc] text-[#007acc]' 
-                        : 'text-[#757575] hover:text-[#969696] hover:bg-[#3e3e42]/30'
-                      }
-                    `}
-                  >
-                    <div className="flex-shrink-0">
-                      <IconComponent 
-                        type={item.icon} 
-                        className="w-3 h-3" 
-                        isActive={isActive(item.path)}
-                      />
-                    </div>
-                  </Link>
-                </Tooltip>
-              ))}
-            </div>
-          </>
-        )}
 
         {/* Separator */}
         <div className="my-6 mx-6 border-t border-[#3e3e42]" />
