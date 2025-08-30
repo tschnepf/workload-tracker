@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.response import Response
 from django.db.models import Max
 from django.http import HttpResponseNotModified
 from django.utils.http import http_date
@@ -12,8 +13,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.AllowAny]
     
     def list(self, request, *args, **kwargs):
-        """Get all projects with conditional request support (ETag/Last-Modified)"""
+        """Get all projects with conditional request support (ETag/Last-Modified) and bulk loading"""
         queryset = self.get_queryset()
+        
+        # Check if bulk loading is requested
+        if request.query_params.get('all') == 'true':
+            # Return all projects without pagination (Phase 2 optimization)
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
         
         # Get the latest update timestamp
         last_modified = queryset.aggregate(Max('updated_at'))['updated_at__max']

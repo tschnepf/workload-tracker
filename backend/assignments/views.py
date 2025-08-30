@@ -41,6 +41,12 @@ class AssignmentViewSet(viewsets.ModelViewSet):
                     'error': 'Invalid project ID format'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Check if bulk loading is requested (Phase 2 optimization)
+        if request.query_params.get('all') == 'true':
+            # Return all assignments without pagination
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        
         serializer = self.get_serializer(queryset, many=True)
         
         return Response({

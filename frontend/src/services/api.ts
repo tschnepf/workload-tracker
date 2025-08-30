@@ -80,21 +80,9 @@ export const peopleApi = {
     return fetchApi<PaginatedResponse<Person>>(`/people/${queryString}`);
   },
 
-  // Get all people (loads all pages)
+  // Get all people (bulk API - Phase 2 optimization)
   listAll: async (): Promise<Person[]> => {
-    const allPeople: Person[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await peopleApi.list({ page, page_size: 500 }); // Optimized page size for bulk fetches
-      allPeople.push(...(response.results || []));
-      
-      hasMore = !!response.next; // Continue if there's a next page
-      page++;
-    }
-
-    return allPeople;
+    return fetchApi<Person[]>(`/people/?all=true`);
   },
 
   // Get single person
@@ -152,21 +140,9 @@ export const projectsApi = {
     return fetchApi<PaginatedResponse<Project>>(`/projects/${queryString}`);
   },
 
-  // Get all projects (loads all pages)
+  // Get all projects (bulk API - Phase 2 optimization)
   listAll: async (): Promise<Project[]> => {
-    const allProjects: Project[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await projectsApi.list({ page, page_size: 500 });
-      allProjects.push(...(response.results || []));
-      
-      hasMore = !!response.next;
-      page++;
-    }
-
-    return allProjects;
+    return fetchApi<Project[]>(`/projects/?all=true`);
   },
 
   // Get single project
@@ -212,21 +188,9 @@ export const departmentsApi = {
     return fetchApi<PaginatedResponse<Department>>(`/departments/${queryString}`);
   },
 
-  // Get all departments (loads all pages)
+  // Get all departments (bulk API - Phase 2 optimization)
   listAll: async (): Promise<Department[]> => {
-    const allDepartments: Department[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await departmentsApi.list({ page, page_size: 500 });
-      allDepartments.push(...(response.results || []));
-      
-      hasMore = !!response.next;
-      page++;
-    }
-
-    return allDepartments;
+    return fetchApi<Department[]>(`/departments/?all=true`);
   },
 
   // Get single department
@@ -265,21 +229,9 @@ export const assignmentsApi = {
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`);
   },
 
-  // Get all assignments (loads all pages)
+  // Get all assignments (bulk API - Phase 2 optimization)
   listAll: async (): Promise<Assignment[]> => {
-    const allAssignments: Assignment[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await assignmentsApi.list({ page, page_size: 500 });
-      allAssignments.push(...(response.results || []));
-      
-      hasMore = !!response.next;
-      page++;
-    }
-
-    return allAssignments;
+    return fetchApi<Assignment[]>(`/assignments/?all=true`);
   },
 
   // Get assignments for specific person
@@ -344,21 +296,13 @@ export const deliverablesApi = {
     return fetchApi<PaginatedResponse<Deliverable>>(`/deliverables/${queryString}`);
   },
 
-  // Get all deliverables (loads all pages)
+  // Get all deliverables (bulk API - Phase 2 optimization)
   listAll: async (projectId?: number): Promise<Deliverable[]> => {
-    const allDeliverables: Deliverable[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await deliverablesApi.list(projectId, { page, page_size: 500 });
-      allDeliverables.push(...(response.results || []));
-      
-      hasMore = !!response.next;
-      page++;
-    }
-
-    return allDeliverables;
+    const queryParams = new URLSearchParams();
+    if (projectId) queryParams.set('project', projectId.toString());
+    queryParams.set('all', 'true');
+    const queryString = queryParams.toString();
+    return fetchApi<Deliverable[]>(`/deliverables/?${queryString}`);
   },
 
   // Get single deliverable  
@@ -384,6 +328,14 @@ export const deliverablesApi = {
     fetchApi<void>(`/deliverables/${id}/`, {
       method: 'DELETE',
     }),
+
+  // Bulk fetch deliverables for multiple projects (Phase 2 optimization)
+  bulkList: async (projectIds: number[]): Promise<{ [projectId: string]: Deliverable[] }> => {
+    if (projectIds.length === 0) return {};
+    
+    const projectIdsString = projectIds.join(',');
+    return fetchApi<{ [projectId: string]: Deliverable[] }>(`/deliverables/bulk/?project_ids=${projectIdsString}`);
+  },
 
   // Reorder deliverables for a project
   reorder: (projectId: number, deliverableIds: number[]) =>

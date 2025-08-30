@@ -31,8 +31,14 @@ class PersonViewSet(viewsets.ModelViewSet):
         return Person.objects.filter(is_active=True).order_by('name')
     
     def list(self, request, *args, **kwargs):
-        """Get all people with conditional request support (ETag/Last-Modified)"""
+        """Get all people with conditional request support (ETag/Last-Modified) and bulk loading"""
         queryset = self.get_queryset()
+        
+        # Check if bulk loading is requested
+        if request.query_params.get('all') == 'true':
+            # Return all people without pagination (Phase 2 optimization)
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
         
         # Get the latest update timestamp
         last_modified = queryset.aggregate(Max('updated_at'))['updated_at__max']

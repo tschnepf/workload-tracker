@@ -2,7 +2,7 @@
  * Projects List - Split-panel layout with filterable project list and detailed project view
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { Project, Person, Assignment, Deliverable, PersonSkill } from '@/types/models';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -19,7 +19,21 @@ interface PersonWithAvailability extends Person {
 }
 import { deliverablesApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
-import DeliverablesSection from '@/components/deliverables/DeliverablesSection';
+
+// Lazy load DeliverablesSection for better initial page performance
+const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
+
+// Loading component for DeliverablesSection
+const DeliverablesSectionLoader: React.FC = () => (
+  <div className="border border-[#3e3e42] rounded-lg p-6 bg-[#2d2d30]">
+    <div className="flex items-center justify-center py-8">
+      <div className="flex items-center space-x-3">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#007acc]"></div>
+        <div className="text-[#969696]">Loading deliverables...</div>
+      </div>
+    </div>
+  </div>
+);
 
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
@@ -94,24 +108,42 @@ const ProjectsList: React.FC = () => {
   }, [projects]);
 
   const loadAllProjectDeliverables = async (projectsList: Project[]) => {
-    const deliverablesMap: { [projectId: number]: Deliverable[] } = {};
-    
-    // Load deliverables for each project in parallel
-    await Promise.all(
-      projectsList.map(async (project) => {
+    try {
+      const startTime = performance.now();
+      
+      // Extract project IDs for bulk API call
+      const projectIds = projectsList.map(p => p.id).filter(id => id !== undefined) as number[];
+      
+      if (projectIds.length === 0) {
+        setProjectDeliverables({});
+        return;
+      }
+      
+      // Single bulk API call replaces N individual calls
+      const bulkDeliverablesResponse = await deliverablesApi.bulkList(projectIds);
+      
+      // Convert string keys to numbers for compatibility
+      const deliverablesMap: { [projectId: number]: Deliverable[] } = {};
+      Object.entries(bulkDeliverablesResponse).forEach(([projectId, deliverables]) => {
+        deliverablesMap[parseInt(projectId)] = deliverables;
+      });
+      
+      setProjectDeliverables(deliverablesMap);
+      
+      const endTime = performance.now();
+      console.log(`Bulk deliverables loaded in ${Math.round(endTime - startTime)}ms for ${projectIds.length} projects`);
+      
+    } catch (error) {
+      console.error('Failed to load bulk deliverables:', error);
+      // Set empty deliverables for all projects on error
+      const emptyMap: { [projectId: number]: Deliverable[] } = {};
+      projectsList.forEach(project => {
         if (project.id) {
-          try {
-            const deliverables = await deliverablesApi.listAll(project.id);
-            deliverablesMap[project.id] = deliverables;
-          } catch (err) {
-            // If deliverables fail to load, just set empty array
-            deliverablesMap[project.id] = [];
-          }
+          emptyMap[project.id] = [];
         }
-      })
-    );
-    
-    setProjectDeliverables(deliverablesMap);
+      });
+      setProjectDeliverables(emptyMap);
+    }
   };
 
   const getNextDeliverable = (projectId: number): Deliverable | null => {
@@ -1368,8 +1400,10 @@ const ProjectsList: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Deliverables Section */}
-                <DeliverablesSection project={selectedProject} />
+                {/* Deliverables Section - Lazy Loaded */}
+                <Suspense fallback={<DeliverablesSectionLoader />}>
+                  <DeliverablesSection project={selectedProject} />
+                </Suspense>
               </div>
             </>
           ) : (
