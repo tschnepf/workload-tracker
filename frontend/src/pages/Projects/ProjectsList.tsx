@@ -8,7 +8,7 @@ import { Project, Person, Assignment, Deliverable, PersonSkill } from '@/types/m
 import { useDebounce } from '@/hooks/useDebounce';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { usePeople } from '@/hooks/usePeople';
-import { assignmentsApi } from '@/services/api';
+import { assignmentsApi, deliverablesApi, peopleApi } from '@/services/api';
 
 interface PersonWithAvailability extends Person {
   availableHours?: number;
@@ -17,7 +17,6 @@ interface PersonWithAvailability extends Person {
   skillMatchScore?: number;
   hasSkillMatch?: boolean;
 }
-import { deliverablesApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
 
 // Lazy load DeliverablesSection for better initial page performance
@@ -802,6 +801,18 @@ const ProjectsList: React.FC = () => {
     setRoleSearchResults([]);
   };
 
+  // Helper function to get current week hours for an assignment
+  const getCurrentWeekHours = (assignment: Assignment): number => {
+    // Get current week in YYYY-MM-DD format for the Monday of this week
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
+    const currentWeekKey = monday.toISOString().split('T')[0];
+    
+    return assignment.weeklyHours?.[currentWeekKey] || 0;
+  };
+
   const handleDeleteAssignment = useCallback(async (assignmentId: number) => {
     if (!confirm('Are you sure you want to remove this assignment?')) {
       return;
@@ -863,7 +874,7 @@ const ProjectsList: React.FC = () => {
     const uniqueRoles = Array.from(new Set(allRoles)).slice(0, 5);
     
     setRoleSearchResults(uniqueRoles);
-  };
+  }, [availableRoles, assignments, people, editingAssignment, getSkillBasedRoleSuggestions]);
 
   const handleRoleSelect = (role: string) => {
     setEditData(prev => ({ ...prev, roleOnProject: role, roleSearch: role }));
@@ -948,16 +959,6 @@ const ProjectsList: React.FC = () => {
     });
   };
 
-  const getCurrentWeekHours = (assignment: Assignment): number => {
-    // Get current week in YYYY-MM-DD format for the Monday of this week
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
-    const currentWeekKey = monday.toISOString().split('T')[0];
-    
-    return assignment.weeklyHours?.[currentWeekKey] || 0;
-  };
 
   const handleStatusChange = async (newStatus: string) => {
     if (!selectedProject?.id) return;

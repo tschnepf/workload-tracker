@@ -1096,9 +1096,9 @@ This ensures usability for all users.
 
 ## 🔧 **PHASE 5: LOWER PRIORITY CLEANUP (Week 4)**
 
-### **Step 4.1: Bundle Size Optimization**
+### **Step 5.1: Bundle Size Optimization**
 
-#### **Prompt 4.1.A: Analyze Bundle Size (Vite Project)**
+#### **Prompt 5.1.A: Analyze Bundle Size (Vite Project)**
 ```
 Audit current bundle composition for Vite:
 1. Install Vite bundle analyzer:
@@ -1118,7 +1118,7 @@ Audit current bundle composition for Vite:
 Do not make changes yet, focus on analysis and planning.
 ```
 
-#### **Prompt 4.1.B: Optimize Dependencies**
+#### **Prompt 5.1.B: Optimize Dependencies**
 ```
 Implement bundle size optimizations:
 1. Replace large libraries with smaller alternatives where appropriate
@@ -1130,9 +1130,9 @@ Implement bundle size optimizations:
 Measure bundle size reduction achieved.
 ```
 
-### **Step 4.2: Clean Up Development Code**
+### **Step 5.2: Clean Up Development Code**
 
-#### **Prompt 4.2.A: Remove Console Logs and Debug Code**
+#### **Prompt 5.2.A: Remove Console Logs and Debug Code**
 ```
 Clean up development artifacts:
 1. Remove all console.log statements from production code
@@ -1144,7 +1144,7 @@ Clean up development artifacts:
 Use ESLint rules to prevent future console.log additions.
 ```
 
-#### **Prompt 4.2.B: Optimize CSS and Styling**
+#### **Prompt 5.2.B: Optimize CSS and Styling**
 ```
 Optimize styling performance:
 1. Extract frequently used Tailwind classes to CSS variables
@@ -1156,9 +1156,9 @@ Optimize styling performance:
 Focus on styles that are recalculated frequently.
 ```
 
-### **Step 4.3: Add Performance Monitoring**
+### **Step 5.3: Add Performance Monitoring**
 
-#### **Prompt 4.3.A: Implement Performance Tracking**
+#### **Prompt 5.3.A: Implement Performance Tracking**
 ```
 Add performance monitoring:
 1. Install and configure Web Vitals tracking
@@ -1170,7 +1170,7 @@ Add performance monitoring:
 Do not slow down the application with monitoring overhead.
 ```
 
-#### **Prompt 4.3.B: Add Error Boundaries**
+#### **Prompt 5.3.B: Add Error Boundaries**
 ```
 Implement comprehensive error handling:
 1. Create reusable ErrorBoundary component
