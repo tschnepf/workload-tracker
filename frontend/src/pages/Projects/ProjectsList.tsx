@@ -245,48 +245,9 @@ const ProjectsList: React.FC = () => {
     }
   };
 
-  const calculatePersonAvailabilityLegacy = async (person: Person): Promise<{ availableHours: number; utilizationPercent: number; totalHours: number }> => {
-    try {
-      const personCapacity = person.weeklyCapacity || 36;
-      
-      // Get current week key
-      const now = new Date();
-      const dayOfWeek = now.getDay();
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
-      const currentWeekKey = monday.toISOString().split('T')[0];
-      
-      let totalHours = 0;
-      
-      // Get all assignments for this person across all projects
-      for (const project of projects) {
-        try {
-          const projectAssignmentsResponse = await assignmentsApi.list({ project: project.id });
-          const projectAssignments = projectAssignmentsResponse.results || [];
-          const personAssignments = projectAssignments.filter(a => a.person === person.id);
-          
-          for (const assignment of personAssignments) {
-            const weekHours = assignment.weeklyHours?.[currentWeekKey] || 0;
-            totalHours += weekHours;
-          }
-        } catch (err) {
-          continue;
-        }
-      }
-      
-      const availableHours = Math.max(0, personCapacity - totalHours);
-      const utilizationPercent = Math.round((totalHours / personCapacity) * 100);
-      
-      return { availableHours, utilizationPercent, totalHours };
-    } catch (error) {
-      return { availableHours: 0, utilizationPercent: 0, totalHours: 0 };
-    }
-  };
 
-  // Optimized calculatePersonAvailability with fallback to legacy implementation
+  // Optimized calculatePersonAvailability using backend utilization endpoint
   const calculatePersonAvailability = async (person: Person): Promise<{ availableHours: number; utilizationPercent: number; totalHours: number }> => {
-    const startTime = performance.now();
-    
     try {
       // Get current week key
       const now = new Date();
@@ -295,10 +256,8 @@ const ProjectsList: React.FC = () => {
       monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
       const currentWeekKey = monday.toISOString().split('T')[0];
 
-      // Try optimized API endpoint first
+      // Use optimized API endpoint
       const utilizationData = await peopleApi.getPersonUtilization(person.id!, currentWeekKey);
-      
-      const endTime = performance.now();
       
       return {
         availableHours: utilizationData.utilization.available_hours,
@@ -307,11 +266,8 @@ const ProjectsList: React.FC = () => {
       };
       
     } catch (error) {
-      // Fall back to legacy implementation if optimized API fails
-      const result = await calculatePersonAvailabilityLegacy(person);
-      const endTime = performance.now();
-      
-      return result;
+      console.error('Failed to calculate person availability:', error);
+      return { availableHours: 0, utilizationPercent: 0, totalHours: 0 };
     }
   };
 
@@ -642,117 +598,18 @@ const ProjectsList: React.FC = () => {
     setRoleSearchResults([]);
   };
 
-  const checkAssignmentConflictsLegacy = async (personId: number, projectId: number, weekKey: string, newHours: number): Promise<string[]> => {
-    const warnings: string[] = [];
-    
-    try {
-      // Find the person to get their capacity
-      const person = people.find(p => p.id === personId);
-      if (!person) return warnings;
-      
-      const personCapacity = person.weeklyCapacity || 36;
-      
-      // Calculate total hours for this person across all assignments for this week
-      let totalHours = 0;
-      const projectAssignments: { projectName: string; hours: number }[] = [];
-      
-      // Get all assignments for this person across all projects
-      for (const project of projects) {
-        try {
-          // Use optimized filtering to get only assignments for this project and person
-          const projectAssignmentsResponse = await assignmentsApi.list({ project: project.id });
-          const projectAssignmentsData = projectAssignmentsResponse.results || [];
-          const personAssignments = projectAssignmentsData.filter(a => a.person === personId);
-          
-          let projectHours = 0;
-          for (const assignment of personAssignments) {
-            const weekHours = assignment.weeklyHours?.[weekKey] || 0;
-            totalHours += weekHours;
-            projectHours += weekHours;
-          }
-          
-          if (projectHours > 0) {
-            projectAssignments.push({
-              projectName: project.name,
-              hours: projectHours
-            });
-          }
-        } catch (err) {
-          // Skip projects we can't load
-          continue;
-        }
-      }
-      
-      // Add the new hours we're trying to assign
-      totalHours += newHours;
-      
-      // Check for overallocation
-      if (totalHours > personCapacity) {
-        const overageHours = totalHours - personCapacity;
-        const overagePercent = Math.round((totalHours / personCapacity) * 100);
-        warnings.push(
-          `⚠️ ${person.name} would be at ${overagePercent}% capacity (${totalHours}h/${personCapacity}h) - ${overageHours}h over limit`
-        );
-        
-        // Show current project assignments for context
-        if (projectAssignments.length > 0) {
-          warnings.push(
-            `📋 Current assignments: ${projectAssignments.map(p => `${p.projectName} (${p.hours}h)`).join(', ')}`
-          );
-        }
-      } else if (totalHours > personCapacity * 0.9) {
-        // High utilization warning (over 90%)
-        const utilizationPercent = Math.round((totalHours / personCapacity) * 100);
-        warnings.push(
-          `📊 ${person.name} would be at ${utilizationPercent}% capacity (${totalHours}h/${personCapacity}h) - high utilization`
-        );
-      }
-      
-      // Check for skill mismatches (if person has development areas related to project skills)
-      const currentProject = projects.find(p => p.id === projectId);
-      if (currentProject && person.id) {
-        // Get person's skills from their existing assignments
-        const personAssignments = assignments.filter(a => a.person === person.id);
-        const personSkills = personAssignments
-          .flatMap(a => a.personSkills || [])
-          .filter(skill => skill.skillType === 'development')
-          .map(skill => skill.skillTagName?.toLowerCase() || '');
-        
-        // Simple skill gap detection based on project name
-        const projectName = currentProject.name.toLowerCase();
-        const potentialSkillGaps = personSkills.filter(skill => 
-          projectName.includes('heat') && skill.includes('heat') ||
-          projectName.includes('lighting') && skill.includes('lighting') ||
-          projectName.includes('hvac') && skill.includes('hvac')
-        );
-        
-        if (potentialSkillGaps.length > 0) {
-          warnings.push(
-            `💡 Development opportunity: ${person.name} has "${potentialSkillGaps[0]}" as a development area - consider pairing with a mentor`
-          );
-        }
-      }
-      
-    } catch (error) {
-      console.error('Failed to check assignment conflicts:', error);
-    }
-    
-    return warnings;
-  };
 
-  // Optimized checkAssignmentConflicts with fallback to legacy implementation
+  // Optimized checkAssignmentConflicts using backend conflict checking endpoint
   const checkAssignmentConflicts = async (personId: number, projectId: number, weekKey: string, newHours: number): Promise<string[]> => {
     try {
-      // Try optimized API endpoint first
+      // Use optimized API endpoint
       const conflictResponse = await assignmentsApi.checkConflicts(personId, projectId, weekKey, newHours);
       
       return conflictResponse.warnings;
       
     } catch (error) {
-      // Fall back to legacy implementation if optimized API fails
-      const result = await checkAssignmentConflictsLegacy(personId, projectId, weekKey, newHours);
-      
-      return result;
+      console.error('Failed to check assignment conflicts:', error);
+      return [];
     }
   };
 
