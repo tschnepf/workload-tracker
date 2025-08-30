@@ -2,9 +2,13 @@
  * Projects List - Split-panel layout with filterable project list and detailed project view
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Project, Person, Assignment, Deliverable, PersonSkill } from '@/types/models';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
+import { usePeople } from '@/hooks/usePeople';
+import { assignmentsApi } from '@/services/api';
 
 interface PersonWithAvailability extends Person {
   availableHours?: number;
@@ -13,19 +17,24 @@ interface PersonWithAvailability extends Person {
   skillMatchScore?: number;
   hasSkillMatch?: boolean;
 }
-import { projectsApi, peopleApi, assignmentsApi, deliverablesApi } from '@/services/api';
+import { deliverablesApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
 import DeliverablesSection from '@/components/deliverables/DeliverablesSection';
 
 const ProjectsList: React.FC = () => {
-  const [projects, setProjects] = useState<Project[]>([]);
+  // React Query hooks for data management
+  const { projects, loading, error: projectsError } = useProjects();
+  const { people } = usePeople();
+  const deleteProjectMutation = useDeleteProject();
+  const updateProjectMutation = useUpdateProject();
+  
+  // Local UI state
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [statusFilter, setStatusFilter] = useState('Show All');
   const [sortBy, setSortBy] = useState('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -34,7 +43,6 @@ const ProjectsList: React.FC = () => {
   const [projectDeliverables, setProjectDeliverables] = useState<{ [projectId: number]: Deliverable[] }>({});
   
   // Assignment management
-  const [people, setPeople] = useState<Person[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [newAssignment, setNewAssignment] = useState({
@@ -46,6 +54,9 @@ const ProjectsList: React.FC = () => {
   });
   const [personSearchResults, setPersonSearchResults] = useState<PersonWithAvailability[]>([]);
   const [selectedPersonIndex, setSelectedPersonIndex] = useState(-1);
+  
+  // Debounced person search for better performance
+  const debouncedPersonSearch = useDebounce(newAssignment.personSearch, 300);
   
   // Inline editing
   const [editingAssignment, setEditingAssignment] = useState<number | null>(null);
@@ -60,10 +71,14 @@ const ProjectsList: React.FC = () => {
   const statusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'Show All'];
   const editableStatusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled'];
 
+  // Set error from React Query if needed
   useEffect(() => {
-    loadProjects();
-    loadPeople();
-  }, []);
+    if (projectsError) {
+      setError(projectsError);
+    } else {
+      setError(null);
+    }
+  }, [projectsError]);
 
   useEffect(() => {
     if (selectedProject?.id) {
@@ -71,22 +86,12 @@ const ProjectsList: React.FC = () => {
     }
   }, [selectedProject]);
 
-  const loadProjects = async () => {
-    try {
-      setLoading(true);
-      const projectsList = await projectsApi.listAll();
-      setProjects(projectsList);
-      
-      // Load deliverables for all projects to show next deliverable
-      await loadAllProjectDeliverables(projectsList);
-      
-      // Selection will be handled by useEffect that watches sortedProjects
-    } catch (err: any) {
-      setError('Failed to load projects');
-    } finally {
-      setLoading(false);
+  // Load deliverables for all projects when projects data changes
+  useEffect(() => {
+    if (projects.length > 0) {
+      loadAllProjectDeliverables(projects);
     }
-  };
+  }, [projects]);
 
   const loadAllProjectDeliverables = async (projectsList: Project[]) => {
     const deliverablesMap: { [projectId: number]: Deliverable[] } = {};
@@ -192,16 +197,13 @@ const ProjectsList: React.FC = () => {
     }
 
     try {
-      await projectsApi.delete(projectId);
-      
-      // Remove the project from the list
-      const updatedProjects = projects.filter(p => p.id !== projectId);
-      setProjects(updatedProjects);
+      await deleteProjectMutation.mutateAsync(projectId);
       
       // Clear selection if deleted project was selected
       if (selectedProject?.id === projectId) {
-        if (updatedProjects.length > 0) {
-          setSelectedProject(updatedProjects[0]);
+        const remainingProjects = projects.filter(p => p.id !== projectId);
+        if (remainingProjects.length > 0) {
+          setSelectedProject(remainingProjects[0]);
           setSelectedIndex(0);
         } else {
           setSelectedProject(null);
@@ -213,25 +215,13 @@ const ProjectsList: React.FC = () => {
     }
   };
 
-  const loadPeople = async () => {
-    try {
-      const response = await peopleApi.list();
-      setPeople(response.results || []);
-    } catch (err: any) {
-      console.error('Failed to load people:', err);
-    }
-  };
+  // People data is now managed by React Query hook
 
   const loadProjectAssignments = async (projectId: number) => {
     try {
-      const response = await assignmentsApi.list();
-      const projectAssignments = response.results?.filter(a => a.project === projectId) || [];
-      
-      console.log('Loaded assignments after save:', projectAssignments.map(a => ({ 
-        id: a.id, 
-        personName: a.personName, 
-        roleOnProject: a.roleOnProject 
-      })));
+      // Use optimized backend filtering instead of client-side filtering
+      const response = await assignmentsApi.list({ project: projectId });
+      const projectAssignments = response.results || [];
       
       setAssignments(projectAssignments);
       
@@ -249,14 +239,13 @@ const ProjectsList: React.FC = () => {
         }
       });
       const sortedRoles = Array.from(roles).sort();
-      console.log('Available roles for autocomplete:', sortedRoles);
       setAvailableRoles(sortedRoles);
     } catch (err: any) {
       console.error('Failed to load project assignments:', err);
     }
   };
 
-  const calculatePersonAvailability = async (person: Person): Promise<{ availableHours: number; utilizationPercent: number; totalHours: number }> => {
+  const calculatePersonAvailabilityLegacy = async (person: Person): Promise<{ availableHours: number; utilizationPercent: number; totalHours: number }> => {
     try {
       const personCapacity = person.weeklyCapacity || 36;
       
@@ -294,7 +283,40 @@ const ProjectsList: React.FC = () => {
     }
   };
 
-  const calculateSkillMatch = (person: PersonWithAvailability, requiredSkills: string[] = []): number => {
+  // Optimized calculatePersonAvailability with fallback to legacy implementation
+  const calculatePersonAvailability = async (person: Person): Promise<{ availableHours: number; utilizationPercent: number; totalHours: number }> => {
+    const startTime = performance.now();
+    
+    try {
+      // Get current week key
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
+      const currentWeekKey = monday.toISOString().split('T')[0];
+
+      // Try optimized API endpoint first
+      const utilizationData = await peopleApi.getPersonUtilization(person.id!, currentWeekKey);
+      
+      const endTime = performance.now();
+      
+      return {
+        availableHours: utilizationData.utilization.available_hours,
+        utilizationPercent: Math.round(utilizationData.utilization.total_percentage),
+        totalHours: utilizationData.utilization.allocated_hours
+      };
+      
+    } catch (error) {
+      // Fall back to legacy implementation if optimized API fails
+      const result = await calculatePersonAvailabilityLegacy(person);
+      const endTime = performance.now();
+      
+      return result;
+    }
+  };
+
+  // Memoized skill match calculation
+  const calculateSkillMatch = useCallback((person: PersonWithAvailability, requiredSkills: string[] = []): number => {
     if (requiredSkills.length === 0) return 0;
     
     // Get person's skill assignments (this would come from the assignment data)
@@ -312,12 +334,16 @@ const ProjectsList: React.FC = () => {
     );
     
     return matches.length / requiredSkills.length; // Return match ratio
-  };
+  }, [assignments]);
 
-  const handlePersonSearch = async (searchTerm: string) => {
+  // Handle immediate input update (no delay for UI feedback)
+  const handlePersonSearch = (searchTerm: string) => {
     setNewAssignment(prev => ({ ...prev, personSearch: searchTerm }));
     setSelectedPersonIndex(-1);
-    
+  };
+
+  // Perform actual search with debounced value
+  const performPersonSearch = async (searchTerm: string) => {
     // If no search term, show all people; if search term provided, filter by it
     let filtered = people;
     if (searchTerm.length > 0) {
@@ -366,8 +392,14 @@ const ProjectsList: React.FC = () => {
       .slice(0, 5);
     
     setPersonSearchResults(sortedResults);
-    setSelectedPersonIndex(-1);
   };
+
+  // Effect to trigger search when debounced value changes
+  useEffect(() => {
+    if (people.length > 0) {
+      performPersonSearch(debouncedPersonSearch);
+    }
+  }, [debouncedPersonSearch, people]);
 
   const handlePersonSelect = (person: Person) => {
     setNewAssignment(prev => ({
@@ -403,7 +435,8 @@ const ProjectsList: React.FC = () => {
     }
   };
 
-  const getSkillBasedRoleSuggestions = (person: Person | null): string[] => {
+  // Memoized role suggestions based on person skills
+  const getSkillBasedRoleSuggestions = useCallback((person: Person | null): string[] => {
     if (!person || !assignments) return [];
     
     // Get person's skills from their existing assignments
@@ -433,11 +466,9 @@ const ProjectsList: React.FC = () => {
     }
     
     return skillBasedRoles;
-  };
+  }, [assignments]);
 
   const handleNewAssignmentRoleSearch = (searchTerm: string) => {
-    console.log('handleNewAssignmentRoleSearch called with:', searchTerm);
-    console.log('Available roles to search:', availableRoles);
     setNewAssignment(prev => ({ 
       ...prev, 
       roleSearch: searchTerm, 
@@ -467,7 +498,6 @@ const ProjectsList: React.FC = () => {
     const allRoles = [...filteredSkillRoles, ...filteredExistingRoles];
     const uniqueRoles = Array.from(new Set(allRoles)).slice(0, 5);
     
-    console.log('Filtered role results:', uniqueRoles);
     setRoleSearchResults(uniqueRoles);
   };
 
@@ -573,11 +603,8 @@ const ProjectsList: React.FC = () => {
   };
 
   const handleRoleSearch = (searchTerm: string) => {
-    console.log('handleRoleSearch called with:', searchTerm);
-    console.log('Available roles to search:', availableRoles);
     setEditData(prev => {
       const newData = { ...prev, roleSearch: searchTerm, roleOnProject: searchTerm };
-      console.log('Setting editData to:', newData);
       return newData;
     });
     
@@ -607,7 +634,6 @@ const ProjectsList: React.FC = () => {
     const allRoles = [...filteredSkillRoles, ...filteredExistingRoles];
     const uniqueRoles = Array.from(new Set(allRoles)).slice(0, 5);
     
-    console.log('Filtered roles for search term "' + searchTerm + '":', uniqueRoles);
     setRoleSearchResults(uniqueRoles);
   };
 
@@ -616,7 +642,7 @@ const ProjectsList: React.FC = () => {
     setRoleSearchResults([]);
   };
 
-  const checkAssignmentConflicts = async (personId: number, projectId: number, weekKey: string, newHours: number): Promise<string[]> => {
+  const checkAssignmentConflictsLegacy = async (personId: number, projectId: number, weekKey: string, newHours: number): Promise<string[]> => {
     const warnings: string[] = [];
     
     try {
@@ -633,6 +659,7 @@ const ProjectsList: React.FC = () => {
       // Get all assignments for this person across all projects
       for (const project of projects) {
         try {
+          // Use optimized filtering to get only assignments for this project and person
           const projectAssignmentsResponse = await assignmentsApi.list({ project: project.id });
           const projectAssignmentsData = projectAssignmentsResponse.results || [];
           const personAssignments = projectAssignmentsData.filter(a => a.person === personId);
@@ -713,6 +740,22 @@ const ProjectsList: React.FC = () => {
     return warnings;
   };
 
+  // Optimized checkAssignmentConflicts with fallback to legacy implementation
+  const checkAssignmentConflicts = async (personId: number, projectId: number, weekKey: string, newHours: number): Promise<string[]> => {
+    try {
+      // Try optimized API endpoint first
+      const conflictResponse = await assignmentsApi.checkConflicts(personId, projectId, weekKey, newHours);
+      
+      return conflictResponse.warnings;
+      
+    } catch (error) {
+      // Fall back to legacy implementation if optimized API fails
+      const result = await checkAssignmentConflictsLegacy(personId, projectId, weekKey, newHours);
+      
+      return result;
+    }
+  };
+
   const handleSaveEdit = async (assignmentId: number) => {
     try {
       const assignment = assignments.find(a => a.id === assignmentId);
@@ -750,11 +793,8 @@ const ProjectsList: React.FC = () => {
         weeklyHours: updatedWeeklyHours
       };
       
-      console.log('Saving assignment with role:', roleToSave, 'Original editData:', editData);
-      console.log('Sending to backend:', updateData);
 
       const updatedAssignment = await assignmentsApi.update(assignmentId, updateData);
-      console.log('Backend returned:', updatedAssignment);
 
       if (selectedProject?.id) {
         await loadProjectAssignments(selectedProject.id);
@@ -794,16 +834,19 @@ const ProjectsList: React.FC = () => {
     if (!selectedProject?.id) return;
 
     try {
-      await projectsApi.update(selectedProject.id, { status: newStatus });
-      
-      // Update the project in the local state
-      const updatedProjects = projects.map(p => 
-        p.id === selectedProject.id ? { ...p, status: newStatus } : p
-      );
-      setProjects(updatedProjects);
-      setSelectedProject({ ...selectedProject, status: newStatus });
+      // Optimistic update - update local state immediately
+      const optimisticProject = { ...selectedProject, status: newStatus };
+      setSelectedProject(optimisticProject);
       setStatusDropdownOpen(false);
+      
+      // Perform actual update
+      await updateProjectMutation.mutateAsync({
+        id: selectedProject.id,
+        data: { status: newStatus }
+      });
     } catch (err: any) {
+      // Revert optimistic update on error
+      setSelectedProject(selectedProject);
       setError('Failed to update project status');
     }
   };
@@ -841,8 +884,8 @@ const ProjectsList: React.FC = () => {
     }
   };
 
-  // Filter projects
-  const filteredProjects = projects.filter(project => {
+  // Memoized filtered and sorted projects for better performance
+  const filteredProjects = useMemo(() => projects.filter(project => {
     let matchesStatus = false;
     
     if (statusFilter === 'Show All') {
@@ -860,10 +903,10 @@ const ProjectsList: React.FC = () => {
       project.projectNumber?.toLowerCase().includes(searchTerm.toLowerCase());
     
     return matchesStatus && matchesSearch;
-  });
+  }), [projects, statusFilter, searchTerm, projectDeliverables]);
 
-  // Sort projects
-  const sortedProjects = [...filteredProjects].sort((a, b) => {
+  // Memoized sorted projects
+  const sortedProjects = useMemo(() => [...filteredProjects].sort((a, b) => {
     let aValue: any, bValue: any;
     
     switch (sortBy) {
@@ -922,7 +965,7 @@ const ProjectsList: React.FC = () => {
     // For string comparison
     const result = aValue.toString().localeCompare(bValue.toString());
     return sortDirection === 'asc' ? result : -result;
-  });
+  }), [filteredProjects, sortBy, sortDirection, projectDeliverables]);
 
   // Auto-select first project from sorted/filtered list
   useEffect(() => {
@@ -1371,7 +1414,7 @@ const ProjectsList: React.FC = () => {
                               placeholder="Start typing name or click to see all..."
                               value={newAssignment.personSearch}
                               onChange={(e) => handlePersonSearch(e.target.value)}
-                              onFocus={() => handlePersonSearch(newAssignment.personSearch)}
+                              onFocus={() => performPersonSearch(newAssignment.personSearch)}
                               onKeyDown={handlePersonSearchKeyDown}
                               className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                               autoFocus

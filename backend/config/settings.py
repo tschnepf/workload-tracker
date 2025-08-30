@@ -134,7 +134,12 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'PAGE_SIZE': 250,  # Increased from 20 to 250 for better performance
+    'PAGE_SIZE_QUERY_PARAM': 'page_size',  # Allow client to specify page size
+    'MAX_PAGE_SIZE': 500,  # Safety cap to prevent excessive memory usage
+    'DEFAULT_THROTTLE_RATES': {
+        'hot_endpoint': '300/hour',  # Special limit for hot endpoints only
+    }
 }
 
 # CORS

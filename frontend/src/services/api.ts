@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Department, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill } from '@/types/models';
+import { Person, Project, Assignment, Department, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -87,7 +87,7 @@ export const peopleApi = {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await peopleApi.list({ page, page_size: 100 }); // Larger page size for efficiency
+      const response = await peopleApi.list({ page, page_size: 500 }); // Optimized page size for bulk fetches
       allPeople.push(...(response.results || []));
       
       hasMore = !!response.next; // Continue if there's a next page
@@ -131,6 +131,14 @@ export const peopleApi = {
       weeklyCapacity: person.weeklyCapacity
     }));
   },
+
+  // Get person utilization for specific week (optimized to prevent N+1 queries)
+  getPersonUtilization: async (personId: number, week?: string): Promise<PersonUtilization> => {
+    const queryParams = new URLSearchParams();
+    if (week) queryParams.set('week', week);
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<PersonUtilization>(`/people/${personId}/utilization/${queryString}`);
+  },
 };
 
 // Projects API
@@ -151,7 +159,7 @@ export const projectsApi = {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await projectsApi.list({ page, page_size: 100 });
+      const response = await projectsApi.list({ page, page_size: 500 });
       allProjects.push(...(response.results || []));
       
       hasMore = !!response.next;
@@ -211,7 +219,7 @@ export const departmentsApi = {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await departmentsApi.list({ page, page_size: 100 });
+      const response = await departmentsApi.list({ page, page_size: 500 });
       allDepartments.push(...(response.results || []));
       
       hasMore = !!response.next;
@@ -264,7 +272,7 @@ export const assignmentsApi = {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await assignmentsApi.list({ page, page_size: 100 });
+      const response = await assignmentsApi.list({ page, page_size: 500 });
       allAssignments.push(...(response.results || []));
       
       hasMore = !!response.next;
@@ -297,6 +305,24 @@ export const assignmentsApi = {
     fetchApi<void>(`/assignments/${id}/`, {
       method: 'DELETE',
     }),
+
+  // Check assignment conflicts (optimized to prevent N+1 queries)
+  checkConflicts: async (
+    personId: number, 
+    projectId: number, 
+    weekKey: string, 
+    proposedHours: number
+  ): Promise<AssignmentConflictResponse> => {
+    return fetchApi<AssignmentConflictResponse>('/assignments/check_conflicts/', {
+      method: 'POST',
+      body: JSON.stringify({
+        personId,
+        projectId,
+        weekKey,
+        proposedHours
+      }),
+    });
+  },
 };
 
 // Person utilization API
@@ -325,7 +351,7 @@ export const deliverablesApi = {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await deliverablesApi.list(projectId, { page, page_size: 100 });
+      const response = await deliverablesApi.list(projectId, { page, page_size: 500 });
       allDeliverables.push(...(response.results || []));
       
       hasMore = !!response.next;

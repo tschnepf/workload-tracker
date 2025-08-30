@@ -122,6 +122,22 @@ export interface PersonUtilization {
   };
 }
 
+// Optimized assignment conflict check response interface
+export interface AssignmentConflictResponse {
+  hasConflict: boolean;
+  warnings: string[];
+  totalHours: number;
+  totalWithProposed: number;
+  personCapacity: number;
+  availableHours: number;
+  currentAssignments: Array<{
+    projectName: string;
+    hours: number;
+    assignmentId: number;
+  }>;
+  projectBreakdown: Record<string, number>;
+}
+
 // API Response types
 export interface ApiResponse<T> {
   data: T;

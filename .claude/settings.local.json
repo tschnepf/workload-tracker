@@ -30,7 +30,8 @@
       "Bash(python3:*)",
       "Bash(git push:*)",
       "Bash(timeout:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": [],

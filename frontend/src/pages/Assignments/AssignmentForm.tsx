@@ -10,6 +10,7 @@ import { assignmentsApi, peopleApi, projectsApi, departmentsApi, personSkillsApi
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface WeeklyHours {
   [weekKey: string]: number;
@@ -217,6 +218,12 @@ const AssignmentForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [bulkHours, setBulkHours] = useState<number>(0);
+  const [personSearchText, setPersonSearchText] = useState('');
+  const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
+  const [showPersonDropdown, setShowPersonDropdown] = useState(false);
+  
+  // Debounced person search for better performance
+  const debouncedPersonSearch = useDebounce(personSearchText, 300);
 
   useEffect(() => {
     loadPeople();
@@ -235,10 +242,32 @@ const AssignmentForm: React.FC = () => {
     setProjectSkills(skills);
   }, [skillsInput, skillTags, extractSkillsFromText]);
 
+  // Update filtered people when dependencies change
+  useEffect(() => {
+    if (people.length > 0) {
+      const sorted = sortPeopleByDepartmentAndSkills(people, formData.person, departments, peopleSkills, projectSkills);
+      setFilteredPeople(sorted);
+    }
+  }, [people, formData.person, departments, peopleSkills, projectSkills]);
+
+  // Sync search text with selected person
+  useEffect(() => {
+    if (formData.person) {
+      const selectedPerson = people.find(p => p.id === formData.person);
+      if (selectedPerson && personSearchText !== selectedPerson.name) {
+        setPersonSearchText(selectedPerson.name);
+      }
+    } else {
+      setPersonSearchText('');
+    }
+  }, [formData.person, people]);
+
   const loadPeople = async () => {
     try {
       const response = await peopleApi.list();
-      setPeople(response.results || []);
+      const peopleList = response.results || [];
+      setPeople(peopleList);
+      setFilteredPeople(sortPeopleByDepartmentAndSkills(peopleList, formData.person, departments, peopleSkills, projectSkills));
     } catch (err: any) {
       setError('Failed to load people list');
     }
@@ -397,6 +426,44 @@ const AssignmentForm: React.FC = () => {
     return selectedPerson?.weeklyCapacity || 0;
   };
 
+  // Handle immediate input update (no delay for UI feedback)
+  const handlePersonSearchChange = (value: string) => {
+    setPersonSearchText(value);
+    setShowPersonDropdown(true);
+    
+    // Clear validation error
+    if (validationErrors.person) {
+      setValidationErrors(prev => ({ ...prev, person: '' }));
+    }
+  };
+
+  // Perform actual search with debounced value
+  const performPersonSearch = (searchText: string) => {
+    const sorted = sortPeopleByDepartmentAndSkills(people, formData.person, departments, peopleSkills, projectSkills);
+    if (searchText.trim() === '') {
+      setFilteredPeople(sorted);
+    } else {
+      const filtered = sorted.filter(person =>
+        person.name.toLowerCase().includes(searchText.toLowerCase())
+      );
+      setFilteredPeople(filtered);
+    }
+  };
+
+  // Effect to trigger search when debounced value changes
+  useEffect(() => {
+    if (people.length > 0) {
+      performPersonSearch(debouncedPersonSearch);
+    }
+  }, [debouncedPersonSearch, people, departments, peopleSkills, projectSkills, formData.person]);
+
+  const selectPerson = (person: Person) => {
+    setFormData(prev => ({ ...prev, person: person.id! }));
+    setPersonSearchText(person.name);
+    setShowPersonDropdown(false);
+    setFilteredPeople(sortPeopleByDepartmentAndSkills(people, person.id!, departments, peopleSkills, projectSkills));
+  };
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto">
@@ -428,40 +495,60 @@ const AssignmentForm: React.FC = () => {
         <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             
-            {/* Person Selection */}
-            <div>
+            {/* Person Selection - Smart Autocomplete */}
+            <div className="relative">
               <label className="block text-sm font-medium text-[#cccccc] mb-2">
                 Person <span className="text-red-400">*</span>
               </label>
-              <select
-                value={formData.person}
-                onChange={(e) => handleChange('person', e.target.value)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-              >
-                <option value="">Select a person...</option>
-                {sortPeopleByDepartmentAndSkills(people, formData.person, departments, peopleSkills, projectSkills).map((person) => {
-                  const isSelectedDepartment = formData.person && 
-                    people.find(p => p.id === formData.person)?.department === person.department;
-                  const departmentName = getDepartmentName(person, departments);
-                  const personSkillsList = peopleSkills.get(person.id!) || [];
-                  const skillScore = calculateSkillMatchScore(person, personSkillsList, projectSkills);
-                  
-                  let prefix = '';
-                  if (skillScore >= 80) prefix = '🎯 ';  // Perfect match
-                  else if (skillScore >= 50) prefix = '⭐ ';  // Good match
-                  else if (isSelectedDepartment) prefix = '🏢 ';  // Same department
-                  
-                  const skillInfo = skillScore > 0 ? ` (${skillScore}% skill match)` : '';
-                  
-                  return (
-                    <option key={person.id} value={person.id}>
-                      {prefix}{person.name} • {departmentName} • {person.weeklyCapacity}h capacity{skillInfo}
-                    </option>
-                  );
-                })}
-              </select>
+              <input
+                type="text"
+                value={personSearchText}
+                onChange={(e) => handlePersonSearchChange(e.target.value)}
+                onFocus={() => setShowPersonDropdown(true)}
+                onBlur={() => {
+                  // Delay hiding to allow for click selection
+                  setTimeout(() => setShowPersonDropdown(false), 200);
+                }}
+                placeholder="Type to search people..."
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              />
               {validationErrors.person && (
                 <p className="text-sm text-red-400 mt-1">{validationErrors.person}</p>
+              )}
+              
+              {/* Dropdown */}
+              {showPersonDropdown && filteredPeople.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded-md shadow-lg max-h-60 overflow-auto">
+                  {filteredPeople.map((person) => {
+                    const isSelectedDepartment = formData.person && 
+                      people.find(p => p.id === formData.person)?.department === person.department;
+                    const departmentName = getDepartmentName(person, departments);
+                    const personSkillsList = peopleSkills.get(person.id!) || [];
+                    const skillScore = calculateSkillMatchScore(person, personSkillsList, projectSkills);
+                    
+                    let prefix = '';
+                    if (skillScore >= 80) prefix = '🎯 ';  // Perfect match
+                    else if (skillScore >= 50) prefix = '⭐ ';  // Good match
+                    else if (isSelectedDepartment) prefix = '🏢 ';  // Same department
+                    
+                    const skillInfo = skillScore > 0 ? ` (${skillScore}% skill match)` : '';
+                    
+                    return (
+                      <div
+                        key={person.id}
+                        className="px-3 py-2 cursor-pointer hover:bg-[#3e3e42] text-[#cccccc] text-sm"
+                        onClick={() => selectPerson(person)}
+                      >
+                        <div className="font-medium">
+                          {prefix}{person.name}
+                        </div>
+                        <div className="text-xs text-[#969696]">
+                          {departmentName} • {person.weeklyCapacity}h capacity{skillInfo}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
               
               {/* Skills-Enhanced Assignment Insights */}

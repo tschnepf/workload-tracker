@@ -16,6 +16,7 @@ interface PersonFormData {
   name: string;
   weeklyCapacity: number;
   department: number | null; // Phase 2: Department assignment
+  location: string; // Location field - city/state or remote
 }
 
 const PersonForm: React.FC = () => {
@@ -27,6 +28,7 @@ const PersonForm: React.FC = () => {
     name: '',
     weeklyCapacity: 36, // Default from master guide
     department: null, // Phase 2: No department initially
+    location: '', // Location can be empty initially
   });
 
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department list
@@ -59,6 +61,7 @@ const PersonForm: React.FC = () => {
         name: person.name,
         weeklyCapacity: person.weeklyCapacity || 36,
         department: person.department || null, // Phase 2: Load department
+        location: person.location || '', // Load location
       });
     } catch (err: any) {
       setError(err.message || 'Failed to load person');
@@ -197,6 +200,21 @@ const PersonForm: React.FC = () => {
             </select>
             <p className="text-[#969696] text-sm mt-1">
               Assign this person to a department for organizational tracking
+            </p>
+          </div>
+
+          {/* Location Field */}
+          <div>
+            <Input
+              label="Location"
+              name="location"
+              value={formData.location}
+              onChange={(e) => handleChange('location', e.target.value)}
+              placeholder="e.g., New York, NY or Remote"
+              className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+            />
+            <p className="text-[#969696] text-sm mt-1">
+              City and state, or indicate if remote. Leave blank if not specified.
             </p>
           </div>
 

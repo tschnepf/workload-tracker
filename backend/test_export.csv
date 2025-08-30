@@ -1,0 +1,3 @@
+name,projectNumber,status,client,description,startDate,endDate,estimatedHours,isActive,assignedPeople,totalAssignments,deliverableCount
+CMH03,,active,ADC,"BLD 2, CMH02 Campus",,,,True,,0,2
+CMH01,,active,ADC,Greenfield,,,,True,,0,1

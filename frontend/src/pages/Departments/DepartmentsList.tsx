@@ -41,9 +41,7 @@ const DepartmentsList: React.FC = () => {
   // Auto-select first department when departments are loaded (per R2-REBUILD-STANDARDS.md)
   // Only auto-select once when departments first load, never override manual selections
   useEffect(() => {
-    console.log('Auto-select useEffect triggered. Departments:', filteredAndSortedDepartments.length, 'Selected:', selectedDepartment?.name, 'HasAutoSelected:', hasAutoSelected);
     if (filteredAndSortedDepartments.length > 0 && !selectedDepartment && !hasAutoSelected) {
-      console.log('Auto-selecting first department:', filteredAndSortedDepartments[0].name);
       setSelectedDepartment(filteredAndSortedDepartments[0]);
       setSelectedIndex(0);
       setHasAutoSelected(true);
@@ -84,15 +82,12 @@ const DepartmentsList: React.FC = () => {
 
   const handleSaveDepartment = async (formData: Partial<Department>) => {
     try {
-      console.log('🟡 Sending to backend:', formData);
       
       let savedDepartment: Department;
       if (editingDepartment?.id) {
         savedDepartment = await departmentsApi.update(editingDepartment.id, formData);
-        console.log('🟢 Backend returned (update):', savedDepartment);
       } else {
         savedDepartment = await departmentsApi.create(formData as any);
-        console.log('🟢 Backend returned (create):', savedDepartment);
       }
 
       // Refresh departments list
@@ -103,7 +98,7 @@ const DepartmentsList: React.FC = () => {
       setShowModal(false);
       setEditingDepartment(null);
     } catch (err: any) {
-      console.error('🔴 API Error:', err);
+      console.error('Failed to save department:', err);
       setError(`Failed to save department: ${err.message}`);
     }
   };
@@ -194,10 +189,8 @@ const DepartmentsList: React.FC = () => {
                     selectedDepartment?.id === department.id ? 'ring-2 ring-[#007acc]' : ''
                   }`}
                   onClick={() => {
-                    console.log('Manual click - department:', department.name, 'index:', index, 'current selected:', selectedDepartment?.name);
                     setSelectedDepartment(department);
                     setSelectedIndex(index);
-                    console.log('After click - set to:', department.name);
                   }}
                 >
                   <div className="flex justify-between items-start">

@@ -286,12 +286,6 @@ const PeopleList: React.FC = () => {
       // Get all current skills for this person
       const currentSkills = [...skillsData.strengths, ...skillsData.development, ...skillsData.learning];
       
-      console.log('All skills to save:', currentSkills);
-      console.log('Skills by type:', {
-        strengths: skillsData.strengths,
-        development: skillsData.development,
-        learning: skillsData.learning
-      });
       
       // Delete all existing skills for this person
       for (const skill of personSkills) {
@@ -304,7 +298,6 @@ const PeopleList: React.FC = () => {
       for (const skill of currentSkills) {
         // Skip skills with invalid skillTagId
         if (!skill.skillTagId) {
-          console.error('Skipping skill with missing skillTagId:', skill);
           continue;
         }
         
@@ -316,7 +309,6 @@ const PeopleList: React.FC = () => {
           notes: skill.notes || ''
         };
         
-        console.log('Creating skill:', skillData);
         
         await personSkillsApi.create(skillData);
       }
@@ -421,7 +413,6 @@ const PeopleList: React.FC = () => {
         ? 'removed from departments'
         : departments.find(d => d.id?.toString() === bulkDepartment)?.name || 'unknown department';
       
-      console.log(`Successfully assigned ${selectedPeopleIds.size} people to ${departmentName}`);
     } catch (err: any) {
       setError(`Failed to update department assignments: ${err.message}`);
     } finally {
