@@ -728,6 +728,312 @@ const handleBlur = () => {
 
 ---
 
+## 📊 TABLE COLUMN SORTING STANDARDS
+
+### When to Implement Column Sorting
+
+Use clickable column sorting for:
+- ✅ **Data tables** with 3+ rows of content
+- ✅ **List views** where users need to find specific items
+- ✅ **Split-panel layouts** where the left panel shows sortable data
+- ✅ **Any tabular data** where different sort orders provide value
+
+### Required Column Sorting Features
+
+#### 1. State Management Pattern
+```typescript
+// ✅ CORRECT - Complete sorting state
+const [sortBy, setSortBy] = useState<'name' | 'department' | 'location' | 'capacity'>('name');
+const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+// Include all columns that are displayed and sortable
+type SortableColumns = 'name' | 'department' | 'location' | 'weeklyCapacity';
+```
+
+#### 2. Column Header Click Handler
+```typescript
+// ✅ REQUIRED - Standard click behavior
+const handleColumnSort = (column: SortableColumns) => {
+  if (sortBy === column) {
+    // Toggle direction if clicking the same column
+    setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+  } else {
+    // Set new column and reset to ascending
+    setSortBy(column);
+    setSortDirection('asc');
+  }
+};
+```
+
+#### 3. Sortable Header Component Template
+```typescript
+// ✅ REQUIRED - Reusable sortable header
+const SortableHeader = ({ column, children, className = "" }: { 
+  column: SortableColumns;
+  children: React.ReactNode; 
+  className?: string;
+}) => (
+  <button
+    onClick={() => handleColumnSort(column)}
+    className={`flex items-center gap-1 text-left hover:text-[#cccccc] transition-colors ${className}`}
+  >
+    {children}
+    {sortBy === column && (
+      <svg 
+        className={`w-3 h-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2"
+      >
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
+    )}
+  </button>
+);
+```
+
+#### 4. Table Header Implementation
+```typescript
+// ✅ CORRECT - Replace static headers with sortable ones
+<div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[#969696] font-medium border-b border-[#3e3e42] bg-[#2d2d30]">
+  <div className="col-span-3">
+    <SortableHeader column="name">NAME</SortableHeader>
+  </div>
+  <div className="col-span-2">
+    <SortableHeader column="department">DEPARTMENT</SortableHeader>
+  </div>
+  <div className="col-span-2">
+    <SortableHeader column="location">LOCATION</SortableHeader>
+  </div>
+  <div className="col-span-2">
+    <SortableHeader column="weeklyCapacity">CAPACITY</SortableHeader>
+  </div>
+  <div className="col-span-3">NON-SORTABLE COLUMN</div>
+</div>
+
+// ❌ WRONG - Static headers for sortable data
+<div className="header">NAME</div>
+<div className="header">DEPARTMENT</div>
+```
+
+### Mandatory Sorting Logic
+
+#### 5. Complete Sort Implementation
+```typescript
+// ✅ REQUIRED - Comprehensive sorting with direction support
+const sortedData = data.sort((a, b) => {
+  let comparison = 0;
+  
+  switch (sortBy) {
+    case 'name':
+      comparison = a.name.localeCompare(b.name);
+      break;
+    case 'department':
+      // Handle null/undefined values by putting them at the end
+      const aDept = a.departmentName || 'zzz_unassigned';
+      const bDept = b.departmentName || 'zzz_unassigned';
+      comparison = aDept.localeCompare(bDept);
+      break;
+    case 'location':
+      const aLoc = a.location?.trim() || 'zzz_unspecified';
+      const bLoc = b.location?.trim() || 'zzz_unspecified';
+      comparison = aLoc.localeCompare(bLoc);
+      break;
+    case 'weeklyCapacity':
+      comparison = (a.weeklyCapacity || 0) - (b.weeklyCapacity || 0);
+      break;
+    default:
+      comparison = 0;
+  }
+  
+  // Apply sort direction
+  return sortDirection === 'asc' ? comparison : -comparison;
+});
+```
+
+#### 6. Null/Undefined Value Handling Rules
+```typescript
+// ✅ CORRECT - Consistent empty value handling
+const getSortValue = (item: any, field: string) => {
+  const value = item[field];
+  
+  switch (field) {
+    case 'department':
+      return value || 'zzz_unassigned';  // Put unassigned at end
+    case 'location':
+      return value?.trim() || 'zzz_unspecified';  // Put unspecified at end
+    case 'weeklyCapacity':
+      return value || 0;  // Default to 0 for numeric fields
+    case 'name':
+      return value || 'zzz_unnamed';  // Put unnamed at end
+    default:
+      return value || 'zzz_default';  // Generic fallback
+  }
+};
+
+// ❌ WRONG - Inconsistent null handling
+// Some fields: nulls first, others: nulls last
+// Some fields: crash on null, others: handle gracefully
+```
+
+### Visual Design Standards
+
+#### 7. Sort Indicator Requirements
+```typescript
+// ✅ REQUIRED - Consistent visual indicators
+// Triangle icon specifications:
+- Size: w-3 h-3 (12px × 12px)
+- Stroke: currentColor with strokeWidth="2"
+- Animation: transition-transform for smooth rotation
+- Direction: pointing down for ascending, rotated 180° for descending
+- Positioning: gap-1 (4px) from column text
+
+// Color scheme (VSCode theme)
+"text-[#969696]"           // Default header color
+"hover:text-[#cccccc]"     // Hover state
+"transition-colors"        // Smooth color transitions
+```
+
+#### 8. Header Interaction States
+```typescript
+// ✅ REQUIRED - Clear interactive feedback
+// Default state
+"text-[#969696] font-medium cursor-pointer"
+
+// Hover state  
+"hover:text-[#cccccc] transition-colors"
+
+// Active sort column (enhanced visibility)
+{sortBy === column ? "text-[#cccccc]" : "text-[#969696]"}
+```
+
+### Behavioral Standards
+
+#### 9. Click Interaction Rules
+- ✅ **First click**: Sort column ascending (A→Z, 0→100)
+- ✅ **Second click**: Sort column descending (Z→A, 100→0)  
+- ✅ **Different column**: Switch to new column, reset to ascending
+- ✅ **Visual feedback**: Triangle appears/rotates immediately
+- ✅ **Hover state**: Headers highlight to indicate they're clickable
+- ✅ **No separate controls**: Remove any separate "Sort by" dropdowns
+
+#### 10. Integration with Other Features
+```typescript
+// ✅ CORRECT - Sorting works with all table features
+const processedData = useMemo(() => {
+  return data
+    .filter(item => {
+      // Apply search and filters first
+      return matchesSearch && matchesFilters;
+    })
+    .sort((a, b) => {
+      // Then apply sorting
+      return applySortLogic(a, b, sortBy, sortDirection);
+    });
+}, [data, searchTerm, filters, sortBy, sortDirection]);
+
+// Auto-selection respects sort order
+useEffect(() => {
+  if (processedData.length > 0 && !selectedItem) {
+    setSelectedItem(processedData[0]); // First item from sorted list
+  }
+}, [processedData, selectedItem]);
+```
+
+### Performance Optimization
+
+#### 11. Memoization Requirements
+```typescript
+// ✅ CORRECT - Memoized sorting for performance
+const sortedAndFilteredData = useMemo(() => {
+  return [...rawData]  // Don't mutate original
+    .filter(applyFilters)
+    .sort(applySorting);
+}, [rawData, filters, sortBy, sortDirection]);
+
+// ❌ WRONG - Sorting on every render
+const sortedData = rawData.sort(...); // Mutates array, runs on every render
+```
+
+### Accessibility Standards
+
+#### 12. Required Accessibility Features
+```typescript
+// ✅ CORRECT - Accessible sortable headers
+<button
+  onClick={() => handleColumnSort(column)}
+  aria-label={`Sort by ${column} ${sortBy === column ? (sortDirection === 'asc' ? 'descending' : 'ascending') : 'ascending'}`}
+  className="flex items-center gap-1 text-left hover:text-[#cccccc] transition-colors"
+>
+  {children}
+  {sortBy === column && (
+    <svg 
+      aria-hidden="true"  // Decorative icon, meaning conveyed by aria-label
+      className={`w-3 h-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`}
+    >
+      <path d="M6 9l6 6 6-6"/>
+    </svg>
+  )}
+</button>
+```
+
+### Common Antipatterns to Avoid
+
+#### 13. Forbidden Patterns
+```typescript
+// ❌ WRONG - Separate sort controls
+<div>
+  <label>Sort by:</label>
+  <select onChange={handleSort}>...</select>
+  <button onClick={toggleDirection}>Direction</button>
+</div>
+
+// ❌ WRONG - No visual indicators
+<button onClick={() => sort('name')}>Name</button>  // No triangle
+
+// ❌ WRONG - Inconsistent direction behavior
+handleColumnSort = (col) => {
+  setSortBy(col);
+  setSortDirection('desc');  // Should start with 'asc'
+}
+
+// ❌ WRONG - Complex sort state
+const [sorts, setSorts] = useState([
+  { field: 'name', dir: 'asc' },
+  { field: 'date', dir: 'desc' }
+]);  // Multi-column sorting unnecessary for most cases
+
+// ❌ WRONG - Missing null handling
+.sort((a, b) => a.field.localeCompare(b.field))  // Crashes on null
+
+// ❌ WRONG - Wrong icon or positioning
+<ChevronUpIcon />  // Use triangle, not chevron
+<div>{text}<Icon /></div>  // Icon should be adjacent with gap
+```
+
+### Testing Checklist for Column Sorting
+
+#### 14. Required Test Scenarios
+- [ ] **Click column header** - Sorts ascending first time
+- [ ] **Click same header again** - Reverses to descending
+- [ ] **Click different header** - Switches column and resets to ascending
+- [ ] **Visual indicator appears** - Triangle shows next to active column
+- [ ] **Triangle rotates** - Points up for asc, down for desc
+- [ ] **Hover feedback** - Headers highlight on hover
+- [ ] **Sorts with filters** - Sorting works when filters are applied
+- [ ] **Sorts with search** - Sorting works when search is active
+- [ ] **Null value handling** - Empty values sort consistently (at end)
+- [ ] **Selection updates** - Active selection respects new sort order
+- [ ] **Performance** - No lag with large datasets (100+ items)
+- [ ] **Accessibility** - Screen readers announce sort state changes
+
+---
+
+**CRITICAL**: Every data table with sortable columns MUST use clickable headers with visual indicators. No separate sort dropdowns allowed.
+
+---
+
 ## 🔄 BACKEND-FRONTEND INTEGRATION STANDARDS
 
 ### Serializer Field Completeness Rule

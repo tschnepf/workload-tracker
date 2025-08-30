@@ -18,7 +18,8 @@ const PeopleList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]); // Multi-select department filter
   const [locationFilter, setLocationFilter] = useState<string[]>([]); // Multi-select location filter
-  const [sortBy, setSortBy] = useState<'name' | 'location' | 'department' | 'role'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'location' | 'department' | 'weeklyCapacity' | 'role'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -491,6 +492,43 @@ const PeopleList: React.FC = () => {
     savePersonField('location', location);
   };
 
+  // Handle column header clicks for sorting
+  const handleColumnSort = (column: 'name' | 'location' | 'department' | 'weeklyCapacity' | 'role') => {
+    if (sortBy === column) {
+      // Toggle direction if clicking the same column
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column and reset to ascending
+      setSortBy(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sortable column header component
+  const SortableHeader = ({ column, children, className = "" }: { 
+    column: 'name' | 'location' | 'department' | 'weeklyCapacity' | 'role';
+    children: React.ReactNode; 
+    className?: string;
+  }) => (
+    <button
+      onClick={() => handleColumnSort(column)}
+      className={`flex items-center gap-1 text-left hover:text-[#cccccc] transition-colors ${className}`}
+    >
+      {children}
+      {sortBy === column && (
+        <svg 
+          className={`w-3 h-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2"
+        >
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      )}
+    </button>
+  );
+
   // Filter and sort people
   const filteredAndSortedPeople = people
     .filter(person => {
@@ -515,23 +553,34 @@ const PeopleList: React.FC = () => {
       return matchesSearch && matchesDepartment && matchesLocation;
     })
     .sort((a, b) => {
+      let comparison = 0;
+      
       switch (sortBy) {
         case 'location':
           const aLoc = a.location?.trim() || 'zzz_unspecified'; // Put unspecified at end
           const bLoc = b.location?.trim() || 'zzz_unspecified';
-          return aLoc.localeCompare(bLoc);
+          comparison = aLoc.localeCompare(bLoc);
+          break;
         case 'department':
           const aDept = a.departmentName || 'zzz_unassigned';
           const bDept = b.departmentName || 'zzz_unassigned';
-          return aDept.localeCompare(bDept);
+          comparison = aDept.localeCompare(bDept);
+          break;
+        case 'weeklyCapacity':
+          comparison = (a.weeklyCapacity || 0) - (b.weeklyCapacity || 0);
+          break;
         case 'role':
           const aRole = a.role || 'zzz_no_role';
           const bRole = b.role || 'zzz_no_role';
-          return aRole.localeCompare(bRole);
+          comparison = aRole.localeCompare(bRole);
+          break;
         case 'name':
         default:
-          return a.name.localeCompare(b.name);
+          comparison = a.name.localeCompare(b.name);
+          break;
       }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
     });
 
   // Auto-select first person from filtered list
@@ -744,20 +793,6 @@ const PeopleList: React.FC = () => {
                 )}
               </div>
 
-              {/* Sort By Dropdown */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-[#969696] whitespace-nowrap">Sort by:</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'name' | 'location' | 'department' | 'role')}
-                  className="flex-1 px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none"
-                >
-                  <option value="name">Name</option>
-                  <option value="location">Location</option>
-                  <option value="department">Department</option>
-                  <option value="role">Role</option>
-                </select>
-              </div>
               
               {/* Bulk Actions Toggle */}
               <div className="flex items-center justify-between">
@@ -796,11 +831,21 @@ const PeopleList: React.FC = () => {
             {/* Table Header */}
             <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[#969696] font-medium border-b border-[#3e3e42] bg-[#2d2d30]">
               {bulkMode && <div className="col-span-1">SELECT</div>}
-              <div className={bulkMode ? "col-span-3" : "col-span-3"}>NAME</div>
-              <div className={bulkMode ? "col-span-2" : "col-span-2"}>DEPARTMENT</div>
-              <div className={bulkMode ? "col-span-2" : "col-span-2"}>LOCATION</div>
-              <div className={bulkMode ? "col-span-2" : "col-span-2"}>CAPACITY</div>
-              <div className={bulkMode ? "col-span-2" : "col-span-3"}>TOP SKILLS</div>
+              <div className={bulkMode ? "col-span-3" : "col-span-3"}>
+                <SortableHeader column="name">NAME</SortableHeader>
+              </div>
+              <div className={bulkMode ? "col-span-2" : "col-span-2"}>
+                <SortableHeader column="department">DEPARTMENT</SortableHeader>
+              </div>
+              <div className={bulkMode ? "col-span-2" : "col-span-2"}>
+                <SortableHeader column="location">LOCATION</SortableHeader>
+              </div>
+              <div className={bulkMode ? "col-span-2" : "col-span-2"}>
+                <SortableHeader column="weeklyCapacity">CAPACITY</SortableHeader>
+              </div>
+              <div className={bulkMode ? "col-span-2" : "col-span-3"}>
+                <SortableHeader column="role">ROLE</SortableHeader>
+              </div>
             </div>
 
             {/* Table Body */}
@@ -867,10 +912,9 @@ const PeopleList: React.FC = () => {
                         {person.weeklyCapacity || 36}h/week
                       </div>
                       
-                      {/* Top Skills Preview */}
-                      <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} flex flex-wrap gap-1`}>
-                        {/* This will be populated when we load skills */}
-                        <span className="text-[#969696] text-xs">Skills...</span>
+                      {/* Role */}
+                      <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[#969696] text-xs`}>
+                        {person.role || 'Not specified'}
                       </div>
                     </div>
                   ))}
