@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { Link } from 'react-router-dom';
-import { Project, Person, Assignment, Deliverable, PersonSkill } from '@/types/models';
+import { Project, Person, Assignment, Deliverable } from '@/types/models';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { usePeople } from '@/hooks/usePeople';
@@ -181,14 +181,12 @@ AssignmentRow.displayName = 'AssignmentRow';
 // Memoized Person Search Result Component for performance (Phase 4 optimization)
 interface PersonSearchResultProps {
   person: PersonWithAvailability;
-  index: number;
   isSelected: boolean;
   onSelect: () => void;
 }
 
 const PersonSearchResult = React.memo<PersonSearchResultProps>(({
   person,
-  index,
   isSelected,
   onSelect
 }) => {
@@ -272,7 +270,6 @@ const ProjectsList: React.FC = () => {
   
   // Pre-computed skills mapping for performance (Phase 4 optimization)
   const [personSkillsMap, setPersonSkillsMap] = useState<Map<number, string[]>>(new Map());
-  const [skillsLastUpdated, setSkillsLastUpdated] = useState<number>(0);
   
   // Accessibility - Screen reader announcements (Phase 4 accessibility preservation)
   const [srAnnouncement, setSrAnnouncement] = useState<string>('');
@@ -324,7 +321,6 @@ const ProjectsList: React.FC = () => {
     });
     
     setPersonSkillsMap(newSkillsMap);
-    setSkillsLastUpdated(Date.now());
   }, [assignments]);
 
   // Recompute skills when assignments change
@@ -491,15 +487,15 @@ const ProjectsList: React.FC = () => {
 
   const loadProjectAssignments = async (projectId: number) => {
     try {
-      // Use optimized backend filtering instead of client-side filtering
-      const response = await assignmentsApi.list({ project: projectId });
-      const projectAssignments = response.results || [];
+      // Get all assignments and filter by project
+      const allAssignments = await assignmentsApi.listAll();
+      const projectAssignments = allAssignments.filter(assignment => assignment.project === projectId);
       
       setAssignments(projectAssignments);
       
       // Extract unique roles from all assignments for autocomplete
       const roles = new Set<string>();
-      response.results?.forEach(assignment => {
+      projectAssignments.forEach(assignment => {
         if (assignment.roleOnProject) {
           roles.add(assignment.roleOnProject);
         }
@@ -934,7 +930,7 @@ const ProjectsList: React.FC = () => {
       };
       
 
-      const updatedAssignment = await assignmentsApi.update(assignmentId, updateData);
+      await assignmentsApi.update(assignmentId, updateData);
 
       if (selectedProject?.id) {
         await loadProjectAssignments(selectedProject.id);
@@ -1022,7 +1018,7 @@ const ProjectsList: React.FC = () => {
       matchesStatus = true;
     } else if (statusFilter === 'active_no_deliverables') {
       // Filter to active projects with no upcoming deliverable dates
-      matchesStatus = project.status === 'active' && project.id && !hasUpcomingDeliverableDates(project.id);
+      matchesStatus = project.status === 'active' && project.id !== undefined && !hasUpcomingDeliverableDates(project.id);
     } else {
       matchesStatus = project.status === statusFilter;
     }

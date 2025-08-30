@@ -1,10 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { visualizer } from 'rollup-plugin-visualizer'
 import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Bundle analyzer - only in build mode
+    visualizer({
+      filename: 'dist/stats.html',
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ],
   server: {
     host: '0.0.0.0',
     port: 3000,
@@ -36,9 +46,6 @@ export default defineConfig({
           
           // React Query for data fetching
           'query': ['@tanstack/react-query', '@tanstack/react-query-devtools'],
-          
-          // Large utility libraries
-          'utils': ['date-fns'],
         },
         
         // Generate hashed filenames for cache busting
