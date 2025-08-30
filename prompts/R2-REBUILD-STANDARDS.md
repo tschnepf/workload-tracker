@@ -409,6 +409,325 @@ const options = ['Option 1', 'Option 2'];  // Hardcoded list
 
 ---
 
+## 🔍 AUTOCOMPLETE & SEARCH FIELD STANDARDS
+
+### When to Use Autocomplete Fields
+
+Use autocomplete for any input field where:
+- ✅ **Existing data** should be reused (locations, client names, skills, etc.)
+- ✅ **Consistency** is important (prevent typos/variations)
+- ✅ **User efficiency** matters (faster than typing full values)
+- ✅ **Data integrity** is required (standardized values)
+
+### Required Autocomplete Features
+
+#### 1. State Management Pattern
+```typescript
+// ✅ CORRECT - Complete autocomplete state
+const [inputValue, setInputValue] = useState('');
+const [showDropdown, setShowDropdown] = useState(false);
+const [selectedIndex, setSelectedIndex] = useState(-1);
+
+// Initialize with existing value when editing
+useEffect(() => {
+  setInputValue(existingValue || '');
+}, [existingValue]);
+```
+
+#### 2. Filtered Options Logic
+```typescript
+// ✅ CORRECT - Case-insensitive filtering
+const filteredOptions = uniqueOptions.filter(option =>
+  option.toLowerCase().includes(inputValue.toLowerCase())
+);
+
+// Show dropdown only when there are matches and input has content
+const shouldShowDropdown = inputValue.length > 0 && filteredOptions.length > 0;
+```
+
+#### 3. Helper Functions
+```typescript
+// ✅ REQUIRED - Centralized selection logic
+const selectOption = (option: string) => {
+  setInputValue(option);
+  handleFieldChange('field', option);
+  setShowDropdown(false);
+  setSelectedIndex(-1);
+  saveField('field', option);
+};
+```
+
+### Mandatory Keyboard Navigation
+
+#### 4. Complete Keyboard Support
+```typescript
+// ✅ REQUIRED - All keyboard interactions
+const handleKeyDown = (e: React.KeyboardEvent) => {
+  if (!showDropdown || filteredOptions.length === 0) return;
+  
+  switch (e.key) {
+    case 'ArrowDown':
+      e.preventDefault();
+      setSelectedIndex(prev => 
+        prev < filteredOptions.length - 1 ? prev + 1 : 0
+      );
+      break;
+      
+    case 'ArrowUp':
+      e.preventDefault();
+      setSelectedIndex(prev => 
+        prev > 0 ? prev - 1 : filteredOptions.length - 1
+      );
+      break;
+      
+    case 'Enter':
+      e.preventDefault();
+      if (selectedIndex >= 0 && selectedIndex < filteredOptions.length) {
+        selectOption(filteredOptions[selectedIndex]);
+      }
+      break;
+      
+    case 'Escape':
+      e.preventDefault();
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+      break;
+  }
+};
+```
+
+#### 5. Keyboard Navigation Requirements:
+- ✅ **Arrow Down**: Move to next option (wrap to first)
+- ✅ **Arrow Up**: Move to previous option (wrap to last)  
+- ✅ **Enter**: Select highlighted option
+- ✅ **Escape**: Close dropdown without selecting
+- ✅ **Visual highlight**: Selected option must be visually distinct
+- ✅ **Mouse integration**: Hover updates selected index
+- ✅ **Typing resets**: Selection index resets to -1 when user types
+
+### Complete Implementation Template
+
+#### 6. Standard Autocomplete Input
+```typescript
+// ✅ CORRECT - Full implementation
+<div className="autocomplete-container relative">
+  <input
+    type="text"
+    value={inputValue}
+    onChange={(e) => {
+      const value = e.target.value;
+      setInputValue(value);
+      handleFieldChange('field', value);
+      setShowDropdown(value.length > 0 && filteredOptions.length > 0);
+      setSelectedIndex(-1); // Reset selection when typing
+    }}
+    onFocus={() => {
+      if (inputValue.length > 0 && filteredOptions.length > 0) {
+        setShowDropdown(true);
+      }
+    }}
+    onKeyDown={handleKeyDown}
+    onBlur={(e) => {
+      // Delay closing to allow clicks on dropdown options
+      setTimeout(() => {
+        setShowDropdown(false);
+        setSelectedIndex(-1);
+        saveField('field');
+      }, 150);
+    }}
+    placeholder="Start typing or select existing..."
+    className="w-full px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent"
+  />
+  
+  {/* Dropdown options */}
+  {showDropdown && filteredOptions.length > 0 && (
+    <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-40 overflow-y-auto">
+      {filteredOptions.map((option, index) => (
+        <button
+          key={index}
+          onClick={() => selectOption(option)}
+          onMouseEnter={() => setSelectedIndex(index)}
+          className={`w-full text-left px-3 py-2 text-sm transition-colors border-b border-[#3e3e42] last:border-b-0 ${
+            selectedIndex === index
+              ? 'bg-[#007acc]/20 text-[#007acc] border-[#007acc]/30'
+              : 'text-[#cccccc] hover:bg-[#3e3e42]'
+          }`}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  )}
+</div>
+```
+
+### Styling Standards
+
+#### 7. VSCode Theme Integration
+```typescript
+// ✅ CORRECT - Consistent with existing components
+// Input styling matches other form inputs
+"bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] placeholder-[#969696] focus:ring-[#007acc]"
+
+// Dropdown styling matches existing dropdowns
+"bg-[#2d2d30] border-[#3e3e42] rounded shadow-lg z-50"
+
+// Selected option styling matches selection patterns
+"bg-[#007acc]/20 text-[#007acc] border-[#007acc]/30"
+
+// Hover styling matches interactive elements
+"hover:bg-[#3e3e42] transition-colors"
+```
+
+#### 8. Z-Index Management
+```typescript
+// ✅ REQUIRED - Proper layering
+"z-50"  // Dropdown must appear above all other content
+"z-40"  // Filter dropdowns (lower priority)
+"z-30"  // Modal backgrounds
+"z-20"  // Fixed headers
+```
+
+### Data Management Standards
+
+#### 9. Option Collection Pattern
+```typescript
+// ✅ CORRECT - Comprehensive data collection
+const collectUniqueOptions = (dataArray: T[], fieldName: keyof T): string[] => {
+  const options = new Set<string>();
+  
+  dataArray.forEach(item => {
+    const value = item[fieldName];
+    if (typeof value === 'string' && value.trim() !== '') {
+      options.add(value.trim());
+    }
+  });
+  
+  return Array.from(options).sort((a, b) => a.localeCompare(b));
+};
+
+// Usage
+const locationOptions = collectUniqueOptions(people, 'location');
+const clientOptions = collectUniqueOptions(projects, 'client');
+const roleOptions = collectUniqueOptions(people, 'role');
+```
+
+#### 10. State Synchronization Rules
+```typescript
+// ✅ REQUIRED - Keep input and form data in sync
+const handleChange = (value: string) => {
+  setInputValue(value);           // Update display
+  handleFieldChange('field', value); // Update form data
+  // Auto-save on blur, not on every keystroke
+};
+
+// Initialize from existing data
+useEffect(() => {
+  if (selectedRecord?.field) {
+    setInputValue(selectedRecord.field);
+  }
+}, [selectedRecord]);
+```
+
+### Common Antipatterns to Avoid
+
+#### 11. Forbidden Patterns
+```typescript
+// ❌ WRONG - No keyboard navigation
+<input onChange={handleChange} />
+<select>...</select>  // Use autocomplete instead
+
+// ❌ WRONG - Hardcoded options
+const options = ['New York', 'Los Angeles'];  // Should be from data
+
+// ❌ WRONG - Case-sensitive filtering
+options.filter(opt => opt.includes(inputValue));  // Missing toLowerCase()
+
+// ❌ WRONG - No visual selection feedback
+<button className="dropdown-item">{option}</button>  // No highlight for selected
+
+// ❌ WRONG - Immediate dropdown close on blur
+onBlur={() => setShowDropdown(false)}  // Prevents clicking options
+
+// ❌ WRONG - Missing reset on typing
+onChange={() => {
+  // Missing: setSelectedIndex(-1);
+}}
+
+// ❌ WRONG - Not preventing default on arrow keys
+onKeyDown={(e) => {
+  if (e.key === 'ArrowDown') {
+    // Missing: e.preventDefault();
+  }
+}}
+```
+
+### Testing Checklist for Autocomplete Fields
+
+#### 12. Required Test Scenarios
+- [ ] **Typing filters options** - Options narrow as user types
+- [ ] **Case insensitive** - "new" matches "New York"  
+- [ ] **Arrow keys navigate** - Up/down cycles through options
+- [ ] **Enter selects** - Highlighted option gets selected
+- [ ] **Escape closes** - Dropdown closes without selection
+- [ ] **Mouse hover updates** - Hovering changes highlight
+- [ ] **Click selects** - Clicking option works
+- [ ] **Blur delays close** - Can click options before close
+- [ ] **Empty input handling** - Dropdown doesn't show for empty input
+- [ ] **No matches handling** - Dropdown doesn't show when no matches
+- [ ] **Existing value loads** - Shows current value when editing
+- [ ] **Auto-save works** - Value persists after selection/blur
+
+### Performance Considerations
+
+#### 13. Optimization Requirements
+```typescript
+// ✅ CORRECT - Debounced filtering for large datasets
+const debouncedInputValue = useDebounce(inputValue, 300);
+
+const filteredOptions = useMemo(() => {
+  if (debouncedInputValue.length < 2) return [];
+  return uniqueOptions.filter(option =>
+    option.toLowerCase().includes(debouncedInputValue.toLowerCase())
+  ).slice(0, 50); // Limit results for performance
+}, [uniqueOptions, debouncedInputValue]);
+
+// ❌ WRONG - No optimization for large datasets
+const filteredOptions = uniqueOptions.filter(...); // Runs on every keystroke
+```
+
+### Integration with Form Validation
+
+#### 14. Validation Pattern
+```typescript
+// ✅ CORRECT - Validate on blur/submit, not during typing
+const [validationError, setValidationError] = useState<string | null>(null);
+
+const validateField = (value: string) => {
+  if (required && !value.trim()) {
+    return 'Field is required';
+  }
+  if (restrictToOptions && !uniqueOptions.includes(value)) {
+    return 'Please select from available options';
+  }
+  return null;
+};
+
+const handleBlur = () => {
+  const error = validateField(inputValue);
+  setValidationError(error);
+  if (!error) {
+    saveField('field');
+  }
+};
+```
+
+---
+
+**CRITICAL**: Every text input field that could benefit from existing data reuse MUST implement full autocomplete functionality with keyboard navigation. No exceptions.
+
+---
+
 ## 🔄 BACKEND-FRONTEND INTEGRATION STANDARDS
 
 ### Serializer Field Completeness Rule

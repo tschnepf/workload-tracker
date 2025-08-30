@@ -50,6 +50,11 @@ const PeopleList: React.FC = () => {
   // Dropdown states
   const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  
+  // Location autocomplete state
+  const [showLocationAutocomplete, setShowLocationAutocomplete] = useState(false);
+  const [locationInputValue, setLocationInputValue] = useState('');
+  const [selectedLocationIndex, setSelectedLocationIndex] = useState(-1);
 
   const proficiencyLevels = [
     { value: 'beginner', label: 'Beginner' },
@@ -111,11 +116,15 @@ const PeopleList: React.FC = () => {
       if (showLocationDropdown && !target.closest('.location-filter')) {
         setShowLocationDropdown(false);
       }
+      
+      if (showLocationAutocomplete && !target.closest('.location-autocomplete')) {
+        setShowLocationAutocomplete(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [editingProficiency, showGearMenu, showDepartmentDropdown, showLocationDropdown]);
+  }, [editingProficiency, showGearMenu, showDepartmentDropdown, showLocationDropdown, showLocationAutocomplete]);
 
   const loadPeople = async () => {
     try {
@@ -128,6 +137,7 @@ const PeopleList: React.FC = () => {
         setSelectedPerson(peopleList[0]);
         setSelectedIndex(0);
         setEditingPersonData({ ...peopleList[0] }); // Initialize editing data
+        setLocationInputValue(peopleList[0].location || ''); // Initialize location input value
       }
     } catch (err: any) {
       setError('Failed to load people');
@@ -158,6 +168,7 @@ const PeopleList: React.FC = () => {
     setSelectedPerson(person);
     setSelectedIndex(index);
     setEditingPersonData({ ...person }); // Initialize editing data with current person data
+    setLocationInputValue(person.location || ''); // Initialize location input value
   };
 
   const handlePersonFieldChange = (field: keyof Person, value: string | number | null) => {
@@ -168,31 +179,70 @@ const PeopleList: React.FC = () => {
     }));
   };
 
-  const savePersonField = async (field: keyof Person) => {
-    if (!selectedPerson?.id || !editingPersonData || isUpdatingPerson) return;
+  const savePersonField = async (field: keyof Person, overrideValue?: any) => {
+    console.log('🔍 [DEBUG] savePersonField called with:', { 
+      field, 
+      overrideValue,
+      selectedPersonId: selectedPerson?.id, 
+      editingPersonData, 
+      isUpdatingPerson 
+    });
+
+    if (!selectedPerson?.id || !editingPersonData || isUpdatingPerson) {
+      console.log('🔍 [DEBUG] savePersonField early return - conditions not met:', {
+        hasSelectedPersonId: !!selectedPerson?.id,
+        hasEditingPersonData: !!editingPersonData,
+        isUpdatingPerson
+      });
+      return;
+    }
 
     try {
       setIsUpdatingPerson(true);
       setError(null);
 
+      // Use override value if provided, otherwise use current form data
+      const fieldValue = overrideValue !== undefined ? overrideValue : editingPersonData[field];
+      
       const updateData = {
-        [field]: editingPersonData[field]
+        [field]: fieldValue
       };
 
       // Handle special cases
       if (field === 'weeklyCapacity') {
-        updateData.weeklyCapacity = Number(editingPersonData.weeklyCapacity) || 36;
+        updateData.weeklyCapacity = Number(fieldValue) || 36;
       }
 
-      await peopleApi.update(selectedPerson.id, updateData);
+      console.log('🔍 [DEBUG] About to call peopleApi.update with:', {
+        id: selectedPerson.id,
+        updateData,
+        field,
+        fieldValue,
+        usedOverrideValue: overrideValue !== undefined
+      });
+
+      const result = await peopleApi.update(selectedPerson.id, updateData);
+      console.log('🔍 [DEBUG] peopleApi.update result:', result);
+
+      // Handle special case for department updates - need to also update departmentName
+      let finalUpdateData = { ...updateData };
+      if (field === 'department') {
+        const selectedDept = departments.find(d => d.id === fieldValue);
+        finalUpdateData.departmentName = selectedDept?.name || '';
+        console.log('🔍 [DEBUG] Department update - adding departmentName:', {
+          deptId: fieldValue,
+          deptName: finalUpdateData.departmentName,
+          selectedDept
+        });
+      }
 
       // Update local state
-      setSelectedPerson(prev => ({ ...prev!, ...updateData }));
+      setSelectedPerson(prev => ({ ...prev!, ...finalUpdateData }));
       
       // Update the people list
       setPeople(prev => prev.map(person => 
         person.id === selectedPerson.id 
-          ? { ...person, ...updateData }
+          ? { ...person, ...finalUpdateData }
           : person
       ));
 
@@ -427,6 +477,20 @@ const PeopleList: React.FC = () => {
       .filter(location => location && location !== '')
   )).sort();
 
+  // Filtered locations for autocomplete
+  const filteredLocations = uniqueLocations.filter(location =>
+    location.toLowerCase().includes(locationInputValue.toLowerCase())
+  );
+
+  // Helper function to select a location from autocomplete
+  const selectLocation = (location: string) => {
+    setLocationInputValue(location);
+    handlePersonFieldChange('location', location);
+    setShowLocationAutocomplete(false);
+    setSelectedLocationIndex(-1);
+    savePersonField('location', location);
+  };
+
   // Filter and sort people
   const filteredAndSortedPeople = people
     .filter(person => {
@@ -476,6 +540,7 @@ const PeopleList: React.FC = () => {
       setSelectedPerson(filteredAndSortedPeople[0]);
       setSelectedIndex(0);
       setEditingPersonData({ ...filteredAndSortedPeople[0] }); // Initialize editing data
+      setLocationInputValue(filteredAndSortedPeople[0].location || ''); // Initialize location input value
     }
   }, [filteredAndSortedPeople, selectedPerson]);
 
@@ -748,66 +813,75 @@ const PeopleList: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                filteredAndSortedPeople.map((person, index) => (
-                  <div
-                    key={person.id}
-                    onClick={bulkMode ? undefined : () => handlePersonClick(person, index)}
-                    className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] transition-colors focus:outline-none ${
-                      bulkMode 
-                        ? 'hover:bg-[#3e3e42]/30'
-                        : `cursor-pointer hover:bg-[#3e3e42]/50 ${
-                            selectedPerson?.id === person.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
-                          }`
-                    }`}
-                    tabIndex={0}
-                  >
-                    {/* Bulk Select Checkbox */}
-                    {bulkMode && (
-                      <div className="col-span-1 flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedPeopleIds.has(person.id!)}
-                          onChange={(e) => {
-                            const newSelected = new Set(selectedPeopleIds);
-                            if (e.target.checked) {
-                              newSelected.add(person.id!);
-                            } else {
-                              newSelected.delete(person.id!);
-                            }
-                            setSelectedPeopleIds(newSelected);
-                          }}
-                          className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-2"
-                        />
+                <>
+                  {filteredAndSortedPeople.map((person, index) => (
+                    <div
+                      key={person.id}
+                      onClick={bulkMode ? undefined : () => handlePersonClick(person, index)}
+                      className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] transition-colors focus:outline-none ${
+                        bulkMode 
+                          ? 'hover:bg-[#3e3e42]/30'
+                          : `cursor-pointer hover:bg-[#3e3e42]/50 ${
+                              selectedPerson?.id === person.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
+                            }`
+                      }`}
+                      tabIndex={0}
+                    >
+                      {/* Bulk Select Checkbox */}
+                      {bulkMode && (
+                        <div className="col-span-1 flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedPeopleIds.has(person.id!)}
+                            onChange={(e) => {
+                              const newSelected = new Set(selectedPeopleIds);
+                              if (e.target.checked) {
+                                newSelected.add(person.id!);
+                              } else {
+                                newSelected.delete(person.id!);
+                              }
+                              setSelectedPeopleIds(newSelected);
+                            }}
+                            className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-2"
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Name */}
+                      <div className="col-span-3 text-[#cccccc] font-medium">
+                        {person.name}
                       </div>
-                    )}
-                    
-                    {/* Name */}
-                    <div className="col-span-3 text-[#cccccc] font-medium">
-                      {person.name}
+                      
+                      {/* Department - Phase 2 */}
+                      <div className="col-span-2 text-[#969696] text-xs">
+                        {person.departmentName || 'None'}
+                      </div>
+                      
+                      {/* Location */}
+                      <div className="col-span-2 text-[#969696] text-xs">
+                        {person.location || 'Not specified'}
+                      </div>
+                      
+                      {/* Capacity */}
+                      <div className="col-span-2 text-[#969696] text-xs">
+                        {person.weeklyCapacity || 36}h/week
+                      </div>
+                      
+                      {/* Top Skills Preview */}
+                      <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} flex flex-wrap gap-1`}>
+                        {/* This will be populated when we load skills */}
+                        <span className="text-[#969696] text-xs">Skills...</span>
+                      </div>
                     </div>
-                    
-                    {/* Department - Phase 2 */}
-                    <div className="col-span-2 text-[#969696] text-xs">
-                      {person.departmentName || 'None'}
-                    </div>
-                    
-                    {/* Location */}
-                    <div className="col-span-2 text-[#969696] text-xs">
-                      {person.location || 'Not specified'}
-                    </div>
-                    
-                    {/* Capacity */}
-                    <div className="col-span-2 text-[#969696] text-xs">
-                      {person.weeklyCapacity || 36}h/week
-                    </div>
-                    
-                    {/* Top Skills Preview */}
-                    <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} flex flex-wrap gap-1`}>
-                      {/* This will be populated when we load skills */}
-                      <span className="text-[#969696] text-xs">Skills...</span>
+                  ))}
+                  
+                  {/* Buffer rows to prevent last person from being cut off */}
+                  <div className="py-1.5">
+                    <div className="py-1.5">
+                      <div className="py-1.5"></div>
                     </div>
                   </div>
-                ))
+                </>
               )}
             </div>
           </div>
@@ -892,8 +966,10 @@ const PeopleList: React.FC = () => {
                         <select
                           value={editingPersonData?.role || ''}
                           onChange={(e) => {
+                            console.log('🔍 [DEBUG] Role dropdown changed to:', e.target.value);
                             handlePersonFieldChange('role', e.target.value);
-                            savePersonField('role');
+                            // Pass the new value directly to avoid state timing issues
+                            savePersonField('role', e.target.value);
                           }}
                           disabled={isUpdatingPerson}
                           className="w-full px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
@@ -932,11 +1008,15 @@ const PeopleList: React.FC = () => {
                           value={editingPersonData?.department || ''}
                           onChange={(e) => {
                             const deptId = e.target.value ? parseInt(e.target.value) : null;
+                            console.log('🔍 [DEBUG] Department dropdown changed to:', { deptId, rawValue: e.target.value });
+                            
                             handlePersonFieldChange('department', deptId);
                             // Also update the department name for display
                             const selectedDept = departments.find(d => d.id === deptId);
                             handlePersonFieldChange('departmentName', selectedDept?.name || '');
-                            savePersonField('department');
+                            
+                            // Pass the new value directly to avoid state timing issues
+                            savePersonField('department', deptId);
                           }}
                           disabled={isUpdatingPerson}
                           className="w-full px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
@@ -950,18 +1030,85 @@ const PeopleList: React.FC = () => {
                         </select>
                       </div>
                       
-                      {/* Location Input */}
-                      <div>
+                      {/* Location Autocomplete Input */}
+                      <div className="location-autocomplete relative">
                         <div className="text-[#969696] text-xs mb-1">Location:</div>
                         <input
                           type="text"
-                          value={editingPersonData?.location || ''}
-                          onChange={(e) => handlePersonFieldChange('location', e.target.value)}
-                          onBlur={() => savePersonField('location')}
+                          value={locationInputValue}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setLocationInputValue(value);
+                            handlePersonFieldChange('location', value);
+                            setShowLocationAutocomplete(value.length > 0 && filteredLocations.length > 0);
+                            setSelectedLocationIndex(-1); // Reset selection when typing
+                          }}
+                          onFocus={() => {
+                            if (locationInputValue.length > 0 && filteredLocations.length > 0) {
+                              setShowLocationAutocomplete(true);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (!showLocationAutocomplete || filteredLocations.length === 0) return;
+                            
+                            switch (e.key) {
+                              case 'ArrowDown':
+                                e.preventDefault();
+                                setSelectedLocationIndex(prev => 
+                                  prev < filteredLocations.length - 1 ? prev + 1 : 0
+                                );
+                                break;
+                              case 'ArrowUp':
+                                e.preventDefault();
+                                setSelectedLocationIndex(prev => 
+                                  prev > 0 ? prev - 1 : filteredLocations.length - 1
+                                );
+                                break;
+                              case 'Enter':
+                                e.preventDefault();
+                                if (selectedLocationIndex >= 0 && selectedLocationIndex < filteredLocations.length) {
+                                  selectLocation(filteredLocations[selectedLocationIndex]);
+                                }
+                                break;
+                              case 'Escape':
+                                e.preventDefault();
+                                setShowLocationAutocomplete(false);
+                                setSelectedLocationIndex(-1);
+                                break;
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Delay closing to allow for clicks on autocomplete options
+                            setTimeout(() => {
+                              setShowLocationAutocomplete(false);
+                              setSelectedLocationIndex(-1);
+                              savePersonField('location');
+                            }, 150);
+                          }}
                           placeholder="e.g., New York, NY or Remote"
                           disabled={isUpdatingPerson}
                           className="w-full px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
                         />
+                        
+                        {/* Location Autocomplete Dropdown */}
+                        {showLocationAutocomplete && filteredLocations.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-40 overflow-y-auto">
+                            {filteredLocations.map((location, index) => (
+                              <button
+                                key={index}
+                                onClick={() => selectLocation(location)}
+                                onMouseEnter={() => setSelectedLocationIndex(index)}
+                                className={`w-full text-left px-3 py-2 text-sm transition-colors border-b border-[#3e3e42] last:border-b-0 ${
+                                  selectedLocationIndex === index
+                                    ? 'bg-[#007acc]/20 text-[#007acc] border-[#007acc]/30'
+                                    : 'text-[#cccccc] hover:bg-[#3e3e42]'
+                                }`}
+                              >
+                                {location}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

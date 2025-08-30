@@ -24,6 +24,15 @@ async function fetchApi<T>(
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   
+  // Debug logging for all API requests
+  console.log('🔍 [DEBUG] fetchApi called:', {
+    url,
+    method: options.method || 'GET',
+    headers: options.headers,
+    body: options.body,
+    bodyParsed: options.body ? JSON.parse(options.body as string) : null
+  });
+  
   try {
     const response = await fetch(url, {
       headers: {
@@ -33,15 +42,25 @@ async function fetchApi<T>(
       ...options,
     });
     
+    console.log('🔍 [DEBUG] fetchApi response:', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+    
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}`;
       let errorData = null;
       try {
         errorData = await response.json();
         errorMessage = errorData.message || errorData.detail || errorMessage;
+        console.error('🔍 [DEBUG] API Error Response:', errorData);
       } catch (e) {
         // If JSON parsing fails, use status text
         errorMessage = response.statusText || errorMessage;
+        console.error('🔍 [DEBUG] API Error (no JSON):', errorMessage);
       }
       throw new ApiError(errorMessage, response.status, errorData);
     }
@@ -55,12 +74,15 @@ async function fetchApi<T>(
     // Check if response body is empty
     const text = await response.text();
     if (!text) {
+      console.log('🔍 [DEBUG] Empty response body, returning undefined');
       return undefined as T;
     }
 
-    return JSON.parse(text);
+    const result = JSON.parse(text);
+    console.log('🔍 [DEBUG] fetchApi success result:', result);
+    return result;
   } catch (error) {
-    console.error('Fetch error:', error);
+    console.error('🔍 [DEBUG] Fetch error:', error);
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new ApiError('Network error - unable to reach server', 0);
     }
@@ -97,11 +119,18 @@ export const peopleApi = {
     }),
 
   // Update person
-  update: (id: number, data: Partial<Person>) => 
-    fetchApi<Person>(`/people/${id}/`, {
+  update: (id: number, data: Partial<Person>) => {
+    console.log('🔍 [DEBUG] peopleApi.update called with:', {
+      id,
+      data,
+      dataJSON: JSON.stringify(data, null, 2),
+      endpoint: `/people/${id}/`
+    });
+    return fetchApi<Person>(`/people/${id}/`, {
       method: 'PATCH',
       body: JSON.stringify(data),
-    }),
+    });
+  },
 
   // Delete person
   delete: (id: number) => 

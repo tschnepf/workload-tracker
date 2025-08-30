@@ -15,6 +15,7 @@ import Card from '@/components/ui/Card';
 interface PersonFormData {
   name: string;
   weeklyCapacity: number;
+  role: string; // Core field - job role/title
   department: number | null; // Phase 2: Department assignment
   location: string; // Location field - city/state or remote
 }
@@ -27,6 +28,7 @@ const PersonForm: React.FC = () => {
   const [formData, setFormData] = useState<PersonFormData>({
     name: '',
     weeklyCapacity: 36, // Default from master guide
+    role: 'Engineer', // Default role from Django model
     department: null, // Phase 2: No department initially
     location: '', // Location can be empty initially
   });
@@ -56,14 +58,22 @@ const PersonForm: React.FC = () => {
   const loadPerson = async (personId: number) => {
     try {
       setLoading(true);
+      console.log('🔍 [DEBUG] Loading person with ID:', personId);
       const person = await peopleApi.get(personId);
-      setFormData({
+      console.log('🔍 [DEBUG] Person data loaded from API:', person);
+      
+      const newFormData = {
         name: person.name,
         weeklyCapacity: person.weeklyCapacity || 36,
+        role: person.role || 'Engineer', // Load role with fallback
         department: person.department || null, // Phase 2: Load department
         location: person.location || '', // Load location
-      });
+      };
+      
+      console.log('🔍 [DEBUG] Setting form data to:', newFormData);
+      setFormData(newFormData);
     } catch (err: any) {
+      console.error('🔍 [DEBUG] Error loading person:', err);
       setError(err.message || 'Failed to load person');
     } finally {
       setLoading(false);
@@ -75,6 +85,10 @@ const PersonForm: React.FC = () => {
 
     if (!formData.name.trim()) {
       errors.name = 'Name is required';
+    }
+
+    if (!formData.role.trim()) {
+      errors.role = 'Role is required';
     }
 
     if (formData.weeklyCapacity < 1 || formData.weeklyCapacity > 80) {
@@ -96,14 +110,33 @@ const PersonForm: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      // Debug logging to see what data is being submitted
+      console.log('🔍 [DEBUG] Form submission data:', {
+        isEditing,
+        id,
+        formData,
+        formDataJSON: JSON.stringify(formData, null, 2)
+      });
+
       if (isEditing && id) {
-        await peopleApi.update(parseInt(id), formData);
+        console.log(`🔍 [DEBUG] Updating person ${id} with PATCH request`);
+        const result = await peopleApi.update(parseInt(id), formData);
+        console.log('🔍 [DEBUG] Update API response:', result);
       } else {
-        await peopleApi.create(formData);
+        console.log('🔍 [DEBUG] Creating new person with POST request');
+        const result = await peopleApi.create(formData);
+        console.log('🔍 [DEBUG] Create API response:', result);
       }
 
+      console.log('🔍 [DEBUG] API call successful, navigating to /people');
       navigate('/people');
     } catch (err: any) {
+      console.error('🔍 [DEBUG] API call failed:', {
+        error: err,
+        message: err.message,
+        status: err.status,
+        response: err.response
+      });
       setError(err.message || `Failed to ${isEditing ? 'update' : 'create'} person`);
     } finally {
       setLoading(false);
@@ -111,7 +144,13 @@ const PersonForm: React.FC = () => {
   };
 
   const handleChange = (field: keyof PersonFormData, value: string | number | null) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    console.log('🔍 [DEBUG] handleChange called:', { field, value, type: typeof value });
+    
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      console.log('🔍 [DEBUG] Updated formData:', newData);
+      return newData;
+    });
     
     // Clear validation error when user starts typing
     if (validationErrors[field]) {
@@ -135,7 +174,14 @@ const PersonForm: React.FC = () => {
       {/* Error Message */}
       {error && (
         <Card className="bg-red-500/20 border-red-500/50 p-4 mb-6">
-          <div className="text-red-400">{error}</div>
+          <div className="text-red-400 font-medium mb-2">Form Error:</div>
+          <div className="text-red-300 text-sm">{error}</div>
+          <details className="mt-2">
+            <summary className="text-red-400 text-xs cursor-pointer">Debug Info</summary>
+            <div className="mt-1 text-red-300 text-xs font-mono whitespace-pre-wrap">
+              Check browser console for detailed logs
+            </div>
+          </details>
         </Card>
       )}
 
@@ -177,6 +223,23 @@ const PersonForm: React.FC = () => {
             />
             <p className="text-[#969696] text-sm mt-1">
               Typical full-time: 40h, Part-time: 20h, Contractor: 36h
+            </p>
+          </div>
+
+          {/* Role Field */}
+          <div>
+            <Input
+              label="Role/Title"
+              name="role"
+              value={formData.role}
+              onChange={(e) => handleChange('role', e.target.value)}
+              placeholder="e.g., Senior Engineer, Project Manager, Designer"
+              required
+              error={validationErrors.role}
+              className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+            />
+            <p className="text-[#969696] text-sm mt-1">
+              Job title or role within the organization
             </p>
           </div>
 
