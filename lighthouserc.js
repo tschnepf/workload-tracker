@@ -38,11 +38,11 @@ module.exports = {
     // Performance budgets aligned with our monitoring thresholds
     assert: {
       assertions: {
-        // Core Web Vitals budgets (aligned with PERFORMANCE_BUDGETS)
+        // Core Web Vitals budgets (aligned with PERFORMANCE_BUDGETS - 2024/2025 standards)
         'largest-contentful-paint': ['error', { maxNumericValue: 2500 }], // LCP budget
         'first-contentful-paint': ['error', { maxNumericValue: 1800 }],   // FCP budget
         'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],   // CLS budget
-        'total-blocking-time': ['error', { maxNumericValue: 300 }],       // TBT approximates FID
+        'total-blocking-time': ['error', { maxNumericValue: 200 }],       // TBT approximates INP (replaces FID)
         
         // Performance score thresholds
         'categories:performance': ['error', { minScore: 0.8 }], // 80+ performance score

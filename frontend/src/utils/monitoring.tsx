@@ -4,17 +4,17 @@
  */
 
 import * as Sentry from '@sentry/react';
-import { getCLS, getFID, getFCP, getLCP, getTTFB, Metric } from 'web-vitals';
+import { onCLS, onINP, onFCP, onLCP, onTTFB, Metric } from 'web-vitals';
 
 // Environment configuration
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Performance budgets and thresholds
+// Performance budgets and thresholds (2024/2025 Core Web Vitals)
 export const PERFORMANCE_BUDGETS = {
   // Core Web Vitals budgets
   CLS: { budget: 0.1, warning: 0.05 },          // Cumulative Layout Shift
-  FID: { budget: 100, warning: 50 },            // First Input Delay (ms)
+  INP: { budget: 200, warning: 100 },           // Interaction to Next Paint (ms) - replaces FID
   LCP: { budget: 2500, warning: 2000 },         // Largest Contentful Paint (ms)
   
   // Additional metrics budgets
@@ -26,7 +26,7 @@ export const PERFORMANCE_BUDGETS = {
   CHUNK_COUNT: { budget: 20, warning: 15 },          // Chunk count limit
 } as const;
 
-type MetricName = 'CLS' | 'FID' | 'LCP' | 'FCP' | 'TTFB';
+type MetricName = 'CLS' | 'INP' | 'LCP' | 'FCP' | 'TTFB';
 type PerformanceScore = 'good' | 'warning' | 'poor';
 
 interface EnhancedPerformanceData {
@@ -61,7 +61,7 @@ export function initializeSentry() {
     dsn: process.env.VITE_SENTRY_DSN,
     environment: process.env.VITE_ENVIRONMENT || 'production',
     
-    // Performance monitoring
+    // Performance monitoring integrations (v10+ syntax)
     integrations: [
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({
@@ -120,7 +120,7 @@ function handleEnhancedMetric(metric: Metric) {
     timestamp: Date.now(),
     url: window.location.pathname,
     sessionId,
-    userId: Sentry.getCurrentHub().getScope()?.getUser()?.id,
+    userId: Sentry.getIsolationScope().getUser()?.id,
   };
 
   // Store metric
@@ -172,14 +172,14 @@ export function initializePerformanceMonitoring() {
     // Initialize Sentry first
     initializeSentry();
 
-    // Web Vitals monitoring with enhanced handling
-    getCLS(handleEnhancedMetric);
-    getFID(handleEnhancedMetric);
-    getLCP(handleEnhancedMetric);
-    getFCP(handleEnhancedMetric);
-    getTTFB(handleEnhancedMetric);
+    // Web Vitals monitoring with enhanced handling (2024/2025 standards)
+    onCLS(handleEnhancedMetric);
+    onINP(handleEnhancedMetric);  // Replaces FID as of 2024
+    onLCP(handleEnhancedMetric);
+    onFCP(handleEnhancedMetric);
+    onTTFB(handleEnhancedMetric);
 
-    // Set user context for Sentry
+    // Set session context for Sentry (v10+ syntax)
     Sentry.setContext('session', {
       sessionId,
       startTime: Date.now(),

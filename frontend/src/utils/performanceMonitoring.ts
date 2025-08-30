@@ -3,13 +3,13 @@
  * Tracks Web Vitals and custom performance metrics
  */
 
-import { getCLS, getFID, getFCP, getLCP, getTTFB, Metric } from 'web-vitals';
+import { onCLS, onINP, onFCP, onLCP, onTTFB, Metric } from 'web-vitals';
 
 // Performance thresholds based on Web Vitals recommendations
 const PERFORMANCE_THRESHOLDS = {
-  // Core Web Vitals
+  // Core Web Vitals (2024/2025 standards)
   CLS: { good: 0.1, needsImprovement: 0.25 },      // Cumulative Layout Shift
-  FID: { good: 100, needsImprovement: 300 },       // First Input Delay (ms)
+  INP: { good: 200, needsImprovement: 500 },       // Interaction to Next Paint (ms) - replaces FID
   LCP: { good: 2500, needsImprovement: 4000 },     // Largest Contentful Paint (ms)
   
   // Additional metrics
@@ -75,14 +75,14 @@ function handleMetric(metric: Metric) {
  */
 export function initializePerformanceMonitoring() {
   try {
-    // Core Web Vitals
-    getCLS(handleMetric);
-    getFID(handleMetric);
-    getLCP(handleMetric);
+    // Core Web Vitals (2024/2025 standards)
+    onCLS(handleMetric);
+    onINP(handleMetric);  // Replaces FID as of 2024
+    onLCP(handleMetric);
     
     // Additional metrics
-    getFCP(handleMetric);
-    getTTFB(handleMetric);
+    onFCP(handleMetric);
+    onTTFB(handleMetric);
     
     console.log('📊 Performance monitoring initialized (legacy)');
   } catch (error) {
