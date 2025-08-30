@@ -19,10 +19,9 @@ const ProjectForm: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Project>>({
     name: '',
     status: 'active',
-    client: 'Internal',
+    client: '',
     description: '',
     startDate: '',
-    endDate: '',
     estimatedHours: undefined,
     projectNumber: '',
   });
@@ -30,12 +29,30 @@ const ProjectForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [availableClients, setAvailableClients] = useState<string[]>([]);
+  const [filteredClients, setFilteredClients] = useState<string[]>([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
 
   useEffect(() => {
     if (isEditing && id) {
       loadProject();
     }
   }, [isEditing, id]);
+
+  useEffect(() => {
+    // Load available clients when component mounts
+    const loadClients = async () => {
+      try {
+        const clients = await projectsApi.getClients();
+        setAvailableClients(clients);
+        setFilteredClients(clients);
+      } catch (err) {
+        console.error('Failed to load clients:', err);
+      }
+    };
+
+    loadClients();
+  }, []);
 
   const loadProject = async () => {
     try {
@@ -81,6 +98,8 @@ const ProjectForm: React.FC = () => {
         client: formData.client?.trim(),
         description: formData.description?.trim(),
         estimatedHours: formData.estimatedHours || undefined,
+        startDate: formData.startDate?.trim() || null,
+        endDate: null, // Never send endDate for new projects
       };
 
       if (isEditing && id) {
@@ -91,7 +110,23 @@ const ProjectForm: React.FC = () => {
 
       navigate('/projects');
     } catch (err: any) {
-      setError(err.message || `Failed to ${isEditing ? 'update' : 'create'} project`);
+      console.error('Project form submission error:', err);
+      let errorMessage = err.message || `Failed to ${isEditing ? 'update' : 'create'} project`;
+      
+      // If it's a validation error, try to extract specific field errors
+      if (err.status === 400 && err.response) {
+        console.error('Validation errors:', err.response);
+        if (typeof err.response === 'object') {
+          const fieldErrors = Object.entries(err.response)
+            .map(([field, messages]: [string, any]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join('; ');
+          if (fieldErrors) {
+            errorMessage = `Validation errors: ${fieldErrors}`;
+          }
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -104,6 +139,33 @@ const ProjectForm: React.FC = () => {
     if (validationErrors[field]) {
       setValidationErrors(prev => ({ ...prev, [field]: '' }));
     }
+  };
+
+  const handleClientChange = (value: string) => {
+    setFormData(prev => ({ ...prev, client: value }));
+    
+    // Filter clients based on input
+    if (value.trim() === '') {
+      setFilteredClients(availableClients);
+    } else {
+      const filtered = availableClients.filter(client =>
+        client.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredClients(filtered);
+    }
+    
+    setShowClientDropdown(true);
+    
+    // Clear validation error
+    if (validationErrors.client) {
+      setValidationErrors(prev => ({ ...prev, client: '' }));
+    }
+  };
+
+  const selectClient = (client: string) => {
+    setFormData(prev => ({ ...prev, client }));
+    setShowClientDropdown(false);
+    setFilteredClients(availableClients);
   };
 
   return (
@@ -144,18 +206,41 @@ const ProjectForm: React.FC = () => {
               />
             </div>
 
-            {/* Client */}
-            <div>
-              <Input
-                label="Client"
-                name="client"
+            {/* Client - Smart Autocomplete */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-[#cccccc] mb-2">
+                Client <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
                 value={formData.client || ''}
-                onChange={(e) => handleChange('client', e.target.value)}
+                onChange={(e) => handleClientChange(e.target.value)}
+                onFocus={() => setShowClientDropdown(true)}
+                onBlur={() => {
+                  // Delay hiding to allow for click selection
+                  setTimeout(() => setShowClientDropdown(false), 200);
+                }}
                 placeholder="e.g., Acme Corp, Internal"
-                required
-                error={validationErrors.client}
-                className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
+              {validationErrors.client && (
+                <p className="text-red-400 text-xs mt-1">{validationErrors.client}</p>
+              )}
+              
+              {/* Dropdown */}
+              {showClientDropdown && filteredClients.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded-md shadow-lg max-h-60 overflow-auto">
+                  {filteredClients.map((client) => (
+                    <div
+                      key={client}
+                      className="px-3 py-2 cursor-pointer hover:bg-[#3e3e42] text-[#cccccc] text-sm"
+                      onClick={() => selectClient(client)}
+                    >
+                      {client}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Status */}
@@ -190,30 +275,19 @@ const ProjectForm: React.FC = () => {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Start Date */}
-              <div>
-                <Input
-                  label="Start Date"
-                  name="startDate"
-                  type="date"
-                  value={formData.startDate || ''}
-                  onChange={(e) => handleChange('startDate', e.target.value)}
-                  className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
-                />
-              </div>
-
-              {/* End Date */}
-              <div>
-                <Input
-                  label="End Date"
-                  name="endDate"
-                  type="date"
-                  value={formData.endDate || ''}
-                  onChange={(e) => handleChange('endDate', e.target.value)}
-                  className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
-                />
-              </div>
+            {/* Start Date */}
+            <div>
+              <Input
+                label="Start Date (Optional)"
+                name="startDate"
+                type="date"
+                value={formData.startDate || ''}
+                onChange={(e) => handleChange('startDate', e.target.value)}
+                className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+              />
+              <p className="text-[#969696] text-sm mt-1">
+                Leave blank if project start date is not yet determined
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

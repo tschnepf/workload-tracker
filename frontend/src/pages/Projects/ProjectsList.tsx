@@ -316,22 +316,21 @@ const ProjectsList: React.FC = () => {
 
   const handlePersonSearch = async (searchTerm: string) => {
     setNewAssignment(prev => ({ ...prev, personSearch: searchTerm }));
+    setSelectedPersonIndex(-1);
     
-    if (searchTerm.length < 2) {
-      setPersonSearchResults([]);
-      setSelectedPersonIndex(-1);
-      return;
+    // If no search term, show all people; if search term provided, filter by it
+    let filtered = people;
+    if (searchTerm.length > 0) {
+      filtered = people.filter(person =>
+        person.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        person.role?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     }
     
     // Detect potential skill requirements from search term
     const commonSkills = ['heat', 'lighting', 'hvac', 'autocad', 'python', 'design', 'mechanical', 'electrical'];
     const detectedSkills = commonSkills.filter(skill => 
       searchTerm.toLowerCase().includes(skill)
-    );
-    
-    let filtered = people.filter(person =>
-      person.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      person.role?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
     // Calculate availability and skill matching for each person
@@ -1369,9 +1368,10 @@ const ProjectsList: React.FC = () => {
                           <div className="relative">
                             <input
                               type="text"
-                              placeholder="Start typing name..."
+                              placeholder="Start typing name or click to see all..."
                               value={newAssignment.personSearch}
                               onChange={(e) => handlePersonSearch(e.target.value)}
+                              onFocus={() => handlePersonSearch(newAssignment.personSearch)}
                               onKeyDown={handlePersonSearchKeyDown}
                               className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                               autoFocus

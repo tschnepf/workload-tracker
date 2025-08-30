@@ -35,14 +35,15 @@ async function fetchApi<T>(
     
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}`;
+      let errorData = null;
       try {
-        const errorData = await response.json();
+        errorData = await response.json();
         errorMessage = errorData.message || errorData.detail || errorMessage;
       } catch (e) {
         // If JSON parsing fails, use status text
         errorMessage = response.statusText || errorMessage;
       }
-      throw new ApiError(errorMessage, response.status);
+      throw new ApiError(errorMessage, response.status, errorData);
     }
 
     // Handle empty responses (like DELETE operations)
@@ -119,6 +120,17 @@ export const peopleApi = {
     fetchApi<void>(`/people/${id}/`, {
       method: 'DELETE',
     }),
+
+  // Get people for autocomplete (name and basic info)
+  getForAutocomplete: async (): Promise<Array<{ id: number; name: string; department?: number; weeklyCapacity?: number }>> => {
+    const allPeople = await peopleApi.listAll();
+    return allPeople.map(person => ({
+      id: person.id!,
+      name: person.name,
+      department: person.department,
+      weeklyCapacity: person.weeklyCapacity
+    }));
+  },
 };
 
 // Projects API
@@ -172,6 +184,13 @@ export const projectsApi = {
     fetchApi<void>(`/projects/${id}/`, {
       method: 'DELETE',
     }),
+
+  // Get unique clients for autocomplete
+  getClients: async (): Promise<string[]> => {
+    const allProjects = await projectsApi.listAll();
+    const clients = [...new Set(allProjects.map(p => p.client).filter(Boolean))];
+    return clients.sort();
+  },
 };
 
 // Departments API
