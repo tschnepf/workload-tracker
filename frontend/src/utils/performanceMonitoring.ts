@@ -71,7 +71,7 @@ function handleMetric(metric: Metric) {
 }
 
 /**
- * Initialize Web Vitals monitoring
+ * Initialize Web Vitals monitoring (Legacy - use monitoring.ts for production)
  */
 export function initializePerformanceMonitoring() {
   try {
@@ -84,7 +84,7 @@ export function initializePerformanceMonitoring() {
     getFCP(handleMetric);
     getTTFB(handleMetric);
     
-    console.log('📊 Performance monitoring initialized');
+    console.log('📊 Performance monitoring initialized (legacy)');
   } catch (error) {
     console.warn('Failed to initialize performance monitoring:', error);
   }

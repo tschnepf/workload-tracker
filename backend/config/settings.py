@@ -5,6 +5,9 @@ Django settings for workload-tracker project.
 import os
 import dj_database_url
 from pathlib import Path
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -36,6 +39,7 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt',
+    'silk',
 ]
 
 LOCAL_APPS = [
@@ -47,12 +51,14 @@ LOCAL_APPS = [
     'departments',
     'dashboard',
     'skills',
+    'monitoring',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'silk.middleware.SilkyMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -162,3 +168,29 @@ FEATURES = {
     'USE_SKILLS': True,            # ✅ Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
 }
+
+# Performance monitoring configuration
+SILK_ENABLED = os.getenv('SILK_ENABLED', 'false').lower() == 'true' or DEBUG
+
+# Sentry configuration for production monitoring
+if not DEBUG and os.getenv('SENTRY_DSN'):
+    sentry_sdk.init(
+        dsn=os.getenv('SENTRY_DSN'),
+        integrations=[
+            DjangoIntegration(
+                transaction_style='url',
+                middleware_spans=True,
+                signals_spans=True,
+            ),
+            LoggingIntegration(
+                level=None,        # Capture info and above as breadcrumbs
+                event_level=None,  # Send records as events
+            ),
+        ],
+        environment=os.getenv('ENVIRONMENT', 'production'),
+        release=os.getenv('APP_VERSION'),
+        traces_sample_rate=float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+        profiles_sample_rate=float(os.getenv('SENTRY_PROFILES_SAMPLE_RATE', '0.1')),
+        attach_stacktrace=True,
+        send_default_pii=False,
+    )

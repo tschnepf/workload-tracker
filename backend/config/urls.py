@@ -4,6 +4,7 @@ URL configuration for workload-tracker project.
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
+from django.conf import settings
 from dashboard.views import DashboardView
 import os
 
@@ -26,3 +27,7 @@ urlpatterns = [
     path('api/departments/', include('departments.urls')),
     path('api/skills/', include('skills.urls')),
 ]
+
+# Add Silk profiling URLs in development/debug mode
+if settings.SILK_ENABLED:
+    urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]

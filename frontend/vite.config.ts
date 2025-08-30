@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import path from 'path'
 
 // https://vitejs.dev/config/
@@ -14,7 +15,13 @@ export default defineConfig({
       gzipSize: true,
       brotliSize: true,
     }),
-  ],
+    // Sentry source maps upload - production only
+    process.env.NODE_ENV === 'production' && sentryVitePlugin({
+      org: process.env.VITE_SENTRY_ORG,
+      project: process.env.VITE_SENTRY_PROJECT,
+      authToken: process.env.VITE_SENTRY_AUTH_TOKEN,
+    }),
+  ].filter(Boolean),
   server: {
     host: '0.0.0.0',
     port: 3000,
