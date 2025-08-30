@@ -108,27 +108,82 @@ Without proper indexes, optimizations will make queries SLOWER.
 
 ```ps1
 Create essential indexes BEFORE any optimization:
-1. Create new migration file:
+1. First, verify existing indexes explicitly:
+   docker-compose exec db psql -U postgres -d workload_tracker -c "
+   SELECT schemaname, tablename, indexname, indexdef 
+   FROM pg_indexes 
+   WHERE tablename = 'assignments_assignment' 
+   AND (indexdef LIKE '%person_id%' OR indexdef LIKE '%project_id%');"
+
+2. Check column statistics for index effectiveness:
+   docker-compose exec db psql -U postgres -d workload_tracker -c "
+   SELECT schemaname, tablename, attname, n_distinct, correlation 
+   FROM pg_stats 
+   WHERE tablename = 'assignments_assignment' 
+   AND attname IN ('person_id', 'project_id');"
+
+3. Create migration file only if indexes are missing:
    docker-compose exec backend python manage.py makemigrations --empty assignments --name add_performance_indexes
-2. Add these indexes to the migration:
-    - Verify FK indexes first; skip creating if they already exist:
-       - assignments_assignment.person_id (present by default in current DB)
-       - assignments_assignment.project_id (present by default in current DB)
-    - Only add composite (person_id, project_id) if you frequently filter by both simultaneously.
-    - Only add JSON GIN on weekly_hours if BOTH are true:
-       a) You run DB-level queries using operators like ?, @>, ->>, or json path
-       b) weekly_hours contains non-empty JSON for a meaningful portion of rows
-      If adding a GIN:
-          - Only create extensions when actually needed:
-             - JSONB GIN indexes work without extra extensions.
-             - CREATE EXTENSION IF NOT EXISTS pg_trgm; only if you implement trigram/text search.
-          - Create index CONCURRENTLY to avoid locks. In Django migrations, use RunSQL with atomic=False or a separate migration marked atomic = False; AddIndex cannot use CONCURRENTLY inside a transaction.
-3. Run migration:
+
+4. Add indexes to migration based on verification results:
+   - Skip if FK indexes already exist (check step 1 output)
+   - Only add composite (person_id, project_id) if both columns show high n_distinct
+   - Only add JSON GIN on weekly_hours if:
+     a) You run DB queries using JSON operators (?, @>, ->>)
+     b) Most rows contain non-empty JSON data
+   
+5. For any new indexes, use CONCURRENTLY method (see Step 0.4.C for implementation)
+
+6. Run migration:
    docker-compose exec backend python manage.py migrate
-4. Verify indexes created:
+
+7. Verify indexes created and analyze performance:
    docker-compose exec db psql -U postgres -d workload_tracker -c "\d assignments_assignment"
-5. ANALYZE then re-run EXPLAIN (ANALYZE, BUFFERS) for representative queries
-This is REQUIRED before Phase 1 optimizations.
+   docker-compose exec db psql -U postgres -d workload_tracker -c "ANALYZE VERBOSE assignments_assignment;"
+
+This verification prevents duplicate indexes and ensures only beneficial indexes are created.
+```
+
+#### **Prompt 0.4.C: CONCURRENTLY Index Migration Implementation**
+
+```python
+Complete Django migration example for CONCURRENTLY indexes:
+
+# In the migration file created in step 0.4.B:
+from django.db import migrations
+
+class Migration(migrations.Migration):
+    atomic = False  # Required for CONCURRENTLY operations
+    
+    dependencies = [
+        ('assignments', 'XXXX_previous_migration'),
+    ]
+    
+    operations = [
+        # Composite index for frequent dual-column queries
+        migrations.RunSQL(
+            sql="CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_assignments_person_project ON assignments_assignment (person_id, project_id);",
+            reverse_sql="DROP INDEX IF EXISTS idx_assignments_person_project;",
+        ),
+        
+        # JSON GIN index (only if JSON queries are used)
+        migrations.RunSQL(
+            sql="CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_assignments_weekly_hours_gin ON assignments_assignment USING GIN (weekly_hours);",
+            reverse_sql="DROP INDEX IF EXISTS idx_assignments_weekly_hours_gin;",
+        ),
+        
+        # Text search index (only if implementing search)
+        migrations.RunSQL(
+            sql="CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_assignments_text_search ON assignments_assignment USING GIN (to_tsvector('english', role_on_project));",
+            reverse_sql="DROP INDEX IF EXISTS idx_assignments_text_search;",
+        ),
+    ]
+
+IMPORTANT NOTES:
+- CONCURRENTLY prevents table locking but takes longer
+- IF NOT EXISTS prevents errors on re-run
+- Always test migration on copy of production data first
+- Monitor disk space during index creation
 ```
 
 Best practices when evaluating plans:
@@ -150,10 +205,29 @@ Instrument query performance to prioritize real hotspots:
    docker-compose exec db psql -U postgres -d workload_tracker -c "SHOW shared_preload_libraries;"
 2. If it includes pg_stat_statements, ensure the extension exists in the DB:
    docker-compose exec db psql -U postgres -d workload_tracker -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
-3. If not enabled, document the change needed (shared_preload_libraries='pg_stat_statements') and plan a DB container restart via docker-compose and a mounted config. Skip enabling if not feasible right now.
+
+3. If NOT enabled, enable it with Docker configuration:
+   a) Create docker/db/postgresql.conf with:
+      shared_preload_libraries = 'pg_stat_statements'
+      pg_stat_statements.track = all
+      pg_stat_statements.max = 10000
+   
+   b) Update docker-compose.yml db service:
+      volumes:
+        - ./docker/db/postgresql.conf:/etc/postgresql/postgresql.conf
+      command: postgres -c config_file=/etc/postgresql/postgresql.conf
+   
+   c) Restart database container (DATA WILL PERSIST):
+      docker-compose restart db
+      # Wait 30 seconds, then create extension:
+      docker-compose exec db psql -U postgres -d workload_tracker -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
+
 4. When enabled, list top queries by total time:
    docker-compose exec db psql -U postgres -d workload_tracker -c "SELECT query, calls, total_exec_time, mean_exec_time FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20;"
+
 5. Use these findings to decide which endpoints to optimize first.
+
+WARNING: Step 3 requires container restart. Schedule during maintenance window.
 ```
 
 #### **Prompt 0.5.B: Autovacuum Health & Table Bloat Checks**
@@ -240,7 +314,7 @@ Implement BOTH Django backend endpoints WITH PROPER PERMISSIONS:
 Maintain backward compatibility - existing endpoints must not change.
 ```
 
-#### **Prompt 1.1.D: Create Frontend API Methods with Caching**
+#### **Prompt 1.1.D: Create Frontend API Methods (No Additional Caching)**
 
 ```text
 In frontend/src/services/api.ts, add TWO new methods:
@@ -250,10 +324,12 @@ In frontend/src/services/api.ts, add TWO new methods:
 
 Include:
 - TypeScript interfaces for responses
-- Simple in-memory caching with 30-second TTL
-- If adopting React Query later, avoid double-caching; prefer React Query as the source of truth.
 - Proper error handling with fallback to old method
+- NO additional caching layer (React Query will handle all caching in Step 1.2)
+- Performance timing logs for comparison with legacy methods
 - Test with Docker: docker-compose exec frontend npm test
+
+IMPORTANT: Do not implement any caching here - Step 1.2 will provide comprehensive caching strategy.
 ```
 
 #### **Prompt 1.1.E: Create Wrapper Functions with Fallbacks (SAFER)**
@@ -831,15 +907,23 @@ This ensures usability for all users.
 
 ### **Step 4.1: Bundle Size Optimization**
 
-#### **Prompt 4.1.A: Analyze Bundle Size**
+#### **Prompt 4.1.A: Analyze Bundle Size (Vite Project)**
 ```
-Audit current bundle composition:
-1. Install webpack-bundle-analyzer
-2. Generate bundle analysis report
-3. Identify largest dependencies and unused code
-4. Document opportunities for tree shaking
-5. Find duplicate dependencies that can be consolidated
-6. Create optimization plan with expected size reductions
+Audit current bundle composition for Vite:
+1. Install Vite bundle analyzer:
+   docker-compose exec frontend npm install --save-dev vite-bundle-analyzer
+2. Add bundle analysis script to package.json:
+   "analyze": "vite-bundle-analyzer"
+3. Generate bundle analysis:
+   docker-compose exec frontend npm run build
+   docker-compose exec frontend npm run analyze
+4. Alternative using rollup-plugin-visualizer:
+   npm install --save-dev rollup-plugin-visualizer
+   Add to vite.config.ts: import { visualizer } from 'rollup-plugin-visualizer'
+5. Identify largest dependencies and unused code
+6. Document opportunities for tree shaking in Vite
+7. Find duplicate dependencies that can be consolidated
+8. Create optimization plan with expected size reductions
 Do not make changes yet, focus on analysis and planning.
 ```
 
@@ -1026,6 +1110,147 @@ Keep storage and indexes efficient:
 2. Schedule VACUUM and REINDEX in maintenance windows as needed.
 3. Consider pg_repack for non-blocking cleanup on large tables.
 4. Re-run ANALYZE and baseline EXPLAIN after maintenance.
+```
+
+---
+
+## 🚨 **ERROR RECOVERY PROCEDURES**
+
+### **Step R1: Performance Regression Detection**
+
+#### **Automated Detection**
+```bash
+# Add to each optimization step:
+# Before making changes:
+performance.mark('optimization-baseline-start');
+fetch('/api/people/').then(() => {
+  performance.mark('optimization-baseline-end');
+  performance.measure('baseline-api', 'optimization-baseline-start', 'optimization-baseline-end');
+});
+
+# After making changes:
+performance.mark('optimization-after-start');
+fetch('/api/people/').then(() => {
+  performance.mark('optimization-after-end');
+  performance.measure('after-api', 'optimization-after-start', 'optimization-after-end');
+  
+  const baseline = performance.getEntriesByName('baseline-api')[0].duration;
+  const after = performance.getEntriesByName('after-api')[0].duration;
+  
+  if (after > baseline * 1.2) { // 20% slower
+    console.error(`REGRESSION: ${after}ms vs ${baseline}ms baseline`);
+    // Trigger rollback procedure
+  }
+});
+```
+
+### **Step R2: Immediate Rollback Commands**
+
+#### **Quick Rollback by Step**
+```bash
+# For database migrations (Step 0.4):
+docker-compose exec backend python manage.py migrate assignments <previous_migration_number>
+
+# For React Query changes (Step 1.2):
+git checkout HEAD~1 -- frontend/src/lib/queryClient.ts frontend/src/hooks/
+docker-compose restart frontend
+
+# For new API endpoints (Step 1.1):
+git checkout HEAD~1 -- backend/people/views.py backend/assignments/views.py
+docker-compose restart backend
+
+# For bulk API changes (Step 2.1):
+git checkout HEAD~1 -- backend/deliverables/views.py
+docker-compose restart backend
+
+# Full system rollback:
+docker-compose down
+git reset --hard <last-known-good-commit>
+docker-compose build
+docker-compose up -d
+```
+
+### **Step R3: Health Check Recovery**
+
+#### **Container Recovery**
+```bash
+# If containers won't start:
+docker-compose down --volumes  # WARNING: Removes data
+docker-compose build --no-cache
+docker-compose up -d
+
+# If database is corrupted:
+docker-compose exec db pg_dump -U postgres workload_tracker > backup.sql
+docker-compose down --volumes
+docker-compose up -d db
+sleep 30
+docker-compose exec db createdb -U postgres workload_tracker
+docker-compose exec -i db psql -U postgres workload_tracker < backup.sql
+docker-compose up -d
+```
+
+### **Step R4: Performance Recovery Checklist**
+
+#### **When Optimizations Fail**
+```text
+1. Check error symptoms:
+   □ Page load slower than baseline?
+   □ API responses timing out?
+   □ Search autocomplete lagging?
+   □ Assignment loading broken?
+   □ Console errors in browser?
+
+2. Identify failure point:
+   □ Database queries slower (check EXPLAIN ANALYZE)
+   □ React rendering issues (check React DevTools)
+   □ Network requests failing (check Network tab)
+   □ Caching not working (check React Query DevTools)
+
+3. Recovery actions by symptom:
+   - Slow queries → Rollback migrations, check indexes
+   - React errors → Rollback frontend changes, clear cache
+   - API failures → Rollback backend endpoints, check logs
+   - Cache issues → Clear React Query cache, restart containers
+
+4. Verification after recovery:
+   □ All containers healthy (docker-compose ps)
+   □ All pages load within 3 seconds
+   □ Person search responds < 500ms
+   □ Assignment creation works
+   □ No console errors
+```
+
+### **Step R5: Monitoring Alert Response**
+
+#### **When Performance Alerts Fire**
+```javascript
+// Add to Sentry configuration (Step 6.1):
+Sentry.configureScope((scope) => {
+  scope.setTag("optimization.phase", "phase-1-n+1-fixes");
+  scope.setContext("performance.budget", {
+    pageLoad: 2000,
+    apiResponse: 500,
+    searchDelay: 300
+  });
+});
+
+// Alert response procedure:
+if (performanceMetric > PERFORMANCE_BUDGETS.threshold) {
+  // 1. Log detailed context
+  Sentry.captureMessage(`Performance regression: ${performanceMetric}ms`, {
+    level: 'warning',
+    extra: {
+      optimization_step: current_step,
+      baseline: baseline_metric,
+      regression_percent: ((performanceMetric - baseline_metric) / baseline_metric) * 100
+    }
+  });
+  
+  // 2. Automatic rollback if > 50% regression
+  if (performanceMetric > baseline_metric * 1.5) {
+    triggerRollback(current_step);
+  }
+}
 ```
 
 ---
