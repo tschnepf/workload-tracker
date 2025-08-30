@@ -41,9 +41,9 @@ def _create_people_sheet(workbook, queryset):
     sheet = workbook.active
     sheet.title = "People"
     
-    # Excel headers (camelCase to match API)
+    # Excel headers (camelCase to match API) - ID first for primary lookup
     headers = [
-        'name', 'role', 'email', 'phone', 'location', 
+        'id', 'name', 'role', 'email', 'phone', 'location', 
         'weeklyCapacity', 'departmentName', 'hireDate', 
         'notes', 'isActive'
     ]
@@ -69,16 +69,16 @@ def _create_people_template_sheet(workbook):
     template_sheet = workbook.create_sheet("Template")
     
     headers = [
-        'name', 'role', 'email', 'phone', 'location',
+        'id', 'name', 'role', 'email', 'phone', 'location',
         'weeklyCapacity', 'departmentName', 'hireDate', 
         'notes', 'isActive'
     ]
     
     _write_excel_headers(template_sheet, headers)
     
-    # Add example row
+    # Add example row (leave ID blank for new people, or use existing ID for updates)
     example_data = [
-        'John Smith', 'Senior Engineer', 'john@company.com',
+        '', 'John Smith', 'Senior Engineer', 'john@company.com',
         '555-0123', 'New York', 40, 'Engineering',
         '2023-01-15', 'Team lead', True
     ]
@@ -97,12 +97,19 @@ def _create_people_instructions_sheet(workbook):
     instructions_sheet = workbook.create_sheet("Instructions")
     
     instructions = [
-        "People Import Instructions",
+        "People Import Instructions - ID-Based Import/Export",
+        "",
+        "Primary Lookup Logic:",
+        "• id - Primary lookup field (blank for new people)",
+        "• If ID exists, updates that specific person",
+        "• If ID is blank, falls back to email then name lookup",
+        "• If no match found, creates new person",
         "",
         "Required Fields:",
         "• name - Person's full name",
         "",
         "Optional Fields:",
+        "• id - Person ID (leave blank for new people)",
         "• role - Job title (default: Engineer)",
         "• email - Contact email address", 
         "• phone - Phone number",
@@ -112,6 +119,11 @@ def _create_people_instructions_sheet(workbook):
         "• hireDate - Start date (YYYY-MM-DD format)",
         "• notes - Additional notes",
         "• isActive - TRUE/FALSE (default: TRUE)",
+        "",
+        "Batch Name Editing Workflow:",
+        "1. Export people to Excel (includes IDs)",
+        "2. Edit names in Excel (keep IDs intact)",
+        "3. Import back - names will be updated using ID lookup",
         "",
         "Import Process:",
         "1. Fill out the Template sheet",
@@ -238,51 +250,67 @@ def import_people_from_excel(file, update_existing=True, dry_run=False):
 
 
 def _process_people_row(row_data, update_existing, dry_run, row_num):
-    """Process single person row using PersonSerializer."""
+    """Process single person row using PersonSerializer with ID-based lookup."""
     try:
-        # Check if person exists by email OR name
+        # Check if person exists using ID-based lookup hierarchy
         existing_person = None
+        lookup_method = 'none'
         
-        # First try to find by email (more reliable if available)
-        if 'email' in row_data and row_data['email']:
+        # First priority: Try to find by ID (most reliable)
+        if 'id' in row_data and row_data['id']:
+            try:
+                person_id = int(row_data['id'])
+                existing_person = Person.objects.get(id=person_id)
+                lookup_method = 'id'
+            except (ValueError, Person.DoesNotExist):
+                return {
+                    'success': False,
+                    'error': f"Person with ID {row_data['id']} not found. ID may be invalid or person may have been deleted."
+                }
+        
+        # Second priority: Try to find by email (if ID not provided)
+        elif 'email' in row_data and row_data['email']:
             try:
                 existing_person = Person.objects.get(email=row_data['email'])
+                lookup_method = 'email'
             except Person.DoesNotExist:
                 pass
         
-        # If not found by email, try to find by name
+        # Third priority: Try to find by name (least reliable)
         if not existing_person and 'name' in row_data and row_data['name']:
             try:
                 existing_person = Person.objects.get(name=row_data['name'])
+                lookup_method = 'name'
             except Person.DoesNotExist:
                 pass
             except Person.MultipleObjectsReturned:
                 # If multiple people have the same name, we can't safely update
-                # Return an error to let user know they need to be more specific
                 return {
                     'success': False,
-                    'error': f"Multiple people found with name '{row_data['name']}'. Please use unique names or add email addresses to distinguish."
+                    'error': f"Multiple people found with name '{row_data['name']}'. Please use ID or unique email for updates."
                 }
         
         # Update existing person
         if existing_person:
             if not update_existing:
-                identifier = row_data.get('email', row_data.get('name', 'Unknown'))
+                identifier = f"ID:{existing_person.id}" if lookup_method == 'id' else row_data.get('email', row_data.get('name', 'Unknown'))
                 return {
                     'success': True,
                     'updated': False,
-                    'message': f"Skipped existing person: {row_data.get('name', 'Unknown')} ({identifier})"
+                    'message': f"Skipped existing person: {row_data.get('name', 'Unknown')} (found by {lookup_method}: {identifier})"
                 }
             
             if not dry_run:
-                serializer = PersonSerializer(existing_person, data=row_data, partial=True)
+                # Remove 'id' from row_data to prevent serializer conflicts
+                update_data = {k: v for k, v in row_data.items() if k != 'id'}
+                serializer = PersonSerializer(existing_person, data=update_data, partial=True)
                 if serializer.is_valid():
                     serializer.save()
-                    identifier = row_data.get('email', row_data.get('name', 'Unknown'))
+                    identifier = f"ID:{existing_person.id}" if lookup_method == 'id' else row_data.get('email', row_data.get('name', 'Unknown'))
                     return {
                         'success': True,
                         'updated': True,
-                        'message': f"Updated: {row_data.get('name', 'Unknown')} ({identifier})"
+                        'message': f"Updated: {row_data.get('name', 'Unknown')} (found by {lookup_method}: {identifier})"
                     }
                 else:
                     return {
@@ -290,24 +318,26 @@ def _process_people_row(row_data, update_existing, dry_run, row_num):
                         'error': f"Validation errors: {serializer.errors}"
                     }
             else:
-                identifier = row_data.get('email', row_data.get('name', 'Unknown'))
+                identifier = f"ID:{existing_person.id}" if lookup_method == 'id' else row_data.get('email', row_data.get('name', 'Unknown'))
                 return {
                     'success': True,
                     'updated': True,
-                    'message': f"[DRY RUN] Would update: {row_data.get('name', 'Unknown')} ({identifier})"
+                    'message': f"[DRY RUN] Would update: {row_data.get('name', 'Unknown')} (found by {lookup_method}: {identifier})"
                 }
         
         # Create new person
         else:
             if not dry_run:
-                serializer = PersonSerializer(data=row_data)
+                # Remove 'id' from row_data for new person creation
+                create_data = {k: v for k, v in row_data.items() if k != 'id'}
+                serializer = PersonSerializer(data=create_data)
                 if serializer.is_valid():
-                    serializer.save()
+                    new_person = serializer.save()
                     identifier = row_data.get('email', row_data.get('name', 'Unknown'))
                     return {
                         'success': True,
                         'updated': False,
-                        'message': f"Created: {row_data.get('name', 'Unknown')} ({identifier})"
+                        'message': f"Created: {row_data.get('name', 'Unknown')} (new ID: {new_person.id}) ({identifier})"
                     }
                 else:
                     return {
