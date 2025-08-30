@@ -1,11 +1,15 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from django.db.models import Max
-from django.http import HttpResponseNotModified
+from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date
 from .models import Project
 from .serializers import ProjectSerializer
+from .utils.excel_handler import export_projects_to_excel, import_projects_from_file
 import hashlib
+import json
+import time
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.filter(is_active=True)
@@ -62,4 +66,164 @@ class ProjectViewSet(viewsets.ModelViewSet):
             response['Last-Modified'] = http_date(last_modified.timestamp())
             response['Cache-Control'] = 'public, max-age=30'  # 30 seconds cache
         
+        return response
+    
+    @action(detail=False, methods=['get'])
+    def export_excel(self, request):
+        """Export projects to Excel with streaming response for large datasets"""
+        # Get filtered queryset
+        queryset = self.get_queryset()
+        
+        # Apply any filters from query params
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status__iexact=status_filter)
+            
+        client = request.query_params.get('client')
+        if client:
+            queryset = queryset.filter(client__icontains=client)
+        
+        count = queryset.count()
+        
+        # For large datasets, use streaming response with progress
+        if count > 50:  # Lower threshold for projects since they have related data
+            return self._stream_excel_export(queryset, count)
+        else:
+            # Direct response for small datasets
+            response = export_projects_to_excel(queryset)
+            return response
+    
+    def _stream_excel_export(self, queryset, total_count):
+        """Stream Excel export with progress updates for large datasets"""
+        def generate_excel_with_progress():
+            """Generator that yields progress updates and final Excel data"""
+            
+            # Yield initial progress
+            yield self._progress_chunk({
+                'stage': 'preparing',
+                'message': f'Preparing to export {total_count} projects with assignments and deliverables...',
+                'progress': 0,
+                'total': total_count
+            })
+            
+            # Process in chunks of 25 (smaller for projects due to related data)
+            chunk_size = 25
+            processed = 0
+            
+            # Get data in chunks with progress updates
+            for chunk_start in range(0, total_count, chunk_size):
+                chunk_queryset = queryset[chunk_start:chunk_start + chunk_size]
+                
+                processed += chunk_queryset.count()
+                progress_percent = int((processed / total_count) * 80)  # Reserve 20% for Excel generation
+                
+                yield self._progress_chunk({
+                    'stage': 'processing',
+                    'message': f'Processed {processed}/{total_count} projects...',
+                    'progress': progress_percent,
+                    'total': total_count
+                })
+                
+                # Small delay to show progress
+                time.sleep(0.1)
+            
+            # Generate Excel file
+            yield self._progress_chunk({
+                'stage': 'generating',
+                'message': 'Generating Excel file with multiple sheets...',
+                'progress': 95,
+                'total': total_count
+            })
+            
+            # Create Excel response (this processes all assignments and deliverables)
+            response = export_projects_to_excel(queryset)
+            
+            # Yield completion with file data
+            yield self._progress_chunk({
+                'stage': 'complete',
+                'message': f'Export completed: {total_count} projects with all related data',
+                'progress': 100,
+                'total': total_count,
+                'download_ready': True
+            })
+            
+            # Yield the actual file data as base64
+            excel_content = response.content
+            import base64
+            yield json.dumps({
+                'type': 'file_data',
+                'filename': f'projects_export_{total_count}_records.xlsx',
+                'content': base64.b64encode(excel_content).decode('utf-8'),
+                'content_type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }) + '\n'
+        
+        response = StreamingHttpResponse(
+            generate_excel_with_progress(), 
+            content_type='text/plain'
+        )
+        response['Cache-Control'] = 'no-cache'
+        return response
+    
+    def _progress_chunk(self, progress_data):
+        """Format progress data as JSON chunk"""
+        return json.dumps({
+            'type': 'progress',
+            **progress_data
+        }) + '\n'
+    
+    @action(detail=False, methods=['post'])
+    def import_excel(self, request):
+        """Import projects from Excel with progress tracking"""
+        if 'file' not in request.FILES:
+            return Response({
+                'success': False,
+                'error': 'No file provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        excel_file = request.FILES['file']
+        
+        # Validate file type
+        if not excel_file.name.endswith(('.xlsx', '.xls', '.csv')):
+            return Response({
+                'success': False,
+                'error': 'File must be Excel (.xlsx/.xls) or CSV format'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get options
+        update_existing = request.data.get('update_existing', 'true').lower() == 'true'
+        include_assignments = request.data.get('include_assignments', 'true').lower() == 'true'
+        include_deliverables = request.data.get('include_deliverables', 'true').lower() == 'true'
+        dry_run = request.data.get('dry_run', 'false').lower() == 'true'
+        
+        # For large files, this could be enhanced with background processing
+        # For now, process synchronously with result
+        try:
+            results = import_projects_from_file(
+                excel_file,
+                update_existing=update_existing,
+                include_assignments=include_assignments,
+                include_deliverables=include_deliverables,
+                dry_run=dry_run
+            )
+            
+            # Add progress indicator for UI
+            results['progress'] = 100
+            results['stage'] = 'complete'
+            
+            return Response(results, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Import failed: {str(e)}',
+                'progress': 0,
+                'stage': 'error'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def export_template(self, request):
+        """Export Excel import template with examples"""
+        # Create template with empty queryset to get template format
+        empty_queryset = self.queryset.none()
+        response = export_projects_to_excel(empty_queryset, is_template=True)
         return response

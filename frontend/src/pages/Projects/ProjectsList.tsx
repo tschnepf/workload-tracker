@@ -35,6 +35,208 @@ const DeliverablesSectionLoader: React.FC = () => (
   </div>
 );
 
+// Memoized Assignment Row Component for performance (Phase 4 optimization)
+interface AssignmentRowProps {
+  assignment: Assignment;
+  isEditing: boolean;
+  editData: {
+    roleOnProject: string;
+    currentWeekHours: number;
+    roleSearch: string;
+  };
+  roleSearchResults: string[];
+  onEdit: () => void;
+  onDelete: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onRoleSearch: (value: string) => void;
+  onRoleSelect: (role: string) => void;
+  onHoursChange: (hours: number) => void;
+  getCurrentWeekHours: (assignment: Assignment) => number;
+}
+
+const AssignmentRow = React.memo<AssignmentRowProps>(({
+  assignment,
+  isEditing,
+  editData,
+  roleSearchResults,
+  onEdit,
+  onDelete,
+  onSave,
+  onCancel,
+  onRoleSearch,
+  onRoleSelect,
+  onHoursChange,
+  getCurrentWeekHours
+}) => {
+  if (isEditing) {
+    return (
+      <div className="p-3 bg-[#3e3e42]/50 rounded border border-[#3e3e42]">
+        <div className="grid grid-cols-4 gap-4 items-center">
+          {/* Person Name (read-only) */}
+          <div className="text-[#cccccc]">{assignment.personName || 'Unknown'}</div>
+          
+          {/* Role Input with Autocomplete */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Role on project..."
+              value={editData.roleSearch}
+              onChange={(e) => onRoleSearch(e.target.value)}
+              className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+              autoFocus
+            />
+            
+            {/* Role Search Results Dropdown */}
+            {roleSearchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
+                {roleSearchResults.map((role) => (
+                  <button
+                    key={role}
+                    onClick={() => onRoleSelect(role)}
+                    className="w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0"
+                  >
+                    {role}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Hours Input */}
+          <div>
+            <input
+              type="number"
+              min="0"
+              max="80"
+              step="0.5"
+              placeholder="Hours"
+              value={editData.currentWeekHours}
+              onChange={(e) => onHoursChange(parseFloat(e.target.value) || 0)}
+              className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-1">
+            <button
+              onClick={onSave}
+              className="px-2 py-1 text-xs rounded border bg-[#007acc] border-[#007acc] text-white hover:bg-[#005fa3] transition-colors"
+            >
+              Save
+            </button>
+            <button
+              onClick={onCancel}
+              className="px-2 py-1 text-xs rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-between items-center p-2 bg-[#3e3e42]/30 rounded">
+      <div className="flex-1">
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <div className="text-[#cccccc]">{assignment.personName || 'Unknown'}</div>
+            {/* Person Skills (Read-only) */}
+            <div className="flex flex-wrap gap-1 mt-1">
+              {assignment.personSkills?.filter(skill => skill.skillType === 'strength').slice(0, 3).map((skill, index) => (
+                <span key={index} className="px-2 py-0.5 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  {skill.skillTagName}
+                </span>
+              ))}
+              {assignment.personSkills?.filter(skill => skill.skillType === 'strength').length === 0 && (
+                <span className="text-[#969696] text-xs">No skills listed</span>
+              )}
+            </div>
+          </div>
+          <div className="text-[#969696]">{assignment.roleOnProject || 'Team Member'}</div>
+          <div className="text-[#969696]">{getCurrentWeekHours(assignment)}h</div>
+        </div>
+      </div>
+      <div className="flex gap-1">
+        <button 
+          onClick={onEdit}
+          className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[#cccccc] hover:bg-[#3e3e42] hover:border-[#3e3e42] transition-colors"
+        >
+          Edit
+        </button>
+        <button 
+          onClick={onDelete}
+          className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-red-400 hover:bg-red-500/20 hover:border-red-500/30 transition-colors"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+});
+
+AssignmentRow.displayName = 'AssignmentRow';
+
+// Memoized Person Search Result Component for performance (Phase 4 optimization)
+interface PersonSearchResultProps {
+  person: PersonWithAvailability;
+  index: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+const PersonSearchResult = React.memo<PersonSearchResultProps>(({
+  person,
+  index,
+  isSelected,
+  onSelect
+}) => {
+  return (
+    <button
+      key={person.id}
+      onClick={onSelect}
+      role="option"
+      aria-selected={isSelected}
+      aria-describedby={`person-${person.id}-details`}
+      className={`w-full text-left px-2 py-2 text-xs hover:bg-[#3e3e42] transition-colors border-b border-[#3e3e42] last:border-b-0 ${
+        isSelected ? 'bg-[#3e3e42]' : ''
+      }`}
+    >
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <div className="text-[#cccccc] font-medium">{person.name}</div>
+          <div className="text-[#969696] text-xs">{person.role}</div>
+          
+          {/* Skills Display */}
+          <div className="flex flex-wrap gap-1 mt-1">
+            {person.hasSkillMatch && (
+              <span 
+                className="px-2 py-0.5 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                aria-label="This person has matching skills for your search"
+              >
+                ✓ Skill Match
+              </span>
+            )}
+          </div>
+        </div>
+        
+        <div className="text-right ml-2" id={`person-${person.id}-details`}>
+          <div className="text-[#cccccc] text-xs font-medium">
+            {person.availableHours?.toFixed(1) || '0'}h available
+          </div>
+          <div className="text-[#969696] text-xs">
+            {person.utilizationPercent?.toFixed(0) || '0'}% utilized
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+});
+
+PersonSearchResult.displayName = 'PersonSearchResult';
+
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
   const { projects, loading, error: projectsError } = useProjects();
@@ -69,6 +271,13 @@ const ProjectsList: React.FC = () => {
   const [personSearchResults, setPersonSearchResults] = useState<PersonWithAvailability[]>([]);
   const [selectedPersonIndex, setSelectedPersonIndex] = useState(-1);
   
+  // Pre-computed skills mapping for performance (Phase 4 optimization)
+  const [personSkillsMap, setPersonSkillsMap] = useState<Map<number, string[]>>(new Map());
+  const [skillsLastUpdated, setSkillsLastUpdated] = useState<number>(0);
+  
+  // Accessibility - Screen reader announcements (Phase 4 accessibility preservation)
+  const [srAnnouncement, setSrAnnouncement] = useState<string>('');
+  
   // Debounced person search for better performance
   const debouncedPersonSearch = useDebounce(newAssignment.personSearch, 300);
   
@@ -93,6 +302,38 @@ const ProjectsList: React.FC = () => {
       setError(null);
     }
   }, [projectsError]);
+
+  // Pre-compute person skills map for performance (Phase 4 optimization)
+  const precomputePersonSkills = useCallback(() => {
+    const newSkillsMap = new Map<number, string[]>();
+    
+    assignments.forEach(assignment => {
+      if (assignment.person && assignment.personSkills) {
+        const personId = assignment.person;
+        const existingSkills = newSkillsMap.get(personId) || [];
+        
+        // Extract strength skills and convert to lowercase for matching
+        const assignmentSkills = assignment.personSkills
+          .filter(skill => skill.skillType === 'strength')
+          .map(skill => skill.skillTagName?.toLowerCase() || '')
+          .filter(skill => skill.length > 0);
+        
+        // Combine and deduplicate skills for this person
+        const combinedSkills = [...new Set([...existingSkills, ...assignmentSkills])];
+        newSkillsMap.set(personId, combinedSkills);
+      }
+    });
+    
+    setPersonSkillsMap(newSkillsMap);
+    setSkillsLastUpdated(Date.now());
+  }, [assignments]);
+
+  // Recompute skills when assignments change
+  useEffect(() => {
+    if (assignments.length > 0) {
+      precomputePersonSkills();
+    }
+  }, [assignments, precomputePersonSkills]);
 
   useEffect(() => {
     if (selectedProject?.id) {
@@ -303,16 +544,12 @@ const ProjectsList: React.FC = () => {
     }
   };
 
-  // Memoized skill match calculation
+  // Optimized skill match calculation using pre-computed skills map (Phase 4)
   const calculateSkillMatch = useCallback((person: PersonWithAvailability, requiredSkills: string[] = []): number => {
     if (requiredSkills.length === 0) return 0;
     
-    // Get person's skill assignments (this would come from the assignment data)
-    const personSkills = assignments
-      .filter(a => a.person === person.id)
-      .flatMap(a => a.personSkills || [])
-      .filter(skill => skill.skillType === 'strength')
-      .map(skill => skill.skillTagName?.toLowerCase() || '');
+    // Get person's skills from pre-computed map (much faster than filtering assignments)
+    const personSkills = personSkillsMap.get(person.id) || [];
     
     const matches = requiredSkills.filter(reqSkill => 
       personSkills.some(personSkill => 
@@ -322,7 +559,7 @@ const ProjectsList: React.FC = () => {
     );
     
     return matches.length / requiredSkills.length; // Return match ratio
-  }, [assignments]);
+  }, [personSkillsMap]);
 
   // Handle immediate input update (no delay for UI feedback)
   const handlePersonSearch = (searchTerm: string) => {
@@ -380,6 +617,9 @@ const ProjectsList: React.FC = () => {
       .slice(0, 5);
     
     setPersonSearchResults(sortedResults);
+    
+    // Announce results for screen readers (Phase 4 accessibility)
+    setSrAnnouncement(`Found ${sortedResults.length} people matching your search. ${sortedResults.filter(p => p.hasSkillMatch).length} with skill matches.`);
   };
 
   // Effect to trigger search when debounced value changes
@@ -562,7 +802,7 @@ const ProjectsList: React.FC = () => {
     setRoleSearchResults([]);
   };
 
-  const handleDeleteAssignment = async (assignmentId: number) => {
+  const handleDeleteAssignment = useCallback(async (assignmentId: number) => {
     if (!confirm('Are you sure you want to remove this assignment?')) {
       return;
     }
@@ -575,9 +815,9 @@ const ProjectsList: React.FC = () => {
     } catch (err: any) {
       setError('Failed to delete assignment');
     }
-  };
+  }, [selectedProject?.id, loadProjectAssignments]);
 
-  const handleEditAssignment = (assignment: Assignment) => {
+  const handleEditAssignment = useCallback((assignment: Assignment) => {
     setEditingAssignment(assignment.id!);
     const currentWeekHours = getCurrentWeekHours(assignment);
     const existingRole = assignment.roleOnProject || '';
@@ -588,9 +828,9 @@ const ProjectsList: React.FC = () => {
     });
     // Clear any previous search results
     setRoleSearchResults([]);
-  };
+  }, [getCurrentWeekHours]);
 
-  const handleRoleSearch = (searchTerm: string) => {
+  const handleRoleSearch = useCallback((searchTerm: string) => {
     setEditData(prev => {
       const newData = { ...prev, roleSearch: searchTerm, roleOnProject: searchTerm };
       return newData;
@@ -1305,13 +1545,32 @@ const ProjectsList: React.FC = () => {
                               onChange={(e) => handlePersonSearch(e.target.value)}
                               onFocus={() => performPersonSearch(newAssignment.personSearch)}
                               onKeyDown={handlePersonSearchKeyDown}
+                              role="combobox"
+                              aria-expanded={personSearchResults.length > 0}
+                              aria-haspopup="listbox"
+                              aria-owns="person-search-results"
+                              aria-describedby="person-search-help"
                               className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
                               autoFocus
                             />
                             
+                            {/* Screen reader help text */}
+                            <div id="person-search-help" className="sr-only">
+                              Search for people to assign to this project. Use arrow keys to navigate results.
+                            </div>
+                            
+                            {/* ARIA live region for search results announcement */}
+                            <div aria-live="polite" aria-atomic="true" className="sr-only">
+                              {srAnnouncement}
+                            </div>
+                            
                             {/* Search Results Dropdown */}
                             {personSearchResults.length > 0 && (
-                              <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
+                              <div 
+                                id="person-search-results"
+                                role="listbox"
+                                className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto"
+                              >
                                 {personSearchResults.map((person, index) => (
                                   <button
                                     key={person.id}

@@ -175,7 +175,7 @@ def _create_excel_response(workbook, filename):
     return response
 
 
-def import_people_from_excel(file, update_existing=True, dry_run=False):
+def import_people_from_excel(file, update_existing=True, dry_run=False, progress_callback=None):
     """Import people from Excel file."""
     try:
         workbook = openpyxl.load_workbook(file, data_only=True)
@@ -209,12 +209,25 @@ def import_people_from_excel(file, update_existing=True, dry_run=False):
             'dry_run': dry_run
         }
         
-        # Process data rows
-        for row_num, row in enumerate(sheet.iter_rows(min_row=2), start=2):
+        # Get total rows for progress calculation
+        all_rows = list(sheet.iter_rows(min_row=2))
+        total_data_rows = sum(1 for row in all_rows if any(cell.value for cell in row))
+        
+        if progress_callback:
+            progress_callback({
+                'stage': 'starting',
+                'message': f'Starting import of {total_data_rows} people...',
+                'progress': 0,
+                'total': total_data_rows
+            })
+        
+        # Process data rows with progress tracking
+        for row_idx, row in enumerate(all_rows):
             if not any(cell.value for cell in row):
                 continue  # Skip empty rows
                 
             results['total_rows'] += 1
+            row_num = row_idx + 2  # Actual row number in Excel
             row_data = {}
             
             # Map row values to headers
@@ -235,6 +248,24 @@ def import_people_from_excel(file, update_existing=True, dry_run=False):
             else:
                 results['error_count'] += 1
                 results['errors'].append(f"Row {row_num}: {row_result['error']}")
+            
+            # Report progress every 10 records or at the end
+            if progress_callback and (results['total_rows'] % 10 == 0 or results['total_rows'] == total_data_rows):
+                progress_percent = int((results['total_rows'] / total_data_rows) * 100)
+                progress_callback({
+                    'stage': 'processing',
+                    'message': f'Processed {results["total_rows"]}/{total_data_rows} people (Success: {results["success_count"]}, Errors: {results["error_count"]})',
+                    'progress': progress_percent,
+                    'total': total_data_rows
+                })
+        
+        if progress_callback:
+            progress_callback({
+                'stage': 'complete',
+                'message': f'Import completed: {results["success_count"]} successful, {results["error_count"]} errors',
+                'progress': 100,
+                'total': total_data_rows
+            })
         
         return results
         
