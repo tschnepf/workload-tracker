@@ -249,11 +249,12 @@ export const departmentsApi = {
 
 // Assignment API
 export const assignmentsApi = {
-  // Get all assignments with pagination support
-  list: (params?: { page?: number; page_size?: number }) => {
+  // Get all assignments with pagination support and optional project filtering
+  list: (params?: { page?: number; page_size?: number; project?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    if (params?.project) queryParams.set('project', params.project.toString());
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`);
   },
