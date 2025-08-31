@@ -205,3 +205,28 @@ This document tracks planned features and improvements for the Workload Tracker 
 
 *Last Updated: August 30, 2025*  
 *Next Review: September 30, 2025*
+
+---
+
+## 🎯 Backlog Additions (from R2-REBUILD request)
+
+These are intentionally deferred and tracked here for future implementation.
+
+### Advanced Skills/Departments
+- Skill gap analysis across teams and projects
+- Department hierarchy visualization and roll-up metrics
+- Bulk operations for departments and skills maintenance
+
+Sources: `prompts/R2-REBUILD-DEPARTMENTS.md`, `prompts/R2-REBUILD-MASTER-GUIDE.md` (Chunk 6)
+
+### Contracts/Compliance
+- Contract tracking with key dates and budget checks
+- Compliance checks aligned to client requirements
+
+Source: `prompts/R2-REBUILD-CONTRACTS.md`
+
+### Automation/Notifications
+- Email notifications for assignment additions/changes and upcoming deadlines
+- Automated suggestions for workload balancing and risk alerts
+
+Sources: `prompts/R2-REBUILD-004-MANAGER-FEATURES.md`, `prompts/R2-REBUILD-002-BUSINESS-LOGIC.md`
