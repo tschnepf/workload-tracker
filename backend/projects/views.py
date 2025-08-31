@@ -1,12 +1,15 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db.models import Max
+from django.db.models import Max, Count, Exists, OuterRef, Q
 from django.http import HttpResponseNotModified, StreamingHttpResponse
-from django.utils.http import http_date
+from django.utils.http import http_date, parse_http_date
+from django.utils import timezone
 from .models import Project
 from .serializers import ProjectSerializer
 from .utils.excel_handler import export_projects_to_excel, import_projects_from_file
+from deliverables.models import Deliverable
+from assignments.models import Assignment
 import hashlib
 import json
 import time
@@ -170,6 +173,115 @@ class ProjectViewSet(viewsets.ModelViewSet):
             'type': 'progress',
             **progress_data
         }) + '\n'
+
+    @action(detail=False, methods=['get'], url_path='filter-metadata')
+    def filter_metadata(self, request):
+        """Get optimized filter metadata for all projects.
+
+        Returns camelCase keys for direct frontend consumption:
+        {
+          "projectFilters": {
+            "<projectId>": {
+              "assignmentCount": number,
+              "hasFutureDeliverables": boolean,
+              "status": string
+            }, ...
+          }
+        }
+        """
+        today = timezone.now().date()
+
+        queryset = self.get_queryset()
+
+        # Compute conservative cache validators (counts + last modified across related models)
+        proj_aggr = queryset.aggregate(
+            last_modified=Max('updated_at'),
+            total=Count('id')
+        )
+        asn_aggr = Assignment.objects.filter(
+            project__is_active=True
+        ).aggregate(
+            last_modified=Max('updated_at'),
+            total=Count('id')
+        )
+        del_aggr = Deliverable.objects.filter(
+            project__is_active=True
+        ).aggregate(
+            last_modified=Max('updated_at'),
+            total=Count('id')
+        )
+
+        # Determine overall last_modified across models
+        lm_candidates = [
+            proj_aggr.get('last_modified'),
+            asn_aggr.get('last_modified'),
+            del_aggr.get('last_modified'),
+        ]
+        last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
+
+        # Build a stable ETag based on totals and last_modified
+        etag_content = f"{proj_aggr.get('total', 0)}-{asn_aggr.get('total', 0)}-{del_aggr.get('total', 0)}-"
+        etag_content += last_modified.isoformat() if last_modified else 'none'
+        etag = hashlib.md5(etag_content.encode()).hexdigest()
+
+        # Conditional request handling
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match.strip('"') == etag:
+            response = HttpResponseNotModified()
+            response['ETag'] = f'"{etag}"'
+            if last_modified:
+                response['Last-Modified'] = http_date(last_modified.timestamp())
+            return response
+
+        if_modified_since = request.META.get('HTTP_IF_MODIFIED_SINCE')
+        if last_modified and if_modified_since:
+            try:
+                if_modified_timestamp = parse_http_date(if_modified_since)
+                last_modified_timestamp = last_modified.timestamp()
+                if last_modified_timestamp <= if_modified_timestamp:
+                    response = HttpResponseNotModified()
+                    response['ETag'] = f'"{etag}"'
+                    response['Last-Modified'] = http_date(last_modified_timestamp)
+                    return response
+            except ValueError:
+                # Ignore malformed header
+                pass
+        projects_data = (
+            queryset
+            .annotate(
+                assignment_count=Count(
+                    'assignment',
+                    filter=Q(assignment__is_active=True),
+                ),
+                has_future_deliverables=Exists(
+                    Deliverable.objects.filter(
+                        project=OuterRef('pk'),
+                        date__gt=today,
+                        date__isnull=False,
+                        is_completed=False,
+                    )
+                ),
+            )
+            .values('id', 'assignment_count', 'has_future_deliverables', 'status')
+        )
+
+        response = Response({
+            'projectFilters': {
+                str(p['id']): {
+                    'assignmentCount': p['assignment_count'],
+                    'hasFutureDeliverables': p['has_future_deliverables'],
+                    'status': p['status'],
+                }
+                for p in projects_data
+            }
+        })
+
+        # Add cache headers
+        response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+        response['Cache-Control'] = 'public, max-age=30'
+        return response
     
     @action(detail=False, methods=['post'])
     def import_excel(self, request):

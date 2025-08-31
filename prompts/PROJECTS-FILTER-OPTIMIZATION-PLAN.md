@@ -14,7 +14,12 @@ Replace client-side assignment counting and deliverable filtering with optimized
 - ✅ No regressions in search, sorting, or other filter functionality
 
 ## 🏗️ **ARCHITECTURE OVERVIEW**
-```
+    ```
+
+    Note:
+    - Use the default related_query_name `assignment` for filters and counts (not `assignments`).
+    - Use `assignment__is_active=True` in the `Count` filter.
+    - Exclude completed deliverables when checking for future dates (`is_completed=False`).
 Current (Problematic):
 Frontend loads ALL assignments → Client-side counting → Filter application
 
@@ -36,7 +41,7 @@ Backend computes filter metadata → Single API response → Direct filter appli
 3. **Performance monitoring** (for metrics)
 
 ### **Field Name Issue (The Real One):**
-- **CRITICAL FIX NEEDED:** `assignments__is_active` instead of `assignments__isActive` in ORM queries
+- **CRITICAL FIX NEEDED:** Use `assignment__is_active` (singular related_query_name) in ORM filters; do not use camelCase or `assignments__...`
 - **Everything else:** Serializers handle camelCase transformation automatically ✅
 
 ---
@@ -54,7 +59,7 @@ Backend computes filter metadata → Single API response → Direct filter appli
 Analyze current database query performance to establish baseline metrics before optimization.
 
 REQUIREMENTS:
-1. Create Django management command: analyze_projects_queries.py
+1. Reuse existing monitoring command: backend/monitoring/management/commands/monitor_performance.py (extend if needed)
 2. Capture EXPLAIN ANALYZE for existing query patterns:
    - Current assignment counting queries from ProjectsList
    - Project filtering queries 
@@ -85,30 +90,11 @@ TEST REQUIREMENTS:
 
 **Prompt for AI Agent:**
 ```
-Create comprehensive performance benchmarking system for measuring optimization impact.
+Prefer reusing existing monitoring utilities and add lightweight timings around the new code paths.
 
 REQUIREMENTS:
-1. Frontend Performance Monitor:
-   ```typescript
-   // Add to frontend/src/utils/performanceMonitor.ts
-   class PerformanceMonitor {
-     private metrics = new Map<string, number[]>()
-     
-     startTimer(label: string): () => void
-     recordMemory(label: string): void
-     generateReport(): PerformanceReport
-     compareWithBaseline(baseline: PerformanceReport): ComparisonReport
-   }
-   ```
-
-2. Backend Metrics Collection:
-   ```python
-   # Add to backend/core/performance.py
-   class QueryPerformanceMiddleware:
-       def process_request(self, request):
-           # Track query count, execution time, memory usage
-   ```
-
+1. Frontend: use existing utilities in `frontend/src/utils/performanceMonitoring.ts` and `frontend/src/utils/monitoring.tsx`; add timing around the new hook and filter computation.
+2. Backend: reuse `backend/monitoring/management/commands/monitor_performance.py` for DB metrics and slow-query/N+1 checks.
 3. Automated Performance Tests:
    - Load test scripts for 100/500/1000+ projects
    - Memory leak detection during prolonged filtering
@@ -146,15 +132,15 @@ REQUIREMENTS:
    class ProjectViewSet(viewsets.ModelViewSet):
        # ... existing code ...
        
-       @action(detail=False, methods=['get'])
+       @action(detail=False, methods=['get'], url_path='filter-metadata')
        def filter_metadata(self, request):
            """Get optimized filter metadata for all projects"""
            today = timezone.now().date()
            
            # ✅ CRITICAL: Use correct field name assignments__is_active (not isActive)
            projects_data = Project.objects.filter(is_active=True).annotate(
-               assignment_count=Count(
-                   'assignments',
+                assignment_count=Count(
+                    'assignment',
                    filter=Q(assignments__is_active=True),  # ✅ CORRECT field name
                    distinct=True
                ),
@@ -180,7 +166,7 @@ REQUIREMENTS:
            })
    ```
 
-2. **Endpoint will be accessible at:** `/api/projects/filter_metadata/` (DRF action URL pattern)
+2. **Endpoint will be accessible at:** `/api/projects/filter-metadata/` (DRF action URL pattern)
 3. **Follow existing ViewSet patterns** - no standalone view needed
 4. **Use existing permissions** from ProjectViewSet
 5. **Basic error handling** with try/catch (circuit breaker optional)
@@ -207,14 +193,12 @@ TEST REQUIREMENTS:
 
 **Prompt for AI Agent:**
 ```
-Add URL routing for the new filter metadata endpoint.
+No manual URL routing needed. The DRF router exposes the action at `/api/projects/filter-metadata/` via `url_path`.
 
 REQUIREMENTS:
-1. Add route to backend/projects/urls.py:
-   path('filter-metadata/', ProjectFilterMetadataView.as_view(), name='project-filter-metadata')
-2. Verify the endpoint is accessible at: /api/projects/filter-metadata/
-3. Follow existing URL pattern conventions in the codebase
-4. Ensure proper naming for reverse URL lookups
+1. Verify the endpoint is accessible at: /api/projects/filter-metadata/
+2. Ensure action permissions and throttling (if any) mirror ProjectViewSet defaults
+3. Follow existing ViewSet/action conventions in the codebase
 
 TEST REQUIREMENTS:
 - Verify endpoint is accessible: curl http://localhost:8000/api/projects/filter-metadata/
@@ -229,7 +213,7 @@ TEST REQUIREMENTS:
 Create comprehensive tests for the project filter metadata endpoint using Django test framework.
 
 REQUIREMENTS:
-1. Create test file: backend/projects/test_filter_metadata.py
+1. Create test file: backend/projects/tests/test_filter_metadata.py (or backend/projects/tests.py)
 2. Test cases to implement:
    - Test with projects having no assignments/deliverables
    - Test with projects having assignments but no future deliverables  
@@ -237,15 +221,33 @@ REQUIREMENTS:
    - Test with projects having past deliverables only
    - Test with inactive assignments (should be excluded)
    - Test with null deliverable dates
+   - Test assignments with null `project` are ignored in counts (legacy data)
+   - Test completed future deliverables do not count as future (is_completed=True)
    - Test performance with larger datasets (100+ projects)
 3. Use Django TestCase with proper fixtures
 4. Follow existing test patterns in the codebase
-5. Test JSON response format matches specification
+5. Test JSON response format matches camelCase specification
 
 TEST REQUIREMENTS:
 - All tests pass: docker-compose exec backend python manage.py test projects.test_filter_metadata
 - Verify query count is minimal (< 5 queries total regardless of project count)
 - Response time < 100ms for 100 projects
+- Conditional GET: subsequent requests return 304 when ETag/Last-Modified indicate unchanged data
+```
+
+#### **Step 1.4: HTTP Caching on Action (ETag/Last-Modified)**
+
+```
+Add conditional response headers to filter-metadata action (reuse ProjectViewSet.list pattern).
+
+REQUIREMENTS:
+1. Compute conservative last_modified using max(updated_at) over Projects and related Assignments/Deliverables.
+2. Generate an ETag (e.g., md5 of count + last_modified) and honor If-None-Match/If-Modified-Since.
+3. Return 304 when unchanged; set Cache-Control: public, max-age=30 on 200 responses.
+
+TEST REQUIREMENTS:
+- Repeated requests return 304 when data unchanged.
+- Headers present and updated correctly after mutations.
 ```
 
 ---
@@ -259,18 +261,9 @@ TEST REQUIREMENTS:
 Add new API method to frontend/src/services/api.ts for fetching project filter metadata.
 
 REQUIREMENTS:
-1. Add to projectsApi object:
-   getFilterMetadata: () => Promise<ProjectFilterMetadataResponse>
-2. Create TypeScript interface:
-   interface ProjectFilterMetadataResponse {
-     project_filters: {
-       [projectId: string]: {
-         assignment_count: number;
-         has_future_deliverables: boolean;
-         status: string;
-       }
-     }
-   }
+1. Add to projectsApi object: `getFilterMetadata: () => Promise<ProjectFilterMetadataResponse>` calling `/projects/filter-metadata/`.
+2. Create TypeScript interface (camelCase):
+   `interface ProjectFilterMetadataResponse { projectFilters: { [projectId: string]: { assignmentCount: number; hasFutureDeliverables: boolean; status: string; } } }`
 3. Add interface to frontend/src/types/models.ts
 4. Use existing fetchApi pattern for consistency
 5. Include proper error handling
@@ -296,28 +289,22 @@ Create a custom React hook for managing project filter metadata state with circu
 
 REQUIREMENTS:
 1. Create frontend/src/hooks/useProjectFilterMetadata.ts
-2. **CIRCUIT BREAKER IMPLEMENTATION:**
+2. **React Query v5 hook:**
    ```typescript
    // Add to frontend/src/hooks/useProjectFilterMetadata.ts
    const useProjectFilterMetadata = () => {
-     return useQuery(
-       ['projectFilterMetadata'], 
-       projectsApi.getFilterMetadata,
-       {
-         retry: (failureCount, error) => {
-           // Implement exponential backoff
-           if (failureCount > 3) return false
-           return !error.message.includes('Circuit breaker')
-         },
-         retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
-         fallbackData: null, // Graceful degradation
-         staleTime: 30000, // 30 seconds
-         keepPreviousData: true,
-         onError: (error) => {
-           console.warn('Filter metadata failed, falling back to legacy system:', error)
-         }
-       }
-     )
+     return useQuery({
+       queryKey: ['projectFilterMetadata'],
+       queryFn: projectsApi.getFilterMetadata,
+       staleTime: 30_000,
+       retry: 3,
+       retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30_000),
+       placeholderData: undefined,
+       networkMode: 'online',
+       onError: (error) => {
+         console.warn('Filter metadata failed, falling back to legacy system:', error)
+       },
+     })
    }
    ```
 
@@ -335,7 +322,7 @@ REQUIREMENTS:
 IMPLEMENTATION DETAILS:
 - Follow existing hook patterns in the codebase
 - Use React Query for caching and state management
-- Set appropriate stale time (30 seconds) with keepPreviousData
+- Set appropriate stale time (30 seconds); no keepPreviousData in v5
 - Include retry logic with exponential backoff
 - Export hook with proper TypeScript types
 - Add performance timing logging
@@ -368,16 +355,14 @@ Integrate the new filter metadata hook into ProjectsList.tsx component with prop
 REQUIREMENTS:
 1. **MEMORY LEAK PREVENTION:**
    ```typescript
-   // FIXED: Proper cleanup in ProjectsList component
-   const ProjectsList = () => {
-     // Add cleanup for parallel systems
-     useEffect(() => {
-       return () => {
-         // Cleanup both old and new filter systems
-         queryClient.removeQueries(['assignmentCounts'])
-         queryClient.removeQueries(['projectFilterMetadata'])
-       }
-     }, [])
+    // FIXED: Proper cleanup in ProjectsList component
+    const ProjectsList = () => {
+      // Minimal cleanup; let React Query manage cache via gcTime
+      useEffect(() => {
+        return () => {
+          // No manual query removals necessary
+        }
+      }, [])
      
      // Memoize expensive computations to prevent memory buildup
      const optimizedFilterFunctions = useMemo(() => ({
@@ -391,7 +376,7 @@ REQUIREMENTS:
    }
    ```
 
-2. Import and use useProjectFilterMetadata hook with circuit breaker
+2. Import and use useProjectFilterMetadata hook (React Query v5 options)
 3. Replace existing assignmentCountData loading with filter metadata
 4. Maintain backward compatibility during transition with proper cleanup
 5. Add loading state handling for filter metadata
@@ -478,7 +463,7 @@ REQUIREMENTS:
    - Maintain all other existing filters unchanged
 3. Use the new helper functions created in Step 3.2
 4. Include performance timing measurements
-5. Add conditional logic to compare old vs new results for validation
+5. Add conditional logic to compare old vs new results for validation (development only)
 
 IMPLEMENTATION DETAILS:
 - Modify the existing filter logic incrementally
@@ -509,56 +494,14 @@ TEST REQUIREMENTS:
 
 **Prompt for AI Agent:**
 ```
-Implement comprehensive cache invalidation strategy with race condition prevention and defined SLAs.
+Implement a simple, robust invalidation strategy with clear SLAs.
 
 REQUIREMENTS:
-1. **ATOMIC CACHE OPERATIONS WITH LOCKING:**
+1. **Simple invalidation:** On assignment/deliverable CRUD success, call:
    ```typescript
-   // FIXED: Atomic cache operations with locking
-   class CacheManager {
-     private invalidationLocks = new Map<string, Promise<void>>()
-     
-     async invalidateWithLock(cacheKey: string, projectIds: number[]): Promise<void> {
-       const lockKey = `invalidation_${cacheKey}`
-       
-       // Prevent concurrent invalidations of same data
-       if (this.invalidationLocks.has(lockKey)) {
-         await this.invalidationLocks.get(lockKey)
-         return
-       }
-       
-       const invalidationPromise = this.performInvalidation(cacheKey, projectIds)
-       this.invalidationLocks.set(lockKey, invalidationPromise)
-       
-       try {
-         await invalidationPromise
-       } finally {
-         this.invalidationLocks.delete(lockKey)
-       }
-     }
-     
-     private async performInvalidation(cacheKey: string, projectIds: number[]): Promise<void> {
-       // Atomic cache invalidation
-       await queryClient.cancelQueries([cacheKey])
-       await queryClient.invalidateQueries([cacheKey, { projectIds }])
-     }
-   }
+   queryClient.invalidateQueries({ queryKey: ['projectFilterMetadata'] })
    ```
-
-2. **SMART INVALIDATION STRATEGY:**
-   ```typescript
-   // Replace blanket invalidation with targeted approach
-   const invalidateFilterCache = (projectIds: number[]) => {
-     // Only invalidate specific projects, not entire cache
-     queryClient.invalidateQueries(['projectFilterMetadata', { projectIds }])
-   }
-   
-   // Prevent cache thrashing from rapid updates
-   const debouncedInvalidation = useDebouncedCallback(
-     (projectIds: number[]) => invalidateFilterCache(projectIds),
-     1000 // 1 second debounce
-   )
-   ```
+2. **Avoid custom locks/debouncing:** Rely on React Query v5 de-duplication and staleTime; no custom locking/debouncing needed.
 
 3. **CACHE INVALIDATION SLAs:**
    - **Eventual Consistency Window**: 30 seconds maximum
@@ -570,26 +513,24 @@ REQUIREMENTS:
    - New assignment is created/updated/deleted
    - New deliverable is created/updated/deleted (especially date changes)
    - Project status changes
-5. Use React Query's invalidateQueries with targeted cache management
-6. Add cache invalidation to existing mutation hooks with debouncing:
+5. Use React Query's invalidateQueries in mutation onSuccess handlers
+6. Add cache invalidation to existing mutation hooks:
    - Assignment CRUD operations
    - Deliverable CRUD operations
    - Project status updates
 7. Include optimistic updates for immediate UI feedback
 
 IMPLEMENTATION DETAILS:
-- Use targeted cache invalidation instead of blanket invalidation
-- Implement atomic cache operations with locking mechanisms
-- Use React Query's useMutation onSuccess callbacks with debouncing
-- Include comprehensive error handling for failed invalidations
-- Add performance monitoring for cache hit/miss ratios
+- Use a single, consistent invalidation for the metadata query
+- Hook into mutation onSuccess callbacks (assignments, deliverables, projects)
+- Include error handling for failed invalidations
+- Add lightweight performance logging as needed
 
 CACHE STRATEGY:
-- Use smart invalidation that only affects relevant projects
-- Implement cache debouncing to prevent thrashing
+- Simple invalidation of `['projectFilterMetadata']`
 - Use background refetch to update cache without blocking UI
-- Set appropriate stale time (30 seconds) with keepPreviousData
-- Include circuit breaker for cache operations
+- Set appropriate stale time (30 seconds)
+- Keep fallback to legacy logic if metadata unavailable
 
 TEST REQUIREMENTS:
 - Cache invalidates when assignments are added/removed
@@ -605,7 +546,7 @@ TEST REQUIREMENTS:
 
 **Prompt for AI Agent:**
 ```
-Add comprehensive performance monitoring to measure the improvement.
+Leverage existing performance monitoring utilities and add lightweight timings to measure the improvement.
 
 REQUIREMENTS:
 1. Add performance timing logs for:
@@ -618,7 +559,7 @@ REQUIREMENTS:
 4. Include user experience metrics (time to interactive)
 
 IMPLEMENTATION DETAILS:
-- Use Performance API for accurate timing measurements
+- Use Performance API and existing utilities for timing measurements
 - Log performance data to console in development
 - Create before/after comparison reports
 - Add memory usage monitoring
@@ -707,6 +648,7 @@ REQUIREMENTS:
 
 SAFETY REQUIREMENTS:
 - Only remove code after Step 5.1 tests pass completely
+- Maintain feature flag during validation and require no mismatches over a defined period before removal
 - Keep git commit history for easy rollback if needed
 - Test thoroughly after each removal
 - Maintain all functionality while removing implementation
@@ -744,6 +686,7 @@ REQUIREMENTS:
 
 DOCUMENTATION UPDATES:
 - Add filter metadata endpoint to API reference
+- Document endpoint path: `/api/projects/filter-metadata/` (DRF action via url_path)
 - Document performance improvements achieved
 - Update component architecture diagrams
 - Add troubleshooting for filter metadata issues

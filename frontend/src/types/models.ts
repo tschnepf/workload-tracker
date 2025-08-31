@@ -221,3 +221,14 @@ export interface DashboardData {
     created: string;
   }>;
 }
+
+// Optimized Projects page filter metadata response
+export interface ProjectFilterMetadataResponse {
+  projectFilters: {
+    [projectId: string]: {
+      assignmentCount: number;
+      hasFutureDeliverables: boolean;
+      status: string;
+    };
+  };
+}

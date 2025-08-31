@@ -8,12 +8,15 @@
 import React, { useState, useEffect } from 'react';
 import { Project, Deliverable } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 
 interface DeliverablesSectionProps {
   project: Project;
 }
 
 const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) => {
+  const queryClient = useQueryClient();
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -57,6 +60,8 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
         ...deliverableData
       });
       await loadDeliverables();
+      // Invalidate project filter metadata (future deliverables flags)
+      await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       setShowAddForm(false);
     } catch (err: any) {
       setError('Failed to create deliverable');
@@ -67,6 +72,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
     try {
       await deliverablesApi.update(id, deliverableData);
       await loadDeliverables();
+      await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       setEditingId(null);
     } catch (err: any) {
       setError('Failed to update deliverable');
@@ -81,6 +87,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
     try {
       await deliverablesApi.delete(id);
       await loadDeliverables();
+      await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
     } catch (err: any) {
       setError('Failed to delete deliverable');
     }
@@ -121,6 +128,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
     try {
       const deliverableIds = newDeliverables.map(d => d.id!);
       await deliverablesApi.reorder(project.id!, deliverableIds);
+      await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
     } catch (err: any) {
       setError('Failed to reorder deliverables');
       // Reload on error to get correct order

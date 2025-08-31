@@ -4,11 +4,13 @@
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { Link } from 'react-router-dom';
-import { Project, Person, Assignment, AssignmentCountData, ProjectAssignmentCounts } from '@/types/models';
+import { Project, Person, Assignment } from '@/types/models';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { usePeople } from '@/hooks/usePeople';
 import { assignmentsApi, peopleApi } from '@/services/api';
+import { useProjectFilterMetadata } from '@/hooks/useProjectFilterMetadata';
+import type { ProjectFilterMetadataResponse } from '@/types/models';
 
 interface PersonWithAvailability extends Person {
   availableHours?: number;
@@ -256,10 +258,8 @@ const ProjectsList: React.FC = () => {
   // Assignment management
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   
-  // Assignment count tracking for "No Assignments" filter
-  const [allAssignmentsCountData, setAllAssignmentsCountData] = useState<AssignmentCountData[]>([]);
-  const [assignmentCountsLoading, setAssignmentCountsLoading] = useState(false);
-  const [assignmentCountsError, setAssignmentCountsError] = useState<string | null>(null);
+  // Optimized filter metadata (assignment counts + hasFutureDeliverables)
+  const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata();
   const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [newAssignment, setNewAssignment] = useState({
     personSearch: '',
@@ -293,52 +293,69 @@ const ProjectsList: React.FC = () => {
   const statusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'no_assignments', 'Show All'];
   const editableStatusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled'];
 
-  /**
-   * Memoized calculation of project assignment counts for efficient filtering
-   * Uses Map data structure for O(1) lookup performance
-   * Only recalculates when assignment count data or projects change
-   */
-  const projectAssignmentCounts = useMemo<ProjectAssignmentCounts>(() => {
-    const countMap = new Map<number, number>();
-    let totalCount = 0;
-    
-    // Process only active assignments with valid project IDs
-    allAssignmentsCountData
-      .filter(assignment => assignment.isActive && assignment.project !== null)
-      .forEach(assignment => {
-        const projectId = assignment.project!;
-        const currentCount = countMap.get(projectId) || 0;
-        countMap.set(projectId, currentCount + 1);
-        totalCount++;
-      });
-    
-    return {
-      projectCounts: countMap,
-      totalAssignments: totalCount,
-      projectsWithNoAssignments: Math.max(0, projects.length - countMap.size),
-      lastUpdated: new Date()
-    };
-  }, [allAssignmentsCountData, projects]);
-
-  // Performance monitoring for development (memory efficient)
+  // Optional: log filter metadata status in development
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && allAssignmentsCountData.length > 0) {
-      const performanceData = {
-        totalAssignments: allAssignmentsCountData.length,
-        totalProjects: projects.length,
-        projectsWithNoAssignments: projectAssignmentCounts.projectsWithNoAssignments,
-        mapSize: projectAssignmentCounts.projectCounts.size,
-        cacheEfficiency: Math.round((projectAssignmentCounts.projectCounts.size / Math.max(1, projects.length)) * 100)
-      };
-      
-      // Only log when values actually change to reduce noise
-      const currentHash = JSON.stringify(performanceData);
-      if (currentHash !== (window as any).__lastPerformanceHash) {
-        console.debug('Assignment Count Performance:', performanceData);
-        (window as any).__lastPerformanceHash = currentHash;
-      }
+    if (process.env.NODE_ENV === 'development' && filterMetadata) {
+      const size = Object.keys(filterMetadata.projectFilters || {}).length;
+      console.debug('Projects filter metadata loaded:', { entries: size });
     }
-  }, [allAssignmentsCountData.length, projects.length, projectAssignmentCounts.projectsWithNoAssignments, projectAssignmentCounts.projectCounts.size]);
+  }, [filterMetadata]);
+
+  // Optimized filter helper functions (Step 3.2)
+  const optimizedFilterFunctions = useMemo(() => {
+    const hasNoAssignments = (
+      projectId: number | undefined,
+      metadata: ProjectFilterMetadataResponse | null
+    ): boolean => {
+      if (!projectId) return false;
+      const meta = metadata?.projectFilters?.[String(projectId)];
+      if (!meta) {
+        if (process.env.NODE_ENV === 'development') {
+          // Fallback to legacy logic not available here; default to conservative false
+          console.debug('Filter fallback: hasNoAssignments without metadata for project', projectId);
+        }
+        return false;
+      }
+      return meta.assignmentCount === 0;
+    };
+
+    const hasNoFutureDeliverables = (
+      projectId: number | undefined,
+      metadata: ProjectFilterMetadataResponse | null
+    ): boolean => {
+      if (!projectId) return false;
+      const meta = metadata?.projectFilters?.[String(projectId)];
+      if (!meta) {
+        if (process.env.NODE_ENV === 'development') {
+          // Fallback to legacy logic not available here; default to conservative false
+          console.debug('Filter fallback: hasNoFutureDeliverables without metadata for project', projectId);
+        }
+        return false;
+      }
+      return !meta.hasFutureDeliverables;
+    };
+
+    const matchesStatusFilter = (
+      project: Project,
+      statusFilter: string,
+      metadata: ProjectFilterMetadataResponse | null
+    ): boolean => {
+      if (!project) return false;
+      if (statusFilter === 'Show All') return true;
+      if (statusFilter === 'active_no_deliverables') {
+        // Active projects that do NOT have future deliverables
+        return project.status === 'active' && hasNoFutureDeliverables(project.id, metadata);
+      }
+      if (statusFilter === 'no_assignments') {
+        // Projects with zero assignments
+        return hasNoAssignments(project.id, metadata);
+      }
+      // Default: direct status match
+      return project.status === statusFilter;
+    };
+
+    return { hasNoAssignments, hasNoFutureDeliverables, matchesStatusFilter };
+  }, []);
 
   // Set error from React Query if needed
   useEffect(() => {
@@ -349,120 +366,7 @@ const ProjectsList: React.FC = () => {
     }
   }, [projectsError]);
 
-  /**
-   * Load all assignments for count tracking (lightweight data only)
-   * Extracts minimal fields to reduce memory footprint and improve performance
-   * Handles errors gracefully with proper user feedback
-   */
-  const loadAllAssignmentsForCounting = useCallback(async () => {
-    try {
-      setAssignmentCountsLoading(true);
-      setAssignmentCountsError(null);
-      
-      // Use existing API endpoint but extract minimal data
-      const response = await assignmentsApi.listAll();
-      
-      // Validate and sanitize response data
-      if (!Array.isArray(response)) {
-        throw new Error('Invalid API response: expected array of assignments');
-      }
-      
-      const lightweightAssignments: AssignmentCountData[] = response
-        .filter(assignment => {
-          // Filter out invalid assignments
-          return assignment && 
-                 typeof assignment.id === 'number' && 
-                 assignment.id > 0;
-        })
-        .map(assignment => ({
-          id: assignment.id!,
-          project: typeof assignment.project === 'number' ? assignment.project : null,
-          isActive: assignment.isActive !== false // Default to true if undefined
-        }));
-      
-      setAllAssignmentsCountData(lightweightAssignments);
-    } catch (err: any) {
-      console.error('Failed to load assignments for counting:', err);
-      
-      // Provide specific error messages based on error type
-      let errorMessage = 'Failed to load assignment data for filtering';
-      if (err.name === 'TypeError' && err.message.includes('fetch')) {
-        errorMessage = 'Network error: Unable to connect to server. Please check your connection.';
-      } else if (err.status === 0) {
-        errorMessage = 'Network timeout: Server is not responding. Please try again.';
-      } else if (err.status >= 500) {
-        errorMessage = 'Server error: Please try again in a few moments.';
-      } else if (err.message.includes('Invalid API response')) {
-        errorMessage = 'Data format error: Please refresh the page.';
-      }
-      
-      setAssignmentCountsError(errorMessage);
-      // Set empty data to prevent filter from breaking
-      setAllAssignmentsCountData([]);
-    } finally {
-      setAssignmentCountsLoading(false);
-    }
-  }, []);
-
-  /**
-   * Optimized cache invalidation for individual assignment changes
-   * Avoids full reload when possible by updating specific entries
-   */
-  const updateAssignmentCountCache = useCallback(async (operation: 'create' | 'update' | 'delete', assignmentData?: Partial<Assignment>) => {
-    try {
-      if (operation === 'create' && assignmentData?.id && typeof assignmentData.id === 'number') {
-        // Add new assignment to cache with validation
-        const newCountData: AssignmentCountData = {
-          id: assignmentData.id,
-          project: typeof assignmentData.project === 'number' ? assignmentData.project : null,
-          isActive: assignmentData.isActive !== false
-        };
-        
-        // Check for duplicate IDs before adding
-        setAllAssignmentsCountData(prev => {
-          const exists = prev.some(a => a.id === assignmentData.id);
-          if (exists) {
-            console.warn('Attempt to add duplicate assignment ID to cache:', assignmentData.id);
-            return prev;
-          }
-          return [...prev, newCountData];
-        });
-      } else if (operation === 'delete' && assignmentData?.id && typeof assignmentData.id === 'number') {
-        // Remove assignment from cache with validation
-        setAllAssignmentsCountData(prev => {
-          const filtered = prev.filter(a => a.id !== assignmentData.id);
-          if (filtered.length === prev.length) {
-            console.warn('Attempt to delete non-existent assignment ID from cache:', assignmentData.id);
-          }
-          return filtered;
-        });
-      } else {
-        // For updates or when we don't have sufficient data, do full reload
-        await loadAllAssignmentsForCounting();
-      }
-    } catch (err) {
-      console.error('Cache update failed, falling back to full reload:', err);
-      // Clear error state before reload to prevent UI confusion
-      setAssignmentCountsError(null);
-      await loadAllAssignmentsForCounting();
-    }
-  }, [loadAllAssignmentsForCounting]);
-
-  // Load assignment count data on component mount and when projects change
-  // Debounced to prevent multiple calls during project loading and handle race conditions
-  useEffect(() => {
-    if (projects.length > 0 && allAssignmentsCountData.length === 0 && !assignmentCountsLoading) {
-      // Clear any existing timeout to prevent race conditions
-      const timeoutId = setTimeout(() => {
-        // Double-check conditions haven't changed during timeout
-        if (allAssignmentsCountData.length === 0 && !assignmentCountsLoading) {
-          loadAllAssignmentsForCounting();
-        }
-      }, 100); // Small delay to batch with other loading operations
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [projects.length, loadAllAssignmentsForCounting, allAssignmentsCountData.length, assignmentCountsLoading]);
+  // No need to pre-load assignments; filter metadata supplies counts and future deliverable flags.
 
   // Pre-compute person skills map for performance (Phase 4 optimization)
   const precomputePersonSkills = useCallback(() => {
@@ -832,8 +736,8 @@ const ProjectsList: React.FC = () => {
 
       const newAssignment = await assignmentsApi.create(assignmentData);
       await loadProjectAssignments(selectedProject.id);
-      // Optimized cache update for better performance
-      await updateAssignmentCountCache('create', newAssignment);
+      // Invalidate filter metadata cache (counts + future dates)
+      await invalidateFilterMeta();
       setShowAddAssignment(false);
     } catch (err: any) {
       setError('Failed to create assignment');
@@ -876,12 +780,12 @@ const ProjectsList: React.FC = () => {
       if (selectedProject?.id) {
         await loadProjectAssignments(selectedProject.id);
       }
-      // Optimized cache update for better performance
-      await updateAssignmentCountCache('delete', { id: assignmentId });
+      // Invalidate filter metadata cache
+      await invalidateFilterMeta();
     } catch (err: any) {
       setError('Failed to delete assignment');
     }
-  }, [selectedProject?.id, loadProjectAssignments, updateAssignmentCountCache]);
+  }, [selectedProject?.id, loadProjectAssignments, invalidateFilterMeta]);
 
   const handleEditAssignment = useCallback((assignment: Assignment) => {
     setEditingAssignment(assignment.id!);
@@ -995,8 +899,8 @@ const ProjectsList: React.FC = () => {
         await loadProjectAssignments(selectedProject.id);
       }
       
-      // For updates, use full reload since assignment project might have changed
-      await updateAssignmentCountCache('update');
+      // Invalidate filter metadata cache
+      await invalidateFilterMeta();
       
       setEditingAssignment(null);
       setRoleSearchResults([]);
@@ -1032,6 +936,8 @@ const ProjectsList: React.FC = () => {
         id: selectedProject.id,
         data: { status: newStatus }
       });
+      // Invalidate filter metadata as status is part of the payload
+      await invalidateFilterMeta();
     } catch (err: any) {
       // Revert optimistic update on error
       setSelectedProject(selectedProject);
@@ -1073,34 +979,25 @@ const ProjectsList: React.FC = () => {
   };
 
   // Memoized filtered and sorted projects for better performance
-  const filteredProjects = useMemo(() => projects.filter(project => {
-    let matchesStatus = false;
-    
-    if (statusFilter === 'Show All') {
-      matchesStatus = true;
-    } else if (statusFilter === 'active_no_deliverables') {
-      // Filter to active projects (deliverable filtering removed - feature will be simplified)
-      matchesStatus = project.status === 'active';
-    } else if (statusFilter === 'no_assignments') {
-      // Filter to projects with zero assignments using efficient Map lookup
-      // Handle projects without valid IDs gracefully
-      if (!project.id || typeof project.id !== 'number') {
-        matchesStatus = false; // Exclude invalid projects from "no assignments" filter
-      } else {
-        const assignmentCount = projectAssignmentCounts.projectCounts.get(project.id) || 0;
-        matchesStatus = assignmentCount === 0;
-      }
-    } else {
-      matchesStatus = project.status === statusFilter;
-    }
-    
-    const matchesSearch = !searchTerm || 
-      project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.client?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.projectNumber?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    return matchesStatus && matchesSearch;
-  }), [projects, statusFilter, searchTerm, projectAssignmentCounts.projectCounts]);
+  const filteredProjects = useMemo(() => {
+    // New optimized filtering using helper functions (Step 3.3)
+    const next = projects.filter(project => {
+      const matchesStatus = optimizedFilterFunctions.matchesStatusFilter(
+        project,
+        statusFilter,
+        filterMetadata
+      );
+
+      const matchesSearch = !searchTerm ||
+        project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.client?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.projectNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      return matchesStatus && matchesSearch;
+    });
+
+    return next;
+  }, [projects, statusFilter, searchTerm, filterMetadata, optimizedFilterFunctions]);
 
   // Memoized sorted projects
   const sortedProjects = useMemo(() => [...filteredProjects].sort((a, b) => {
@@ -1264,18 +1161,24 @@ const ProjectsList: React.FC = () => {
             </div>
           )}
 
-          {/* Assignment Count Error Message */}
-          {assignmentCountsError && (
-            <div className="p-3 bg-red-500/20 border-b border-red-500/50">
-              <div className="text-red-400 text-sm flex items-center gap-2">
-                <span>{assignmentCountsError}</span>
-                <button 
-                  onClick={loadAllAssignmentsForCounting}
-                  className="px-2 py-1 text-xs rounded border bg-transparent border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors"
-                  disabled={assignmentCountsLoading}
-                >
-                  Retry
-                </button>
+          {/* Filter metadata status */}
+          {(filterMetaLoading || filterMetaError) && (
+            <div className={`p-3 border-b ${filterMetaError ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[#2d2d30] border-[#3e3e42]'}`}>
+              <div className={`text-sm ${filterMetaError ? 'text-amber-400' : 'text-[#969696]'}`}>
+                {filterMetaError ? (
+                  <div className="flex items-center gap-2">
+                    <span>Filter data unavailable; using fallback filters.</span>
+                    <button
+                      onClick={() => refetchFilterMeta()}
+                      className="px-2 py-1 text-xs rounded border bg-transparent border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                      disabled={filterMetaLoading}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <span>Loading filter metadata…</span>
+                )}
               </div>
             </div>
           )}

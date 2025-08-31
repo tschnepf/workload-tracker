@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Department, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role } from '@/types/models';
+import { Person, Project, Assignment, Department, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -203,6 +203,23 @@ export const projectsApi = {
     const allProjects = await projectsApi.listAll();
     const clients = [...new Set(allProjects.map(p => p.client).filter(Boolean))];
     return clients.sort();
+  },
+
+  /**
+   * Fetch optimized filter metadata for Projects page.
+   * Returns per-project assignment counts and future deliverables flags.
+   * Includes a 30s timeout and leverages server-side ETag/Last-Modified.
+   */
+  getFilterMetadata: async (): Promise<ProjectFilterMetadataResponse> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      return await fetchApi<ProjectFilterMetadataResponse>(`/projects/filter-metadata/`, {
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   },
 };
 
