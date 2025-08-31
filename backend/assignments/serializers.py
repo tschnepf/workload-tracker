@@ -21,9 +21,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
     personSkills = PersonSkillSummarySerializer(source='person.skills', many=True, read_only=True)
     roleOnProject = serializers.CharField(source='role_on_project', max_length=100, required=False, allow_blank=True)
     
-    # Calculated fields
-    totalHours = serializers.ReadOnlyField(source='total_hours')
-    averageWeeklyHours = serializers.ReadOnlyField(source='average_weekly_hours')
+    # Calculated fields removed for performance - not used on projects page
     
     # Legacy field - kept for backward compatibility but not used in UI
     allocationPercentage = serializers.IntegerField(source='allocation_percentage', read_only=True)
@@ -41,8 +39,6 @@ class AssignmentSerializer(serializers.ModelSerializer):
             'projectDisplayName',
             'roleOnProject',
             'weeklyHours',
-            'totalHours',
-            'averageWeeklyHours',
             'allocationPercentage',  # Legacy
             'createdAt', 
             'updatedAt'

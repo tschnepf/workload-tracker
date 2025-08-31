@@ -11,6 +11,10 @@ dj-database-url==2.1.0
 # Development
 python-decouple==3.8
 
+# Monitoring and Error Tracking
+sentry-sdk[django]==1.40.6
+django-silk==5.2.0
+
 # For naming validation
 dataclasses==0.6
 

@@ -4,11 +4,11 @@
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { Link } from 'react-router-dom';
-import { Project, Person, Assignment, Deliverable } from '@/types/models';
+import { Project, Person, Assignment, AssignmentCountData, ProjectAssignmentCounts } from '@/types/models';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { usePeople } from '@/hooks/usePeople';
-import { assignmentsApi, deliverablesApi, peopleApi } from '@/services/api';
+import { assignmentsApi, peopleApi } from '@/services/api';
 
 interface PersonWithAvailability extends Person {
   availableHours?: number;
@@ -252,11 +252,14 @@ const ProjectsList: React.FC = () => {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   
-  // Deliverables data for all projects
-  const [projectDeliverables, setProjectDeliverables] = useState<{ [projectId: number]: Deliverable[] }>({});
   
   // Assignment management
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  
+  // Assignment count tracking for "No Assignments" filter
+  const [allAssignmentsCountData, setAllAssignmentsCountData] = useState<AssignmentCountData[]>([]);
+  const [assignmentCountsLoading, setAssignmentCountsLoading] = useState(false);
+  const [assignmentCountsError, setAssignmentCountsError] = useState<string | null>(null);
   const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [newAssignment, setNewAssignment] = useState({
     personSearch: '',
@@ -287,8 +290,55 @@ const ProjectsList: React.FC = () => {
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [roleSearchResults, setRoleSearchResults] = useState<string[]>([]);
 
-  const statusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'Show All'];
+  const statusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'no_assignments', 'Show All'];
   const editableStatusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled'];
+
+  /**
+   * Memoized calculation of project assignment counts for efficient filtering
+   * Uses Map data structure for O(1) lookup performance
+   * Only recalculates when assignment count data or projects change
+   */
+  const projectAssignmentCounts = useMemo<ProjectAssignmentCounts>(() => {
+    const countMap = new Map<number, number>();
+    let totalCount = 0;
+    
+    // Process only active assignments with valid project IDs
+    allAssignmentsCountData
+      .filter(assignment => assignment.isActive && assignment.project !== null)
+      .forEach(assignment => {
+        const projectId = assignment.project!;
+        const currentCount = countMap.get(projectId) || 0;
+        countMap.set(projectId, currentCount + 1);
+        totalCount++;
+      });
+    
+    return {
+      projectCounts: countMap,
+      totalAssignments: totalCount,
+      projectsWithNoAssignments: Math.max(0, projects.length - countMap.size),
+      lastUpdated: new Date()
+    };
+  }, [allAssignmentsCountData, projects]);
+
+  // Performance monitoring for development (memory efficient)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && allAssignmentsCountData.length > 0) {
+      const performanceData = {
+        totalAssignments: allAssignmentsCountData.length,
+        totalProjects: projects.length,
+        projectsWithNoAssignments: projectAssignmentCounts.projectsWithNoAssignments,
+        mapSize: projectAssignmentCounts.projectCounts.size,
+        cacheEfficiency: Math.round((projectAssignmentCounts.projectCounts.size / Math.max(1, projects.length)) * 100)
+      };
+      
+      // Only log when values actually change to reduce noise
+      const currentHash = JSON.stringify(performanceData);
+      if (currentHash !== (window as any).__lastPerformanceHash) {
+        console.debug('Assignment Count Performance:', performanceData);
+        (window as any).__lastPerformanceHash = currentHash;
+      }
+    }
+  }, [allAssignmentsCountData.length, projects.length, projectAssignmentCounts.projectsWithNoAssignments, projectAssignmentCounts.projectCounts.size]);
 
   // Set error from React Query if needed
   useEffect(() => {
@@ -298,6 +348,121 @@ const ProjectsList: React.FC = () => {
       setError(null);
     }
   }, [projectsError]);
+
+  /**
+   * Load all assignments for count tracking (lightweight data only)
+   * Extracts minimal fields to reduce memory footprint and improve performance
+   * Handles errors gracefully with proper user feedback
+   */
+  const loadAllAssignmentsForCounting = useCallback(async () => {
+    try {
+      setAssignmentCountsLoading(true);
+      setAssignmentCountsError(null);
+      
+      // Use existing API endpoint but extract minimal data
+      const response = await assignmentsApi.listAll();
+      
+      // Validate and sanitize response data
+      if (!Array.isArray(response)) {
+        throw new Error('Invalid API response: expected array of assignments');
+      }
+      
+      const lightweightAssignments: AssignmentCountData[] = response
+        .filter(assignment => {
+          // Filter out invalid assignments
+          return assignment && 
+                 typeof assignment.id === 'number' && 
+                 assignment.id > 0;
+        })
+        .map(assignment => ({
+          id: assignment.id!,
+          project: typeof assignment.project === 'number' ? assignment.project : null,
+          isActive: assignment.isActive !== false // Default to true if undefined
+        }));
+      
+      setAllAssignmentsCountData(lightweightAssignments);
+    } catch (err: any) {
+      console.error('Failed to load assignments for counting:', err);
+      
+      // Provide specific error messages based on error type
+      let errorMessage = 'Failed to load assignment data for filtering';
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        errorMessage = 'Network error: Unable to connect to server. Please check your connection.';
+      } else if (err.status === 0) {
+        errorMessage = 'Network timeout: Server is not responding. Please try again.';
+      } else if (err.status >= 500) {
+        errorMessage = 'Server error: Please try again in a few moments.';
+      } else if (err.message.includes('Invalid API response')) {
+        errorMessage = 'Data format error: Please refresh the page.';
+      }
+      
+      setAssignmentCountsError(errorMessage);
+      // Set empty data to prevent filter from breaking
+      setAllAssignmentsCountData([]);
+    } finally {
+      setAssignmentCountsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Optimized cache invalidation for individual assignment changes
+   * Avoids full reload when possible by updating specific entries
+   */
+  const updateAssignmentCountCache = useCallback(async (operation: 'create' | 'update' | 'delete', assignmentData?: Partial<Assignment>) => {
+    try {
+      if (operation === 'create' && assignmentData?.id && typeof assignmentData.id === 'number') {
+        // Add new assignment to cache with validation
+        const newCountData: AssignmentCountData = {
+          id: assignmentData.id,
+          project: typeof assignmentData.project === 'number' ? assignmentData.project : null,
+          isActive: assignmentData.isActive !== false
+        };
+        
+        // Check for duplicate IDs before adding
+        setAllAssignmentsCountData(prev => {
+          const exists = prev.some(a => a.id === assignmentData.id);
+          if (exists) {
+            console.warn('Attempt to add duplicate assignment ID to cache:', assignmentData.id);
+            return prev;
+          }
+          return [...prev, newCountData];
+        });
+      } else if (operation === 'delete' && assignmentData?.id && typeof assignmentData.id === 'number') {
+        // Remove assignment from cache with validation
+        setAllAssignmentsCountData(prev => {
+          const filtered = prev.filter(a => a.id !== assignmentData.id);
+          if (filtered.length === prev.length) {
+            console.warn('Attempt to delete non-existent assignment ID from cache:', assignmentData.id);
+          }
+          return filtered;
+        });
+      } else {
+        // For updates or when we don't have sufficient data, do full reload
+        await loadAllAssignmentsForCounting();
+      }
+    } catch (err) {
+      console.error('Cache update failed, falling back to full reload:', err);
+      // Clear error state before reload to prevent UI confusion
+      setAssignmentCountsError(null);
+      await loadAllAssignmentsForCounting();
+    }
+  }, [loadAllAssignmentsForCounting]);
+
+  // Load assignment count data on component mount and when projects change
+  // Debounced to prevent multiple calls during project loading and handle race conditions
+  useEffect(() => {
+    if (projects.length > 0 && allAssignmentsCountData.length === 0 && !assignmentCountsLoading) {
+      // Clear any existing timeout to prevent race conditions
+      const timeoutId = setTimeout(() => {
+        // Double-check conditions haven't changed during timeout
+        if (allAssignmentsCountData.length === 0 && !assignmentCountsLoading) {
+          loadAllAssignmentsForCounting();
+        }
+      }, 100); // Small delay to batch with other loading operations
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [projects.length, loadAllAssignmentsForCounting, allAssignmentsCountData.length, assignmentCountsLoading]);
 
   // Pre-compute person skills map for performance (Phase 4 optimization)
   const precomputePersonSkills = useCallback(() => {
@@ -336,126 +501,16 @@ const ProjectsList: React.FC = () => {
     }
   }, [selectedProject]);
 
-  // Load deliverables for all projects when projects data changes
-  useEffect(() => {
-    if (projects.length > 0) {
-      loadAllProjectDeliverables(projects);
-    }
-  }, [projects]);
 
-  const loadAllProjectDeliverables = async (projectsList: Project[]) => {
-    try {
-      const startTime = performance.now();
-      
-      // Extract project IDs for bulk API call
-      const projectIds = projectsList.map(p => p.id).filter(id => id !== undefined) as number[];
-      
-      if (projectIds.length === 0) {
-        setProjectDeliverables({});
-        return;
-      }
-      
-      // Single bulk API call replaces N individual calls
-      const bulkDeliverablesResponse = await deliverablesApi.bulkList(projectIds);
-      
-      // Convert string keys to numbers for compatibility
-      const deliverablesMap: { [projectId: number]: Deliverable[] } = {};
-      Object.entries(bulkDeliverablesResponse).forEach(([projectId, deliverables]) => {
-        deliverablesMap[parseInt(projectId)] = deliverables;
-      });
-      
-      setProjectDeliverables(deliverablesMap);
-      
-      const endTime = performance.now();
-      console.log(`Bulk deliverables loaded in ${Math.round(endTime - startTime)}ms for ${projectIds.length} projects`);
-      
-    } catch (error) {
-      console.error('Failed to load bulk deliverables:', error);
-      // Set empty deliverables for all projects on error
-      const emptyMap: { [projectId: number]: Deliverable[] } = {};
-      projectsList.forEach(project => {
-        if (project.id) {
-          emptyMap[project.id] = [];
-        }
-      });
-      setProjectDeliverables(emptyMap);
-    }
-  };
 
-  const getNextDeliverable = (projectId: number): Deliverable | null => {
-    const deliverables = projectDeliverables[projectId] || [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset time for accurate date comparison
-    
-    // Filter deliverables that:
-    // 1. Have a date set
-    // 2. Are not completed
-    // 3. Are today or in the future
-    const upcomingDeliverables = deliverables
-      .filter(d => d.date && !d.isCompleted)
-      .filter(d => {
-        // Parse date string manually to avoid timezone issues
-        const [year, month, day] = d.date!.split('-').map(Number);
-        const deliverableDate = new Date(year, month - 1, day);
-        deliverableDate.setHours(0, 0, 0, 0);
-        return deliverableDate >= today;
-      })
-      .sort((a, b) => {
-        // Sort by date, then by percentage (lower percentage = earlier milestone)
-        // Parse dates manually to avoid timezone issues
-        const [aYear, aMonth, aDay] = a.date!.split('-').map(Number);
-        const [bYear, bMonth, bDay] = b.date!.split('-').map(Number);
-        const aDate = new Date(aYear, aMonth - 1, aDay);
-        const bDate = new Date(bYear, bMonth - 1, bDay);
-        const dateCompare = aDate.getTime() - bDate.getTime();
-        if (dateCompare !== 0) return dateCompare;
-        return (a.percentage || 0) - (b.percentage || 0);
-      });
 
-    return upcomingDeliverables.length > 0 ? upcomingDeliverables[0] : null;
-  };
 
-  const formatNextDeliverable = (deliverable: Deliverable): string => {
-    const parts = [];
-    
-    if (deliverable.date) {
-      // Parse date string manually to avoid timezone issues
-      const [year, month, day] = deliverable.date.split('-').map(Number);
-      const date = new Date(year, month - 1, day); // month is 0-indexed
-      parts.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-    }
-    
-    if (deliverable.percentage !== null) {
-      parts.push(`${deliverable.percentage}%`);
-    }
-    
-    if (deliverable.description) {
-      parts.push(deliverable.description);
-    }
-    
-    return parts.length > 0 ? parts.join(' • ') : '-';
-  };
-
-  const hasUpcomingDeliverableDates = (projectId: number): boolean => {
-    const deliverables = projectDeliverables[projectId] || [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    return deliverables.some(d => {
-      if (!d.date || d.isCompleted) return false;
-      
-      // Parse date string manually to avoid timezone issues
-      const [year, month, day] = d.date.split('-').map(Number);
-      const deliverableDate = new Date(year, month - 1, day);
-      deliverableDate.setHours(0, 0, 0, 0);
-      return deliverableDate >= today;
-    });
-  };
 
   const formatFilterStatus = (status: string): string => {
     if (status === 'Show All') return 'Show All';
     if (status === 'active_no_deliverables') return 'Active - No Dates';
     if (status === 'active_ca') return 'Active CA';
+    if (status === 'no_assignments') return 'No Assignments';
     return formatStatus(status);
   };
 
@@ -487,9 +542,9 @@ const ProjectsList: React.FC = () => {
 
   const loadProjectAssignments = async (projectId: number) => {
     try {
-      // Get all assignments and filter by project
-      const allAssignments = await assignmentsApi.listAll();
-      const projectAssignments = allAssignments.filter(assignment => assignment.project === projectId);
+      // Get assignments filtered by project on the server side (much faster)
+      const response = await assignmentsApi.list({ project: projectId });
+      const projectAssignments = response.results || [];
       
       setAssignments(projectAssignments);
       
@@ -775,8 +830,10 @@ const ProjectsList: React.FC = () => {
         startDate: new Date().toISOString().split('T')[0], // Today
       };
 
-      await assignmentsApi.create(assignmentData);
+      const newAssignment = await assignmentsApi.create(assignmentData);
       await loadProjectAssignments(selectedProject.id);
+      // Optimized cache update for better performance
+      await updateAssignmentCountCache('create', newAssignment);
       setShowAddAssignment(false);
     } catch (err: any) {
       setError('Failed to create assignment');
@@ -819,10 +876,12 @@ const ProjectsList: React.FC = () => {
       if (selectedProject?.id) {
         await loadProjectAssignments(selectedProject.id);
       }
+      // Optimized cache update for better performance
+      await updateAssignmentCountCache('delete', { id: assignmentId });
     } catch (err: any) {
       setError('Failed to delete assignment');
     }
-  }, [selectedProject?.id, loadProjectAssignments]);
+  }, [selectedProject?.id, loadProjectAssignments, updateAssignmentCountCache]);
 
   const handleEditAssignment = useCallback((assignment: Assignment) => {
     setEditingAssignment(assignment.id!);
@@ -936,6 +995,9 @@ const ProjectsList: React.FC = () => {
         await loadProjectAssignments(selectedProject.id);
       }
       
+      // For updates, use full reload since assignment project might have changed
+      await updateAssignmentCountCache('update');
+      
       setEditingAssignment(null);
       setRoleSearchResults([]);
     } catch (err: any) {
@@ -1017,8 +1079,17 @@ const ProjectsList: React.FC = () => {
     if (statusFilter === 'Show All') {
       matchesStatus = true;
     } else if (statusFilter === 'active_no_deliverables') {
-      // Filter to active projects with no upcoming deliverable dates
-      matchesStatus = project.status === 'active' && project.id !== undefined && !hasUpcomingDeliverableDates(project.id);
+      // Filter to active projects (deliverable filtering removed - feature will be simplified)
+      matchesStatus = project.status === 'active';
+    } else if (statusFilter === 'no_assignments') {
+      // Filter to projects with zero assignments using efficient Map lookup
+      // Handle projects without valid IDs gracefully
+      if (!project.id || typeof project.id !== 'number') {
+        matchesStatus = false; // Exclude invalid projects from "no assignments" filter
+      } else {
+        const assignmentCount = projectAssignmentCounts.projectCounts.get(project.id) || 0;
+        matchesStatus = assignmentCount === 0;
+      }
     } else {
       matchesStatus = project.status === statusFilter;
     }
@@ -1029,7 +1100,7 @@ const ProjectsList: React.FC = () => {
       project.projectNumber?.toLowerCase().includes(searchTerm.toLowerCase());
     
     return matchesStatus && matchesSearch;
-  }), [projects, statusFilter, searchTerm, projectDeliverables]);
+  }), [projects, statusFilter, searchTerm, projectAssignmentCounts.projectCounts]);
 
   // Memoized sorted projects
   const sortedProjects = useMemo(() => [...filteredProjects].sort((a, b) => {
@@ -1053,45 +1124,15 @@ const ProjectsList: React.FC = () => {
         aValue = a.status || '';
         bValue = b.status || '';
         break;
-      case 'nextDeliverable':
-        const aNext = a.id ? getNextDeliverable(a.id) : null;
-        const bNext = b.id ? getNextDeliverable(b.id) : null;
-        
-        // Sort by date first, then by percentage
-        if (!aNext && !bNext) {
-          aValue = '';
-          bValue = '';
-        } else if (!aNext) {
-          aValue = 'zzz'; // Sort projects without deliverables to the end
-          bValue = bNext!.date || 'zzz';
-        } else if (!bNext) {
-          aValue = aNext.date || 'zzz';
-          bValue = 'zzz';
-        } else {
-          aValue = aNext.date || 'zzz';
-          bValue = bNext.date || 'zzz';
-          
-          // If dates are the same, sort by percentage
-          if (aValue === bValue) {
-            aValue = aNext.percentage || 0;
-            bValue = bNext.percentage || 0;
-          }
-        }
-        break;
       default:
         aValue = a.name || '';
         bValue = b.name || '';
     }
 
-    // For date comparison
-    if (sortBy === 'nextDeliverable') {
-      return sortDirection === 'asc' ? aValue.getTime() - bValue.getTime() : bValue.getTime() - aValue.getTime();
-    }
-
     // For string comparison
     const result = aValue.toString().localeCompare(bValue.toString());
     return sortDirection === 'asc' ? result : -result;
-  }), [filteredProjects, sortBy, sortDirection, projectDeliverables]);
+  }), [filteredProjects, sortBy, sortDirection]);
 
   // Auto-select first project from sorted/filtered list
   useEffect(() => {
@@ -1192,8 +1233,10 @@ const ProjectsList: React.FC = () => {
                       className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                         statusFilter === status
                           ? 'bg-[#007acc] border-[#007acc] text-white'
-                          : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc]'
+                          : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/80'
                       }`}
+                      aria-label={`Filter projects by ${formatFilterStatus(status).toLowerCase()}`}
+                      aria-pressed={statusFilter === status}
                     >
                       {formatFilterStatus(status)}
                     </button>
@@ -1221,6 +1264,22 @@ const ProjectsList: React.FC = () => {
             </div>
           )}
 
+          {/* Assignment Count Error Message */}
+          {assignmentCountsError && (
+            <div className="p-3 bg-red-500/20 border-b border-red-500/50">
+              <div className="text-red-400 text-sm flex items-center gap-2">
+                <span>{assignmentCountsError}</span>
+                <button 
+                  onClick={loadAllAssignmentsForCounting}
+                  className="px-2 py-1 text-xs rounded border bg-transparent border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors"
+                  disabled={assignmentCountsLoading}
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Warnings Message */}
           {warnings.length > 0 && (
             <div className="p-3 bg-amber-500/20 border-b border-amber-500/50">
@@ -1235,7 +1294,7 @@ const ProjectsList: React.FC = () => {
           {/* Projects Table */}
           <div className="flex-1 overflow-hidden">
             {/* Table Header */}
-            <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[#969696] font-medium border-b border-[#3e3e42] bg-[#2d2d30]">
+            <div className="grid grid-cols-8 gap-2 px-2 py-1.5 text-xs text-[#969696] font-medium border-b border-[#3e3e42] bg-[#2d2d30]">
               <div className="col-span-2 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('client')}>
                 CLIENT<SortIcon column="client" />
               </div>
@@ -1248,9 +1307,6 @@ const ProjectsList: React.FC = () => {
               <div className="col-span-2 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('status')}>
                 STATUS<SortIcon column="status" />
               </div>
-              <div className="col-span-4 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('nextDeliverable')}>
-                NEXT DELIVERABLE<SortIcon column="nextDeliverable" />
-              </div>
             </div>
 
             {/* Table Body */}
@@ -1258,8 +1314,18 @@ const ProjectsList: React.FC = () => {
               {sortedProjects.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="text-center text-[#969696]">
-                    <div className="text-lg mb-2">No projects found</div>
-                    <div className="text-sm">Try adjusting your filters or create a new project</div>
+                    <div className="text-lg mb-2">
+                      {statusFilter === 'no_assignments' 
+                        ? 'No projects without assignments'
+                        : 'No projects found'
+                      }
+                    </div>
+                    <div className="text-sm">
+                      {statusFilter === 'no_assignments'
+                        ? 'All projects have team members assigned. Try a different filter.'
+                        : 'Try adjusting your filters or create a new project'
+                      }
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1267,7 +1333,7 @@ const ProjectsList: React.FC = () => {
                   <div
                     key={project.id}
                     onClick={() => handleProjectClick(project, index)}
-                    className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
+                    className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
                       selectedProject?.id === project.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
                     }`}
                     tabIndex={0}
@@ -1293,20 +1359,6 @@ const ProjectsList: React.FC = () => {
                       <span className={`${getStatusColor(project.status || '')} px-2 py-0.5 rounded text-xs`}>
                         {formatStatus(project.status || '')}
                       </span>
-                    </div>
-                    
-                    {/* Next Deliverable */}
-                    <div className="col-span-4">
-                      {(() => {
-                        const nextDeliverable = project.id ? getNextDeliverable(project.id) : null;
-                        return nextDeliverable ? (
-                          <div className="text-[#cccccc] text-xs leading-tight">
-                            {formatNextDeliverable(nextDeliverable)}
-                          </div>
-                        ) : (
-                          <div className="text-[#969696] text-xs">-</div>
-                        );
-                      })()}
                     </div>
                   </div>
                 ))

@@ -53,8 +53,6 @@ export interface Assignment {
   project?: number; // Project ID (FK)
   projectDisplayName?: string; // Read-only project display name
   weeklyHours: { [weekKey: string]: number }; // Weekly hours allocation
-  totalHours?: number; // Read-only calculated total
-  averageWeeklyHours?: number; // Read-only calculated average
   allocationPercentage?: number; // Legacy field
   availableWeeks?: string[]; // Read-only list of available weeks
   roleOnProject?: string;
@@ -64,6 +62,27 @@ export interface Assignment {
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/**
+ * Lightweight assignment data for counting purposes only
+ * Reduces memory footprint for assignment count tracking
+ */
+export interface AssignmentCountData {
+  readonly id: number;
+  readonly project: number | null;
+  readonly isActive: boolean;
+}
+
+/**
+ * Project assignment count tracking interface
+ * Provides efficient lookup and statistics for assignment filtering
+ */
+export interface ProjectAssignmentCounts {
+  readonly projectCounts: Map<number, number>;  // projectId -> assignment count
+  readonly totalAssignments: number;
+  readonly projectsWithNoAssignments: number;
+  readonly lastUpdated: Date;
 }
 
 export interface Department {
