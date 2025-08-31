@@ -24,6 +24,7 @@ const Projects = React.lazy(() => import('./pages/Projects'));
 const ProjectForm = React.lazy(() => import('./pages/Projects/ProjectForm'));
 const SkillsDashboard = React.lazy(() => import('./pages/Skills').then(module => ({ default: module.SkillsDashboard })));
 const PerformanceDashboard = React.lazy(() => import('./pages/Performance/PerformanceDashboard'));
+const Settings = React.lazy(() => import('./pages/Settings/Settings'));
 
 // Loading component for Suspense fallback
 const PageLoader: React.FC = () => (
@@ -107,6 +108,7 @@ function App() {
               <Route path="/projects/:id/edit" element={<ProjectForm />} />
               <Route path="/skills" element={<SkillsDashboard />} />
               <Route path="/performance" element={<PerformanceDashboard />} />
+              <Route path="/settings" element={<Settings />} />
               {/* More routes will be added in later chunks */}
             </Routes>
           </Suspense>

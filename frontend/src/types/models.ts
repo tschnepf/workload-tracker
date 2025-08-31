@@ -7,12 +7,22 @@ export interface Person {
   weeklyCapacity?: number;
   department?: number | null; // Department ID (Phase 2)
   departmentName?: string; // Read-only department name (Phase 2)
-  role?: string;
+  role?: number | null; // Role ID (ForeignKey)
+  roleName?: string; // Read-only role name for display
   email?: string;
   phone?: string;
   location?: string;
   hireDate?: string;
   notes?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Role {
+  id: number;
+  name: string;
+  description?: string;
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;

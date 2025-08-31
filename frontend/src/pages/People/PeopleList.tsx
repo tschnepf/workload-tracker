@@ -6,14 +6,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Person, PersonSkill, SkillTag, Department } from '@/types/models';
-import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi } from '@/services/api';
+import { Person, PersonSkill, SkillTag, Department, Role } from '@/types/models';
+import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi, rolesApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
 import SkillsAutocomplete from '@/components/skills/SkillsAutocomplete';
 
 const PeopleList: React.FC = () => {
   const [people, setPeople] = useState<Person[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
+  const [roles, setRoles] = useState<Role[]>([]); // Phase 1: Role management
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]); // Multi-select department filter
@@ -57,6 +58,11 @@ const PeopleList: React.FC = () => {
   const [locationInputValue, setLocationInputValue] = useState('');
   const [selectedLocationIndex, setSelectedLocationIndex] = useState(-1);
 
+  // Role autocomplete state - CRITICAL: follows AUTOCOMPLETE STANDARDS
+  const [showRoleAutocomplete, setShowRoleAutocomplete] = useState(false);
+  const [roleInputValue, setRoleInputValue] = useState('');
+  const [selectedRoleIndex, setSelectedRoleIndex] = useState(-1);
+
   const proficiencyLevels = [
     { value: 'beginner', label: 'Beginner' },
     { value: 'intermediate', label: 'Intermediate' },
@@ -64,21 +70,12 @@ const PeopleList: React.FC = () => {
     { value: 'expert', label: 'Expert' }
   ];
 
-  const roleOptions = [
-    'Engineer', 'Senior Engineer', 'Lead Engineer', 'Principal Engineer',
-    'Designer', 'Senior Designer', 'Design Lead',
-    'Product Manager', 'Senior Product Manager',
-    'Project Manager', 'Program Manager',
-    'QA Engineer', 'DevOps Engineer',
-    'Data Scientist', 'Data Analyst',
-    'Marketing Specialist', 'Sales Representative',
-    'Operations Manager', 'HR Specialist',
-    'Consultant', 'Contractor', 'Intern'
-  ];
+  // Roles are now loaded from API instead of hardcoded
 
   useEffect(() => {
     loadPeople();
     loadDepartments(); // Phase 2: Load departments for filter
+    loadRoles(); // Phase 1: Load roles for dropdowns
   }, []);
 
   // Phase 2: Load departments for filter dropdown
@@ -88,6 +85,16 @@ const PeopleList: React.FC = () => {
       setDepartments(departmentsList);
     } catch (err) {
       console.error('Error loading departments:', err);
+    }
+  };
+
+  // Phase 1: Load roles for dropdown
+  const loadRoles = async () => {
+    try {
+      const rolesList = await rolesApi.listAll();
+      setRoles(rolesList);
+    } catch (err) {
+      console.error('Error loading roles:', err);
     }
   };
 
@@ -139,6 +146,7 @@ const PeopleList: React.FC = () => {
         setSelectedIndex(0);
         setEditingPersonData({ ...peopleList[0] }); // Initialize editing data
         setLocationInputValue(peopleList[0].location || ''); // Initialize location input value
+        setRoleInputValue(peopleList[0].roleName || ''); // Initialize role input value
       }
     } catch (err: any) {
       setError('Failed to load people');
@@ -170,6 +178,7 @@ const PeopleList: React.FC = () => {
     setSelectedIndex(index);
     setEditingPersonData({ ...person }); // Initialize editing data with current person data
     setLocationInputValue(person.location || ''); // Initialize location input value
+    setRoleInputValue(person.roleName || ''); // Initialize role input value
   };
 
   const handlePersonFieldChange = (field: keyof Person, value: string | number | null) => {
@@ -225,7 +234,7 @@ const PeopleList: React.FC = () => {
       const result = await peopleApi.update(selectedPerson.id, updateData);
       console.log('🔍 [DEBUG] peopleApi.update result:', result);
 
-      // Handle special case for department updates - need to also update departmentName
+      // Handle special cases for updates that need additional data
       let finalUpdateData = { ...updateData };
       if (field === 'department') {
         const selectedDept = departments.find(d => d.id === fieldValue);
@@ -234,6 +243,15 @@ const PeopleList: React.FC = () => {
           deptId: fieldValue,
           deptName: finalUpdateData.departmentName,
           selectedDept
+        });
+      }
+      if (field === 'role') {
+        const selectedRole = roles.find(r => r.id === fieldValue);
+        finalUpdateData.roleName = selectedRole?.name || '';
+        console.log('🔍 [DEBUG] Role update - adding roleName:', {
+          roleId: fieldValue,
+          roleName: finalUpdateData.roleName,
+          selectedRole
         });
       }
 
@@ -483,6 +501,11 @@ const PeopleList: React.FC = () => {
     location.toLowerCase().includes(locationInputValue.toLowerCase())
   );
 
+  // Filtered roles for autocomplete - CRITICAL: follows AUTOCOMPLETE STANDARDS
+  const filteredRoles = roles.filter(role =>
+    role.isActive && role.name.toLowerCase().includes(roleInputValue.toLowerCase())
+  );
+
   // Helper function to select a location from autocomplete
   const selectLocation = (location: string) => {
     setLocationInputValue(location);
@@ -490,6 +513,16 @@ const PeopleList: React.FC = () => {
     setShowLocationAutocomplete(false);
     setSelectedLocationIndex(-1);
     savePersonField('location', location);
+  };
+
+  // Helper function to select a role from autocomplete - CRITICAL: follows AUTOCOMPLETE STANDARDS
+  const selectRole = (role: Role) => {
+    setRoleInputValue(role.name);
+    handlePersonFieldChange('role', role.id);
+    handlePersonFieldChange('roleName', role.name);
+    setShowRoleAutocomplete(false);
+    setSelectedRoleIndex(-1);
+    savePersonField('role', role.id);
   };
 
   // Handle column header clicks for sorting
@@ -535,7 +568,7 @@ const PeopleList: React.FC = () => {
       // Enhanced search filter (includes notes/description + location search)
       const matchesSearch = !searchTerm || 
         person.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        person.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        person.roleName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         person.departmentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         person.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         person.notes?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -570,8 +603,8 @@ const PeopleList: React.FC = () => {
           comparison = (a.weeklyCapacity || 0) - (b.weeklyCapacity || 0);
           break;
         case 'role':
-          const aRole = a.role || 'zzz_no_role';
-          const bRole = b.role || 'zzz_no_role';
+          const aRole = a.roleName || 'zzz_no_role';
+          const bRole = b.roleName || 'zzz_no_role';
           comparison = aRole.localeCompare(bRole);
           break;
         case 'name':
@@ -914,7 +947,7 @@ const PeopleList: React.FC = () => {
                       
                       {/* Role */}
                       <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[#969696] text-xs`}>
-                        {person.role || 'Not specified'}
+                        {person.roleName || 'Not specified'}
                       </div>
                     </div>
                   ))}
@@ -1010,18 +1043,19 @@ const PeopleList: React.FC = () => {
                         <select
                           value={editingPersonData?.role || ''}
                           onChange={(e) => {
-                            console.log('🔍 [DEBUG] Role dropdown changed to:', e.target.value);
-                            handlePersonFieldChange('role', e.target.value);
+                            const roleId = e.target.value ? parseInt(e.target.value) : null;
+                            console.log('🔍 [DEBUG] Role dropdown changed to:', roleId);
+                            handlePersonFieldChange('role', roleId);
                             // Pass the new value directly to avoid state timing issues
-                            savePersonField('role', e.target.value);
+                            savePersonField('role', roleId);
                           }}
                           disabled={isUpdatingPerson}
                           className="w-full px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
                         >
                           <option value="">Select Role...</option>
-                          {roleOptions.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
+                          {roles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
                             </option>
                           ))}
                         </select>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>Testing Person Update API</h1>
+    <button onclick="testUpdate()">Test Person Update</button>
+    <div id="results"></div>
+
+    <script>
+        async function testUpdate() {
+            const API_BASE_URL = 'http://localhost:8000/api';
+            const personId = 48;
+            
+            const testData = {
+                name: "Alan Jones",
+                weeklyCapacity: 40,
+                role: "Frontend Developer", 
+                department: 3,
+                location: "Denver, CO"
+            };
+            
+            console.log('🔍 Testing person update with data:', testData);
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/people/${personId}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                console.log('🔍 Response status:', response.status);
+                console.log('🔍 Response headers:', Object.fromEntries(response.headers.entries()));
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('🔍 Error response:', errorText);
+                    document.getElementById('results').innerHTML = `<pre>Error: ${response.status}\n${errorText}</pre>`;
+                    return;
+                }
+                
+                const result = await response.json();
+                console.log('🔍 Success result:', result);
+                document.getElementById('results').innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                
+                // Verify the update by fetching the person
+                const verifyResponse = await fetch(`${API_BASE_URL}/people/${personId}/`);
+                const verifyResult = await verifyResponse.json();
+                console.log('🔍 Verification result:', verifyResult);
+                
+                document.getElementById('results').innerHTML += `<h3>Verification:</h3><pre>${JSON.stringify(verifyResult, null, 2)}</pre>`;
+                
+            } catch (error) {
+                console.error('🔍 Network error:', error);
+                document.getElementById('results').innerHTML = `<pre>Network Error: ${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>

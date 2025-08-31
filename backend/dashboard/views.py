@@ -81,7 +81,7 @@ class DashboardView(APIView):
             team_overview.append({
                 'id': person.id,
                 'name': person.name,
-                'role': person.role,
+                'role': person.role.name if person.role else 'No Role',
                 'utilization_percent': percent,
                 'allocated_hours': utilization_data['allocated_hours'],
                 'capacity': person.weekly_capacity,

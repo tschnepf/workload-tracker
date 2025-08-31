@@ -165,6 +165,12 @@ const Sidebar: React.FC = () => {
       icon: 'skills', 
       label: 'Skills',
       description: 'Team skills analysis'
+    },
+    { 
+      path: '/settings', 
+      icon: 'settings', 
+      label: 'Settings',
+      description: 'System configuration'
     }
   ];
 

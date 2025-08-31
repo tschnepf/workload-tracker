@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Department, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse } from '@/types/models';
+import { Person, Project, Assignment, Department, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -468,6 +468,38 @@ export const personSkillsApi = {
       development: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
       learning: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
     }>(`/skills/person-skills/summary/?person=${personId}`),
+};
+
+// Roles API - for role management and dropdowns
+export const rolesApi = {
+  // Get all roles (paginated)
+  list: () => fetchApi<PaginatedResponse<Role>>('/roles/'),
+
+  // Get all roles (bulk) - for autocomplete/dropdowns
+  listAll: () => fetchApi<Role[]>('/roles/bulk/'),
+
+  // Get single role
+  get: (id: number) => fetchApi<Role>(`/roles/${id}/`),
+
+  // Create new role
+  create: (data: Partial<Role>) =>
+    fetchApi<Role>('/roles/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update role
+  update: (id: number, data: Partial<Role>) =>
+    fetchApi<Role>(`/roles/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete role
+  delete: (id: number) =>
+    fetchApi<void>(`/roles/${id}/`, {
+      method: 'DELETE',
+    }),
 };
 
 export { ApiError };

@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/deliverables/', include('deliverables.urls')),
     path('api/departments/', include('departments.urls')),
     path('api/skills/', include('skills.urls')),
+    path('api/', include('roles.urls')),
 ]
 
 # Add Silk profiling URLs in development/debug mode

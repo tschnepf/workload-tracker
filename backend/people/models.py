@@ -11,7 +11,14 @@ class Person(models.Model):
     # === CORE FIELDS (Required, used from Chunk 2) ===
     name = models.CharField(max_length=200)  # ONLY required field for users
     weekly_capacity = models.IntegerField(default=36)
-    role = models.CharField(max_length=100, default='Engineer')
+    role = models.ForeignKey(
+        'roles.Role',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='people',
+        help_text="Person's role in the organization"
+    )
     
     # === CONTACT FIELDS (Optional, used from Chunk 4) ===
     email = models.EmailField(blank=True, null=True)
