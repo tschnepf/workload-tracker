@@ -1,4 +1,4 @@
-"""
+﻿"""
 Deliverable views - STANDARDS COMPLIANT API endpoints
 Follows R2-REBUILD-STANDARDS.md naming conventions
 """
@@ -151,6 +151,7 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 'id': d.id,
                 'project': d.project_id,
                 'projectName': d.project.name if d.project_id else None,
+                'projectClient': getattr(d.project, 'client', None) if d.project_id else None,
                 'title': title,
                 'date': d.date.strftime('%Y-%m-%d') if d.date else None,
                 'isCompleted': d.is_completed,
@@ -213,7 +214,7 @@ class DeliverableViewSet(viewsets.ModelViewSet):
     def staffing_summary(self, request, pk=None):
         """Return derived staffing for a deliverable from Assignment.weekly_hours.
 
-        Default window: 6 weeks prior OR between previous and current deliverable (exclusive→inclusive).
+        Default window: 6 weeks prior OR between previous and current deliverable (exclusiveâ†’inclusive).
         Optional override: ?weeks=6 to force a fixed lookback window.
 
         Returns array items per person with >0 hours in window on the deliverable's project:
@@ -349,3 +350,4 @@ class DeliverableAssignmentViewSet(viewsets.ModelViewSet):
             return Response({"error": "person must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
+
