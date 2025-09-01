@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Dashboard page - Team utilization overview
  * Chunk 4: Real dashboard with team metrics and VSCode dark theme
  */
@@ -9,7 +9,9 @@ import Card from '../components/ui/Card';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
 import SkillsFilter from '../components/skills/SkillsFilter';
 import { dashboardApi, departmentsApi, personSkillsApi } from '../services/api';
+import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
 import { DashboardData, Department, PersonSkill } from '../types/models';
+import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 
 const Dashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -24,12 +26,19 @@ const Dashboard: React.FC = () => {
   // Skills filtering state
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
+  const [heatWeeks, setHeatWeeks] = useState<number>(4);
 
   useEffect(() => {
     loadDashboard();
     loadDepartments();
     loadPeopleSkills();
   }, [weeksPeriod, selectedDepartment]);
+
+  const departmentIdNum = selectedDepartment ? Number(selectedDepartment) : null;
+  const heatQuery = useCapacityHeatmap(departmentIdNum, heatWeeks, !loading);
+  const heatData = heatQuery.data ?? [];
+  const heatLoading = heatQuery.isLoading;
+  const heatFetching = heatQuery.isFetching;
   
   const loadDepartments = async () => {
     try {
@@ -91,6 +100,79 @@ const Dashboard: React.FC = () => {
       <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="text-[#969696]">Loading dashboard...</div>
+          {/* Heatmap suppressed during loading */}
+          {false && (
+          <Card className="lg:col-span-2 bg-[#2d2d30] border-[#3e3e42]">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-[#cccccc]">Team Utilization Heat Map</h3>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-[#969696]">Weeks:</span>
+                {[4, 8, 12].map((w) => (
+                  <button
+                    key={w}
+                    onClick={() => setHeatWeeks(w)}
+                    className={`px-2 py-0.5 rounded ${heatWeeks === w ? 'bg-[#007acc] text-white' : 'bg-[#3e3e42] text-[#969696] hover:text-[#cccccc]'}`}
+                    aria-pressed={heatWeeks === w}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Show grid when we have any data; keep visible while refreshing */}
+            {heatData && heatData.length > 0 ? (
+              <div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '4px 6px', width: '30%' }}>Person</th>
+                        {heatData[0].weekKeys.map((wk) => (
+                          <th key={wk} style={{ textAlign: 'center', padding: '2px 4px', whiteSpace: 'nowrap' }}>{wk.slice(5)}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                  </table>
+                </div>
+                <div style={{ maxHeight: '16rem', overflowY: 'auto', overflowX: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      {heatData.map((row) => (
+                        <tr key={row.id}>
+                          <td style={{ padding: '4px 6px' }}>{row.name}</td>
+                          {row.weekKeys.map((wk) => {
+                            const h = row.weekTotals[wk] || 0;
+                            const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
+                            let bg = '#10b981';
+                            if (pct > 100) bg = '#ef4444';
+                            else if (pct > 85) bg = '#f59e0b';
+                            else if (pct > 70) bg = '#3b82f6';
+                            return (
+                              <td key={wk} title={`${wk} — ${Math.round(h)}h`} style={{ padding: 2 }}>
+                                <div style={{ width: 16, height: 16, background: bg, opacity: 0.7, borderRadius: 3, border: '1px solid #64748b', margin: '0 auto' }} />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3 flex items-center gap-4 text-xs text-[#969696]">
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0–70%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70–85%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85–100%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
+                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
+                </div>
+              </div>
+            ) : (
+              <div className="text-[#969696]">{heatLoading ? 'Loading…' : 'No data'}</div>
+            )}
+          </Card>
+          )}
+
         </div>
       </Layout>
     );
@@ -123,6 +205,8 @@ const Dashboard: React.FC = () => {
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Quick Actions moved inline into header */}
+
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
@@ -140,7 +224,7 @@ const Dashboard: React.FC = () => {
             </p>
           </div>
           
-          {/* Department and Time Period Selectors */}
+          {/* Department and Time Period Selectors + Quick Actions */}
           <div className="flex items-center gap-6">
             {/* Department Filter */}
             <div className="flex items-center gap-3">
@@ -192,6 +276,8 @@ const Dashboard: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {/* Inline Quick Actions */}
+              <QuickActionsInline />
             </div>
           </div>
         </div>
@@ -248,17 +334,33 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Team Overview */}
           <Card className="lg:col-span-2 bg-[#2d2d30] border-[#3e3e42]">
-            <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Team Overview</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-[#cccccc]">Team Overview</h3>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-[#969696]">Heat:</span>
+                {[4, 8].map((w) => (
+                  <button
+                    key={w}
+                    onClick={() => setHeatWeeks(w)}
+                    className={`px-2 py-0.5 rounded ${heatWeeks === w ? 'bg-[#007acc] text-white' : 'bg-[#3e3e42] text-[#969696] hover:text-[#cccccc]'}`}
+                    aria-pressed={heatWeeks === w}
+                  >
+                    {w}w
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {filterPeopleBySkills(data.team_overview).map(person => (
                 <div key={person.id} className="flex items-center justify-between p-3 bg-[#3e3e42]/50 rounded-lg">
                   <div className="flex-1">
                     <div className="font-medium text-[#cccccc]">{person.name}</div>
-                    <div className="text-sm text-[#969696]">{person.role} • {person.allocated_hours}h / {person.capacity}h</div>
+                    <div className="text-sm text-[#969696]">{person.role} - {person.allocated_hours}h / {person.capacity}h</div>
+                    {/* Compact heatmap is shown in its own card below */}
                     {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (
                       <div className="text-xs text-amber-400 mt-1">
                         Peak: {person.peak_utilization_percent}%
-                        {person.is_peak_overallocated && ' ⚠️'}
+                        {person.is_peak_overallocated && ' over'}
                       </div>
                     )}
                   </div>
@@ -302,6 +404,102 @@ const Dashboard: React.FC = () => {
             </div>
           </Card>
         </div>
+
+        {/* Team Utilization Heat Map (compact) */}
+        <Card className="lg:col-span-2 bg-[#2d2d30] border-[#3e3e42]">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-[#cccccc]">Team Utilization Heat Map</h3>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-[#969696]">Weeks:</span>
+              {[4, 8, 12].map((w) => (
+                <button
+                  key={w}
+                  onClick={() => setHeatWeeks(w)}
+                  className={`px-2 py-0.5 rounded ${heatWeeks === w ? 'bg-[#007acc] text-white' : 'bg-[#3e3e42] text-[#969696] hover:text-[#cccccc]'}`}
+                  aria-pressed={heatWeeks === w}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {heatData && heatData.length > 0 ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: 'auto', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '140px' }} />
+                  {heatData[0].weekKeys.map((wk) => (
+                    <col key={`col-${wk}`} style={{ width: 26 }} />
+                  ))}
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th
+                      style={{
+                        textAlign: 'left',
+                        padding: '4px 6px',
+                        position: 'sticky',
+                        top: 0,
+                        background: '#2d2d30',
+                        zIndex: 1,
+                        fontSize: '12px'
+                      }}
+                    >
+                      Person
+                    </th>
+                    {heatData[0].weekKeys.map((wk) => (
+                      <th
+                        key={`head-${wk}`}
+                        style={{
+                          textAlign: 'center',
+                          padding: '2px',
+                          whiteSpace: 'nowrap',
+                          fontWeight: 600,
+                          position: 'sticky',
+                          top: 0,
+                          background: '#2d2d30',
+                          fontSize: '12px'
+                        }}
+                      >
+                        {wk.slice(5)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {heatData.map((row) => (
+                    <tr key={row.id}>
+                      <td style={{ padding: '4px 6px', color: '#cccccc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</td>
+                      {row.weekKeys.map((wk) => {
+                        const h = row.weekTotals[wk] || 0;
+                        const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
+                        let bg = '#10b981';
+                        if (pct > 100) bg = '#ef4444';
+                        else if (pct > 85) bg = '#f59e0b';
+                        else if (pct > 70) bg = '#3b82f6';
+                        return (
+                          <td key={`cell-${row.id}-${wk}`} title={`${wk} - ${Math.round(h)}h`} style={{ padding: 3, textAlign: 'center' }}>
+                            <div style={{ width: 20, height: 20, background: bg, opacity: 0.9, borderRadius: 3, border: '1px solid #52525b', margin: '0 auto' }} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-2 flex items-center gap-3 text-[11px] text-[#969696]">
+                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0-70%</div>
+                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70-85%</div>
+                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85-100%</div>
+                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
+                {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
+              </div>
+            </div>
+          ) : (
+            <div className="text-[#969696]">{heatLoading ? 'Loading…' : 'No data'}</div>
+          )}
+        </Card>
 
         {/* Utilization Distribution */}
         <Card className="bg-[#2d2d30] border-[#3e3e42]">

@@ -149,6 +149,20 @@ This document tracks planned features and improvements for the Workload Tracker 
 - **Benefits**: Improved response times, reduced database load
 - **Estimated Timeline**: 2-3 days
 
+#### 10.1 Dockerized Redis Container (Staging/Prod Simulation)
+- Intent: simulate deployment with a standalone Redis service while keeping dev on LocMem by default.
+- Compose changes (docker-compose.yml):
+  - Add `redis` service (image `redis:7-alpine`), `ports: ["6379:6379"]`, healthcheck (`redis-cli ping`).
+  - Optional auth: `command: ["redis-server","--requirepass","${REDIS_PASSWORD}"]` and add `REDIS_PASSWORD` to `.env`.
+  - Backend: add `depends_on: redis` and set `REDIS_URL` to `redis://${HOST_IP}:6379/1` (or in-network `redis://redis:6379/1`).
+- Backend dependency: add `redis>=4.5` to `backend/requirements.txt` and rebuild backend.
+- Settings: already support `REDIS_URL` env; LocMem fallback remains.
+- Validation:
+  - Bring up: `docker-compose up -d --build redis backend` and verify redis healthy.
+  - Shell check: `from django.core.cache import cache; cache.set('k','v',60); cache.get('k')` via `manage.py shell`.
+  - Endpoint timing: call `/api/people/capacity_heatmap/` and `/api/people/workload_forecast/` twice; expect HIT on second call.
+- Security/ops: restrict Redis exposure (bridge network), set memory limits, optional eviction policy (`allkeys-lru`).
+
 ### 11. Automated Testing Suite
 - **Description**: Expand test coverage with integration and end-to-end tests
 - **Tools**: Playwright for E2E, expanded Django test suite

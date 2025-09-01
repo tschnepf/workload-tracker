@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Production Monitoring - Phase 6 Optimization
  * Integrates Sentry with existing Web Vitals monitoring
  */
@@ -72,7 +72,7 @@ export function initializeSentry() {
     return;
   }
   if (!isProduction) {
-    console.log('🔍 Sentry disabled in development mode');
+    console.log('Sentry disabled in development mode');
     return;
   }
 
@@ -172,9 +172,9 @@ function handleEnhancedMetric(metric: Metric) {
 
   // Development logging (opt-in)
   if (monitoringDebug) {
-    const budgetStatus = performanceData.exceedsBudget ? '🚨 OVER BUDGET' : '✅ Within budget';
+    const budgetStatus = performanceData.exceedsBudget ? ' OVER BUDGET' : ' Within budget';
     console.log(
-      `📊 [Performance] ${metric.name}: ${metric.value} (${performanceData.score}) ${budgetStatus}`,
+      ` [Performance] ${metric.name}: ${metric.value} (${performanceData.score}) ${budgetStatus}`,
       {
         value: metric.value,
         score: performanceData.score,
@@ -229,7 +229,7 @@ export function initializePerformanceMonitoring() {
       startTime: Date.now(),
     });
 
-    console.log('📊 Enhanced performance monitoring initialized');
+    console.log(' Enhanced performance monitoring initialized');
   } catch (error) {
     console.warn('Failed to initialize performance monitoring:', error);
     
@@ -316,7 +316,7 @@ export function trackPerformanceEvent(
   };
 
   if (monitoringDebug) {
-    console.log(`📈 [Performance Event] ${name}: ${value}${unit}`, eventData);
+    console.log(`[Performance Event] ${name}: ${value}${unit}`, eventData);
   }
 
   if (isProduction) {
@@ -364,7 +364,7 @@ export class EnhancedPerformanceTimer {
 
     if (monitoringDebug) {
       console.log(
-        `⏱️ [Performance Timer] ${this.label}: ${duration.toFixed(2)}ms${
+        `[Performance Timer] ${this.label}: ${duration.toFixed(2)}ms${
           memoryDelta ? ` (${(memoryDelta / 1024).toFixed(2)}KB)` : ''
         }`,
         result

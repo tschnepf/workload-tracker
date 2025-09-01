@@ -1,9 +1,9 @@
-/**
+﻿/**
  * API service layer - handles all backend communication
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Department, Deliverable, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse } from '@/types/models';
+import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -25,7 +25,7 @@ async function fetchApi<T>(
   const url = `${API_BASE_URL}${endpoint}`;
   
   // Debug logging for all API requests
-  console.log('🔍 [DEBUG] fetchApi called:', {
+  console.log(' [DEBUG] fetchApi called:', {
     url,
     method: options.method || 'GET',
     headers: options.headers,
@@ -42,7 +42,7 @@ async function fetchApi<T>(
       ...options,
     });
     
-    console.log('🔍 [DEBUG] fetchApi response:', {
+    console.log(' [DEBUG] fetchApi response:', {
       url,
       status: response.status,
       statusText: response.statusText,
@@ -56,11 +56,11 @@ async function fetchApi<T>(
       try {
         errorData = await response.json();
         errorMessage = errorData.message || errorData.detail || errorMessage;
-        console.error('🔍 [DEBUG] API Error Response:', errorData);
+        console.error(' [DEBUG] API Error Response:', errorData);
       } catch (e) {
         // If JSON parsing fails, use status text
         errorMessage = response.statusText || errorMessage;
-        console.error('🔍 [DEBUG] API Error (no JSON):', errorMessage);
+        console.error(' [DEBUG] API Error (no JSON):', errorMessage);
       }
       throw new ApiError(errorMessage, response.status, errorData);
     }
@@ -74,15 +74,15 @@ async function fetchApi<T>(
     // Check if response body is empty
     const text = await response.text();
     if (!text) {
-      console.log('🔍 [DEBUG] Empty response body, returning undefined');
+      console.log(' [DEBUG] Empty response body, returning undefined');
       return undefined as T;
     }
 
     const result = JSON.parse(text);
-    console.log('🔍 [DEBUG] fetchApi success result:', result);
+    console.log(' [DEBUG] fetchApi success result:', result);
     return result;
   } catch (error) {
-    console.error('🔍 [DEBUG] Fetch error:', error);
+    console.error(' [DEBUG] Fetch error:', error);
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new ApiError('Network error - unable to reach server', 0);
     }
@@ -120,7 +120,7 @@ export const peopleApi = {
 
   // Update person
   update: (id: number, data: Partial<Person>) => {
-    console.log('🔍 [DEBUG] peopleApi.update called with:', {
+    console.log(' [DEBUG] peopleApi.update called with:', {
       id,
       data,
       dataJSON: JSON.stringify(data, null, 2),
@@ -155,6 +155,23 @@ export const peopleApi = {
     if (week) queryParams.set('week', week);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApi<PersonUtilization>(`/people/${personId}/utilization/${queryString}`);
+  },
+
+  // Capacity heatmap
+  capacityHeatmap: (params?: { weeks?: number; department?: string | number }, options?: RequestInit) => {
+    const query = new URLSearchParams();
+    if (params?.weeks) query.set('weeks', String(params.weeks));
+    if (params?.department !== undefined && params.department !== '') {
+      query.set('department', String(params.department));
+    }
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return fetchApi<PersonCapacityHeatmapItem[]>(`/people/capacity_heatmap/${qs}`, options);
+  },
+
+  // Team workload forecast
+  workloadForecast: (weeks: number = 8) => {
+    const qs = weeks ? `?weeks=${weeks}` : '';
+    return fetchApi<WorkloadForecastItem[]>(`/people/workload_forecast/${qs}`);
   },
 };
 
@@ -221,6 +238,7 @@ export const projectsApi = {
       clearTimeout(timeout);
     }
   },
+
 };
 
 // Departments API
@@ -393,6 +411,15 @@ export const deliverablesApi = {
         deliverable_ids: deliverableIds 
       }),
     }),
+
+  // Milestone calendar within date range
+  calendar: (start?: string, end?: string) => {
+    const params = new URLSearchParams();
+    if (start) params.set('start', start);
+    if (end) params.set('end', end);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return fetchApi<DeliverableCalendarItem[]>(`/deliverables/calendar/${qs}`);
+  },
 };
 
 // Dashboard API
@@ -521,3 +548,40 @@ export const rolesApi = {
 };
 
 export { ApiError };
+
+// Deliverable Assignments API
+export const deliverableAssignmentsApi = {
+  // List all active assignments (use ?all=true for bulk)
+  list: (params?: { all?: boolean }) => {
+    const qs = params?.all ? '?all=true' : '';
+    return fetchApi<DeliverableAssignment[]>(`/deliverables/assignments/${qs}`);
+  },
+
+  // Filter by deliverable
+  byDeliverable: (deliverableId: number) =>
+    fetchApi<DeliverableAssignment[]>(`/deliverables/assignments/by_deliverable/?deliverable=${deliverableId}`),
+
+  // Filter by person
+  byPerson: (personId: number) =>
+    fetchApi<DeliverableAssignment[]>(`/deliverables/assignments/by_person/?person=${personId}`),
+
+  // Create
+  create: (data: Omit<DeliverableAssignment, 'id' | 'personName' | 'projectId' | 'createdAt' | 'updatedAt' | 'isActive'> & { isActive?: boolean }) =>
+    fetchApi<DeliverableAssignment>('/deliverables/assignments/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update (partial)
+  update: (id: number, data: Partial<DeliverableAssignment>) =>
+    fetchApi<DeliverableAssignment>(`/deliverables/assignments/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete
+  delete: (id: number) =>
+    fetchApi<void>(`/deliverables/assignments/${id}/`, {
+      method: 'DELETE',
+    }),
+};

@@ -222,6 +222,52 @@ export interface DashboardData {
   }>;
 }
 
+// DeliverableAssignment (link person to deliverable with weekly hours)
+export interface DeliverableAssignment {
+  id?: number;
+  deliverable: number; // Deliverable ID
+  person: number; // Person ID
+  weeklyHours: { [weekKey: string]: number };
+  roleOnMilestone?: string | null;
+  isActive?: boolean;
+  personName?: string; // Read-only
+  projectId?: number; // Read-only (deliverable.project_id)
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Milestone calendar item
+export interface DeliverableCalendarItem {
+  id: number;
+  project: number;
+  projectName: string | null;
+  title: string;
+  date: string | null; // YYYY-MM-DD
+  isCompleted: boolean;
+  assignmentCount: number;
+}
+
+// Capacity heatmap item
+export interface PersonCapacityHeatmapItem {
+  id: number;
+  name: string;
+  weeklyCapacity: number;
+  department: string | null;
+  weekKeys: string[];
+  weekTotals: { [weekKey: string]: number };
+  peak: { weekKey: string | null; percentage: number };
+  averagePercentage: number;
+}
+
+// Team workload forecast item
+export interface WorkloadForecastItem {
+  weekStart: string; // YYYY-MM-DD (Monday)
+  totalCapacity: number;
+  totalAllocated: number;
+  teamUtilization: number;
+  peopleOverallocated: Array<{ id: number; name: string }>;
+}
+
 // Optimized Projects page filter metadata response
 export interface ProjectFilterMetadataResponse {
   projectFilters: {

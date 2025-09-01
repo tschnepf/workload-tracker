@@ -6,7 +6,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle
-from django.db.models import Sum, Max
+from django.db.models import Sum, Max, Prefetch
 from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date
 from django.core.files.storage import default_storage
@@ -14,10 +14,13 @@ from django.core.files.base import ContentFile
 from .models import Person
 from .serializers import PersonSerializer
 from .utils.excel_handler import export_people_to_excel, import_people_from_excel
+from .services import CapacityAnalysisService
 import hashlib
 import json
 import io
 import time
+from datetime import datetime, timedelta, date
+from assignments.models import Assignment
 
 class HotEndpointThrottle(UserRateThrottle):
     """Special throttle for hot endpoints like utilization checking"""
@@ -87,7 +90,7 @@ class PersonViewSet(viewsets.ModelViewSet):
             response['Cache-Control'] = 'public, max-age=30'  # 30 seconds cache
         
         return response
-    
+
     @action(detail=True, methods=['get'], throttle_classes=[HotEndpointThrottle])
     def utilization(self, request, pk=None):
         """Get detailed utilization breakdown for a person - Chunk 3"""
@@ -206,7 +209,7 @@ class PersonViewSet(viewsets.ModelViewSet):
         )
         response['Cache-Control'] = 'no-cache'
         return response
-    
+
     def _progress_chunk(self, progress_data):
         """Format progress data as JSON chunk"""
         return json.dumps({
@@ -310,3 +313,49 @@ class PersonViewSet(viewsets.ModelViewSet):
         )
         response['Cache-Control'] = 'no-cache'
         return response
+
+    @action(detail=False, methods=['get'])
+    def capacity_heatmap(self, request):
+        """Return per-person week summaries for the next N weeks (default 12)."""
+        try:
+            weeks = int(request.query_params.get('weeks', 12))
+        except ValueError:
+            weeks = 12
+
+        people = self.get_queryset().select_related('department')
+        # Optional department filter to align with dashboard filtering
+        department_param = request.query_params.get('department')
+        cache_scope = 'all'
+        if department_param not in (None, ""):
+            try:
+                dept_id = int(department_param)
+                people = people.filter(department_id=dept_id)
+                cache_scope = f'dept_{dept_id}'
+            except (TypeError, ValueError):
+                # Ignore invalid department filter; return unfiltered list
+                pass
+        result = CapacityAnalysisService.get_capacity_heatmap(people, weeks, cache_scope=cache_scope)
+        return Response(result)
+
+    @action(detail=False, methods=['get'])
+    def workload_forecast(self, request):
+        """Aggregate team capacity vs allocated for N weeks ahead (default 8).
+
+        Response array items:
+        { weekStart, totalCapacity, totalAllocated, teamUtilization, peopleOverallocated[] }
+        """
+        try:
+            weeks = int(request.query_params.get('weeks', 8))
+        except ValueError:
+            weeks = 8
+
+        people = (
+            self.get_queryset()
+            .prefetch_related(
+                Prefetch('assignments', queryset=Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id'))
+            )
+        )
+
+        # Scope is currently global team; if department filter is added in future, pass cache_scope accordingly
+        result = CapacityAnalysisService.get_workload_forecast(people, weeks, cache_scope='all')
+        return Response(result)

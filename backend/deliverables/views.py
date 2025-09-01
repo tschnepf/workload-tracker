@@ -7,9 +7,13 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
+from django.db.models import Count, Q, Max
+from django.utils.dateparse import parse_date
+from django.utils.http import http_date
+from datetime import datetime
 from collections import defaultdict
-from .models import Deliverable
-from .serializers import DeliverableSerializer
+from .models import Deliverable, DeliverableAssignment
+from .serializers import DeliverableSerializer, DeliverableAssignmentSerializer
 
 
 class DeliverableViewSet(viewsets.ModelViewSet):
@@ -94,6 +98,69 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 {"error": "project_ids parameter is required"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+    @action(detail=False, methods=['get'])
+    def calendar(self, request):
+        """
+        Read-only calendar endpoint returning deliverables within a date range
+        with assignmentCount. Missing params tolerated (returns all dated items).
+
+        GET /api/deliverables/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD
+        """
+        start_str = request.query_params.get('start')
+        end_str = request.query_params.get('end')
+        start_date = parse_date(start_str) if start_str else None
+        end_date = parse_date(end_str) if end_str else None
+
+        qs = (
+            Deliverable.objects.all()
+            .select_related('project')
+            .annotate(
+                assignmentCount=Count(
+                    'assignments', filter=Q(assignments__is_active=True)
+                )
+            )
+        )
+
+        # Apply date filters if provided; otherwise return dated items only
+        if start_date:
+            qs = qs.filter(date__gte=start_date)
+        if end_date:
+            qs = qs.filter(date__lte=end_date)
+        if not start_date and not end_date:
+            qs = qs.filter(date__isnull=False)
+
+        # Compute conditional caching headers (ETag/Last-Modified)
+        agg = qs.aggregate(
+            max_deliv=Max('updated_at'),
+            max_assign=Max('assignments__updated_at'),
+            total=Count('id'),
+        )
+        last_updated = agg['max_assign'] or agg['max_deliv']
+        count = agg['total'] or 0
+        etag_val = f"W/\"calendar:{start_str or ''}:{end_str or ''}:{(last_updated.isoformat() if last_updated else '')}:{count}\""
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match == etag_val:
+            return Response(status=status.HTTP_304_NOT_MODIFIED)
+
+        items = []
+        for d in qs:
+            title = d.description or (f"{d.percentage}%" if d.percentage is not None else "Milestone")
+            items.append({
+                'id': d.id,
+                'project': d.project_id,
+                'projectName': d.project.name if d.project_id else None,
+                'title': title,
+                'date': d.date.strftime('%Y-%m-%d') if d.date else None,
+                'isCompleted': d.is_completed,
+                'assignmentCount': getattr(d, 'assignmentCount', 0),
+            })
+
+        resp = Response(items)
+        if last_updated:
+            resp['Last-Modified'] = http_date(int(last_updated.timestamp()))
+        resp['ETag'] = etag_val
+        return resp
         
         try:
             # Parse and validate project IDs
@@ -140,3 +207,48 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 {"error": f"Failed to fetch bulk deliverables: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class DeliverableAssignmentViewSet(viewsets.ModelViewSet):
+    """CRUD and filter endpoints for deliverable-person weekly hour links."""
+
+    serializer_class = DeliverableAssignmentSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        return (
+            DeliverableAssignment.objects.filter(is_active=True)
+            .select_related('deliverable', 'person', 'deliverable__project')
+            .order_by('-created_at')
+        )
+
+    def list(self, request, *args, **kwargs):
+        # Support bulk fetch without pagination for UI convenience
+        if request.query_params.get('all') == 'true':
+            serializer = self.get_serializer(self.get_queryset(), many=True)
+            return Response(serializer.data)
+        return super().list(request, *args, **kwargs)
+
+    @action(detail=False, methods=['get'])
+    def by_deliverable(self, request):
+        deliverable_id = request.query_params.get('deliverable')
+        if not deliverable_id:
+            return Response({"error": "deliverable parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            qs = self.get_queryset().filter(deliverable_id=int(deliverable_id))
+        except ValueError:
+            return Response({"error": "deliverable must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def by_person(self, request):
+        person_id = request.query_params.get('person')
+        if not person_id:
+            return Response({"error": "person parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            qs = self.get_queryset().filter(person_id=int(person_id))
+        except ValueError:
+            return Response({"error": "person must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)

@@ -12,6 +12,7 @@ from .models import Assignment
 from .serializers import AssignmentSerializer
 from people.models import Person
 from projects.models import Project
+from .services import WorkloadRebalancingService
 
 class HotEndpointThrottle(UserRateThrottle):
     """Special throttle for hot endpoints like conflict checking"""
@@ -20,7 +21,7 @@ class HotEndpointThrottle(UserRateThrottle):
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment CRUD API with utilization tracking
-    Uses AutoMapped serializer for automatic snake_case ↔ camelCase conversion
+    Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
     """
     queryset = Assignment.objects.filter(is_active=True).select_related('person').order_by('-created_at')
     serializer_class = AssignmentSerializer
@@ -146,7 +147,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
                 overage_hours = total_with_proposed - person_capacity
                 overage_percent = round((total_with_proposed / person_capacity) * 100)
                 warnings.append(
-                    f"⚠️ {person.name} would be at {overage_percent}% capacity "
+                    f"{person.name} would be at {overage_percent}% capacity "
                     f"({total_with_proposed}h/{person_capacity}h) - {overage_hours}h over limit"
                 )
                 
@@ -154,7 +155,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
                 if project_assignments:
                     warnings.append("Current assignments:")
                     for project_name, hours in project_assignments.items():
-                        warnings.append(f"• {project_name}: {hours}h")
+                        warnings.append(f"- {project_name}: {hours}h")
             
             return Response({
                 'hasConflict': has_conflict,
@@ -175,3 +176,21 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Internal server error: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def rebalance_suggestions(self, request):
+        """Suggest non-destructive rebalancing ideas across the next N weeks (default 12).
+
+        Heuristic:
+        - Overallocated: utilization > 100% (based on 1-week snapshot)
+        - Underutilized: utilization < 70%
+        - Pair over with under and propose shifting 4–8 hours
+        Returns at most 20 suggestions.
+        """
+        try:
+            horizon_weeks = int(request.query_params.get('weeks', 12))
+        except ValueError:
+            horizon_weeks = 12
+
+        suggestions = WorkloadRebalancingService.generate_rebalance_suggestions(weeks=horizon_weeks)
+        return Response(suggestions)

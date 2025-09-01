@@ -79,3 +79,32 @@ class Deliverable(models.Model):
         if self.date:
             parts.append(str(self.date))
         return " - ".join(parts) if parts else f"Deliverable #{self.id}"
+
+
+class DeliverableAssignment(models.Model):
+    """Link a deliverable (milestone) to a person with weekly hours."""
+
+    deliverable = models.ForeignKey(
+        'deliverables.Deliverable',
+        on_delete=models.CASCADE,
+        related_name='assignments',
+    )
+    person = models.ForeignKey(
+        'people.Person',
+        on_delete=models.CASCADE,
+        related_name='deliverable_assignments',
+    )
+    # Follow Assignment.weekly_hours JSON convention: {"YYYY-MM-DD": hours}
+    weekly_hours = models.JSONField(default=dict)
+    role_on_milestone = models.CharField(max_length=100, blank=True, null=True)
+
+    # System fields
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"DeliverableAssignment(d={self.deliverable_id}, p={self.person_id})"

@@ -149,6 +149,25 @@ REST_FRAMEWORK = {
     }
 }
 
+# Cache configuration: LocMem by default; Redis if REDIS_URL provided
+REDIS_URL = os.getenv('REDIS_URL')
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'TIMEOUT': int(os.getenv('CACHE_DEFAULT_TIMEOUT', '300')),
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'workload-tracker-locmem',
+            'TIMEOUT': int(os.getenv('CACHE_DEFAULT_TIMEOUT', '300')),
+        }
+    }
+
 # CORS
 # CORS - Build allowed origins dynamically
 CORS_ALLOWED_ORIGINS = [
