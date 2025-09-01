@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Person, Department } from '@/types/models';
-import { peopleApi, departmentsApi } from '@/services/api';
+import { Person, Department, Role } from '@/types/models';
+import { peopleApi, departmentsApi, rolesApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -28,18 +28,20 @@ const PersonForm: React.FC = () => {
   const [formData, setFormData] = useState<PersonFormData>({
     name: '',
     weeklyCapacity: 36, // Default from master guide
-    role: 'Engineer', // Default role from Django model
+    role: '1', // Default role ID (Engineer) - converts properly to number
     department: null, // Phase 2: No department initially
     location: '', // Location can be empty initially
   });
 
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department list
+  const [roles, setRoles] = useState<Role[]>([]); // Available roles
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadDepartments(); // Phase 2: Always load departments
+    loadRoles(); // Load available roles
     if (isEditing && id) {
       loadPerson(parseInt(id));
     }
@@ -55,6 +57,16 @@ const PersonForm: React.FC = () => {
     }
   };
 
+  // Load roles for dropdown
+  const loadRoles = async () => {
+    try {
+      const response = await rolesApi.list();
+      setRoles(response.results || []);
+    } catch (err) {
+      console.error('Error loading roles:', err);
+    }
+  };
+
   const loadPerson = async (personId: number) => {
     try {
       setLoading(true);
@@ -65,7 +77,7 @@ const PersonForm: React.FC = () => {
       const newFormData = {
         name: person.name,
         weeklyCapacity: person.weeklyCapacity || 36,
-        role: String(person.role || 'Engineer'), // Convert number role to string for form
+        role: String(person.role || 1), // Convert role ID to string for form
         department: person.department || null, // Phase 2: Load department
         location: person.location || '', // Load location
       };
@@ -119,9 +131,10 @@ const PersonForm: React.FC = () => {
       });
 
       // Convert form data to API format (role: string → role: number)
+      const roleId = parseInt(formData.role) || 1; // Fallback to role ID 1 if invalid
       const apiData = {
         ...formData,
-        role: Number(formData.role)
+        role: roleId
       };
 
       if (isEditing && id) {
@@ -234,18 +247,28 @@ const PersonForm: React.FC = () => {
 
           {/* Role Field */}
           <div>
-            <Input
-              label="Role/Title"
-              name="role"
-              value={formData.role}
+            <label className="block text-sm font-medium text-[#cccccc] mb-2">
+              Role/Title *
+            </label>
+            <select
+              value={formData.role || ''}
               onChange={(e) => handleChange('role', e.target.value)}
-              placeholder="e.g., Senior Engineer, Project Manager, Designer"
+              className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent"
+              disabled={loading}
               required
-              error={validationErrors.role}
-              className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
-            />
+            >
+              <option value="">Select a role...</option>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+            {validationErrors.role && (
+              <p className="text-red-400 text-sm mt-1">{validationErrors.role}</p>
+            )}
             <p className="text-[#969696] text-sm mt-1">
-              Job title or role within the organization
+              Select the person's role within the organization
             </p>
           </div>
 
