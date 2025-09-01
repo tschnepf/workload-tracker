@@ -1,6 +1,21 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: workload-tracker-redis
+    restart: unless-stopped
+    # Expose on host so other machines can reach it via HOST_IP:6379
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tracker-network
+
   db:
     image: postgres:15
     container_name: workload-tracker-db
@@ -42,8 +57,13 @@ services:
       - "${BACKEND_PORT}:8000"
     env_file:
       - .env
+    environment:
+      # Use internal Docker network for backend->Redis to minimize hiccups
+      - REDIS_URL=redis://redis:6379/1
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - tracker-network

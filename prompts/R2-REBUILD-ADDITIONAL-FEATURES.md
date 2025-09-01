@@ -125,6 +125,8 @@ Frontend patterns (VSCode dark mode):
 - MilestoneCalendar: read-only grid/timeline using `Card`, `Table`, semantic colors for status; hover shows assignmentCount and projectName.
 - Deliverable detail drawer: show milestone assignments with inline weekly hours editors reusing the assignment grid pattern and week key list from `AssignmentSerializer.availableWeeks`.
 
+Status: Completed
+
 Acceptance criteria:
 
 ```text
@@ -937,6 +939,8 @@ Acceptance criteria:
 
 Create a `QuickActionsPanel` component that presents actions: Find Available, Balance Workload, Milestone Review, Capacity Report. Each opens a split-panel modal consistent with the Projects/People pattern.
 
+Status: Completed
+
 Requirements:
 - Use dark tokens; no hardcoded hex colors.
 - Keyboard accessible; focus management in modals.
@@ -947,7 +951,7 @@ Acceptance criteria:
 
 ## Prompt 10 — Frontend: Milestone Assignments UI
 
-In the project detail deliverables section, add the ability to link people to a deliverable with weekly hours.
+In the project detail deliverables section, allow linking/unlinking people to a deliverable (optional role). Do not store per-deliverable weekly hours; display derived hours from Assignment.weekly_hours for the deliverable’s project over the milestone window.
 
 **🔴 CRITICAL: Prevent Dropdown/Form Issues:**
 ```bash
@@ -959,9 +963,10 @@ curl -s http://localhost:8000/api/deliverables/assignments/ | head -20
 ```
 
 Requirements:
-- For a selected deliverable, show existing assignments and weekly hours; allow inline edits.
-- Use Sunday week keys; when editing, call conflict checker before saving when increasing hours.
-- Optimistic UI updates, rollback on error with clear toast.
+- For a selected deliverable, show linked people and display derived totals and a small week breakdown for the milestone window.
+- Milestone window default: 6 weeks leading up to the deliverable date; if a prior deliverable exists for the same project, use the time between the prior and current deliverable (exclusive→inclusive).
+- No inline hour editing here; any hour adjustments are made on the Assignments grid.
+- Optimistic UI updates for link/unlink and role changes; rollback on error with clear toast.
 - **CRITICAL**: Load people/roles from API, never hardcode options in dropdowns
 
 **🚨 Implementation Safety Checklist:**
@@ -990,6 +995,7 @@ Add a calendar view that consumes `/api/deliverables/calendar` and displays deli
 
 Requirements:
 - Show project name, title (description or percentage), date, assignmentCount badge.
+- assignmentCount represents the number of distinct people with >0 derived hours (from Assignment.weekly_hours) on the deliverable’s project within the milestone window.
 - Range controls (month, custom start/end). Debounce queries.
 - Lightweight rendering; no heavy dependency unless justified. Plain SVG/DOM acceptable.
 
@@ -1001,8 +1007,8 @@ Acceptance criteria:
 Add charts for team workload forecast and a per-project timeline with assignment bars and deliverable overlays.
 
 Requirements:
-- Forecast: line/area comparing totalCapacity vs totalAllocated for N weeks.
-- Timeline: stacked bars by week; overlay deliverable markers; use utilization color scale from tokens.
+- Forecast: line/area comparing totalCapacity vs totalAllocated for N weeks (sourced from Assignment.weekly_hours via API).
+- Timeline: stacked bars by week from Assignment.weekly_hours; overlay deliverable markers (display-only); use utilization color scale from tokens.
 - Keep bundle size in check; prefer small libs or SVG.
 
 Acceptance criteria:

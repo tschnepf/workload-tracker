@@ -15,9 +15,16 @@ class CapacityAnalysisService:
         Expects people_queryset to be filtered (e.g., active only) and may include
         select_related('department') to avoid N+1.
         """
-        version = cache.get('analytics_cache_version', 1)
+        try:
+            version = cache.get('analytics_cache_version', 1)
+        except Exception:
+            version = 1
         key = f"capacity_heatmap_v{version}_{cache_scope}_{weeks}"
-        cached = cache.get(key)
+        try:
+            cached = cache.get(key)
+        except Exception as e:
+            cached = None
+            logger.warning("Cache GET failed: %s", key)
         if cached is not None:
             logger.info("Cache HIT: %s", key, extra={'cache_hit': True})
             return cached
@@ -39,7 +46,10 @@ class CapacityAnalysisService:
                 },
                 'averagePercentage': util.get('total_percentage'),
             })
-        cache.set(key, result, timeout=300)
+        try:
+            cache.set(key, result, timeout=300)
+        except Exception:
+            logger.warning("Cache SET failed: %s", key)
         return result
 
     @staticmethod
@@ -69,9 +79,16 @@ class CapacityAnalysisService:
                     return float(wh[k] or 0)
             return 0.0
 
-        version = cache.get('analytics_cache_version', 1)
+        try:
+            version = cache.get('analytics_cache_version', 1)
+        except Exception:
+            version = 1
         key = f"workload_forecast_v{version}_{cache_scope}_{weeks}"
-        cached = cache.get(key)
+        try:
+            cached = cache.get(key)
+        except Exception:
+            cached = None
+            logger.warning("Cache GET failed: %s", key)
         if cached is not None:
             logger.info("Cache HIT: %s", key, extra={'cache_hit': True})
             return cached
@@ -98,5 +115,8 @@ class CapacityAnalysisService:
                 'peopleOverallocated': overallocated,
             })
 
-        cache.set(key, forecast, timeout=600)
+        try:
+            cache.set(key, forecast, timeout=600)
+        except Exception:
+            logger.warning("Cache SET failed: %s", key)
         return forecast

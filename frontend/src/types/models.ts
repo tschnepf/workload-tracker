@@ -247,6 +247,16 @@ export interface DeliverableCalendarItem {
   assignmentCount: number;
 }
 
+// Deliverable staffing summary (derived from Assignment.weekly_hours)
+export interface DeliverableStaffingSummaryItem {
+  linkId: number | null;
+  personId: number;
+  personName: string;
+  roleOnMilestone: string | null;
+  totalHours: number;
+  weekBreakdown: { [weekKey: string]: number };
+}
+
 // Capacity heatmap item
 export interface PersonCapacityHeatmapItem {
   id: number;

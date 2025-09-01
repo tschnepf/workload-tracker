@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse } from '@/types/models';
+import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse } from '@/types/models';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -419,6 +419,12 @@ export const deliverablesApi = {
     if (end) params.set('end', end);
     const qs = params.toString() ? `?${params.toString()}` : '';
     return fetchApi<DeliverableCalendarItem[]>(`/deliverables/calendar/${qs}`);
+  },
+
+  // Deliverable staffing summary (derived hours) for a given deliverable
+  staffingSummary: (deliverableId: number, weeks?: number) => {
+    const qs = weeks ? `?weeks=${weeks}` : '';
+    return fetchApi<DeliverableStaffingSummaryItem[]>(`/deliverables/${deliverableId}/staffing_summary/${qs}`);
   },
 };
 

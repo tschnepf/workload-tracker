@@ -157,6 +157,12 @@ if REDIS_URL:
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',
             'LOCATION': REDIS_URL,
             'TIMEOUT': int(os.getenv('CACHE_DEFAULT_TIMEOUT', '300')),
+            'OPTIONS': {
+                # Short, resilient timeouts to avoid request hangs
+                'socket_connect_timeout': float(os.getenv('CACHE_SOCKET_CONNECT_TIMEOUT', '2')),
+                'socket_timeout': float(os.getenv('CACHE_SOCKET_TIMEOUT', '2')),
+                'retry_on_timeout': True,
+            },
         }
     }
 else:

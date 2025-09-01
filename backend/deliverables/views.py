@@ -14,6 +14,7 @@ from datetime import datetime
 from collections import defaultdict
 from .models import Deliverable, DeliverableAssignment
 from .serializers import DeliverableSerializer, DeliverableAssignmentSerializer
+from assignments.models import Assignment
 
 
 class DeliverableViewSet(viewsets.ModelViewSet):
@@ -208,6 +209,99 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=True, methods=['get'], url_path='staffing_summary', url_name='staffing-summary')
+    def staffing_summary(self, request, pk=None):
+        """Return derived staffing for a deliverable from Assignment.weekly_hours.
+
+        Default window: 6 weeks prior OR between previous and current deliverable (exclusive→inclusive).
+        Optional override: ?weeks=6 to force a fixed lookback window.
+
+        Returns array items per person with >0 hours in window on the deliverable's project:
+        { linkId|null, personId, personName, roleOnMilestone|null, totalHours, weekBreakdown }
+        """
+        try:
+            deliverable = Deliverable.objects.select_related('project').get(pk=pk)
+        except Deliverable.DoesNotExist:
+            return Response({"error": "Deliverable not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        from datetime import timedelta
+        end_date = deliverable.date or datetime.utcnow().date()
+        weeks_param = request.query_params.get('weeks')
+
+        prev = (
+            Deliverable.objects.filter(project_id=deliverable.project_id, date__lt=end_date)
+            .order_by('-date')
+            .first()
+        )
+        if weeks_param:
+            try:
+                lookback_weeks = max(1, int(weeks_param))
+            except ValueError:
+                lookback_weeks = 6
+            start_date = end_date - timedelta(weeks=lookback_weeks)
+        else:
+            if prev and prev.date:
+                start_date = prev.date + timedelta(days=1)
+            else:
+                start_date = end_date - timedelta(weeks=6)
+
+        # Aggregate assignments for this project within the window
+        assignments = (
+            Assignment.objects.filter(project_id=deliverable.project_id, is_active=True)
+            .select_related('person')
+        )
+
+        per_person = {}
+        for a in assignments:
+            person_id = a.person_id
+            person_name = getattr(a.person, 'name', f'Person {person_id}') if getattr(a, 'person', None) else f'Person {person_id}'
+            wh = a.weekly_hours or {}
+            for key, hours in wh.items():
+                try:
+                    d = datetime.strptime(key, '%Y-%m-%d').date()
+                except ValueError:
+                    continue
+                if start_date <= d <= end_date:
+                    try:
+                        amt = float(hours or 0)
+                    except (TypeError, ValueError):
+                        amt = 0.0
+                    if amt <= 0:
+                        continue
+                    rec = per_person.setdefault(person_id, {
+                        'personId': person_id,
+                        'personName': person_name,
+                        'totalHours': 0.0,
+                        'weekBreakdown': {}
+                    })
+                    rec['totalHours'] += amt
+                    rec['weekBreakdown'][key] = rec['weekBreakdown'].get(key, 0.0) + amt
+
+        # Join with existing links for this deliverable
+        links = (
+            DeliverableAssignment.objects.filter(deliverable_id=deliverable.id, is_active=True)
+            .select_related('person')
+        )
+        link_map = {link.person_id: link for link in links}
+
+        results = []
+        for pid, rec in per_person.items():
+            if rec['totalHours'] <= 0:
+                continue
+            link = link_map.get(pid)
+            results.append({
+                'linkId': link.id if link else None,
+                'personId': pid,
+                'personName': getattr(link.person, 'name', rec['personName']) if link else rec['personName'],
+                'roleOnMilestone': link.role_on_milestone if link else None,
+                'totalHours': round(rec['totalHours'], 1),
+                'weekBreakdown': rec['weekBreakdown'],
+            })
+
+        # Sort by personName for stable display
+        results.sort(key=lambda x: (x['personName'] or '').lower())
+        return Response(results)
+
 
 class DeliverableAssignmentViewSet(viewsets.ModelViewSet):
     """CRUD and filter endpoints for deliverable-person weekly hour links."""
@@ -240,6 +334,9 @@ class DeliverableAssignmentViewSet(viewsets.ModelViewSet):
             return Response({"error": "deliverable must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
+
+    # Note: Staffing summary is exposed on DeliverableViewSet (detail action)
+    # to be accessible at /api/deliverables/{id}/staffing_summary/
 
     @action(detail=False, methods=['get'])
     def by_person(self, request):

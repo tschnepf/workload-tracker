@@ -76,7 +76,10 @@ class Person(models.Model):
             
             # Check exact match first
             if current_week_key in assignment.weekly_hours:
-                week_hours = assignment.weekly_hours[current_week_key]
+                try:
+                    week_hours = float(assignment.weekly_hours[current_week_key] or 0)
+                except (TypeError, ValueError):
+                    week_hours = 0
                 used_date_key = current_week_key
             else:
                 # Check nearby dates (common with Monday/Tuesday/Sunday variations)
@@ -85,7 +88,10 @@ class Person(models.Model):
                     check_date = current_date + timedelta(days=offset)
                     check_key = check_date.strftime('%Y-%m-%d')
                     if check_key in assignment.weekly_hours:
-                        week_hours = assignment.weekly_hours[check_key]
+                        try:
+                            week_hours = float(assignment.weekly_hours[check_key] or 0)
+                        except (TypeError, ValueError):
+                            week_hours = 0
                         used_date_key = check_key
                         break
             
@@ -147,7 +153,10 @@ class Person(models.Model):
                 used_date_key = None
                 
                 if week_key in assignment.weekly_hours:
-                    week_hours = assignment.weekly_hours[week_key]
+                    try:
+                        week_hours = float(assignment.weekly_hours[week_key] or 0)
+                    except (TypeError, ValueError):
+                        week_hours = 0
                     used_date_key = week_key
                 else:
                     # Check nearby dates (common with Monday/Tuesday/Sunday variations)
@@ -156,14 +165,17 @@ class Person(models.Model):
                         check_date = current_date + timedelta(days=offset)
                         check_key = check_date.strftime('%Y-%m-%d')
                         if check_key in assignment.weekly_hours:
-                            week_hours = assignment.weekly_hours[check_key]
+                            try:
+                                week_hours = float(assignment.weekly_hours[check_key] or 0)
+                            except (TypeError, ValueError):
+                                week_hours = 0
                             used_date_key = check_key
                             break
                 
                 if week_hours > 0:
-                    assignment_total_hours += week_hours
+                    assignment_total_hours += float(week_hours)
                     assignment_weeks_with_data += 1
-                    week_totals[week_key] += week_hours
+                    week_totals[week_key] += float(week_hours)
             
             total_allocated_hours += assignment_total_hours
             
