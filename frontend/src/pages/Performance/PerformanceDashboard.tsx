@@ -47,7 +47,14 @@ const PerformanceDashboard: React.FC = () => {
       
       const currentSummary = getEnhancedPerformanceSummary();
       const currentMetrics = getEnhancedPerformanceMetrics();
-      const currentViolations = getBudgetViolations();
+      const rawViolations = getBudgetViolations();
+      const currentViolations = rawViolations.map(violation => ({
+        metric: violation.metric,
+        value: violation.value,
+        budget: PERFORMANCE_BUDGETS[violation.metric].budget,
+        excess: violation.value - PERFORMANCE_BUDGETS[violation.metric].budget,
+        timestamp: violation.timestamp,
+      }));
       
       setSummary(currentSummary);
       setMetrics(currentMetrics);

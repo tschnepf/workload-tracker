@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/services/api';
+import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { Project } from '@/types/models';
 
 // Projects query hook with state adapter for existing code compatibility
@@ -45,6 +46,8 @@ export function useCreateProject() {
     onSuccess: () => {
       // Invalidate projects list to refetch updated data
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // Invalidate filter metadata (new project may affect filters)
+      queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
     },
   });
 }
@@ -61,6 +64,8 @@ export function useUpdateProject() {
       queryClient.setQueryData(['projects', variables.id], updatedProject);
       // Invalidate projects list to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // Invalidate filter metadata (status/name/client can influence filters)
+      queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
     },
   });
 }
@@ -74,6 +79,8 @@ export function useDeleteProject() {
     onSuccess: () => {
       // Invalidate projects list to remove deleted project
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // Invalidate filter metadata (remove deleted project entry)
+      queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
     },
   });
 }

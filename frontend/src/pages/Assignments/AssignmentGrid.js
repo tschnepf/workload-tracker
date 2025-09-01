@@ -1,0 +1,545 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+/**
+ * Assignment Grid - Real implementation of the spreadsheet-like assignment interface
+ * Replaces the form-based AssignmentForm with a modern grid view
+ */
+import { useState, useEffect } from 'react';
+import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
+import Sidebar from '@/components/layout/Sidebar';
+import Toast from '@/components/ui/Toast';
+// Get next 12 Monday dates
+const getNext12Mondays = () => {
+    const today = new Date();
+    const currentMonday = new Date(today);
+    const daysFromMonday = (today.getDay() + 6) % 7;
+    currentMonday.setDate(today.getDate() - daysFromMonday);
+    const mondays = [];
+    for (let i = 0; i < 12; i++) {
+        const monday = new Date(currentMonday);
+        monday.setDate(currentMonday.getDate() + (i * 7));
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        mondays.push({
+            date: monday.toISOString().split('T')[0],
+            display: `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+            fullDisplay: `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+        });
+    }
+    return mondays;
+};
+const AssignmentGrid = () => {
+    const [people, setPeople] = useState([]);
+    const [deliverables, setDeliverables] = useState([]);
+    const [projects, setProjects] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isAddingAssignment, setIsAddingAssignment] = useState(null);
+    const [newProjectName, setNewProjectName] = useState('');
+    const [selectedProject, setSelectedProject] = useState(null);
+    const [projectSearchResults, setProjectSearchResults] = useState([]);
+    const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+    const [selectedDropdownIndex, setSelectedDropdownIndex] = useState(-1);
+    const [toast, setToast] = useState(null);
+    const [editingCell, setEditingCell] = useState(null);
+    const [editingValue, setEditingValue] = useState('');
+    const [selectedCell, setSelectedCell] = useState(null);
+    const [selectedCells, setSelectedCells] = useState([]);
+    const [selectionStart, setSelectionStart] = useState(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const weeks = getNext12Mondays();
+    // Helper function to determine if a date falls within a given week
+    const isDateInWeek = (date, weekStart) => {
+        const deliverableDate = new Date(date);
+        const weekStartDate = new Date(weekStart);
+        const weekEndDate = new Date(weekStart);
+        weekEndDate.setDate(weekStartDate.getDate() + 6); // Week ends on Sunday
+        return deliverableDate >= weekStartDate && deliverableDate <= weekEndDate;
+    };
+    // Get deliverables for a specific project and week
+    const getDeliverablesForProjectWeek = (projectId, weekStart) => {
+        return deliverables.filter(deliverable => deliverable.project === projectId &&
+            deliverable.date &&
+            isDateInWeek(deliverable.date, weekStart));
+    };
+    // Smart project search - searches name, client, projectNumber with AND logic
+    const searchProjects = (searchTerm) => {
+        if (!searchTerm.trim()) {
+            return [];
+        }
+        const searchWords = searchTerm.trim().toLowerCase().split(/\s+/);
+        return projects.filter(project => {
+            const searchableText = [
+                project.name || '',
+                project.client || '',
+                project.projectNumber || ''
+            ].join(' ').toLowerCase();
+            // All search words must be found in the combined searchable text
+            return searchWords.every(word => searchableText.includes(word));
+        }).slice(0, 8); // Limit results
+    };
+    // Handle project search input changes
+    const handleProjectSearch = (value) => {
+        setNewProjectName(value);
+        const results = searchProjects(value);
+        setProjectSearchResults(results);
+        setShowProjectDropdown(results.length > 0);
+        setSelectedProject(null);
+        setSelectedDropdownIndex(-1);
+    };
+    // Handle project selection from dropdown
+    const handleProjectSelect = (project) => {
+        setSelectedProject(project);
+        setNewProjectName(project.name);
+        setShowProjectDropdown(false);
+        setProjectSearchResults([]);
+        setSelectedDropdownIndex(-1);
+    };
+    // Show toast notification
+    const showToast = (message, type = 'info') => {
+        setToast({ message, type });
+    };
+    // Load data on mount
+    useEffect(() => {
+        loadData();
+    }, []);
+    // Global keyboard navigation and direct typing
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Only handle if we have a selected cell and we're not in edit mode
+            // Also ignore if user is currently adding an assignment (typing in project search)
+            if (!selectedCell || editingCell || isAddingAssignment !== null)
+                return;
+            const { personId, assignmentId, week } = selectedCell;
+            const person = people.find(p => p.id === personId);
+            const assignment = person?.assignments.find(a => a.id === assignmentId);
+            if (!person || !assignment)
+                return;
+            const currentWeekIndex = weeks.findIndex(w => w.date === week);
+            // Handle direct number typing - should clear existing value and start with new number
+            if (/^[0-9.]$/.test(e.key)) {
+                e.preventDefault();
+                // Start editing with the typed character (replaces existing value)
+                setEditingCell({ personId, assignmentId, week });
+                setEditingValue(e.key); // Start fresh with just the typed character
+                return;
+            }
+            // Handle Enter key - only when NOT in edit mode (edit mode handles its own Enter)
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                // Move to next week (this should only happen when just selecting, not editing)
+                if (currentWeekIndex < weeks.length - 1) {
+                    const nextCell = { personId, assignmentId, week: weeks[currentWeekIndex + 1].date };
+                    setSelectedCell(nextCell);
+                    setSelectionStart(nextCell);
+                    setSelectedCells([]);
+                }
+                return;
+            }
+            // Handle Tab key - move to next cell
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                // Move to next week
+                if (currentWeekIndex < weeks.length - 1) {
+                    const nextCell = { personId, assignmentId, week: weeks[currentWeekIndex + 1].date };
+                    setSelectedCell(nextCell);
+                    setSelectionStart(nextCell);
+                    setSelectedCells([]);
+                }
+                return;
+            }
+            // Handle arrow key navigation
+            let newCell = null;
+            switch (e.key) {
+                case 'ArrowLeft':
+                    if (currentWeekIndex > 0) {
+                        newCell = { personId, assignmentId, week: weeks[currentWeekIndex - 1].date };
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (currentWeekIndex < weeks.length - 1) {
+                        newCell = { personId, assignmentId, week: weeks[currentWeekIndex + 1].date };
+                    }
+                    break;
+                // Add more navigation logic for up/down arrows if needed
+            }
+            if (newCell) {
+                e.preventDefault();
+                if (e.shiftKey && selectionStart) {
+                    // Extend selection
+                    const startWeekIndex = weeks.findIndex(w => w.date === selectionStart.week);
+                    const endWeekIndex = weeks.findIndex(w => w.date === newCell.week);
+                    const [minIndex, maxIndex] = [Math.min(startWeekIndex, endWeekIndex), Math.max(startWeekIndex, endWeekIndex)];
+                    const newSelectedCells = [];
+                    for (let i = minIndex; i <= maxIndex; i++) {
+                        newSelectedCells.push({
+                            personId: selectionStart.personId,
+                            assignmentId: selectionStart.assignmentId,
+                            week: weeks[i].date
+                        });
+                    }
+                    setSelectedCells(newSelectedCells);
+                }
+                else {
+                    // Single selection
+                    setSelectedCells([]);
+                    setSelectionStart(newCell);
+                }
+                setSelectedCell(newCell);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedCell, editingCell, people, weeks, selectionStart]);
+    // Global mouse up handler for drag selection
+    useEffect(() => {
+        const handleMouseUp = () => {
+            if (isDragging) {
+                setIsDragging(false);
+            }
+        };
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => window.removeEventListener('mouseup', handleMouseUp);
+    }, [isDragging]);
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const [peopleData, assignmentsData, deliverablesData, projectsData] = await Promise.all([
+                peopleApi.listAll(),
+                assignmentsApi.listAll(),
+                deliverablesApi.listAll(),
+                projectsApi.listAll()
+            ]);
+            // Store deliverables and projects in state
+            setDeliverables(deliverablesData);
+            setProjects(projectsData);
+            const peopleWithAssignments = peopleData.map(person => ({
+                ...person,
+                assignments: assignmentsData.filter(assignment => assignment.person === person.id),
+                isExpanded: true
+            }));
+            setPeople(peopleWithAssignments);
+        }
+        catch (err) {
+            setError('Failed to load assignment data: ' + err.message);
+        }
+        finally {
+            setLoading(false);
+        }
+    };
+    // Toggle person expansion
+    const togglePersonExpanded = (personId) => {
+        setPeople(prev => prev.map(person => person.id === personId
+            ? { ...person, isExpanded: !person.isExpanded }
+            : person));
+    };
+    // Get person's total hours for a specific week
+    const getPersonTotalHours = (person, week) => {
+        return person.assignments.reduce((total, assignment) => total + (assignment.weeklyHours[week] || 0), 0);
+    };
+    // Add new assignment
+    const addAssignment = async (personId, project) => {
+        try {
+            const newAssignment = await assignmentsApi.create({
+                person: personId,
+                project: project.id,
+                weeklyHours: {}
+            });
+            setPeople(prev => prev.map(person => person.id === personId
+                ? { ...person, assignments: [...person.assignments, newAssignment] }
+                : person));
+            // Show notification about assignment creation and potential overallocation risk
+            const person = people.find(p => p.id === personId);
+            if (person) {
+                const projectCount = person.assignments.length + 1; // Include the new assignment
+                if (projectCount >= 3) {
+                    showToast(`⚠️ ${person.name} is now assigned to ${projectCount} projects. Monitor workload to avoid overallocation.`, 'warning');
+                }
+                else {
+                    showToast(`✓ ${person.name} successfully assigned to ${project.name}`, 'success');
+                }
+            }
+            setIsAddingAssignment(null);
+            setNewProjectName('');
+            setSelectedProject(null);
+            setProjectSearchResults([]);
+            setShowProjectDropdown(false);
+        }
+        catch (err) {
+            console.error('Failed to create assignment:', err);
+            alert('Failed to create assignment: ' + err.message);
+        }
+    };
+    // Remove assignment
+    const removeAssignment = async (assignmentId, personId) => {
+        if (!confirm('Are you sure you want to remove this assignment?'))
+            return;
+        try {
+            await assignmentsApi.delete(assignmentId);
+            setPeople(prev => prev.map(person => person.id === personId
+                ? { ...person, assignments: person.assignments.filter(a => a.id !== assignmentId) }
+                : person));
+        }
+        catch (err) {
+            console.error('Failed to delete assignment:', err);
+            alert('Failed to delete assignment: ' + err.message);
+        }
+    };
+    // Update assignment hours
+    const updateAssignmentHours = async (personId, assignmentId, week, hours) => {
+        try {
+            // Find the assignment to update
+            const person = people.find(p => p.id === personId);
+            const assignment = person?.assignments.find(a => a.id === assignmentId);
+            if (!assignment)
+                return;
+            // Update the weekly hours
+            const updatedWeeklyHours = {
+                ...assignment.weeklyHours,
+                [week]: hours
+            };
+            // Call API to update
+            await assignmentsApi.update(assignmentId, {
+                weeklyHours: updatedWeeklyHours
+            });
+            // Update local state
+            setPeople(prev => prev.map(person => person.id === personId
+                ? {
+                    ...person,
+                    assignments: person.assignments.map(a => a.id === assignmentId
+                        ? { ...a, weeklyHours: updatedWeeklyHours }
+                        : a)
+                }
+                : person));
+        }
+        catch (err) {
+            console.error('Failed to update assignment hours:', err);
+            alert('Failed to update hours: ' + err.message);
+        }
+    };
+    // Helper function to check if a cell is in the selected cells array
+    const isCellSelected = (personId, assignmentId, week) => {
+        return selectedCells.some(cell => cell.personId === personId &&
+            cell.assignmentId === assignmentId &&
+            cell.week === week);
+    };
+    // Update multiple cells at once (for bulk editing)
+    const updateMultipleCells = async (cells, hours) => {
+        try {
+            // Group cells by assignment to minimize API calls
+            const assignmentUpdates = new Map();
+            cells.forEach(cell => {
+                const key = `${cell.personId}-${cell.assignmentId}`;
+                if (!assignmentUpdates.has(key)) {
+                    const person = people.find(p => p.id === cell.personId);
+                    const assignment = person?.assignments.find(a => a.id === cell.assignmentId);
+                    if (assignment) {
+                        assignmentUpdates.set(key, {
+                            personId: cell.personId,
+                            assignmentId: cell.assignmentId,
+                            weeklyHours: { ...assignment.weeklyHours }
+                        });
+                    }
+                }
+                const update = assignmentUpdates.get(key);
+                if (update) {
+                    update.weeklyHours[cell.week] = hours;
+                }
+            });
+            // Execute all updates
+            const promises = Array.from(assignmentUpdates.values()).map(async (update) => {
+                await assignmentsApi.update(update.assignmentId, {
+                    weeklyHours: update.weeklyHours
+                });
+                return update;
+            });
+            const completedUpdates = await Promise.all(promises);
+            // Update local state
+            setPeople(prev => prev.map(person => {
+                const personUpdates = completedUpdates.filter(u => u.personId === person.id);
+                if (personUpdates.length === 0)
+                    return person;
+                return {
+                    ...person,
+                    assignments: person.assignments.map(assignment => {
+                        const assignmentUpdate = personUpdates.find(u => u.assignmentId === assignment.id);
+                        return assignmentUpdate
+                            ? { ...assignment, weeklyHours: assignmentUpdate.weeklyHours }
+                            : assignment;
+                    })
+                };
+            }));
+        }
+        catch (err) {
+            console.error('Failed to update multiple cells:', err);
+            alert('Failed to update multiple cells: ' + err.message);
+        }
+    };
+    // Get utilization badge styling
+    const getUtilizationBadgeStyle = (hours, capacity) => {
+        if (hours === 0)
+            return 'bg-[#3e3e42] text-[#969696]';
+        const percentage = (hours / capacity) * 100;
+        if (percentage <= 70)
+            return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+        if (percentage <= 85)
+            return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
+        if (percentage <= 100)
+            return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+        return 'bg-red-500/20 text-red-300 border border-red-500/30';
+    };
+    if (loading) {
+        return (_jsxs("div", { className: "min-h-screen bg-[#1e1e1e] flex", children: [_jsx(Sidebar, {}), _jsx("div", { className: "flex-1 flex flex-col min-w-0", children: _jsx("div", { className: "flex items-center justify-center h-64", children: _jsx("div", { className: "text-[#969696]", children: "Loading assignments..." }) }) })] }));
+    }
+    if (error) {
+        return (_jsxs("div", { className: "min-h-screen bg-[#1e1e1e] flex", children: [_jsx(Sidebar, {}), _jsx("div", { className: "flex-1 flex flex-col min-w-0", children: _jsx("div", { className: "flex items-center justify-center h-64", children: _jsx("div", { className: "text-red-400", children: error }) }) })] }));
+    }
+    return (_jsxs("div", { className: "min-h-screen bg-[#1e1e1e] flex", children: [_jsx(Sidebar, {}), _jsxs("div", { className: "flex-1 flex flex-col min-w-0", children: [_jsx("div", { className: "sticky top-0 bg-[#1e1e1e] border-b border-[#3e3e42] z-30 px-6 py-4", children: _jsxs("div", { className: "flex items-center justify-between", children: [_jsxs("div", { children: [_jsx("h1", { className: "text-2xl font-bold text-[#cccccc]", children: "Assignment Grid" }), _jsx("p", { className: "text-[#969696] text-sm", children: "Manage team workload allocation across 12 weeks" })] }), _jsxs("div", { className: "text-xs text-[#969696]", children: [people.length, " people \u2022 ", people.reduce((total, p) => total + p.assignments.length, 0), " assignments"] })] }) }), _jsx("div", { className: "sticky top-[88px] bg-[#2d2d30] border-b border-[#3e3e42] z-20 overflow-x-auto", children: _jsx("div", { className: "min-w-[1400px]", children: _jsxs("div", { className: "grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2", children: [_jsx("div", { className: "font-medium text-[#cccccc] text-sm px-2 py-1", children: "Team Member" }), _jsx("div", { className: "text-center text-xs text-[#969696] px-1", children: "+/-" }), weeks.map((week, index) => (_jsxs("div", { className: "text-center px-1", children: [_jsx("div", { className: "text-xs font-medium text-[#cccccc]", children: week.display }), _jsxs("div", { className: "text-[10px] text-[#757575]", children: ["W", index + 1] })] }, week.date)))] }) }) }), _jsx("div", { className: "flex-1 overflow-x-auto bg-[#1e1e1e]", children: _jsx("div", { className: "min-w-[1400px]", children: _jsx("div", { children: people.map((person) => (_jsxs("div", { className: "border-b border-[#3e3e42] last:border-b-0", children: [_jsxs("div", { className: "grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2 hover:bg-[#2d2d30]/50 transition-colors", children: [_jsxs("button", { onClick: () => togglePersonExpanded(person.id), className: "flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left hover:bg-[#3e3e42]/50 transition-all duration-200 rounded-sm", children: [_jsx("div", { className: "flex-shrink-0 w-5 h-5 flex items-center justify-center text-[#969696]", children: _jsx("svg", { width: "12", height: "12", viewBox: "0 0 12 12", className: `transition-transform duration-200 ${person.isExpanded ? 'rotate-90' : 'rotate-0'}`, children: _jsx("path", { d: "M4 2 L8 6 L4 10", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }) }) }), _jsxs("div", { className: "min-w-0 flex-1", children: [_jsx("div", { className: "font-medium text-[#cccccc] text-sm truncate", children: person.name }), _jsxs("div", { className: "text-xs text-[#969696]", children: [person.role, " \u2022 ", person.weeklyCapacity, "h/wk"] })] })] }), _jsx("div", { className: "flex items-center justify-center", children: _jsx("button", { className: "w-7 h-7 rounded text-white hover:text-[#969696] hover:bg-[#3e3e42] transition-colors text-center text-sm font-medium leading-none font-mono", style: { display: 'flex', alignItems: 'center', justifyContent: 'center' }, title: "Add new assignment", onClick: () => {
+                                                            setIsAddingAssignment(person.id);
+                                                            setNewProjectName('');
+                                                        }, children: "+" }) }), weeks.map((week) => {
+                                                    const totalHours = getPersonTotalHours(person, week.date);
+                                                    return (_jsx("div", { className: "flex items-center justify-center px-1", children: _jsx("div", { className: `px-2 py-1 rounded-full text-xs font-medium min-w-[40px] text-center ${getUtilizationBadgeStyle(totalHours, person.weeklyCapacity)}`, children: totalHours > 0 ? `${totalHours}h` : '—' }) }, week.date));
+                                                })] }), person.isExpanded && person.assignments.map((assignment) => (_jsxs("div", { className: "grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#252526] hover:bg-[#2d2d30] transition-colors", children: [_jsx("div", { className: "flex items-center py-1 pl-[60px] pr-2", children: _jsx("div", { className: "min-w-0 flex-1", children: _jsx("div", { className: "text-[#cccccc] text-xs truncate", children: assignment.projectDisplayName }) }) }), _jsx("div", { className: "flex items-center justify-center", children: _jsx("button", { className: "w-7 h-7 rounded text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-colors text-center text-sm font-medium leading-none font-mono", style: { display: 'flex', alignItems: 'center', justifyContent: 'center' }, title: "Remove assignment", onClick: () => removeAssignment(assignment.id, person.id), children: "\u00D7" }) }), weeks.map((week) => {
+                                                    const hours = assignment.weeklyHours?.[week.date] || 0;
+                                                    const cellKey = { personId: person.id, assignmentId: assignment.id, week: week.date };
+                                                    const isEditing = editingCell?.personId === person.id &&
+                                                        editingCell?.assignmentId === assignment.id &&
+                                                        editingCell?.week === week.date;
+                                                    const isSelected = selectedCell?.personId === person.id &&
+                                                        selectedCell?.assignmentId === assignment.id &&
+                                                        selectedCell?.week === week.date;
+                                                    const isMultiSelected = isCellSelected(person.id, assignment.id, week.date);
+                                                    // Check for deliverables in this week
+                                                    const weekDeliverables = assignment.project ? getDeliverablesForProjectWeek(assignment.project, week.date) : [];
+                                                    const hasDeliverables = weekDeliverables.length > 0;
+                                                    return (_jsx("div", { className: "flex items-center justify-center px-1", children: isEditing ? (_jsx("input", { type: "number", min: "0", step: "0.5", value: editingValue, onChange: (e) => setEditingValue(e.target.value), className: "w-12 h-6 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] text-center focus:border-[#007acc] focus:ring-1 focus:ring-[#007acc] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", onBlur: () => {
+                                                                const numValue = parseFloat(editingValue) || 0;
+                                                                if (selectedCells.length > 0) {
+                                                                    updateMultipleCells(selectedCells, numValue);
+                                                                    setSelectedCells([]);
+                                                                }
+                                                                else {
+                                                                    updateAssignmentHours(person.id, assignment.id, week.date, numValue);
+                                                                }
+                                                                setEditingCell(null);
+                                                            }, onKeyDown: (e) => {
+                                                                if (e.key === 'Enter' || e.key === 'Tab') {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation(); // Prevent global handler from also running
+                                                                    const numValue = parseFloat(editingValue) || 0;
+                                                                    if (selectedCells.length > 0) {
+                                                                        updateMultipleCells(selectedCells, numValue);
+                                                                        setSelectedCells([]);
+                                                                    }
+                                                                    else {
+                                                                        updateAssignmentHours(person.id, assignment.id, week.date, numValue);
+                                                                    }
+                                                                    setEditingCell(null);
+                                                                    // Move to next cell
+                                                                    const currentWeekIndex = weeks.findIndex(w => w.date === week.date);
+                                                                    if (currentWeekIndex < weeks.length - 1) {
+                                                                        const nextCell = {
+                                                                            personId: person.id,
+                                                                            assignmentId: assignment.id,
+                                                                            week: weeks[currentWeekIndex + 1].date
+                                                                        };
+                                                                        setSelectedCell(nextCell);
+                                                                        setSelectionStart(nextCell);
+                                                                    }
+                                                                }
+                                                                else if (e.key === 'Escape') {
+                                                                    setEditingCell(null);
+                                                                }
+                                                            }, autoFocus: true })) : (_jsx("div", { className: `w-12 h-6 text-xs rounded flex items-center justify-center cursor-pointer transition-colors ${isMultiSelected
+                                                                ? 'ring-2 ring-purple-400 bg-purple-500/30 text-[#cccccc]'
+                                                                : isSelected
+                                                                    ? 'ring-2 ring-blue-400 bg-blue-500/20 text-[#cccccc]'
+                                                                    : hasDeliverables
+                                                                        ? 'text-[#cccccc] hover:bg-[#3e3e42] ring-1 ring-orange-400/80 bg-orange-500/15'
+                                                                        : 'text-[#cccccc] hover:bg-[#3e3e42]'}`, title: hasDeliverables ? weekDeliverables.map(d => {
+                                                                const parts = [];
+                                                                if (d.percentage !== null && d.percentage !== undefined)
+                                                                    parts.push(`${d.percentage}%`);
+                                                                if (d.description)
+                                                                    parts.push(d.description);
+                                                                return parts.join(' ');
+                                                            }).join(', ') : undefined, onClick: (e) => {
+                                                                e.preventDefault();
+                                                                // Single click should only select the cell, never start editing
+                                                                setSelectedCell(cellKey);
+                                                                setSelectionStart(cellKey);
+                                                                setSelectedCells([]);
+                                                            }, onMouseDown: (e) => {
+                                                                // Always allow drag selection to start from any cell
+                                                                e.preventDefault();
+                                                                setSelectedCell(cellKey);
+                                                                setSelectionStart(cellKey);
+                                                                setIsDragging(true);
+                                                                setSelectedCells([]);
+                                                            }, onMouseEnter: () => {
+                                                                if (isDragging && selectionStart) {
+                                                                    // Create selection from start to current cell (horizontal only for now)
+                                                                    const startWeekIndex = weeks.findIndex(w => w.date === selectionStart.week);
+                                                                    const currentWeekIndex = weeks.findIndex(w => w.date === week.date);
+                                                                    if (selectionStart.personId === person.id && selectionStart.assignmentId === assignment.id) {
+                                                                        const [minIndex, maxIndex] = [Math.min(startWeekIndex, currentWeekIndex), Math.max(startWeekIndex, currentWeekIndex)];
+                                                                        const newSelectedCells = [];
+                                                                        for (let i = minIndex; i <= maxIndex; i++) {
+                                                                            newSelectedCells.push({
+                                                                                personId: person.id,
+                                                                                assignmentId: assignment.id,
+                                                                                week: weeks[i].date
+                                                                            });
+                                                                        }
+                                                                        setSelectedCells(newSelectedCells);
+                                                                    }
+                                                                }
+                                                            }, onMouseUp: () => {
+                                                                setIsDragging(false);
+                                                            }, children: hours > 0 ? hours : '—' })) }, week.date));
+                                                })] }, assignment.id))), person.isExpanded && isAddingAssignment === person.id && (_jsxs("div", { className: "grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#2d2d30] border border-blue-500/30", children: [_jsxs("div", { className: "flex items-center py-1 pl-[60px] pr-2 relative", children: [_jsx("input", { type: "text", value: newProjectName, onChange: (e) => handleProjectSearch(e.target.value), onKeyDown: (e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    if (selectedDropdownIndex >= 0 && selectedDropdownIndex < projectSearchResults.length) {
+                                                                        // Select the highlighted project from dropdown
+                                                                        const selectedProject = projectSearchResults[selectedDropdownIndex];
+                                                                        handleProjectSelect(selectedProject);
+                                                                        addAssignment(person.id, selectedProject);
+                                                                    }
+                                                                    else if (selectedProject) {
+                                                                        // Use already selected project
+                                                                        addAssignment(person.id, selectedProject);
+                                                                    }
+                                                                }
+                                                                else if (e.key === 'Escape') {
+                                                                    setIsAddingAssignment(null);
+                                                                    setNewProjectName('');
+                                                                    setSelectedProject(null);
+                                                                    setShowProjectDropdown(false);
+                                                                    setSelectedDropdownIndex(-1);
+                                                                }
+                                                                else if (e.key === 'ArrowDown') {
+                                                                    e.preventDefault();
+                                                                    if (projectSearchResults.length > 0) {
+                                                                        setShowProjectDropdown(true);
+                                                                        setSelectedDropdownIndex(prev => prev < projectSearchResults.length - 1 ? prev + 1 : prev);
+                                                                    }
+                                                                }
+                                                                else if (e.key === 'ArrowUp') {
+                                                                    e.preventDefault();
+                                                                    if (showProjectDropdown && projectSearchResults.length > 0) {
+                                                                        setSelectedDropdownIndex(prev => prev > -1 ? prev - 1 : -1);
+                                                                    }
+                                                                }
+                                                            }, placeholder: "Search projects (name, client, number)...", className: "w-full px-2 py-1 text-xs bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none", autoFocus: true }), showProjectDropdown && projectSearchResults.length > 0 && (_jsx("div", { className: "absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-48 overflow-y-auto", children: projectSearchResults.map((project, index) => (_jsxs("button", { onClick: () => handleProjectSelect(project), className: `w-full text-left px-2 py-1 text-xs transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0 ${selectedDropdownIndex === index
+                                                                    ? 'bg-[#007acc]/30 border-[#007acc]'
+                                                                    : 'hover:bg-[#3e3e42]'}`, children: [_jsx("div", { className: "font-medium", children: project.name }), _jsx("div", { className: "text-[#969696]", children: [project.client, project.projectNumber].filter(Boolean).join(' • ') })] }, project.id))) }))] }), _jsxs("div", { className: "flex items-center justify-center gap-1", children: [_jsx("button", { className: "w-5 h-5 rounded bg-green-600 hover:bg-green-500 text-white text-xs font-medium transition-colors flex items-center justify-center", title: "Save assignment", onClick: () => selectedProject && addAssignment(person.id, selectedProject), disabled: !selectedProject, children: "\u2713" }), _jsx("button", { className: "w-5 h-5 rounded bg-[#3e3e42] hover:bg-[#4e4e52] text-white text-xs font-medium transition-colors flex items-center justify-center", title: "Cancel", onClick: () => {
+                                                                setIsAddingAssignment(null);
+                                                                setNewProjectName('');
+                                                                setSelectedProject(null);
+                                                                setProjectSearchResults([]);
+                                                                setShowProjectDropdown(false);
+                                                            }, children: "\u2715" })] }), weeks.map((week) => (_jsx("div", { className: "flex items-center justify-center", children: _jsx("div", { className: "w-12 h-6 flex items-center justify-center text-[#757575] text-xs", children: "\u2014" }) }, week.date)))] })), person.isExpanded && person.assignments.length === 0 && (_jsxs("div", { className: "grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#252526]", children: [_jsx("div", { className: "flex items-center py-1 pl-[60px] pr-2", children: _jsx("div", { className: "text-[#757575] text-xs italic", children: "No assignments" }) }), _jsx("div", {}), weeks.map((week) => (_jsx("div", { className: "flex items-center justify-center", children: _jsx("div", { className: "w-12 h-6 flex items-center justify-center text-[#757575] text-xs", children: "\u2014" }) }, week.date)))] }))] }, person.id))) }) }) }), _jsx("div", { className: "flex justify-between items-center text-xs text-[#969696] px-1", children: _jsxs("div", { className: "flex gap-6", children: [_jsxs("div", { className: "flex items-center gap-2", children: [_jsx("div", { className: "w-2 h-2 rounded-full bg-emerald-500" }), _jsx("span", { children: "Available (\u226470%)" })] }), _jsxs("div", { className: "flex items-center gap-2", children: [_jsx("div", { className: "w-2 h-2 rounded-full bg-blue-500" }), _jsx("span", { children: "Busy (71-85%)" })] }), _jsxs("div", { className: "flex items-center gap-2", children: [_jsx("div", { className: "w-2 h-2 rounded-full bg-amber-500" }), _jsx("span", { children: "Full (86-100%)" })] }), _jsxs("div", { className: "flex items-center gap-2", children: [_jsx("div", { className: "w-2 h-2 rounded-full bg-red-500" }), _jsx("span", { children: "Overallocated (>100%)" })] })] }) })] }), toast && (_jsx(Toast, { message: toast.message, type: toast.type, onDismiss: () => setToast(null) }))] }));
+};
+export default AssignmentGrid;

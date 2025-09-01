@@ -4,7 +4,7 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { trackCustomMetric } from '@/utils/performanceMonitoring';
+import { trackPerformanceEvent } from '@/utils/monitoring';
 
 interface Props {
   children: ReactNode;
@@ -51,8 +51,8 @@ function logError(error: Error, errorInfo: ErrorInfo, errorId: string, level: st
     console.groupEnd();
   }
 
-  // Track error metric
-  trackCustomMetric('error_boundary_triggered', 1, 'count');
+  // Track error metric (enhanced monitoring)
+  trackPerformanceEvent('error_boundary_triggered', 1, 'count');
 
   // In production, send to error reporting service
   // errorReporting.captureException(error, errorDetails);

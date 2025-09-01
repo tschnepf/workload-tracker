@@ -11,6 +11,7 @@ import { usePeople } from '@/hooks/usePeople';
 import { assignmentsApi, peopleApi } from '@/services/api';
 import { useProjectFilterMetadata } from '@/hooks/useProjectFilterMetadata';
 import type { ProjectFilterMetadataResponse } from '@/types/models';
+import { trackPerformanceEvent } from '@/utils/monitoring';
 
 interface PersonWithAvailability extends Person {
   availableHours?: number;
@@ -311,8 +312,7 @@ const ProjectsList: React.FC = () => {
       const meta = metadata?.projectFilters?.[String(projectId)];
       if (!meta) {
         if (process.env.NODE_ENV === 'development') {
-          // Fallback to legacy logic not available here; default to conservative false
-          console.debug('Filter fallback: hasNoAssignments without metadata for project', projectId);
+          console.debug('Filter metadata not yet loaded; hasNoAssignments returns false for project', projectId);
         }
         return false;
       }
@@ -327,8 +327,7 @@ const ProjectsList: React.FC = () => {
       const meta = metadata?.projectFilters?.[String(projectId)];
       if (!meta) {
         if (process.env.NODE_ENV === 'development') {
-          // Fallback to legacy logic not available here; default to conservative false
-          console.debug('Filter fallback: hasNoFutureDeliverables without metadata for project', projectId);
+          console.debug('Filter metadata not yet loaded; hasNoFutureDeliverables returns false for project', projectId);
         }
         return false;
       }
@@ -462,7 +461,7 @@ const ProjectsList: React.FC = () => {
       // Also add roles from people
       people.forEach(person => {
         if (person.role) {
-          roles.add(person.role);
+          roles.add(String(person.role));
         }
       });
       const sortedRoles = Array.from(roles).sort();
@@ -528,7 +527,7 @@ const ProjectsList: React.FC = () => {
     if (searchTerm.length > 0) {
       filtered = people.filter(person =>
         person.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        person.role?.toLowerCase().includes(searchTerm.toLowerCase())
+        String(person.role || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
@@ -734,7 +733,7 @@ const ProjectsList: React.FC = () => {
         startDate: new Date().toISOString().split('T')[0], // Today
       };
 
-      const newAssignment = await assignmentsApi.create(assignmentData);
+      const createdAssignment = await assignmentsApi.create(assignmentData);
       await loadProjectAssignments(selectedProject.id);
       // Invalidate filter metadata cache (counts + future dates)
       await invalidateFilterMeta();
@@ -884,7 +883,7 @@ const ProjectsList: React.FC = () => {
         [currentWeekKey]: editData.currentWeekHours
       };
 
-      // Use the role from editData, fallback to 'Team Member' if truly empty
+      // Use the role from editData, default to 'Team Member' if truly empty
       const roleToSave = editData.roleOnProject?.trim() || 'Team Member';
       
       const updateData = {
@@ -980,6 +979,7 @@ const ProjectsList: React.FC = () => {
 
   // Memoized filtered and sorted projects for better performance
   const filteredProjects = useMemo(() => {
+    const tStart = performance.now();
     // New optimized filtering using helper functions (Step 3.3)
     const next = projects.filter(project => {
       const matchesStatus = optimizedFilterFunctions.matchesStatusFilter(
@@ -994,6 +994,14 @@ const ProjectsList: React.FC = () => {
         project.projectNumber?.toLowerCase().includes(searchTerm.toLowerCase());
 
       return matchesStatus && matchesSearch;
+    });
+
+    // Record compute timing (controlled by monitoring debug)
+    const tEnd = performance.now();
+    trackPerformanceEvent('projects.filter.compute', tEnd - tStart, 'ms', {
+      projects: projects.length,
+      result: next.length,
+      statusFilter,
     });
 
     return next;
@@ -1013,7 +1021,7 @@ const ProjectsList: React.FC = () => {
         bValue = b.name || '';
         break;
       case 'type':
-        // We don't have type field in backend, using status as fallback
+        // We don't have type field in backend; use status instead
         aValue = a.status || '';
         bValue = b.status || '';
         break;
@@ -1038,6 +1046,18 @@ const ProjectsList: React.FC = () => {
       setSelectedIndex(0);
     }
   }, [sortedProjects, selectedProject]);
+
+  // Page ready timing: from mount to when projects + metadata are loaded
+  const [pageStart] = useState(() => performance.now());
+  useEffect(() => {
+    if (!loading && !filterMetaLoading) {
+      const readyDuration = performance.now() - pageStart;
+      trackPerformanceEvent('projects.page.ready', readyDuration, 'ms', {
+        projectsCount: projects.length,
+        hasMetadata: Boolean(filterMetadata),
+      });
+    }
+  }, [loading, filterMetaLoading, pageStart, projects.length, filterMetadata]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -1167,7 +1187,7 @@ const ProjectsList: React.FC = () => {
               <div className={`text-sm ${filterMetaError ? 'text-amber-400' : 'text-[#969696]'}`}>
                 {filterMetaError ? (
                   <div className="flex items-center gap-2">
-                    <span>Filter data unavailable; using fallback filters.</span>
+                    <span>Filter data unavailable; special filters temporarily disabled.</span>
                     <button
                       onClick={() => refetchFilterMeta()}
                       className="px-2 py-1 text-xs rounded border bg-transparent border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors"

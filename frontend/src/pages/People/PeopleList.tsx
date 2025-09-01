@@ -11,6 +11,31 @@ import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi, rolesApi } fr
 import Sidebar from '@/components/layout/Sidebar';
 import SkillsAutocomplete from '@/components/skills/SkillsAutocomplete';
 
+// Helper to normalize proficiency level to allowed union type
+const normalizeProficiencyLevel = (level: string): 'beginner' | 'intermediate' | 'advanced' | 'expert' => {
+  const normalized = level.toLowerCase().trim();
+  switch (normalized) {
+    case 'beginner':
+    case 'basic':
+    case 'novice':
+      return 'beginner';
+    case 'intermediate':
+    case 'medium':
+    case 'mid':
+      return 'intermediate';
+    case 'advanced':
+    case 'senior':
+    case 'high':
+      return 'advanced';
+    case 'expert':
+    case 'master':
+    case 'professional':
+      return 'expert';
+    default:
+      return 'beginner'; // Default fallback
+  }
+};
+
 const PeopleList: React.FC = () => {
   const [people, setPeople] = useState<Person[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
@@ -423,14 +448,15 @@ const PeopleList: React.FC = () => {
 
       if (skillToUpdate?.id) {
         // Update in database immediately
+        const normalizedProficiency = normalizeProficiencyLevel(newProficiency);
         await personSkillsApi.update(skillToUpdate.id, {
-          proficiencyLevel: newProficiency
+          proficiencyLevel: normalizedProficiency
         });
 
         // Update local state
         const updatedSkills = skillsData[skillType].map(s => 
           s.skillTagName === skill.skillTagName 
-            ? { ...s, proficiencyLevel: newProficiency }
+            ? { ...s, proficiencyLevel: normalizedProficiency }
             : s
         );
         
@@ -439,7 +465,7 @@ const PeopleList: React.FC = () => {
         // Also update the main personSkills array
         const updatedPersonSkills = personSkills.map(s => 
           s.id === skillToUpdate.id 
-            ? { ...s, proficiencyLevel: newProficiency }
+            ? { ...s, proficiencyLevel: normalizedProficiency }
             : s
         );
         setPersonSkills(updatedPersonSkills);

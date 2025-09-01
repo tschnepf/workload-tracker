@@ -2,12 +2,11 @@
  * Main App component with routing and code splitting
  */
 
-import React, { Suspense, useEffect } from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from '@/lib/queryClient';
-import { initializePerformanceMonitoring } from '@/utils/performanceMonitoring';
 
 // Lazy-loaded route components for code splitting
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -76,10 +75,6 @@ class LazyLoadErrorBoundary extends React.Component<
 document.documentElement.classList.add('dark');
 
 function App() {
-  // Initialize performance monitoring on app load
-  useEffect(() => {
-    initializePerformanceMonitoring();
-  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

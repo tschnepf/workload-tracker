@@ -3,12 +3,23 @@
  * Integrates Sentry with existing Web Vitals monitoring
  */
 
+import React from 'react';
 import * as Sentry from '@sentry/react';
 import { onCLS, onINP, onFCP, onLCP, onTTFB, Metric } from 'web-vitals';
 
-// Environment configuration
-const isDevelopment = process.env.NODE_ENV === 'development';
-const isProduction = process.env.NODE_ENV === 'production';
+// Environment configuration (Vite-first with safe fallbacks)
+const viteEnv: any = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+const isDevelopment = Boolean(viteEnv.DEV ?? (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development'));
+const isProduction = Boolean(viteEnv.PROD ?? (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'));
+const monitoringDebug = String(viteEnv.VITE_MONITORING_DEBUG ?? (typeof process !== 'undefined' ? process.env?.VITE_MONITORING_DEBUG : '')).toLowerCase() === 'true';
+
+function getEnv(name: string, fallback: string | undefined = undefined): string | undefined {
+  const viteVal = viteEnv?.[name];
+  if (viteVal !== undefined) return String(viteVal);
+  const procVal = (typeof process !== 'undefined' && process.env) ? process.env[name] : undefined;
+  if (procVal !== undefined) return String(procVal);
+  return fallback;
+}
 
 // Performance budgets and thresholds (2024/2025 Core Web Vitals)
 export const PERFORMANCE_BUDGETS = {
@@ -52,14 +63,22 @@ function generateSessionId(): string {
  * Initialize Sentry for production monitoring
  */
 export function initializeSentry() {
+  // DSN + environment gating (safe, avoids noisy errors without DSN)
+  const dsn = getEnv('VITE_SENTRY_DSN');
+  if (!isProduction || !dsn) {
+    if (monitoringDebug) {
+      console.log('Monitoring: Sentry disabled', { isProduction, hasDSN: Boolean(dsn) });
+    }
+    return;
+  }
   if (!isProduction) {
     console.log('🔍 Sentry disabled in development mode');
     return;
   }
 
   Sentry.init({
-    dsn: process.env.VITE_SENTRY_DSN,
-    environment: process.env.VITE_ENVIRONMENT || 'production',
+    dsn,
+    environment: getEnv('VITE_ENVIRONMENT', isProduction ? 'production' : 'development'),
     
     // Performance monitoring integrations (v10+ syntax)
     integrations: [
@@ -71,15 +90,17 @@ export function initializeSentry() {
     ],
     
     // Performance monitoring configuration
-    tracesSampleRate: process.env.VITE_SENTRY_TRACES_SAMPLE_RATE ? 
-      parseFloat(process.env.VITE_SENTRY_TRACES_SAMPLE_RATE) : 0.1,
+    tracesSampleRate: getEnv('VITE_SENTRY_TRACES_SAMPLE_RATE') ? 
+      parseFloat(getEnv('VITE_SENTRY_TRACES_SAMPLE_RATE')!) : 0.1,
     
     // Session replay configuration
-    replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
+    replaysSessionSampleRate: getEnv('VITE_SENTRY_REPLAYS_SESSION_RATE') ?
+      parseFloat(getEnv('VITE_SENTRY_REPLAYS_SESSION_RATE')!) : 0.0,
+    replaysOnErrorSampleRate: getEnv('VITE_SENTRY_REPLAYS_ERROR_RATE') ?
+      parseFloat(getEnv('VITE_SENTRY_REPLAYS_ERROR_RATE')!) : 1.0,
     
     // Release tracking
-    release: process.env.VITE_APP_VERSION,
+    release: getEnv('VITE_APP_VERSION') || 'dev',
     
     // Error filtering
     beforeSend(event) {
@@ -90,11 +111,34 @@ export function initializeSentry() {
           return null; // Ignore ResizeObserver errors
         }
       }
+      // Sanitize URL and redact common PII before sending in production
+      try {
+        if ((event as any).request?.url) {
+          const url = new URL((event as any).request.url);
+          url.search = '';
+          (event as any).request.url = url.toString();
+        }
+        if (event.user) {
+          // Keep only an anonymous id
+          event.user = { id: (event.user as any).id } as any;
+        }
+        const redactKeys = ['email', 'phone', 'name'];
+        const redact = (obj: any) => {
+          if (!obj || typeof obj !== 'object') return;
+          for (const k of Object.keys(obj)) {
+            if (redactKeys.includes(k)) obj[k] = '[REDACTED]';
+            else if (typeof obj[k] === 'object') redact(obj[k]);
+          }
+        };
+        redact((event as any).extra);
+        redact((event as any).contexts);
+      } catch { /* noop */ }
       return event;
     },
   });
-
-  console.log('📡 Sentry monitoring initialized');
+  if (monitoringDebug) {
+    console.log('Monitoring: Sentry initialized');
+  }
 }
 
 /**
@@ -120,14 +164,14 @@ function handleEnhancedMetric(metric: Metric) {
     timestamp: Date.now(),
     url: window.location.pathname,
     sessionId,
-    userId: Sentry.getIsolationScope().getUser()?.id,
+    userId: (Sentry.getIsolationScope().getUser()?.id as any)?.toString(),
   };
 
   // Store metric
   performanceMetrics.push(performanceData);
 
-  // Development logging
-  if (isDevelopment) {
+  // Development logging (opt-in)
+  if (monitoringDebug) {
     const budgetStatus = performanceData.exceedsBudget ? '🚨 OVER BUDGET' : '✅ Within budget';
     console.log(
       `📊 [Performance] ${metric.name}: ${metric.value} (${performanceData.score}) ${budgetStatus}`,
@@ -271,7 +315,7 @@ export function trackPerformanceEvent(
     ...context,
   };
 
-  if (isDevelopment) {
+  if (monitoringDebug) {
     console.log(`📈 [Performance Event] ${name}: ${value}${unit}`, eventData);
   }
 
@@ -318,7 +362,7 @@ export class EnhancedPerformanceTimer {
 
     const result = { duration, memoryDelta };
 
-    if (isDevelopment) {
+    if (monitoringDebug) {
       console.log(
         `⏱️ [Performance Timer] ${this.label}: ${duration.toFixed(2)}ms${
           memoryDelta ? ` (${(memoryDelta / 1024).toFixed(2)}KB)` : ''
@@ -361,7 +405,7 @@ export function withPerformanceMonitoring<T extends {}>(
       fallback: ({ error }) => (
         <div className="p-4 bg-red-500/10 border border-red-500/30 rounded text-red-400">
           Component Error: {componentName}
-          {isDevelopment && <div className="text-xs mt-2">{error.message}</div>}
+          {isDevelopment && <div className="text-xs mt-2">{(error as Error).message}</div>}
         </div>
       ),
       beforeCapture: (scope) => {
@@ -371,7 +415,6 @@ export function withPerformanceMonitoring<T extends {}>(
   );
 }
 
-// Re-export legacy functions for backward compatibility
-export {
-  initializePerformanceMonitoring as initializePerformanceMonitoring_Legacy,
-} from './performanceMonitoring';
+// Legacy monitoring removed; no re-exports to avoid confusion
+
+

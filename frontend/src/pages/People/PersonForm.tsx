@@ -65,7 +65,7 @@ const PersonForm: React.FC = () => {
       const newFormData = {
         name: person.name,
         weeklyCapacity: person.weeklyCapacity || 36,
-        role: person.role || 'Engineer', // Load role with fallback
+        role: String(person.role || 'Engineer'), // Convert number role to string for form
         department: person.department || null, // Phase 2: Load department
         location: person.location || '', // Load location
       };
@@ -118,13 +118,19 @@ const PersonForm: React.FC = () => {
         formDataJSON: JSON.stringify(formData, null, 2)
       });
 
+      // Convert form data to API format (role: string → role: number)
+      const apiData = {
+        ...formData,
+        role: Number(formData.role)
+      };
+
       if (isEditing && id) {
         console.log(`🔍 [DEBUG] Updating person ${id} with PATCH request`);
-        const result = await peopleApi.update(parseInt(id), formData);
+        const result = await peopleApi.update(parseInt(id), apiData);
         console.log('🔍 [DEBUG] Update API response:', result);
       } else {
         console.log('🔍 [DEBUG] Creating new person with POST request');
-        const result = await peopleApi.create(formData);
+        const result = await peopleApi.create(apiData);
         console.log('🔍 [DEBUG] Create API response:', result);
       }
 
