@@ -182,7 +182,7 @@ const MilestoneReviewTool: React.FC<Props> = () => {
                       onBlur={(e) => s.linkId && handleRoleChange(s.linkId, e.target.value)}
                       disabled={!s.linkId}
                       style={{
-                        background: darkTheme.colors.background.base,
+                        background: darkTheme.colors.background.tertiary,
                         color: darkTheme.colors.text.primary,
                         border: `1px solid ${darkTheme.colors.border.secondary}`,
                         borderRadius: 6,

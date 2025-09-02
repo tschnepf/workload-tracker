@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Production Sidebar Component - Always collapsed with hover tooltips
  * Extracted from working mockup and cleaned for production use
  */
@@ -99,6 +99,15 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
           <circle cx="12" cy="17" r="1"/>
         </svg>
       );
+    case 'calendar':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
+          <rect x="3" y="5" width="18" height="16" rx="2"/>
+          <line x1="16" y1="3" x2="16" y2="7"/>
+          <line x1="8" y1="3" x2="8" y2="7"/>
+          <line x1="3" y1="11" x2="21" y2="11"/>
+        </svg>
+      );
     default:
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
@@ -159,6 +168,19 @@ const Sidebar: React.FC = () => {
       icon: 'projects', 
       label: 'Projects',
       description: 'Project tracking'
+    },
+    
+    {
+      path: '/reports/forecast',
+      icon: 'reports',
+      label: 'Forecast',
+      description: 'Team forecast & timeline'
+    },
+    { 
+      path: '/deliverables/calendar', 
+      icon: 'calendar', 
+      label: 'Calendar',
+      description: 'Milestone schedule'
     },
     { 
       path: '/skills', 
@@ -339,3 +361,5 @@ const Sidebar: React.FC = () => {
 };
 
 export default Sidebar;
+
+

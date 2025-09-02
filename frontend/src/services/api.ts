@@ -169,8 +169,11 @@ export const peopleApi = {
   },
 
   // Team workload forecast
-  workloadForecast: (weeks: number = 8) => {
-    const qs = weeks ? `?weeks=${weeks}` : '';
+  workloadForecast: (weeks: number = 8, department?: number) => {
+    const params = new URLSearchParams();
+    if (weeks) params.set('weeks', String(weeks));
+    if (department != null) params.set('department', String(department));
+    const qs = params.toString() ? `?${params.toString()}` : '';
     return fetchApi<WorkloadForecastItem[]>(`/people/workload_forecast/${qs}`);
   },
 };

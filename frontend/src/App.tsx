@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Main App component with routing and code splitting
  */
 
@@ -24,6 +24,8 @@ const ProjectForm = React.lazy(() => import('./pages/Projects/ProjectForm'));
 const SkillsDashboard = React.lazy(() => import('./pages/Skills').then(module => ({ default: module.SkillsDashboard })));
 const PerformanceDashboard = React.lazy(() => import('./pages/Performance/PerformanceDashboard'));
 const Settings = React.lazy(() => import('./pages/Settings/Settings'));
+const MilestoneCalendar = React.lazy(() => import('./pages/Deliverables/Calendar'));
+const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'));
 
 // Loading component for Suspense fallback
 const PageLoader: React.FC = () => (
@@ -104,9 +106,10 @@ function App() {
               <Route path="/skills" element={<SkillsDashboard />} />
               <Route path="/performance" element={<PerformanceDashboard />} />
               <Route path="/settings" element={<Settings />} />
-              {/* More routes will be added in later chunks */}
+              <Route path="/deliverables/calendar" element={<MilestoneCalendar />} />
+              {/* More routes will be added in later chunks */}              <Route path="/reports/forecast" element={<TeamForecastPage />} />
             </Routes>
-          </Suspense>
+</Suspense>
         </LazyLoadErrorBoundary>
       </Router>
       {/* React Query DevTools for development */}
@@ -116,3 +119,4 @@ function App() {
 }
 
 export default App;
+

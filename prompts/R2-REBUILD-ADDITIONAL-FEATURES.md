@@ -1,4 +1,4 @@
-# R2-REBUILD-ADDITIONAL-FEATURES: Milestones, Manager Tools, Forecasting, Production Polish
+﻿# R2-REBUILD-ADDITIONAL-FEATURES: Milestones, Manager Tools, Forecasting, Production Polish
 
 Purpose: Define and implement the remaining manager-focused features using the current codebase as the source of truth. This guide follows the prompting style and standards of `R2-REBUILD-MASTER-GUIDE.md` and `R2-REBUILD-STANDARDS.md`.
 
@@ -44,7 +44,7 @@ class DeliverableAssignment(models.Model):
         return f"{self.person.name} on milestone {self.deliverable_id}"
 ```
 
-API serializers (snake_case → camelCase):
+API serializers (snake_case â†’ camelCase):
 
 ```python
 # backend/deliverables/serializers.py
@@ -124,17 +124,18 @@ Frontend patterns (VSCode dark mode):
 
 - MilestoneCalendar: read-only grid/timeline using `Card`, `Table`, semantic colors for status; hover shows assignmentCount and projectName.
 - Deliverable detail drawer: show milestone assignments with inline weekly hours editors reusing the assignment grid pattern and week key list from `AssignmentSerializer.availableWeeks`.
+## Prompt 11 — Frontend: Milestone Calendar View
 
 Status: Completed
 
 Acceptance criteria:
 
 ```text
-✅ Can link a person to a deliverable with weekly hours (JSON, Sunday keys)
-✅ Calendar shows deliverables between date range with project names
-✅ Deliverable page shows assigned people and weekly hours
-✅ API fields use camelCase; backend uses snake_case
-✅ Dark mode UI matches tokens (no hardcoded colors)
+âœ… Can link a person to a deliverable with weekly hours (JSON, Sunday keys)
+âœ… Calendar shows deliverables between date range with project names
+âœ… Deliverable page shows assigned people and weekly hours
+âœ… API fields use camelCase; backend uses snake_case
+âœ… Dark mode UI matches tokens (no hardcoded colors)
 ```
 
 Demo script:
@@ -221,10 +222,10 @@ Quick Actions (frontend):
 Acceptance criteria:
 
 ```text
-✅ Heatmap endpoint returns weekKeys and weekTotals per person (12 weeks default)
-✅ Rebalance suggestions endpoint returns human-readable, non-destructive suggestions
-✅ Quick Actions panel launches the three tools
-✅ UI complies with VSCode dark tokens
+âœ… Heatmap endpoint returns weekKeys and weekTotals per person (12 weeks default)
+âœ… Rebalance suggestions endpoint returns human-readable, non-destructive suggestions
+âœ… Quick Actions panel launches the three tools
+âœ… UI complies with VSCode dark tokens
 ```
 
 ---
@@ -275,9 +276,9 @@ Visual timeline views (frontend):
 Acceptance criteria:
 
 ```text
-✅ `/api/people/workload_forecast/` returns 8-week forecast with teamUtilization
-✅ Timeline displays deliverable dates from Deliverables API
-✅ Colors follow established utilization palette
+âœ… `/api/people/workload_forecast/` returns 8-week forecast with teamUtilization
+âœ… Timeline displays deliverable dates from Deliverables API
+âœ… Colors follow established utilization palette
 ```
 
 ---
@@ -306,10 +307,10 @@ Deployment scripts:
 Acceptance criteria:
 
 ```text
-✅ Consistent error responses with helpful messages; frontend toasts render cleanly
-✅ Logs include requestId, path, status, duration; are JSON-formatted in containers
-✅ Basic audit events for assignment changes are captured
-✅ One-command prod bring-up and logs work locally
+âœ… Consistent error responses with helpful messages; frontend toasts render cleanly
+âœ… Logs include requestId, path, status, duration; are JSON-formatted in containers
+âœ… Basic audit events for assignment changes are captured
+âœ… One-command prod bring-up and logs work locally
 ```
 
 ---
@@ -317,17 +318,17 @@ Acceptance criteria:
 ## Standards & Compliance Checklist
 
 ```text
-✅ Backend snake_case; API camelCase via serializers
-✅ UI uses VSCode dark tokens; no hardcoded colors  
-✅ Week keys normalized to Sunday for new data; tolerant reading (+/- days) remains in People methods
-✅ Feature flags allowed where helpful (e.g., enable DeliverableAssignments gradually)
-✅ No stale .js/.jsx files in frontend/src during development
-✅ TypeScript compilation passes before any feature marked complete
-✅ All new API endpoints manually tested with curl/Postman
-✅ Container restarts performed after significant changes
+âœ… Backend snake_case; API camelCase via serializers
+âœ… UI uses VSCode dark tokens; no hardcoded colors  
+âœ… Week keys normalized to Sunday for new data; tolerant reading (+/- days) remains in People methods
+âœ… Feature flags allowed where helpful (e.g., enable DeliverableAssignments gradually)
+âœ… No stale .js/.jsx files in frontend/src during development
+âœ… TypeScript compilation passes before any feature marked complete
+âœ… All new API endpoints manually tested with curl/Postman
+âœ… Container restarts performed after significant changes
 ```
 
-## 🚨 Production Deployment Validation
+## ðŸš¨ Production Deployment Validation
 
 **Database Migration Safety:**
 ```bash
@@ -358,7 +359,7 @@ docker-compose exec frontend npm run build -- --report
 
 **Error Prevention Patterns:**
 - **Dropdown Components**: Always load options from API endpoints
-- **Form Data**: Test string ↔ number conversion explicitly with browser network tab
+- **Form Data**: Test string â†” number conversion explicitly with browser network tab
 - **Import Resolution**: After path/config changes, verify imports resolve in container
 - **API Responses**: Validate camelCase fields appear correctly in browser network requests
 
@@ -380,28 +381,28 @@ curl -s http://localhost:8000/api/health/ | grep "healthy"
 **Feature Testing Sequence:**
 ```text
 1) Create deliverable with date; assign two people via DeliverableAssignments.
-   ✅ Check browser network tab shows camelCase fields
-   ✅ No console errors during form submission
+   âœ… Check browser network tab shows camelCase fields
+   âœ… No console errors during form submission
 
 2) Verify calendar shows the milestone with assignmentCount.
-   ✅ API endpoint returns expected JSON shape
-   ✅ Frontend renders without TypeScript errors
+   âœ… API endpoint returns expected JSON shape
+   âœ… Frontend renders without TypeScript errors
 
 3) Open heatmap and see 12-week rows per person; colors reflect utilization tiers.
-   ✅ Performance: query completes under 5 seconds
-   ✅ Colors match established utilization palette
+   âœ… Performance: query completes under 5 seconds
+   âœ… Colors match established utilization palette
 
 4) Open rebalancer suggestions; apply one manually and recheck conflicts via existing `check_conflicts`.
-   ✅ Suggestions API returns reasonable data
-   ✅ Manual application doesn't break existing functionality
+   âœ… Suggestions API returns reasonable data
+   âœ… Manual application doesn't break existing functionality
 
 5) Load team forecast (8 weeks) and scan for weeks over 100%.
-   ✅ Forecast calculations are mathematically sound
-   ✅ No N+1 query issues in backend logs
+   âœ… Forecast calculations are mathematically sound
+   âœ… No N+1 query issues in backend logs
 
 6) Force an API error; confirm structured error and log entry with requestId.
-   ✅ Error response follows standard shape
-   ✅ Frontend handles errors gracefully with toasts
+   âœ… Error response follows standard shape
+   âœ… Frontend handles errors gracefully with toasts
 ```
 
 **Post-QA Validation:**
@@ -416,24 +417,24 @@ docker-compose logs | grep ERROR  # Should be empty
 
 - We intentionally reuse Deliverable as the milestone model to avoid duplicate concepts. The new DeliverableAssignment mirrors `Assignment.weekly_hours` conventions to keep calculations consistent with the rest of the system.
 
-## 📚 Implementation Safety Improvements (2025-09-01)
+## ðŸ“š Implementation Safety Improvements (2025-09-01)
 
 **Based on lessons learned from TypeScript cleanup and PersonForm dropdown issues:**
 
-### ✅ Added Critical Safety Measures:
+### âœ… Added Critical Safety Measures:
 1. **Stale File Prevention**: Mandatory checks for compiled .js/.jsx files that override TSX changes
 2. **TypeScript Validation Gates**: Required `tsc --noEmit` validation after all changes
 3. **Container Synchronization**: Explicit restart protocols when changes aren't reflecting
 4. **API Contract Testing**: Manual curl testing before frontend implementation
 5. **Browser Validation**: Network tab verification for camelCase field transformation
 
-### ✅ Enhanced Each Prompt With:
+### âœ… Enhanced Each Prompt With:
 - Pre-flight safety checks (find/delete stale files)
 - Implementation validation commands (TypeScript compilation)
 - Post-implementation verification (browser testing)
 - Clear acceptance criteria including operational requirements
 
-### ✅ Production Deployment Safeguards:
+### âœ… Production Deployment Safeguards:
 - Migration rollback testing procedures
 - Build validation and bundle analysis
 - Performance monitoring requirements
@@ -445,7 +446,7 @@ docker-compose logs | grep ERROR  # Should be empty
 - API field transformation not working as expected
 - Container state inconsistencies during development
 
-### ✅ Scale Architecture Enhancements (2025-09-01):
+### âœ… Scale Architecture Enhancements (2025-09-01):
 1. **Service Layer Refactoring (Prompt 7.5)**: Moved complex business logic from ViewSets to dedicated service classes for improved testability and reusability at 100-300+ person scale
 2. **Robust Input Validation (Prompt 3)**: Added comprehensive JSONField validation for weekly_hours and XSS protection for user strings to prevent data corruption at scale
 3. **Performance Caching Infrastructure (Prompt 7.6)**: Implemented Redis caching with invalidation signals for analytics endpoints to achieve sub-second response times with large teams
@@ -471,7 +472,7 @@ Global standards to apply in every prompt:
 - Tests: for backend, add DRF tests that validate status codes and response shapes; for frontend, add smoke tests where practical. Keep tests focused on the change.
 - Logging/Errors: use structured, clear error messages. Avoid noisy debug logs by default; guard behind env flags that already exist.
 
-## 🚨 CRITICAL: Pre-Implementation Safety Checks (Every Prompt)
+## ðŸš¨ CRITICAL: Pre-Implementation Safety Checks (Every Prompt)
 
 **Development Workflow Safeguards** - Apply to ALL prompts:
 
@@ -507,11 +508,11 @@ curl -s http://localhost:8000/api/your-new-endpoint/ | head -20
 # 4. Verify camelCase fields in browser Network tab
 ```
 
-**🔴 STOP WORK if any of these fail. Fix before proceeding.**
+**ðŸ”´ STOP WORK if any of these fail. Fix before proceeding.**
 
 Do not implement backward-compatibility shims or versioned APIs for these prompts; not required at this time.
 
-## Prompt 1 — Freeze Contract: DeliverableAssignment
+## Prompt 1 â€” Freeze Contract: DeliverableAssignment
 
 Define the DeliverableAssignment API contract as a short spec inside this repository (e.g., `contracts/deliverables.assignments.md`). Capture exact request/response shapes in camelCase. Include examples for create, update, list, by_deliverable, and by_person. Reference week key conventions and date formats.
 
@@ -530,7 +531,7 @@ Acceptance criteria:
 - Contract file exists and is consistent with standards above.
 - Examples compile logically and match our naming scheme.
 
-## Prompt 2 — Backend: DeliverableAssignment Model + Migration
+## Prompt 2 â€” Backend: DeliverableAssignment Model + Migration
 
 Implement `DeliverableAssignment` in `backend/deliverables/models.py`. Follow existing patterns used by `Assignment` and `Deliverable`.
 
@@ -546,7 +547,7 @@ Acceptance criteria:
 - Indices present for FKs.
 - No changes to unrelated models.
 
-## Prompt 3 — Backend: Serializer + ViewSet + URLs for DeliverableAssignment
+## Prompt 3 â€” Backend: Serializer + ViewSet + URLs for DeliverableAssignment
 
 Add serializer and viewset for `DeliverableAssignment`, registered under `/api/deliverables/assignments/`.
 
@@ -559,7 +560,7 @@ Requirements:
 - URLs: register as `router.register('assignments', DeliverableAssignmentViewSet, basename='deliverable-assignment')` inside `backend/deliverables/urls.py`.
 - Tests: DRF tests for create, list, by_deliverable, by_person; verify camelCase response fields.
 
-**🔒 Robust Input Validation (Scale Protection):**
+**ðŸ”’ Robust Input Validation (Scale Protection):**
 ```python
 # Add to DeliverableAssignmentSerializer:
 def validate_weekly_hours(self, value):
@@ -599,7 +600,7 @@ def validate_role_on_milestone(self, value):
 - Hours validation (negative, over 80, non-numeric)
 - Role sanitization (XSS attempts, length limits)
 
-**🚨 Implementation Safety Checklist:**
+**ðŸš¨ Implementation Safety Checklist:**
 ```bash
 # Before coding:
 find frontend/src -name "*.js" -o -name "*.jsx" | grep -v node_modules
@@ -613,15 +614,15 @@ docker-compose exec frontend npx tsc --noEmit
 ```
 
 Acceptance criteria:
-- ✅ Pre-flight checks pass (no stale JS files)
-- ✅ TypeScript compilation passes after changes
-- ✅ Endpoints work with expected shapes and status codes
-- ✅ API manually tested with curl shows camelCase fields
-- ✅ Input validation prevents malformed data (invalid dates, negative hours)
-- ✅ Sanitization protects against XSS in role descriptions
-- ✅ Tests pass locally including validation edge cases
+- âœ… Pre-flight checks pass (no stale JS files)
+- âœ… TypeScript compilation passes after changes
+- âœ… Endpoints work with expected shapes and status codes
+- âœ… API manually tested with curl shows camelCase fields
+- âœ… Input validation prevents malformed data (invalid dates, negative hours)
+- âœ… Sanitization protects against XSS in role descriptions
+- âœ… Tests pass locally including validation edge cases
 
-## Prompt 4 — Backend: Milestone Calendar Endpoint
+## Prompt 4 â€” Backend: Milestone Calendar Endpoint
 
 Implement a read-only calendar endpoint that returns deliverables within a date range along with `assignmentCount`.
 
@@ -636,7 +637,7 @@ Acceptance criteria:
 - Endpoint returns correct items and counts within range.
 - Adds no N+1 queries in common paths.
 
-## Prompt 5 — Backend: People Capacity Heatmap Action
+## Prompt 5 â€” Backend: People Capacity Heatmap Action
 
 Add `capacity_heatmap` action to `PersonViewSet` that returns per-person week summaries based on existing utilization helpers.
 
@@ -649,7 +650,7 @@ Requirements:
 Acceptance criteria:
 - Action returns expected structure and values.
 
-## Prompt 6 — Backend: Workload Rebalance Suggestions Action
+## Prompt 6 â€” Backend: Workload Rebalance Suggestions Action
 
 Add non-destructive suggestions endpoint to `AssignmentViewSet` for potential hour shifts across team.
 
@@ -661,7 +662,7 @@ Requirements:
 Acceptance criteria:
 - Action returns well-formed suggestions under varying team states.
 
-## Prompt 7 — Backend: Team Workload Forecast Action
+## Prompt 7 â€” Backend: Team Workload Forecast Action
 
 Add `workload_forecast` action to `PersonViewSet` that aggregates team capacity vs allocated for N weeks ahead.
 
@@ -673,13 +674,13 @@ Requirements:
 Acceptance criteria:
 - Forecast response matches spec and calculations are sound.
 
-## Prompt 7.5 — Backend: Service Layer Implementation for Business Logic
+## Prompt 7.5 â€” Backend: Service Layer Implementation for Business Logic
 
 Refactor complex business logic from ViewSet actions into dedicated service classes for improved testability, maintainability, and scale readiness (100-300+ people).
 
-**🔴 PREREQUISITE: Complete Prompts 5-7 first (requires existing ViewSet actions to refactor)**
+**ðŸ”´ PREREQUISITE: Complete Prompts 5-7 first (requires existing ViewSet actions to refactor)**
 
-**🚨 Implementation Safety Checklist:**
+**ðŸš¨ Implementation Safety Checklist:**
 ```bash
 # Before refactoring:
 docker-compose ps  # All services "Up"
@@ -740,7 +741,7 @@ def capacity_heatmap(self, request):
 - Structure for bulk operations on large people querysets
 - Include performance logging for methods handling 100+ records
 
-**🔒 Atomic Transactions (Data Integrity at Scale):**
+**ðŸ”’ Atomic Transactions (Data Integrity at Scale):**
 ```python
 # Use transactions for multi-step operations only:
 from django.db import transaction
@@ -763,11 +764,11 @@ def create_milestone_with_assignments(deliverable_data, assignment_list):
 ```
 
 **Transaction Guidelines:**
-- ✅ **Use for**: Multi-model operations, bulk updates, complex workflows  
-- ❌ **Don't use for**: Simple CRUD operations, read-only endpoints
-- ✅ **Performance**: Keep transaction blocks small and fast
+- âœ… **Use for**: Multi-model operations, bulk updates, complex workflows  
+- âŒ **Don't use for**: Simple CRUD operations, read-only endpoints
+- âœ… **Performance**: Keep transaction blocks small and fast
 
-**🚀 Caching Integration (Performance Critical at 100-300+ People):**
+**ðŸš€ Caching Integration (Performance Critical at 100-300+ People):**
 ```python
 # Service methods must include caching strategy:
 from django.core.cache import cache
@@ -815,23 +816,23 @@ class TestWorkloadRebalancingService(TestCase):
 ```
 
 Acceptance criteria:
-- ✅ Service classes created with static methods for business logic
-- ✅ ViewSet actions refactored to use services (thin HTTP adapters)
-- ✅ All existing API endpoints return identical responses
-- ✅ Comprehensive unit tests for service classes pass
-- ✅ No performance regression in endpoint response times
-- ✅ Business logic is now reusable outside of API context
-- ✅ Service methods designed for scale (bulk operations, caching ready)
-- ✅ Caching strategy implemented with proper invalidation
-- ✅ Cache performance provides sub-second response times for 100+ people
+- âœ… Service classes created with static methods for business logic
+- âœ… ViewSet actions refactored to use services (thin HTTP adapters)
+- âœ… All existing API endpoints return identical responses
+- âœ… Comprehensive unit tests for service classes pass
+- âœ… No performance regression in endpoint response times
+- âœ… Business logic is now reusable outside of API context
+- âœ… Service methods designed for scale (bulk operations, caching ready)
+- âœ… Caching strategy implemented with proper invalidation
+- âœ… Cache performance provides sub-second response times for 100+ people
 
-## Prompt 7.6 — Backend: Caching Infrastructure Setup
+## Prompt 7.6 â€” Backend: Caching Infrastructure Setup
 
 Configure Redis caching infrastructure and invalidation signals to support high-performance analytics endpoints at scale.
 
-**🔴 PREREQUISITE: Complete Prompt 7.5 first (requires service layer caching integration)**
+**ðŸ”´ PREREQUISITE: Complete Prompt 7.5 first (requires service layer caching integration)**
 
-**🚨 Implementation Safety Checklist:**
+**ðŸš¨ Implementation Safety Checklist:**
 ```bash
 # Before setup:
 docker-compose ps  # All services healthy
@@ -894,19 +895,19 @@ def log_cache_performance(cache_key: str, hit: bool, calculation_time: float = N
 ```
 
 Acceptance criteria:
-- ✅ Redis cache backend configured with environment variables
-- ✅ Cache invalidation signals properly registered and tested
-- ✅ Service methods integrate with caching infrastructure  
-- ✅ Cache hit/miss logging functional for performance monitoring
-- ✅ 80%+ cache hit rate for repeated analytics requests
-- ✅ Sub-second response times for cached endpoints with 100+ people
-- ✅ Cache invalidation works correctly when assignments change
+- âœ… Redis cache backend configured with environment variables
+- âœ… Cache invalidation signals properly registered and tested
+- âœ… Service methods integrate with caching infrastructure  
+- âœ… Cache hit/miss logging functional for performance monitoring
+- âœ… 80%+ cache hit rate for repeated analytics requests
+- âœ… Sub-second response times for cached endpoints with 100+ people
+- âœ… Cache invalidation works correctly when assignments change
 
-## Prompt 8 — Frontend: API Client Extensions
+## Prompt 8 â€” Frontend: API Client Extensions
 
 Extend `frontend/src/services/api.ts` to add typed client functions for the new endpoints.
 
-**🔴 CRITICAL: Check for stale compiled files FIRST:**
+**ðŸ”´ CRITICAL: Check for stale compiled files FIRST:**
 ```bash
 # Delete any .js files in src/ before starting:
 find frontend/src -name "*.js" -o -name "*.jsx" | grep -v node_modules | xargs rm -f
@@ -919,7 +920,7 @@ Requirements:
 - Use existing fetch wrapper; return proper TS types; no hardcoded colors/log spam.
 - Regenerate TS interfaces if needed (`make generate-types`).
 
-**🚨 Implementation Safety Checklist:**
+**ðŸš¨ Implementation Safety Checklist:**
 ```bash
 # After changes - MANDATORY:
 docker-compose exec frontend npx tsc --noEmit
@@ -930,12 +931,12 @@ docker-compose restart frontend
 ```
 
 Acceptance criteria:
-- ✅ No stale .js files exist in src/
-- ✅ TypeScript compilation passes with no errors
-- ✅ API methods compile and are used by subsequent prompts
-- ✅ Browser console shows no import resolution errors
+- âœ… No stale .js files exist in src/
+- âœ… TypeScript compilation passes with no errors
+- âœ… API methods compile and are used by subsequent prompts
+- âœ… Browser console shows no import resolution errors
 
-## Prompt 9 — Frontend: Quick Actions Panel
+## Prompt 9 â€” Frontend: Quick Actions Panel
 
 Create a `QuickActionsPanel` component that presents actions: Find Available, Balance Workload, Milestone Review, Capacity Report. Each opens a split-panel modal consistent with the Projects/People pattern.
 
@@ -949,11 +950,11 @@ Requirements:
 Acceptance criteria:
 - Panel renders; each button opens the correct tool shell.
 
-## Prompt 10 — Frontend: Milestone Assignments UI
+## Prompt 10 â€” Frontend: Milestone Assignments UI
 
-In the project detail deliverables section, allow linking/unlinking people to a deliverable (optional role). Do not store per-deliverable weekly hours; display derived hours from Assignment.weekly_hours for the deliverable’s project over the milestone window.
+In the project detail deliverables section, allow linking/unlinking people to a deliverable (optional role). Do not store per-deliverable weekly hours; display derived hours from Assignment.weekly_hours for the deliverableâ€™s project over the milestone window.
 
-**🔴 CRITICAL: Prevent Dropdown/Form Issues:**
+**ðŸ”´ CRITICAL: Prevent Dropdown/Form Issues:**
 ```bash
 # 1. Check for stale compiled files:
 find frontend/src -name "*.js" -o -name "*.jsx" | grep -v node_modules | xargs rm -f
@@ -964,12 +965,12 @@ curl -s http://localhost:8000/api/deliverables/assignments/ | head -20
 
 Requirements:
 - For a selected deliverable, show linked people and display derived totals and a small week breakdown for the milestone window.
-- Milestone window default: 6 weeks leading up to the deliverable date; if a prior deliverable exists for the same project, use the time between the prior and current deliverable (exclusive→inclusive).
+- Milestone window default: 6 weeks leading up to the deliverable date; if a prior deliverable exists for the same project, use the time between the prior and current deliverable (exclusiveâ†’inclusive).
 - No inline hour editing here; any hour adjustments are made on the Assignments grid.
 - Optimistic UI updates for link/unlink and role changes; rollback on error with clear toast.
 - **CRITICAL**: Load people/roles from API, never hardcode options in dropdowns
 
-**🚨 Implementation Safety Checklist:**
+**ðŸš¨ Implementation Safety Checklist:**
 ```bash
 # After UI changes:
 docker-compose exec frontend npx tsc --noEmit
@@ -983,26 +984,26 @@ docker-compose restart frontend
 ```
 
 Acceptance criteria:
-- ✅ No stale .js files preventing updates
-- ✅ TypeScript compilation passes
-- ✅ Create/update/delete works; conflict warnings surface
-- ✅ UI adheres to VSCode dark tokens
-- ✅ Dropdowns load from API (never hardcoded)
+- âœ… No stale .js files preventing updates
+- âœ… TypeScript compilation passes
+- âœ… Create/update/delete works; conflict warnings surface
+- âœ… UI adheres to VSCode dark tokens
+- âœ… Dropdowns load from API (never hardcoded)
 
-## Prompt 11 — Frontend: Milestone Calendar View
 
+Status: Completed
 Add a calendar view that consumes `/api/deliverables/calendar` and displays deliverables within a date range.
 
 Requirements:
 - Show project name, title (description or percentage), date, assignmentCount badge.
-- assignmentCount represents the number of distinct people with >0 derived hours (from Assignment.weekly_hours) on the deliverable’s project within the milestone window.
+- assignmentCount represents the number of distinct people with >0 derived hours (from Assignment.weekly_hours) on the deliverableâ€™s project within the milestone window.
 - Range controls (month, custom start/end). Debounce queries.
 - Lightweight rendering; no heavy dependency unless justified. Plain SVG/DOM acceptable.
 
 Acceptance criteria:
 - Calendar renders range correctly; counts match API; responsive layout.
 
-## Prompt 12 — Frontend: Team Forecast & Project Timeline
+## Prompt 12 â€” Frontend: Team Forecast & Project Timeline
 
 Add charts for team workload forecast and a per-project timeline with assignment bars and deliverable overlays.
 
@@ -1014,7 +1015,7 @@ Requirements:
 Acceptance criteria:
 - Charts render correctly; color scale matches utilization tiers.
 
-## Prompt 13 — Backend: Global Exception Handler
+## Prompt 13 â€” Backend: Global Exception Handler
 
 Add a DRF global exception handler that returns a consistent error shape and integrates with logging.
 
@@ -1026,7 +1027,7 @@ Requirements:
 Acceptance criteria:
 - Errors across APIs return the standard shape; manual test verifies.
 
-## Prompt 14 — Backend: Structured JSON Logging
+## Prompt 14 â€” Backend: Structured JSON Logging
 
 Configure JSON logging with request metadata and slow-query logging.
 
@@ -1038,7 +1039,7 @@ Requirements:
 Acceptance criteria:
 - Logs appear as JSON with required fields; slow queries logged.
 
-## Prompt 15 — Build & Deploy: Makefile + Compose (Prod Overlay)
+## Prompt 15 â€” Build & Deploy: Makefile + Compose (Prod Overlay)
 
 Add Makefile targets and a docker-compose prod overlay to run the backend under gunicorn behind nginx, and serve the frontend statically.
 
@@ -1050,7 +1051,7 @@ Requirements:
 Acceptance criteria:
 - `make build-prod && make up-prod` starts a working prod stack locally.
 
-## Prompt 16 — Dev Ergonomics: EditorConfig, Attributes, Hooks
+## Prompt 16 â€” Dev Ergonomics: EditorConfig, Attributes, Hooks
 
 Add `.editorconfig` and `.gitattributes` to enforce text encoding and line endings; optionally wire pre-commit hooks that run existing formatters/linters.
 
@@ -1061,3 +1062,4 @@ Requirements:
 
 Acceptance criteria:
 - New files present; line ending/encoding normalization verified by a small commit.
+

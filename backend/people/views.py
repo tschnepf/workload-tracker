@@ -1,4 +1,4 @@
-"""
+﻿"""
 People API Views - Using AutoMapped serializers for naming prevention
 """
 
@@ -29,7 +29,7 @@ class HotEndpointThrottle(UserRateThrottle):
 class PersonViewSet(viewsets.ModelViewSet):
     """
     Person CRUD API with utilization calculations
-    Uses AutoMapped serializer for automatic snake_case ↔ camelCase conversion
+    Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
     """
     queryset = Person.objects.all().order_by('-created_at')
     serializer_class = PersonSerializer
@@ -349,13 +349,23 @@ class PersonViewSet(viewsets.ModelViewSet):
         except ValueError:
             weeks = 8
 
-        people = (
+        people_qs = (
             self.get_queryset()
             .prefetch_related(
                 Prefetch('assignments', queryset=Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id'))
             )
         )
 
-        # Scope is currently global team; if department filter is added in future, pass cache_scope accordingly
-        result = CapacityAnalysisService.get_workload_forecast(people, weeks, cache_scope='all')
+        # Optional department filter
+        dept_param = request.query_params.get('department')
+        cache_scope = 'all'
+        if dept_param not in (None, ""): 
+            try:
+                dept_id = int(dept_param)
+                people_qs = people_qs.filter(department_id=dept_id)
+                cache_scope = f'dept_{dept_id}'
+            except (TypeError, ValueError):
+                pass
+
+        result = CapacityAnalysisService.get_workload_forecast(people_qs, weeks, cache_scope=cache_scope)
         return Response(result)

@@ -27,7 +27,7 @@ setup:
 	@echo "Running initial setup..."
 	@make migrate
 	@make generate-types
-	@echo "✅ Setup complete!"
+	@echo "Setup complete!"
 	@echo "Access the application at:"
 	@echo "  - Frontend: http://localhost:3000"
 	@echo "  - Backend:  http://localhost:8000"
@@ -75,14 +75,14 @@ migrate:
 
 .PHONY: validate-naming
 validate-naming:
-	@echo "🔍 Checking naming consistency..."
-	@docker-compose exec backend python manage.py shell -c "from core.validation import validate_naming_consistency; errors = validate_naming_consistency(); print('✅ All names consistent' if not errors else f'❌ Errors: {errors}')"
+	@echo "Checking naming consistency..."
+	@docker-compose exec backend python manage.py shell -c "from core.validation import validate_naming_consistency; errors = validate_naming_consistency(); print('All names consistent' if not errors else f'Errors: {errors}')"
 
 .PHONY: generate-types
 generate-types:
-	@echo "📝 Generating TypeScript interfaces..."
+	@echo "Generating TypeScript interfaces..."
 	@docker-compose exec backend python manage.py generate_types
-	@echo "✅ Types generated"
+	@echo "Types generated"
 
 .PHONY: test
 test:
@@ -93,3 +93,4 @@ test:
 clean:
 	docker-compose down -v
 	docker system prune -f
+
