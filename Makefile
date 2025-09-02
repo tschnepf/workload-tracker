@@ -1,6 +1,8 @@
 .PHONY: help
 help:
 	@echo "Available commands:"
+	@echo ""
+	@echo "Development:"
 	@echo "  make setup          - Initial project setup"
 	@echo "  make up             - Start all containers"
 	@echo "  make down           - Stop all containers"
@@ -13,6 +15,13 @@ help:
 	@echo "  make generate-types  - Generate TypeScript interfaces"
 	@echo "  make test           - Run tests"
 	@echo "  make clean          - Clean up containers and volumes"
+	@echo ""
+	@echo "Production:"
+	@echo "  make build-prod     - Build production images"
+	@echo "  make up-prod        - Start production stack"
+	@echo "  make down-prod      - Stop production stack"
+	@echo "  make logs-prod      - View production logs"
+	@echo "  make backup-db      - Create database backup"
 
 .PHONY: setup
 setup:
@@ -93,4 +102,38 @@ test:
 clean:
 	docker-compose down -v
 	docker system prune -f
+
+# Production targets
+.PHONY: build-prod
+build-prod:
+	@echo "Building production images..."
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+	@echo "Production images built successfully"
+
+.PHONY: up-prod
+up-prod:
+	@echo "Starting production stack..."
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+	@echo "Waiting for services to be ready..."
+	@sleep 15
+	@echo "Production stack started successfully"
+	@echo "Access the application at:"
+	@echo "  - Application: http://localhost (via nginx)"
+	@echo "  - Admin:       http://localhost/admin"
+
+.PHONY: down-prod
+down-prod:
+	@echo "Stopping production stack..."
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+.PHONY: logs-prod
+logs-prod:
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+
+.PHONY: backup-db
+backup-db:
+	@echo "Creating database backup..."
+	@mkdir -p backups
+	@docker-compose exec -T db pg_dump -U postgres -d workload_tracker > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
+	@echo "Database backup created in backups/ directory"
 
