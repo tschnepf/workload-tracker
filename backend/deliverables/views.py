@@ -12,6 +12,7 @@ from django.utils.dateparse import parse_date
 from django.utils.http import http_date
 from datetime import datetime
 from collections import defaultdict
+import logging
 from .models import Deliverable, DeliverableAssignment
 from .serializers import DeliverableSerializer, DeliverableAssignmentSerializer
 from assignments.models import Assignment
@@ -79,8 +80,9 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 return Response({"success": True}, status=status.HTTP_200_OK)
                 
         except Exception as e:
+            logging.exception("Failed to reorder deliverables")
             return Response(
-                {"error": f"Failed to reorder deliverables: {str(e)}"},
+                {"error": "Failed to reorder deliverables."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
