@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Assignment, Person, Deliverable, Project } from '@/types/models';
 import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
 import StatusBadge, { editableStatusOptions } from '@/components/projects/StatusBadge';
@@ -232,6 +233,7 @@ const getNext12Mondays = (): { date: string, display: string, fullDisplay: strin
 };
 
 const AssignmentGrid: React.FC = () => {
+  const queryClient = useQueryClient();
   const { state: deptState, backendParams } = useDepartmentFilter();
   
   // Status dropdown management - single open dropdown per project
@@ -982,6 +984,9 @@ const AssignmentGrid: React.FC = () => {
 
     try {
       await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+      // Invalidate analytics queries so heatmaps/forecasts refresh
+      queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
     } catch (err: any) {
       // Rollback on error
       setPeople(prev => prev.map(p =>
@@ -1070,6 +1075,13 @@ const AssignmentGrid: React.FC = () => {
     results.forEach((res, idx) => {
       if (res.status === 'rejected') failed.push(updatesArray[idx]);
     });
+
+    // Invalidate analytics if there were any successful updates
+    const succeeded = results.some(r => r.status === 'fulfilled');
+    if (succeeded) {
+      queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+    }
 
     if (failed.length > 0) {
       // Revert failed assignments only
