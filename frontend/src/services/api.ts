@@ -18,6 +18,18 @@ class ApiError extends Error {
   }
 }
 
+const IS_DEV = import.meta.env && (import.meta.env.DEV ?? false);
+
+// Lightweight in-memory cache to coalesce duplicate GETs and short-cache results
+type CacheEntry<T> = { promise: Promise<T>; timestamp: number; data?: T };
+const inflightRequests = new Map<string, CacheEntry<any>>();
+const responseCache = new Map<string, CacheEntry<any>>();
+const DEFAULT_TTL_MS = 15000; // 15s TTL is enough to absorb StrictMode double effects
+
+function makeCacheKey(url: string, method?: string) {
+  return `${method || 'GET'} ${url}`;
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -25,13 +37,19 @@ async function fetchApi<T>(
   const url = `${API_BASE_URL}${endpoint}`;
   
   // Debug logging for all API requests
-  console.log(' [DEBUG] fetchApi called:', {
-    url,
-    method: options.method || 'GET',
-    headers: options.headers,
-    body: options.body,
-    bodyParsed: options.body ? JSON.parse(options.body as string) : null
-  });
+  if (IS_DEV) {
+    try {
+      console.log(' [DEBUG] fetchApi called:', {
+        url,
+        method: options.method || 'GET',
+        headers: options.headers,
+        body: options.body,
+        bodyParsed: typeof options.body === 'string' ? JSON.parse(options.body) : null,
+      });
+    } catch {
+      // ignore body parse errors in dev logging
+    }
+  }
   
   try {
     const response = await fetch(url, {
@@ -42,13 +60,15 @@ async function fetchApi<T>(
       ...options,
     });
     
-    console.log(' [DEBUG] fetchApi response:', {
-      url,
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      headers: Object.fromEntries(response.headers.entries())
-    });
+    if (IS_DEV) {
+      console.log(' [DEBUG] fetchApi response:', {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+      });
+    }
     
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}`;
@@ -56,11 +76,11 @@ async function fetchApi<T>(
       try {
         errorData = await response.json();
         errorMessage = errorData.message || errorData.detail || errorMessage;
-        console.error(' [DEBUG] API Error Response:', errorData);
+        if (IS_DEV) console.error(' [DEBUG] API Error Response:', errorData);
       } catch (e) {
         // If JSON parsing fails, use status text
         errorMessage = response.statusText || errorMessage;
-        console.error(' [DEBUG] API Error (no JSON):', errorMessage);
+        if (IS_DEV) console.error(' [DEBUG] API Error (no JSON):', errorMessage);
       }
       throw new ApiError(errorMessage, response.status, errorData);
     }
@@ -74,15 +94,15 @@ async function fetchApi<T>(
     // Check if response body is empty
     const text = await response.text();
     if (!text) {
-      console.log(' [DEBUG] Empty response body, returning undefined');
+      if (IS_DEV) console.log(' [DEBUG] Empty response body, returning undefined');
       return undefined as T;
     }
 
     const result = JSON.parse(text);
-    console.log(' [DEBUG] fetchApi success result:', result);
+    if (IS_DEV) console.log(' [DEBUG] fetchApi success result:', result);
     return result;
   } catch (error) {
-    console.error(' [DEBUG] Fetch error:', error);
+    if (IS_DEV) console.error(' [DEBUG] Fetch error:', error);
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new ApiError('Network error - unable to reach server', 0);
     }
@@ -90,21 +110,65 @@ async function fetchApi<T>(
   }
 }
 
+// Cached variant for idempotent GET endpoints
+async function fetchApiCached<T>(endpoint: string, ttlMs = DEFAULT_TTL_MS): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const key = makeCacheKey(url, 'GET');
+  const now = Date.now();
+
+  const cached = responseCache.get(key);
+  if (cached && cached.data !== undefined && (now - cached.timestamp) < ttlMs) {
+    return cached.data as T;
+  }
+
+  const inflight = inflightRequests.get(key);
+  if (inflight) return inflight.promise as Promise<T>;
+
+  const promise = fetchApi<T>(endpoint, { method: 'GET' })
+    .then((data) => {
+      responseCache.set(key, { promise, timestamp: Date.now(), data });
+      inflightRequests.delete(key);
+      return data;
+    })
+    .catch((err) => {
+      inflightRequests.delete(key);
+      throw err;
+    });
+
+  inflightRequests.set(key, { promise, timestamp: now });
+  return promise;
+}
+
+// Helper to append query params from a record where undefined/null values are skipped
+function appendQueryParams(sp: URLSearchParams, params: Record<string, string | number | boolean | undefined | null>) {
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '') continue;
+    sp.set(k, String(v));
+  }
+}
+
 // People API
 export const peopleApi = {
   // Get all people with pagination support
-  list: (params?: { page?: number; page_size?: number; search?: string }) => {
+  list: (params?: { page?: number; page_size?: number; search?: string; department?: number; include_children?: 0 | 1 }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     if (params?.search) queryParams.set('search', params.search);
+    if (params?.department != null) queryParams.set('department', String(params.department));
+    if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApi<PaginatedResponse<Person>>(`/people/${queryString}`);
   },
 
   // Get all people (bulk API - Phase 2 optimization)
-  listAll: async (): Promise<Person[]> => {
-    return fetchApi<Person[]>(`/people/?all=true`);
+  listAll: async (filters?: { department?: number; include_children?: 0 | 1 }): Promise<Person[]> => {
+    const sp = new URLSearchParams();
+    sp.set('all', 'true');
+    if (filters?.department != null) sp.set('department', String(filters.department));
+    if (filters?.include_children != null) sp.set('include_children', String(filters.include_children));
+    const qs = sp.toString();
+  return fetchApiCached<Person[]>(`/people/?${qs}`);
   },
 
   // Get single person
@@ -157,23 +221,28 @@ export const peopleApi = {
     return fetchApi<PersonUtilization>(`/people/${personId}/utilization/${queryString}`);
   },
 
-  // Capacity heatmap
-  capacityHeatmap: (params?: { weeks?: number; department?: string | number }, options?: RequestInit) => {
+  // Capacity heatmap (supports department/include_children)
+  capacityHeatmap: (
+    params?: { weeks?: number; department?: string | number; include_children?: 0 | 1 },
+    options?: RequestInit
+  ) => {
     const query = new URLSearchParams();
     if (params?.weeks) query.set('weeks', String(params.weeks));
     if (params?.department !== undefined && params.department !== '') {
       query.set('department', String(params.department));
     }
+    if (params?.include_children != null) query.set('include_children', String(params.include_children));
     const qs = query.toString() ? `?${query.toString()}` : '';
     return fetchApi<PersonCapacityHeatmapItem[]>(`/people/capacity_heatmap/${qs}`, options);
   },
 
   // Team workload forecast
-  workloadForecast: (weeks: number = 8, department?: number) => {
-    const params = new URLSearchParams();
-    if (weeks) params.set('weeks', String(weeks));
-    if (department != null) params.set('department', String(department));
-    const qs = params.toString() ? `?${params.toString()}` : '';
+  workloadForecast: (opts?: { weeks?: number; department?: number; include_children?: 0 | 1 }) => {
+    const sp = new URLSearchParams();
+    if (opts?.weeks) sp.set('weeks', String(opts.weeks));
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<WorkloadForecastItem[]>(`/people/workload_forecast/${qs}`);
   },
 };
@@ -257,7 +326,7 @@ export const departmentsApi = {
 
   // Get all departments (bulk API - Phase 2 optimization)
   listAll: async (): Promise<Department[]> => {
-    return fetchApi<Department[]>(`/departments/?all=true`);
+  return fetchApiCached<Department[]>(`/departments/?all=true`);
   },
 
   // Get single department
@@ -288,18 +357,24 @@ export const departmentsApi = {
 // Assignment API
 export const assignmentsApi = {
   // Get all assignments with pagination support and optional project filtering
-  list: (params?: { page?: number; page_size?: number; project?: number }) => {
+  list: (params?: { page?: number; page_size?: number; project?: number; department?: number; include_children?: 0 | 1 }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     if (params?.project) queryParams.set('project', params.project.toString());
+    if (params?.department != null) queryParams.set('department', String(params.department));
+    if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`);
   },
 
   // Get all assignments (bulk API - Phase 2 optimization)
-  listAll: async (): Promise<Assignment[]> => {
-    return fetchApi<Assignment[]>(`/assignments/?all=true`);
+  listAll: async (filters?: { department?: number; include_children?: 0 | 1 }): Promise<Assignment[]> => {
+    const sp = new URLSearchParams();
+    sp.set('all', 'true');
+    if (filters?.department != null) sp.set('department', String(filters.department));
+    if (filters?.include_children != null) sp.set('include_children', String(filters.include_children));
+  return fetchApiCached<Assignment[]>(`/assignments/?${sp.toString()}`);
   },
 
   // Get assignments for specific person

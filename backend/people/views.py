@@ -12,6 +12,7 @@ from django.utils.http import http_date
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from .models import Person
+from departments.models import Department
 from .serializers import PersonSerializer
 from .utils.excel_handler import export_people_to_excel, import_people_from_excel
 from .services import CapacityAnalysisService
@@ -37,11 +38,36 @@ class PersonViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filter active people by default"""
-        return Person.objects.filter(is_active=True).order_by('name')
+        return Person.objects.filter(is_active=True).select_related('department').order_by('name')
     
     def list(self, request, *args, **kwargs):
         """Get all people with conditional request support (ETag/Last-Modified) and bulk loading"""
         queryset = self.get_queryset()
+
+        # Optional department filter (by ID) with include_children support
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    # Gather descendant department IDs (including root)
+                    ids = set()
+                    stack = [dept_id]
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                            if d not in ids:
+                                stack.append(d)
+                    queryset = queryset.filter(department_id__in=list(ids))
+                else:
+                    queryset = queryset.filter(department_id=dept_id)
+            except (TypeError, ValueError):
+                # Ignore invalid department filter; return unfiltered list
+                pass
         
         # Check if bulk loading is requested
         if request.query_params.get('all') == 'true':
@@ -322,15 +348,29 @@ class PersonViewSet(viewsets.ModelViewSet):
         except ValueError:
             weeks = 12
 
-        people = self.get_queryset().select_related('department')
-        # Optional department filter to align with dashboard filtering
+        people = self.get_queryset()
+        # Optional department filter with include_children
         department_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
         cache_scope = 'all'
         if department_param not in (None, ""):
             try:
                 dept_id = int(department_param)
-                people = people.filter(department_id=dept_id)
-                cache_scope = f'dept_{dept_id}'
+                if include_children:
+                    ids = set()
+                    stack = [dept_id]
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                            if d not in ids:
+                                stack.append(d)
+                    people = people.filter(department_id__in=list(ids))
+                else:
+                    people = people.filter(department_id=dept_id)
+                cache_scope = f'dept_{dept_id}{"_children" if include_children else ""}'
             except (TypeError, ValueError):
                 # Ignore invalid department filter; return unfiltered list
                 pass
@@ -358,12 +398,26 @@ class PersonViewSet(viewsets.ModelViewSet):
 
         # Optional department filter
         dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
         cache_scope = 'all'
         if dept_param not in (None, ""): 
             try:
                 dept_id = int(dept_param)
-                people_qs = people_qs.filter(department_id=dept_id)
-                cache_scope = f'dept_{dept_id}'
+                if include_children:
+                    ids = set()
+                    stack = [dept_id]
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                            if d not in ids:
+                                stack.append(d)
+                    people_qs = people_qs.filter(department_id__in=list(ids))
+                else:
+                    people_qs = people_qs.filter(department_id=dept_id)
+                cache_scope = f'dept_{dept_id}{"_children" if include_children else ""}'
             except (TypeError, ValueError):
                 pass
 

@@ -286,3 +286,17 @@ The application uses a professional dark theme optimized for long work sessions:
 ---
 
 The Workload Tracker provides a comprehensive solution for modern team management, from individual assignment tracking to organizational analytics. Start with the basics and gradually leverage advanced features as your team grows and your processes mature.
+
+---
+
+## 🌐 Global Department Filter
+
+Apply a department scope across the entire app and share deep links.
+
+- Persistent filter visible in the header. Toggle “Include sub-departments.”
+- Deep link parameters: `?dept=<id>&deptChildren=0|1` (when unset, params are removed)
+- URL precedence on first load; thereafter changes update the URL without adding history entries.
+- Keyboard shortcut: Alt+Shift+D to focus the filter from anywhere.
+- Pages and APIs automatically respect this filter (People, Assignments, Capacity Heatmap, Workload Forecast).
+
+Tip: Use the “Copy link” action in the header to share a filtered view.

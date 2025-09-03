@@ -36,7 +36,12 @@
       "WebFetch(domain:web.dev)",
       "WebFetch(domain:docs.sentry.io)",
       "Bash(git rm:*)",
-      "Bash(del \"C:\\Users\\tim\\VScode\\workload-tracker\\test-api-update.html\")"
+      "Bash(del \"C:\\Users\\tim\\VScode\\workload-tracker\\test-api-update.html\")",
+      "Bash(docker volume:*)",
+      "Bash(docker system prune:*)",
+      "Bash(grep:*)",
+      "Bash(chmod:*)",
+      "Bash(docker exec:*)"
     ],
     "deny": [],
     "ask": [],

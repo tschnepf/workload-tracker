@@ -65,3 +65,37 @@ class CapacityHeatmapApiTests(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
         self.assertTrue(all(item['name'] == 'Alice' for item in data))
+
+    def test_capacity_heatmap_department_include_children(self):
+        # Create child department under Engineering and add a person
+        child = Department.objects.create(
+            name='Eng-Child', parent_department=self.dept_eng
+        )
+        p_child = Person.objects.create(
+            name='Eve', weekly_capacity=25, department=child
+        )
+        # allocate some hours so they appear in heatmap
+        today = datetime.now().date()
+        this_sunday = sunday_of_week(today)
+        wk = this_sunday.strftime('%Y-%m-%d')
+        Assignment.objects.create(person=p_child, weekly_hours={wk: 8})
+
+        # include_children=0 should exclude the child
+        resp0 = self.client.get(
+            '/api/people/capacity_heatmap/?department='
+            f'{self.dept_eng.id}&include_children=0'
+        )
+        self.assertEqual(resp0.status_code, status.HTTP_200_OK)
+        names0 = {item['name'] for item in resp0.json()}
+        self.assertIn('Alice', names0)
+        self.assertNotIn('Eve', names0)
+
+        # include_children=1 should include both Alice and Eve
+        resp1 = self.client.get(
+            '/api/people/capacity_heatmap/?department='
+            f'{self.dept_eng.id}&include_children=1'
+        )
+        self.assertEqual(resp1.status_code, status.HTTP_200_OK)
+        names1 = {item['name'] for item in resp1.json()}
+        self.assertIn('Alice', names1)
+        self.assertIn('Eve', names1)

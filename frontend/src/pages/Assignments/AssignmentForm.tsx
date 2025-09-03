@@ -11,6 +11,7 @@ import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 
 interface WeeklyHours {
   [weekKey: string]: number;
@@ -59,6 +60,7 @@ const AssignmentForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
+  const { state: deptState } = useDepartmentFilter();
 
   // Helper function to calculate skill match score
   const calculateSkillMatchScore = (_person: Person, personSkills: PersonSkill[], requiredSkills: string[]): number => {
@@ -151,6 +153,23 @@ const AssignmentForm: React.FC = () => {
     });
   };
 
+  // Compute descendant department IDs when include-children is on
+  const getDescendantDepartmentIds = (rootId: number | null | undefined, allDepts: Department[]): Set<number> => {
+    const result = new Set<number>();
+    if (rootId == null) return result;
+    const stack = [rootId];
+    while (stack.length) {
+      const current = stack.pop()!;
+      result.add(current);
+      for (const d of allDepts) {
+        if (d.parentDepartment === current && d.id != null && !result.has(d.id)) {
+          stack.push(d.id);
+        }
+      }
+    }
+    return result;
+  };
+
   // Helper function to get skill mismatch warnings
   const getSkillWarnings = (
     person: Person, 
@@ -221,6 +240,7 @@ const AssignmentForm: React.FC = () => {
   const [personSearchText, setPersonSearchText] = useState('');
   const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
   const [showPersonDropdown, setShowPersonDropdown] = useState(false);
+  const [showAllDepartments, setShowAllDepartments] = useState(false);
   
   // Debounced person search for better performance
   const debouncedPersonSearch = useDebounce(personSearchText, 300);
@@ -245,10 +265,17 @@ const AssignmentForm: React.FC = () => {
   // Update filtered people when dependencies change
   useEffect(() => {
     if (people.length > 0) {
-      const sorted = sortPeopleByDepartmentAndSkills(people, formData.person, departments, peopleSkills, projectSkills);
+      let base = people;
+      if (!showAllDepartments && deptState.selectedDepartmentId != null) {
+        const allowed = deptState.includeChildren
+          ? getDescendantDepartmentIds(Number(deptState.selectedDepartmentId), departments)
+          : new Set<number>([Number(deptState.selectedDepartmentId)]);
+        base = base.filter(p => (p.department != null) && allowed.has(Number(p.department)));
+      }
+      const sorted = sortPeopleByDepartmentAndSkills(base, formData.person, departments, peopleSkills, projectSkills);
       setFilteredPeople(sorted);
     }
-  }, [people, formData.person, departments, peopleSkills, projectSkills]);
+  }, [people, formData.person, departments, peopleSkills, projectSkills, deptState.selectedDepartmentId, deptState.includeChildren, showAllDepartments]);
 
   // Sync search text with selected person
   useEffect(() => {
@@ -264,8 +291,9 @@ const AssignmentForm: React.FC = () => {
 
   const loadPeople = async () => {
     try {
-      const response = await peopleApi.list();
-      const peopleList = response.results || [];
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = deptState.includeChildren ? 1 : 0;
+      const peopleList = await peopleApi.listAll({ department: dept, include_children: dept != null ? inc : undefined });
       setPeople(peopleList);
       setFilteredPeople(sortPeopleByDepartmentAndSkills(peopleList, formData.person, departments, peopleSkills, projectSkills));
     } catch (err: any) {
@@ -439,7 +467,15 @@ const AssignmentForm: React.FC = () => {
 
   // Perform actual search with debounced value
   const performPersonSearch = (searchText: string) => {
-    const sorted = sortPeopleByDepartmentAndSkills(people, formData.person, departments, peopleSkills, projectSkills);
+    // Respect implicit global department filter in searches unless overridden
+    let base = people;
+    if (!showAllDepartments && deptState.selectedDepartmentId != null) {
+      const allowed = deptState.includeChildren
+        ? getDescendantDepartmentIds(Number(deptState.selectedDepartmentId), departments)
+        : new Set<number>([Number(deptState.selectedDepartmentId)]);
+      base = base.filter(p => (p.department != null) && allowed.has(Number(p.department)));
+    }
+    const sorted = sortPeopleByDepartmentAndSkills(base, formData.person, departments, peopleSkills, projectSkills);
     if (searchText.trim() === '') {
       setFilteredPeople(sorted);
     } else {
@@ -475,6 +511,40 @@ const AssignmentForm: React.FC = () => {
           <p className="text-[#969696] mt-1">
             Assign a team member to a project with weekly hour allocations for the next 12 weeks
           </p>
+          {/* Global Department info pill */}
+          {deptState.selectedDepartmentId != null && (
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-[#3e3e42] text-[#cbd5e1] border border-[#3e3e42]">
+                Filtered by: <strong className="text-[#e5e7eb]">
+                  {(() => {
+                    const d = departments.find(d => d.id === deptState.selectedDepartmentId);
+                    return d?.name || `Dept ${deptState.selectedDepartmentId}`;
+                  })()}
+                </strong>
+              </span>
+              <button
+                type="button"
+                className="px-2 py-1 rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]"
+                onClick={() => {
+                  const input = document.getElementById('global-dept-filter-input') as HTMLInputElement | null;
+                  input?.focus();
+                }}
+                title="Change department (Alt+Shift+D)"
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]"
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(window.location.href); } catch {}
+                }}
+                title="Copy link with current filter"
+              >
+                Copy link
+              </button>
+            </div>
+          )}
           {formData.person && (
             <div className="mt-2 text-sm text-slate-300">
               Total hours: <span className="font-semibold text-blue-400">{getTotalHours()}h</span>
@@ -500,6 +570,20 @@ const AssignmentForm: React.FC = () => {
               <label className="block text-sm font-medium text-[#cccccc] mb-2">
                 Person <span className="text-red-400">*</span>
               </label>
+              {/* Local override to view all departments */}
+              {deptState.selectedDepartmentId != null && (
+                <div className="mb-2 flex items-center gap-2 text-xs text-[#cbd5e1]">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!showAllDepartments}
+                      onChange={(e) => setShowAllDepartments(!e.target.checked)}
+                      className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-1"
+                    />
+                    Limit to current department
+                  </label>
+                </div>
+              )}
               <input
                 type="text"
                 value={personSearchText}

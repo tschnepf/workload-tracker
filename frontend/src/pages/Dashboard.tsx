@@ -12,6 +12,7 @@ import { dashboardApi, departmentsApi, personSkillsApi } from '../services/api';
 import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
 import { DashboardData, Department, PersonSkill } from '../types/models';
 import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
+import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 
 const Dashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -19,23 +20,28 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [weeksPeriod, setWeeksPeriod] = useState<number>(1);
   
-  // Department filtering state
+  // Department filtering state (global)
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>(''); // Empty string = 'All Departments'
+  const { state: deptState, setDepartment } = useDepartmentFilter();
   
   // Skills filtering state
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
   const [heatWeeks, setHeatWeeks] = useState<number>(4);
 
+  // Load dashboard when weeks or global department changes
   useEffect(() => {
     loadDashboard();
+  }, [weeksPeriod, deptState.selectedDepartmentId]);
+
+  // Load static data once
+  useEffect(() => {
     loadDepartments();
     loadPeopleSkills();
-  }, [weeksPeriod, selectedDepartment]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const departmentIdNum = selectedDepartment ? Number(selectedDepartment) : null;
-  const heatQuery = useCapacityHeatmap(departmentIdNum, heatWeeks, !loading);
+  const heatQuery = useCapacityHeatmap({ departmentId: deptState.selectedDepartmentId, includeChildren: deptState.includeChildren }, heatWeeks, !loading);
   const heatData = heatQuery.data ?? [];
   const heatLoading = heatQuery.isLoading;
   const heatFetching = heatQuery.isFetching;
@@ -62,7 +68,10 @@ const Dashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await dashboardApi.getDashboard(weeksPeriod, selectedDepartment || undefined);
+      const response = await dashboardApi.getDashboard(
+        weeksPeriod,
+        deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : undefined
+      );
       setData(response);
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard data');
@@ -216,9 +225,9 @@ const Dashboard: React.FC = () => {
             <p className="text-[#969696] mt-2">
               Overview of team utilization and workload allocation
               {weeksPeriod === 1 ? ' (current week)' : ` (${weeksPeriod} week average)`}
-              {selectedDepartment && (
+        {deptState.selectedDepartmentId != null && (
                 <span className="block mt-1">
-                  Filtered by: {departments.find(d => d.id?.toString() === selectedDepartment)?.name || 'Unknown Department'}
+          Filtered by: {departments.find(d => d.id === deptState.selectedDepartmentId)?.name || 'Unknown Department'}
                 </span>
               )}
             </p>
@@ -230,8 +239,11 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-3">
               <label className="text-sm text-[#969696]">Department:</label>
               <select
-                value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value)}
+                value={deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDepartment(val ? Number(val) : null);
+                }}
                 className="px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none min-w-[140px]"
               >
                 <option value="">All Departments</option>

@@ -7,30 +7,40 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle
-from django.db.models import Sum
+from django.db.models import Sum  # noqa: F401
 from .models import Assignment
+from departments.models import Department
 from .serializers import AssignmentSerializer
 from people.models import Person
-from projects.models import Project
+from projects.models import Project  # noqa: F401
 from .services import WorkloadRebalancingService
+
 
 class HotEndpointThrottle(UserRateThrottle):
     """Special throttle for hot endpoints like conflict checking"""
     scope = 'hot_endpoint'
+
 
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
     Assignment CRUD API with utilization tracking
     Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
     """
-    queryset = Assignment.objects.filter(is_active=True).select_related('person').order_by('-created_at')
+    queryset = (
+        Assignment.objects.filter(is_active=True)
+        .select_related('person', 'person__department', 'project')
+        .order_by('-created_at')
+    )
     serializer_class = AssignmentSerializer
     permission_classes = []  # Remove auth for Chunk 3 testing
     
-    def list(self, request):
-        """Get all assignments with person details and optional project filtering"""
+    def list(self, request, *args, **kwargs):
+        """
+        Get all assignments with person details and optional project
+        filtering.
+        """
         queryset = self.get_queryset()
-        
+
         # Filter by project if specified
         project_id = request.query_params.get('project')
         if project_id:
@@ -41,15 +51,43 @@ class AssignmentViewSet(viewsets.ModelViewSet):
                 return Response({
                     'error': 'Invalid project ID format'
                 }, status=status.HTTP_400_BAD_REQUEST)
-        
+        # Optional department filter via person.department (with
+        # include_children)
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    ids = set()
+                    stack = [dept_id]
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in (
+                            Department.objects
+                            .filter(parent_department_id=current)
+                            .values_list('id', flat=True)
+                        ):
+                            if d not in ids:
+                                stack.append(d)
+                    queryset = queryset.filter(
+                        person__department_id__in=list(ids)
+                    )
+                else:
+                    queryset = queryset.filter(person__department_id=dept_id)
+            except (TypeError, ValueError):
+                # Ignore invalid department filter; return unfiltered
+                pass
+
         # Check if bulk loading is requested (Phase 2 optimization)
         if request.query_params.get('all') == 'true':
-            # Return all assignments without pagination
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
-        
+
         serializer = self.get_serializer(queryset, many=True)
-        
         return Response({
             'results': serializer.data,
             'count': len(serializer.data)
@@ -61,7 +99,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             assignment = serializer.save()
             return Response(
-                self.get_serializer(assignment).data, 
+                self.get_serializer(assignment).data,
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -78,22 +116,33 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     
-    @action(detail=False, methods=['post'], throttle_classes=[HotEndpointThrottle])
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[HotEndpointThrottle],
+    )
     def check_conflicts(self, request):
         """
-        Check assignment conflicts for a person in a specific week
-        Optimized to prevent N+1 queries by fetching all person assignments in single query
+        Check assignment conflicts for a person in a specific week.
+        Optimized to prevent N+1 queries by fetching all person assignments
+        in a single query.
         """
         try:
             person_id = request.data.get('personId')
-            project_id = request.data.get('projectId') 
+            project_id = request.data.get('projectId')
             week_key = request.data.get('weekKey')
             proposed_hours = float(request.data.get('proposedHours', 0))
             
             if not all([person_id, project_id, week_key]):
-                return Response({
-                    'error': 'Missing required fields: personId, projectId, weekKey'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        'error': (
+                            'Missing required fields: personId, projectId, '
+                            'weekKey'
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             
             # Get person and validate capacity
             try:
@@ -105,7 +154,8 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             
             person_capacity = person.weekly_capacity or 36
             
-            # Get ALL assignments for this person in a single query with project info
+            # Get ALL assignments for this person in a single query
+            # with project info
             person_assignments = Assignment.objects.filter(
                 person_id=person_id,
                 is_active=True
@@ -123,7 +173,11 @@ class AssignmentViewSet(viewsets.ModelViewSet):
                 
                 if week_hours > 0:
                     total_hours += week_hours
-                    project_name = assignment.project.name if assignment.project else f"Project {assignment.project_id}"
+                    project_name = (
+                        assignment.project.name
+                        if assignment.project
+                        else f"Project {assignment.project_id}"
+                    )
                     
                     # Group by project
                     if project_name not in project_assignments:
@@ -145,10 +199,13 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             
             if has_conflict:
                 overage_hours = total_with_proposed - person_capacity
-                overage_percent = round((total_with_proposed / person_capacity) * 100)
+                overage_percent = round(
+                    (total_with_proposed / person_capacity) * 100
+                )
                 warnings.append(
                     f"{person.name} would be at {overage_percent}% capacity "
-                    f"({total_with_proposed}h/{person_capacity}h) - {overage_hours}h over limit"
+                    f"({total_with_proposed}h/{person_capacity}h) - "
+                    f"{overage_hours}h over limit"
                 )
                 
                 # Add project breakdown if there are existing assignments
@@ -179,18 +236,22 @@ class AssignmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def rebalance_suggestions(self, request):
-        """Suggest non-destructive rebalancing ideas across the next N weeks (default 12).
+        """Suggest non-destructive rebalancing ideas across the next N weeks
+        (default 12).
 
-        Heuristic:
-        - Overallocated: utilization > 100% (based on 1-week snapshot)
-        - Underutilized: utilization < 70%
-        - Pair over with under and propose shifting 4–8 hours
-        Returns at most 20 suggestions.
+            Heuristic:
+            - Overallocated: utilization > 100% (based on 1-week snapshot)
+            - Underutilized: utilization < 70%
+            - Pair over with under and propose shifting 4–8 hours
+            Returns at most 20 suggestions.
         """
         try:
             horizon_weeks = int(request.query_params.get('weeks', 12))
         except ValueError:
             horizon_weeks = 12
 
-        suggestions = WorkloadRebalancingService.generate_rebalance_suggestions(weeks=horizon_weeks)
+        suggestions = (
+            WorkloadRebalancingService
+            .generate_rebalance_suggestions(weeks=horizon_weeks)
+        )
         return Response(suggestions)

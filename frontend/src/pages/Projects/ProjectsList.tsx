@@ -21,6 +21,7 @@ interface PersonWithAvailability extends Person {
   hasSkillMatch?: boolean;
 }
 import Sidebar from '@/components/layout/Sidebar';
+import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -949,24 +950,7 @@ const ProjectsList: React.FC = () => {
     setSelectedIndex(index);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'active': return 'text-emerald-400';
-      case 'active_ca': return 'text-blue-400';
-      case 'planning': return 'text-blue-400';
-      case 'on_hold': return 'text-amber-400';
-      case 'completed': return 'text-slate-400';
-      case 'cancelled': return 'text-red-400';
-      default: return 'text-slate-400';
-    }
-  };
-
-  const formatStatus = (status: string) => {
-    if (status === 'active_ca') return 'Active CA';
-    return status?.split('_').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ') || 'Unknown';
-  };
+  // getStatusColor/formatStatus now imported from shared StatusBadge
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -1279,9 +1263,7 @@ const ProjectsList: React.FC = () => {
                     
                     {/* Status */}
                     <div className="col-span-2">
-                      <span className={`${getStatusColor(project.status || '')} px-2 py-0.5 rounded text-xs`}>
-                        {formatStatus(project.status || '')}
-                      </span>
+                      <StatusBadge status={project.status || ''} />
                     </div>
                   </div>
                 ))
@@ -1327,9 +1309,11 @@ const ProjectsList: React.FC = () => {
                                   onClick={() => handleStatusChange(status)}
                                   className={`w-full text-left px-3 py-2 text-sm hover:bg-[#3e3e42] transition-colors first:rounded-t last:rounded-b ${
                                     selectedProject.status === status ? 'bg-[#007acc]/20' : ''
-                                  } ${getStatusColor(status)}`}
+                                  }`}
                                 >
-                                  {formatStatus(status)}
+                                  <span className="flex items-center gap-2">
+                                    <StatusBadge status={status} />
+                                  </span>
                                 </button>
                               ))}
                             </div>
