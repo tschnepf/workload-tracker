@@ -5,6 +5,7 @@ Django settings for workload-tracker project.
 import os
 import dj_database_url
 from pathlib import Path
+from datetime import timedelta
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
@@ -39,6 +40,7 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'silk',
 ]
 
@@ -53,6 +55,7 @@ LOCAL_APPS = [
     'skills',
     'monitoring',
     'roles',
+    'accounts',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -137,6 +140,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],
@@ -146,7 +153,17 @@ REST_FRAMEWORK = {
     'MAX_PAGE_SIZE': 500,  # Safety cap to prevent excessive memory usage
     'DEFAULT_THROTTLE_RATES': {
         'hot_endpoint': '300/hour',  # Special limit for hot endpoints only
+        'login': '10/min',
     }
+}
+
+# SimpleJWT configuration
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 # Cache configuration: LocMem by default; Redis if REDIS_URL provided

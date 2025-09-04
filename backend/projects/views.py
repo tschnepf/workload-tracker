@@ -17,7 +17,7 @@ import time
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.filter(is_active=True)
     serializer_class = ProjectSerializer
-    permission_classes = [permissions.AllowAny]
+    # Use global default permissions (IsAuthenticated)
     
     def list(self, request, *args, **kwargs):
         """Get all projects with conditional request support (ETag/Last-Modified) and bulk loading"""
@@ -67,7 +67,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if last_modified:
             response['ETag'] = f'"{etag}"'
             response['Last-Modified'] = http_date(last_modified.timestamp())
-            response['Cache-Control'] = 'public, max-age=30'  # 30 seconds cache
+            response['Cache-Control'] = 'private, max-age=30'  # 30 seconds cache for authenticated responses
         
         return response
     
@@ -280,7 +280,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         response['ETag'] = f'"{etag}"'
         if last_modified:
             response['Last-Modified'] = http_date(last_modified.timestamp())
-        response['Cache-Control'] = 'public, max-age=30'
+        response['Cache-Control'] = 'private, max-age=30'
         return response
     
     @action(detail=False, methods=['post'])

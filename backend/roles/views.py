@@ -23,7 +23,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = []  # Remove auth requirement to match other APIs
+    # Use global default permissions (IsAuthenticated)
     
     def get_queryset(self):
         """Filter queryset based on query parameters"""

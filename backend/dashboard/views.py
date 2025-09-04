@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Sum, Q
 from datetime import date, timedelta
 from people.models import Person
@@ -9,7 +9,7 @@ from assignments.models import Assignment
 
 class DashboardView(APIView):
     """Team dashboard with utilization metrics and overview"""
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         # Get weeks parameter from query string (default to 1)

@@ -34,7 +34,6 @@ class PersonViewSet(viewsets.ModelViewSet):
     """
     queryset = Person.objects.all().order_by('-created_at')
     serializer_class = PersonSerializer
-    permission_classes = []  # Remove auth requirement for Chunk 2 testing
     
     def get_queryset(self):
         """Filter active people by default"""
@@ -113,7 +112,7 @@ class PersonViewSet(viewsets.ModelViewSet):
         if last_modified:
             response['ETag'] = f'"{etag}"'
             response['Last-Modified'] = http_date(last_modified.timestamp())
-            response['Cache-Control'] = 'public, max-age=30'  # 30 seconds cache
+            response['Cache-Control'] = 'private, max-age=30'  # 30 seconds cache for authenticated responses
         
         return response
 

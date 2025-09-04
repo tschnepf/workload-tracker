@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 from django.utils import timezone
@@ -13,6 +14,10 @@ from deliverables.models import Deliverable
 class ProjectFilterMetadataTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        # Authenticate client
+        User = get_user_model()
+        self.user = User.objects.create_user(username='tester', password='pass')
+        self.client.force_authenticate(user=self.user)
         # Endpoint path as mounted in config.urls -> /api/projects/ + action url_path
         self.url = "/api/projects/filter-metadata/"
 
@@ -216,4 +221,4 @@ class ProjectFilterMetadataTests(TestCase):
         self.assertIsNotNone(new_etag)
         self.assertNotEqual(new_etag, etag)
         # Cache-Control should be set
-        self.assertEqual(resp4.headers.get('Cache-Control'), 'public, max-age=30')
+        self.assertEqual(resp4.headers.get('Cache-Control'), 'private, max-age=30')

@@ -135,6 +135,19 @@ export function ensureInitialized() {
 }
 
 /**
+ * Apply server-provided defaults (used after auth hydration).
+ * Respects URL precedence: only applies when no department is currently selected.
+ * Does not update the URL (non-user initiated).
+ */
+export function applyServerDefaults(defaults: Partial<DepartmentFilterState>) {
+  if (state.selectedDepartmentId != null) return; // already selected via URL or local
+  const nextId = defaults.selectedDepartmentId ?? null;
+  const nextInclude = defaults.includeChildren ?? false;
+  if (nextId == null) return;
+  setState({ selectedDepartmentId: nextId, includeChildren: !!nextInclude }, { userInitiated: false });
+}
+
+/**
  * UI params helper for pages (keeps undefined when unfiltered)
  */
 export function buildDeptUiParams(current: DepartmentFilterState): {

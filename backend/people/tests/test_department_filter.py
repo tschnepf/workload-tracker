@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -10,6 +11,10 @@ from people.models import Person
 class PeopleDepartmentFilterTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        # Authenticate client
+        User = get_user_model()
+        self.user = User.objects.create_user(username='tester', password='pass')
+        self.client.force_authenticate(user=self.user)
         # Dept tree: X -> Y, sibling Z
         self.dept_x = Department.objects.create(name='X')
         self.dept_y = Department.objects.create(

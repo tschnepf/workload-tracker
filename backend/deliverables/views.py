@@ -1,4 +1,4 @@
-﻿"""
+"""
 Deliverable views - STANDARDS COMPLIANT API endpoints
 Follows R2-REBUILD-STANDARDS.md naming conventions
 """
@@ -24,7 +24,7 @@ class DeliverableViewSet(viewsets.ModelViewSet):
     Supports filtering by project and manual reordering
     """
     serializer_class = DeliverableSerializer
-    permission_classes = [permissions.AllowAny]  # Match existing project permissions
+    # Use global default permissions (IsAuthenticated)
     
     def get_queryset(self):
         """Filter deliverables by project if specified"""
@@ -216,7 +216,7 @@ class DeliverableViewSet(viewsets.ModelViewSet):
     def staffing_summary(self, request, pk=None):
         """Return derived staffing for a deliverable from Assignment.weekly_hours.
 
-        Default window: 6 weeks prior OR between previous and current deliverable (exclusiveâ†’inclusive).
+        Default window: 6 weeks prior OR between previous and current deliverable (exclusive→inclusive).
         Optional override: ?weeks=6 to force a fixed lookback window.
 
         Returns array items per person with >0 hours in window on the deliverable's project:
@@ -310,7 +310,7 @@ class DeliverableAssignmentViewSet(viewsets.ModelViewSet):
     """CRUD and filter endpoints for deliverable-person weekly hour links."""
 
     serializer_class = DeliverableAssignmentSerializer
-    permission_classes = [permissions.AllowAny]
+    # Use global default permissions (IsAuthenticated)
 
     def get_queryset(self):
         return (

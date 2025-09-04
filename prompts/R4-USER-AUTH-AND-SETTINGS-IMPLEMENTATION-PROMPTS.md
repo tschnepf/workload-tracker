@@ -20,6 +20,25 @@ Follow these prompts exactly. Implement proper, production-grade patterns only -
 
 ---
 
+## Prompt 0A - Preflight and Rollout Checklist
+
+- Goal: Avoid common integration errors and stage rollout safely.
+- Steps (Backend):
+  - Confirm dependencies installed and enabled: `rest_framework`, `rest_framework_simplejwt`, `rest_framework_simplejwt.token_blacklist`, `corsheaders`.
+  - Add `SIMPLE_JWT` lifetimes, throttle classes/rates (see Prompt 1).
+  - Add throttled JWT views and URLs (Prompts 2/2A) and `/health`.
+  - Create `accounts` app, migrations, and mandatory backfill migration (Prompts 3/3A). Run `python manage.py migrate` before exposing `/api/auth/me`.
+  - Ensure signals import from `accounts.apps.AccountsConfig.ready()` so `UserProfile` auto-creates on user creation.
+  - Verify list endpoints that set cache headers use `Cache-Control: private, max-age=30` once auth is required.
+  - Steps (Frontend):
+    - All Node/npm commands must run inside the frontend container, e.g., `docker-compose exec frontend npm ci`, `docker-compose exec frontend npm run build`.
+    - Add `src/utils/auth.ts` with `getAccessToken()`; wire header injection; implement single-flight refresh with `refreshPromise` and retry once; add hydration state and cross-tab sync.
+    - Add `/login` route and guard that waits for hydration.
+- Rollout order:
+  1) Backend changes + migrate + health check. 2) Frontend auth store + login page + header injection. 3) Flip auth enforcement (Prompt 6). Use `AUTH_ENFORCED` env flag if you need staging.
+
+---
+
 ## Prompt 1 - Configure SimpleJWT Lifetimes and Blacklist
 
 - Goal: Enforce the chosen token policy globally.
@@ -301,17 +320,62 @@ Follow these prompts exactly. Implement proper, production-grade patterns only -
   - Optional: introduce an `AUTH_ENFORCED` env flag to stage the switch to `IsAuthenticated` if frontend and backend cannot deploy in lockstep; otherwise flip immediately.
   - Add a `create_dev_user` management command for local development (e.g., username/password args) to simplify setup.
   - Add basic monitoring/logging for auth: failed login attempts (rate spikes), token refresh failures, and suspicious activity patterns.
+  - Docker/containers:
+    - Expose `/health` for container health checks; add a compose `healthcheck` using `curl http://backend:8000/health`.
+    - Run `python manage.py migrate` in the container entrypoint before starting the app.
+    - Ensure client IPs are forwarded by the reverse proxy so throttling and logging see real IPs (`X-Forwarded-For`); set `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` and `USE_X_FORWARDED_HOST = True` when behind TLS-terminating proxy.
+    - Set environment variables for origins and hosts (`ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`) matching container DNS names and public domains.
+    - Keep container clocks in sync (host time) to avoid JWT `exp` skew; ensure timezone packages installed if needed.
+    - Log to stdout/stderr for container log collection.
+    - Run all interactive commands through compose: `docker-compose exec backend python manage.py ...`, `docker-compose exec frontend npm ...`.
+    - Any new packages must be added to `backend/requirements.txt` and `frontend/package.json` so builds install them automatically.
 - Acceptance:
   - App starts with migrations applied; login works in production environment.
 
 ---
 
-## Prompt 18 - Post-Phase Tightening (Optional Follow-ups)
+## Prompt 18 - People Search (Server-side Typeahead)
 
-- Goal: Future hardening without changing contracts.
-- Ideas:
-  - Move refresh token to httpOnly SameSite=Strict cookie; keep access token in memory.
-  - Add blacklist endpoint on logout.
-  - Add SSO (e.g., SAML/OIDC) while keeping `UserProfile` and settings contract intact.
-  - Optimize People autocomplete: add a server-side search endpoint to avoid fetching the entire list as the dataset grows.
+- Goal: Replace large client-side dropdowns with a fast, authenticated server-side search for People, suitable for large datasets.
 
+- Backend (Django + DRF):
+  - Add `@action(detail=False, methods=['get'], url_path='search')` on `PersonViewSet` in `backend/people/views.py`.
+    - Params: `q` (required, min length 2), `limit` (optional, default 20, max 50).
+    - Behavior: If `len(q) < 2`, return 400 with `{ detail: 'Query too short' }`.
+    - Query: filter `name__icontains=q` OR `email__icontains=q`, order by `name`.
+    - Projection: return minimal fields only (e.g., `id`, `name`, `department_id`).
+    - Throttling: use existing `HotEndpointThrottle`.
+    - Permissions: rely on global `IsAuthenticated`.
+  - Indexes (migration):
+    - Add DB indexes to support case-insensitive search efficiently:
+      - Functional index on `Lower('name')`.
+      - Functional index on `Lower('email')` (if email is commonly searched).
+    - Create a Django migration in `people` that adds these `models.Index` entries.
+  - Docker: run migrations inside the container: `docker-compose exec backend python manage.py migrate`.
+  - Acceptance:
+    - `GET /api/people/search/?q=jo&limit=10` returns up to 10 matches with minimal fields, 401 when unauthenticated.
+    - Requests with `q` shorter than 2 return 400; `limit` is capped at 50.
+
+- Frontend (React + TS):
+  - API: add `peopleApi.search = (q: string, limit = 20) => fetchApi<{ id: number; name: string; department?: number }[]>("/people/search/?q=...&limit=...")`.
+  - UI: on Settings page, replace the Person dropdown with an async typeahead:
+    - Input debounced (250–300ms); show a loading state and results panel.
+    - Minimum 2 chars to search; show a hint if fewer.
+    - Select a result to set `personId`; keep a “None (Unlink)” option.
+    - On Save, call `authApi.linkPerson(personId | null)` and `reloadProfile()`; handle errors (409/403).
+  - Accessibility: allow keyboard navigation (up/down/enter) and escape to close results.
+  - Package management: no new deps required; ensure changes are committed so Docker images rebuild with updated code.
+
+- Testing & Validation:
+  - Backend tests (Django):
+    - Auth required → 401 when unauthenticated.
+    - `q` min length validation → 400 when `q` shorter than 2.
+    - Limit cap enforcement (e.g., `limit=500` still returns max 50).
+    - Case-insensitive matches on name/email; returns minimal fields only.
+  - Frontend smoke:
+    - Type query → results appear; select person → Save → linked person updates in Settings (and in `/auth/me`).
+    - Unlink flow works; handles errors (already linked, email mismatch).
+
+- Performance & Throttling:
+  - Debounce client requests; don’t issue requests for empty/short queries.
+  - Rely on `HotEndpointThrottle` server-side; adjust rate if needed in settings.

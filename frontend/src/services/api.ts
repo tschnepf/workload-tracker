@@ -4,6 +4,8 @@
  */
 
 import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse } from '@/types/models';
+import { getAccessToken } from '@/utils/auth';
+import { refreshAccessToken as refreshAccessTokenSafe } from '@/store/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -30,13 +32,118 @@ function makeCacheKey(url: string, method?: string) {
   return `${method || 'GET'} ${url}`;
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
+function base64UrlDecode(input: string): string {
+  // Replace URL-safe chars
+  const base64 = input.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(input.length / 4) * 4, '=');
+  try {
+    // atob is available in browsers; Node in dev may polyfill via Vite
+    return typeof atob !== 'undefined' ? atob(base64) : Buffer.from(base64, 'base64').toString('binary');
+  } catch {
+    return '';
+  }
+}
+
+function getTokenExpSeconds(token: string | null): number | null {
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const json = base64UrlDecode(parts[1]);
+    const payload = JSON.parse(json);
+    const exp = payload && payload.exp;
+    return Number.isFinite(exp) ? exp : null;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureAccessTokenFresh(): Promise<void> {
+  const token = getAccessToken();
+  const exp = getTokenExpSeconds(token);
+  if (!exp) return; // no token or can't parse
+  const nowSec = Math.floor(Date.now() / 1000);
+  // If token expires in less than 120s, refresh proactively
+  if (exp - nowSec < 120) {
+    if (!refreshPromise) refreshPromise = refreshAccessTokenSafe();
+    try {
+      await refreshPromise;
+    } finally {
+      refreshPromise = null;
+    }
+  }
+}
+
+async function doFetch<T>(endpoint: string, options: RequestInit, isRetry = false): Promise<T> {
+  await ensureAccessTokenFresh();
+  const url = `${API_BASE_URL}${endpoint}`;
+  const token = getAccessToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  } as Record<string, string>;
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (IS_DEV) {
+    console.log(' [DEBUG] fetchApi response:', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+  }
+
+  if (response.status === 401 && !isRetry) {
+    try {
+      if (!refreshPromise) refreshPromise = (async () => {
+        try {
+          return await refreshAccessTokenSafe();
+        } catch {
+          // minimal backoff retry
+          await new Promise((r) => setTimeout(r, 300));
+          return await refreshAccessTokenSafe();
+        }
+      })();
+      await refreshPromise;
+    } finally {
+      refreshPromise = null;
+    }
+    // Retry once with new token
+    return doFetch<T>(endpoint, options, true);
+  }
+
+  if (!response.ok) {
+    let errorMessage = `HTTP ${response.status}`;
+    let errorData: any = null;
+    try {
+      errorData = await response.json();
+      errorMessage = errorData.message || errorData.detail || errorMessage;
+      if (IS_DEV) console.error(' [DEBUG] API Error Response:', errorData);
+    } catch (e) {
+      errorMessage = response.statusText || errorMessage;
+      if (IS_DEV) console.error(' [DEBUG] API Error (no JSON):', errorMessage);
+    }
+    throw new ApiError(errorMessage, response.status, errorData);
+  }
+
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    return undefined as T;
+  }
+  const text = await response.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  
-  // Debug logging for all API requests
   if (IS_DEV) {
     try {
       console.log(' [DEBUG] fetchApi called:', {
@@ -46,64 +153,13 @@ async function fetchApi<T>(
         body: options.body,
         bodyParsed: typeof options.body === 'string' ? JSON.parse(options.body) : null,
       });
-    } catch {
-      // ignore body parse errors in dev logging
-    }
+    } catch {}
   }
-  
   try {
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
-    
-    if (IS_DEV) {
-      console.log(' [DEBUG] fetchApi response:', {
-        url,
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries()),
-      });
-    }
-    
-    if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}`;
-      let errorData = null;
-      try {
-        errorData = await response.json();
-        errorMessage = errorData.message || errorData.detail || errorMessage;
-        if (IS_DEV) console.error(' [DEBUG] API Error Response:', errorData);
-      } catch (e) {
-        // If JSON parsing fails, use status text
-        errorMessage = response.statusText || errorMessage;
-        if (IS_DEV) console.error(' [DEBUG] API Error (no JSON):', errorMessage);
-      }
-      throw new ApiError(errorMessage, response.status, errorData);
-    }
-
-    // Handle empty responses (like DELETE operations)
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      return undefined as T;
-    }
-
-    // Check if response body is empty
-    const text = await response.text();
-    if (!text) {
-      if (IS_DEV) console.log(' [DEBUG] Empty response body, returning undefined');
-      return undefined as T;
-    }
-
-    const result = JSON.parse(text);
-    if (IS_DEV) console.log(' [DEBUG] fetchApi success result:', result);
-    return result;
+    return await doFetch<T>(endpoint, options);
   } catch (error) {
     if (IS_DEV) console.error(' [DEBUG] Fetch error:', error);
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+    if (error instanceof TypeError && (error as any).message?.includes('fetch')) {
       throw new ApiError('Network error - unable to reach server', 0);
     }
     throw error;
@@ -667,5 +723,15 @@ export const deliverableAssignmentsApi = {
   delete: (id: number) =>
     fetchApi<void>(`/deliverables/assignments/${id}/`, {
       method: 'DELETE',
+    }),
+};
+
+// Auth/Accounts API
+export const authApi = {
+  // Link or unlink the current user to a person
+  linkPerson: (personId: number | null) =>
+    fetchApi<{ id: number; user: any; person: any; settings: any }>(`/auth/link_person/`, {
+      method: 'POST',
+      body: JSON.stringify({ person_id: personId }),
     }),
 };

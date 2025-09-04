@@ -26,6 +26,8 @@ const PerformanceDashboard = React.lazy(() => import('./pages/Performance/Perfor
 const Settings = React.lazy(() => import('./pages/Settings/Settings'));
 const MilestoneCalendar = React.lazy(() => import('./pages/Deliverables/Calendar'));
 const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'));
+const Login = React.lazy(() => import('./pages/Auth/Login'));
+import { RequireAuth } from '@/components/auth/RequireAuth';
 
 // Loading component for Suspense fallback
 const PageLoader: React.FC = () => (
@@ -73,10 +75,13 @@ class LazyLoadErrorBoundary extends React.Component<
   }
 }
 
-// Enable VSCode-style dark theme globally
-document.documentElement.classList.add('dark');
+import { useDeptServerDefaultsOnce } from '@/hooks/useDeptServerDefaults';
+import { useThemeFromSettings } from '@/hooks/useThemeFromSettings';
 
 function App() {
+  // Apply server-provided defaults and theme after auth hydration
+  useDeptServerDefaultsOnce();
+  useThemeFromSettings();
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -87,27 +92,32 @@ function App() {
         <LazyLoadErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/people" element={<PeopleList />} />
-              <Route path="/people/new" element={<PersonForm />} />
-              <Route path="/people/:id/edit" element={<PersonForm />} />
-              <Route path="/departments" element={<DepartmentsList />} />
-              <Route path="/departments/manager" element={<ManagerDashboard />} />
-              <Route path="/departments/hierarchy" element={<HierarchyView />} />
-              <Route path="/departments/reports" element={<ReportsView />} />
-              <Route path="/assignments" element={<AssignmentGrid />} />
-              <Route path="/assignments/list" element={<AssignmentList />} />
-              <Route path="/assignments/new" element={<AssignmentForm />} />
-              <Route path="/assignments/:id/edit" element={<AssignmentForm />} />
-              <Route path="/projects" element={<Projects />} />
-              <Route path="/projects/new" element={<ProjectForm />} />
-              <Route path="/projects/:id/edit" element={<ProjectForm />} />
-              <Route path="/skills" element={<SkillsDashboard />} />
-              <Route path="/performance" element={<PerformanceDashboard />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/deliverables/calendar" element={<MilestoneCalendar />} />
-              {/* More routes will be added in later chunks */}              <Route path="/reports/forecast" element={<TeamForecastPage />} />
+              {/* Public route */}
+              <Route path="/login" element={<Login />} />
+
+              {/* Protected routes */}
+              <Route path="/" element={<RequireAuth><Navigate to="/dashboard" replace /></RequireAuth>} />
+              <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+              <Route path="/people" element={<RequireAuth><PeopleList /></RequireAuth>} />
+              <Route path="/people/new" element={<RequireAuth><PersonForm /></RequireAuth>} />
+              <Route path="/people/:id/edit" element={<RequireAuth><PersonForm /></RequireAuth>} />
+              <Route path="/departments" element={<RequireAuth><DepartmentsList /></RequireAuth>} />
+              <Route path="/departments/manager" element={<RequireAuth><ManagerDashboard /></RequireAuth>} />
+              <Route path="/departments/hierarchy" element={<RequireAuth><HierarchyView /></RequireAuth>} />
+              <Route path="/departments/reports" element={<RequireAuth><ReportsView /></RequireAuth>} />
+              <Route path="/assignments" element={<RequireAuth><AssignmentGrid /></RequireAuth>} />
+              <Route path="/assignments/list" element={<RequireAuth><AssignmentList /></RequireAuth>} />
+              <Route path="/assignments/new" element={<RequireAuth><AssignmentForm /></RequireAuth>} />
+              <Route path="/assignments/:id/edit" element={<RequireAuth><AssignmentForm /></RequireAuth>} />
+              <Route path="/projects" element={<RequireAuth><Projects /></RequireAuth>} />
+              <Route path="/projects/new" element={<RequireAuth><ProjectForm /></RequireAuth>} />
+              <Route path="/projects/:id/edit" element={<RequireAuth><ProjectForm /></RequireAuth>} />
+              <Route path="/skills" element={<RequireAuth><SkillsDashboard /></RequireAuth>} />
+              <Route path="/performance" element={<RequireAuth><PerformanceDashboard /></RequireAuth>} />
+              <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+              <Route path="/deliverables/calendar" element={<RequireAuth><MilestoneCalendar /></RequireAuth>} />
+              {/* More routes will be added in later chunks */}
+              <Route path="/reports/forecast" element={<RequireAuth><TeamForecastPage /></RequireAuth>} />
             </Routes>
 </Suspense>
         </LazyLoadErrorBoundary>
@@ -119,4 +129,3 @@ function App() {
 }
 
 export default App;
-

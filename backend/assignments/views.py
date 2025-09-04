@@ -32,7 +32,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         .order_by('-created_at')
     )
     serializer_class = AssignmentSerializer
-    permission_classes = []  # Remove auth for Chunk 3 testing
+    # Use global default permissions (IsAuthenticated)
     
     def list(self, request, *args, **kwargs):
         """

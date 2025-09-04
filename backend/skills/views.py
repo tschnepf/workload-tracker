@@ -13,7 +13,7 @@ class SkillTagViewSet(viewsets.ModelViewSet):
     """CRUD operations for skill tags"""
     queryset = SkillTag.objects.filter(is_active=True)
     serializer_class = SkillTagSerializer
-    permission_classes = []  # Remove auth requirement for Chunk 6 testing
+    # Use global default permissions (IsAuthenticated)
     
     def get_queryset(self):
         """Filter by search term if provided"""
@@ -29,7 +29,7 @@ class PersonSkillViewSet(viewsets.ModelViewSet):
     """CRUD operations for person skills"""
     queryset = PersonSkill.objects.all()
     serializer_class = PersonSkillSerializer
-    permission_classes = []  # Remove auth requirement for Chunk 6 testing
+    # Use global default permissions (IsAuthenticated)
     
     def get_queryset(self):
         """Filter by person if provided"""

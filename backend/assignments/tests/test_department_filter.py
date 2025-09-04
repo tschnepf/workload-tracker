@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from datetime import date, timedelta
@@ -18,6 +19,10 @@ def sunday_of_week(d):
 class AssignmentDepartmentFilterTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        # Authenticate client
+        User = get_user_model()
+        self.user = User.objects.create_user(username='tester', password='pass')
+        self.client.force_authenticate(user=self.user)
         # Departments: A -> B -> C, and sibling D
         self.dept_a = Department.objects.create(name='A')
         self.dept_b = Department.objects.create(
