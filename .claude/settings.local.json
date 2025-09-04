@@ -41,7 +41,8 @@
       "Bash(docker system prune:*)",
       "Bash(grep:*)",
       "Bash(chmod:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": [],
