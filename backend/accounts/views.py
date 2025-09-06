@@ -1,7 +1,7 @@
 from django.db import transaction, IntegrityError
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.throttling import UserRateThrottle
@@ -9,6 +9,8 @@ from rest_framework.throttling import UserRateThrottle
 from .models import UserProfile
 from .serializers import UserProfileSerializer
 from people.models import Person
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 
 
 @api_view(["GET"])
@@ -92,3 +94,192 @@ def link_person(request):
     serializer = UserProfileSerializer(profile)
     return Response(serializer.data)
 
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([UserRateThrottle])
+def change_password(request):
+    """Change password for the authenticated user.
+
+    Body: { "currentPassword": str, "newPassword": str }
+    """
+    current = request.data.get("currentPassword")
+    new = request.data.get("newPassword")
+    if not current or not new:
+        return Response({"detail": "currentPassword and newPassword are required."}, status=status.HTTP_400_BAD_REQUEST)
+    if not request.user.check_password(current):
+        return Response({"detail": "Current password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        validate_password(new, user=request.user)
+    except Exception as e:
+        return Response({"detail": "Invalid password.", "errors": [str(x) for x in (e.error_list if hasattr(e, 'error_list') else [e])]}, status=status.HTTP_400_BAD_REQUEST)
+    request.user.set_password(new)
+    request.user.save(update_fields=["password"])
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminUser])
+@throttle_classes([UserRateThrottle])
+def create_user(request):
+    """Create a new user (staff only) and optionally link to a Person.
+
+    Body: { "username": str, "email": str, "password": str, "personId": number|null, "role": "admin"|"manager"|"user" }
+    """
+    User = get_user_model()
+    username = (request.data.get("username") or "").strip()
+    email = (request.data.get("email") or "").strip()
+    password = request.data.get("password")
+    person_id = request.data.get("personId")
+    role = (request.data.get("role") or "user").strip().lower()
+
+    if not username or not password:
+        return Response({"detail": "username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+    if User.objects.filter(username=username).exists():
+        return Response({"detail": "Username already exists."}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        validate_password(password)
+    except Exception as e:
+        return Response({"detail": "Invalid password.", "errors": [str(x) for x in (e.error_list if hasattr(e, 'error_list') else [e])]}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.create_user(username=username, email=email)
+    user.set_password(password)
+    # Assign role
+    from django.contrib.auth.models import Group
+    if role == 'admin':
+        user.is_staff = True
+        user.save(update_fields=["password", "is_staff"])
+        try:
+            admin_group = Group.objects.get(name='Admin')
+            user.groups.add(admin_group)
+        except Group.DoesNotExist:
+            pass
+    elif role == 'manager':
+        user.is_staff = False
+        user.save(update_fields=["password", "is_staff"])
+        try:
+            mgr_group = Group.objects.get(name='Manager')
+            user.groups.add(mgr_group)
+        except Group.DoesNotExist:
+            pass
+    else:
+        user.is_staff = False
+        user.save(update_fields=["password", "is_staff"])
+        try:
+            user_group = Group.objects.get(name='User')
+            user.groups.add(user_group)
+        except Group.DoesNotExist:
+            pass
+
+    # Ensure profile exists
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+
+    # Optionally link to Person (staff override allowed; still enforce uniqueness)
+    if person_id not in (None, ""):
+        try:
+            with transaction.atomic():
+                person = get_object_or_404(Person, pk=person_id)
+                # Uniqueness
+                existing = UserProfile.objects.select_for_update().filter(person_id=person.id).exclude(user_id=user.id)
+                if existing.exists():
+                    return Response({"detail": "This person is already linked to another user."}, status=status.HTTP_409_CONFLICT)
+                profile.person = person
+                profile.save(update_fields=["person", "updated_at"])
+        except IntegrityError:
+            return Response({"detail": "Unable to link. This person may already be linked."}, status=status.HTTP_409_CONFLICT)
+
+    ser = UserProfileSerializer(profile)
+    return Response(ser.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminUser])
+@throttle_classes([UserRateThrottle])
+def set_password(request):
+    """Set password for a target user (staff only).
+
+    Body: { "userId": number, "newPassword": str }
+    """
+    user_id = request.data.get("userId")
+    new = request.data.get("newPassword")
+    if not user_id or not new:
+        return Response({"detail": "userId and newPassword are required."}, status=status.HTTP_400_BAD_REQUEST)
+    User = get_user_model()
+    target = get_object_or_404(User, pk=user_id)
+    try:
+        validate_password(new, user=target)
+    except Exception as e:
+        return Response({"detail": "Invalid password.", "errors": [str(x) for x in (e.error_list if hasattr(e, 'error_list') else [e])]}, status=status.HTTP_400_BAD_REQUEST)
+    target.set_password(new)
+    target.save(update_fields=["password"])
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["GET"]) 
+@permission_classes([IsAuthenticated, IsAdminUser])
+@throttle_classes([UserRateThrottle])
+def list_users(request):
+    """List all users with role and linked person (admin only)."""
+    User = get_user_model()
+    qs = (
+        User.objects.all()
+        .select_related('profile__person')
+        .prefetch_related('groups')
+        .order_by('username')
+    )
+
+    results = []
+    for u in qs:
+        try:
+            group_names = set(u.groups.values_list('name', flat=True))
+        except Exception:
+            group_names = set()
+        if u.is_staff or u.is_superuser:
+            role = 'admin'
+        elif 'Manager' in group_names:
+            role = 'manager'
+        else:
+            role = 'user'
+
+        person = None
+        if getattr(u, 'profile', None) and getattr(u.profile, 'person', None):
+            person = {
+                'id': u.profile.person.id,
+                'name': u.profile.person.name,
+            }
+
+        results.append({
+            'id': u.id,
+            'username': u.username,
+            'email': u.email,
+            'is_staff': u.is_staff,
+            'is_superuser': u.is_superuser,
+            'groups': sorted(list(group_names)),
+            'role': role,
+            'person': person,
+        })
+
+    return Response(results)
+
+
+@api_view(["DELETE"]) 
+@permission_classes([IsAuthenticated, IsAdminUser])
+@throttle_classes([UserRateThrottle])
+def delete_user(request, user_id: int):
+    """Delete a user account (admin only).
+
+    Guards:
+    - Prevent deleting own account.
+    - Prevent deleting a superuser unless the requester is a superuser.
+    """
+    User = get_user_model()
+    target = get_object_or_404(User, pk=user_id)
+
+    if target.id == request.user.id:
+        return Response({"detail": "You cannot delete your own account."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if target.is_superuser and not request.user.is_superuser:
+        return Response({"detail": "Only a superuser may delete another superuser."}, status=status.HTTP_403_FORBIDDEN)
+
+    target.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)

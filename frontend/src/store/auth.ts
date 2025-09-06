@@ -10,6 +10,10 @@ type UserSummary = {
   id: number | null;
   username: string | null;
   email: string | null;
+  is_staff?: boolean;
+  is_superuser?: boolean;
+  accountRole?: 'admin' | 'manager' | 'user';
+  groups?: string[];
 };
 
 type PersonSummary = {

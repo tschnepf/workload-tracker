@@ -27,6 +27,7 @@ const Settings = React.lazy(() => import('./pages/Settings/Settings'));
 const MilestoneCalendar = React.lazy(() => import('./pages/Deliverables/Calendar'));
 const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'));
 const Login = React.lazy(() => import('./pages/Auth/Login'));
+const Profile = React.lazy(() => import('./pages/Profile/Profile'));
 import { RequireAuth } from '@/components/auth/RequireAuth';
 
 // Loading component for Suspense fallback
@@ -98,6 +99,7 @@ function App() {
               {/* Protected routes */}
               <Route path="/" element={<RequireAuth><Navigate to="/dashboard" replace /></RequireAuth>} />
               <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+              <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
               <Route path="/people" element={<RequireAuth><PeopleList /></RequireAuth>} />
               <Route path="/people/new" element={<RequireAuth><PersonForm /></RequireAuth>} />
               <Route path="/people/:id/edit" element={<RequireAuth><PersonForm /></RequireAuth>} />

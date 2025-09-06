@@ -139,6 +139,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
+        'accounts.permissions.RoleBasedAccessPermission',
     ],
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
@@ -152,6 +153,8 @@ REST_FRAMEWORK = {
     'PAGE_SIZE_QUERY_PARAM': 'page_size',  # Allow client to specify page size
     'MAX_PAGE_SIZE': 500,  # Safety cap to prevent excessive memory usage
     'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('DRF_THROTTLE_ANON', '100/min'),
+        'user': os.getenv('DRF_THROTTLE_USER', '1000/min'),
         'hot_endpoint': '300/hour',  # Special limit for hot endpoints only
         'login': '10/min',
     }

@@ -734,4 +734,20 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ person_id: personId }),
     }),
+  // Change password for current user
+  changePassword: (currentPassword: string, newPassword: string) =>
+    fetchApi<void>(`/auth/change_password/`, {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  // Create a new user (staff only)
+  createUser: (data: { username: string; email?: string; password: string; personId?: number | null }) =>
+    fetchApi<{ id: number; user: any; person: any; settings: any }>(`/auth/create_user/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  // List users (admin only)
+  listUsers: () => fetchApi<Array<{ id: number; username: string; email: string; role: 'admin'|'manager'|'user'; person: { id: number; name: string } | null }>>(`/auth/users/`),
+  // Delete user (admin only)
+  deleteUser: (userId: number) => fetchApi<void>(`/auth/users/${userId}/`, { method: 'DELETE' }),
 };

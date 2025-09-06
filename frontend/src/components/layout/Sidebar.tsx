@@ -333,14 +333,17 @@ const Sidebar: React.FC = () => {
         <div className="px-3 space-y-1">
           {/* User Profile */}
           <Tooltip title="User Profile" description="Account settings">
-            <div className="flex items-center rounded-md hover:bg-[#3e3e42]/50 cursor-pointer transition-colors px-3 py-2.5 justify-center">
+            <Link
+              to="/profile"
+              className="flex items-center rounded-md hover:bg-[#3e3e42]/50 cursor-pointer transition-colors px-3 py-2.5 justify-center"
+            >
               <div className="w-6 h-6 bg-[#007acc] rounded-full flex items-center justify-center flex-shrink-0">
                 <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                   <circle cx="12" cy="7" r="4"/>
                 </svg>
               </div>
-            </div>
+            </Link>
           </Tooltip>
 
           {/* Help */}
@@ -361,5 +364,3 @@ const Sidebar: React.FC = () => {
 };
 
 export default Sidebar;
-
-

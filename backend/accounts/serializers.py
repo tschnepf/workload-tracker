@@ -76,10 +76,25 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_user(self, obj: UserProfile):
         u = obj.user
+        # Resolve groups and derived account role
+        try:
+            group_names = set(u.groups.values_list('name', flat=True))
+        except Exception:
+            group_names = set()
+        if getattr(u, 'is_staff', False) or getattr(u, 'is_superuser', False):
+            account_role = 'admin'
+        elif 'Manager' in group_names:
+            account_role = 'manager'
+        else:
+            account_role = 'user'
         return {
             "id": getattr(u, "id", None),
             "username": getattr(u, "username", None),
             "email": getattr(u, "email", None),
+            "is_staff": getattr(u, "is_staff", False),
+            "is_superuser": getattr(u, "is_superuser", False),
+            "groups": sorted(list(group_names)),
+            "accountRole": account_role,
         }
 
     def get_person(self, obj: UserProfile):
@@ -111,4 +126,3 @@ class UserProfileSerializer(serializers.ModelSerializer):
             instance.settings = validated_data.get("settings", {})
         instance.save(update_fields=["settings", "updated_at"])
         return instance
-
