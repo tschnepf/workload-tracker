@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Person, Department, Role } from '@/types/models';
 import { peopleApi, departmentsApi, rolesApi } from '@/services/api';
+import { useUpdatePerson } from '@/hooks/usePeople';
+import Toast from '@/components/ui/Toast';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -38,6 +40,8 @@ const PersonForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  const updatePersonMutation = useUpdatePerson();
 
   useEffect(() => {
     loadDepartments(); // Phase 2: Always load departments
@@ -53,7 +57,7 @@ const PersonForm: React.FC = () => {
       const response = await departmentsApi.list();
       setDepartments(response.results || []);
     } catch (err) {
-      console.error('Error loading departments:', err);
+      if (import.meta.env.DEV) console.error('Error loading departments:', err);
     }
   };
 
@@ -63,16 +67,16 @@ const PersonForm: React.FC = () => {
       const response = await rolesApi.list();
       setRoles(response.results || []);
     } catch (err) {
-      console.error('Error loading roles:', err);
+      if (import.meta.env.DEV) console.error('Error loading roles:', err);
     }
   };
 
   const loadPerson = async (personId: number) => {
     try {
       setLoading(true);
-      console.log('🔍 [DEBUG] Loading person with ID:', personId);
+      if (import.meta.env.DEV) console.log('🔍 [DEBUG] Loading person with ID:', personId);
       const person = await peopleApi.get(personId);
-      console.log('🔍 [DEBUG] Person data loaded from API:', person);
+      if (import.meta.env.DEV) console.log('🔍 [DEBUG] Person data loaded from API:', person);
       
       const newFormData = {
         name: person.name,
@@ -82,10 +86,10 @@ const PersonForm: React.FC = () => {
         location: person.location || '', // Load location
       };
       
-      console.log('🔍 [DEBUG] Setting form data to:', newFormData);
+      if (import.meta.env.DEV) console.log('🔍 [DEBUG] Setting form data to:', newFormData);
       setFormData(newFormData);
     } catch (err: any) {
-      console.error('🔍 [DEBUG] Error loading person:', err);
+      if (import.meta.env.DEV) console.error('🔍 [DEBUG] Error loading person:', err);
       setError(err.message || 'Failed to load person');
     } finally {
       setLoading(false);
@@ -123,7 +127,7 @@ const PersonForm: React.FC = () => {
       setError(null);
 
       // Debug logging to see what data is being submitted
-      console.log('🔍 [DEBUG] Form submission data:', {
+      if (import.meta.env.DEV) console.log('🔍 [DEBUG] Form submission data:', {
         isEditing,
         id,
         formData,
@@ -138,36 +142,39 @@ const PersonForm: React.FC = () => {
       };
 
       if (isEditing && id) {
-        console.log(`🔍 [DEBUG] Updating person ${id} with PATCH request`);
-        const result = await peopleApi.update(parseInt(id), apiData);
-        console.log('🔍 [DEBUG] Update API response:', result);
+        if (import.meta.env.DEV) console.log(`[DEBUG] Updating person ${id} with PATCH request`);
+        await updatePersonMutation.mutateAsync({ id: parseInt(id), data: apiData });
+        setToast({ message: 'Person updated', type: 'success' });
       } else {
-        console.log('🔍 [DEBUG] Creating new person with POST request');
+        if (import.meta.env.DEV) console.log('🔍 [DEBUG] Creating new person with POST request');
         const result = await peopleApi.create(apiData);
-        console.log('🔍 [DEBUG] Create API response:', result);
+        setToast({ message: 'Person created', type: 'success' });
+        if (import.meta.env.DEV) console.log('🔍 [DEBUG] Create API response:', result);
       }
 
-      console.log('🔍 [DEBUG] API call successful, navigating to /people');
+      if (import.meta.env.DEV) console.log('🔍 [DEBUG] API call successful, navigating to /people');
+      await new Promise((r) => setTimeout(r, 800));
       navigate('/people');
     } catch (err: any) {
-      console.error('🔍 [DEBUG] API call failed:', {
+      if (import.meta.env.DEV) console.error('🔍 [DEBUG] API call failed:', {
         error: err,
         message: err.message,
         status: err.status,
         response: err.response
       });
       setError(err.message || `Failed to ${isEditing ? 'update' : 'create'} person`);
+      setToast({ message: err.message || 'Failed to save person', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleChange = (field: keyof PersonFormData, value: string | number | null) => {
-    console.log('🔍 [DEBUG] handleChange called:', { field, value, type: typeof value });
+    if (import.meta.env.DEV) console.log('🔍 [DEBUG] handleChange called:', { field, value, type: typeof value });
     
     setFormData(prev => {
       const newData = { ...prev, [field]: value };
-      console.log('🔍 [DEBUG] Updated formData:', newData);
+      if (import.meta.env.DEV) console.log('🔍 [DEBUG] Updated formData:', newData);
       return newData;
     });
     
@@ -231,6 +238,7 @@ const PersonForm: React.FC = () => {
               label="Weekly Capacity (hours)"
               name="weeklyCapacity"
               type="number"
+              inputMode="numeric"
               value={formData.weeklyCapacity}
               onChange={(e) => handleChange('weeklyCapacity', parseInt(e.target.value) || 0)}
               placeholder="36"
@@ -253,7 +261,7 @@ const PersonForm: React.FC = () => {
             <select
               value={formData.role || ''}
               onChange={(e) => handleChange('role', e.target.value)}
-              className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent"
+              className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent min-h-[44px]"
               disabled={loading}
               required
             >
@@ -280,7 +288,7 @@ const PersonForm: React.FC = () => {
             <select
               value={formData.department || ''}
               onChange={(e) => handleChange('department', e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent"
+              className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent min-h-[44px]"
               disabled={loading}
             >
               <option value="">None Assigned</option>
@@ -333,8 +341,14 @@ const PersonForm: React.FC = () => {
         </form>
       </Card>
       </div>
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
+      )}
     </Layout>
   );
 };
 
 export default PersonForm;
+
+
+

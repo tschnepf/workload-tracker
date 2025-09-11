@@ -3,9 +3,10 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse } from '@/types/models';
+import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse, JobStatus } from '@/types/models';
 import { getAccessToken } from '@/utils/auth';
 import { refreshAccessToken as refreshAccessTokenSafe } from '@/store/auth';
+import { showToast } from '@/lib/toastBus';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -22,10 +23,55 @@ class ApiError extends Error {
 
 const IS_DEV = import.meta.env && (import.meta.env.DEV ?? false);
 
+function friendlyErrorMessage(status: number, data: any, fallback: string): string {
+  // Try common DRF shapes first
+  const detail = typeof data === 'object' && data ? (data.detail || data.message || data.error) : null;
+  const nonField = Array.isArray(data?.non_field_errors) ? data.non_field_errors[0] : null;
+  const firstFieldError = (() => {
+    if (data && typeof data === 'object') {
+      for (const [k, v] of Object.entries(data)) {
+        if (k === 'detail' || k === 'message' || k === 'non_field_errors') continue;
+        if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'string') return v[0] as string;
+      }
+    }
+    return null;
+  })();
+
+  switch (status) {
+    case 0:
+      return 'Network error — unable to reach the server.';
+    case 400:
+      return nonField || firstFieldError || detail || 'Please check the form for errors and try again.';
+    case 401:
+      return 'Your session has expired. Please sign in again.';
+    case 403:
+      return 'You do not have permission to perform this action.';
+    case 404:
+      return 'We could not find what you were looking for.';
+    case 409:
+      return 'A conflict occurred. Please refresh and try again.';
+    case 412:
+      return 'This record changed since you loaded it. Refresh and retry.';
+    case 413:
+      return 'The request is too large. Try narrowing your selection.';
+    case 429:
+      return 'Too many requests. Please slow down and try again soon.';
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return 'Something went wrong on our side. Please try again.';
+    default:
+      return detail || fallback;
+  }
+}
+
 // Lightweight in-memory cache to coalesce duplicate GETs and short-cache results
 type CacheEntry<T> = { promise: Promise<T>; timestamp: number; data?: T };
 const inflightRequests = new Map<string, CacheEntry<any>>();
 const responseCache = new Map<string, CacheEntry<any>>();
+// Store ETags by endpoint for conditional requests (detail routes)
+const etagStore = new Map<string, string>();
 const DEFAULT_TTL_MS = 15000; // 15s TTL is enough to absorb StrictMode double effects
 
 function makeCacheKey(url: string, method?: string) {
@@ -85,6 +131,15 @@ async function doFetch<T>(endpoint: string, options: RequestInit, isRetry = fals
   } as Record<string, string>;
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  // Inject If-Match automatically for detail mutations when we have an ETag
+  const method = (options.method || 'GET').toUpperCase();
+  if (method === 'PATCH' || method === 'PUT' || method === 'DELETE') {
+    if (!headers['If-Match']) {
+      const etag = etagStore.get(endpoint);
+      if (etag) headers['If-Match'] = etag;
+    }
+  }
+
   const response = await fetch(url, { ...options, headers });
 
   if (IS_DEV) {
@@ -116,16 +171,30 @@ async function doFetch<T>(endpoint: string, options: RequestInit, isRetry = fals
     return doFetch<T>(endpoint, options, true);
   }
 
+  // Capture ETag from successful GET responses
+  if (response.ok && method === 'GET') {
+    const etag = response.headers.get('etag');
+    if (etag) {
+      try {
+        // Store raw value without quotes for matching convenience
+        etagStore.set(endpoint, etag.replace(/^"|"$/g, ''));
+      } catch {}
+    }
+  }
+
   if (!response.ok) {
     let errorMessage = `HTTP ${response.status}`;
     let errorData: any = null;
     try {
       errorData = await response.json();
-      errorMessage = errorData.message || errorData.detail || errorMessage;
+      errorMessage = friendlyErrorMessage(response.status, errorData, errorMessage);
       if (IS_DEV) console.error(' [DEBUG] API Error Response:', errorData);
     } catch (e) {
-      errorMessage = response.statusText || errorMessage;
+      errorMessage = friendlyErrorMessage(response.status, null, response.statusText || errorMessage);
       if (IS_DEV) console.error(' [DEBUG] API Error (no JSON):', errorMessage);
+    }
+    if (response.status === 412) {
+      showToast('This record changed since you loaded it. Refresh and retry.', 'warning');
     }
     throw new ApiError(errorMessage, response.status, errorData);
   }
@@ -227,6 +296,23 @@ export const peopleApi = {
   return fetchApiCached<Person[]>(`/people/?${qs}`);
   },
 
+  // Server-side search for people (typeahead)
+  search: async (q: string, limit = 20): Promise<Array<{ id: number; name: string; department?: number }>> => {
+    const sp = new URLSearchParams();
+    sp.set('q', q);
+    if (limit) sp.set('limit', String(limit));
+    return fetchApi<Array<{ id: number; name: string; department?: number }>>(`/people/search/?${sp.toString()}`);
+  },
+
+  // Autocomplete endpoint (Phase 3/4 wiring)
+  autocomplete: async (search?: string, limit?: number): Promise<Array<{ id: number; name: string; department: number | null }>> => {
+    const sp = new URLSearchParams();
+    if (search) sp.set('search', search);
+    if (limit != null) sp.set('limit', String(limit));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<Array<{ id: number; name: string; department: number | null }>>(`/people/autocomplete/${qs}`);
+  },
+
   // Get single person
   get: (id: number) => 
     fetchApi<Person>(`/people/${id}/`),
@@ -257,17 +343,6 @@ export const peopleApi = {
     fetchApi<void>(`/people/${id}/`, {
       method: 'DELETE',
     }),
-
-  // Get people for autocomplete (name and basic info)
-  getForAutocomplete: async (): Promise<Array<{ id: number; name: string; department?: number; weeklyCapacity?: number }>> => {
-    const allPeople = await peopleApi.listAll();
-    return allPeople.map(person => ({
-      id: person.id!,
-      name: person.name,
-      department: person.department,
-      weeklyCapacity: person.weeklyCapacity
-    }));
-  },
 
   // Get person utilization for specific week (optimized to prevent N+1 queries)
   getPersonUtilization: async (personId: number, week?: string): Promise<PersonUtilization> => {
@@ -345,8 +420,9 @@ export const projectsApi = {
 
   // Get unique clients for autocomplete
   getClients: async (): Promise<string[]> => {
-    const allProjects = await projectsApi.listAll();
-    const clients = [...new Set(allProjects.map(p => p.client).filter(Boolean))];
+    // Use first page to avoid heavy bulk fetch; adjust if needed
+    const page = await projectsApi.list({ page: 1, page_size: 200 });
+    const clients = [...new Set((page.results || []).map(p => p.client).filter(Boolean))];
     return clients.sort();
   },
 
@@ -687,6 +763,27 @@ export const rolesApi = {
     }),
 };
 
+// Jobs API (async background tasks)
+export const jobsApi = {
+  // Get job status
+  getStatus: (jobId: string) => 
+    fetchApi<JobStatus>(`/jobs/${jobId}/`),
+
+  // Download job result file (if available). Returns a Blob.
+  downloadFile: async (jobId: string): Promise<Blob> => {
+    const url = `${API_BASE_URL}/jobs/${jobId}/download/`;
+    const token = getAccessToken();
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) {
+      throw new ApiError(`HTTP ${res.status}`, res.status);
+    }
+    return await res.blob();
+  },
+};
+
 export { ApiError };
 
 // Deliverable Assignments API
@@ -741,7 +838,7 @@ export const authApi = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
   // Create a new user (staff only)
-  createUser: (data: { username: string; email?: string; password: string; personId?: number | null }) =>
+  createUser: (data: { username: string; email?: string; password: string; personId?: number | null; role?: 'admin' | 'manager' | 'user' }) =>
     fetchApi<{ id: number; user: any; person: any; settings: any }>(`/auth/create_user/`, {
       method: 'POST',
       body: JSON.stringify(data),

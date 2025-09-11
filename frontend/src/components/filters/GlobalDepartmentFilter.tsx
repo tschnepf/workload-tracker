@@ -31,9 +31,9 @@ export const GlobalDepartmentFilter: React.FC = () => {
     (async () => {
       try {
         setLoading(true);
-        const data = await departmentsApi.listAll();
+        const page = await departmentsApi.list({ page: 1, page_size: 500 });
         if (!active) return;
-        setDepartments(data || []);
+        setDepartments((page.results || []) as Department[]);
       } catch (e: any) {
         if (!active) return;
         setError('Failed to load departments');
@@ -170,7 +170,8 @@ export const GlobalDepartmentFilter: React.FC = () => {
 
   const listboxStyle: React.CSSProperties = {
     position: 'absolute',
-    zIndex: 20,
+    // Ensure combobox overlays sticky headers (Assignments header uses z-30)
+    zIndex: 60,
     marginTop: 4,
     maxHeight: 280,
     overflowY: 'auto',

@@ -13,6 +13,8 @@ help:
 	@echo "  make migrate        - Run database migrations"
 	@echo "  make validate-naming - Check naming consistency"
 	@echo "  make generate-types  - Generate TypeScript interfaces"
+	@echo "  make openapi-schema  - Dump OpenAPI schema to backend/openapi.json"
+	@echo "  make openapi-client  - Generate frontend OpenAPI TS types"
 	@echo "  make test           - Run tests"
 	@echo "  make clean          - Clean up containers and volumes"
 	@echo ""
@@ -93,6 +95,18 @@ generate-types:
 	@docker-compose exec backend python manage.py generate_types
 	@echo "Types generated"
 
+.PHONY: openapi-schema
+openapi-schema:
+	@echo "Generating OpenAPI schema (backend/openapi.json)..."
+	@docker-compose exec backend python manage.py spectacular --file openapi.json --format openapi-json
+	@echo "OpenAPI schema written to backend/openapi.json"
+
+.PHONY: openapi-client
+openapi-client:
+	@echo "Generating frontend OpenAPI TypeScript types..."
+	@docker-compose exec frontend npx openapi-typescript ../backend/openapi.json -o src/api/schema.ts
+	@echo "Types written to frontend/src/api/schema.ts"
+
 .PHONY: test
 test:
 	docker-compose exec backend python manage.py test
@@ -136,4 +150,3 @@ backup-db:
 	@mkdir -p backups
 	@docker-compose exec -T db pg_dump -U postgres -d workload_tracker > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
 	@echo "Database backup created in backups/ directory"
-

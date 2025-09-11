@@ -11,4 +11,5 @@ urlpatterns = [
     path('set_password/', views.set_password, name='auth_set_password'),
     path('users/', views.list_users, name='auth_users'),
     path('users/<int:user_id>/', views.delete_user, name='auth_delete_user'),
+    path('admin_audit/', views.admin_audit_logs, name='auth_admin_audit'),
 ]

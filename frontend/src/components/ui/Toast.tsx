@@ -60,14 +60,14 @@ const Toast: React.FC<ToastProps> = ({
   const styles = getTypeStyles();
 
   const toastElement = (
-    <div className="fixed bottom-6 right-6 z-[9999] animate-in slide-in-from-right-5 duration-500 ease-out">
+    <div className="fixed bottom-6 right-6 z-[9999] animate-in slide-in-from-right-5 duration-500 ease-out motion-reduce:animate-none motion-reduce:transition-none">
       <div className={`
         relative rounded-xl px-4 py-4 pr-10 min-w-[320px] max-w-[400px]
         bg-[#2d2d30] backdrop-blur-md
         border ${styles.border}
         shadow-2xl shadow-black/30
         ${styles.background}
-        transition-all duration-200 hover:shadow-3xl
+        transition-all duration-200 motion-reduce:transition-none hover:shadow-3xl
       `}>
         {/* Content */}
         <div className={`text-sm font-medium leading-5 ${styles.text}`}>

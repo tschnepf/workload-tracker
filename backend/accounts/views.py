@@ -4,13 +4,17 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.throttling import UserRateThrottle
+from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
 
-from .models import UserProfile
-from .serializers import UserProfileSerializer
+from .models import UserProfile, AdminAuditLog
+from .serializers import UserProfileSerializer, AdminAuditLogSerializer
 from people.models import Person
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+
+
+class HotEndpointThrottle(ScopedRateThrottle):
+    scope = 'hot_endpoint'
 
 
 @api_view(["GET"])
@@ -97,7 +101,7 @@ def link_person(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@throttle_classes([UserRateThrottle])
+@throttle_classes([UserRateThrottle, HotEndpointThrottle])
 def change_password(request):
     """Change password for the authenticated user.
 
@@ -115,12 +119,22 @@ def change_password(request):
         return Response({"detail": "Invalid password.", "errors": [str(x) for x in (e.error_list if hasattr(e, 'error_list') else [e])]}, status=status.HTTP_400_BAD_REQUEST)
     request.user.set_password(new)
     request.user.save(update_fields=["password"])
+    # Audit: user changed own password
+    try:
+        AdminAuditLog.objects.create(
+            actor=request.user,
+            action='change_password',
+            target_user=request.user,
+            detail={},
+        )
+    except Exception:
+        pass
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsAdminUser])
-@throttle_classes([UserRateThrottle])
+@throttle_classes([UserRateThrottle, HotEndpointThrottle])
 def create_user(request):
     """Create a new user (staff only) and optionally link to a Person.
 
@@ -188,13 +202,26 @@ def create_user(request):
         except IntegrityError:
             return Response({"detail": "Unable to link. This person may already be linked."}, status=status.HTTP_409_CONFLICT)
 
+    # Audit: admin created user
+    try:
+        AdminAuditLog.objects.create(
+            actor=request.user,
+            action='create_user',
+            target_user=user,
+            detail={
+                'role': role,
+                'personId': person_id,
+            },
+        )
+    except Exception:
+        pass
     ser = UserProfileSerializer(profile)
     return Response(ser.data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsAdminUser])
-@throttle_classes([UserRateThrottle])
+@throttle_classes([UserRateThrottle, HotEndpointThrottle])
 def set_password(request):
     """Set password for a target user (staff only).
 
@@ -212,6 +239,16 @@ def set_password(request):
         return Response({"detail": "Invalid password.", "errors": [str(x) for x in (e.error_list if hasattr(e, 'error_list') else [e])]}, status=status.HTTP_400_BAD_REQUEST)
     target.set_password(new)
     target.save(update_fields=["password"])
+    # Audit: admin set password for another user
+    try:
+        AdminAuditLog.objects.create(
+            actor=request.user,
+            action='set_password',
+            target_user=target,
+            detail={},
+        )
+    except Exception:
+        pass
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -264,7 +301,7 @@ def list_users(request):
 
 @api_view(["DELETE"]) 
 @permission_classes([IsAuthenticated, IsAdminUser])
-@throttle_classes([UserRateThrottle])
+@throttle_classes([UserRateThrottle, HotEndpointThrottle])
 def delete_user(request, user_id: int):
     """Delete a user account (admin only).
 
@@ -281,5 +318,37 @@ def delete_user(request, user_id: int):
     if target.is_superuser and not request.user.is_superuser:
         return Response({"detail": "Only a superuser may delete another superuser."}, status=status.HTTP_403_FORBIDDEN)
 
+    # Audit before delete to retain target id/email in detail
+    try:
+        AdminAuditLog.objects.create(
+            actor=request.user,
+            action='delete_user',
+            target_user=target,
+            detail={
+                'username': target.username,
+                'email': target.email,
+            },
+        )
+    except Exception:
+        pass
     target.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["GET"]) 
+@permission_classes([IsAuthenticated, IsAdminUser])
+@throttle_classes([UserRateThrottle])
+def admin_audit_logs(request):
+    """Read-only endpoint for recent admin audit logs (admin only).
+
+    Query params:
+    - limit: int (default 50, max 500)
+    """
+    try:
+        limit = int(request.query_params.get('limit', '50'))
+    except Exception:
+        limit = 50
+    limit = max(1, min(500, limit))
+    qs = AdminAuditLog.objects.select_related('actor', 'target_user').all()[:limit]
+    ser = AdminAuditLogSerializer(qs, many=True)
+    return Response(ser.data)

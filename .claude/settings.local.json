@@ -42,7 +42,8 @@
       "Bash(grep:*)",
       "Bash(chmod:*)",
       "Bash(docker exec:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": [],

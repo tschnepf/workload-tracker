@@ -43,12 +43,12 @@ const MilestoneReviewTool: React.FC<Props> = () => {
     loadAssignments();
   }, [selectedDeliverableId]);
 
-  // Load people for linking
+  // Load people for linking (lightweight autocomplete seed)
   useEffect(() => {
     const load = async () => {
       try {
-        const all = await peopleApi.listAll();
-        setPeople(all);
+        const first = await peopleApi.autocomplete('', 50);
+        setPeople(first);
       } catch (e) {
         console.error('Failed to load people', e);
       }

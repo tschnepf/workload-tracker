@@ -251,7 +251,7 @@ const ProjectForm: React.FC = () => {
               <select
                 value={formData.status || 'active'}
                 onChange={(e) => handleChange('status', e.target.value)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
               >
                 <option value="active">Active</option>
                 <option value="active_ca">Active CA</option>

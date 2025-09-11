@@ -1,20 +1,13 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-
-const Loading: React.FC = () => (
-  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-    <div>Loading…</div>
-  </div>
-);
+import Loader from '@/components/ui/Loader';
 
 export const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth = useAuth();
   const location = useLocation();
 
-  if (auth.hydrating) {
-    return <Loading />;
-  }
+  if (auth.hydrating) return <Loader message="Loading…" />;
 
   // If no access token after hydration, redirect to login
   if (!auth.accessToken) {
@@ -23,4 +16,3 @@ export const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return <>{children}</>;
 };
-

@@ -1,0 +1,32 @@
+﻿name: Production Config Guard
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  prod-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure docker-compose.prod.yml does not enable DEBUG
+        run: |
+          if grep -q "DEBUG=true" docker-compose.prod.yml; then
+            echo "ERROR: DEBUG=true found in docker-compose.prod.yml" >&2
+            exit 1
+          fi
+
+      - name: Ensure ALLOWED_HOSTS present in env example
+        run: |
+          if ! grep -q "^ALLOWED_HOSTS=" .env.example; then
+            echo "ERROR: ALLOWED_HOSTS not present in .env.example" >&2
+            exit 1
+          fi
+
+      - name: Show summary
+        run: |
+          echo "Prod config checks passed." 

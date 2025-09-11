@@ -3,7 +3,7 @@
  * Replaces the form-based AssignmentForm with a modern grid view
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Assignment, Person, Deliverable, Project } from '@/types/models';
 import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
@@ -22,6 +22,7 @@ import Layout from '@/components/layout/Layout';
 import Toast from '@/components/ui/Toast';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useUpdateProject } from '@/hooks/useProjects';
+import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
 
 interface PersonWithAssignments extends Person {
   assignments: Assignment[];
@@ -319,6 +320,25 @@ const AssignmentGrid: React.FC = () => {
   };
 
   const weeks = getNext12Mondays();
+
+  // Measure sticky header height so the week header can offset correctly
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState<number>(88);
+  useEffect(() => {
+    function measure() {
+      if (headerRef.current) {
+        setHeaderHeight(headerRef.current.getBoundingClientRect().height);
+      }
+    }
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
+    if (ro && headerRef.current) ro.observe(headerRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      if (ro && headerRef.current) ro.unobserve(headerRef.current);
+    };
+  }, []);
 
   // Error-bounded computation with explicit null/undefined handling
   const computeAllowedProjects = useMemo(() => {
@@ -786,27 +806,41 @@ const AssignmentGrid: React.FC = () => {
     return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [isDragging]);
 
+  // Use existing department filter state declared near top of component
+
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Load all data with comprehensive error boundaries
-      const [peopleData, assignmentsData, deliverablesData, projectsData] = await Promise.all([
-        peopleApi.listAll(backendParams),
-        assignmentsApi.listAll(backendParams),
-        deliverablesApi.listAll(),
-        projectsApi.listAll() // Single API call to avoid N+1 queries
+      // Load first pages (trim heavy bulk listAll)
+      const pageSize = 100;
+      // Use canonical backend params from the shared store to avoid mismatch
+      const deptParams = backendParams; // { department?: number; include_children?: 0|1 }
+      const [peoplePage, assignmentsPage, deliverablesPage, projectsPage] = await Promise.all([
+        peopleApi.list({ page: 1, page_size: pageSize, ...deptParams }),
+        assignmentsApi.list({ page: 1, page_size: pageSize, ...deptParams }),
+        deliverablesApi.list(undefined, { page: 1, page_size: pageSize }),
+        projectsApi.list({ page: 1, page_size: pageSize })
       ]);
 
       // Store deliverables and projects in state
+      const deliverablesData = deliverablesPage.results || [];
+      const projectsData = projectsPage.results || [];
       setDeliverables(deliverablesData);
       setProjects(projectsData);
       
       // Store raw data for filter computation
+      const assignmentsData = assignmentsPage.results || [];
       setAssignmentsData(assignmentsData);
       setProjectsData(projectsData);
       
+      let peopleData = (peoplePage.results || []) as Person[];
+      // Defensive client-side filter to ensure only selected department is shown
+      if (deptState.selectedDepartmentId != null && !deptState.includeChildren) {
+        const sel = Number(deptState.selectedDepartmentId);
+        peopleData = peopleData.filter(p => (p.department ?? null) === sel);
+      }
       const peopleWithAssignments: PersonWithAssignments[] = peopleData.map(person => ({
         ...person,
         assignments: assignmentsData.filter(assignment => assignment.person === person.id),
@@ -1139,8 +1173,9 @@ const AssignmentGrid: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Sticky Header Section */}
-        <div className="sticky top-0 bg-[#1e1e1e] border-b border-[#3e3e42] z-30 px-6 py-4">
-          <div className="flex items-center justify-between">
+        <div ref={headerRef} className="sticky top-0 bg-[#1e1e1e] border-b border-[#3e3e42] z-30 px-6 py-4">
+          {/* Top row: title + counts */}
+          <div className="flex items-start justify-between gap-6">
             <div>
               <h1 className="text-2xl font-bold text-[#cccccc]">Assignment Grid</h1>
               <p className="text-[#969696] text-sm">Manage team workload allocation across 12 weeks</p>
@@ -1149,33 +1184,41 @@ const AssignmentGrid: React.FC = () => {
               <div className="text-xs text-[#969696]">
                 {people.length} people • {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
               </div>
-              {/* Project Status Filters (multi-select) */}
-              <div className="flex flex-wrap items-center gap-1">
-                {statusFilterOptions.map((status) => {
-                  const isActive = selectedStatusFilters.has(status);
-                  return (
-                    <button
-                      key={status}
-                      onClick={() => toggleStatusFilter(status)}
-                      className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-                        isActive
-                          ? 'bg-[#007acc] border-[#007acc] text-white'
-                          : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
-                      }`}
-                      aria-pressed={isActive}
-                      aria-label={`Filter: ${formatFilterStatus(status)}`}
-                    >
-                      {formatFilterStatus(status)}
-                    </button>
-                  );
-                })}
-              </div>
+            </div>
+          </div>
+
+          {/* Second row: Department filter + project status filters */}
+          <div className="mt-3 flex items-center justify-between gap-6">
+            {/* Department filter is now part of page header to stay visible */}
+            <div className="flex-1 min-w-[320px]">
+              <GlobalDepartmentFilter />
+            </div>
+            {/* Project Status Filters (multi-select) */}
+            <div className="flex flex-wrap items-center gap-1">
+              {statusFilterOptions.map((status) => {
+                const isActive = selectedStatusFilters.has(status);
+                return (
+                  <button
+                    key={status}
+                    onClick={() => toggleStatusFilter(status)}
+                    className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                      isActive
+                        ? 'bg-[#007acc] border-[#007acc] text-white'
+                        : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
+                    }`}
+                    aria-pressed={isActive}
+                    aria-label={`Filter: ${formatFilterStatus(status)}`}
+                  >
+                    {formatFilterStatus(status)}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Sticky Week Header - positioned directly below title */}
-        <div className="sticky top-[88px] bg-[#2d2d30] border-b border-[#3e3e42] z-20 overflow-x-auto">
+        {/* Sticky Week Header - positioned directly below measured header */}
+        <div className="sticky bg-[#2d2d30] border-b border-[#3e3e42] z-20 overflow-x-auto" style={{ top: headerHeight }}>
           <div className="min-w-[1400px]">
             <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2">
               <div className="font-medium text-[#cccccc] text-sm px-2 py-1">Team Member</div>
@@ -1189,6 +1232,8 @@ const AssignmentGrid: React.FC = () => {
             </div>
           </div>
         </div>
+
+        
 
         {/* Full Width Grid Container */}
         <div className="flex-1 overflow-x-auto bg-[#1e1e1e]">

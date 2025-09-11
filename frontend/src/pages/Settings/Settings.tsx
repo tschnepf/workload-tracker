@@ -4,6 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Loader from '@/components/ui/Loader';
 import { Role } from '@/types/models';
 import { rolesApi, peopleApi, authApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
@@ -42,7 +45,8 @@ const Settings: React.FC = () => {
     // Load people options (for admin create-user linking)
     (async () => {
       try {
-        const list = await peopleApi.getForAutocomplete();
+        // Use backend autocomplete; default to first page of results
+        const list = await peopleApi.autocomplete('', 50);
         setPeopleOptions(list.map(p => ({ id: p.id, name: p.name })));
       } catch (e) {
         // non-fatal
@@ -116,7 +120,13 @@ const Settings: React.FC = () => {
       <div className="flex">
         <Sidebar />
         <div className="flex-1 p-6">
-          <div className="text-[#cccccc]">Loading settings...</div>
+          <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
+            <div className="py-10">
+              <div className="max-w-md mx-auto">
+                <Loader inline message="Loading settings…" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -146,12 +156,9 @@ const Settings: React.FC = () => {
                   Manage job roles used throughout the system. Roles can be assigned to people and used for reporting.
                 </p>
               </div>
-              <button
-                onClick={handleCreateRole}
-                className="bg-[#007acc] hover:bg-[#005a9e] text-white px-4 py-2 rounded-md font-medium transition-colors"
-              >
+              <Button onClick={handleCreateRole}>
                 Add Role
-              </button>
+              </Button>
             </div>
 
             <RoleList
@@ -169,20 +176,17 @@ const Settings: React.FC = () => {
               {createMsg && <div className="text-sm text-[#cccccc] mb-2">{createMsg}</div>}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-[#969696] mb-1">Username</label>
-                  <input className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2" value={newUsername} onChange={e => setNewUsername(e.target.value)} />
+                  <Input label="Username" autoComplete="username" value={newUsername} onChange={e => setNewUsername((e.target as HTMLInputElement).value)} />
                 </div>
                 <div>
-                  <label className="block text-sm text-[#969696] mb-1">Email (optional)</label>
-                  <input className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
+                  <Input label="Email (optional)" type="email" autoComplete="email" value={newEmail} onChange={e => setNewEmail((e.target as HTMLInputElement).value)} />
                 </div>
                 <div>
-                  <label className="block text-sm text-[#969696] mb-1">Initial Password</label>
-                  <input type="password" className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} />
+                  <Input label="Initial Password" type="password" autoComplete="new-password" value={newUserPassword} onChange={e => setNewUserPassword((e.target as HTMLInputElement).value)} />
                 </div>
                 <div>
                   <label className="block text-sm text-[#969696] mb-1">Role</label>
-                  <select className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2" value={newUserRole} onChange={e => setNewUserRole(e.target.value as any)}>
+                  <select className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2 min-h-[44px]" value={newUserRole} onChange={e => setNewUserRole(e.target.value as any)}>
                     <option value="user">User</option>
                     <option value="manager">Manager</option>
                     <option value="admin">Admin</option>
@@ -191,7 +195,7 @@ const Settings: React.FC = () => {
                 <div>
                   <label className="block text-sm text-[#969696] mb-1">Link to Person (optional)</label>
                   <select
-                    className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2"
+                    className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2 min-h-[44px]"
                     value={newUserPersonId}
                     onChange={(e) => setNewUserPersonId(e.target.value === '' ? '' : Number(e.target.value))}
                   >
@@ -203,7 +207,7 @@ const Settings: React.FC = () => {
                 </div>
               </div>
               <div className="mt-3">
-                <button
+                <Button
                   disabled={createBusy}
                   onClick={async () => {
                     setCreateMsg(null);
@@ -223,10 +227,9 @@ const Settings: React.FC = () => {
                       setCreateBusy(false);
                     }
                   }}
-                  className="bg-[#007acc] hover:bg-[#005a9e] text-white px-4 py-2 rounded-md disabled:opacity-60"
                 >
                   {createBusy ? 'Creating…' : 'Create User'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -237,48 +240,93 @@ const Settings: React.FC = () => {
               {usersLoading ? (
                 <div className="text-[#cccccc]">Loading users…</div>
               ) : (
-                <div className="overflow-auto">
+                <div>
                   {usersMsg && <div className="text-sm text-[#cccccc] mb-2">{usersMsg}</div>}
-                  <table className="min-w-full text-sm text-left">
-                    <thead className="text-[#969696]">
-                      <tr>
-                        <th className="py-2 pr-4">Username</th>
-                        <th className="py-2 pr-4">Email</th>
-                        <th className="py-2 pr-4">Role</th>
-                        <th className="py-2 pr-4">Linked Person</th>
-                        <th className="py-2 pr-4">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-[#cccccc]">
-                      {users.map(u => (
-                        <tr key={u.id} className="border-t border-[#3e3e42]">
-                          <td className="py-2 pr-4">{u.username}</td>
-                          <td className="py-2 pr-4">{u.email}</td>
-                          <td className="py-2 pr-4 capitalize">{u.role}</td>
-                          <td className="py-2 pr-4">{u.person ? u.person.name : '—'}</td>
-                          <td className="py-2 pr-4">
-                            <button
-                              className="text-red-400 hover:text-red-300 disabled:opacity-50"
-                              disabled={u.id === auth.user?.id}
-                              onClick={async () => {
-                                setUsersMsg(null);
-                                if (!confirm(`Delete user ${u.username}? This cannot be undone.`)) return;
-                                try {
-                                  await authApi.deleteUser(u.id);
-                                  setUsers(prev => prev.filter(x => x.id !== u.id));
-                                  setUsersMsg('User deleted.');
-                                } catch (err: any) {
-                                  setUsersMsg(err?.data?.detail || err?.message || 'Failed to delete user');
-                                }
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </td>
+                  {/* Card list on small screens */}
+                  <div className="block sm:hidden space-y-3">
+                    {users.map(u => (
+                      <div
+                        key={u.id}
+                        className="rounded-lg border border-[#3e3e42] bg-[#252526] p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-[#cccccc] font-medium text-base">{u.username}</div>
+                            <div className="text-[#969696] text-sm">{u.email || 'No email'}</div>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded bg-[#3e3e42] text-[#cccccc] capitalize">{u.role}</span>
+                        </div>
+                        <div className="mt-2 text-sm text-[#969696]">
+                          Linked Person: <span className="text-[#cccccc]">{u.person ? u.person.name : 'None'}</span>
+                        </div>
+                        <div className="mt-3">
+                          <button
+                            className="inline-flex items-center justify-center min-h-[44px] px-4 py-2 rounded-md text-sm text-red-400 hover:text-red-300 hover:bg-[#3e3e42] disabled:opacity-50"
+                            disabled={u.id === auth.user?.id}
+                            onClick={async () => {
+                              setUsersMsg(null);
+                              if (!confirm(`Delete user ${u.username}? This cannot be undone.`)) return;
+                              try {
+                                await authApi.deleteUser(u.id);
+                                setUsers(prev => prev.filter(x => x.id !== u.id));
+                                setUsersMsg('User deleted.');
+                              } catch (err: any) {
+                                setUsersMsg(err?.data?.detail || err?.message || 'Failed to delete user');
+                              }
+                            }}
+                            aria-disabled={u.id === auth.user?.id}
+                            aria-label={`Delete user ${u.username}`}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Table on sm and up */}
+                  <div className="hidden sm:block overflow-auto">
+                    <table className="min-w-full text-sm text-left">
+                      <thead className="text-[#969696]">
+                        <tr>
+                          <th className="py-2 pr-4">Username</th>
+                          <th className="py-2 pr-4">Email</th>
+                          <th className="py-2 pr-4">Role</th>
+                          <th className="py-2 pr-4">Linked Person</th>
+                          <th className="py-2 pr-4">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="text-[#cccccc]">
+                        {users.map(u => (
+                          <tr key={u.id} className="border-t border-[#3e3e42]">
+                            <td className="py-2 pr-4">{u.username}</td>
+                            <td className="py-2 pr-4">{u.email}</td>
+                            <td className="py-2 pr-4 capitalize">{u.role}</td>
+                            <td className="py-2 pr-4">{u.person ? u.person.name : '—'}</td>
+                            <td className="py-2 pr-4">
+                              <button
+                                className="text-red-400 hover:text-red-300 disabled:opacity-50"
+                                disabled={u.id === auth.user?.id}
+                                onClick={async () => {
+                                  setUsersMsg(null);
+                                  if (!confirm(`Delete user ${u.username}? This cannot be undone.`)) return;
+                                  try {
+                                    await authApi.deleteUser(u.id);
+                                    setUsers(prev => prev.filter(x => x.id !== u.id));
+                                    setUsersMsg('User deleted.');
+                                  } catch (err: any) {
+                                    setUsersMsg(err?.data?.detail || err?.message || 'Failed to delete user');
+                                  }
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

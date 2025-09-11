@@ -19,15 +19,17 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend/Dockerfile
+      target: production
 
   # Production frontend - static build
   frontend:
-    command: sh -c "npm run build && npx serve -s dist -l 3000"
+    command: sh -c "cp -r /app/_built/* /app/dist/ 2>/dev/null || true; npx serve -s /app/dist -l 3000"
     environment:
       - NODE_ENV=production
     volumes:
-      - ./frontend:/app:ro  # Read-only mount
-      - /app/node_modules
       - frontend_build:/app/dist
     restart: unless-stopped
     healthcheck:
@@ -36,6 +38,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend/Dockerfile
+      target: production
 
   # Nginx reverse proxy and static file server
   nginx:

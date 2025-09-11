@@ -1,23 +1,40 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { peopleApi } from '@/services/api';
 import { Person } from '@/types/models';
 
 // People query hook with state adapter for existing code compatibility
 export function usePeople() {
-  const { data, isLoading, isFetching, error: queryError } = useQuery({
+  const pageSize = 100;
+  const query = useInfiniteQuery({
     queryKey: ['people'],
-    queryFn: () => peopleApi.listAll(),
-    staleTime: 30 * 1000, // 30 seconds - people data changes less frequently
+    queryFn: ({ pageParam = 1 }) => peopleApi.list({ page: pageParam, page_size: pageSize }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      // If server returned a next URL, infer next page; else stop
+      if (!lastPage?.next) return undefined;
+      try {
+        const url = new URL(lastPage.next);
+        const next = url.searchParams.get('page');
+        return next ? Number(next) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
   });
 
-  // Adapt to existing state shape that components expect
-  const loading = isLoading || isFetching;
-  const error = queryError ? queryError.message : null;
+  const people = (query.data?.pages || []).flatMap(p => p?.results || []);
+  const loading = query.isLoading || query.isFetching;
+  const error = query.error ? (query.error as any).message : null;
 
-  return { 
-    people: data || [], 
-    loading, 
-    error 
+  return {
+    people,
+    loading,
+    error,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage,
+    isFetchingNextPage: query.isFetchingNextPage,
   };
 }
 
@@ -53,17 +70,20 @@ export function usePersonUtilization(personId: number, week?: string) {
 }
 
 // People for autocomplete - optimized with longer cache time
-export function usePeopleAutocomplete() {
+export function usePeopleAutocomplete(search?: string) {
+  const enabled = !!(search && search.trim().length >= 2);
   const { data, isLoading, error: queryError } = useQuery({
-    queryKey: ['people-autocomplete'],
-    queryFn: () => peopleApi.getForAutocomplete(),
-    staleTime: 2 * 60 * 1000, // 2 minutes - autocomplete data can be cached longer
+    queryKey: ['people-autocomplete', search || ''],
+    queryFn: () => peopleApi.search(search!.trim(), 20),
+    enabled,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   return {
-    people: data || [],
-    loading: isLoading,
-    error: queryError ? queryError.message : null
+    people: enabled ? (data || []) : [],
+    loading: enabled ? isLoading : false,
+    error: queryError ? (queryError as any).message : null,
   };
 }
 
@@ -88,10 +108,42 @@ export function useUpdatePerson() {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<Person> }) => 
       peopleApi.update(id, data),
+    // Optimistic update with rollback
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['people'] });
+      await queryClient.cancelQueries({ queryKey: ['people', id] });
+
+      const prevDetail = queryClient.getQueryData<Person>(['people', id]);
+      const prevPages = queryClient.getQueryData<any>(['people']);
+
+      if (prevDetail) {
+        queryClient.setQueryData<Person>(['people', id], { ...prevDetail, ...data });
+      }
+      if (prevPages && Array.isArray(prevPages.pages)) {
+        const nextPages = {
+          ...prevPages,
+          pages: prevPages.pages.map((page: any) => ({
+            ...page,
+            results: (page?.results || []).map((p: Person) => (p.id === id ? { ...p, ...data } : p))
+          }))
+        };
+        queryClient.setQueryData(['people'], nextPages);
+      }
+
+      return { prevDetail, prevPages };
+    },
+    onError: (_err, variables, context) => {
+      if (context?.prevDetail) {
+        queryClient.setQueryData(['people', variables.id], context.prevDetail);
+      }
+      if (context?.prevPages) {
+        queryClient.setQueryData(['people'], context.prevPages);
+      }
+    },
     onSuccess: (updatedPerson, variables) => {
-      // Update specific person in cache
       queryClient.setQueryData(['people', variables.id], updatedPerson);
-      // Invalidate related queries
+    },
+    onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({ queryKey: ['people'] });
       queryClient.invalidateQueries({ queryKey: ['people-autocomplete'] });
       queryClient.invalidateQueries({ queryKey: ['person-utilization', variables.id] });

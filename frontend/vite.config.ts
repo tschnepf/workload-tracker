@@ -6,6 +6,9 @@ import path from 'path'
 import pkg from './package.json'
 
 // https://vitejs.dev/config/
+const SHOULD_UPLOAD_SOURCEMAPS = process.env.SENTRY_UPLOAD === 'true';
+const RELEASE = process.env.VITE_APP_VERSION || (pkg as any).version || 'dev';
+
 export default defineConfig({
   plugins: [
     react(),
@@ -16,11 +19,15 @@ export default defineConfig({
       gzipSize: true,
       brotliSize: true,
     }),
-    // Sentry source maps upload - production only
-    process.env.NODE_ENV === 'production' && sentryVitePlugin({
+    // Sentry source maps upload - CI/production only when explicitly enabled
+    process.env.NODE_ENV === 'production' && SHOULD_UPLOAD_SOURCEMAPS && sentryVitePlugin({
       org: process.env.VITE_SENTRY_ORG,
       project: process.env.VITE_SENTRY_PROJECT,
       authToken: process.env.VITE_SENTRY_AUTH_TOKEN,
+      telemetry: false,
+      release: {
+        name: RELEASE,
+      },
     }),
   ].filter(Boolean),
   server: {
@@ -39,8 +46,8 @@ export default defineConfig({
     // Target modern browsers for smaller bundles
     target: 'es2020',
     
-    // Generate sourcemaps for debugging
-    sourcemap: true,
+    // Generate sourcemaps only when uploading to Sentry (CI)
+    sourcemap: SHOULD_UPLOAD_SOURCEMAPS,
     
     // Optimize chunk size warnings
     chunkSizeWarningLimit: 1000,

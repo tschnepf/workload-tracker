@@ -111,10 +111,60 @@ This document tracks planned features and improvements for the Workload Tracker 
 - **Features**: CSV, PDF reports, scheduled exports, import validation
 - **Estimated Timeline**: 2-4 days
 
+### 5. Virtualized Lists Across App (People/Projects)
+- **Description**: Use lightweight list virtualization (render only visible rows + small buffer) for large lists while keeping paginated fetching for network efficiency.
+- **Current**: PeopleList now has a clean, isolated virtualized table component; Projects uses infinite pagination with “Load more”.
+- **Plan**:
+  - Extract Projects left-panel rows into a `ProjectsListTable` component.
+  - Enable virtualization when `items.length > 200`; otherwise map normally.
+  - Keep existing infinite query and “Load more” for network payload control.
+- **Benefits**:
+  - Smooth scrolling and lower memory/DOM size even after many pages are loaded.
+  - Clear separation of concerns: page orchestration vs. table rendering.
+  - Easier maintenance and reuse of row markup.
+- **Trade‑offs**:
+  - Virtualization complements but does not replace pagination.
+  - Requires a reasonable row height estimate (tuneable; use 44px baseline).
+- **Acceptance**:
+  - Scrolling remains smooth with 1,000+ items loaded.
+  - No visual/interaction regressions vs. current rows.
+  - TS build passes; container build green.
+- **Estimated Timeline**: 0.5–1 day (Projects parity)
+
 ### 5. Real-time Notifications
 - **Description**: Add real-time notifications for assignment changes, conflicts, deadlines
 - **Technology**: WebSockets or Server-Sent Events
 - **Estimated Timeline**: 3-4 days
+
+### Help & Documentation Hub (/help)
+- **Scope**: Provide an in-app documentation hub at `/help` with accessible structure, quick navigation, and contextual entry points from across the app.
+- **Intended Content**:
+  - Quick Start: signing in, linking a person, basic navigation
+  - Keyboard Shortcuts: list and how to enable reduced motion
+  - People & Departments: filters, include-children hierarchy, autocomplete
+  - Projects: status, client, deliverables overview, filter metadata
+  - Assignments: grid vs list, conflict checks, weekly hours semantics
+  - Reports & Forecasts: capacity heatmap, team forecast
+  - Settings & Roles: admin vs manager vs user capabilities
+  - Exports/Imports: formats, limits, troubleshooting
+  - FAQ & Troubleshooting: common errors and friendly resolutions
+- **Related Future UX**:
+  - Searchable docs with typeahead (client-side index; highlight matches)
+  - Contextual help: deep-link anchors from UI “?” icons to relevant sections
+  - Copy-to-clipboard for example queries and shortcuts cheat-sheet
+  - Link to API schema once available (Phase 10 OpenAPI)
+- **Dependencies**:
+  - Router route exists; Coming Soon page implemented (Phase 1.1)
+  - Choose content delivery: MDX static pages in frontend or curated markdown compiled at build
+  - Optional: surface API schema links after Phase 10.1 (`/schema/`, Swagger UI)
+- **Milestones**:
+  - M0 (done): `/help` route renders Coming Soon
+  - M1: Static Help landing page with sections + anchor links
+  - M2: Client-side search + table of contents
+  - M3: Contextual links from major screens (e.g., People filters → /help#filters)
+  - M4: Tips/Shortcuts overlay and accessibility notes
+  - M5: Feedback link (mailto or form) and basic analytics on help usage
+ - **Estimated Timeline**: 2–4 days for M1–M2; additional 2–3 days for M3–M5
 
 ---
 
@@ -244,3 +294,11 @@ Source: `prompts/R2-REBUILD-CONTRACTS.md`
 - Automated suggestions for workload balancing and risk alerts
 
 Sources: `prompts/R2-REBUILD-004-MANAGER-FEATURES.md`, `prompts/R2-REBUILD-002-BUSINESS-LOGIC.md`
+### Infinite Scrolling for Lists
+- Description: Replace explicit �Load more� buttons with automatic fetching when users near the bottom of the list.
+- Scope: People and Projects left-panel lists (and similar long lists).
+- Approach: Use IntersectionObserver/scroll threshold with React Query `fetchNextPage()`; preserve keyboard accessibility and announce loading status.
+- Benefits: Fewer clicks; smoother, continuous browsing.
+- Trade-offs: Must guard against over-fetching; keep clear end-of-list indicators; still combine with virtualization for render performance.
+- Acceptance: Smooth auto-append, no duplicate loads, accessible focus management, works with filtered views.
+- Estimated Timeline: 0.5�1 day

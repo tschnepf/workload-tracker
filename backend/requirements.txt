@@ -1,5 +1,5 @@
 # Core Django
-Django==5.0.1
+Django==5.0.14
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
 djangorestframework-simplejwt==5.3.1
@@ -12,8 +12,11 @@ dj-database-url==2.1.0
 python-decouple==3.8
 
 # Monitoring and Error Tracking
-sentry-sdk[django]==1.40.6
+sentry-sdk[django]==2.37.0
 django-silk==5.2.0
+
+# Login protection (feature-flagged)
+django-axes==6.5.0
 
 # For naming validation
 dataclasses==0.6
@@ -27,3 +30,9 @@ redis==5.0.1
 # Production WSGI server
 gunicorn==21.2.0
 gevent==23.9.1
+
+# Background jobs
+celery[redis]==5.4.0
+
+# OpenAPI schema generation
+drf-spectacular==0.27.2

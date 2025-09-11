@@ -68,6 +68,9 @@ REDIS_PASSWORD=your-redis-password
 DEBUG=false
 SECRET_KEY=your-production-secret-key
 DJANGO_SETTINGS_MODULE=config.settings
+ALLOWED_HOSTS=your.domain.com,your-alt-domain.com
+CORS_ALLOWED_ORIGINS=https://your.domain.com
+AUTH_ENFORCED=true
 
 # Optional monitoring
 SENTRY_DSN=your-sentry-dsn
@@ -219,4 +222,16 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend pyt
 
 # Create admin user
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py createsuperuser
+```
+### Authentication Enforcement
+- `AUTH_ENFORCED` controls whether the backend enforces `IsAuthenticated` globally.
+  - Keep `AUTH_ENFORCED=true` in production.
+  - You may temporarily set `AUTH_ENFORCED=false` during staggered rollouts; switch back to true once frontend is deployed.
+
+### Create Dev/Admin User (optional)
+For staging or local production-like testing, create a user quickly:
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend \
+  python manage.py create_dev_user --username admin --password 'strongpass' --email admin@example.com --staff --superuser
 ```

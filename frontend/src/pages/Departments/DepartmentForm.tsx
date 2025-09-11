@@ -190,7 +190,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
               <select
                 value={formData.parentDepartment || ''}
                 onChange={(e) => handleInputChange('parentDepartment', e.target.value ? parseInt(e.target.value) : null)}
-                className={`w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent ${
+                className={`w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent min-h-[44px] ${
                   validationErrors.parentDepartment ? 'border-red-600' : ''
                 }`}
                 disabled={loading}
@@ -214,7 +214,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
               <select
                 value={formData.manager || ''}
                 onChange={(e) => handleInputChange('manager', e.target.value ? parseInt(e.target.value) : null)}
-                className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent"
+                className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent min-h-[44px]"
                 disabled={loading}
               >
                 <option value="">None Assigned</option>

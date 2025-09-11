@@ -2,7 +2,7 @@
  * Projects List - Split-panel layout with filterable project list and detailed project view
  */
 
-import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Project, Person, Assignment } from '@/types/models';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -21,7 +21,10 @@ interface PersonWithAvailability extends Person {
   hasSkillMatch?: boolean;
 }
 import Sidebar from '@/components/layout/Sidebar';
+import Toast from '@/components/ui/Toast';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import Skeleton from '@/components/ui/Skeleton';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -255,6 +258,7 @@ const ProjectsList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   
   
   // Assignment management
@@ -938,10 +942,12 @@ const ProjectsList: React.FC = () => {
       });
       // Invalidate filter metadata as status is part of the payload
       await invalidateFilterMeta();
+      setToast({ message: 'Project status updated', type: 'success' });
     } catch (err: any) {
       // Revert optimistic update on error
       setSelectedProject(selectedProject);
       setError('Failed to update project status');
+      setToast({ message: 'Failed to update project status', type: 'error' });
     }
   };
 
@@ -1217,64 +1223,27 @@ const ProjectsList: React.FC = () => {
             </div>
 
             {/* Table Body */}
-            <div className="overflow-y-auto h-full">
-              {sortedProjects.length === 0 ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center text-[#969696]">
-                    <div className="text-lg mb-2">
-                      {statusFilter === 'no_assignments' 
-                        ? 'No projects without assignments'
-                        : 'No projects found'
-                      }
-                    </div>
-                    <div className="text-sm">
-                      {statusFilter === 'no_assignments'
-                        ? 'All projects have team members assigned. Try a different filter.'
-                        : 'Try adjusting your filters or create a new project'
-                      }
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                sortedProjects.map((project, index) => (
-                  <div
-                    key={project.id}
-                    onClick={() => handleProjectClick(project, index)}
-                    className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
-                      selectedProject?.id === project.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
-                    }`}
-                    tabIndex={0}
-                  >
-                    {/* Client */}
-                    <div className="col-span-2 text-[#969696] text-xs">
-                      {project.client || 'No Client'}
-                    </div>
-                    
-                    {/* Project Name & Number */}
-                    <div className="col-span-3">
-                      <div className="text-[#cccccc] font-medium leading-tight">{project.name}</div>
-                      <div className="text-[#969696] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
-                    </div>
-                    
-                    {/* Type (using status for now) */}
-                    <div className="col-span-1 text-[#969696] text-xs">
-                      {formatStatus(project.status || '')}
-                    </div>
-                    
-                    {/* Status */}
-                    <div className="col-span-2">
-                      <StatusBadge status={project.status || ''} />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            {loading ? (
+              <div className="p-3">
+                <Skeleton rows={8} className="h-5 mb-2" />
+              </div>
+            ) : (
+              <VirtualizedProjectsList 
+                projects={sortedProjects} 
+                selectedProjectId={selectedProject?.id ?? null}
+                onSelect={handleProjectClick}
+              />
+            )}
           </div>
         </div>
 
         {/* Right Panel - Project Details */}
         <div className="w-1/2 flex flex-col bg-[#2d2d30] min-w-0">
-          {selectedProject ? (
+          {loading ? (
+            <div className="p-4 space-y-3">
+              <Skeleton rows={6} className="h-5" />
+            </div>
+          ) : selectedProject ? (
             <>
               {/* Project Header */}
               <div className="p-4 border-b border-[#3e3e42]">
@@ -1631,8 +1600,100 @@ const ProjectsList: React.FC = () => {
           )}
         </div>
       </div>
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
+      )}
     </div>
   );
 };
 
 export default ProjectsList;
+
+// Virtualized list component for left panel projects list
+function VirtualizedProjectsList({
+  projects,
+  selectedProjectId,
+  onSelect,
+}: {
+  projects: Project[];
+  selectedProjectId: number | null;
+  onSelect: (p: Project, index: number) => void;
+}) {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const enableVirtual = projects.length > 200;
+
+  if (projects.length === 0) {
+    return (
+      <div className="overflow-y-auto h-full">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center text-[#969696]">
+            <div className="text-lg mb-2">No projects found</div>
+            <div className="text-sm">Try adjusting your filters or create a new project</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!enableVirtual) {
+    return (
+      <div className="overflow-y-auto h-full">
+        {projects.map((project, index) => (
+          <div
+            key={project.id}
+            onClick={() => onSelect(project, index)}
+            className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
+              selectedProjectId === project.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
+            }`}
+            tabIndex={0}
+          >
+            <div className="col-span-2 text-[#969696] text-xs">{project.client || 'No Client'}</div>
+            <div className="col-span-3">
+              <div className="text-[#cccccc] font-medium leading-tight">{project.name}</div>
+              <div className="text-[#969696] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
+            </div>
+            <div className="col-span-1 text-[#969696] text-xs">{formatStatus(project.status || '')}</div>
+            <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const rowVirtualizer = useVirtualizer({
+    count: projects.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 44,
+    overscan: 6,
+  });
+
+  return (
+    <div ref={parentRef} className="overflow-y-auto h-full relative">
+      <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+        {rowVirtualizer.getVirtualItems().map((v) => {
+          const project = projects[v.index];
+          if (!project) return null;
+          return (
+            <div
+              key={project.id}
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
+              onClick={() => onSelect(project, v.index)}
+              className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
+                selectedProjectId === project.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
+              }`}
+              tabIndex={0}
+            >
+              <div className="col-span-2 text-[#969696] text-xs">{project.client || 'No Client'}</div>
+              <div className="col-span-3">
+                <div className="text-[#cccccc] font-medium leading-tight">{project.name}</div>
+                <div className="text-[#969696] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
+              </div>
+              <div className="col-span-1 text-[#969696] text-xs">{formatStatus(project.status || '')}</div>
+              <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

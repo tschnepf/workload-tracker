@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from '@/lib/queryClient';
+import Loader from '@/components/ui/Loader';
 
 // Lazy-loaded route components for code splitting
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -28,17 +29,11 @@ const MilestoneCalendar = React.lazy(() => import('./pages/Deliverables/Calendar
 const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'));
 const Login = React.lazy(() => import('./pages/Auth/Login'));
 const Profile = React.lazy(() => import('./pages/Profile/Profile'));
+const ComingSoon = React.lazy(() => import('./pages/ComingSoon/ComingSoon'));
 import { RequireAuth } from '@/components/auth/RequireAuth';
 
-// Loading component for Suspense fallback
-const PageLoader: React.FC = () => (
-  <div className="flex items-center justify-center min-h-screen bg-[#1e1e1e]">
-    <div className="flex flex-col items-center space-y-4">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#007acc]"></div>
-      <div className="text-[#cccccc] text-lg">Loading...</div>
-    </div>
-  </div>
-);
+// Suspense fallback uses unified Loader
+const PageLoader: React.FC = () => <Loader full message="Loading…" />;
 
 // Error boundary for lazy-loaded components
 class LazyLoadErrorBoundary extends React.Component<
@@ -78,6 +73,7 @@ class LazyLoadErrorBoundary extends React.Component<
 
 import { useDeptServerDefaultsOnce } from '@/hooks/useDeptServerDefaults';
 import { useThemeFromSettings } from '@/hooks/useThemeFromSettings';
+import ToastHost from '@/components/ui/ToastHost';
 
 function App() {
   // Apply server-provided defaults and theme after auth hydration
@@ -120,12 +116,14 @@ function App() {
               <Route path="/deliverables/calendar" element={<RequireAuth><MilestoneCalendar /></RequireAuth>} />
               {/* More routes will be added in later chunks */}
               <Route path="/reports/forecast" element={<RequireAuth><TeamForecastPage /></RequireAuth>} />
+              <Route path="/help" element={<RequireAuth><ComingSoon /></RequireAuth>} />
             </Routes>
 </Suspense>
         </LazyLoadErrorBoundary>
       </Router>
       {/* React Query DevTools for development */}
       <ReactQueryDevtools initialIsOpen={false} />
+      <ToastHost />
     </QueryClientProvider>
   );
 }

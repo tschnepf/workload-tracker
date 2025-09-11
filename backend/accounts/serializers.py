@@ -4,7 +4,7 @@ from typing import Dict, Tuple
 from django.conf import settings as django_settings
 from rest_framework import serializers
 
-from .models import UserProfile
+from .models import UserProfile, AdminAuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -126,3 +126,28 @@ class UserProfileSerializer(serializers.ModelSerializer):
             instance.settings = validated_data.get("settings", {})
         instance.save(update_fields=["settings", "updated_at"])
         return instance
+
+
+class AdminAuditLogSerializer(serializers.ModelSerializer):
+    actor = serializers.SerializerMethodField()
+    targetUser = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AdminAuditLog
+        fields = ("id", "action", "detail", "created_at", "actor", "targetUser")
+        read_only_fields = fields
+
+    def _user_summary(self, u):
+        if not u:
+            return None
+        return {
+            "id": getattr(u, 'id', None),
+            "username": getattr(u, 'username', None),
+            "email": getattr(u, 'email', None),
+        }
+
+    def get_actor(self, obj: AdminAuditLog):
+        return self._user_summary(getattr(obj, 'actor', None))
+
+    def get_targetUser(self, obj: AdminAuditLog):
+        return self._user_summary(getattr(obj, 'target_user', None))

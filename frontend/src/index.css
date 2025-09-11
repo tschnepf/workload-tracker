@@ -18,6 +18,21 @@
 
 /* Custom scrollbar for dark mode */
 @layer utilities {
+  /* Slightly bump secondary text (#969696) for better AA contrast on dark backgrounds */
+  [class*="text-\[#969696\]"] {
+    color: #bdbdbd !important; /* was #969696 */
+  }
+
+  /* Respect users who prefer reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   .scrollbar-dark {
     scrollbar-width: thin;
     scrollbar-color: #475569 #1e293b;

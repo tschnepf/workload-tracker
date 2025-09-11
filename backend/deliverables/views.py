@@ -14,7 +14,11 @@ from datetime import datetime
 from collections import defaultdict
 import logging
 from .models import Deliverable, DeliverableAssignment
-from .serializers import DeliverableSerializer, DeliverableAssignmentSerializer
+from .serializers import (
+    DeliverableSerializer,
+    DeliverableAssignmentSerializer,
+    DeliverableCalendarItemSerializer,
+)
 from assignments.models import Assignment
 
 
@@ -146,21 +150,8 @@ class DeliverableViewSet(viewsets.ModelViewSet):
         if if_none_match and if_none_match == etag_val:
             return Response(status=status.HTTP_304_NOT_MODIFIED)
 
-        items = []
-        for d in qs:
-            title = d.description or (f"{d.percentage}%" if d.percentage is not None else "Milestone")
-            items.append({
-                'id': d.id,
-                'project': d.project_id,
-                'projectName': d.project.name if d.project_id else None,
-                'projectClient': getattr(d.project, 'client', None) if d.project_id else None,
-                'title': title,
-                'date': d.date.strftime('%Y-%m-%d') if d.date else None,
-                'isCompleted': d.is_completed,
-                'assignmentCount': getattr(d, 'assignmentCount', 0),
-            })
-
-        resp = Response(items)
+        ser = DeliverableCalendarItemSerializer(qs, many=True)
+        resp = Response(ser.data)
         if last_updated:
             resp['Last-Modified'] = http_date(int(last_updated.timestamp()))
         resp['ETag'] = etag_val

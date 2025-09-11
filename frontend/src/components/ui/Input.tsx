@@ -19,9 +19,10 @@ const Input: React.FC<InputProps> = ({
   // VSCode-style dark theme input styling - consistent across all forms
   const baseStyles = `
     w-full px-3 py-2 rounded-md border text-sm transition-colors
-    bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] 
-    placeholder-[#969696] focus:border-[#007acc] 
-    focus:ring-1 focus:ring-[#007acc] focus:outline-none
+    bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]
+    placeholder-[#969696] focus:border-[#007acc]
+    focus:ring-1 focus:ring-[#007acc] focus:outline-none motion-reduce:transition-none
+    min-h-[44px]
   `;
 
   const errorStyles = error 

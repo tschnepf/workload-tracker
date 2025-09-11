@@ -112,3 +112,26 @@ class DeliverableAssignmentSerializer(serializers.ModelSerializer):
 
     def validate_role_on_milestone(self, value):
         return self.validate_roleOnMilestone(value)
+
+
+class DeliverableCalendarItemSerializer(serializers.Serializer):
+    """Serializer for calendar items (aggregate), camelCase API fields.
+
+    Accepts Deliverable instances annotated with assignmentCount.
+    """
+    id = serializers.IntegerField()
+    project = serializers.IntegerField(source='project_id')
+    projectName = serializers.CharField(source='project.name', allow_null=True)
+    projectClient = serializers.CharField(source='project.client', allow_null=True, required=False)
+    title = serializers.SerializerMethodField()
+    date = serializers.DateField(allow_null=True, format='%Y-%m-%d')
+    isCompleted = serializers.BooleanField(source='is_completed')
+    assignmentCount = serializers.IntegerField()
+
+    def get_title(self, obj):
+        if getattr(obj, 'description', None):
+            return obj.description
+        pct = getattr(obj, 'percentage', None)
+        if pct is not None:
+            return f"{pct}%"
+        return 'Milestone'

@@ -9,7 +9,9 @@ Notes:
 - When touching API contracts, update both backend and frontend in the same phase/step.
 - Use serializers to map names; do not manually map in views/components.
 - Guard production-only changes with environment flags.
-- If you run the stack via Docker, use `docker compose exec <service>` to run commands inside containers (e.g., `docker compose exec frontend npm run build`, `docker compose exec backend python manage.py check`).
+- Always run commands inside containers using `docker compose exec <service>` — avoid host-level `npm`, `node`, `pip`, or `manage.py`.
+  - Frontend examples: `docker compose exec frontend npm install` | `docker compose exec frontend npm ci` | `docker compose exec frontend npm run build` | `docker compose exec frontend npm audit` | `docker compose exec frontend npx lhci autorun`.
+  - Backend examples: `docker compose exec backend python manage.py check` | `docker compose exec backend sh -lc "pip install -q pip-audit && pip-audit -r requirements.txt --desc"`.
 - When adding Python packages, add them to `backend/requirements.txt` and rebuild the backend image (`docker compose build backend`). When adding frontend packages, update `frontend/package.json` and rebuild the frontend image (`docker compose build frontend`).
 
 ---
@@ -27,6 +29,7 @@ Notes:
 ### Step 0.3 — Upgrade frontend dev dependencies with known advisories
 - Prompt: "Update `vite` to ≥ 5.4.19 (current is 5.4.8) and `eslint` to ≥ 9.35.0 (current is 9.12.0) to resolve security advisories. Run `npm install`, `npm audit` and ensure build still succeeds. Rebuild the frontend Docker image so future deployments include updated modules. Do not introduce breaking config changes."
 - Description: Patch known vulnerabilities in tooling.
+- Commands (Docker): `docker compose exec frontend npm install`; `docker compose exec frontend npm audit`; `docker compose exec frontend npm run build`.
 
 ### Step 0.4 — Verify backend dependencies are on secure patches
 - Prompt: "Check `backend/requirements.txt` for latest security patches of Django, DRF, SimpleJWT, and Sentry SDK. Target patch-level upgrades within the current major/minor (e.g., Django 5.0.x → latest 5.0.x). Do not upgrade across major versions without explicit approval."
@@ -35,16 +38,17 @@ Notes:
 ### Step 0.5 — Update or remove `serve` (frontend)
 - Prompt: "Update `serve` to ≥ 14.2.5 (addresses transitive `compression` advisory) or remove it if not used in the workflow. Re-run `npm audit` to confirm resolution. Rebuild the frontend Docker image so production builds succeed with the correct dependency set."
 - Description: Close additional advisories flagged by `npm audit`.
+- Commands (Docker): `docker compose exec frontend npm audit`.
 
 ### Step 0.6 — Run Python security audit
-- Prompt: "Run `pip-audit` on the backend. Propose safe patch updates that do not introduce code changes, and record results in a short SECURITY_NOTES.md."
+- Prompt: "Run `pip-audit` inside the backend container (e.g., `docker compose exec backend sh -lc \"pip install -q pip-audit && pip-audit -r requirements.txt --desc\"`). Propose safe patch updates that do not introduce code changes, and record results in a short SECURITY_NOTES.md."
 - Description: Identify Python CVEs early and plan safe patches.
 
 ### Testing (AI-Agent)
-- Run `npm run build` in `frontend` and ensure success.
-- Run `npm audit` and confirm the flagged advisories are mitigated where possible.
-- Run `pip-audit` and document actionable items.
-- Run `python backend/manage.py check` to ensure no Django config errors.
+- Run `docker compose exec frontend npm run build` and ensure success.
+- Run `docker compose exec frontend npm audit` and confirm the flagged advisories are mitigated where possible.
+- Run `docker compose exec backend sh -lc "pip install -q pip-audit && pip-audit -r requirements.txt --desc"` and document actionable items.
+- Run `docker compose exec backend python manage.py check` to ensure no Django config errors.
 
 ### Manual UI Checks (You)
 - Confirm no `.env` is tracked in git; application still runs with your local env.
@@ -74,7 +78,7 @@ Notes:
 - Description: Reduce confusion and accidental imports.
 
 ### Testing (AI-Agent)
-- Run `npm run build` and ensure type checks pass.
+- Run `docker compose exec frontend npm run build` and ensure type checks pass.
 - Grep for `Loading` and ensure references now use the Loader component.
 - Verify `App.tsx` has a `/help` route and it renders the Coming Soon page.
 
@@ -116,8 +120,16 @@ Notes:
 - Prompt: "Add IP-based request rate limiting for `/api/token/` and `/api/auth/*` routes in Nginx to complement DRF throttles. Document limits and burst."
 - Description: Defense-in-depth for auth endpoints.
 
+### Step 2.7 — Auth lockout under feature flag (optional)
+- Prompt: "Add login protection under a feature flag using `django-axes` (or similar) to lock accounts temporarily after repeated failed logins. Configure safe defaults, admin whitelist, and alerting. Add the package to `backend/requirements.txt` and rebuild the backend image. Expose env vars to tune thresholds per environment."
+- Description: Prevent brute force without risking accidental admin lockout.
+
+### Step 2.8 — Admin audit trail for sensitive actions
+- Prompt: "Add lightweight audit logging for admin actions (user create/delete, password set, role changes). Use a simple model/table with who/when/what fields and log from existing views. Provide a read-only endpoint for admins to query recent actions."
+- Description: Accountability and traceability in multi-user setups.
+
 ### Testing (AI-Agent)
-- Run `python backend/manage.py check --deploy` and fix any reported security settings.
+- Run `docker compose exec backend python manage.py check --deploy` and fix any reported security settings.
 - With feature-flag off: header-token auth works. With flag on: refresh cookie flow works in local dev (use non-Secure cookies on http). Verify CORS/CSRF settings on refresh.
 
 ### Manual UI Checks (You)
@@ -155,6 +167,14 @@ Notes:
 - Prompt: "Create `GET /api/people/autocomplete/?search=` returning a limited array of `{ id, name, department, weekly_capacity }` using `only()` and appropriate indexes. Limit results (e.g., top 20). Reuse a serializer (or create a lightweight one) to ensure camelCase mapping via serializers, not views."
 - Description: Support efficient UI autocomplete without loading all people.
 
+### Step 3.8 — Database connection pooling
+- Prompt: "Enable DB connection reuse by setting `DATABASES['default']['CONN_MAX_AGE']=60` and `CONN_HEALTH_CHECKS=True` in `backend/config/settings.py` (guarded by env)."
+- Description: Reduce connection overhead and improve reliability under load.
+
+### Step 3.9 — Short‑TTL cache for hot aggregate endpoints (feature-flagged)
+- Prompt: "Introduce short‑TTL caching for hot aggregate endpoints (e.g., `/projects/filter-metadata/`, heatmaps/forecasts) using Redis (`django-redis`). Add invalidation hooks (signals on save/delete of related models) and a feature flag to toggle server-side cache. Document TTLs and invalidation strategy."
+- Description: Improve responsiveness while keeping data fresh.
+
 ### Testing (AI-Agent)
 - Measure response sizes/times before/after defaults change (sample endpoints). Ensure no shape changes.
 - Exercise the new `/people/autocomplete/` endpoint with/without search.
@@ -186,8 +206,28 @@ Notes:
 - Prompt: "Add `peopleApi.autocomplete(search)` to call `/people/autocomplete/`. Replace `getForAutocomplete()` usages with the new function. Remove the old `listAll`-based implementation once all call sites are migrated."
 - Description: Eliminate large client-side scans for autocomplete.
 
+### Step 4.6 — Optimistic UI updates with safe rollback
+- Prompt: "Use React Query optimistic updates for common edits (e.g., People name, Project fields). Implement rollback on error and show toasts for success/error. Keep server as the source of truth by refetching the affected record after mutation settles."
+- Description: Snappier UX while preserving consistency.
+
+### Step 4.7 — Skeleton loaders and empty states
+- Prompt: "Add skeleton components for list/detail panes and explicit empty states (e.g., 'No people match your filters') to improve perceived performance and clarity."
+- Description: Reduce perceived latency and confusion.
+
+### Step 4.8 — Centralized toasts and error mapping
+- Prompt: "Standardize notifications through `components/ui/Toast.tsx`. Map common API error shapes (HTTP 400/401/403/409/500) to friendly messages. Remove ad‑hoc inline status strings."
+- Description: Consistent, readable feedback across the app.
+
+### Step 4.9 — Timezone and date handling
+- Prompt: "Normalize all dates from backend as ISO (UTC). In the frontend, format dates in the user's local timezone only for display. Document this contract and audit affected pages for consistency."
+- Description: Avoid off‑by‑one date bugs and user confusion.
+
+### Step 4.10 — Accessibility & keyboard navigation
+- Prompt: "Ensure modals trap focus and close on Escape; add `aria-*` attributes for loaders and Coming Soon pages; implement basic keyboard navigation in list views (↑/↓ to move, Enter to open)."
+- Description: Improve usability and accessibility.
+
 ### Testing (AI-Agent)
-- Run Lighthouse (LHCI) on a production build to capture metrics before/after. If using Docker, run the build/serve commands inside the frontend container.
+- Run Lighthouse (LHCI) inside the frontend container on a production build: `docker compose exec frontend npm run build` then `docker compose exec frontend npx lhci autorun`.
 - After adding or updating dependencies (frontend or backend), run `docker compose build` (or targeted `build frontend|backend`) to ensure future deployments pull in the changes.
 
 ### Manual UI Checks (You)
@@ -250,7 +290,7 @@ Notes:
 - Description: Institutionalize the practice.
 
 ### Testing (AI-Agent)
-- Build the frontend and run TypeScript checks; ensure model types match serialized fields.
+- Build the frontend inside the container and run TypeScript checks (e.g., `docker compose exec frontend npm run build`); ensure model types match serialized fields.
 
 ### Manual UI Checks (You)
 - Spot-check pages (People, Projects) for properly displayed names and fields.
@@ -259,19 +299,105 @@ Notes:
 
 ## Phase 8 — Deployment, Monitoring, and Source Maps
 
-### Step 8.1 — Sentry integration and sourcemaps hygiene
+### Step 8.1 – Sentry integration and sourcemaps hygiene
 - Prompt: "Ensure frontend sourcemaps are uploaded to Sentry in production builds (configure `@sentry/vite-plugin` with CI env vars) and are not publicly served. Keep `sourcemap: true` only for the CI step that uploads maps. Confirm backend Sentry is enabled in production with PII off by default."
 - Description: Enable error triage without exposing internals.
+
+### Step 8.1b – Sentry Python SDK 2.x Upgrade
+- Prompt: "Upgrade backend `sentry-sdk[django]` to `2.37.0`. Verify `sentry_sdk.init` options (DjangoIntegration, LoggingIntegration), `send_default_pii=False`, and traces/profiles sample rates. Deploy to staging, trigger test errors/transactions, and confirm they appear in Sentry with expected metadata."
+- Description: Adopt latest Sentry SDK with migration validation.
 
 ### Step 8.2 — Disable Silk in production
 - Prompt: "Ensure `SILK_ENABLED=False` for production via env and that `/silk/` is not routed."
 - Description: Avoid shipping profiling tools to prod.
+
+### Step 8.3 — Static asset caching and Brotli compression
+- Prompt: "In Nginx, set long‑lived `Cache-Control: public,max-age=31536000,immutable` for hashed assets (Vite outputs). Keep shorter cache for HTML. Enable Brotli (and keep gzip) where supported. Test asset updates with a cache‑busting deploy."
+- Description: Faster loads via caching and better compression.
+
+### Step 8.4 — Request IDs and structured logs
+- Prompt: "Add middleware to inject an `X-Request-ID` (preserve incoming if set) and log structured JSON including request id, user id, path, status, and latency. Correlate with Sentry by including the request id."
+- Description: Easier debugging and traceability in production.
+
+### Step 8.5 — Readiness endpoint and healthchecks
+- Prompt: "Add `/api/ready/` that verifies DB and cache connectivity (fast checks). Update Docker healthchecks to use readiness for the backend, improving accuracy over mere process liveness."
+- Description: More reliable container orchestration.
+
+### Step 8.6 — CSP rollout strategy (report‑only → enforce)
+- Prompt: "Introduce a `Content-Security-Policy-Report-Only` header in staging to capture violations without breaking pages. After resolving issues (e.g., fonts), switch to enforcing `Content-Security-Policy` in production."
+- Description: Reduce risk of CSP rollouts breaking the UI.
+
+### Testing (AI-Agent)
 
 ### Testing (AI-Agent)
 - Simulate a handled error in a staging build to verify Sentry receives events and source maps resolve.
 
 ### Manual UI Checks (You)
 - Confirm no `/silk/` in production; verify Sentry dashboards populate with meaningful stack traces.
+
+---
+
+## Phase 9 — Background Jobs & Heavy Workflows (Feature‑flagged)
+
+### Step 9.1 — Introduce Celery workers for heavy tasks
+- Prompt: "Add Celery + Redis for Excel import/export and other heavy tasks. Add `celery` to `backend/requirements.txt` and rebuild the backend image. Add a `worker` service to docker-compose (dev/prod) and a basic `celery.py` app wiring. Keep synchronous endpoints by default; add a feature flag (`FEATURES['ASYNC_JOBS']`) to switch to async job submission + status polling."
+- Description: Prevent request timeouts and keep the UI responsive for heavy operations.
+
+### Step 9.2 — Async API contract and UI status
+- Prompt: "When async jobs are enabled, return a job id from import/export endpoints and add a `GET /api/jobs/<id>/` status endpoint. In the frontend, show job progress and allow retry/download when complete."
+- Description: Clear UX for long‑running operations.
+
+### Testing (AI-Agent)
+- Run a large export/import with the feature flag off (sync) and on (async). Verify no regressions. If using Docker, bring up the worker service and observe logs.
+
+### Manual UI Checks (You)
+- Trigger large imports/exports and confirm the UI stays responsive and shows progress.
+
+---
+
+## Phase 10 — API Schema & Typed Clients (Optional)
+
+### Step 10.1 — Add OpenAPI schema generation
+- Prompt: "Integrate `drf-spectacular` (or `drf-yasg`) to serve `/schema/` and `/schema/swagger/`. Add the package to `backend/requirements.txt` and rebuild the backend image."
+- Description: Authoritative API documentation from code.
+
+### Step 10.2 — Generate TypeScript clients (incremental adoption)
+- Prompt: "Add a script to generate TypeScript clients from the OpenAPI schema (e.g., `openapi-typescript`). Add the generator as a devDependency and rebuild the frontend image. Migrate selected modules to the generated client incrementally to avoid large churn."
+- Description: Reduce drift between FE/BE and improve type safety.
+
+### Testing (AI-Agent)
+- Validate the schema endpoint loads and clients type‑check. Ensure no breaking API changes were introduced.
+
+### Manual UI Checks (You)
+- Exercise a migrated module and confirm requests/responses align with the schema.
+
+---
+
+## Phase 11 — E2E Tests (Optional)
+
+### Step 11.1 — Add Playwright tests for critical flows
+- Prompt: "Add Playwright as a devDependency in the frontend. Create tests for login, People list/edit, Projects list/edit. Run headless in CI and locally via Docker: `docker compose exec frontend npx playwright test`."
+- Description: Catch regressions in user-critical paths.
+
+### Testing (AI-Agent)
+- Run the E2E suite headless locally and in CI. Capture screenshots on failures.
+
+### Manual UI Checks (You)
+- Skim the recorded videos (if enabled) to confirm flows and timing.
+
+---
+
+## Phase 12 — Docker Image Hardening (Optional)
+
+### Step 12.1 — Multi‑stage builds and non‑root runtime
+ - Prompt: "Convert backend and frontend Dockerfiles to multi-stage builds to produce smaller runtime images. Run containers as a non-root user. Validate volume permissions and entrypoints. Roll out on main with environment-gated toggles and feature flags, and test both dev and prod compose flows before enabling in production."
+- Description: Smaller, more secure deployable images with fewer privileges.
+
+### Testing (AI-Agent)
+- Build new images, run the stack with compose, and verify migrations, static collection, and frontend serve still work.
+
+### Manual UI Checks (You)
+- Validate that dev workflow is unaffected and production smoke tests pass.
 
 ---
 

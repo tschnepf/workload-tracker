@@ -27,6 +27,33 @@ Comprehensive team member management with capacity tracking.
 
 ---
 
+## Serializer & Naming Discipline
+
+Centralize snake_case → camelCase mapping in DRF serializers; avoid hand‑mapping in views.
+
+- Backend: Use serializers for both model and aggregate responses (see `docs/NAMING-DISCIPLINE.md`).
+- Frontend: Use typed models in `frontend/src/types/models.ts`; do not manually rename fields in components.
+
+---
+
+## Structured JSON Logs
+
+The backend emits JSON logs for each HTTP request (includes `request_id`, `user_id`, `path`, `status`, and `duration_ms`). Each response also includes an `X-Request-ID` header to correlate with logs and Sentry.
+
+Quick examples:
+
+- Docker (dev):
+  - Tail backend logs: `docker compose logs -f backend`
+  - Filter request lines only: `docker compose logs -f backend | rg '"logger":"request"'`
+  - Pretty-print with `jq` (optional): `docker compose logs -f backend | rg '"logger":"request"' | jq .`
+
+- Kubernetes (example):
+  - `kubectl logs -f deploy/workload-tracker-backend | jq .`
+
+Tip: Include `X-Request-ID` on client requests to propagate an external trace ID; otherwise the server generates one.
+
+---
+
 ### 📊 **Assignment Management**
 Smart workload allocation with visual planning tools.
 
@@ -300,3 +327,31 @@ Apply a department scope across the entire app and share deep links.
 - Pages and APIs automatically respect this filter (People, Assignments, Capacity Heatmap, Workload Forecast).
 
 Tip: Use the “Copy link” action in the header to share a filtered view.
+
+---
+
+## Administration & Auth
+
+### Authentication Enforcement Toggle (AUTH_ENFORCED)
+- Purpose: stage the switch to authenticated APIs during rollout.
+- Behavior:
+  - When AUTH_ENFORCED=true (default), the backend enforces IsAuthenticated globally.
+  - When AUTH_ENFORCED=false, the backend relaxes to AllowAny to support staggered frontend/backend deploys.
+- Configure via env (e.g., .env):
+  - AUTH_ENFORCED=true for staging/production
+
+### Create a Dev User (local)
+Quickly create or update a local account:
+
+`ash
+docker compose exec backend python manage.py create_dev_user \
+  --username admin --password admin123 --email admin@example.com --staff --superuser
+` 
+
+This also ensures a corresponding UserProfile exists via signals.
+
+### Production Safety (Highlights)
+- DEBUG=false in production (enforced in docker-compose.prod.yml).
+- Set SECRET_KEY, ALLOWED_HOSTS, and CORS_ALLOWED_ORIGINS via env.
+- If behind a proxy/ingress, Django honors X-Forwarded-* headers (SECURE_PROXY_SSL_HEADER, USE_X_FORWARDED_HOST).
+

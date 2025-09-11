@@ -293,7 +293,8 @@ const AssignmentForm: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = deptState.includeChildren ? 1 : 0;
-      const peopleList = await peopleApi.listAll({ department: dept, include_children: dept != null ? inc : undefined });
+      const page = await peopleApi.list({ page: 1, page_size: 100, department: dept, include_children: dept != null ? inc : undefined });
+      const peopleList = page.results || [];
       setPeople(peopleList);
       setFilteredPeople(sortPeopleByDepartmentAndSkills(peopleList, formData.person, departments, peopleSkills, projectSkills));
     } catch (err: any) {
@@ -303,8 +304,8 @@ const AssignmentForm: React.FC = () => {
 
   const loadProjects = async () => {
     try {
-      const projectsList = await projectsApi.listAll();
-      setProjects(projectsList);
+      const page = await projectsApi.list({ page: 1, page_size: 100 });
+      setProjects(page.results || []);
     } catch (err: any) {
       setError('Failed to load projects list');
     }
@@ -763,7 +764,7 @@ const AssignmentForm: React.FC = () => {
               <select
                 value={formData.project}
                 onChange={(e) => handleChange('project', e.target.value)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
               >
                 <option value="">Select a project...</option>
                 {projects.map((project) => (

@@ -8,8 +8,11 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Person, PersonSkill, SkillTag, Department, Role } from '@/types/models';
 import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi, rolesApi } from '@/services/api';
+import { useUpdatePerson } from '@/hooks/usePeople';
+import Toast from '@/components/ui/Toast';
 import Sidebar from '@/components/layout/Sidebar';
 import SkillsAutocomplete from '@/components/skills/SkillsAutocomplete';
+import PeopleListTable from './PeopleListTable';
 
 // Helper to normalize proficiency level to allowed union type
 const normalizeProficiencyLevel = (level: string): 'beginner' | 'intermediate' | 'advanced' | 'expert' => {
@@ -49,6 +52,8 @@ const PeopleList: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  const updatePersonMutation = useUpdatePerson();
   
   // Bulk actions state
   const [bulkMode, setBulkMode] = useState(false);
@@ -87,6 +92,9 @@ const PeopleList: React.FC = () => {
   const [showRoleAutocomplete, setShowRoleAutocomplete] = useState(false);
   const [roleInputValue, setRoleInputValue] = useState('');
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(-1);
+  // Pagination state (Phase 4.1)
+  const [nextPage, setNextPage] = useState<number | null>(1);
+  const [hasMore, setHasMore] = useState<boolean>(true);
 
   const proficiencyLevels = [
     { value: 'beginner', label: 'Beginner' },
@@ -106,8 +114,8 @@ const PeopleList: React.FC = () => {
   // Phase 2: Load departments for filter dropdown
   const loadDepartments = async () => {
     try {
-      const departmentsList = await departmentsApi.listAll();
-      setDepartments(departmentsList);
+      const page = await departmentsApi.list({ page: 1, page_size: 500 });
+      setDepartments(page.results || []);
     } catch (err) {
       console.error('Error loading departments:', err);
     }
@@ -116,8 +124,8 @@ const PeopleList: React.FC = () => {
   // Phase 1: Load roles for dropdown
   const loadRoles = async () => {
     try {
-      const rolesList = await rolesApi.listAll();
-      setRoles(rolesList);
+      const page = await rolesApi.list();
+      setRoles(page.results || []);
     } catch (err) {
       console.error('Error loading roles:', err);
     }
@@ -162,8 +170,12 @@ const PeopleList: React.FC = () => {
   const loadPeople = async () => {
     try {
       setLoading(true);
-      const peopleList = await peopleApi.listAll();
+      const page = await peopleApi.list({ page: 1, page_size: 100 });
+      const peopleList = page.results || [];
       setPeople(peopleList);
+      const more = Boolean(page.next);
+      setHasMore(more);
+      setNextPage(more ? 2 : null);
       
       // Auto-select first person if none selected
       if (peopleList.length > 0 && !selectedPerson) {
@@ -175,6 +187,23 @@ const PeopleList: React.FC = () => {
       }
     } catch (err: any) {
       setError('Failed to load people');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMore = async () => {
+    if (!nextPage) return;
+    try {
+      setLoading(true);
+      const page = await peopleApi.list({ page: nextPage, page_size: 100 });
+      const results = page.results || [];
+      setPeople(prev => [...prev, ...results]);
+      const more = Boolean(page.next);
+      setHasMore(more);
+      setNextPage(more ? nextPage + 1 : null);
+    } catch (err) {
+      // ignore transient errors
     } finally {
       setLoading(false);
     }
@@ -256,8 +285,8 @@ const PeopleList: React.FC = () => {
         usedOverrideValue: overrideValue !== undefined
       });
 
-      const result = await peopleApi.update(selectedPerson.id, updateData);
-      console.log('🔍 [DEBUG] peopleApi.update result:', result);
+      await updatePersonMutation.mutateAsync({ id: selectedPerson.id!, data: updateData });
+      // Update completed
 
       // Handle special cases for updates that need additional data
       let finalUpdateData = { ...updateData };
@@ -290,8 +319,10 @@ const PeopleList: React.FC = () => {
           : person
       ));
 
+      setToast({ message: `${String(field)} updated`, type: 'success' });
     } catch (err: any) {
       setError(`Failed to update ${field}: ${err.message}`);
+      setToast({ message: `Failed to update ${String(field)}`, type: 'error' });
       // Reset editing data to original values on error
       setEditingPersonData({ ...selectedPerson });
     } finally {
@@ -307,12 +338,13 @@ const PeopleList: React.FC = () => {
   const handleNameSave = async () => {
     if (!selectedPerson?.id || !editingPersonData?.name?.trim()) {
       setEditingName(false);
+      setToast({ message: 'Name updated', type: 'success' });
       return;
     }
 
     try {
       setIsUpdatingPerson(true);
-      await peopleApi.update(selectedPerson.id, { name: editingPersonData.name.trim() });
+      await updatePersonMutation.mutateAsync({ id: selectedPerson.id!, data: { name: editingPersonData.name.trim() } });
       
       // Update local state
       setSelectedPerson(prev => ({ ...prev!, name: editingPersonData.name.trim() }));
@@ -325,6 +357,7 @@ const PeopleList: React.FC = () => {
       setEditingName(false);
     } catch (err: any) {
       setError(`Failed to update name: ${err.message}`);
+      setToast({ message: 'Failed to update name', type: 'error' });
     } finally {
       setIsUpdatingPerson(false);
     }
@@ -490,7 +523,7 @@ const PeopleList: React.FC = () => {
         const updateData = {
           department: bulkDepartment === 'unassigned' ? null : parseInt(bulkDepartment)
         };
-        return peopleApi.update(personId, updateData);
+        return updatePersonMutation.mutateAsync({ id: personId, data: updateData });
       });
 
       await Promise.all(updatePromises);
@@ -508,8 +541,10 @@ const PeopleList: React.FC = () => {
         ? 'removed from departments'
         : departments.find(d => d.id?.toString() === bulkDepartment)?.name || 'unknown department';
       
+      setToast({ message: `Updated ${selectedPeopleIds.size} people (${departmentName})`, type: 'success' });
     } catch (err: any) {
       setError(`Failed to update department assignments: ${err.message}`);
+      setToast({ message: 'Failed to update assignments', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -661,6 +696,7 @@ const PeopleList: React.FC = () => {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-[#1e1e1e] flex">
       <Sidebar />
       <div className="flex-1 flex h-screen bg-[#1e1e1e]">
@@ -908,85 +944,28 @@ const PeopleList: React.FC = () => {
             </div>
 
             {/* Table Body */}
-            <div className="overflow-y-auto h-full">
-              {filteredAndSortedPeople.length === 0 ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center text-[#969696]">
-                    <div className="text-lg mb-2">No people found</div>
-                    <div className="text-sm">Try adjusting your search or create a new person</div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {filteredAndSortedPeople.map((person, index) => (
-                    <div
-                      key={person.id}
-                      onClick={bulkMode ? undefined : () => handlePersonClick(person, index)}
-                      className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] transition-colors focus:outline-none ${
-                        bulkMode 
-                          ? 'hover:bg-[#3e3e42]/30'
-                          : `cursor-pointer hover:bg-[#3e3e42]/50 ${
-                              selectedPerson?.id === person.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
-                            }`
-                      }`}
-                      tabIndex={0}
-                    >
-                      {/* Bulk Select Checkbox */}
-                      {bulkMode && (
-                        <div className="col-span-1 flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedPeopleIds.has(person.id!)}
-                            onChange={(e) => {
-                              const newSelected = new Set(selectedPeopleIds);
-                              if (e.target.checked) {
-                                newSelected.add(person.id!);
-                              } else {
-                                newSelected.delete(person.id!);
-                              }
-                              setSelectedPeopleIds(newSelected);
-                            }}
-                            className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-2"
-                          />
-                        </div>
-                      )}
-                      
-                      {/* Name */}
-                      <div className="col-span-3 text-[#cccccc] font-medium">
-                        {person.name}
-                      </div>
-                      
-                      {/* Department - Phase 2 */}
-                      <div className="col-span-2 text-[#969696] text-xs">
-                        {person.departmentName || 'None'}
-                      </div>
-                      
-                      {/* Location */}
-                      <div className="col-span-2 text-[#969696] text-xs">
-                        {person.location || 'Not specified'}
-                      </div>
-                      
-                      {/* Capacity */}
-                      <div className="col-span-2 text-[#969696] text-xs">
-                        {person.weeklyCapacity || 36}h/week
-                      </div>
-                      
-                      {/* Role */}
-                      <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[#969696] text-xs`}>
-                        {person.roleName || 'Not specified'}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {/* Buffer rows to prevent last person from being cut off */}
-                  <div className="py-1.5">
-                    <div className="py-1.5">
-                      <div className="py-1.5"></div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <PeopleListTable
+              items={filteredAndSortedPeople}
+              bulkMode={bulkMode}
+              selectedPersonId={selectedPerson?.id ?? null}
+              selectedPeopleIds={selectedPeopleIds}
+              onRowClick={handlePersonClick}
+              onToggleSelect={(id, checked) => {
+                const next = new Set(selectedPeopleIds);
+                if (checked) next.add(id); else next.delete(id);
+                setSelectedPeopleIds(next);
+              }}
+            />
+            {hasMore && (
+              <div className="p-2 flex justify-center">
+                <button
+                  onClick={loadMore}
+                  className="px-3 py-1 text-xs rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]"
+                >
+                  Load more
+                </button>
+              </div>
+            )}
           </div>
           
           {/* Bulk Actions Panel */}
@@ -1029,7 +1008,14 @@ const PeopleList: React.FC = () => {
 
         {/* Right Panel - Person Details */}
         <div className="w-1/2 flex flex-col bg-[#2d2d30] min-w-0">
-          {selectedPerson ? (
+          {loading ? (
+            <div className="p-4 space-y-3">
+              <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+              <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+              <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+              <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+            </div>
+          ) : selectedPerson ? (
             <>
               {/* Person Header */}
               <div className="p-4 border-b border-[#3e3e42]">
@@ -1219,7 +1205,7 @@ const PeopleList: React.FC = () => {
                   <div className="flex gap-2 items-start">
                     {isUpdatingPerson && (
                       <div className="px-2 py-0.5 text-xs text-[#007acc] flex items-center gap-1">
-                        <div className="w-3 h-3 border border-[#007acc] border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-3 h-3 border border-[#007acc] border-t-transparent rounded-full animate-spin motion-reduce:animate-none"></div>
                         Saving...
                       </div>
                     )}
@@ -1312,7 +1298,7 @@ const PeopleList: React.FC = () => {
                       >
                         {isUpdatingPerson ? (
                           <>
-                            <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin"></div>
+                            <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin motion-reduce:animate-none"></div>
                             Deleting...
                           </>
                         ) : (
@@ -1493,6 +1479,10 @@ const PeopleList: React.FC = () => {
         </div>
       </div>
     </div>
+    {toast && (
+      <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
+    )}
+  </>
   );
 };
 

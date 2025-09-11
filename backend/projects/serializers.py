@@ -1,6 +1,16 @@
 from rest_framework import serializers
 from .models import Project
 
+
+class ProjectFilterEntrySerializer(serializers.Serializer):
+    assignmentCount = serializers.IntegerField()
+    hasFutureDeliverables = serializers.BooleanField()
+    status = serializers.CharField()
+
+
+class ProjectFilterMetadataSerializer(serializers.Serializer):
+    projectFilters = serializers.DictField(child=ProjectFilterEntrySerializer())
+
 class ProjectSerializer(serializers.ModelSerializer):
     projectNumber = serializers.CharField(source='project_number', required=False, allow_null=True, allow_blank=True)
     startDate = serializers.DateField(source='start_date', required=False, allow_null=True)

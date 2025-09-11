@@ -39,6 +39,7 @@ export type AuthState = {
 };
 
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || 'http://localhost:8000/api';
+const COOKIE_REFRESH = !!(typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_COOKIE_REFRESH_AUTH === 'true');
 
 const LS_REFRESH = 'auth.refreshToken';
 
@@ -129,39 +130,66 @@ async function http<T>(path: string, opts: RequestInit = {}, withAuth = false): 
 export async function login(usernameOrEmail: string, password: string): Promise<void> {
   // SimpleJWT expects { username, password }
   const body = JSON.stringify({ username: usernameOrEmail, password });
-  const tok = await http<{ access: string; refresh: string }>(`/token/`, { method: 'POST', body });
-  writeRefreshToStorage(tok.refresh);
-  setState({ refreshToken: tok.refresh, accessToken: tok.access });
+  if (COOKIE_REFRESH) {
+    const tok = await http<{ access: string }>(`/token/`, { method: 'POST', body, credentials: 'include' });
+    // Refresh is stored as httpOnly cookie by server
+    setState({ refreshToken: null, accessToken: tok.access });
+  } else {
+    const tok = await http<{ access: string; refresh: string }>(`/token/`, { method: 'POST', body });
+    writeRefreshToStorage(tok.refresh);
+    setState({ refreshToken: tok.refresh, accessToken: tok.access });
+  }
   await hydrateProfile();
 }
 
 export async function logout(): Promise<void> {
+  if (COOKIE_REFRESH) {
+    try { await http(`/token/logout/`, { method: 'POST', credentials: 'include' }); } catch {}
+  }
   writeRefreshToStorage(null);
   setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
-  const refresh = readRefreshFromStorage();
-  if (!refresh) return null;
-  try {
-    const body = JSON.stringify({ refresh });
-    const data = await http<{ access: string; refresh?: string }>(`/token/refresh/`, { method: 'POST', body });
-    // SimpleJWT may return a rotated refresh token when ROTATE_REFRESH_TOKENS is true
-    if (data.refresh) {
-      writeRefreshToStorage(data.refresh);
-      setState({ refreshToken: data.refresh });
+  if (COOKIE_REFRESH) {
+    try {
+      const data = await http<{ access: string }>(`/token/refresh/`, { method: 'POST', credentials: 'include' });
+      setState({ accessToken: data.access });
+      return data.access;
+    } catch (e) {
+      setState({ accessToken: null, user: null, person: null, settings: {} });
+      return null;
     }
-    setState({ accessToken: data.access });
-    return data.access;
-  } catch (e) {
-    // If refresh fails (expired/invalid), clear auth state
-    writeRefreshToStorage(null);
-    setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
-    return null;
+  } else {
+    const refresh = readRefreshFromStorage();
+    if (!refresh) return null;
+    try {
+      const body = JSON.stringify({ refresh });
+      const data = await http<{ access: string; refresh?: string }>(`/token/refresh/`, { method: 'POST', body });
+      // SimpleJWT may return a rotated refresh token when ROTATE_REFRESH_TOKENS is true
+      if (data.refresh) {
+        writeRefreshToStorage(data.refresh);
+        setState({ refreshToken: data.refresh });
+      }
+      setState({ accessToken: data.access });
+      return data.access;
+    } catch (e) {
+      // If refresh fails (expired/invalid), clear auth state
+      writeRefreshToStorage(null);
+      setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
+      return null;
+    }
   }
 }
 
 export async function loadFromStorage(): Promise<void> {
+  if (COOKIE_REFRESH) {
+    // Attempt refresh using cookie; do not rely on localStorage
+    await refreshAccessToken();
+    await hydrateProfile();
+    setState({ hydrating: false });
+    return;
+  }
   // Read refresh from localStorage and attempt to obtain a fresh access token
   const refresh = readRefreshFromStorage();
   setState({ refreshToken: refresh });

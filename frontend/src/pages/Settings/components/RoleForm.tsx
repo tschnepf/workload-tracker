@@ -73,8 +73,8 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
 
   const loadExistingRoles = async () => {
     try {
-      const rolesList = await rolesApi.listAll();
-      setExistingRoles(rolesList);
+      const page = await rolesApi.list();
+      setExistingRoles(page.results || []);
     } catch (err) {
       console.error('Error loading existing roles:', err);
     }

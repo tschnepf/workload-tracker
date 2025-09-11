@@ -11,8 +11,7 @@ const BalanceWorkloadTool: React.FC<Props> = () => {
   useEffect(() => {
     const run = async () => {
       try {
-        const data = await assignmentsApi.listAll(); // warm API
-        // Fetch suggestions after initial load
+        // Directly fetch suggestions without bulk warming
         const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/assignments/rebalance_suggestions/`);
         const json = await resp.json();
         setSuggestions(json);
@@ -57,4 +56,3 @@ const BalanceWorkloadTool: React.FC<Props> = () => {
 };
 
 export default BalanceWorkloadTool;
-

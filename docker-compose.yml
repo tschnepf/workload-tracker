@@ -47,6 +47,7 @@ services:
     build:
       context: ./backend
       dockerfile: ../docker/backend/Dockerfile
+      target: dev
     container_name: workload-tracker-backend
     restart: unless-stopped
     volumes:
@@ -60,11 +61,18 @@ services:
     environment:
       # Use internal Docker network for backend->Redis to minimize hiccups
       - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/1}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - tracker-network
     command: python manage.py runserver 0.0.0.0:8000
@@ -73,6 +81,7 @@ services:
     build:
       context: ./frontend
       dockerfile: ../docker/frontend/Dockerfile
+      target: dev
     container_name: workload-tracker-frontend
     restart: unless-stopped
     volumes:
@@ -87,6 +96,33 @@ services:
     networks:
       - tracker-network
     command: npm run dev -- --host 0.0.0.0 --port 3000
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend/Dockerfile
+      target: dev
+    container_name: workload-tracker-worker
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/1}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      - DJANGO_SETTINGS_MODULE=config.settings
+    command: celery -A config worker -l info --concurrency=2
+    networks:
+      - tracker-network
 
 volumes:
   postgres_data:

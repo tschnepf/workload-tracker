@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { authApi, peopleApi } from '@/services/api';
+import { useUpdatePerson } from '@/hooks/usePeople';
+import Toast from '@/components/ui/Toast';
 
 const Profile: React.FC = () => {
   const auth = useAuth();
@@ -14,6 +18,8 @@ const Profile: React.FC = () => {
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
   const [pwBusy, setPwBusy] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  const updatePersonMutation = useUpdatePerson();
   const [pwMsg, setPwMsg] = useState<string | null>(null);
 
   const accountRole = useMemo(() => auth.user?.accountRole || (auth.user?.is_staff || auth.user?.is_superuser ? 'admin' : 'user'), [auth.user]);
@@ -41,6 +47,7 @@ const Profile: React.FC = () => {
   const canEditName = !!auth.person?.id;
 
   return (
+    <>
     <div className="p-6">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold text-[#cccccc] mb-6">My Profile</h1>
@@ -74,35 +81,36 @@ const Profile: React.FC = () => {
           <h2 className="text-lg font-semibold text-[#cccccc] mb-4">Name</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="md:col-span-2">
-              <input
+              <Input
                 type="text"
+                autoComplete="name"
                 value={personName}
-                onChange={(e) => setPersonName(e.target.value)}
+                onChange={(e) => setPersonName((e.target as HTMLInputElement).value)}
                 disabled={!canEditName}
-                className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2 disabled:opacity-60"
                 placeholder={canEditName ? 'Enter your name' : 'No linked person'}
               />
             </div>
             <div>
-              <button
+              <Button
                 disabled={!canEditName || savingName}
                 onClick={async () => {
                   if (!auth.person?.id) return;
                   setNameMsg(null);
                   setSavingName(true);
                   try {
-                    await peopleApi.update(auth.person.id, { name: personName });
+                    await updatePersonMutation.mutateAsync({ id: auth.person.id, data: { name: personName } });
                     setNameMsg('Name updated.');
+                    setToast({ message: 'Profile name updated', type: 'success' });
                   } catch (err: any) {
                     setNameMsg(err?.message || 'Failed to update name');
+                    setToast({ message: 'Failed to update profile name', type: 'error' });
                   } finally {
                     setSavingName(false);
                   }
                 }}
-                className="bg-[#007acc] hover:bg-[#005a9e] text-white px-4 py-2 rounded-md disabled:opacity-60"
               >
                 {savingName ? 'Saving…' : 'Save Name'}
-              </button>
+              </Button>
             </div>
           </div>
           {nameMsg && <div className="text-sm text-[#cccccc] mt-2">{nameMsg}</div>}
@@ -113,20 +121,20 @@ const Profile: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
               <label className="block text-sm text-[#969696] mb-1">Current Password</label>
-              <input type="password" className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2" value={currentPw} onChange={e => setCurrentPw(e.target.value)} />
+              <Input type="password" autoComplete="current-password" value={currentPw} onChange={e => setCurrentPw((e.target as HTMLInputElement).value)} />
             </div>
             <div>
               <label className="block text-sm text-[#969696] mb-1">New Password</label>
-              <input type="password" className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2" value={newPw} onChange={e => setNewPw(e.target.value)} />
+              <Input type="password" autoComplete="new-password" value={newPw} onChange={e => setNewPw((e.target as HTMLInputElement).value)} />
             </div>
             <div>
               <label className="block text-sm text-[#969696] mb-1">Confirm New Password</label>
-              <input type="password" className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} />
+              <Input type="password" autoComplete="new-password" value={confirmPw} onChange={e => setConfirmPw((e.target as HTMLInputElement).value)} />
             </div>
           </div>
           <div className="mt-3">
             {pwMsg && <div className="text-sm text-[#cccccc] mb-2">{pwMsg}</div>}
-            <button
+            <Button
               disabled={pwBusy}
               onClick={async () => {
                 setPwMsg(null);
@@ -145,16 +153,20 @@ const Profile: React.FC = () => {
                   setPwBusy(false);
                 }
               }}
-              className="bg-[#007acc] hover:bg-[#005a9e] text-white px-4 py-2 rounded-md disabled:opacity-60"
             >
               {pwBusy ? 'Changing…' : 'Change Password'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
     </div>
+    {toast && (
+      <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
+    )}
+  </>
   );
 };
 
 export default Profile;
+
 

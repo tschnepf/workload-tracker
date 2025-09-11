@@ -1,4 +1,8 @@
-FROM python:3.11-slim
+##########
+# Builder stage: install Python deps into a virtualenv
+##########
+FROM python:3.11-slim AS builder
+ENV DEBIAN_FRONTEND=noninteractive
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,38 +11,71 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    postgresql-client \
-    curl \
-    netcat-traditional \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python packages
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m venv /opt/venv \
+ && . /opt/venv/bin/activate \
+ && pip install --upgrade pip \
+ && pip install -r requirements.txt
 
-# Copy application
+##########
+# Development stage: full environment, root user, hot-reload friendly
+##########
+FROM python:3.11-slim AS dev
+ENV DEBIAN_FRONTEND=noninteractive
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    curl \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
 COPY . .
-
-# Create entrypoint script
-RUN echo '#!/bin/bash\n\
-set -e\n\
-echo "Waiting for database..."\n\
-while ! nc -z db 5432; do sleep 1; done\n\
-echo "Database ready!"\n\
-echo "Running migrations..."\n\
-python manage.py migrate --noinput\n\
-echo "Collecting static files..."\n\
-python manage.py collectstatic --noinput\n\
-if [ "$DEBUG" = "true" ]; then\n\
-    echo "Creating default superuser..."\n\
-    python manage.py createsuperuser --noinput || true\n\
-fi\n\
-echo "Starting server..."\n\
-exec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
+ENTRYPOINT ["/entrypoint.sh"]
 
+##########
+# Production stage: non-root runtime, smaller surface
+##########
+FROM python:3.11-slim AS production
+ENV DEBIAN_FRONTEND=noninteractive
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user and writable dirs
+RUN groupadd -r app && useradd -r -g app app \
+ && mkdir -p /app/staticfiles /app/media \
+ && chown -R app:app /app
+
+COPY --from=builder /opt/venv /opt/venv
+COPY . .
+RUN chown -R app:app /app
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+USER app
+EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]

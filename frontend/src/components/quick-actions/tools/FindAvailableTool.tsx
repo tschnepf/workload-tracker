@@ -12,8 +12,8 @@ const FindAvailableTool: React.FC<Props> = () => {
   useEffect(() => {
     const run = async () => {
       try {
-        const all = await peopleApi.listAll();
-        setPeople(all);
+        const page = await peopleApi.list({ page: 1, page_size: 100 });
+        setPeople(page.results || []);
       } finally {
         setLoading(false);
       }
@@ -59,4 +59,3 @@ const FindAvailableTool: React.FC<Props> = () => {
 };
 
 export default FindAvailableTool;
-

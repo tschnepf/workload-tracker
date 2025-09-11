@@ -290,3 +290,16 @@ export interface ProjectFilterMetadataResponse {
   };
 }
 
+// Async jobs (Phase 9)
+export type JobState = 'PENDING' | 'STARTED' | 'PROGRESS' | 'SUCCESS' | 'FAILURE' | string;
+
+export interface JobStatus {
+  id: string;
+  state: JobState;
+  progress?: number;
+  message?: string | null;
+  downloadReady?: boolean;
+  downloadUrl?: string | null;
+  result?: any;
+  error?: string | null;
+}

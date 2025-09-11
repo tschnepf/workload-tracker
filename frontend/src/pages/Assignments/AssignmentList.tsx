@@ -31,14 +31,15 @@ const AssignmentList: React.FC = () => {
         setError(null);
         const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
         const inc = deptState.includeChildren ? 1 : 0;
-        const [assignmentsResp, peopleList, departmentsList] = await Promise.all([
-          assignmentsApi.list({ department: dept, include_children: dept != null ? inc : undefined }),
-          peopleApi.listAll({ department: dept, include_children: dept != null ? inc : undefined }),
-          departmentsApi.listAll(),
+        const [assignmentsResp, peoplePage, departmentsPage] = await Promise.all([
+          assignmentsApi.list({ page: 1, page_size: 100, department: dept, include_children: dept != null ? inc : undefined }),
+          peopleApi.list({ page: 1, page_size: 100, department: dept, include_children: dept != null ? inc : undefined }),
+          departmentsApi.list({ page: 1, page_size: 500 }),
         ]);
         setAssignments(assignmentsResp.results || []);
-        setPeopleById(new Map(peopleList.map(p => [p.id!, p])));
-        setDepartments(departmentsList);
+        const peopleList = peoplePage.results || [];
+        setPeopleById(new Map(peopleList.map((p: any) => [p.id!, p])));
+        setDepartments(departmentsPage.results || []);
       } catch (err: any) {
         setError(err.message || 'Failed to load assignments');
       } finally {
@@ -119,7 +120,12 @@ const AssignmentList: React.FC = () => {
     return (
       <Layout>
         <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
-          <div className="text-slate-300">Loading assignments...</div>
+          <div className="space-y-2">
+            <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+            <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+            <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+            <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+          </div>
         </Card>
       </Layout>
     );

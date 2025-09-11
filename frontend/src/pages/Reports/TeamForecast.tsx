@@ -39,8 +39,16 @@ const TeamForecastPage: React.FC = () => {
     return () => { active = false; };
   }, [weeks, deptState.selectedDepartmentId, deptState.includeChildren]);
 
-  useEffect(() => { projectsApi.listAll().then(setProjects).catch(() => {}); }, []);
-  useEffect(() => { departmentsApi.listAll().then(setDepts).catch(()=>{}); }, []);
+  useEffect(() => {
+    projectsApi.list({ page: 1, page_size: 200 })
+      .then(p => setProjects(p.results || []))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    departmentsApi.list({ page: 1, page_size: 500 })
+      .then(p => setDepts(p.results || []))
+      .catch(()=>{});
+  }, []);
 
   useEffect(() => {
     if (!selectedProject) { setProjAssignments([]); setProjDeliverables([]); return; }
@@ -50,7 +58,7 @@ const TeamForecastPage: React.FC = () => {
     const inc = deptState.includeChildren ? 1 : 0;
     Promise.all([
       assignmentsApi.list({ project: Number(selectedProject), department: dept, include_children: dept != null ? inc : undefined }).then(r => r.results || []),
-      deliverablesApi.listAll(Number(selectedProject))
+      deliverablesApi.list(Number(selectedProject), { page: 1, page_size: 1000 }).then(r => r.results || [])
     ]).then(([assigns, dels]) => {
       if (!active) return;
       setProjAssignments(assigns as any);

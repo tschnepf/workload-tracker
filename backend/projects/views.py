@@ -4,20 +4,39 @@ from rest_framework.decorators import action
 from django.db.models import Max, Count, Exists, OuterRef, Q
 from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date, parse_http_date
+from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 from .models import Project
-from .serializers import ProjectSerializer
+from core.etag import ETagConditionalMixin
+from .serializers import ProjectSerializer, ProjectFilterMetadataSerializer
 from .utils.excel_handler import export_projects_to_excel, import_projects_from_file
 from deliverables.models import Deliverable
 from assignments.models import Assignment
 import hashlib
 import json
 import time
+from django.conf import settings as django_settings
+try:
+    from .tasks import export_projects_excel_task
+except Exception:
+    export_projects_excel_task = None  # type: ignore
 
-class ProjectViewSet(viewsets.ModelViewSet):
+class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     queryset = Project.objects.filter(is_active=True)
     serializer_class = ProjectSerializer
     # Use global default permissions (IsAuthenticated)
+    
+    def get_queryset(self):
+        # Phase 3: tighten fields to reduce payload
+        return (
+            Project.objects
+            .filter(is_active=True)
+            .only(
+                'id', 'name', 'status', 'client', 'description', 'project_number',
+                'start_date', 'end_date', 'estimated_hours', 'is_active', 'created_at', 'updated_at'
+            )
+        )
     
     def list(self, request, *args, **kwargs):
         """Get all projects with conditional request support (ETag/Last-Modified) and bulk loading"""
@@ -33,9 +52,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         last_modified = queryset.aggregate(Max('updated_at'))['updated_at__max']
         
         if last_modified:
-            # Generate ETag from count and last modified timestamp
-            count = queryset.count()
-            etag_content = f"{count}-{last_modified.isoformat()}"
+            # ETag simplification: base on max(updated_at) only (avoid count())
+            etag_content = last_modified.isoformat()
             etag = hashlib.md5(etag_content.encode()).hexdigest()
             
             # Check If-None-Match header (ETag)
@@ -74,6 +92,23 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def export_excel(self, request):
         """Export projects to Excel with streaming response for large datasets"""
+        # Async path: submit job and return id when feature is enabled
+        if django_settings.FEATURES.get('ASYNC_JOBS') and export_projects_excel_task is not None:
+            filters = {}
+            status_filter = request.query_params.get('status')
+            if status_filter:
+                filters['status'] = status_filter
+            client = request.query_params.get('client')
+            if client:
+                filters['client'] = client
+            task = export_projects_excel_task.delay(filters)
+            job_id = task.id
+            return Response({
+                'jobId': job_id,
+                'statusUrl': request.build_absolute_uri(f"/api/jobs/{job_id}/"),
+                'downloadUrl': request.build_absolute_uri(f"/api/jobs/{job_id}/download/")
+            }, status=status.HTTP_202_ACCEPTED)
+
         # Get filtered queryset
         queryset = self.get_queryset()
         
@@ -127,8 +162,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     'total': total_count
                 })
                 
-                # Small delay to show progress
-                time.sleep(0.1)
+                # Small delay to show progress (dev only)
+                if settings.DEBUG:
+                    time.sleep(0.05)
             
             # Generate Excel file
             yield self._progress_chunk({
@@ -246,27 +282,30 @@ class ProjectViewSet(viewsets.ModelViewSet):
             except ValueError:
                 # Ignore malformed header
                 pass
-        projects_data = (
-            queryset
-            .annotate(
-                assignment_count=Count(
-                    'assignment',
-                    filter=Q(assignment__is_active=True),
-                ),
-                has_future_deliverables=Exists(
-                    Deliverable.objects.filter(
-                        project=OuterRef('pk'),
-                        date__gt=today,
-                        date__isnull=False,
-                        is_completed=False,
-                    )
-                ),
+        payload = None
+        if settings.FEATURES.get('SHORT_TTL_AGGREGATES'):
+            payload = cache.get('projects:filter_metadata')
+        if payload is None:
+            projects_data = (
+                queryset
+                .annotate(
+                    assignment_count=Count(
+                        'assignment',
+                        filter=Q(assignment__is_active=True),
+                    ),
+                    has_future_deliverables=Exists(
+                        Deliverable.objects.filter(
+                            project=OuterRef('pk'),
+                            date__gt=today,
+                            date__isnull=False,
+                            is_completed=False,
+                        )
+                    ),
+                )
+                .values('id', 'assignment_count', 'has_future_deliverables', 'status')
             )
-            .values('id', 'assignment_count', 'has_future_deliverables', 'status')
-        )
-
-        response = Response({
-            'projectFilters': {
+            # Build mapping and validate via serializer to enforce naming discipline
+            mapping = {
                 str(p['id']): {
                     'assignmentCount': p['assignment_count'],
                     'hasFutureDeliverables': p['has_future_deliverables'],
@@ -274,7 +313,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 }
                 for p in projects_data
             }
-        })
+            ser = ProjectFilterMetadataSerializer(data={'projectFilters': mapping})
+            ser.is_valid(raise_exception=True)
+            payload = ser.validated_data
+            if settings.FEATURES.get('SHORT_TTL_AGGREGATES'):
+                cache.set('projects:filter_metadata', payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '15')))
+
+        response = Response(payload)
 
         # Add cache headers
         response['ETag'] = f'"{etag}"'
