@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
 import { Assignment, Person, Deliverable, Project } from '@/types/models';
 import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
@@ -53,6 +54,7 @@ interface AssignmentRowProps {
   onCellMouseEnter: (personId: number, assignmentId: number, week: string) => void;
   getDeliverablesForProjectWeek: (projectId: number, weekStart: string) => Deliverable[];
   personId: number;
+  gridTemplate: string;
 }
 
 const AssignmentRow = React.memo<AssignmentRowProps>(({
@@ -76,7 +78,8 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
   onCellMouseDown,
   onCellMouseEnter,
   getDeliverablesForProjectWeek,
-  personId
+  personId,
+  gridTemplate
 }) => {
   const isSelected = (week: string) => {
     // Selected range (multi-select)
@@ -98,14 +101,29 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
     editingCell?.assignmentId === assignment.id &&
     editingCell?.week === week;
 
+  const project = projectsById.get(assignment.project);
+  const clientName = project?.client || '';
+  const projectName = assignment.projectDisplayName || project?.name || '';
+
   return (
-    <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#252526] hover:bg-[#2d2d30] transition-colors">
-      {/* Assignment Name with Project Status */}
+    <div className="grid gap-px p-1 bg-[#252526] hover:bg-[#2d2d30] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
+      {/* Client Name Column */}
       <div className="flex items-center py-1 pl-[60px] pr-2">
         <div className="min-w-0 flex-1">
+          <div className="text-[#969696] text-xs truncate" title={clientName}>
+            {clientName || '—'}
+          </div>
+        </div>
+      </div>
+
+      {/* Project Name with Status Column */}
+      <div className="flex items-center py-1 pr-2">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="text-[#cccccc] text-xs truncate flex-1">{assignment.projectDisplayName}</div>
-            
+            <div className="text-[#cccccc] text-xs truncate flex-1" title={projectName}>
+              {projectName}
+            </div>
+
             {/* Editable Status Badge with Dropdown */}
             <div className="relative flex-shrink-0">
               {/* Use per-assignment dropdown key so only the clicked row opens */}
@@ -113,8 +131,8 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
                 const dropdownKey = `${assignment.id}:${assignment.project}`;
                 return (
                   <>
-                    <StatusBadge 
-                      status={getProjectStatus(assignment.project)} 
+                    <StatusBadge
+                      status={getProjectStatus(assignment.project)}
                       variant="editable"
                       onClick={() => assignment.project && statusDropdown.toggle(dropdownKey)}
                       isUpdating={assignment.project && projectStatus.isUpdating(assignment.project)}
@@ -250,6 +268,15 @@ const AssignmentGrid: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [assignmentsData, setAssignmentsData] = useState<Assignment[]>([]);
   const [projectsData, setProjectsData] = useState<Project[]>([]);
+  // Snapshot/rendering mode and aggregated hours
+  const [hoursByPerson, setHoursByPerson] = useState<Record<number, Record<string, number>>>({});
+  const [isSnapshotMode, setIsSnapshotMode] = useState<boolean>(false);
+  // Weeks header: from grid snapshot when available; fallback to 12 Mondays
+  // (state moved up near other snapshot states)
+  // On-demand detail loading flags
+  const [loadedAssignmentIds, setLoadedAssignmentIds] = useState<Set<number>>(new Set());
+  const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
+  // Grid snapshot aggregation state (declared above)
   
   // Enhanced memoized projectsById map with loading states and type safety
   const projectsById = useMemo(() => {
@@ -281,7 +308,15 @@ const AssignmentGrid: React.FC = () => {
   const [selectedCells, setSelectedCells] = useState<{ personId: number, assignmentId: number, week: string }[]>([]);
   const [selectionStart, setSelectionStart] = useState<{ personId: number, assignmentId: number, week: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  
+
+  // Column width state for adjustable virtual columns
+  // Default widths sized to prevent most client/project name cutoff
+  const [clientColumnWidth, setClientColumnWidth] = useState(210); // 1.5x wider for longer client names
+  const [projectColumnWidth, setProjectColumnWidth] = useState(300); // 1.5x wider for longer project names
+  const [isResizing, setIsResizing] = useState<'client' | 'project' | null>(null);
+  const [resizeStartX, setResizeStartX] = useState(0);
+  const [resizeStartWidth, setResizeStartWidth] = useState(0);
+
   // New multi-select project status filters (aggregate selection)
   const statusFilterOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'Show All'] as const;
   type StatusFilter = typeof statusFilterOptions[number];
@@ -319,7 +354,18 @@ const AssignmentGrid: React.FC = () => {
     });
   };
 
-  const weeks = getNext12Mondays();
+  // Weeks header: from grid snapshot when available; fallback to 12 Mondays
+  const [weeks, setWeeks] = useState<{ date: string; display: string; fullDisplay: string }[]>(getNext12Mondays());
+
+  // Create dynamic grid template based on column widths
+  const gridTemplate = useMemo(() => {
+    return `${clientColumnWidth}px ${projectColumnWidth}px 40px repeat(${weeks.length}, 70px)`;
+  }, [clientColumnWidth, projectColumnWidth, weeks.length]);
+
+  // Calculate total minimum width
+  const totalMinWidth = useMemo(() => {
+    return clientColumnWidth + projectColumnWidth + 40 + (weeks.length * 70) + 20; // +20 for gaps/padding
+  }, [clientColumnWidth, projectColumnWidth, weeks.length]);
 
   // Measure sticky header height so the week header can offset correctly
   const headerRef = useRef<HTMLDivElement | null>(null);
@@ -794,75 +840,214 @@ const AssignmentGrid: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedCell, editingCell, people, weeks, selectionStart]);
 
-  // Global mouse up handler for drag selection
+  // Global mouse up handler for drag selection and column resizing
   useEffect(() => {
     const handleMouseUp = () => {
       if (isDragging) {
         setIsDragging(false);
       }
+      if (isResizing) {
+        setIsResizing(null);
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizing) {
+        const deltaX = e.clientX - resizeStartX;
+        const newWidth = Math.max(80, resizeStartWidth + deltaX); // Min width of 80px
+
+        if (isResizing === 'client') {
+          setClientColumnWidth(newWidth);
+        } else if (isResizing === 'project') {
+          setProjectColumnWidth(newWidth);
+        }
+      }
     };
 
     window.addEventListener('mouseup', handleMouseUp);
-    return () => window.removeEventListener('mouseup', handleMouseUp);
-  }, [isDragging]);
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [isDragging, isResizing, resizeStartX, resizeStartWidth]);
+
+  // Column resize handlers
+  const startColumnResize = (column: 'client' | 'project', e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(column);
+    setResizeStartX(e.clientX);
+    setResizeStartWidth(column === 'client' ? clientColumnWidth : projectColumnWidth);
+  };
 
   // Use existing department filter state declared near top of component
 
   const loadData = async () => {
+    const pageSize = 100;
     try {
       setLoading(true);
       setError(null);
 
-      // Load first pages (trim heavy bulk listAll)
-      const pageSize = 100;
-      // Use canonical backend params from the shared store to avoid mismatch
-      const deptParams = backendParams; // { department?: number; include_children?: 0|1 }
-      const [peoplePage, assignmentsPage, deliverablesPage, projectsPage] = await Promise.all([
-        peopleApi.list({ page: 1, page_size: pageSize, ...deptParams }),
-        assignmentsApi.list({ page: 1, page_size: pageSize, ...deptParams }),
+      // Snapshot path first
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const snapshot = await assignmentsApi.getGridSnapshot({ weeks: 12, department: dept, include_children: inc });
+
+      // Map weekKeys -> weeks state
+      const wk = (snapshot.weekKeys || []).map((mondayStr: string) => {
+        const monday = new Date(mondayStr + 'T00:00:00');
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        return {
+          date: mondayStr,
+          display: monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          fullDisplay: `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        };
+      });
+      if (wk.length) setWeeks(wk);
+
+      // People list from snapshot (collapsed; assignments empty)
+      const peopleWithAssignments: PersonWithAssignments[] = (snapshot.people || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        weeklyCapacity: p.weeklyCapacity,
+        department: p.department ?? null,
+        assignments: [],
+        isExpanded: false,
+      })) as PersonWithAssignments[];
+      setPeople(peopleWithAssignments);
+      setAssignmentsData([]);
+
+      // hoursByPerson map
+      const hb: Record<number, Record<string, number>> = {};
+      Object.entries(snapshot.hoursByPerson || {}).forEach(([pid, map]) => {
+        hb[Number(pid)] = map as Record<string, number>;
+      });
+      setHoursByPerson(hb);
+
+      // Deliverables + projects for UI
+      const [deliverablesPage, projectsPage] = await Promise.all([
         deliverablesApi.list(undefined, { page: 1, page_size: pageSize }),
         projectsApi.list({ page: 1, page_size: pageSize })
       ]);
+      setDeliverables(deliverablesPage.results || []);
+      setProjects(projectsPage.results || []);
+      setProjectsData(projectsPage.results || []);
+      setIsSnapshotMode(true);
+      // Telemetry breadcrumb
+      try {
+        trackPerformanceEvent('assignments-grid-load', 1, 'count', {
+          mode: 'snapshot',
+          weeks: wk.length,
+          department: deptState.selectedDepartmentId ?? null,
+          include_children: deptState.includeChildren ? 1 : 0,
+        });
+      } catch {}
 
-      // Store deliverables and projects in state
-      const deliverablesData = deliverablesPage.results || [];
-      const projectsData = projectsPage.results || [];
-      setDeliverables(deliverablesData);
-      setProjects(projectsData);
-      
-      // Store raw data for filter computation
-      const assignmentsData = assignmentsPage.results || [];
-      setAssignmentsData(assignmentsData);
-      setProjectsData(projectsData);
-      
-      let peopleData = (peoplePage.results || []) as Person[];
-      // Defensive client-side filter to ensure only selected department is shown
-      if (deptState.selectedDepartmentId != null && !deptState.includeChildren) {
-        const sel = Number(deptState.selectedDepartmentId);
-        peopleData = peopleData.filter(p => (p.department ?? null) === sel);
-      }
-      const peopleWithAssignments: PersonWithAssignments[] = peopleData.map(person => ({
-        ...person,
-        assignments: assignmentsData.filter(assignment => assignment.person === person.id),
-        isExpanded: true
-      }));
-      
-      setPeople(peopleWithAssignments);
-      
     } catch (err: any) {
-      setError('Failed to load assignment data: ' + err.message);
+      console.warn('Grid snapshot unavailable; falling back to legacy path.', err);
+      try {
+        const deptParams = backendParams; // legacy
+        const [peoplePage, assignmentsPage, deliverablesPage, projectsPage] = await Promise.all([
+          peopleApi.list({ page: 1, page_size: pageSize, ...deptParams }),
+          assignmentsApi.list({ page: 1, page_size: pageSize, ...deptParams }),
+          deliverablesApi.list(undefined, { page: 1, page_size: pageSize }),
+          projectsApi.list({ page: 1, page_size: pageSize })
+        ]);
+
+        setDeliverables(deliverablesPage.results || []);
+        setProjects(projectsPage.results || []);
+        const assignments = assignmentsPage.results || [];
+        setAssignmentsData(assignments);
+        setProjectsData(projectsPage.results || []);
+
+        let peopleData = (peoplePage.results || []) as Person[];
+        if (deptState.selectedDepartmentId != null && !deptState.includeChildren) {
+          const sel = Number(deptState.selectedDepartmentId);
+          peopleData = peopleData.filter(p => (p.department ?? null) === sel);
+        }
+        const peopleWithAssignments: PersonWithAssignments[] = peopleData.map(person => ({
+          ...person,
+          assignments: assignments.filter(assignment => assignment.person === person.id),
+          isExpanded: true
+        }));
+        setPeople(peopleWithAssignments);
+        setHoursByPerson({});
+        setWeeks(getNext12Mondays());
+        setIsSnapshotMode(false);
+        try {
+          trackPerformanceEvent('assignments-grid-load', 1, 'count', {
+            mode: 'legacy',
+            weeks: 12,
+            department: deptState.selectedDepartmentId ?? null,
+            include_children: deptState.includeChildren ? 1 : 0,
+          });
+        } catch {}
+      } catch (fallErr: any) {
+        setError('Failed to load assignment data: ' + (fallErr?.message || 'Unknown error'));
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // Load a person's assignments once when expanding
+  const ensureAssignmentsLoaded = async (personId: number) => {
+    if (loadedAssignmentIds.has(personId) || loadingAssignments.has(personId)) return;
+    setLoadingAssignments(prev => new Set(prev).add(personId));
+    try {
+      const rows = await assignmentsApi.byPerson(personId);
+      setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
+      setLoadedAssignmentIds(prev => new Set(prev).add(personId));
+    } catch (e: any) {
+      showToast('Failed to load assignments: ' + (e?.message || 'Unknown error'), 'error');
+      setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: false } : p)));
+    } finally {
+      setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
+    }
+  };
+
+  // Manual refresh for a person's assignments on demand
+  const refreshPersonAssignments = async (personId: number) => {
+    setLoadingAssignments(prev => new Set(prev).add(personId));
+    try {
+      const rows = await assignmentsApi.byPerson(personId);
+      setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
+      setLoadedAssignmentIds(prev => new Set(prev).add(personId));
+      // Optional: recompute aggregated totals for this person from refreshed rows
+      try {
+        setHoursByPerson(prev => {
+          const next = { ...prev } as Record<number, Record<string, number>>;
+          const totals: Record<string, number> = {};
+          for (const wk of weeks.map(w => w.date)) {
+            let sum = 0;
+            for (const a of rows) {
+              const wh = (a as any).weeklyHours || {};
+              const v = parseFloat((wh[wk] ?? 0).toString()) || 0;
+              sum += v;
+            }
+            if (sum !== 0) totals[wk] = sum;
+          }
+          next[personId] = { ...(next[personId] || {}), ...totals };
+          return next;
+        });
+      } catch {}
+      showToast('Assignments refreshed', 'success');
+    } catch (e: any) {
+      showToast('Failed to refresh assignments: ' + (e?.message || 'Unknown error'), 'error');
+    } finally {
+      setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
+    }
+  };
+
   // Toggle person expansion
   const togglePersonExpanded = (personId: number) => {
-    setPeople(prev => prev.map(person => 
-      person.id === personId 
-        ? { ...person, isExpanded: !person.isExpanded }
-        : person
-    ));
+    const person = people.find(p => p.id === personId);
+    const willExpand = !(person?.isExpanded ?? false);
+    setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: !p.isExpanded } : p)));
+    if (willExpand) {
+      void ensureAssignmentsLoaded(personId);
+    }
   };
 
   // Precompute future deliverables per project for filter
@@ -893,17 +1078,40 @@ const AssignmentGrid: React.FC = () => {
     return baseMatch || noDeliverablesMatch;
   };
 
-  // Filter assignments based on multi-select status filters
+  // Filter and sort assignments based on multi-select status filters
   const getVisibleAssignments = (assignments: Assignment[]): Assignment[] => {
     try {
       if (!assignments?.length) return [];
-      
-      return assignments.filter(assignment => {
+
+      const filteredAssignments = assignments.filter(assignment => {
         const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
         return matchesStatusFilters(project as Project);
       });
+
+      // Sort alphabetically: first by client name, then by project name
+      return filteredAssignments.sort((a, b) => {
+        const projectA = a?.project ? projectsById.get(a.project) : undefined;
+        const projectB = b?.project ? projectsById.get(b.project) : undefined;
+
+        const clientA = (projectA?.client || '').toLowerCase().trim();
+        const clientB = (projectB?.client || '').toLowerCase().trim();
+
+        // First sort by client name
+        if (clientA !== clientB) {
+          // Handle empty client names - put them at the end
+          if (!clientA && clientB) return 1;
+          if (clientA && !clientB) return -1;
+          return clientA.localeCompare(clientB);
+        }
+
+        // If client names are the same, sort by project name
+        const projectNameA = (projectA?.name || a?.projectDisplayName || '').toLowerCase().trim();
+        const projectNameB = (projectB?.name || b?.projectDisplayName || '').toLowerCase().trim();
+
+        return projectNameA.localeCompare(projectNameB);
+      });
     } catch (error) {
-      console.error('Error filtering assignments:', error);
+      console.error('Error filtering/sorting assignments:', error);
       return assignments || []; // Safe fallback - show all on error
     }
   };
@@ -924,6 +1132,10 @@ const AssignmentGrid: React.FC = () => {
 
   // Get person's total hours for a specific week (updated to use filtered assignments)
   const getPersonTotalHours = (person: PersonWithAssignments, week: string) => {
+    const byWeek = hoursByPerson[person.id!];
+    if (byWeek && Object.prototype.hasOwnProperty.call(byWeek, week)) {
+      return byWeek[week] || 0;
+    }
     return calculatePersonTotal(person.assignments, week);
   };
 
@@ -1099,10 +1311,49 @@ const AssignmentGrid: React.FC = () => {
       return u ? { ...a, weeklyHours: u.weeklyHours } : a;
     }));
 
-    // Execute API updates
-    const results = await Promise.allSettled(
-      updatesArray.map(u => assignmentsApi.update(u.assignmentId, { weeklyHours: u.weeklyHours }))
-    );
+    // Update aggregated totals (hoursByPerson) for affected people/weeks
+    try {
+      const byPersonWeeks = new Map<number, Set<string>>();
+      cells.forEach(c => {
+        if (!byPersonWeeks.has(c.personId)) byPersonWeeks.set(c.personId, new Set());
+        byPersonWeeks.get(c.personId)!.add(c.week);
+      });
+      const newMap: Record<number, Record<string, number>> = { ...hoursByPerson };
+      for (const [pid, weeksSet] of byPersonWeeks.entries()) {
+        const person = people.find(p => p.id === pid);
+        if (!person) continue;
+        if (!newMap[pid]) newMap[pid] = { ...(hoursByPerson[pid] || {}) };
+        for (const wk of weeksSet) {
+          const total = (person.assignments || []).reduce((sum, a) => {
+            const u = updatesArray.find(x => x.assignmentId === a.id && x.personId === pid);
+            const wh = u ? u.weeklyHours : a.weeklyHours || {};
+            const v = parseFloat((wh?.[wk] as any)?.toString?.() || '0') || 0;
+            return sum + v;
+          }, 0);
+          newMap[pid][wk] = total;
+        }
+      }
+      setHoursByPerson(newMap);
+    } catch {}
+
+    // Execute API updates (use bulk endpoint when multiple assignments updated)
+    let results: PromiseSettledResult<any>[] = [];
+    if (updatesArray.length > 1) {
+      try {
+        const bulk = await assignmentsApi.bulkUpdateHours(
+          updatesArray.map(u => ({ assignmentId: u.assignmentId, weeklyHours: u.weeklyHours }))
+        );
+        // Normalize results to a Promise.allSettled-like structure
+        const ok = (bulk?.results || []).map(r => ({ status: 'fulfilled', value: r })) as PromiseSettledResult<any>[];
+        results = ok;
+      } catch (e) {
+        results = updatesArray.map(() => ({ status: 'rejected', reason: e })) as PromiseSettledResult<any>[];
+      }
+    } else {
+      results = await Promise.allSettled(
+        updatesArray.map(u => assignmentsApi.update(u.assignmentId, { weeklyHours: u.weeklyHours }))
+      );
+    }
 
     // Rollback failed ones, if any
     const failed: typeof updatesArray = [];
@@ -1178,7 +1429,19 @@ const AssignmentGrid: React.FC = () => {
           <div className="flex items-start justify-between gap-6">
             <div>
               <h1 className="text-2xl font-bold text-[#cccccc]">Assignment Grid</h1>
-              <p className="text-[#969696] text-sm">Manage team workload allocation across 12 weeks</p>
+              <div className="flex items-center gap-3">
+                <p className="text-[#969696] text-sm">Manage team workload allocation across {weeks.length} weeks</p>
+                <span
+                  title={isSnapshotMode ? 'Rendering from server grid snapshot' : 'Server snapshot unavailable; using legacy client aggregation'}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border ${
+                    isSnapshotMode
+                      ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'
+                      : 'bg-[#3e3e42] text-[#bbbbbb] border-[#4e4e52]'
+                  }`}
+                >
+                  {isSnapshotMode ? 'Snapshot Mode' : 'Legacy Mode'}
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-xs text-[#969696]">
@@ -1219,9 +1482,28 @@ const AssignmentGrid: React.FC = () => {
 
         {/* Sticky Week Header - positioned directly below measured header */}
         <div className="sticky bg-[#2d2d30] border-b border-[#3e3e42] z-20 overflow-x-auto" style={{ top: headerHeight }}>
-          <div className="min-w-[1400px]">
-            <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2">
-              <div className="font-medium text-[#cccccc] text-sm px-2 py-1">Team Member</div>
+          <div style={{ minWidth: totalMinWidth }}>
+            <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
+              {/* Client column header with resize handle */}
+              <div className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group">
+                Client
+                <div
+                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[#007acc]/50 transition-colors"
+                  onMouseDown={(e) => startColumnResize('client', e)}
+                  title="Drag to resize client column"
+                />
+              </div>
+
+              {/* Project column header with resize handle */}
+              <div className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group">
+                Project
+                <div
+                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[#007acc]/50 transition-colors"
+                  onMouseDown={(e) => startColumnResize('project', e)}
+                  title="Drag to resize project column"
+                />
+              </div>
+
               <div className="text-center text-xs text-[#969696] px-1">+/-</div>
               {weeks.map((week, index) => (
                 <div key={week.date} className="text-center px-1">
@@ -1237,7 +1519,7 @@ const AssignmentGrid: React.FC = () => {
 
         {/* Full Width Grid Container */}
         <div className="flex-1 overflow-x-auto bg-[#1e1e1e]">
-          <div className="min-w-[1400px]">
+          <div style={{ minWidth: totalMinWidth }}>
 
             {/* Data Rows */}
             <div>
@@ -1245,39 +1527,41 @@ const AssignmentGrid: React.FC = () => {
                 <div key={person.id} className="border-b border-[#3e3e42] last:border-b-0">
                   
                   {/* Person Row */}
-                  <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-2 hover:bg-[#2d2d30]/50 transition-colors">
-                    
-                    {/* Person Info - Entire area clickable */}
-                    <button
-                      onClick={() => togglePersonExpanded(person.id!)}
-                      className="flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left hover:bg-[#3e3e42]/50 transition-all duration-200 rounded-sm"
-                    >
-                      <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[#969696]">
-                        <svg 
-                          width="12" 
-                          height="12" 
-                          viewBox="0 0 12 12" 
-                          className={`transition-transform duration-200 ${person.isExpanded ? 'rotate-90' : 'rotate-0'}`}
-                        >
-                          <path 
-                            d="M4 2 L8 6 L4 10" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="1.5" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-[#cccccc] text-sm truncate">{person.name}</div>
-                        <div className="text-xs text-[#969696]">{person.role} • {person.weeklyCapacity}h/wk</div>
-                      </div>
-                    </button>
+                  <div className="grid gap-px p-2 hover:bg-[#2d2d30]/50 transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
+
+                    {/* Person Info - Spans both client and project columns */}
+                    <div className="col-span-2 flex items-center">
+                      <button
+                        onClick={() => togglePersonExpanded(person.id!)}
+                        className="flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left hover:bg-[#3e3e42]/50 transition-all duration-200 rounded-sm"
+                      >
+                        <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[#969696]">
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 12 12"
+                            className={`transition-transform duration-200 ${person.isExpanded ? 'rotate-90' : 'rotate-0'}`}
+                          >
+                            <path
+                              d="M4 2 L8 6 L4 10"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-[#cccccc] text-sm truncate">{person.name}</div>
+                          <div className="text-xs text-[#969696]">{person.role} • {person.weeklyCapacity}h/wk</div>
+                        </div>
+                      </button>
+                    </div>
 
                     {/* Add Assignment Button */}
-                    <div className="flex items-center justify-center">
-                      <button 
+                    <div className="flex items-center justify-center gap-1">
+                      <button
                         className="w-7 h-7 rounded text-white hover:text-[#969696] hover:bg-[#3e3e42] transition-colors text-center text-sm font-medium leading-none font-mono"
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Add new assignment"
@@ -1287,6 +1571,20 @@ const AssignmentGrid: React.FC = () => {
                         }}
                       >
                         +
+                      </button>
+                      <button
+                        className={`w-7 h-7 rounded transition-colors text-center text-sm font-medium leading-none ${loadingAssignments.has(person.id!) ? 'bg-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent text-[#cccccc] hover:text-white hover:bg-[#3e3e42]'}`}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Refresh assignments"
+                        onClick={() => refreshPersonAssignments(person.id!)}
+                        disabled={loadingAssignments.has(person.id!)}
+                        aria-busy={loadingAssignments.has(person.id!)}
+                      >
+                        {loadingAssignments.has(person.id!) ? (
+                          <span className="inline-block w-3 h-3 border-2 border-[#969696] border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <span aria-hidden>↻</span>
+                        )}
                       </button>
                     </div>
 
@@ -1305,7 +1603,20 @@ const AssignmentGrid: React.FC = () => {
                   </div>
 
                   {/* Assignment Rows */}
-                  {person.isExpanded && getVisibleAssignments(person.assignments).map((assignment) => (
+                  {person.isExpanded && loadingAssignments.has(person.id!) && (
+                    <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
+                      <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
+                        <div className="text-[#969696] text-xs">Loading assignments…</div>
+                      </div>
+                      <div></div>
+                      {weeks.map((week) => (
+                        <div key={week.date} className="flex items-center justify-center">
+                          <div className="w-12 h-6 flex items-center justify-center text-[#757575] text-xs">—</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {person.isExpanded && !loadingAssignments.has(person.id!) && getVisibleAssignments(person.assignments).map((assignment) => (
                     <AssignmentRow
                       key={assignment.id}
                       assignment={assignment}
@@ -1333,13 +1644,14 @@ const AssignmentGrid: React.FC = () => {
                       onCellMouseDown={handleCellMouseDown}
                       onCellMouseEnter={handleCellMouseEnter}
                       personId={person.id!}
+                      gridTemplate={gridTemplate}
                     />
                   ))}
 
                   {/* Add Assignment Form */}
                   {person.isExpanded && isAddingAssignment === person.id && (
-                    <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#2d2d30] border border-blue-500/30">
-                      <div className="flex items-center py-1 pl-[60px] pr-2 relative">
+                    <div className="grid gap-px p-1 bg-[#2d2d30] border border-blue-500/30" style={{ gridTemplateColumns: gridTemplate }}>
+                      <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2 relative">
                         <input
                           type="text"
                           value={newProjectName}
@@ -1437,8 +1749,8 @@ const AssignmentGrid: React.FC = () => {
 
                   {/* Empty State */}
                   {person.isExpanded && person.assignments.length === 0 && (
-                    <div className="grid grid-cols-[280px_40px_repeat(12,70px)] gap-px p-1 bg-[#252526]">
-                      <div className="flex items-center py-1 pl-[60px] pr-2">
+                    <div className="grid gap-px p-1 bg-[#252526]" style={{ gridTemplateColumns: gridTemplate }}>
+                      <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
                         <div className="text-[#757575] text-xs italic">
                           No assignments
                         </div>
