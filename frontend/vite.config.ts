@@ -68,7 +68,7 @@ export default defineConfig({
           'react-vendor': ['react', 'react-dom'],
           
           // React Router
-          'router': ['react-router-dom'],
+          'router': ['react-router'],
           
           // React Query for data fetching
           'query': ['@tanstack/react-query', '@tanstack/react-query-devtools'],
@@ -107,7 +107,7 @@ export default defineConfig({
     include: [
       'react', 
       'react-dom', 
-      'react-router-dom',
+      'react-router',
       '@tanstack/react-query',
     ],
   },
