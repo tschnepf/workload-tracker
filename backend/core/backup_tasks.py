@@ -19,6 +19,55 @@ def create_backup_task(self, description: str | None = None) -> dict:
         return {}
 
 
+@shared_task(bind=True, soft_time_limit=3600, time_limit=5400)
+def cleanup_retention_task(self, daily: int | None = None, weekly: int | None = None, monthly: int | None = None, dry_run: bool = False) -> dict:
+    """Enforce retention policy by invoking the management command."""
+    # Build args safely
+    args = []
+    if daily is not None:
+        args += ["--daily", str(daily)]
+    if weekly is not None:
+        args += ["--weekly", str(weekly)]
+    if monthly is not None:
+        args += ["--monthly", str(monthly)]
+    if dry_run:
+        args += ["--dry-run"]
+    buf = io.StringIO()
+    call_command('cleanup_backups', *args, stdout=buf)
+    buf.seek(0)
+    try:
+        return json.loads(buf.read() or '{}')
+    except Exception:
+        return {}
+
+
+@shared_task(bind=True, soft_time_limit=7200, time_limit=10800)
+def sync_backups_task(self, force: bool = False) -> dict:
+    """Run offsite sync via management command."""
+    args = []
+    if force:
+        args.append("--force")
+    buf = io.StringIO()
+    call_command('sync_backups', *args, stdout=buf)
+    buf.seek(0)
+    try:
+        return json.loads(buf.read() or '{}')
+    except Exception:
+        return {}
+
+
+@shared_task(bind=True, soft_time_limit=7200, time_limit=10800)
+def restore_latest_safety_task(self) -> dict:
+    """Run nightly restore drill to a disposable database (see management command)."""
+    buf = io.StringIO()
+    call_command('restore_latest_safety', stdout=buf)
+    buf.seek(0)
+    try:
+        return json.loads(buf.read() or '{}')
+    except Exception:
+        return {}
+
+
 @shared_task(bind=True, soft_time_limit=7200, time_limit=10800)
 def restore_backup_task(
     self,

@@ -635,19 +635,25 @@ Update CLAUDE.md with backup/restore usage instructions:
 ```
 
 ### Phase 9: Automation, Retention, and Offsite (Optional but Recommended)
+"Hardened" to avoid the issues we addressed earlier (e.g., read-only windows, env blanks, version drift). Defaults are safe and env‑driven.
 
 #### Step 9.1: Implement Retention Cleanup Command
-**Prompt for AI Agent:**
+**Prompt for AI Agent (updated):**
 ```
 Create backend/core/management/commands/cleanup_backups.py that:
 - Reads a retention policy (e.g., 7 daily, 4 weekly, 12 monthly) from settings or env
 - Deletes expired backups safely using metadata timestamps and naming
 - Skips files with active lock/in-progress markers
 - Logs a concise summary and updates status for /api/backups/status/
+
+Safety:
+- Respect locks: skip when BACKUPS_DIR/.restore.lock exists; do not modify files during restore.
+- Route to queue "db_maintenance" and set soft/time limits (e.g., 1800/2700s).
+- No ORM usage during lock windows; use filesystem and simple I/O only.
 ```
 
 #### Step 9.2: Schedule Backups and Cleanup (Celery Beat)
-**Prompt for AI Agent:**
+**Prompt for AI Agent (updated):**
 ```
 Add optional Celery beat schedule to run:
 - Nightly backup creation (off-hours), with description and policy tags
@@ -657,31 +663,47 @@ Add optional Celery beat schedule to run:
 
 Notes:
 - Schedules are environment-specific; default to env-driven cron strings (e.g., BACKUP_SCHEDULE_CRON, CLEANUP_SCHEDULE_CRON)
-- Provide sensible defaults (e.g., 02:00 backup, 02:30 cleanup) and document timezone
-- Ensure tasks run on queue "db_maintenance" (single concurrency worker)
+- Provide sensible defaults (e.g., 02:00 backup, 02:30 cleanup) and document timezone (UTC)
+- Ensure tasks run on queue "db_maintenance" (single-concurrency worker)
+- Validate cron strings: if blank/invalid, disable the schedule and log a warning (do not crash beat)
+- Default automation disabled unless `ENABLE_AUTOMATION=true`; when enabled use:
+  - `BACKUP_SCHEDULE_CRON="0 2 * * *"` (UTC)
+  - `CLEANUP_SCHEDULE_CRON="30 2 * * *"` (UTC)
+- Set `app.conf.timezone = settings.TIME_ZONE or 'UTC'` and `app.conf.enable_utc = True`
+- Keep beat schedule file at a writable path (`/var/run/celery/beat-schedule`) using the existing named volume
 ```
 
 #### Step 9.3: Offsite Sync Command
-**Prompt for AI Agent:**
+**Prompt for AI Agent (updated):**
 ```
 Create backend/core/management/commands/sync_backups.py that:
 - Pushes verified backups to S3/GCS/Azure (choose AWS S3 via boto3 or generic rclone)
 - Supports server-side encryption (SSE/SSE-KMS)
 - Skips in-progress files and updates sidecar meta with offsite sync timestamp
 - Uses credentials via env variables; never commit secrets
+
+Operational requirements:
+- Gate behind `OFFSITE_ENABLED=true`; otherwise no-op.
+- Respect locks: skip when `.restore.lock` exists.
+- Chunked uploads (streaming) and short timeouts; non-blocking notifications.
+- On success, write `offsiteLastSyncAt` to the sidecar `.meta.json`.
 ```
 
 #### Step 9.4: Notifications
-**Prompt for AI Agent:**
+**Prompt for AI Agent (updated):**
 ```
 Add optional Slack/email notification helper:
 - On backup/restore/cleanup/sync success/failure, send a short summary
 - Configure via env (e.g., SLACK_WEBHOOK_URL)
 - Integrate into management commands and API flows (errors captured in Sentry)
+
+Non-blocking & safe:
+- Wrap calls in try/except with short timeouts; never fail the job due to notification errors.
+- Redact secrets/paths; send concise summaries only.
 ```
 
 #### Step 9.5: Nightly Restore Test (Safety Drill)
-**Prompt for AI Agent:**
+**Prompt for AI Agent (updated):**
 ```
 Add an optional management command to restore latest backup into a disposable database and run health checks:
 - Create temp database, restore with limited connections, run manage.py check and migrate --check
@@ -696,10 +718,16 @@ Why it matters:
 
 Cost:
 - Runtime and disk I/O scale with database size; schedule off-hours and keep it disabled by default.
+
+Safety & alignment:
+- Use `DB_ADMIN_URL` to connect; never alter the primary schema.
+- Do not toggle READ_ONLY_MODE; operate only on a temp DB.
+- Respect `.restore.lock`; skip if a real restore is in progress.
+- Route to `db_maintenance` with time limits and no ORM during lock windows.
 ```
 
 #### Step 9.6: Backup Schedule UI (Admin Settings)
-**Prompt for AI Agent:**
+**Prompt for AI Agent (updated):**
 ```
 Add a new admin-only Scheduling section under Settings → Backup & Restore that allows configuring automation:
 
@@ -719,6 +747,37 @@ Backend Wiring:
 Accessibility & Safety:
 - Clear warnings about off-hours execution and resource usage
 - Confirm dialogs for "Run now" actions
+
+Additional guidance:
+- Display timezone (UTC by default) and computed next run times.
+- If env cron strings are blank/invalid, show disabled status instead of errors.
+- "Run now" buttons enqueue Celery tasks on `db_maintenance` and respect lock files.
+- Prefer relative `/api` endpoints so the dev proxy handles routing (Windows-friendly).
+```
+
+#### Phase 9 Env Reference (New)
+```
+ENABLE_AUTOMATION=false            # enable beat schedules when true
+BACKUP_SCHEDULE_CRON=0 2 * * *     # UTC (used when automation enabled)
+CLEANUP_SCHEDULE_CRON=30 2 * * *   # UTC
+
+# Retention (defaults in settings if unset)
+BACKUP_RETENTION_DAILY=7
+BACKUP_RETENTION_WEEKLY=4
+BACKUP_RETENTION_MONTHLY=12
+
+# Offsite sync
+OFFSITE_ENABLED=false
+OFFSITE_PROVIDER=s3                 # initially support 's3'
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=...
+AWS_S3_BUCKET=...
+AWS_SSE=aws:kms or AES256 (optional)
+AWS_SSE_KMS_KEY_ID=... (optional)
+
+# Notifications
+SLACK_WEBHOOK_URL=                  # optional; if set, send concise messages
 ```
 
 ## Implementation Notes
