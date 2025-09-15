@@ -2,21 +2,22 @@
 // Focused on naming-discipline guardrails without noisy rules.
 
 import tsParser from '@typescript-eslint/parser';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default [
   {
     files: ['**/*.{ts,tsx,js,jsx}'],
     ignores: ['node_modules/**', 'dist/**', 'build/**'],
+    plugins: { 'react-hooks': reactHooks },
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 'latest',
       sourceType: 'module',
-      ecmaFeatures: { jsx: true },
+      parserOptions: { ecmaFeatures: { jsx: true } },
     },
     rules: {
       // Naming discipline: avoid ad-hoc key mapping helpers; use serializers + typed models instead.
       'no-restricted-imports': ['warn', {
-        name: 'naming-discipline', // label only
         paths: [
           { name: 'camelcase-keys', message: 'Avoid ad-hoc key mapping; use serializers and typed models.' },
           { name: 'snakecase-keys', message: 'Avoid ad-hoc key mapping; use serializers and typed models.' },
@@ -35,7 +36,9 @@ export default [
           message: 'Avoid ad-hoc key mapping; use serializers and typed models.',
         },
       ],
+      // Ensure hooks usage is validated; align with CRA defaults
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
 ];
-
