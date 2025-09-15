@@ -24,7 +24,7 @@ django-axes==8.0.0
 openpyxl==3.1.5
 
 # Caching (Redis)
-redis==6.4.0
+redis==5.0.1
 
 # Production WSGI server
 gunicorn==23.0.0
