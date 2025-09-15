@@ -45,3 +45,13 @@ class ProjectSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError('Name is required')
         return value
+
+
+class ProjectAvailabilityItemSerializer(serializers.Serializer):
+    """Availability snapshot item for a person in project context."""
+    personId = serializers.IntegerField()
+    personName = serializers.CharField()
+    totalHours = serializers.FloatField()
+    capacity = serializers.FloatField()
+    availableHours = serializers.FloatField()
+    utilizationPercent = serializers.FloatField()

@@ -33,6 +33,14 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
+    // Dev proxy to backend to avoid cross-origin and host port issues on Windows
+    proxy: {
+      '/api': {
+        target: 'http://backend:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   resolve: {
     alias: {

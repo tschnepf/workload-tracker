@@ -4,16 +4,32 @@ Uses AutoMapped serializers for naming prevention
 """
 
 from rest_framework import viewsets, status
+from core.etag import ETagConditionalMixin
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
+from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.throttling import UserRateThrottle
-from django.db.models import Sum  # noqa: F401
+from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
+from django.db.models import Sum, Max, Prefetch, Value  # noqa: F401
+from django.db.models.functions import Coalesce, Lower
 from .models import Assignment
 from departments.models import Department
 from .serializers import AssignmentSerializer
 from people.models import Person
 from projects.models import Project  # noqa: F401
 from .services import WorkloadRebalancingService
+from django.conf import settings
+from django.core.cache import cache
+from django.http import HttpResponseNotModified
+from django.utils.http import http_date
+from datetime import date, timedelta
+import hashlib
+import os
+import time
+try:
+    from core.tasks import generate_grid_snapshot_async  # type: ignore
+except Exception:
+    generate_grid_snapshot_async = None  # type: ignore
 
 
 class HotEndpointThrottle(UserRateThrottle):
@@ -21,7 +37,12 @@ class HotEndpointThrottle(UserRateThrottle):
     scope = 'hot_endpoint'
 
 
-class AssignmentViewSet(viewsets.ModelViewSet):
+class GridSnapshotThrottle(ScopedRateThrottle):
+    """Throttle for grid snapshot aggregate reads"""
+    scope = 'grid_snapshot'
+
+
+class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     """
     Assignment CRUD API with utilization tracking
     Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
@@ -82,6 +103,16 @@ class AssignmentViewSet(viewsets.ModelViewSet):
                 # Ignore invalid department filter; return unfiltered
                 pass
 
+        # Apply stable DB-level ordering: client asc (nulls last), then project name asc (case-insensitive)
+        try:
+            queryset = queryset.order_by(
+                Coalesce(Lower('project__client'), Value('zzzz_no_client')),
+                Lower('project__name'),
+            )
+        except Exception:
+            # Fallback to basic ordering if DB backend lacks functions
+            queryset = queryset.order_by('project__client', 'project__name')
+
         # Check if bulk loading is requested (Phase 2 optimization)
         if request.query_params.get('all') == 'true':
             serializer = self.get_serializer(queryset, many=True)
@@ -92,7 +123,321 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             'results': serializer.data,
             'count': len(serializer.data)
         })
-    
+
+    @extend_schema(
+        description="Return compact pre-aggregated grid data for N weeks ahead (default 12).\n\n"
+                    "Response shape: { weekKeys: [YYYY-MM-DD], people: [{id, name, weeklyCapacity, department}], hoursByPerson: { <personId>: { <weekKey>: hours } } }",
+        parameters=[
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+        ],
+        responses=inline_serializer(
+            name='GridSnapshotResponse',
+            fields={
+                'weekKeys': serializers.ListField(child=serializers.CharField()),
+                'people': serializers.ListField(child=inline_serializer(name='GridSnapshotPerson', fields={
+                    'id': serializers.IntegerField(),
+                    'name': serializers.CharField(),
+                    'weeklyCapacity': serializers.IntegerField(),
+                    'department': serializers.IntegerField(allow_null=True),
+                })),
+                'hoursByPerson': serializers.DictField(child=serializers.DictField(child=serializers.FloatField())),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='grid_snapshot', throttle_classes=[GridSnapshotThrottle])
+    def grid_snapshot(self, request):
+        """Provide a compact, pre-aggregated structure for the grid in one request.
+
+        Uses Monday as canonical API week keys and tolerates +/- 3 days against stored JSON keys.
+        Includes short-TTL caching and conditional ETag/Last-Modified handling.
+        """
+        # Parse and clamp weeks
+        try:
+            weeks = int(request.query_params.get('weeks', 12))
+        except ValueError:
+            weeks = 12
+        if weeks < 1:
+            weeks = 1
+        if weeks > 26:
+            weeks = 26
+
+        # Build people queryset with optional department scoping
+        people_qs = Person.objects.filter(is_active=True).select_related('department')
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        cache_scope = 'all'
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    # BFS for descendants
+                    ids = set()
+                    stack = [dept_id]
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                            if d not in ids:
+                                stack.append(d)
+                    people_qs = people_qs.filter(department_id__in=list(ids))
+                    cache_scope = f'dept_{dept_id}_children'
+                else:
+                    people_qs = people_qs.filter(department_id=dept_id)
+                    cache_scope = f'dept_{dept_id}'
+            except (TypeError, ValueError):
+                pass
+
+        # Prefetch active assignments with minimal fields
+        asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id', 'updated_at')
+        people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
+
+        # Build cache key and short-TTL caching
+        try:
+            version = cache.get('analytics_cache_version', 1)
+        except Exception:
+            version = 1
+        cache_key = f"assignments:grid_snapshot:v{version}:{weeks}:{cache_scope}"
+        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+
+        # Compute conservative validators across People + Assignments
+        ppl_aggr = people_qs.aggregate(last_modified=Max('updated_at'))
+        asn_aggr = Assignment.objects.filter(person__in=people_qs).aggregate(last_modified=Max('updated_at'))
+        lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
+        last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
+        etag_content = f"{weeks}-{cache_scope}-" + (last_modified.isoformat() if last_modified else 'none')
+        etag = hashlib.md5(etag_content.encode()).hexdigest()
+
+        # Conditional request handling
+        inm = request.META.get('HTTP_IF_NONE_MATCH')
+        if inm and inm.strip('"') == etag:
+            resp = HttpResponseNotModified()
+            resp['ETag'] = f'"{etag}"'
+            if last_modified:
+                resp['Last-Modified'] = http_date(last_modified.timestamp())
+            return resp
+        ims = request.META.get('HTTP_IF_MODIFIED_SINCE')
+        if last_modified and ims:
+            try:
+                from django.utils.http import parse_http_date
+                if_modified_ts = parse_http_date(ims)
+                if int(last_modified.timestamp()) <= if_modified_ts:
+                    resp = HttpResponseNotModified()
+                    resp['ETag'] = f'"{etag}"'
+                    resp['Last-Modified'] = http_date(last_modified.timestamp())
+                    return resp
+            except Exception:
+                pass
+
+        payload = None
+        if use_cache:
+            try:
+                payload = cache.get(cache_key)
+            except Exception:
+                payload = None
+
+        if payload is None:
+            # Single-flight lock to prevent stampedes
+            lock_key = f"lock:{cache_key}"
+            got_lock = False
+            if use_cache:
+                try:
+                    got_lock = cache.add(lock_key, '1', timeout=10)
+                except Exception:
+                    got_lock = True
+            try:
+                if not got_lock and use_cache:
+                    t0 = time.time()
+                    while time.time() - t0 < 2.0:
+                        try:
+                            payload = cache.get(cache_key)
+                            if payload is not None:
+                                break
+                        except Exception:
+                            pass
+                        time.sleep(0.05)
+                if payload is None:
+                    # Compute week keys (Mondays)
+                    today = date.today()
+                    start_monday = today - timedelta(days=today.weekday())
+                    week_keys = [(start_monday + timedelta(weeks=w)).strftime('%Y-%m-%d') for w in range(weeks)]
+
+                    # Build people list
+                    people_list = []
+                    for p in people_qs:
+                        people_list.append({
+                            'id': p.id,
+                            'name': p.name,
+                            'weeklyCapacity': p.weekly_capacity or 0,
+                            'department': p.department_id,
+                        })
+
+                    # Build hours map per person
+                    def hours_for_week_from_json(weekly_hours: dict, monday_key: str) -> float:
+                        if not weekly_hours:
+                            return 0.0
+                        # Exact Monday key
+                        if monday_key in weekly_hours:
+                            try:
+                                return float(weekly_hours[monday_key] or 0)
+                            except (TypeError, ValueError):
+                                return 0.0
+                        # Tolerant +/- 3 days
+                        monday_date = date.fromisoformat(monday_key)
+                        for off in range(-3, 4):
+                            k = (monday_date + timedelta(days=off)).strftime('%Y-%m-%d')
+                            if k in weekly_hours:
+                                try:
+                                    return float(weekly_hours[k] or 0)
+                                except (TypeError, ValueError):
+                                    return 0.0
+                        return 0.0
+
+                    hours_by_person = {}
+                    for p in people_qs:
+                        wk_map = {}
+                        # iterate prefetched assignments
+                        for wk in week_keys:
+                            wk_total = 0.0
+                            for a in getattr(p, 'assignments').all():
+                                wh = a.weekly_hours or {}
+                                wk_total += hours_for_week_from_json(wh, wk)
+                            if wk_total != 0.0:
+                                # store non-zero to keep payload compact; client may treat missing as 0
+                                wk_map[wk] = round(wk_total, 2)
+                        hours_by_person[p.id] = wk_map
+
+                    payload = {
+                        'weekKeys': week_keys,
+                        'people': people_list,
+                        'hoursByPerson': hours_by_person,
+                    }
+                    if use_cache:
+                        try:
+                            cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+                        except Exception:
+                            pass
+            finally:
+                if use_cache:
+                    try:
+                        cache.delete(lock_key)
+                    except Exception:
+                        pass
+
+        response = Response(payload)
+        response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+        response['Cache-Control'] = 'private, max-age=30'
+        return response
+
+    @extend_schema(
+        description="Start async grid snapshot job and return task ID for polling.",
+        parameters=[
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+        ],
+        responses=inline_serializer(name='GridSnapshotAsyncResponse', fields={'jobId': serializers.CharField()})
+    )
+    @action(detail=False, methods=['get'], url_path='grid_snapshot_async', throttle_classes=[GridSnapshotThrottle])
+    def grid_snapshot_async(self, request):
+        if generate_grid_snapshot_async is None:
+            return Response({'detail': 'Async jobs not available'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        try:
+            weeks = int(request.query_params.get('weeks', 12))
+        except ValueError:
+            weeks = 12
+        dept_param = request.query_params.get('department')
+        dept = None
+        if dept_param not in (None, ""):
+            try:
+                dept = int(dept_param)
+            except Exception:
+                dept = None
+        include_children = 1 if request.query_params.get('include_children') == '1' else 0
+        try:
+            job = generate_grid_snapshot_async.delay(weeks, dept, include_children)
+        except Exception as e:
+            return Response({'detail': f'Failed to enqueue job: {e.__class__.__name__}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({'jobId': job.id}, status=status.HTTP_202_ACCEPTED)
+
+    @extend_schema(
+        description="Bulk update weekly hours for multiple assignments in a single transaction.",
+        request=inline_serializer(
+            name='BulkUpdateHoursRequest',
+            fields={
+                'updates': serializers.ListField(child=inline_serializer(name='AssignmentHoursUpdate', fields={
+                    'assignmentId': serializers.IntegerField(),
+                    'weeklyHours': serializers.DictField(child=serializers.FloatField()),
+                }))
+            }
+        ),
+        responses=inline_serializer(
+            name='BulkUpdateHoursResponse',
+            fields={
+                'success': serializers.BooleanField(),
+                'results': serializers.ListField(child=inline_serializer(name='BulkUpdateResultItem', fields={
+                    'assignmentId': serializers.IntegerField(),
+                    'status': serializers.CharField(),
+                    'etag': serializers.CharField(),
+                })),
+            }
+        )
+    )
+    @action(detail=False, methods=['patch'], url_path='bulk_update_hours')
+    def bulk_update_hours(self, request):
+        """All-or-nothing bulk weekly hours update with per-item results and refreshed ETags."""
+        from django.db import transaction
+        data = request.data or {}
+        updates = data.get('updates') or []
+        if not isinstance(updates, list) or len(updates) == 0:
+            return Response({'detail': 'updates[] required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate shapes early
+        try:
+            normalized = []
+            for u in updates:
+                aid = int(u.get('assignmentId'))
+                wh = u.get('weeklyHours') or {}
+                if not isinstance(wh, dict):
+                    return Response({'detail': f'invalid weeklyHours for assignmentId {aid}'}, status=status.HTTP_400_BAD_REQUEST)
+                normalized.append((aid, wh))
+        except Exception:
+            return Response({'detail': 'Invalid updates payload'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            # Load all assignments first
+            asn_map = {a.id: a for a in Assignment.objects.select_for_update().filter(id__in=[aid for aid, _ in normalized])}
+            if len(asn_map) != len(normalized):
+                return Response({'detail': 'One or more assignments not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Apply updates and validate capacity via serializer per item
+            for aid, wh in normalized:
+                a = asn_map[aid]
+                ser = AssignmentSerializer(instance=a, data={'weeklyHours': wh}, partial=True)
+                if not ser.is_valid():
+                    return Response({'detail': ser.errors}, status=status.HTTP_409_CONFLICT)
+                ser.save()
+
+        # Success, compute refreshed ETags
+        results = []
+        for aid, _ in normalized:
+            a = Assignment.objects.get(id=aid)
+            # ETag based on updated_at via ETagConditionalMixin logic
+            try:
+                lm = getattr(a, 'updated_at', None)
+                payload = lm.isoformat() if lm else str(a.id)
+                etag = hashlib.md5(payload.encode()).hexdigest()
+            except Exception:
+                etag = hashlib.md5(str(a.id).encode()).hexdigest()
+            results.append({'assignmentId': a.id, 'status': 'ok', 'etag': etag})
+
+        return Response({'success': True, 'results': results})
+
     def create(self, request, *args, **kwargs):
         """Create assignment with validation"""
         serializer = self.get_serializer(data=request.data)
@@ -104,6 +449,11 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='person_id', type=int, required=False, description='Filter by person id'),
+        ]
+    )
     @action(detail=False, methods=['get'])
     def by_person(self, request):
         """Get assignments grouped by person"""
@@ -120,6 +470,34 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         detail=False,
         methods=['post'],
         throttle_classes=[HotEndpointThrottle],
+    )
+    @extend_schema(
+        request=inline_serializer(
+            name='AssignmentConflictRequest',
+            fields={
+                'personId': serializers.IntegerField(),
+                'projectId': serializers.IntegerField(),
+                'weekKey': serializers.CharField(),
+                'proposedHours': serializers.FloatField(required=False),
+            },
+        ),
+        responses=inline_serializer(
+            name='AssignmentConflictResponse',
+            fields={
+                'hasConflict': serializers.BooleanField(),
+                'warnings': serializers.ListField(child=serializers.CharField()),
+                'totalHours': serializers.FloatField(),
+                'totalWithProposed': serializers.FloatField(),
+                'personCapacity': serializers.IntegerField(),
+                'availableHours': serializers.FloatField(),
+                'currentAssignments': serializers.ListField(child=inline_serializer(name='AssignmentConflictItem', fields={
+                    'projectName': serializers.CharField(),
+                    'hours': serializers.FloatField(),
+                    'assignmentId': serializers.IntegerField(),
+                })),
+                'projectBreakdown': serializers.DictField(child=serializers.FloatField()),
+            },
+        ),
     )
     def check_conflicts(self, request):
         """

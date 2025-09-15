@@ -64,6 +64,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'core.middleware.RequestIDLogMiddleware',
+    'core.middleware.ReadOnlyModeMiddleware',
     'core.middleware.CSPMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -138,8 +139,29 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Backups configuration (Phase 0: Step 0.1)
+# Use a non-public directory for database backups; never place under MEDIA_ROOT
+BACKUPS_DIR = os.getenv('BACKUPS_DIR', '/backups')
+# Read-only maintenance mode switch (also used during restore via lock file)
+READ_ONLY_MODE = os.getenv('READ_ONLY_MODE', 'false').lower() == 'true'
+# Optional privileged DSN for restore operations (DB owner)
+DB_ADMIN_URL = os.getenv('DB_ADMIN_URL')
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Optional encryption/offsite toggles (Phase 0: Step 0.6)
+BACKUP_ENCRYPTION_ENABLED = os.getenv('BACKUP_ENCRYPTION_ENABLED', 'false').lower() == 'true'
+BACKUP_ENCRYPTION_PROVIDER = os.getenv('BACKUP_ENCRYPTION_PROVIDER', 'gpg')  # 'gpg'|'kms'
+BACKUP_ENCRYPTION_RECIPIENT = os.getenv('BACKUP_ENCRYPTION_RECIPIENT')  # e.g., GPG recipient or KMS key id
+
+BACKUP_OFFSITE_ENABLED = os.getenv('BACKUP_OFFSITE_ENABLED', 'false').lower() == 'true'
+BACKUP_OFFSITE_PROVIDER = os.getenv('BACKUP_OFFSITE_PROVIDER')  # e.g., 's3'|'gcs'|'azure'|'rclone'
+BACKUP_OFFSITE_BUCKET = os.getenv('BACKUP_OFFSITE_BUCKET')
+BACKUP_OFFSITE_PREFIX = os.getenv('BACKUP_OFFSITE_PREFIX', '')
+
+# Max upload size for backup archives (bytes). Default 5 GiB.
+BACKUP_UPLOAD_MAX_BYTES = int(os.getenv('BACKUP_UPLOAD_MAX_BYTES', str(5 * 1024 * 1024 * 1024)))
 
 # Feature flags for progressive enhancement
 FEATURES = {
@@ -194,7 +216,20 @@ REST_FRAMEWORK = {
         'anon': os.getenv('DRF_THROTTLE_ANON', '100/min'),
         'user': os.getenv('DRF_THROTTLE_USER', '1000/min'),
         'hot_endpoint': os.getenv('DRF_THROTTLE_HOT', '300/hour'),  # Special limit for hot endpoints
+        'heatmap': os.getenv('DRF_THROTTLE_HEATMAP', '1200/min'),
+        'skill_match': os.getenv('DRF_THROTTLE_SKILL_MATCH', '600/min'),
+        'project_availability': os.getenv('DRF_THROTTLE_PROJECT_AVAILABILITY', '600/min'),
+        'find_available': os.getenv('DRF_THROTTLE_FIND_AVAILABLE', '600/min'),
+        'grid_snapshot': os.getenv('DRF_THROTTLE_GRID_SNAPSHOT', '600/min'),
         'login': os.getenv('DRF_THROTTLE_LOGIN', '10/min'),
+        # Backup/restore endpoints (Phase 0: Step 0.3)
+        'backup_create': os.getenv('DRF_THROTTLE_BACKUP_CREATE', '2/hour'),
+        'backup_delete': os.getenv('DRF_THROTTLE_BACKUP_DELETE', '5/hour'),
+        'backup_download': os.getenv('DRF_THROTTLE_BACKUP_DOWNLOAD', '20/hour'),
+        'backup_status': os.getenv('DRF_THROTTLE_BACKUP_STATUS', '120/min'),
+        # New granular scopes for restore and upload+restore
+        'backup_restore': os.getenv('DRF_THROTTLE_BACKUP_RESTORE', os.getenv('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
+        'backup_upload_restore': os.getenv('DRF_THROTTLE_BACKUP_UPLOAD_RESTORE', os.getenv('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
     }
 }
 
@@ -242,6 +277,13 @@ else:
         }
     }
 
+# Aggregate/dashboard caching TTLs (seconds)
+# Use AGGREGATE_CACHE_TTL globally for heavy aggregate endpoints.
+# Optionally set DASHBOARD_CACHE_TTL to override just the dashboard cache TTL.
+# Precedence: DASHBOARD_CACHE_TTL > AGGREGATE_CACHE_TTL > 30s default in view fallback.
+AGGREGATE_CACHE_TTL = int(os.getenv('AGGREGATE_CACHE_TTL', '30'))
+# DASHBOARD_CACHE_TTL is intentionally not set by default; set via env when needed.
+
 # CORS
 # CORS - Build allowed origins dynamically
 CORS_ALLOWED_ORIGINS = [
@@ -257,6 +299,12 @@ if HOST_IP:
 _cors_from_env = os.getenv('CORS_ALLOWED_ORIGINS')
 if _cors_from_env:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_from_env.split(',') if o.strip()]
+
+# Expose headers for client-side downloads (filename via Content-Disposition)
+try:
+    CORS_EXPOSE_HEADERS = list(set((globals().get('CORS_EXPOSE_HEADERS') or []) + ['Content-Disposition']))
+except Exception:
+    CORS_EXPOSE_HEADERS = ['Content-Disposition']
 
 # CSRF trusted origins (optional env override; comma-separated)
 _csrf_from_env = os.getenv('CSRF_TRUSTED_ORIGINS')
@@ -284,16 +332,33 @@ FEATURES.update({
 CORS_ALLOW_CREDENTIALS = bool(FEATURES.get('COOKIE_REFRESH_AUTH'))
 
 # Performance monitoring configuration
-SILK_ENABLED = os.getenv('SILK_ENABLED', 'false').lower() == 'true' or DEBUG
+# Silk enablement: default to on in DEBUG, but allow explicit override.
+_silk_env = os.getenv('SILK_ENABLED')
+SILK_ENABLED = (_silk_env.lower() == 'true') if _silk_env is not None else DEBUG
 if SILK_ENABLED:
     # Enable Silk only when explicitly allowed or in DEBUG
     INSTALLED_APPS.append('silk')
     try:
-        # After CORS; before other middlewares to profile as much as possible
-        insert_at = 1 if 'corsheaders.middleware.CorsMiddleware' in MIDDLEWARE else 0
-        MIDDLEWARE.insert(insert_at, 'silk.middleware.SilkyMiddleware')
+        # Place Silk AFTER our maintenance/read-only middleware so that during
+        # restores, our guard can short-circuit before Silk touches the DB.
+        ro_idx = MIDDLEWARE.index('core.middleware.ReadOnlyModeMiddleware') + 1
     except Exception:
-        MIDDLEWARE.insert(0, 'silk.middleware.SilkyMiddleware')
+        ro_idx = len(MIDDLEWARE)
+    MIDDLEWARE.insert(ro_idx, 'silk.middleware.SilkyMiddleware')
+    # Avoid DB writes for health/readiness and job-polling endpoints, which are
+    # frequently hit during backup/restore when schema may be transient.
+    SILKY_IGNORE_PATHS = list(set([
+        r'^/silk/.*',
+        r'^/admin/.*',
+        r'^/static/.*',
+        r'^/media/.*',
+        r'^/csp-report/.*',
+        r'^/health/.*',
+        r'^/readiness/.*',
+        r'^/api/health/.*',
+        r'^/api/readiness/.*',
+        r'^/api/jobs/.*',
+    ] + (globals().get('SILKY_IGNORE_PATHS') or [])))
 
 # Sentry configuration for production monitoring
 if not DEBUG and os.getenv('SENTRY_DSN'):
@@ -381,6 +446,11 @@ LOGGING = {
             'level': os.getenv('REQUEST_LOG_LEVEL', 'INFO'),
             'propagate': False,
         },
+        'db': {
+            'handlers': ['console_json'],
+            'level': os.getenv('DB_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
     },
 }
 
@@ -389,6 +459,9 @@ CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', os.getenv('REDIS_URL', 'redis
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', os.getenv('REDIS_URL', 'redis://redis:6379/1'))
 CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'false').lower() == 'true'
 CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_ROUTES = {
+    'core.backup_tasks.*': {'queue': 'db_maintenance'},
+}
 
 # CSP rollout configuration
 CSP_ENABLED = os.getenv('CSP_ENABLED', 'true').lower() == 'true'

@@ -62,22 +62,8 @@ const AssignmentForm: React.FC = () => {
   const isEditing = !!id;
   const { state: deptState } = useDepartmentFilter();
 
-  // Helper function to calculate skill match score
-  const calculateSkillMatchScore = (_person: Person, personSkills: PersonSkill[], requiredSkills: string[]): number => {
-    if (requiredSkills.length === 0) return 0;
-    
-    const personStrengths = personSkills
-      .filter(skill => skill.skillType === 'strength')
-      .map(skill => skill.skillTagName?.toLowerCase() || '');
-    
-    const matches = requiredSkills.filter(required => 
-      personStrengths.some(strength => 
-        strength.includes(required.toLowerCase()) || required.toLowerCase().includes(strength)
-      )
-    );
-    
-    return Math.round((matches.length / requiredSkills.length) * 100);
-  };
+  // Server-side skill match scores (by personId) for ranking
+  const [skillMatchScores, setSkillMatchScores] = useState<Map<number, number>>(new Map());
 
   // Helper function to extract skills from input text - will be used when skills input is processed
   const extractSkillsFromText = (text: string, availableSkills: SkillTag[]): string[] => {
@@ -121,11 +107,9 @@ const AssignmentForm: React.FC = () => {
     const selectedDepartment = selectedPerson?.department;
     
     return [...people].sort((a, b) => {
-      // Calculate skill match scores
-      const aSkills = peopleSkills.get(a.id!) || [];
-      const bSkills = peopleSkills.get(b.id!) || [];
-      const aSkillScore = calculateSkillMatchScore(a, aSkills, requiredSkills);
-      const bSkillScore = calculateSkillMatchScore(b, bSkills, requiredSkills);
+      // Use server-side skill scores when available
+      const aSkillScore = requiredSkills.length > 0 ? (skillMatchScores.get(a.id!) || 0) : 0;
+      const bSkillScore = requiredSkills.length > 0 ? (skillMatchScores.get(b.id!) || 0) : 0;
       
       // If we have required skills, prioritize skill matching
       if (requiredSkills.length > 0) {
@@ -152,6 +136,8 @@ const AssignmentForm: React.FC = () => {
       return a.name.localeCompare(b.name);
     });
   };
+
+  
 
   // Compute descendant department IDs when include-children is on
   const getDescendantDepartmentIds = (rootId: number | null | undefined, allDepts: Department[]): Set<number> => {
@@ -261,6 +247,42 @@ const AssignmentForm: React.FC = () => {
     const skills = extractSkillsFromText(skillsInput, skillTags);
     setProjectSkills(skills);
   }, [skillsInput, skillTags, extractSkillsFromText]);
+
+  // Fetch server-side skill match scores when required skills or filters change
+  useEffect(() => {
+    const run = async () => {
+      if (projectSkills.length === 0) { setSkillMatchScores(new Map()); return; }
+      try {
+        const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+        const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+        const res = await peopleApi.skillMatch(projectSkills, { department: dept, include_children: inc, limit: 200 });
+        const map = new Map<number, number>();
+        (res || []).forEach(item => { if (item.personId != null) map.set(item.personId, item.score || 0); });
+        setSkillMatchScores(map);
+      } catch {
+        setSkillMatchScores(new Map());
+      }
+    };
+    run();
+  }, [JSON.stringify(projectSkills), deptState.selectedDepartmentId, deptState.includeChildren]);
+
+  // Fetch server-side skill match scores for current required skills and department scope
+  useEffect(() => {
+    const run = async () => {
+      if (projectSkills.length === 0) { setSkillMatchScores(new Map()); return; }
+      try {
+        const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+        const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+        const res = await peopleApi.skillMatch(projectSkills, { department: dept, include_children: inc, limit: 200 });
+        const map = new Map<number, number>();
+        (res || []).forEach(item => { if (item.personId != null) map.set(item.personId, item.score || 0); });
+        setSkillMatchScores(map);
+      } catch {
+        setSkillMatchScores(new Map());
+      }
+    };
+    run();
+  }, [JSON.stringify(projectSkills), deptState.selectedDepartmentId, deptState.includeChildren]);
 
   // Update filtered people when dependencies change
   useEffect(() => {
@@ -609,7 +631,7 @@ const AssignmentForm: React.FC = () => {
                       people.find(p => p.id === formData.person)?.department === person.department;
                     const departmentName = getDepartmentName(person, departments);
                     const personSkillsList = peopleSkills.get(person.id!) || [];
-                    const skillScore = calculateSkillMatchScore(person, personSkillsList, projectSkills);
+                    const skillScore = skillMatchScores.get(person.id!) || 0;
                     
                     let prefix = '';
                     if (skillScore >= 80) prefix = '🎯 ';  // Perfect match
@@ -646,7 +668,7 @@ const AssignmentForm: React.FC = () => {
                     const personDept = getDepartmentName(selectedPerson, departments);
                     const sameDeptCount = people.filter(p => p.department === selectedPerson.department).length - 1;
                     const personSkillsList = peopleSkills.get(selectedPerson.id!) || [];
-                    const skillScore = calculateSkillMatchScore(selectedPerson, personSkillsList, projectSkills);
+                    const skillScore = skillMatchScores.get(selectedPerson.id!) || 0;
                     const skillWarnings = getSkillWarnings(selectedPerson, personSkillsList, projectSkills);
                     
                     return (

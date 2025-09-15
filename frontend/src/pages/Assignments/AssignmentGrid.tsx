@@ -7,7 +7,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
 import { Assignment, Person, Deliverable, Project } from '@/types/models';
-import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
+import { assignmentsApi, peopleApi, deliverablesApi, projectsApi, jobsApi } from '@/services/api';
+import { useCapabilities } from '@/hooks/useCapabilities';
 import StatusBadge, { editableStatusOptions } from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
@@ -308,6 +309,11 @@ const AssignmentGrid: React.FC = () => {
   const [selectedCells, setSelectedCells] = useState<{ personId: number, assignmentId: number, week: string }[]>([]);
   const [selectionStart, setSelectionStart] = useState<{ personId: number, assignmentId: number, week: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // Async job state for snapshot generation
+  const [asyncJobId, setAsyncJobId] = useState<string | null>(null);
+  const [asyncProgress, setAsyncProgress] = useState<number>(0);
+  const [asyncMessage, setAsyncMessage] = useState<string | undefined>(undefined);
+  const caps = useCapabilities();
 
   // Column width state for adjustable virtual columns
   // Default widths sized to prevent most client/project name cutoff
@@ -888,10 +894,56 @@ const AssignmentGrid: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Snapshot path first
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const snapshot = await assignmentsApi.getGridSnapshot({ weeks: 12, department: dept, include_children: inc });
+
+      // Heuristic: use async if weeks target > 20 or estimated people count > 400
+      const targetWeeks = 12; // current default
+      let estimatedCount = 0;
+      try {
+        const headPage = await peopleApi.list({ page: 1, page_size: 1, department: dept, include_children: inc });
+        estimatedCount = (headPage as any)?.count ?? 0;
+      } catch {}
+      const asyncEnabled = caps.data?.asyncJobs ?? false;
+      const shouldUseAsync = asyncEnabled && (targetWeeks > 20 || estimatedCount > 400);
+
+      let snapshot: { weekKeys: string[]; people: any[]; hoursByPerson: Record<string, Record<string, number>> };
+      if (shouldUseAsync) {
+        try {
+          const { jobId } = await assignmentsApi.getGridSnapshotAsync({ weeks: targetWeeks, department: dept, include_children: inc });
+          setAsyncJobId(jobId);
+          setAsyncProgress(0);
+          // Manual polling to surface progress
+          while (true) {
+            const s = await jobsApi.getStatus(jobId);
+            setAsyncProgress(s.progress || 0);
+            setAsyncMessage(s.message || undefined);
+            if (s.state === 'SUCCESS') {
+              if (s.result && (s.result as any).weekKeys) {
+                snapshot = s.result as any;
+              } else {
+                throw new Error('Missing result');
+              }
+              break;
+            }
+            if (s.state === 'FAILURE') {
+              throw new Error(s.error || 'Job failed');
+            }
+            await new Promise(r => setTimeout(r, 1500));
+          }
+        } catch (e: any) {
+          console.warn('Async snapshot failed; falling back to sync path.', e);
+          showToast('Async snapshot failed, using sync path', 'warning');
+          const resp = await assignmentsApi.getGridSnapshot({ weeks: targetWeeks, department: dept, include_children: inc });
+          snapshot = resp as any;
+        } finally {
+          setAsyncJobId(null);
+          setAsyncProgress(0);
+          setAsyncMessage(undefined);
+        }
+      } else {
+        snapshot = await assignmentsApi.getGridSnapshot({ weeks: targetWeeks, department: dept, include_children: inc }) as any;
+      }
 
       // Map weekKeys -> weeks state
       const wk = (snapshot.weekKeys || []).map((mondayStr: string) => {
@@ -1078,7 +1130,7 @@ const AssignmentGrid: React.FC = () => {
     return baseMatch || noDeliverablesMatch;
   };
 
-  // Filter and sort assignments based on multi-select status filters
+  // Filter assignments based on multi-select status filters
   const getVisibleAssignments = (assignments: Assignment[]): Assignment[] => {
     try {
       if (!assignments?.length) return [];
@@ -1088,28 +1140,8 @@ const AssignmentGrid: React.FC = () => {
         return matchesStatusFilters(project as Project);
       });
 
-      // Sort alphabetically: first by client name, then by project name
-      return filteredAssignments.sort((a, b) => {
-        const projectA = a?.project ? projectsById.get(a.project) : undefined;
-        const projectB = b?.project ? projectsById.get(b.project) : undefined;
-
-        const clientA = (projectA?.client || '').toLowerCase().trim();
-        const clientB = (projectB?.client || '').toLowerCase().trim();
-
-        // First sort by client name
-        if (clientA !== clientB) {
-          // Handle empty client names - put them at the end
-          if (!clientA && clientB) return 1;
-          if (clientA && !clientB) return -1;
-          return clientA.localeCompare(clientB);
-        }
-
-        // If client names are the same, sort by project name
-        const projectNameA = (projectA?.name || a?.projectDisplayName || '').toLowerCase().trim();
-        const projectNameB = (projectB?.name || b?.projectDisplayName || '').toLowerCase().trim();
-
-        return projectNameA.localeCompare(projectNameB);
-      });
+      // Sorting is now handled by the backend API (client, then project name).
+      return filteredAssignments;
     } catch (error) {
       console.error('Error filtering/sorting assignments:', error);
       return assignments || []; // Safe fallback - show all on error
@@ -1443,11 +1475,18 @@ const AssignmentGrid: React.FC = () => {
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-xs text-[#969696]">
-                {people.length} people • {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
+              <div className="flex items-center gap-4">
+                <div className="text-xs text-[#969696]">
+                  {people.length} people • {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
+                </div>
+                {asyncJobId && (
+                  <div className="flex items-center gap-2 text-xs text-[#cccccc]">
+                    <span className="inline-block w-3 h-3 border-2 border-[#969696] border-t-transparent rounded-full animate-spin" />
+                    <span>Generating snapshot… {asyncProgress}%</span>
+                    {asyncMessage && <span className="text-[#969696]">({asyncMessage})</span>}
+                  </div>
+                )}
               </div>
-            </div>
           </div>
 
           {/* Second row: Department filter + project status filters */}

@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { formatUtcToLocal } from '@/utils/dates';
 import { Project, Deliverable } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -396,7 +397,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
           {deliverable.description || '-'}
         </div>
         <div className="text-[#969696]">
-          {deliverable.date || '-'}
+          {deliverable.date ? formatUtcToLocal(deliverable.date) : '-'}
         </div>
         <div className="text-[#969696]">
           {deliverable.notes || '-'}

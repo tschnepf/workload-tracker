@@ -8,25 +8,54 @@ interface Props { onClose: () => void }
 const FindAvailableTool: React.FC<Props> = () => {
   const [people, setPeople] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [skills, setSkills] = useState<string>('');
+  const [minAvail, setMinAvail] = useState<number>(0);
 
   useEffect(() => {
     const run = async () => {
       try {
-        const page = await peopleApi.list({ page: 1, page_size: 100 });
-        setPeople(page.results || []);
+        // Compute current Monday (canonical week)
+        const now = new Date();
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+        const week = monday.toISOString().split('T')[0];
+        const items = await peopleApi.findAvailable(
+          skills.trim() ? skills.split(',').map(s => s.trim()) : undefined,
+          { week, limit: 100, minAvailableHours: minAvail }
+        );
+        setPeople(items || []);
       } finally {
         setLoading(false);
       }
     };
     run();
-  }, []);
+  }, [skills, minAvail]);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: darkTheme.spacing.md }}>
       <div style={{ borderRight: `1px solid ${darkTheme.colors.border.secondary}`, paddingRight: darkTheme.spacing.md }}>
         <div style={{ color: darkTheme.colors.text.secondary, marginBottom: darkTheme.spacing.sm }}>Filters</div>
-        <div style={{ fontSize: darkTheme.typography.fontSize.sm, color: darkTheme.colors.text.muted }}>
-          Use skills/department filters on dashboard or implement here later.
+        <div style={{ display: 'grid', gap: darkTheme.spacing.xs }}>
+          <label style={{ display: 'grid', gap: 4, fontSize: 12, color: darkTheme.colors.text.muted }}>
+            <span>Skills (comma-separated)</span>
+            <input
+              value={skills}
+              onChange={(e) => setSkills(e.target.value)}
+              placeholder="e.g., lighting, hvac"
+              style={{ padding: '6px 8px', background: darkTheme.colors.background.tertiary, color: darkTheme.colors.text.primary, border: `1px solid ${darkTheme.colors.border.secondary}`, borderRadius: 4 }}
+            />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 12, color: darkTheme.colors.text.muted }}>
+            <span>Min available hours</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={minAvail}
+              onChange={(e) => setMinAvail(Number(e.target.value) || 0)}
+              style={{ padding: '6px 8px', width: 110, background: darkTheme.colors.background.tertiary, color: darkTheme.colors.text.primary, border: `1px solid ${darkTheme.colors.border.secondary}`, borderRadius: 4 }}
+            />
+          </label>
         </div>
       </div>
       <div>
@@ -45,10 +74,10 @@ const FindAvailableTool: React.FC<Props> = () => {
                 <div>
                   <div style={{ fontWeight: 600 }}>{p.name}</div>
                   <div style={{ color: darkTheme.colors.text.muted, fontSize: darkTheme.typography.fontSize.sm }}>
-                    Weekly capacity: {p.weeklyCapacity}
+                    Available: {(p.availableHours ?? 0)}h · Utilization: {(p.utilizationPercent ?? 0)}%
                   </div>
                 </div>
-                <UtilizationBadge percentage={0} />
+                <UtilizationBadge percentage={p.utilizationPercent ?? 0} />
               </div>
             ))}
           </div>

@@ -1,8 +1,11 @@
 import time
 import uuid
 import logging
+import os
 from typing import Callable
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.conf import settings
+from django.db import connections
 
 try:
     import sentry_sdk
@@ -34,11 +37,44 @@ class RequestIDLogMiddleware:
             except Exception:
                 pass
 
+        # Detect restore/maintenance lock early to avoid DB-dependent work
+        has_restore_lock = False
+        try:
+            lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
+            has_restore_lock = os.path.exists(lock_path)
+        except Exception:
+            has_restore_lock = False
+
         response = self.get_response(request)
 
         duration_ms = int((time.monotonic() - start) * 1000)
         remote = request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
-        user_id = getattr(getattr(request, 'user', None), 'id', None)
+        # Avoid evaluating request.user (which may hit DB) during restore
+        user_id = None if has_restore_lock else getattr(getattr(request, 'user', None), 'id', None)
+
+        # Collect DB metrics (available when DEBUG; otherwise best-effort)
+        db_queries = None
+        db_time_ms = None
+        try:
+            # Skip introspection when restore lock is present to reduce coupling
+            if not has_restore_lock:
+                total = 0
+                t = 0.0
+                for alias in connections:
+                    try:
+                        qs = connections[alias].queries
+                        total += len(qs)
+                        for q in qs:
+                            try:
+                                t += float(q.get('time', 0.0))
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                db_queries = total
+                db_time_ms = int(t * 1000)
+        except Exception:
+            pass
 
         # Echo the request ID on the response
         try:
@@ -58,10 +94,30 @@ class RequestIDLogMiddleware:
                     'status_code': getattr(response, 'status_code', None),
                     'duration_ms': duration_ms,
                     'remote_addr': remote,
+                    'db_queries': db_queries,
+                    'db_time_ms': db_time_ms,
                 },
             )
         except Exception:
             pass
+
+        # Sentry breadcrumb with performance hints
+        if sentry_sdk is not None:
+            try:
+                sentry_sdk.add_breadcrumb(
+                    category='http.performance',
+                    message='endpoint',
+                    data={
+                        'path': request.path,
+                        'status': getattr(response, 'status_code', None),
+                        'duration_ms': duration_ms,
+                        'db_queries': db_queries,
+                        'db_time_ms': db_time_ms,
+                    },
+                    level='info',
+                )
+            except Exception:
+                pass
 
         return response
 
@@ -98,3 +154,42 @@ class CSPMiddleware:
         except Exception:
             pass
         return response
+
+
+class ReadOnlyModeMiddleware:
+    """Blocks unsafe HTTP methods during maintenance/restore windows.
+
+    Behavior:
+    - If request method is POST/PUT/PATCH/DELETE and either
+      settings.READ_ONLY_MODE is True OR a lock file exists at
+      f"{settings.BACKUPS_DIR}/.restore.lock", respond with 503 JSON.
+    - Safe methods (GET/HEAD/OPTIONS) pass through.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]):
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        method = request.method.upper()
+        path = request.path or ''
+        try:
+            in_read_only = bool(getattr(settings, 'READ_ONLY_MODE', False))
+            lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
+            has_restore_lock = os.path.exists(lock_path)
+        except Exception:
+            in_read_only = False
+            has_restore_lock = False
+
+        if in_read_only or has_restore_lock:
+            # Allow-list essential endpoints during restore/maintenance
+            allowed_prefixes = (
+                '/api/jobs/',
+                '/api/health/', '/api/readiness/',
+                '/health/', '/readiness/',
+                '/csp-report/',
+            )
+            allowed = any(path.startswith(p) for p in allowed_prefixes)
+            if not allowed:
+                return JsonResponse({'detail': 'Read-only maintenance'}, status=503)
+
+        return self.get_response(request)

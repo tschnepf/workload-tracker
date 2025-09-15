@@ -261,3 +261,28 @@ For CRUD steps
 Before phase completion
 - Regression pass on related areas
 - If adding `If-None-Match` later, verify 304 handling and cache surfacing
+
+---
+
+## Post-Migration: Outstanding Schema Tasks
+
+The following drf-spectacular items remain (or can reappear) and should be closed after rollout stabilization:
+
+- Accounts APIViews: Spectacular still logs "unable to guess serializer" for some function-based views (me, settings_view, link_person, change_password, set_password, list_users, delete_user, admin_audit_logs).
+  - Plan:
+    - Option A (preferred): Convert these to class-based views (APIView/GenericAPIView) with explicit `serializer_class` per method and `@extend_schema` on methods.
+    - Option B: Keep FBVs but attach `@extend_schema` with explicit `request`/`responses` using dedicated serializer classes (avoid large inline serializers).
+    - Add minimal serializer classes in `backend/accounts/serializers.py` (e.g., ProfileResponseSerializer, SettingsPatchSerializer, LinkPersonRequestSerializer, ChangePasswordRequestSerializer, UserListItemSerializer, AdminAuditLogItemSerializer) and reference them from the views.
+    - Re-run `manage.py spectacular` and ensure errors drop to zero for accounts.
+
+- Deliverables calendar SerializerMethodField type hint warning (get_title):
+  - Plan: Annotate the field with `@extend_schema_field(serializers.CharField())` or declare it explicitly as `serializers.CharField(source='get_title')` to provide a concrete schema type.
+
+- Keep free-form list responses fully typed:
+  - People capacity_heatmap and workload_forecast have concrete serializers now; keep them in sync with `frontend/src/types/models.ts` (PersonCapacityHeatmapItem, WorkloadForecastItem).
+
+- CI hardening:
+  - Fail CI on any Spectacular errors (> 0). Use `.github/workflows/openapi-ci.yml` to verify `backend/openapi.json` and `frontend/src/api/schema.ts` are up-to-date in PRs.
+
+- De-risked rollout cleanup:
+  - After flags are stable in prod, remove legacy fetch paths and keep only typed-client code paths. Retain interceptors (auth/ETag/If-Match/401 refresh) as the single source of truth.

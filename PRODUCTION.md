@@ -74,6 +74,12 @@ AUTH_ENFORCED=true
 
 # Optional monitoring
 SENTRY_DSN=your-sentry-dsn
+
+# Caching (optional)
+# Global TTL for heavy aggregate endpoints (seconds). Reasonable range: 15–60.
+AGGREGATE_CACHE_TTL=30
+# Dashboard-specific TTL (seconds). Only set if you want the dashboard to differ.
+# DASHBOARD_CACHE_TTL=15
 ```
 
 ### Production Optimizations
@@ -100,6 +106,11 @@ SENTRY_DSN=your-sentry-dsn
 - Gzip compression for text assets
 - Security headers (CSRF, XSS, etc.)
 - Static file caching with proper headers
+
+**Caching (Redis vs LocMem):**
+- In production, set `REDIS_URL` to enable the Redis cache backend (shared across workers).
+- In development, the default LocMem cache is used per process.
+- TTL precedence for dashboard caching: `DASHBOARD_CACHE_TTL` (if set) > `AGGREGATE_CACHE_TTL` > 30s fallback in code.
 
 ## Security Features
 

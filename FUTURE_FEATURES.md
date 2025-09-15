@@ -295,10 +295,26 @@ Source: `prompts/R2-REBUILD-CONTRACTS.md`
 
 Sources: `prompts/R2-REBUILD-004-MANAGER-FEATURES.md`, `prompts/R2-REBUILD-002-BUSINESS-LOGIC.md`
 ### Infinite Scrolling for Lists
-- Description: Replace explicit “Load more” buttons with automatic fetching when users near the bottom of the list.
+- Description: Replace explicit "Load more" buttons with automatic fetching when users near the bottom of the list.
 - Scope: People and Projects left-panel lists (and similar long lists).
 - Approach: Use IntersectionObserver/scroll threshold with React Query `fetchNextPage()`; preserve keyboard accessibility and announce loading status.
 - Benefits: Fewer clicks; smoother, continuous browsing.
 - Trade-offs: Must guard against over-fetching; keep clear end-of-list indicators; still combine with virtualization for render performance.
 - Acceptance: Smooth auto-append, no duplicate loads, accessible focus management, works with filtered views.
-- Estimated Timeline: 0.5–1 day
+- Estimated Timeline: 0.5â€“1 day
+
+### Brotli Compression for Nginx
+- **Description**: Enable Brotli compression in Nginx for improved asset compression beyond gzip
+- **Status**: Deferred due to implementation complexity vs. marginal benefits
+- **Current**: Gzip compression already provides ~80% of Brotli's benefits with `gzip_comp_level 6`
+- **Implementation Requirements**:
+  - Switch from `nginx:alpine` to `nginxinc/nginx-unprivileged:alpine` or custom build
+  - Add Brotli configuration to `nginx/nginx.conf` (already has placeholder config)
+  - Update `nginx/sites-available/workload-tracker.conf` for content negotiation
+  - Add build-time pre-compression to frontend Dockerfile
+  - Add Brotli CLI tools to build containers
+- **Benefits**: 15-20% better compression than gzip (~50-100KB savings on JS/CSS)
+- **Complexity**: 5-7 file changes, custom Docker images, build process modifications
+- **Alternative**: Consider CDN-based Brotli (e.g., Cloudflare auto-enables Brotli)
+- **Estimated Timeline**: 1-2 days
+- **Trigger**: When asset sizes grow significantly or CDN migration is planned

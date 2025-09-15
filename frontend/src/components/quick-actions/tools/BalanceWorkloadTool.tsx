@@ -12,7 +12,8 @@ const BalanceWorkloadTool: React.FC<Props> = () => {
     const run = async () => {
       try {
         // Directly fetch suggestions without bulk warming
-        const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/assignments/rebalance_suggestions/`);
+        const base = (import.meta as any)?.env?.VITE_API_URL || '/api';
+        const resp = await fetch(`${base}/assignments/rebalance_suggestions/`);
         const json = await resp.json();
         setSuggestions(json);
       } finally {

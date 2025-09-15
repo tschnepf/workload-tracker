@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { peopleApi } from '@/services/api';
 import { Person } from '@/types/models';
 
@@ -24,12 +25,18 @@ export function usePeople() {
     refetchOnWindowFocus: false,
   });
 
-  const people = (query.data?.pages || []).flatMap(p => p?.results || []);
+  // Stabilize array identity so downstream effects don't fire on every render
+  const pages = query.data?.pages || [];
+  const people = useMemo(() => pages.flatMap(p => p?.results || []), [pages]);
+  // Provide a lightweight, stable change indicator
+  const peopleVersion = people.length; // changes only when count changes
   const loading = query.isLoading || query.isFetching;
   const error = query.error ? (query.error as any).message : null;
 
   return {
     people,
+    peopleVersion,
+    dataUpdatedAt: query.dataUpdatedAt,
     loading,
     error,
     fetchNextPage: query.fetchNextPage,

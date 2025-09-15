@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Role
 from .serializers import RoleSerializer
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -36,6 +37,12 @@ class RoleViewSet(viewsets.ModelViewSet):
         
         return queryset.order_by('name')
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='include_inactive', type=bool, required=False, description='Include inactive roles when present'),
+        ],
+        responses=RoleSerializer(many=True),
+    )
     @action(detail=False, methods=['get'])
     def bulk(self, request):
         """

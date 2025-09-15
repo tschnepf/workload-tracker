@@ -8,7 +8,9 @@ import { Project, Person, Assignment } from '@/types/models';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { usePeople } from '@/hooks/usePeople';
-import { assignmentsApi, peopleApi } from '@/services/api';
+import { assignmentsApi, projectsApi, peopleApi, jobsApi } from '@/services/api';
+import { useCapabilities } from '@/hooks/useCapabilities';
+import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useProjectFilterMetadata } from '@/hooks/useProjectFilterMetadata';
 import type { ProjectFilterMetadataResponse } from '@/types/models';
 import { trackPerformanceEvent } from '@/utils/monitoring';
@@ -21,7 +23,7 @@ interface PersonWithAvailability extends Person {
   hasSkillMatch?: boolean;
 }
 import Sidebar from '@/components/layout/Sidebar';
-import Toast from '@/components/ui/Toast';
+import { showToast } from '@/lib/toastBus';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import Skeleton from '@/components/ui/Skeleton';
@@ -34,7 +36,7 @@ const DeliverablesSectionLoader: React.FC = () => (
   <div className="border border-[#3e3e42] rounded-lg p-6 bg-[#2d2d30]">
     <div className="flex items-center justify-center py-8">
       <div className="flex items-center space-x-3">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#007acc]"></div>
+        <div className="animate-spin motion-reduce:animate-none rounded-full h-6 w-6 border-b-2 border-[#007acc]"></div>
         <div className="text-[#969696]">Loading deliverables...</div>
       </div>
     </div>
@@ -244,7 +246,7 @@ PersonSearchResult.displayName = 'PersonSearchResult';
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
   const { projects, loading, error: projectsError } = useProjects();
-  const { people } = usePeople();
+  const { people, peopleVersion } = usePeople();
   const deleteProjectMutation = useDeleteProject();
   const updateProjectMutation = useUpdateProject();
   
@@ -258,7 +260,7 @@ const ProjectsList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  // Centralized toasts via toast bus
   
   
   // Assignment management
@@ -295,6 +297,8 @@ const ProjectsList: React.FC = () => {
   });
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [roleSearchResults, setRoleSearchResults] = useState<string[]>([]);
+  // Toggle to restrict availability to candidate departments
+  const [candidatesOnly, setCandidatesOnly] = useState<boolean>(true);
 
   const statusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'no_assignments', 'Show All'];
   const editableStatusOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled'];
@@ -477,47 +481,50 @@ const ProjectsList: React.FC = () => {
   };
 
 
-  // Optimized calculatePersonAvailability using backend utilization endpoint
-  const calculatePersonAvailability = async (person: Person): Promise<{ availableHours: number; utilizationPercent: number; totalHours: number }> => {
-    try {
-      // Get current week key
-      const now = new Date();
-      const dayOfWeek = now.getDay();
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
-      const currentWeekKey = monday.toISOString().split('T')[0];
+  // Availability snapshot state (server-side aggregation)
+  const [availabilityMap, setAvailabilityMap] = useState<Record<number, { availableHours: number; utilizationPercent: number; totalHours: number; capacity: number }>>({});
+  const { state: deptState } = useDepartmentFilter();
+  const caps = useCapabilities();
 
-      // Use optimized API endpoint
-      const utilizationData = await peopleApi.getPersonUtilization(person.id!, currentWeekKey);
-      
-      return {
-        availableHours: utilizationData.utilization.available_hours,
-        utilizationPercent: Math.round(utilizationData.utilization.total_percentage),
-        totalHours: utilizationData.utilization.allocated_hours
-      };
-      
-    } catch (error) {
-      console.error('Failed to calculate person availability:', error);
-      return { availableHours: 0, utilizationPercent: 0, totalHours: 0 };
-    }
-  };
+  // Load availability for the selected project once (one burst)
+  useEffect(() => {
+    const loadAvailability = async () => {
+      try {
+        if (!selectedProject?.id) {
+          setAvailabilityMap({});
+          return;
+        }
+        // Compute current Monday (canonical week)
+        const now = new Date();
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+        const week = monday.toISOString().split('T')[0];
+        const department = deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : undefined;
+        const include_children = department != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+        const items = await projectsApi.getAvailability(
+          selectedProject.id as number,
+          week,
+          { candidates_only: candidatesOnly ? 1 : 0, department, include_children }
+        );
+        const map: Record<number, { availableHours: number; utilizationPercent: number; totalHours: number; capacity: number }> = {};
+        for (const it of items) {
+          map[it.personId] = {
+            availableHours: it.availableHours || 0,
+            utilizationPercent: it.utilizationPercent || 0,
+            totalHours: it.totalHours || 0,
+            capacity: it.capacity || 0,
+          };
+        }
+        setAvailabilityMap(map);
+      } catch (e) {
+        console.warn('Failed to load project availability; falling back to zero availability.', e);
+        setAvailabilityMap({});
+      }
+    };
+    loadAvailability();
+  }, [selectedProject?.id, deptState?.selectedDepartmentId, deptState?.includeChildren, candidatesOnly]);
 
-  // Optimized skill match calculation using pre-computed skills map (Phase 4)
-  const calculateSkillMatch = useCallback((person: PersonWithAvailability, requiredSkills: string[] = []): number => {
-    if (requiredSkills.length === 0) return 0;
-    
-    // Get person's skills from pre-computed map (much faster than filtering assignments)
-    const personSkills = personSkillsMap.get(person.id) || [];
-    
-    const matches = requiredSkills.filter(reqSkill => 
-      personSkills.some(personSkill => 
-        personSkill.includes(reqSkill.toLowerCase()) || 
-        reqSkill.toLowerCase().includes(personSkill)
-      )
-    );
-    
-    return matches.length / requiredSkills.length; // Return match ratio
-  }, [personSkillsMap]);
+  // Local skill similarity function retired in favor of server/async scoring
 
   // Handle immediate input update (no delay for UI feedback)
   const handlePersonSearch = (searchTerm: string) => {
@@ -525,8 +532,23 @@ const ProjectsList: React.FC = () => {
     setSelectedPersonIndex(-1);
   };
 
+  // Helper to compare search results and avoid unnecessary state updates
+  const areResultsEqual = (a: PersonWithAvailability[], b: PersonWithAvailability[]) => {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i] as any;
+      const bi = b[i] as any;
+      if (ai.id !== bi.id) return false;
+      if ((ai.availableHours ?? 0) !== (bi.availableHours ?? 0)) return false;
+      if ((ai.skillMatchScore ?? 0) !== (bi.skillMatchScore ?? 0)) return false;
+    }
+    return true;
+  };
+
   // Perform actual search with debounced value
-  const performPersonSearch = async (searchTerm: string) => {
+  const performPersonSearch = useCallback(async (searchTerm: string) => {
     // If no search term, show all people; if search term provided, filter by it
     let filtered = people;
     if (searchTerm.length > 0) {
@@ -542,19 +564,39 @@ const ProjectsList: React.FC = () => {
       searchTerm.toLowerCase().includes(skill)
     );
     
-    // Calculate availability and skill matching for each person
-    const peopleWithData = await Promise.all(
-      filtered.map(async (person) => {
-        const availability = await calculatePersonAvailability(person);
-        const skillMatchScore = calculateSkillMatch({ ...person, ...availability }, detectedSkills);
-        return { 
-          ...person, 
-          ...availability,
-          skillMatchScore,
-          hasSkillMatch: skillMatchScore > 0
-        };
-      })
-    );
+    // Server-side skill match: use async when dataset is large/global
+    let scoreMap: Record<number, number> = {};
+    if (detectedSkills.length > 0) {
+      try {
+        const department = deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : undefined;
+        const include_children = department != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+        const isGlobal = department == null || people.length > 500; // heuristic
+        if (isGlobal && (caps.data?.asyncJobs ?? false)) {
+          const { jobId } = await peopleApi.skillMatchAsync(detectedSkills, { department, include_children, limit: 2000 });
+          const status = await jobsApi.pollStatus(jobId, { intervalMs: 1200, timeoutMs: 90000 });
+          const results = (status.result || []) as Array<{ personId: number; score: number }>;
+          results.forEach(r => { if (r.personId != null) scoreMap[r.personId] = r.score || 0; });
+        } else {
+          const results = await peopleApi.skillMatch(detectedSkills, { department, include_children, limit: 2000 });
+          results.forEach(r => { if ((r as any).personId != null) scoreMap[(r as any).personId] = (r as any).score || 0; });
+        }
+      } catch (e) {
+        // If server skill matching fails, leave scores empty without client fallback
+        scoreMap = {};
+      }
+    }
+
+    // Merge availability snapshot and server skill scores for each person
+    const peopleWithData = filtered.map((person) => {
+      const availability = availabilityMap[person.id!] || { availableHours: 0, utilizationPercent: 0, totalHours: 0, capacity: person.weeklyCapacity || 36 };
+      const skillMatchScore = scoreMap[person.id!] ?? 0;
+      return {
+        ...person,
+        ...availability,
+        skillMatchScore,
+        hasSkillMatch: (detectedSkills.length > 0) ? (skillMatchScore > 0) : false,
+      } as PersonWithAvailability;
+    });
     
     // Sort by skill match (if any), then availability, then name
     const sortedResults = peopleWithData
@@ -574,18 +616,29 @@ const ProjectsList: React.FC = () => {
       })
       .slice(0, 5);
     
-    setPersonSearchResults(sortedResults);
+    if (!areResultsEqual(personSearchResults, sortedResults)) {
+      setPersonSearchResults(sortedResults);
+    }
     
     // Announce results for screen readers (Phase 4 accessibility)
-    setSrAnnouncement(`Found ${sortedResults.length} people matching your search. ${sortedResults.filter(p => p.hasSkillMatch).length} with skill matches.`);
-  };
-
-  // Effect to trigger search when debounced value changes
-  useEffect(() => {
-    if (people.length > 0) {
-      performPersonSearch(debouncedPersonSearch);
+    const announcement = `Found ${sortedResults.length} people matching your search. ${sortedResults.filter(p => p.hasSkillMatch).length} with skill matches.`;
+    if (srAnnouncement !== announcement) {
+      setSrAnnouncement(announcement);
     }
-  }, [debouncedPersonSearch, people]);
+  }, [people, availabilityMap, caps.data, deptState?.selectedDepartmentId, deptState?.includeChildren, candidatesOnly, personSearchResults, srAnnouncement]);
+
+  // Stable indicator for availability changes without depending on full object
+  const availabilityVersion = useMemo(() => Object.keys(availabilityMap).length, [availabilityMap]);
+
+  // Effect to trigger search when debounced value or stable deps change
+  useEffect(() => {
+    // Early exit: nothing to search and no people
+    if (people.length === 0) {
+      if (personSearchResults.length !== 0) setPersonSearchResults([]);
+      return;
+    }
+    performPersonSearch(debouncedPersonSearch);
+  }, [debouncedPersonSearch, peopleVersion, availabilityVersion]);
 
   const handlePersonSelect = (person: Person) => {
     setNewAssignment(prev => ({
@@ -942,12 +995,12 @@ const ProjectsList: React.FC = () => {
       });
       // Invalidate filter metadata as status is part of the payload
       await invalidateFilterMeta();
-      setToast({ message: 'Project status updated', type: 'success' });
+      showToast('Project status updated', 'success');
     } catch (err: any) {
       // Revert optimistic update on error
       setSelectedProject(selectedProject);
       setError('Failed to update project status');
-      setToast({ message: 'Failed to update project status', type: 'error' });
+      showToast('Failed to update project status', 'error');
     }
   };
 
@@ -1325,12 +1378,29 @@ const ProjectsList: React.FC = () => {
                     <h3 className="text-base font-semibold text-[#cccccc]">
                       Assignments
                     </h3>
-                    <button 
-                      onClick={handleAddAssignment}
-                      className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors"
-                    >
-                      + Add Assignment
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1 text-xs text-[#cbd5e1] cursor-pointer" title="Show only Team Members already staffing this project (people in departments already assigned here). Turn off to include everyone in the selected department scope.">
+                        <input
+                          type="checkbox"
+                          checked={candidatesOnly}
+                          onChange={(e) => setCandidatesOnly(e.target.checked)}
+                        />
+                        <span>Team Members only</span>
+                        <span
+                          className="ml-1 inline-flex items-center justify-center w-3 h-3 rounded-full bg-[#3e3e42] text-[#969696] cursor-help"
+                          title="Show only Team Members already staffing this project (people in departments already assigned here). Turn off to include everyone in the selected department scope."
+                          aria-label="Help: Team Members only filter"
+                        >
+                          ?
+                        </span>
+                      </label>
+                      <button 
+                        onClick={handleAddAssignment}
+                        className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors"
+                      >
+                        + Add Assignment
+                      </button>
+                    </div>
                   </div>
 
                   {/* Assignments List */}
@@ -1600,9 +1670,7 @@ const ProjectsList: React.FC = () => {
           )}
         </div>
       </div>
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
-      )}
+      {/* Toasts are shown globally via ToastHost */}
     </div>
   );
 };

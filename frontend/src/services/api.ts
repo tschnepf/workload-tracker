@@ -4,11 +4,31 @@
  */
 
 import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse, JobStatus } from '@/types/models';
+import type { BackupListResponse, BackupStatus } from '@/types/backup';
 import { getAccessToken } from '@/utils/auth';
+import { apiClient, authHeaders } from '@/api/client';
 import { refreshAccessToken as refreshAccessTokenSafe } from '@/store/auth';
 import { showToast } from '@/lib/toastBus';
+import { etagStore } from '@/api/etagStore';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+function resolveApiBase(): string {
+  const raw = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
+  const fallback = (typeof window !== 'undefined' && window.location)
+    ? `${window.location.origin}/api`
+    : 'http://localhost:8000/api';
+  if (!raw) return fallback;
+  try {
+    const u = new URL(raw);
+    if (!u.hostname) throw new Error('empty-host');
+    return raw;
+  } catch {
+    return fallback;
+  }
+}
+
+const API_BASE_URL = resolveApiBase();
+// Feature flags for OpenAPI migration (scoped + global)
+const OPENAPI_MIGRATION_ENABLED = (import.meta.env.VITE_OPENAPI_MIGRATION_ENABLED === 'true');
 
 class ApiError extends Error {
   constructor(
@@ -71,7 +91,7 @@ type CacheEntry<T> = { promise: Promise<T>; timestamp: number; data?: T };
 const inflightRequests = new Map<string, CacheEntry<any>>();
 const responseCache = new Map<string, CacheEntry<any>>();
 // Store ETags by endpoint for conditional requests (detail routes)
-const etagStore = new Map<string, string>();
+// Use shared ETag store to align behavior with typed client
 const DEFAULT_TTL_MS = 15000; // 15s TTL is enough to absorb StrictMode double effects
 
 function makeCacheKey(url: string, method?: string) {
@@ -275,7 +295,7 @@ function appendQueryParams(sp: URLSearchParams, params: Record<string, string | 
 // People API
 export const peopleApi = {
   // Get all people with pagination support
-  list: (params?: { page?: number; page_size?: number; search?: string; department?: number; include_children?: 0 | 1 }) => {
+  list: async (params?: { page?: number; page_size?: number; search?: string; department?: number; include_children?: 0 | 1 }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
@@ -283,10 +303,17 @@ export const peopleApi = {
     if (params?.department != null) queryParams.set('department', String(params.department));
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return fetchApi<PaginatedResponse<Person>>(`/people/${queryString}`);
+
+    const res = await apiClient.GET(`/people/${queryString}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<Person>;
   },
 
   // Get all people (bulk API - Phase 2 optimization)
+  // NOTE (OpenAPI Phase 0.7): Keep legacy for ?all=true bulk responses until bulk endpoints are annotated.
   listAll: async (filters?: { department?: number; include_children?: 0 | 1 }): Promise<Person[]> => {
     const sp = new URLSearchParams();
     sp.set('all', 'true');
@@ -301,7 +328,12 @@ export const peopleApi = {
     const sp = new URLSearchParams();
     sp.set('q', q);
     if (limit) sp.set('limit', String(limit));
-    return fetchApi<Array<{ id: number; name: string; department?: number }>>(`/people/search/?${sp.toString()}`);
+    const res = await apiClient.GET('/people/search/' as any, { params: { query: { q, limit } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Array<{ id: number; name: string; department?: number }>;
   },
 
   // Autocomplete endpoint (Phase 3/4 wiring)
@@ -310,39 +342,59 @@ export const peopleApi = {
     if (search) sp.set('search', search);
     if (limit != null) sp.set('limit', String(limit));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<Array<{ id: number; name: string; department: number | null }>>(`/people/autocomplete/${qs}`);
+    const res = await apiClient.GET(`/people/autocomplete/${qs}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Array<{ id: number; name: string; department: number | null }>;
   },
 
   // Get single person
-  get: (id: number) => 
-    fetchApi<Person>(`/people/${id}/`),
+  get: async (id: number) => {
+    const res = await apiClient.GET('/people/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Person;
+  },
 
   // Create person
-  create: (data: Omit<Person, 'id' | 'createdAt' | 'updatedAt'>) => 
-    fetchApi<Person>('/people/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: async (data: Omit<Person, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const res = await apiClient.POST('/people/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Person;
+  },
 
   // Update person
-  update: (id: number, data: Partial<Person>) => {
+  update: async (id: number, data: Partial<Person>) => {
     console.log(' [DEBUG] peopleApi.update called with:', {
       id,
       data,
       dataJSON: JSON.stringify(data, null, 2),
       endpoint: `/people/${id}/`
     });
-    return fetchApi<Person>(`/people/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+    const res = await apiClient.PATCH('/people/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Person;
   },
 
   // Delete person
-  delete: (id: number) => 
-    fetchApi<void>(`/people/${id}/`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: number) => {
+    const res = await apiClient.DELETE('/people/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 
   // Get person utilization for specific week (optimized to prevent N+1 queries)
   getPersonUtilization: async (personId: number, week?: string): Promise<PersonUtilization> => {
@@ -376,47 +428,124 @@ export const peopleApi = {
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<WorkloadForecastItem[]>(`/people/workload_forecast/${qs}`);
   },
+  
+  // Skill match (server-side ranking)
+  skillMatch: (skills: string[], opts?: { department?: number; include_children?: 0 | 1; limit?: number; week?: string }) => {
+    const sp = new URLSearchParams();
+    if (skills && skills.length) sp.set('skills', skills.join(','));
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.limit != null) sp.set('limit', String(opts.limit));
+    if (opts?.week) sp.set('week', opts.week);
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<Array<{ personId: number; name: string; score: number; matchedSkills: string[]; missingSkills: string[]; departmentId: number | null; roleName?: string | null }>>(`/people/skill_match/${qs}`);
+  },
+
+  // Async skill match (returns job id)
+  skillMatchAsync: async (skills: string[], opts?: { department?: number; include_children?: 0 | 1; limit?: number; week?: string }) => {
+    const sp = new URLSearchParams();
+    if (skills && skills.length) sp.set('skills', skills.join(','));
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.limit != null) sp.set('limit', String(opts.limit));
+    if (opts?.week) sp.set('week', opts.week);
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<{ jobId: string }>(`/people/skill_match_async/${qs}`);
+  },
+
+  // Find available (availability + skills)
+  findAvailable: (
+    skills: string[] | undefined,
+    opts?: { week?: string; department?: number; include_children?: 0 | 1; limit?: number; minAvailableHours?: number }
+  ) => {
+    const sp = new URLSearchParams();
+    if (skills && skills.length) sp.set('skills', skills.join(','));
+    if (opts?.week) sp.set('week', opts.week);
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.limit != null) sp.set('limit', String(opts.limit));
+    if (opts?.minAvailableHours != null) sp.set('minAvailableHours', String(opts.minAvailableHours));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<Array<{ personId: number; name: string; availableHours: number; capacity: number; utilizationPercent: number; skillScore: number; matchedSkills: string[]; missingSkills: string[]; departmentId: number | null; roleName?: string | null }>>(`/people/find_available/${qs}`);
+  },
 };
 
 // Projects API
 export const projectsApi = {
   // Get all projects with pagination support
-  list: (params?: { page?: number; page_size?: number }) => {
+  list: async (params?: { page?: number; page_size?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return fetchApi<PaginatedResponse<Project>>(`/projects/${queryString}`);
+    const res = await apiClient.GET(`/projects/${queryString}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<Project>;
+  },
+
+  // Availability snapshot for a project context
+  getAvailability: async (
+    projectId: number,
+    week?: string,
+    opts?: { department?: number; include_children?: 0 | 1; candidates_only?: 0 | 1 }
+  ) => {
+    const sp = new URLSearchParams();
+    if (week) sp.set('week', week);
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.candidates_only != null) sp.set('candidates_only', String(opts.candidates_only));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<Array<{ personId: number; personName: string; totalHours: number; capacity: number; availableHours: number; utilizationPercent: number }>>(`/projects/${projectId}/availability/${qs}`);
   },
 
   // Get all projects (bulk API - Phase 2 optimization)
+  // NOTE (OpenAPI Phase 0.7): Keep legacy for ?all=true bulk responses until bulk endpoints are annotated.
   listAll: async (): Promise<Project[]> => {
     return fetchApi<Project[]>(`/projects/?all=true`);
   },
 
   // Get single project
-  get: (id: number) => 
-    fetchApi<Project>(`/projects/${id}/`),
+  get: async (id: number) => {
+    const res = await apiClient.GET('/projects/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Project;
+  },
 
   // Create project
-  create: (data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => 
-    fetchApi<Project>('/projects/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: async (data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const res = await apiClient.POST('/projects/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Project;
+  },
 
   // Update project
-  update: (id: number, data: Partial<Project>) => 
-    fetchApi<Project>(`/projects/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+  update: async (id: number, data: Partial<Project>) => {
+    const res = await apiClient.PATCH('/projects/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Project;
+  },
 
   // Delete project
-  delete: (id: number) => 
-    fetchApi<void>(`/projects/${id}/`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: number) => {
+    const res = await apiClient.DELETE('/projects/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 
   // Get unique clients for autocomplete
   getClients: async (): Promise<string[]> => {
@@ -435,9 +564,12 @@ export const projectsApi = {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
-      return await fetchApi<ProjectFilterMetadataResponse>(`/projects/filter-metadata/`, {
-        signal: controller.signal,
-      });
+      const res = await apiClient.GET('/projects/filter-metadata/' as any, { headers: authHeaders(), signal: controller.signal });
+      if (!res.data) {
+        const status = res.response?.status ?? 500;
+        throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+      }
+      return res.data as unknown as ProjectFilterMetadataResponse;
     } finally {
       clearTimeout(timeout);
     }
@@ -448,17 +580,23 @@ export const projectsApi = {
 // Departments API
 export const departmentsApi = {
   // Get all departments with pagination support
-  list: (params?: { page?: number; page_size?: number }) => {
+  list: async (params?: { page?: number; page_size?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return fetchApi<PaginatedResponse<Department>>(`/departments/${queryString}`);
+    const res = await apiClient.GET(`/departments/${queryString}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<Department>;
   },
 
   // Get all departments (bulk API - Phase 2 optimization)
+  // NOTE (OpenAPI Phase 0.7): Keep legacy for ?all=true bulk responses until bulk endpoints are annotated.
   listAll: async (): Promise<Department[]> => {
-  return fetchApiCached<Department[]>(`/departments/?all=true`);
+    return fetchApiCached<Department[]>(`/departments/?all=true`);
   },
 
   // Get single department
@@ -500,6 +638,43 @@ export const assignmentsApi = {
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`);
   },
 
+  // Start async grid snapshot job (returns jobId)
+  getGridSnapshotAsync: async (
+    opts?: { weeks?: number; department?: number; include_children?: 0 | 1 }
+  ): Promise<{ jobId: string }> => {
+    const sp = new URLSearchParams();
+    if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<{ jobId: string }>(`/assignments/grid_snapshot_async/${qs}`);
+  },
+
+  // Grid snapshot (server-side aggregation for grid)
+  getGridSnapshot: (
+    opts?: { weeks?: number; department?: number; include_children?: 0 | 1 },
+    options?: RequestInit
+  ) => {
+    const sp = new URLSearchParams();
+    if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<{ weekKeys: string[]; people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null }>; hoursByPerson: Record<string, Record<string, number>> }>(`/assignments/grid_snapshot/${qs}`, options);
+  },
+
+  // Bulk weekly hours update
+  bulkUpdateHours: async (
+    updates: Array<{ assignmentId: number; weeklyHours: Record<string, number> }>
+  ) => {
+    const res = await apiClient.PATCH('/assignments/bulk_update_hours/' as any, { body: { updates } as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as { success: boolean; results: Array<{ assignmentId: number; status: string; etag: string }> };
+  },
+
   // Get all assignments (bulk API - Phase 2 optimization)
   listAll: async (filters?: { department?: number; include_children?: 0 | 1 }): Promise<Assignment[]> => {
     const sp = new URLSearchParams();
@@ -514,43 +689,51 @@ export const assignmentsApi = {
     fetchApi<Assignment[]>(`/assignments/by_person/?person_id=${personId}`),
 
   // Create assignment
-  create: (data: Omit<Assignment, 'id' | 'createdAt' | 'updatedAt' | 'personName'>) => 
-    fetchApi<Assignment>('/assignments/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: async (data: Omit<Assignment, 'id' | 'createdAt' | 'updatedAt' | 'personName'>) => {
+    const res = await apiClient.POST('/assignments/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Assignment;
+  },
 
   // Update assignment
-  update: (id: number, data: Partial<Assignment>) => 
-    fetchApi<Assignment>(`/assignments/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+  update: async (id: number, data: Partial<Assignment>) => {
+    const res = await apiClient.PATCH('/assignments/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Assignment;
+  },
 
   // Delete assignment
-  delete: (id: number) => 
-    fetchApi<void>(`/assignments/${id}/`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: number) => {
+    const res = await apiClient.DELETE('/assignments/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 
   // Check assignment conflicts (optimized to prevent N+1 queries)
   checkConflicts: async (
-    personId: number, 
-    projectId: number, 
-    weekKey: string, 
+    personId: number,
+    projectId: number,
+    weekKey: string,
     proposedHours: number
   ): Promise<AssignmentConflictResponse> => {
-    return fetchApi<AssignmentConflictResponse>('/assignments/check_conflicts/', {
-      method: 'POST',
-      body: JSON.stringify({
-        personId,
-        projectId,
-        weekKey,
-        proposedHours
-      }),
-    });
+    const payload = { personId, projectId, weekKey, proposedHours } as any;
+    const res = await apiClient.POST('/assignments/check_conflicts/' as any, { body: payload, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as AssignmentConflictResponse;
   },
-};
+}; 
 
 // Person utilization API
 export const utilizationApi = {
@@ -559,16 +742,23 @@ export const utilizationApi = {
     fetchApi<PersonUtilization>(`/people/${personId}/utilization/`),
 };
 
+// Note: jobsApi is defined below (typed-client backed). We'll extend it with a simple poller after its declaration.
+
 // Deliverables API - STANDARDS COMPLIANT
 export const deliverablesApi = {
   // Get all deliverables or filter by project with pagination support
-  list: (projectId?: number, params?: { page?: number; page_size?: number }) => {
+  list: async (projectId?: number, params?: { page?: number; page_size?: number }) => {
     const queryParams = new URLSearchParams();
     if (projectId) queryParams.set('project', projectId.toString());
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return fetchApi<PaginatedResponse<Deliverable>>(`/deliverables/${queryString}`);
+    const res = await apiClient.GET(`/deliverables/${queryString}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<Deliverable>;
   },
 
   // Get all deliverables (bulk API - Phase 2 optimization)
@@ -581,28 +771,44 @@ export const deliverablesApi = {
   },
 
   // Get single deliverable  
-  get: (id: number) =>
-    fetchApi<Deliverable>(`/deliverables/${id}/`),
+  get: async (id: number) => {
+    const res = await apiClient.GET('/deliverables/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Deliverable;
+  },
 
   // Create deliverable
-  create: (data: Omit<Deliverable, 'id' | 'createdAt' | 'updatedAt'>) =>
-    fetchApi<Deliverable>('/deliverables/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: async (data: Omit<Deliverable, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const res = await apiClient.POST('/deliverables/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Deliverable;
+  },
 
   // Update deliverable
-  update: (id: number, data: Partial<Deliverable>) =>
-    fetchApi<Deliverable>(`/deliverables/${id}/`, {
-      method: 'PATCH', 
-      body: JSON.stringify(data),
-    }),
+  update: async (id: number, data: Partial<Deliverable>) => {
+    const res = await apiClient.PATCH('/deliverables/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Deliverable;
+  },
 
   // Delete deliverable
-  delete: (id: number) =>
-    fetchApi<void>(`/deliverables/${id}/`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: number) => {
+    const res = await apiClient.DELETE('/deliverables/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 
   // Bulk fetch deliverables for multiple projects (Phase 2 optimization)
   bulkList: async (projectIds: number[]): Promise<{ [projectId: string]: Deliverable[] }> => {
@@ -623,30 +829,45 @@ export const deliverablesApi = {
     }),
 
   // Milestone calendar within date range
-  calendar: (start?: string, end?: string) => {
+  calendar: async (start?: string, end?: string) => {
     const params = new URLSearchParams();
     if (start) params.set('start', start);
     if (end) params.set('end', end);
     const qs = params.toString() ? `?${params.toString()}` : '';
-    return fetchApi<DeliverableCalendarItem[]>(`/deliverables/calendar/${qs}`);
+    const res = await apiClient.GET(`/deliverables/calendar/${qs}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableCalendarItem[];
   },
 
   // Deliverable staffing summary (derived hours) for a given deliverable
-  staffingSummary: (deliverableId: number, weeks?: number) => {
+  staffingSummary: async (deliverableId: number, weeks?: number) => {
     const qs = weeks ? `?weeks=${weeks}` : '';
-    return fetchApi<DeliverableStaffingSummaryItem[]>(`/deliverables/${deliverableId}/staffing_summary/${qs}`);
+    const res = await apiClient.GET(`/deliverables/{id}/staffing_summary/${qs}` as any, { params: { path: { id: deliverableId } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableStaffingSummaryItem[];
   },
 };
 
 // Dashboard API
 export const dashboardApi = {
   // Get dashboard data with optional weeks and department parameters
-  getDashboard: (weeks?: number, department?: string) => {
+  getDashboard: async (weeks?: number, department?: string) => {
     const params = new URLSearchParams();
     if (weeks && weeks !== 1) params.set('weeks', weeks.toString());
     if (department) params.set('department', department);
     const queryString = params.toString() ? `?${params.toString()}` : '';
-    return fetchApi<DashboardData>(`/dashboard/${queryString}`);
+    const res = await apiClient.GET(`/dashboard/${queryString}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DashboardData;
   },
 };
 
@@ -667,24 +888,34 @@ export const skillTagsApi = {
     fetchApi<SkillTag>(`/skills/skill-tags/${id}/`),
 
   // Create skill tag
-  create: (data: Omit<SkillTag, 'id' | 'isActive' | 'createdAt' | 'updatedAt'>) =>
-    fetchApi<SkillTag>('/skills/skill-tags/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: async (data: Omit<SkillTag, 'id' | 'isActive' | 'createdAt' | 'updatedAt'>) => {
+    const res = await apiClient.POST('/skills/skill-tags/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as SkillTag;
+  },
 
   // Update skill tag
-  update: (id: number, data: Partial<SkillTag>) =>
-    fetchApi<SkillTag>(`/skills/skill-tags/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+  update: async (id: number, data: Partial<SkillTag>) => {
+    const res = await apiClient.PATCH('/skills/skill-tags/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as SkillTag;
+  },
 
   // Delete skill tag
-  delete: (id: number) =>
-    fetchApi<void>(`/skills/skill-tags/${id}/`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: number) => {
+    const res = await apiClient.DELETE('/skills/skill-tags/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 };
 
 export const personSkillsApi = {
@@ -703,24 +934,34 @@ export const personSkillsApi = {
     fetchApi<PersonSkill>(`/skills/person-skills/${id}/`),
 
   // Create person skill
-  create: (data: Omit<PersonSkill, 'id' | 'skillTagName' | 'createdAt' | 'updatedAt'>) =>
-    fetchApi<PersonSkill>('/skills/person-skills/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: async (data: Omit<PersonSkill, 'id' | 'skillTagName' | 'createdAt' | 'updatedAt'>) => {
+    const res = await apiClient.POST('/skills/person-skills/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PersonSkill;
+  },
 
   // Update person skill
-  update: (id: number, data: Partial<PersonSkill>) =>
-    fetchApi<PersonSkill>(`/skills/person-skills/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+  update: async (id: number, data: Partial<PersonSkill>) => {
+    const res = await apiClient.PATCH('/skills/person-skills/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PersonSkill;
+  },
 
   // Delete person skill
-  delete: (id: number) =>
-    fetchApi<void>(`/skills/person-skills/${id}/`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: number) => {
+    const res = await apiClient.DELETE('/skills/person-skills/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 
   // Get skill summary for a person
   summary: (personId: number) =>
@@ -734,7 +975,14 @@ export const personSkillsApi = {
 // Roles API - for role management and dropdowns
 export const rolesApi = {
   // Get all roles (paginated)
-  list: () => fetchApi<PaginatedResponse<Role>>('/roles/'),
+  list: async () => {
+    const res = await apiClient.GET('/roles/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<Role>;
+  },
 
   // Get all roles (bulk) - for autocomplete/dropdowns
   listAll: () => fetchApi<Role[]>('/roles/bulk/'),
@@ -766,8 +1014,14 @@ export const rolesApi = {
 // Jobs API (async background tasks)
 export const jobsApi = {
   // Get job status
-  getStatus: (jobId: string) => 
-    fetchApi<JobStatus>(`/jobs/${jobId}/`),
+  getStatus: async (jobId: string) => {
+    const res = await apiClient.GET('/jobs/{job_id}/' as any, { params: { path: { job_id: jobId } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as JobStatus;
+  },
 
   // Download job result file (if available). Returns a Blob.
   downloadFile: async (jobId: string): Promise<Blob> => {
@@ -782,6 +1036,113 @@ export const jobsApi = {
     }
     return await res.blob();
   },
+  // Simple polling helper for convenience
+  pollStatus: async (jobId: string, { intervalMs = 1500, timeoutMs = 120000 }: { intervalMs?: number; timeoutMs?: number } = {}) => {
+    const started = Date.now();
+    while (true) {
+      const s = await jobsApi.getStatus(jobId);
+      if ((s as any).state === 'SUCCESS') return s;
+      if ((s as any).state === 'FAILURE') throw new ApiError((s as any).error || 'Job failed', 500);
+      if (Date.now() - started > timeoutMs) throw new ApiError('Job polling timed out', 504);
+      await new Promise(r => setTimeout(r, intervalMs));
+    }
+  },
+};
+
+// Backups API
+export const backupApi = {
+  // Create a backup (async task)
+  createBackup: async (description?: string): Promise<{ jobId: string; statusUrl: string }> => {
+    const payload = description ? { description } : {};
+    const res = await apiClient.POST('/backups/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, res.error, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
+
+  // List available backups
+  getBackups: async (): Promise<BackupListResponse> => {
+    const res = await apiClient.GET('/backups/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
+
+  // Status summary for dashboards
+  getBackupStatus: async (): Promise<BackupStatus> => {
+    const res = await apiClient.GET('/backups/status/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
+
+  // Delete a backup by id (filename)
+  deleteBackup: async (id: string): Promise<void> => {
+    const res = await apiClient.DELETE('/backups/{id}/' as any, { params: { path: { id: encodeURIComponent(id) } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
+
+  // Restore from an existing backup (async task)
+  restoreBackup: async (
+    id: string,
+    confirm: string,
+    options?: { jobs?: number; migrate?: boolean }
+  ): Promise<{ jobId: string; statusUrl: string }> => {
+    const body: any = { confirm };
+    if (options?.jobs != null) body.jobs = options.jobs;
+    if (options?.migrate != null) body.migrate = options.migrate;
+    const res = await apiClient.POST('/backups/{id}/restore/' as any, { params: { path: { id: encodeURIComponent(id) } }, body, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, res.error, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
+
+  // Upload a backup file and immediately restore it (async task)
+  uploadAndRestore: async (
+    file: File,
+    confirm: string,
+    options?: { jobs?: number; migrate?: boolean; signal?: AbortSignal }
+  ): Promise<{ jobId: string; statusUrl: string }> => {
+    const url = `${API_BASE_URL}/backups/upload-restore/`;
+    const form = new FormData();
+    form.append('file', file);
+    form.append('confirm', confirm);
+    if (options?.jobs != null) form.append('jobs', String(options.jobs));
+    if (options?.migrate != null) form.append('migrate', String(options.migrate));
+    const token = getAccessToken();
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+      signal: options?.signal,
+    });
+    if (!res.ok) {
+      const status = res.status;
+      let data: any = null;
+      try { data = await res.json(); } catch {}
+      throw new ApiError(friendlyErrorMessage(status, data, `HTTP ${status}`), status, data);
+    }
+    return await res.json();
+  },
+};
+
+// System API (capabilities, etc.)
+export const systemApi = {
+  getCapabilities: async (): Promise<{ asyncJobs: boolean; aggregates: Record<string, boolean>; cache: { shortTtlAggregates: boolean; aggregateTtlSeconds: number } }> => {
+    return fetchApi(`/capabilities/`);
+  },
 };
 
 export { ApiError };
@@ -795,56 +1156,103 @@ export const deliverableAssignmentsApi = {
   },
 
   // Filter by deliverable
-  byDeliverable: (deliverableId: number) =>
-    fetchApi<DeliverableAssignment[]>(`/deliverables/assignments/by_deliverable/?deliverable=${deliverableId}`),
+  byDeliverable: async (deliverableId: number) => {
+    const res = await apiClient.GET('/deliverables/assignments/by_deliverable/' as any, { params: { query: { deliverable: deliverableId } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableAssignment[];
+  },
 
   // Filter by person
-  byPerson: (personId: number) =>
-    fetchApi<DeliverableAssignment[]>(`/deliverables/assignments/by_person/?person=${personId}`),
+  byPerson: async (personId: number) => {
+    const res = await apiClient.GET('/deliverables/assignments/by_person/' as any, { params: { query: { person: personId } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableAssignment[];
+  },
 
-  // Create
-  create: (data: Omit<DeliverableAssignment, 'id' | 'personName' | 'projectId' | 'createdAt' | 'updatedAt' | 'isActive'> & { isActive?: boolean }) =>
-    fetchApi<DeliverableAssignment>('/deliverables/assignments/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  // Create (link)
+  create: async (data: Omit<DeliverableAssignment, 'id' | 'personName' | 'projectId' | 'createdAt' | 'updatedAt' | 'isActive'> & { isActive?: boolean }) => {
+    const res = await apiClient.POST('/deliverables/assignments/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableAssignment;
+  },
 
   // Update (partial)
-  update: (id: number, data: Partial<DeliverableAssignment>) =>
-    fetchApi<DeliverableAssignment>(`/deliverables/assignments/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+  update: async (id: number, data: Partial<DeliverableAssignment>) => {
+    const res = await apiClient.PATCH('/deliverables/assignments/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableAssignment;
+  },
 
-  // Delete
-  delete: (id: number) =>
-    fetchApi<void>(`/deliverables/assignments/${id}/`, {
-      method: 'DELETE',
-    }),
+  // Delete (unlink)
+  delete: async (id: number) => {
+    const res = await apiClient.DELETE('/deliverables/assignments/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 };
 
 // Auth/Accounts API
 export const authApi = {
   // Link or unlink the current user to a person
-  linkPerson: (personId: number | null) =>
-    fetchApi<{ id: number; user: any; person: any; settings: any }>(`/auth/link_person/`, {
-      method: 'POST',
-      body: JSON.stringify({ person_id: personId }),
-    }),
+  linkPerson: async (personId: number | null) => {
+    const payload = { person_id: personId } as any;
+    const res = await apiClient.POST('/auth/link_person/' as any, { body: payload, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
   // Change password for current user
-  changePassword: (currentPassword: string, newPassword: string) =>
-    fetchApi<void>(`/auth/change_password/`, {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword }),
-    }),
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const payload = { currentPassword, newPassword } as any;
+    const res = await apiClient.POST('/auth/change_password/' as any, { body: payload, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
   // Create a new user (staff only)
-  createUser: (data: { username: string; email?: string; password: string; personId?: number | null; role?: 'admin' | 'manager' | 'user' }) =>
-    fetchApi<{ id: number; user: any; person: any; settings: any }>(`/auth/create_user/`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  createUser: async (data: { username: string; email?: string; password: string; personId?: number | null; role?: 'admin' | 'manager' | 'user' }) => {
+    const res = await apiClient.POST('/auth/create_user/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
   // List users (admin only)
-  listUsers: () => fetchApi<Array<{ id: number; username: string; email: string; role: 'admin'|'manager'|'user'; person: { id: number; name: string } | null }>>(`/auth/users/`),
+  listUsers: async () => {
+    const res = await apiClient.GET('/auth/users/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
   // Delete user (admin only)
-  deleteUser: (userId: number) => fetchApi<void>(`/auth/users/${userId}/`, { method: 'DELETE' }),
+  deleteUser: async (userId: number) => {
+    const res = await apiClient.DELETE('/auth/users/{id}/' as any, { params: { path: { id: userId } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 };

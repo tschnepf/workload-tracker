@@ -3,6 +3,7 @@ from typing import Dict, Tuple
 
 from django.conf import settings as django_settings
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from .models import UserProfile, AdminAuditLog
 
@@ -74,6 +75,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = ("id", "user", "person", "settings", "created_at", "updated_at")
         read_only_fields = ("id", "created_at", "updated_at")
 
+    @extend_schema_field(serializers.DictField())
     def get_user(self, obj: UserProfile):
         u = obj.user
         # Resolve groups and derived account role
@@ -97,6 +99,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "accountRole": account_role,
         }
 
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_person(self, obj: UserProfile):
         p = obj.person
         if not p:
@@ -146,8 +149,54 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
             "email": getattr(u, 'email', None),
         }
 
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_actor(self, obj: AdminAuditLog):
         return self._user_summary(getattr(obj, 'actor', None))
 
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_targetUser(self, obj: AdminAuditLog):
         return self._user_summary(getattr(obj, 'target_user', None))
+
+
+# --- Request/Response serializers for Accounts API (for OpenAPI) ---
+
+class UserSettingsPatchSerializer(serializers.Serializer):
+    settings = serializers.DictField()
+
+
+class LinkPersonRequestSerializer(serializers.Serializer):
+    person_id = serializers.IntegerField(allow_null=True, required=False)
+
+
+class ChangePasswordRequestSerializer(serializers.Serializer):
+    currentPassword = serializers.CharField()
+    newPassword = serializers.CharField()
+
+
+class CreateUserRequestSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    email = serializers.CharField(allow_blank=True, required=False)
+    password = serializers.CharField()
+    personId = serializers.IntegerField(allow_null=True, required=False)
+    role = serializers.ChoiceField(choices=[('admin','admin'), ('manager','manager'), ('user','user')], required=False)
+
+
+class SetPasswordRequestSerializer(serializers.Serializer):
+    userId = serializers.IntegerField()
+    newPassword = serializers.CharField()
+
+
+class UserListPersonSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
+class UserListItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    email = serializers.CharField(allow_blank=True, required=False)
+    is_staff = serializers.BooleanField()
+    is_superuser = serializers.BooleanField()
+    groups = serializers.ListField(child=serializers.CharField())
+    role = serializers.CharField()
+    person = UserListPersonSerializer(allow_null=True, required=False)

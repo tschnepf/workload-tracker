@@ -3,14 +3,25 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Sum, Q
 from datetime import date, timedelta
+from django.core.cache import cache
+from django.conf import settings
 from people.models import Person
 from assignments.models import Assignment
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from .serializers import DashboardResponseSerializer
 
 
 class DashboardView(APIView):
     """Team dashboard with utilization metrics and overview"""
     permission_classes = [IsAuthenticated]
-    
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks to aggregate (1-12)'),
+            OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
+        ],
+        responses=DashboardResponseSerializer
+    )
     def get(self, request):
         # Get weeks parameter from query string (default to 1)
         weeks = int(request.GET.get('weeks', 1))
@@ -24,6 +35,19 @@ class DashboardView(APIView):
                 department_filter = int(department_id)
             except (ValueError, TypeError):
                 department_filter = None
+
+        # Short-TTL cache wrapper (feature-flagged)
+        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        cache_key = None
+        if use_cache:
+            # Keyed by weeks + department (None -> 'all')
+            cache_key = f"dashboard_v1:{weeks}:{department_filter if department_filter is not None else 'all'}"
+            try:
+                cached = cache.get(cache_key)
+            except Exception:
+                cached = None
+            if cached is not None:
+                return Response(cached)
         
         today = date.today()
         week_start = today - timedelta(days=today.weekday())
@@ -118,7 +142,7 @@ class DashboardView(APIView):
                 'created': assignment.created_at.isoformat()
             })
         
-        return Response({
+        payload = {
             'summary': {
                 'total_people': total_people,
                 'avg_utilization': avg_utilization,
@@ -131,4 +155,17 @@ class DashboardView(APIView):
             'team_overview': sorted(team_overview, key=lambda x: x['name']),
             'available_people': sorted(available_people, key=lambda x: -x['available_hours'])[:5],
             'recent_assignments': recent_assignments
-        })
+        }
+
+        # Store in cache with short TTL if enabled
+        if use_cache and cache_key is not None:
+            # TTL preference: DASHBOARD_CACHE_TTL > AGGREGATE_CACHE_TTL > default(30)
+            ttl = getattr(settings, 'DASHBOARD_CACHE_TTL', None)
+            if ttl is None:
+                ttl = getattr(settings, 'AGGREGATE_CACHE_TTL', 30)
+            try:
+                cache.set(cache_key, payload, timeout=int(ttl))
+            except Exception:
+                pass
+
+        return Response(payload)

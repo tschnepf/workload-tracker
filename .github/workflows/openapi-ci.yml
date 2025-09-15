@@ -1,0 +1,61 @@
+name: OpenAPI Schema and Client Check
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  openapi-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare env file for compose
+        run: |
+          cp .env.example .env
+          echo "HOST_IP=localhost" >> .env
+          echo "BACKEND_PORT=8000" >> .env
+          echo "FRONTEND_PORT=3000" >> .env
+
+      - name: Start backend for schema
+        run: |
+          docker compose -f docker-compose.yml up -d --build db redis backend
+
+      - name: Wait for backend readiness
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:8000/api/readiness/ > /dev/null; then
+              echo "Backend ready"; exit 0; fi; sleep 2; done; \
+          echo "Backend did not become ready in time"; \
+          docker compose -f docker-compose.yml logs backend; \
+          exit 1
+
+      - name: Generate OpenAPI schema
+        run: docker compose -f docker-compose.yml exec -T backend python manage.py spectacular --file openapi.json --format openapi-json
+
+      - name: Check schema file up to date
+        run: |
+          if ! git diff --exit-code -- backend/openapi.json; then
+            echo "backend/openapi.json is out of date. Run 'make openapi-schema' and commit changes." >&2
+            exit 1
+          fi
+
+      - name: Generate frontend types from schema
+        run: |
+          docker compose -f docker-compose.yml exec -T frontend npx openapi-typescript http://backend:8000/api/schema/ -o src/api/schema.ts
+
+      - name: Check generated types up to date
+        working-directory: frontend
+        run: |
+          if ! git diff --exit-code -- src/api/schema.ts; then
+            echo "frontend/src/api/schema.ts is out of date. Regenerate and commit." >&2
+            exit 1
+          fi
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v
+

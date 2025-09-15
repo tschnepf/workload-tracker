@@ -36,6 +36,9 @@ staticfiles/
 media/
 *.sqlite3
 
+# Backups directory (not served; excluded from VCS)
+backups/
+
 # Environment & local config
 .env
 .env.*
@@ -51,4 +54,3 @@ Thumbs.db
 **/.python_packages
 **/.pytest_cache
 **/.cache
-

@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { formatUtcToLocal } from '@/utils/dates';
 import { Role } from '@/types/models';
 
 interface RoleListProps {
@@ -107,86 +108,135 @@ const RoleList: React.FC<RoleListProps> = ({
   }
 
   return (
-    <div className="overflow-x-auto">
-      {/* Table Header */}
-      <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-[#3e3e42]/30 border-b border-[#3e3e42] text-sm font-medium text-[#969696] rounded-t-md">
-        <div className="col-span-3">
-          <SortableHeader column="name">ROLE NAME</SortableHeader>
-        </div>
-        <div className="col-span-5">
-          <SortableHeader column="description">DESCRIPTION</SortableHeader>
-        </div>
-        <div className="col-span-2">
-          <SortableHeader column="createdAt">CREATED</SortableHeader>
-        </div>
-        <div className="col-span-1 text-center">STATUS</div>
-        <div className="col-span-1 text-center">ACTIONS</div>
-      </div>
-
-      {/* Table Body */}
-      <div className="divide-y divide-[#3e3e42]">
+    <>
+      {/* Mobile: stacked cards */}
+      <div className="block sm:hidden space-y-2">
         {sortedRoles.map((role) => (
-          <div
-            key={role.id}
-            className="grid grid-cols-12 gap-4 px-4 py-4 hover:bg-[#3e3e42]/20 transition-colors"
-          >
-            {/* Role Name */}
-            <div className="col-span-3">
-              <div className="font-medium text-[#cccccc]">{role.name}</div>
-            </div>
-
-            {/* Description */}
-            <div className="col-span-5">
-              <div className="text-[#969696] text-sm">
-                {role.description || 'No description'}
+          <div key={role.id} className="bg-[#2d2d30] border border-[#3e3e42] rounded p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[#cccccc] font-medium">{role.name}</div>
+                <div className="text-[#969696] text-xs mt-1">
+                  {role.description || 'No description'}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`inline-block w-2 h-2 rounded-full ${role.isActive ? 'bg-emerald-400' : 'bg-[#969696]'}`} title={role.isActive ? 'Active' : 'Inactive'} />
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => onEditRole(role)}
+                    className="text-[#969696] hover:text-[#007acc] p-1 rounded transition-colors"
+                    aria-label={`Edit role ${role.name}`}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => onDeleteRole(role)}
+                    className="text-[#969696] hover:text-red-400 p-1 rounded transition-colors"
+                    aria-label={`Delete role ${role.name}`}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3,6 5,6 21,6"/>
+                      <path d="m19,6v14a2,2 0 0 1 -2,2H7a2,2 0 0 1 -2,-2V6m3,0V4a2,2 0 0 1 2,-2h4a2,2 0 0 1 2,2v2"/>
+                      <line x1="10" y1="11" x2="10" y2="17"/>
+                      <line x1="14" y1="11" x2="14" y2="17"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
-
-            {/* Created Date */}
-            <div className="col-span-2">
-              <div className="text-[#969696] text-sm">
-                {role.createdAt ? new Date(role.createdAt).toLocaleDateString() : '-'}
-              </div>
-            </div>
-
-            {/* Status */}
-            <div className="col-span-1 text-center">
-              <span className={`inline-block w-2 h-2 rounded-full ${
-                role.isActive ? 'bg-emerald-400' : 'bg-[#969696]'
-              }`} title={role.isActive ? 'Active' : 'Inactive'} />
-            </div>
-
-            {/* Actions */}
-            <div className="col-span-1 text-center">
-              <div className="flex items-center justify-center gap-1">
-                <button
-                  onClick={() => onEditRole(role)}
-                  className="text-[#969696] hover:text-[#007acc] p-1 rounded transition-colors"
-                  title="Edit role"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
-                </button>
-                <button
-                  onClick={() => onDeleteRole(role)}
-                  className="text-[#969696] hover:text-red-400 p-1 rounded transition-colors"
-                  title="Delete role"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="3,6 5,6 21,6"/>
-                    <path d="m19,6v14a2,2 0 0 1 -2,2H7a2,2 0 0 1 -2,-2V6m3,0V4a2,2 0 0 1 2,-2h4a2,2 0 0 1 2,2v2"/>
-                    <line x1="10" y1="11" x2="10" y2="17"/>
-                    <line x1="14" y1="11" x2="14" y2="17"/>
-                  </svg>
-                </button>
-              </div>
+            <div className="text-[#969696] text-xs mt-2">
+              Created: {role.createdAt ? formatUtcToLocal(role.createdAt) : '-'}
             </div>
           </div>
         ))}
       </div>
-    </div>
+
+      {/* Desktop/tablet: original table layout */}
+      <div className="hidden sm:block overflow-x-auto">
+        {/* Table Header */}
+        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-[#3e3e42]/30 border-b border-[#3e3e42] text-sm font-medium text-[#969696] rounded-t-md">
+          <div className="col-span-3">
+            <SortableHeader column="name">ROLE NAME</SortableHeader>
+          </div>
+          <div className="col-span-5">
+            <SortableHeader column="description">DESCRIPTION</SortableHeader>
+          </div>
+          <div className="col-span-2">
+            <SortableHeader column="createdAt">CREATED</SortableHeader>
+          </div>
+          <div className="col-span-1 text-center">STATUS</div>
+          <div className="col-span-1 text-center">ACTIONS</div>
+        </div>
+
+        {/* Table Body */}
+        <div className="divide-y divide-[#3e3e42]">
+          {sortedRoles.map((role) => (
+            <div
+              key={role.id}
+              className="grid grid-cols-12 gap-4 px-4 py-4 hover:bg-[#3e3e42]/20 transition-colors"
+            >
+              {/* Role Name */}
+              <div className="col-span-3">
+                <div className="font-medium text-[#cccccc]">{role.name}</div>
+              </div>
+
+              {/* Description */}
+              <div className="col-span-5">
+                <div className="text-[#969696] text-sm">
+                  {role.description || 'No description'}
+                </div>
+              </div>
+
+              {/* Created Date */}
+              <div className="col-span-2">
+                <div className="text-[#969696] text-sm">
+                  {role.createdAt ? formatUtcToLocal(role.createdAt) : '-'}
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="col-span-1 text-center">
+                <span className={`inline-block w-2 h-2 rounded-full ${
+                  role.isActive ? 'bg-emerald-400' : 'bg-[#969696]'
+                }`} title={role.isActive ? 'Active' : 'Inactive'} />
+              </div>
+
+              {/* Actions */}
+              <div className="col-span-1 text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    onClick={() => onEditRole(role)}
+                    className="text-[#969696] hover:text-[#007acc] p-1 rounded transition-colors"
+                    title="Edit role"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => onDeleteRole(role)}
+                    className="text-[#969696] hover:text-red-400 p-1 rounded transition-colors"
+                    title="Delete role"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3,6 5,6 21,6"/>
+                      <path d="m19,6v14a2,2 0 0 1 -2,2H7a2,2 0 0 1 -2,-2V6m3,0V4a2,2 0 0 1 2,-2h4a2,2 0 0 1 2,2v2"/>
+                      <line x1="10" y1="11" x2="10" y2="17"/>
+                      <line x1="14" y1="11" x2="14" y2="17"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 };
 

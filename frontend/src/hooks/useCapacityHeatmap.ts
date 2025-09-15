@@ -19,7 +19,7 @@ export function useCapacityHeatmap(
         { signal }
       ),
     placeholderData: keepPreviousData,
-    staleTime: 60_000,
+    staleTime: 30_000,
     retry: 1,
     refetchOnWindowFocus: true,
     enabled: enabled && weeks > 0,

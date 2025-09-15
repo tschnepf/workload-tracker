@@ -13,8 +13,18 @@ export DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings}
 echo "Running migrations..."
 python manage.py migrate --noinput
 
-echo "Collecting static files..."
-python manage.py collectstatic --noinput
+# Skip collectstatic automatically for celery processes (workers/beat)
+IS_CELERY=0
+case "$1" in
+  celery|*celery*) IS_CELERY=1 ;;
+esac
+
+if [ "${COLLECT_STATIC:-true}" = "true" ] && [ "$IS_CELERY" -eq 0 ]; then
+  echo "Collecting static files..."
+  python manage.py collectstatic --noinput || echo "collectstatic skipped or failed (non-fatal for non-web services)"
+else
+  echo "Skipping collectstatic (COLLECT_STATIC=${COLLECT_STATIC})"
+fi
 
 if [ "${DEBUG:-false}" = "true" ]; then
   echo "Ensuring default superuser (dev only)..."

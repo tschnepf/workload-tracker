@@ -4,6 +4,7 @@ URL configuration for workload-tracker project.
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
+import time
 from django.db import connections
 import os
 try:
@@ -14,6 +15,7 @@ from django.conf import settings
 import json
 from dashboard.views import DashboardView
 from core.job_views import JobStatusView, JobDownloadView
+from core import backup_views as backups
 import os
 from accounts.token_views import (
     ThrottledTokenObtainPairView,
@@ -39,9 +41,12 @@ def readiness_check(request):
 
     # Database check
     try:
+        t0 = time.perf_counter()
         with connections['default'].cursor() as cursor:
             cursor.execute('SELECT 1;')
-            checks['database'] = 'ok'
+        db_rtt_ms = int((time.perf_counter() - t0) * 1000)
+        checks['database'] = 'ok'
+        checks['db_rtt_ms'] = db_rtt_ms
     except Exception as e:
         checks['database'] = f'error: {e.__class__.__name__}'
         ok = False
@@ -60,8 +65,34 @@ def readiness_check(request):
     data = {
         'status': 'ready' if ok else 'degraded',
         'checks': checks,
+        'metrics': {
+            'conn_max_age': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+            'conn_health_checks': os.getenv('DB_CONN_HEALTH_CHECKS', 'true').lower() == 'true',
+        }
     }
     return JsonResponse(data, status=200 if ok else 503)
+
+
+def capabilities_view(request):
+    """Advertise backend feature capabilities for clients to decide rollouts.
+
+    Returns booleans and simple settings for aggregate endpoints, async jobs, and cache TTL hints.
+    """
+    caps = {
+        'asyncJobs': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
+        'aggregates': {
+            'capacityHeatmap': True,
+            'projectAvailability': True,
+            'findAvailable': True,
+            'gridSnapshot': True,
+            'skillMatch': True,
+        },
+        'cache': {
+            'shortTtlAggregates': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
+            'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
+        }
+    }
+    return JsonResponse(caps)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -81,9 +112,17 @@ urlpatterns = [
     # OpenAPI schema + Swagger UI
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/schema/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/capabilities/', capabilities_view, name='capabilities'),
     # Async job status and file download
     path('api/jobs/<str:job_id>/', JobStatusView.as_view(), name='job_status'),
     path('api/jobs/<str:job_id>/download/', JobDownloadView.as_view(), name='job_download'),
+    # Database backups API
+    path('api/backups/', backups.BackupListCreateView.as_view(), name='backups_list_create'),
+    path('api/backups/status/', backups.BackupStatusView.as_view(), name='backups_status'),
+    path('api/backups/upload-restore/', backups.UploadAndRestoreView.as_view(), name='backups_upload_restore'),
+    path('api/backups/<str:id>/download/', backups.BackupDownloadView.as_view(), name='backups_download'),
+    path('api/backups/<str:id>/', backups.BackupDeleteView.as_view(), name='backups_delete'),
+    path('api/backups/<str:id>/restore/', backups.BackupRestoreView.as_view(), name='backups_restore'),
     path('api/people/', include('people.urls')),
     path('api/projects/', include('projects.urls')),
     path('api/assignments/', include('assignments.urls')),

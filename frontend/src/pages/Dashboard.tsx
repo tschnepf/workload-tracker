@@ -9,6 +9,7 @@ import Card from '../components/ui/Card';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
 import SkillsFilter from '../components/skills/SkillsFilter';
 import { dashboardApi, departmentsApi, personSkillsApi } from '../services/api';
+import { formatUtcToLocal } from '@/utils/dates';
 import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
 import { DashboardData, Department, PersonSkill } from '../types/models';
 import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
@@ -151,14 +152,16 @@ const Dashboard: React.FC = () => {
                         <tr key={row.id}>
                           <td style={{ padding: '4px 6px' }}>{row.name}</td>
                           {row.weekKeys.map((wk) => {
-                            const h = row.weekTotals[wk] || 0;
-                            const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
+                            // Prefer server-provided percent/available maps when present
+                            const pct = (row as any).percentByWeek && (row as any).percentByWeek[wk] != null
+                              ? Number((row as any).percentByWeek[wk])
+                              : (row.weeklyCapacity ? ((row.weekTotals[wk] || 0) / row.weeklyCapacity) * 100 : 0);
                             let bg = '#10b981';
                             if (pct > 100) bg = '#ef4444';
                             else if (pct > 85) bg = '#f59e0b';
                             else if (pct > 70) bg = '#3b82f6';
                             return (
-                              <td key={wk} title={`${wk} — ${Math.round(h)}h`} style={{ padding: 2 }}>
+                              <td key={wk} title={`${wk} - ${(row as any).availableByWeek && (row as any).availableByWeek[wk] != null ? `${(row as any).availableByWeek[wk]}h available` : `${Math.round(row.weekTotals[wk] || 0)}h allocated`}`} style={{ padding: 2 }}>
                                 <div style={{ width: 16, height: 16, background: bg, opacity: 0.7, borderRadius: 3, border: '1px solid #64748b', margin: '0 auto' }} />
                               </td>
                             );
@@ -505,6 +508,13 @@ const Dashboard: React.FC = () => {
                 <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70-85%</div>
                 <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85-100%</div>
                 <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
+                <span
+                  className="ml-2 inline-flex items-center gap-1 text-[#7a7a7a]"
+                  title="When available, heatmap tooltips show available hours instead of allocated hours."
+                >
+                  <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[#3e3e42] text-[#969696] text-[10px]">i</span>
+                  Tooltips show available hours when provided
+                </span>
                 {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
               </div>
             </div>
@@ -549,7 +559,7 @@ const Dashboard: React.FC = () => {
                     <span className="text-[#cccccc]">{assignment.project}</span>
                   </div>
                   <div className="text-[#969696] text-sm">
-                    {new Date(assignment.created).toLocaleDateString()}
+                    {formatUtcToLocal(assignment.created)}
                   </div>
                 </div>
               ))}

@@ -1,0 +1,85 @@
+name: E2E Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Prepare env file for compose
+        run: |
+          cp .env.example .env
+          echo "HOST_IP=localhost" >> .env
+          echo "BACKEND_PORT=8000" >> .env
+          echo "FRONTEND_PORT=3000" >> .env
+
+      - name: Build and start dev stack
+        run: |
+          docker compose -f docker-compose.yml up -d --build db redis backend frontend
+
+      - name: Wait for backend readiness
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:8000/api/readiness/ > /dev/null; then
+              echo "Backend ready"; exit 0; fi; sleep 2; done; \
+          echo "Backend did not become ready in time"; \
+          docker compose -f docker-compose.yml ps; \
+          docker compose -f docker-compose.yml logs backend; \
+          exit 1
+
+      - name: Wait for frontend
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:3000/ > /dev/null; then
+              echo "Frontend ready"; exit 0; fi; sleep 2; done; \
+          echo "Frontend did not become ready in time"; \
+          docker compose -f docker-compose.yml logs frontend; \
+          exit 1
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright (Chromium + deps)
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          CI: "true"
+        run: npm run e2e
+
+      - name: Upload Playwright artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          if-no-files-found: ignore
+          path: |
+            frontend/test-results/**
+            frontend/playwright-report/**
+            frontend/playwright-traces/**
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml ps
+          docker compose -f docker-compose.yml logs backend frontend db redis
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v
+

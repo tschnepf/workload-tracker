@@ -14,6 +14,9 @@ import RoleList from './components/RoleList';
 import RoleForm from './components/RoleForm';
 import RoleDeleteConfirm from './components/RoleDeleteConfirm';
 import { useAuth } from '@/hooks/useAuth';
+import BackupManagement from '@/components/settings/BackupManagement';
+import RestoreManagement from '@/components/settings/RestoreManagement';
+import BackupOverview from '@/components/settings/BackupOverview';
 
 const Settings: React.FC = () => {
   const auth = useAuth();
@@ -147,8 +150,16 @@ const Settings: React.FC = () => {
             </div>
           )}
 
+          {/* Quick section navigation */}
+          <div className="mb-4 text-sm text-[#969696]">
+            Sections:
+            <a href="#role-management" className="ml-2 text-[#cccccc] hover:text-white">Role Management</a>
+            <span className="mx-2 text-[#3e3e42]">|</span>
+            <a href="#backup-restore" className="text-[#cccccc] hover:text-white">Backup &amp; Restore</a>
+          </div>
+
           {/* Role Management Section */}
-          <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
+          <div id="role-management" className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-semibold text-[#cccccc] mb-1">Role Management</h2>
@@ -329,6 +340,23 @@ const Settings: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Admin-only: Backup & Restore Section */}
+          {auth.user?.is_staff && (
+            <div id="backup-restore" className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6 mt-6">
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-[#cccccc] mb-1">Backup &amp; Restore</h2>
+                <p className="text-[#969696] text-sm">
+                  Create and download database backups, and restore from existing or uploaded backups. Restoring will overwrite all current data.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-6">
+                <BackupOverview />
+                <BackupManagement />
+                <RestoreManagement />
+              </div>
             </div>
           )}
         </div>

@@ -41,6 +41,63 @@ docker-compose build frontend
 docker-compose logs frontend --tail=20
 ```
 
+## Database Backups & Restore
+
+### Overview
+- Backups are stored under `BACKUPS_DIR` (default `/backups`). In Docker, the host `./backups` folder is mounted there.
+- Supported formats:
+  - Custom `.pgcustom` (pg_dump -Fc), fast and supports parallel restore
+  - Plain `.sql.gz` (pg_dump -Fp piped to gzip)
+- Sidecar metadata `<basename>.meta.json` includes checksum (sha256), app version, migrations hash, server version, timestamps, and optional description.
+
+### Settings → Backup & Restore (Admin)
+- Requires Celery workers to be available. 503 errors indicate async jobs are unavailable.
+- Backups card: create (with optional description), list, download, delete.
+- Restore card: restore an existing backup with 2–4 parallel jobs, optional migrate; or upload & restore an external `.pgcustom`/`.sql.gz`.
+- Safety: Restores require typing the exact phrase: `I understand this will irreversibly overwrite data`.
+- Status card: last backup time/size, retention compliance, offsite and encryption flags.
+
+### CLI Commands
+Create backup:
+```bash
+docker-compose exec backend python manage.py backup_database --description "Pre-upgrade"
+```
+
+Restore backup:
+```bash
+docker-compose exec backend python manage.py restore_database \
+  --path /backups/<file>.pgcustom \
+  --jobs 2 \
+  --confirm "I understand this will irreversibly overwrite data" \
+  --migrate   # optional
+```
+
+Notes
+- `.backup.lock` and `.restore.lock` in `BACKUPS_DIR` prevent concurrent operations and force read-only maintenance during restore.
+- Paths outside `BACKUPS_DIR` are rejected.
+
+### Docker Configuration
+- Dev (`docker-compose.yml`) and Prod (`docker-compose.prod.yml`) mount `./backups:/backups` for backend/workers and set `BACKUPS_DIR=/backups`.
+- Backend image includes `postgresql-client` (pg_dump/pg_restore/psql) in both dev and prod stages.
+- Nginx does NOT mount backups; downloading occurs via authenticated API endpoints only.
+- Optional Celery Beat (`worker_beat`) is available to schedule backups and retention cleanup.
+
+### Retention, Offsite, Encryption
+- Retention: `BackupService.cleanup_retention()` provides GFS-style cleanup (e.g., daily=7, weekly=4, monthly=12). Schedule via beat as needed.
+- Offsite toggles available via env (provider-specific sync handled externally). Never log secrets.
+- Encryption flags:
+  - `BACKUP_ENCRYPTION_ENABLED` (false by default)
+  - `BACKUP_ENCRYPTION_PROVIDER` (e.g., gpg)
+  - `BACKUP_ENCRYPTION_RECIPIENT`
+  Manage keys securely; never commit them.
+
+### Troubleshooting
+- 503 on backup/restore: Celery/Redis not available. Check `worker`, `worker_db`, and `REDIS_URL`.
+- 429 on backup create: DRF throttles enforced; adjust `DRF_THROTTLE_BACKUP_*` in `.env`.
+- `Permission denied` writing `/backups`: ensure host `./backups` exists and is writable; container user has access.
+- `pg_dump/pg_restore` missing: confirm backend image includes `postgresql-client`.
+- Upload rejected as too large: increase `BACKUP_UPLOAD_MAX_BYTES` (default 5 GiB) and verify disk space.
+
 ## 🎯 Standards Compliance
 
 ### **Package Management**

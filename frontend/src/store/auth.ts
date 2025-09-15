@@ -6,6 +6,8 @@
   - Exposes helpers to login, logout, refresh access token, and update settings
 */
 
+import { etagStore } from '@/api/etagStore';
+
 type UserSummary = {
   id: number | null;
   username: string | null;
@@ -39,6 +41,7 @@ export type AuthState = {
 };
 
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || 'http://localhost:8000/api';
+const OPENAPI_MIGRATION_ENABLED = !!(typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_OPENAPI_MIGRATION_ENABLED === 'true');
 const COOKIE_REFRESH = !!(typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_COOKIE_REFRESH_AUTH === 'true');
 
 const LS_REFRESH = 'auth.refreshToken';
@@ -148,6 +151,8 @@ export async function logout(): Promise<void> {
   }
   writeRefreshToStorage(null);
   setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
+  // Clear any stored ETags on identity change
+  etagStore.clear();
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
@@ -158,6 +163,7 @@ export async function refreshAccessToken(): Promise<string | null> {
       return data.access;
     } catch (e) {
       setState({ accessToken: null, user: null, person: null, settings: {} });
+      etagStore.clear();
       return null;
     }
   } else {
@@ -177,6 +183,7 @@ export async function refreshAccessToken(): Promise<string | null> {
       // If refresh fails (expired/invalid), clear auth state
       writeRefreshToStorage(null);
       setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
+      etagStore.clear();
       return null;
     }
   }
@@ -200,8 +207,33 @@ export async function loadFromStorage(): Promise<void> {
   setState({ hydrating: false });
 }
 
+// Lightweight typed client (local) to avoid circular deps
+import createClient from 'openapi-fetch';
+import type { paths } from '@/api/schema';
+const typedAuthClient = createClient<paths>({ baseUrl: API_BASE_URL });
+
 async function hydrateProfile(): Promise<void> {
   if (!state.accessToken) return;
+  const useTyped = true;
+  if (useTyped) {
+    try {
+      const headers: Record<string, string> = { Authorization: `Bearer ${state.accessToken}` };
+      let res = await typedAuthClient.GET('/auth/me/' as any, { headers });
+      if (!res.data && res.response && res.response.status === 401) {
+        const tok = await refreshAccessToken();
+        if (tok) {
+          res = await typedAuthClient.GET('/auth/me/' as any, { headers: { Authorization: `Bearer ${tok}` } });
+        }
+      }
+      if (res.data) {
+        const profile = res.data as any;
+        setState({ user: profile.user, person: profile.person, settings: profile.settings || {} });
+        return;
+      }
+    } catch {
+      // fallback to legacy
+    }
+  }
   const profile = await http<{ id: number; user: UserSummary; person: PersonSummary; settings: UserSettings }>(`/auth/me/`, { method: 'GET' }, true);
   setState({ user: profile.user, person: profile.person, settings: profile.settings || {} });
 }
@@ -210,8 +242,28 @@ export async function setSettings(partial: UserSettings): Promise<void> {
   // Merge current settings with partial and PATCH server
   const current = state.settings || {};
   const next = { ...current, ...partial };
-  const body = JSON.stringify({ settings: next });
-  const updated = await http<{ id: number; user: UserSummary; person: PersonSummary; settings: UserSettings }>(`/auth/settings/`, { method: 'PATCH', body }, true);
+  const useTyped = true;
+  if (useTyped) {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (state.accessToken) headers['Authorization'] = `Bearer ${state.accessToken}`;
+      let res = await typedAuthClient.PATCH('/auth/settings/' as any, { body: { settings: next } as any, headers });
+      if (!res.data && res.response && res.response.status === 401) {
+        const tok = await refreshAccessToken();
+        const hdrs: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (tok) hdrs['Authorization'] = `Bearer ${tok}`;
+        res = await typedAuthClient.PATCH('/auth/settings/' as any, { body: { settings: next } as any, headers: hdrs });
+      }
+      if (res.data) {
+        const updated = res.data as any;
+        setState({ settings: updated.settings || {} });
+        return;
+      }
+    } catch {
+      // fall back to legacy
+    }
+  }
+  const updated = await http<{ id: number; user: UserSummary; person: PersonSummary; settings: UserSettings }>(`/auth/settings/`, { method: 'PATCH', body: JSON.stringify({ settings: next }) }, true);
   setState({ settings: updated.settings || {} });
 }
 

@@ -5,7 +5,7 @@ People API Views - Using AutoMapped serializers for naming prevention
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.throttling import UserRateThrottle
+from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
 from django.db.models import Sum, Max, Prefetch
 from django.conf import settings
 from django.core.cache import cache
@@ -16,7 +16,13 @@ from django.core.files.base import ContentFile
 from .models import Person
 from core.etag import ETagConditionalMixin
 from departments.models import Department
-from .serializers import PersonSerializer
+from .serializers import (
+    PersonSerializer,
+    PersonCapacityHeatmapItemSerializer,
+    WorkloadForecastItemSerializer,
+    SkillMatchRequestSerializer,
+    SkillMatchResultItemSerializer,
+)
 from .utils.excel_handler import export_people_to_excel, import_people_from_excel
 from .services import CapacityAnalysisService
 import hashlib
@@ -28,6 +34,13 @@ import os
 from assignments.models import Assignment
 from django.db.models import Q
 from django.conf import settings as django_settings
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
+from rest_framework import serializers
+from skills.models import PersonSkill, SkillTag
+try:
+    from core.tasks import bulk_skill_matching_async  # type: ignore
+except Exception:
+    bulk_skill_matching_async = None  # type: ignore
 try:
     # Celery tasks (optional until async jobs are enabled)
     from .tasks import export_people_excel_task, import_people_excel_task
@@ -35,9 +48,20 @@ except Exception:
     export_people_excel_task = None  # type: ignore
     import_people_excel_task = None  # type: ignore
 
+class FindAvailableThrottle(ScopedRateThrottle):
+    scope = 'find_available'
+
 class HotEndpointThrottle(UserRateThrottle):
     """Special throttle for hot endpoints like utilization checking"""
     scope = 'hot_endpoint'
+
+class HeatmapThrottle(ScopedRateThrottle):
+    """Higher-rate throttle for aggregate heatmap reads"""
+    scope = 'heatmap'
+
+class SkillMatchThrottle(ScopedRateThrottle):
+    """Throttle for skill match endpoint"""
+    scope = 'skill_match'
 
 class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     """
@@ -61,6 +85,15 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             .order_by('name')
         )
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='page', type=int, required=False, description='Page number'),
+            OpenApiParameter(name='page_size', type=int, required=False, description='Page size'),
+            OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
+            OpenApiParameter(name='include_children', type=int, required=False, description='Include child departments (0|1)'),
+            OpenApiParameter(name='all', type=str, required=False, description='Return all items without pagination when true'),
+        ]
+    )
     def list(self, request, *args, **kwargs):
         """Get all people with conditional request support (ETag/Last-Modified) and bulk loading"""
         queryset = self.get_queryset()
@@ -299,6 +332,18 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             **progress_data
         }) + '\n'
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='search', type=str, required=False, description='Substring of name'),
+            OpenApiParameter(name='q', type=str, required=False, description='Alias for search'),
+            OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-50)'),
+        ],
+        responses=inline_serializer(name='PeopleAutocompleteItem', fields={
+            'id': serializers.IntegerField(),
+            'name': serializers.CharField(),
+            'department': serializers.IntegerField(allow_null=True, required=False),
+        })
+    )
     @action(detail=False, methods=['get'])
     def autocomplete(self, request):
         """Lightweight autocomplete for active people.
@@ -313,7 +358,13 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         except Exception:
             limit = 20
         limit = max(1, min(50, limit))
-        qs = self.get_queryset().only('id', 'name', 'department').order_by('name')
+        # Build a slim queryset explicitly to avoid conflicts between
+        # select_related() from get_queryset and deferred fields via only().
+        qs = (
+            Person.objects.filter(is_active=True)
+            .only('id', 'name', 'department')
+            .order_by('name')
+        )
         if q:
             qs = qs.filter(name__icontains=q)
         qs = qs[:limit]
@@ -327,6 +378,17 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         ]
         return Response(data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='q', type=str, required=True, description='Search query (min length 2)'),
+            OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-50)'),
+        ],
+        responses=inline_serializer(name='PeopleSearchItem', fields={
+            'id': serializers.IntegerField(),
+            'name': serializers.CharField(),
+            'department': serializers.IntegerField(allow_null=True, required=False),
+        })
+    )
     @action(detail=False, methods=['get'], url_path='search', throttle_classes=[HotEndpointThrottle])
     def search(self, request):
         """Server-side typeahead for People.
@@ -345,8 +407,10 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             limit = 20
         limit = max(1, min(50, limit))
 
+        # Use a fresh base queryset without select_related to avoid
+        # deferred-field conflicts with only().
         qs = (
-            self.get_queryset()
+            Person.objects.filter(is_active=True)
             .only('id', 'name', 'department')
             .filter(Q(name__icontains=q) | Q(email__icontains=q))
             .order_by('name')[:limit]
@@ -360,6 +424,476 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             for p in qs
         ]
         return Response(results)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Monday) week key'),
+            OpenApiParameter(name='skills', type=str, required=False, description='Comma-separated skill names'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-200), default 100'),
+            OpenApiParameter(name='minAvailableHours', type=float, required=False, description='Filter to people with at least this many hours free'),
+        ],
+        responses=SkillMatchResultItemSerializer(many=True)
+    )
+    @action(detail=False, methods=['get'], url_path='find_available', throttle_classes=[FindAvailableThrottle])
+    def find_available(self, request):
+        from datetime import datetime as _dt, timedelta as _td
+        week_str = request.query_params.get('week')
+        if week_str:
+            try:
+                d = _dt.strptime(week_str, '%Y-%m-%d').date()
+                week_monday = d - _td(days=d.weekday())
+            except Exception:
+                return Response({'detail': 'Invalid week format, expected YYYY-MM-DD'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            today = _dt.today().date()
+            week_monday = today - _td(days=today.weekday())
+
+        raw_skills = (request.query_params.get('skills') or '').strip()
+        req_skills = [s.strip().lower() for s in raw_skills.split(',') if s.strip()]
+        try:
+            limit = int(request.query_params.get('limit', '100'))
+        except Exception:
+            limit = 100
+        if limit < 1 or limit > 200:
+            return Response({'detail': 'Requested limit too large'}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        try:
+            min_available = float(request.query_params.get('minAvailableHours', '0'))
+        except Exception:
+            min_available = 0.0
+
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+
+        people_qs = Person.objects.filter(is_active=True).select_related('department', 'role')
+        cache_scope = 'all'
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    try:
+                        _ver = cache.get('dept_desc_ver', 1)
+                    except Exception:
+                        _ver = 1
+                    cache_key_desc = f"dept_desc:v{_ver}:{dept_id}"
+                    ids = cache.get(cache_key_desc)
+                    if ids is None:
+                        rows = Department.objects.values_list('id', 'parent_department_id')
+                        children = {}
+                        for _id, parent in rows:
+                            children.setdefault(parent, []).append(_id)
+                        ids_set = set()
+                        stack = [dept_id]
+                        while stack:
+                            current = stack.pop()
+                            if current in ids_set:
+                                continue
+                            ids_set.add(current)
+                            for child in children.get(current, []):
+                                if child not in ids_set:
+                                    stack.append(child)
+                        ids = list(ids_set)
+                        try:
+                            cache.set(cache_key_desc, ids, timeout=3600)
+                        except Exception:
+                            pass
+                    people_qs = people_qs.filter(department_id__in=ids)
+                    cache_scope = f'dept_{dept_id}_children'
+                else:
+                    people_qs = people_qs.filter(department_id=dept_id)
+                    cache_scope = f'dept_{dept_id}'
+            except (TypeError, ValueError):
+                pass
+
+        skill_qs = PersonSkill.objects.select_related('skill_tag')
+        asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id')
+        people_qs = people_qs.prefetch_related(Prefetch('skills', queryset=skill_qs), Prefetch('assignments', queryset=asn_qs))
+
+        try:
+            version = cache.get('analytics_cache_version', 1)
+        except Exception:
+            version = 1
+        skills_key = ','.join(sorted(req_skills)) if req_skills else 'none'
+        cache_key = f"find_available_v{version}:{week_monday.isoformat()}:{skills_key}:{cache_scope}:{limit}:{int(min_available)}"
+
+        ps_lm = PersonSkill.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
+        st_lm = SkillTag.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
+        asn_lm = Assignment.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
+        lm_candidates = [ps_lm, st_lm, asn_lm]
+        last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
+
+        etag = hashlib.md5(f"{cache_key}-".encode() + (last_modified.isoformat().encode() if last_modified else b'none')).hexdigest()
+
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match.strip('"') == etag:
+            resp = HttpResponseNotModified()
+            resp['ETag'] = f'"{etag}"'
+            if last_modified:
+                resp['Last-Modified'] = http_date(last_modified.timestamp())
+            return resp
+
+        payload = None
+        try:
+            payload = cache.get(cache_key)
+        except Exception:
+            payload = None
+        if payload is None:
+            lock_key = f"lock:{cache_key}"
+            got_lock = False
+            try:
+                got_lock = cache.add(lock_key, '1', timeout=10)
+            except Exception:
+                got_lock = True
+            if not got_lock:
+                t0 = time.time()
+                while time.time() - t0 < 2.0:
+                    try:
+                        payload = cache.get(cache_key)
+                        if payload is not None:
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(0.05)
+        if payload is None:
+            wk_key = week_monday.strftime('%Y-%m-%d')
+            results = []
+            for p in people_qs:
+                cap = float(p.weekly_capacity or 0)
+                allocated = 0.0
+                for a in getattr(p, 'assignments').all():
+                    wh = a.weekly_hours or {}
+                    val = 0.0
+                    if wk_key in wh:
+                        try:
+                            val = float(wh[wk_key] or 0)
+                        except (TypeError, ValueError):
+                            val = 0.0
+                    else:
+                        for off in range(-3, 4):
+                            d2 = week_monday + _td(days=off)
+                            k2 = d2.strftime('%Y-%m-%d')
+                            if k2 in wh:
+                                try:
+                                    val = float(wh[k2] or 0)
+                                except (TypeError, ValueError):
+                                    val = 0.0
+                                break
+                    allocated += val
+                available = max(0.0, cap - allocated)
+                if available < min_available:
+                    continue
+                util_pct = round((allocated / cap * 100.0), 1) if cap > 0 else 0.0
+
+                # Skills
+                skill_names = []
+                for ps in getattr(p, 'skills').all():
+                    if ps.skill_tag and ps.skill_tag.name:
+                        skill_names.append(ps.skill_tag.name.lower())
+                matched, missing = [], []
+                for rs in req_skills:
+                    ok = any((rs in sn) or (sn in rs) for sn in skill_names)
+                    (matched if ok else missing).append(rs)
+                skill_score = (len(matched) / len(req_skills) * 100.0) if req_skills else 0.0
+                avail_pct = (available / cap * 100.0) if cap > 0 else 0.0
+                combined = 0.5 * avail_pct + 0.5 * skill_score
+
+                results.append({
+                    'personId': p.id,
+                    'name': p.name,
+                    'availableHours': round(available, 1),
+                    'capacity': cap,
+                    'utilizationPercent': util_pct,
+                    'skillScore': round(skill_score, 1),
+                    'matchedSkills': matched,
+                    'missingSkills': missing,
+                    'departmentId': p.department_id,
+                    'roleName': getattr(p.role, 'name', None) if getattr(p, 'role', None) else None,
+                    '_score': combined,
+                })
+            results.sort(key=lambda x: (-x['_score'], x['name']))
+            for r in results:
+                r.pop('_score', None)
+            payload = results[:limit]
+            try:
+                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+            except Exception:
+                pass
+            try:
+                cache.delete(lock_key)
+            except Exception:
+                pass
+
+        response = Response(payload)
+        response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+        response['Cache-Control'] = 'private, max-age=30'
+        return response
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='skills', type=str, required=True, description='Comma-separated skill names'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-200), default 50'),
+            OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Monday) for availability-aware scoring'),
+        ],
+        responses=SkillMatchResultItemSerializer(many=True)
+    )
+    @action(detail=False, methods=['get'], url_path='skill_match', throttle_classes=[SkillMatchThrottle])
+    def skill_match(self, request):
+        """Rank people by skills (and optionally availability for a given week).
+
+        Returns an array of items: { personId, name, score, matchedSkills[], missingSkills[], departmentId, roleName }.
+        Score is based on percent of required skills matched (case-insensitive contains) and optionally blended with availability when `week` is provided.
+        """
+        from datetime import datetime as _dt, timedelta as _td
+
+        raw_skills = (request.query_params.get('skills') or '').strip()
+        if not raw_skills:
+            return Response({'detail': 'skills is required (comma-separated)'}, status=status.HTTP_400_BAD_REQUEST)
+        req_skills = [s.strip().lower() for s in raw_skills.split(',') if s.strip()]
+        if not req_skills:
+            return Response({'detail': 'No valid skills provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # limit
+        try:
+            limit = int(request.query_params.get('limit', '50'))
+        except Exception:
+            limit = 50
+        if limit < 1 or limit > 200:
+            return Response({'detail': 'Requested limit too large'}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+        # Department scoping
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+
+        # Optional availability week (normalize to Monday)
+        week_str = request.query_params.get('week')
+        week_monday = None
+        if week_str:
+            try:
+                d = _dt.strptime(week_str, '%Y-%m-%d').date()
+                week_monday = d - _td(days=d.weekday())
+            except Exception:
+                return Response({'detail': 'Invalid week format, expected YYYY-MM-DD'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Base queryset
+        people_qs = (
+            Person.objects.filter(is_active=True)
+            .select_related('department', 'role')
+        )
+        cache_scope = 'all'
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    try:
+                        _ver = cache.get('dept_desc_ver', 1)
+                    except Exception:
+                        _ver = 1
+                    cache_key_desc = f"dept_desc:v{_ver}:{dept_id}"
+                    ids = cache.get(cache_key_desc)
+                    if ids is None:
+                        rows = Department.objects.values_list('id', 'parent_department_id')
+                        children = {}
+                        for _id, parent in rows:
+                            children.setdefault(parent, []).append(_id)
+                        ids_set = set()
+                        stack = [dept_id]
+                        while stack:
+                            current = stack.pop()
+                            if current in ids_set:
+                                continue
+                            ids_set.add(current)
+                            for child in children.get(current, []):
+                                if child not in ids_set:
+                                    stack.append(child)
+                        ids = list(ids_set)
+                        try:
+                            cache.set(cache_key_desc, ids, timeout=3600)
+                        except Exception:
+                            pass
+                    people_qs = people_qs.filter(department_id__in=ids)
+                    cache_scope = f'dept_{dept_id}_children'
+                else:
+                    people_qs = people_qs.filter(department_id=dept_id)
+                    cache_scope = f'dept_{dept_id}'
+            except (TypeError, ValueError):
+                pass
+
+        # Prefetch skills and assignments (if week provided)
+        skill_qs = PersonSkill.objects.select_related('skill_tag')
+        prefetches = [Prefetch('skills', queryset=skill_qs)]
+        if week_monday is not None:
+            asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id')
+            prefetches.append(Prefetch('assignments', queryset=asn_qs))
+        people_qs = people_qs.prefetch_related(*prefetches)
+
+        # Cache & ETag computation
+        try:
+            version = cache.get('analytics_cache_version', 1)
+        except Exception:
+            version = 1
+        cache_key = f"skill_match_v{version}:{','.join(sorted(req_skills))}:{cache_scope}:{limit}:{week_monday.isoformat() if week_monday else 'none'}"
+
+        ps_lm = PersonSkill.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
+        st_lm = SkillTag.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
+        lm_candidates = [ps_lm, st_lm]
+        if week_monday is not None:
+            asn_lm = Assignment.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
+            lm_candidates.append(asn_lm)
+        last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
+
+        etag_content = f"{cache_key}-" + (last_modified.isoformat() if last_modified else 'none')
+        etag = hashlib.md5(etag_content.encode()).hexdigest()
+
+        # Conditional headers
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match.strip('"') == etag:
+            resp = HttpResponseNotModified()
+            resp['ETag'] = f'"{etag}"'
+            if last_modified:
+                resp['Last-Modified'] = http_date(last_modified.timestamp())
+            return resp
+        if_modified_since = request.META.get('HTTP_IF_MODIFIED_SINCE')
+        if last_modified and if_modified_since:
+            try:
+                from django.utils.http import parse_http_date
+                if_modified_ts = parse_http_date(if_modified_since)
+                if int(last_modified.timestamp()) <= if_modified_ts:
+                    resp = HttpResponseNotModified()
+                    resp['ETag'] = f'"{etag}"'
+                    resp['Last-Modified'] = http_date(last_modified.timestamp())
+                    return resp
+            except Exception:
+                pass
+
+        payload = None
+        try:
+            payload = cache.get(cache_key)
+        except Exception:
+            payload = None
+        if payload is None:
+            lock_key = f"lock:{cache_key}"
+            got_lock = False
+            try:
+                got_lock = cache.add(lock_key, '1', timeout=10)
+            except Exception:
+                got_lock = True
+            if not got_lock:
+                t0 = time.time()
+                while time.time() - t0 < 2.0:
+                    try:
+                        payload = cache.get(cache_key)
+                        if payload is not None:
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(0.05)
+            if payload is None:
+                # Compute results
+                results = []
+                for p in people_qs:
+                    # person skill names (lowercase)
+                    skill_names = []
+                    for ps in getattr(p, 'skills').all():
+                        if ps.skill_tag and ps.skill_tag.name:
+                            skill_names.append(ps.skill_tag.name.lower())
+
+                    matched, missing = [], []
+                    for rs in req_skills:
+                        ok = any((rs in sn) or (sn in rs) for sn in skill_names)
+                        (matched if ok else missing).append(rs)
+
+                    base_score = (len(matched) / len(req_skills)) * 100.0 if req_skills else 0.0
+
+                    # Availability blend (70/30)
+                    if week_monday is not None:
+                        cap = float(p.weekly_capacity or 0)
+                        if cap > 0:
+                            wk_key = week_monday.strftime('%Y-%m-%d')
+                            allocated = 0.0
+                            for a in getattr(p, 'assignments').all():
+                                wh = a.weekly_hours or {}
+                                val = 0.0
+                                if wk_key in wh:
+                                    try:
+                                        val = float(wh[wk_key] or 0)
+                                    except (TypeError, ValueError):
+                                        val = 0.0
+                                else:
+                                    for off in range(-3, 4):
+                                        d = week_monday + _td(days=off)
+                                        k = d.strftime('%Y-%m-%d')
+                                        if k in wh:
+                                            try:
+                                                val = float(wh[k] or 0)
+                                            except (TypeError, ValueError):
+                                                val = 0.0
+                                            break
+                                allocated += val
+                            avail_pct = max(0.0, (cap - allocated) / cap * 100.0)
+                            base_score = 0.7 * base_score + 0.3 * avail_pct
+
+                    results.append({
+                        'personId': p.id,
+                        'name': p.name,
+                        'score': round(base_score, 1),
+                        'matchedSkills': matched,
+                        'missingSkills': missing,
+                        'departmentId': p.department_id,
+                        'roleName': getattr(p.role, 'name', None) if getattr(p, 'role', None) else None,
+                    })
+
+                results.sort(key=lambda x: (-x['score'], x['name']))
+                payload = results[:limit]
+                try:
+                    cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+                except Exception:
+                    pass
+            try:
+                cache.delete(lock_key)
+            except Exception:
+                pass
+
+        response = Response(payload)
+        response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+        response['Cache-Control'] = 'private, max-age=30'
+        return response
+
+    @extend_schema(
+        description="Start async skill match job and return task ID for polling.",
+        parameters=[
+            OpenApiParameter(name='skills', type=str, required=True, description='Comma-separated skill names'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-200), default 50'),
+            OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Monday) for availability-aware scoring'),
+        ],
+        responses=inline_serializer(name='SkillMatchAsyncResponse', fields={'jobId': serializers.CharField()})
+    )
+    @action(detail=False, methods=['get'], url_path='skill_match_async', throttle_classes=[SkillMatchThrottle])
+    def skill_match_async(self, request):
+        if bulk_skill_matching_async is None:
+            return Response({'detail': 'Async jobs not available'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        raw_skills = (request.query_params.get('skills') or '').strip()
+        if not raw_skills:
+            return Response({'detail': 'skills is required (comma-separated)'}, status=status.HTTP_400_BAD_REQUEST)
+        skills = [s.strip() for s in raw_skills.split(',') if s.strip()]
+        filters = {}
+        for key in ('department', 'include_children', 'limit', 'week'):
+            val = request.query_params.get(key)
+            if val not in (None, ""):
+                filters[key] = val
+        try:
+            job = bulk_skill_matching_async.delay(skills, filters)
+        except Exception as e:
+            return Response({'detail': f'Failed to enqueue job: {e.__class__.__name__}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({'jobId': job.id}, status=status.HTTP_202_ACCEPTED)
     
     @action(detail=False, methods=['post'])
     def import_excel(self, request):
@@ -472,7 +1006,15 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         response['Cache-Control'] = 'no-cache'
         return response
 
-    @action(detail=False, methods=['get'])
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='weeks', type=int, required=False),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+        ],
+        responses=PersonCapacityHeatmapItemSerializer(many=True)
+    )
+    @action(detail=False, methods=['get'], throttle_classes=[HeatmapThrottle])
     def capacity_heatmap(self, request):
         """Return per-person week summaries for the next N weeks (default 12)."""
         try:
@@ -506,9 +1048,126 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except (TypeError, ValueError):
                 # Ignore invalid department filter; return unfiltered list
                 pass
-        result = CapacityAnalysisService.get_capacity_heatmap(people, weeks, cache_scope=cache_scope)
-        return Response(result)
+        # Build cache key and short-TTL caching (optional via feature flag)
+        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        cache_key = f"people:capacity_heatmap:{weeks}:{cache_scope}"
 
+        # Compute conservative validators across People + Assignments
+        ppl_aggr = people.aggregate(last_modified=Max('updated_at'), total=Max('id'))  # total not used, but keeps shape
+        asn_aggr = Assignment.objects.filter(person__in=people).aggregate(last_modified=Max('updated_at'))
+
+        lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
+        last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
+
+        etag_content = f"{weeks}-{cache_scope}-" + (last_modified.isoformat() if last_modified else 'none')
+        etag = hashlib.md5(etag_content.encode()).hexdigest()
+
+        # Handle conditional request
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match.strip('"') == etag:
+            resp = HttpResponseNotModified()
+            resp['ETag'] = f'"{etag}"'
+            if last_modified:
+                resp['Last-Modified'] = http_date(last_modified.timestamp())
+            return resp
+
+        if_modified_since = request.META.get('HTTP_IF_MODIFIED_SINCE')
+        if last_modified and if_modified_since:
+            try:
+                from django.utils.http import parse_http_date
+                if_modified_ts = parse_http_date(if_modified_since)
+                if int(last_modified.timestamp()) <= if_modified_ts:
+                    resp = HttpResponseNotModified()
+                    resp['ETag'] = f'"{etag}"'
+                    resp['Last-Modified'] = http_date(last_modified.timestamp())
+                    return resp
+            except Exception:
+                pass
+
+        payload = None
+        if use_cache:
+            try:
+                payload = cache.get(cache_key)
+            except Exception:
+                payload = None
+        if payload is None:
+            # Single-flight lock to prevent cache stampedes on heavy compute
+            lock_key = f"lock:{cache_key}"
+            got_lock = False
+            if use_cache:
+                try:
+                    got_lock = cache.add(lock_key, '1', timeout=10)
+                except Exception:
+                    got_lock = True
+            try:
+                if not got_lock and use_cache:
+                    # Briefly wait for another worker
+                    t0 = time.time()
+                    while time.time() - t0 < 2.0:
+                        try:
+                            payload = cache.get(cache_key)
+                            if payload is not None:
+                                break
+                        except Exception:
+                            pass
+                        time.sleep(0.05)
+                if payload is None:
+                    payload = CapacityAnalysisService.get_capacity_heatmap(people, weeks, cache_scope=cache_scope)
+            finally:
+                if use_cache:
+                    try:
+                        cache.delete(lock_key)
+                    except Exception:
+                        pass
+            if use_cache:
+                try:
+                    cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+                except Exception:
+                    pass
+
+        # Add convenience maps: percentByWeek and availableByWeek (optional fields)
+        try:
+            enhanced = []
+            for item in (payload or []):
+                wk_cap = float(item.get('weeklyCapacity') or 0)
+                week_totals = item.get('weekTotals') or {}
+                percent_map = {}
+                available_map = {}
+                if isinstance(week_totals, dict) and wk_cap >= 0:
+                    for wk, hours in week_totals.items():
+                        h = 0.0
+                        try:
+                            h = float(hours or 0)
+                        except Exception:
+                            h = 0.0
+                        pct = round((h / wk_cap * 100.0), 1) if wk_cap > 0 else 0.0
+                        avail = round(max(0.0, wk_cap - h), 1)
+                        percent_map[wk] = pct
+                        available_map[wk] = avail
+                new_item = dict(item)
+                new_item['percentByWeek'] = percent_map
+                new_item['availableByWeek'] = available_map
+                enhanced.append(new_item)
+            payload = enhanced
+        except Exception:
+            # In worst case, return original payload
+            pass
+
+        response = Response(payload)
+        response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+        response['Cache-Control'] = 'private, max-age=30'
+        return response
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='weeks', type=int, required=False),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+        ],
+        responses=WorkloadForecastItemSerializer(many=True)
+    )
     @action(detail=False, methods=['get'])
     def workload_forecast(self, request):
         """Aggregate team capacity vs allocated for N weeks ahead (default 8).

@@ -4,6 +4,9 @@ Follows R2-REBUILD-STANDARDS.md naming conventions
 """
 
 from rest_framework import viewsets, permissions, status
+from core.etag import ETagConditionalMixin
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
+from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
@@ -20,9 +23,11 @@ from .serializers import (
     DeliverableCalendarItemSerializer,
 )
 from assignments.models import Assignment
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
+from rest_framework import serializers
 
 
-class DeliverableViewSet(viewsets.ModelViewSet):
+class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     """
     CRUD operations for deliverables
     Supports filtering by project and manual reordering
@@ -54,6 +59,13 @@ class DeliverableViewSet(viewsets.ModelViewSet):
         # Use default pagination
         return super().list(request, *args, **kwargs)
     
+    @extend_schema(
+        request=inline_serializer(name='DeliverableReorderRequest', fields={
+            'project': serializers.IntegerField(),
+            'deliverable_ids': serializers.ListField(child=serializers.IntegerField()),
+        }),
+        responses=inline_serializer(name='DeliverableReorderResponse', fields={'success': serializers.BooleanField()}),
+    )
     @action(detail=False, methods=['post'])
     def reorder(self, request):
         """
@@ -90,6 +102,12 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='project_ids', type=str, required=True, description='Comma-separated project IDs'),
+        ],
+        responses=serializers.DictField(child=DeliverableSerializer(many=True)),
+    )
     @action(detail=False, methods=['get'])
     def bulk(self, request):
         """
@@ -106,6 +124,18 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='start', type=str, required=False, description='YYYY-MM-DD'),
+            OpenApiParameter(name='end', type=str, required=False, description='YYYY-MM-DD'),
+        ],
+        responses=DeliverableCalendarItemSerializer(many=True)
+    )
+    @extend_schema(
+        parameters=[OpenApiParameter(name='start', type=str, required=False, description='YYYY-MM-DD'),
+                    OpenApiParameter(name='end', type=str, required=False, description='YYYY-MM-DD')],
+        responses=DeliverableCalendarItemSerializer(many=True)
+    )
     @action(detail=False, methods=['get'])
     def calendar(self, request):
         """
@@ -203,6 +233,17 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @extend_schema(
+        parameters=[OpenApiParameter(name='weeks', type=int, required=False, description='Lookback window in weeks')],
+        responses=inline_serializer(name='DeliverableStaffingSummaryItem', fields={
+            'linkId': serializers.IntegerField(allow_null=True, required=False),
+            'personId': serializers.IntegerField(),
+            'personName': serializers.CharField(),
+            'roleOnMilestone': serializers.CharField(allow_null=True, required=False),
+            'totalHours': serializers.FloatField(),
+            'weekBreakdown': serializers.DictField(),
+        })
+    )
     @action(detail=True, methods=['get'], url_path='staffing_summary', url_name='staffing-summary')
     def staffing_summary(self, request, pk=None):
         """Return derived staffing for a deliverable from Assignment.weekly_hours.
@@ -297,7 +338,7 @@ class DeliverableViewSet(viewsets.ModelViewSet):
         return Response(results)
 
 
-class DeliverableAssignmentViewSet(viewsets.ModelViewSet):
+class DeliverableAssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     """CRUD and filter endpoints for deliverable-person weekly hour links."""
 
     serializer_class = DeliverableAssignmentSerializer
@@ -317,6 +358,10 @@ class DeliverableAssignmentViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         return super().list(request, *args, **kwargs)
 
+    @extend_schema(
+        parameters=[OpenApiParameter(name='deliverable', type=int, required=True)],
+        responses=DeliverableAssignmentSerializer(many=True)
+    )
     @action(detail=False, methods=['get'])
     def by_deliverable(self, request):
         deliverable_id = request.query_params.get('deliverable')
@@ -332,6 +377,10 @@ class DeliverableAssignmentViewSet(viewsets.ModelViewSet):
     # Note: Staffing summary is exposed on DeliverableViewSet (detail action)
     # to be accessible at /api/deliverables/{id}/staffing_summary/
 
+    @extend_schema(
+        parameters=[OpenApiParameter(name='person', type=int, required=True)],
+        responses=DeliverableAssignmentSerializer(many=True)
+    )
     @action(detail=False, methods=['get'])
     def by_person(self, request):
         person_id = request.query_params.get('person')

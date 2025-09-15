@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { Person, PersonSkill, SkillTag, Department, Role } from '@/types/models';
 import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi, rolesApi } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
-import Toast from '@/components/ui/Toast';
+import { showToast } from '@/lib/toastBus';
 import Sidebar from '@/components/layout/Sidebar';
 import SkillsAutocomplete from '@/components/skills/SkillsAutocomplete';
 import PeopleListTable from './PeopleListTable';
@@ -52,7 +52,7 @@ const PeopleList: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  // Centralized toasts via toast bus
   const updatePersonMutation = useUpdatePerson();
   
   // Bulk actions state
@@ -319,10 +319,10 @@ const PeopleList: React.FC = () => {
           : person
       ));
 
-      setToast({ message: `${String(field)} updated`, type: 'success' });
+      showToast(`${String(field)} updated`, 'success');
     } catch (err: any) {
       setError(`Failed to update ${field}: ${err.message}`);
-      setToast({ message: `Failed to update ${String(field)}`, type: 'error' });
+      showToast(`Failed to update ${String(field)}`, 'error');
       // Reset editing data to original values on error
       setEditingPersonData({ ...selectedPerson });
     } finally {
@@ -338,7 +338,7 @@ const PeopleList: React.FC = () => {
   const handleNameSave = async () => {
     if (!selectedPerson?.id || !editingPersonData?.name?.trim()) {
       setEditingName(false);
-      setToast({ message: 'Name updated', type: 'success' });
+      showToast('Name updated', 'success');
       return;
     }
 
@@ -357,7 +357,7 @@ const PeopleList: React.FC = () => {
       setEditingName(false);
     } catch (err: any) {
       setError(`Failed to update name: ${err.message}`);
-      setToast({ message: 'Failed to update name', type: 'error' });
+      showToast('Failed to update name', 'error');
     } finally {
       setIsUpdatingPerson(false);
     }
@@ -541,10 +541,10 @@ const PeopleList: React.FC = () => {
         ? 'removed from departments'
         : departments.find(d => d.id?.toString() === bulkDepartment)?.name || 'unknown department';
       
-      setToast({ message: `Updated ${selectedPeopleIds.size} people (${departmentName})`, type: 'success' });
+      showToast(`Updated ${selectedPeopleIds.size} people (${departmentName})`, 'success');
     } catch (err: any) {
       setError(`Failed to update department assignments: ${err.message}`);
-      setToast({ message: 'Failed to update assignments', type: 'error' });
+      showToast('Failed to update assignments', 'error');
     } finally {
       setLoading(false);
     }
@@ -1479,9 +1479,7 @@ const PeopleList: React.FC = () => {
         </div>
       </div>
     </div>
-    {toast && (
-      <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
-    )}
+    {/* Toasts are shown globally via ToastHost */}
   </>
   );
 };

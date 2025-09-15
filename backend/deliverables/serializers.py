@@ -4,6 +4,7 @@ Follows R2-REBUILD-STANDARDS.md: snake_case -> camelCase transformation
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import Deliverable, DeliverableAssignment
 from datetime import datetime
 from projects.models import Project
@@ -128,6 +129,7 @@ class DeliverableCalendarItemSerializer(serializers.Serializer):
     isCompleted = serializers.BooleanField(source='is_completed')
     assignmentCount = serializers.IntegerField()
 
+    @extend_schema_field(serializers.CharField())
     def get_title(self, obj):
         if getattr(obj, 'description', None):
             return obj.description

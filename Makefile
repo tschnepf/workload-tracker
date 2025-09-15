@@ -24,6 +24,8 @@ help:
 	@echo "  make down-prod      - Stop production stack"
 	@echo "  make logs-prod      - View production logs"
 	@echo "  make backup-db      - Create database backup"
+	@echo "  make restore-latest - Restore latest backup (dev)"
+	@echo "  make reset-throttles - Clear DRF throttle counters (dev)"
 
 .PHONY: setup
 setup:
@@ -150,3 +152,16 @@ backup-db:
 	@mkdir -p backups
 	@docker-compose exec -T db pg_dump -U postgres -d workload_tracker > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
 	@echo "Database backup created in backups/ directory"
+
+.PHONY: restore-latest
+restore-latest:
+	@echo "Restoring latest backup into dev DB (PG17)..."
+	@latest=$$(ls -t backups/*.(pgcustom|sql.gz) 2>/dev/null | head -n1); \
+	if [ -z "$$latest" ]; then echo "No backup found in ./backups"; exit 1; fi; \
+	confirm="I understand this will irreversibly overwrite data"; \
+	docker-compose exec backend python manage.py restore_database --path /$$latest --jobs 2 --confirm "$$confirm" --migrate
+
+.PHONY: reset-throttles
+reset-throttles:
+	@echo "Clearing DRF throttle keys from Redis (DB 1)..."
+	@docker-compose exec redis sh -lc 'for k in $$(redis-cli -n 1 --scan --pattern "*throttle*" | sort -u); do redis-cli -n 1 DEL "$$k" >/dev/null; done; echo done'
