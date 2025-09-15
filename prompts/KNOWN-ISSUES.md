@@ -88,7 +88,12 @@ All above discovered: 2025-09-15 (Phase 2, Step 5 lint). Suggested fix for most 
   - Discovered: 2025-09-15 (Phase 1 tests)
   - Suggested fix: Review test auth setup and update fixtures; fix module import
 
+### Backend ecosystem compatibility
+- [ ] [KI-0300] Python redis client cannot be upgraded to 6.x with Celery 5.5.x/kombu 5.5.x
+  - Details: pip resolver conflict when pinning `redis==6.4.0` with `celery[redis]==5.5.3` (kombu[redis] constraints). Kept `redis==5.0.1` to proceed.
+  - Discovered: 2025-09-15 (Phase 3, Step 7 build)
+  - Suggested fix: Revisit when Celery/kombu support redis 6.x; consider bumping Celery to a version that relaxes redis upper bound.
+
 ---
 
 Last updated: 2025-09-15
-
