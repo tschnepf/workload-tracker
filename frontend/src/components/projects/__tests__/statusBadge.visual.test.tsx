@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, within } from '@testing-library/react';
 import { StatusBadge } from '../StatusBadge';
 import type { ProjectStatus } from '../status.utils';
 import { vi, describe, test, expect } from 'vitest';
@@ -101,11 +101,12 @@ describe('StatusBadge Visual Regression Tests', () => {
     ];
 
     testCases.forEach(({ input, expected }) => {
-      const { getByText } = render(
+      const { container } = render(
         <StatusBadge status={input} variant="display" />
       );
       
-      expect(getByText(expected)).toBeInTheDocument();
+      // Scope query to this render to avoid matching across multiple renders in the same test
+      expect(within(container).getByText(expected)).toBeInTheDocument();
     });
   });
 

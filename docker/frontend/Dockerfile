@@ -1,7 +1,7 @@
 ##########
 # Dev stage: full node environment for Vite dev server
 ##########
-FROM node:18-alpine AS dev
+FROM node:20-alpine AS dev
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 ##########
 # Builder stage: install deps and build static assets
 ##########
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -48,7 +48,7 @@ RUN npm run build
 ##########
 # Production stage: minimal runtime to serve built assets (non-root)
 ##########
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 WORKDIR /app
 
 # Copy built assets to a separate path baked into the image

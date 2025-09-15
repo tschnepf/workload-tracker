@@ -35,7 +35,7 @@ describe('Project Status Integration Tests', () => {
     }));
 
     // Mock API failure
-    const mockUpdateProject = require('@/hooks/useProjects').useUpdateProject();
+    const mockUpdateProject = require('../../../../hooks/useProjects').useUpdateProject();
     mockUpdateProject.mutateAsync.mockRejectedValue(new Error('API Error'));
 
     // Test optimistic update followed by rollback
@@ -60,9 +60,7 @@ describe('Project Status Integration Tests', () => {
     expect(result.current.isUpdating(1)).toBe(false);
 
     // After starting update, state should be updating
-    act(() => {
-      result.current.updateStatus(1, 'completed');
-    });
+    await act(async () => { await result.current.updateStatus(1, 'completed'); });
 
     const updatingState = result.current.getUpdateState(1);
     expect(updatingState.type).toBe('updating');
@@ -156,20 +154,18 @@ describe('Performance Tests', () => {
     const startTime = performance.now();
     
     // Simulate updating 100 projects
-    const promises = [];
     for (let i = 1; i <= 100; i++) {
       const { result } = renderHook(() => useProjectStatus({
         getCurrentStatus: () => 'active',
         onOptimisticUpdate: vi.fn(),
         onSuccess: vi.fn()
       }));
-      
-      promises.push(act(async () => {
-        await result.current.updateStatus(i, 'completed');
-      }));
-    }
 
-    await Promise.all(promises);
+      // Run sequentially to avoid overlapping act() calls
+      await act(async () => {
+        await result.current.updateStatus(i, 'completed')
+      })
+    }
     
     const endTime = performance.now();
     const duration = endTime - startTime;
@@ -203,3 +199,5 @@ describe('Performance Tests', () => {
     });
   });
 });
+
+

@@ -88,6 +88,18 @@ All above discovered: 2025-09-15 (Phase 2, Step 5 lint). Suggested fix for most 
   - Discovered: 2025-09-15 (Phase 1 tests)
   - Suggested fix: Review test auth setup and update fixtures; fix module import
 
+### Frontend architecture follow-ups
+- [ ] [KI-0400] Root layout component split — separate layout from `App`
+  - Details: After Router v7 migration, `App` acts as providers + outlet wrapper. Consider extracting a dedicated `RootLayout` to clarify responsibilities.
+  - Discovered: 2025-09-15 (Phase 4, Step 8)
+  - Suggested fix: Introduce `src/layouts/RootLayout.tsx` wrapping Suspense/ErrorBoundary and providers; keep `App` focused or remove it.
+
+### Test execution reminders
+- [ ] [KI-0401] Run full unit/E2E suite post-router migration
+  - Details: Execute unit tests to catch path/import regressions. For E2E inside the frontend container, install browsers with `npx playwright install` first.
+  - Discovered: 2025-09-15 (Phase 4, Step 8)
+  - Suggested fix: Add a Makefile target to install browsers and run E2E; document in README.
+
 ### Backend ecosystem compatibility
 - [ ] [KI-0300] Python redis client cannot be upgraded to 6.x with Celery 5.5.x/kombu 5.5.x
   - Details: pip resolver conflict when pinning `redis==6.4.0` with `celery[redis]==5.5.3` (kombu[redis] constraints). Kept `redis==5.0.1` to proceed.

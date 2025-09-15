@@ -610,6 +610,128 @@ Rollback:
 - Reinstall react-router-dom and revert import changes.
 ```
 
+### Step 8B - Test Reliability Fixes After React 19 + Router v7
+Risk Level: MEDIUM | Priority: HIGH | Estimated Time: 0.5–1.5 days
+
+Goal: Resolve non-functional unit test failures introduced by React 19’s stricter act semantics and Router v7 changes, without altering app behavior.
+
+Scope Notes:
+- Text expectation changes like "On_hold" vs "On Hold" are intentionally deferred (tracked in Known Issues). Focus here is on structural test errors (act, concurrency, query assumptions, and router test utils).
+- Tests should render with the same providers used at runtime (e.g., React Query). Introduce a lightweight TestProviders wrapper to reduce boilerplate and flakiness.
+
+Issues and Fixes
+
+1) Error: "An update to TestComponent inside a test was not wrapped in act(...)"
+- Cause: Tests trigger state updates (setState, hooks, or async effects) and immediately assert without waiting for React to flush updates.
+- Solution:
+  - Prefer React Testing Library async APIs first: `await screen.findBy...`, `await waitFor(...)`, and `userEvent.setup()` helpers which internally use act.
+  - Use manual `act` sparingly; if needed, wrap state-changing code in a single `await act(async () => { ... })` and avoid nested/parallel acts.
+  - In React 19, import `act` from `react` (not react-dom/test-utils).
+- Proposed change pattern:
+  - Replace sync queries (`getBy*`) that race effects with async queries (`findBy*`) or `waitFor` (keep `getBy*` for truly synchronous elements).
+  - Wrap imperative state updates and async handler invocations in one awaited act.
+
+2) Error: "You seem to have overlapping act() calls ..."
+- Cause: Tests launch multiple `act(async () => ...)` calls concurrently (e.g., by pushing Promises into an array and `Promise.all(...)`). React disallows overlapping act scopes.
+- Solution:
+  - Run updates sequentially: loop with `await act(async () => { ... })` for each iteration.
+  - Or batch updates in a single act block if feasible.
+
+3) Error: "Found multiple elements with the text: Unknown"
+- Cause: Test uses `getByText` which requires a unique match, but the UI legitimately renders multiple matching nodes.
+- Solution:
+  - Use `getAllByText` and assert the expected count or specific instance.
+  - Or scope the query using `within(container).getByText(...)` or prefer role/name queries (`getByRole('link', { name: /unknown/i })`) for stronger semantics.
+
+4) Router v7 testing utilities alignment
+- Cause: After switching to `react-router` v7 and `RouterProvider`, any tests that render routes or use router helpers may still rely on `react-router-dom` testing utilities, or custom wrappers assuming `BrowserRouter`.
+- Solution:
+  - Use `createMemoryRouter` + `RouterProvider` in tests to render routes.
+  - Update imports to come from `react-router` (or `react-router/testing` if using their helpers) instead of `react-router-dom`. If tests mock hooks (e.g., `useNavigate`, `useLocation`, `useParams`), ensure they import from `react-router` in v7.
+  - If tests mount components that depend on route context, wrap them with a small helper that returns a memory router and providers.
+
+5) Providers and data fetching stability (React Query)
+- Cause: Tests rendering components that depend on QueryClient may retry or schedule async updates, increasing act warnings and flakiness.
+- Solution:
+  - Provide a shared `TestProviders` wrapper that includes `QueryClientProvider` with retries disabled and any global context providers from `App`.
+  - Example:
+    ```tsx
+    // test-utils.tsx
+    import { render } from '@testing-library/react'
+    import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+    import { RouterProvider, createMemoryRouter } from 'react-router'
+
+    export function renderWithProviders(ui: React.ReactElement, { route = '/', routes } = {}) {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      const router = routes
+        ? createMemoryRouter(routes, { initialEntries: [route] })
+        : null
+      const tree = (
+        <QueryClientProvider client={client}>
+          {router ? <RouterProvider router={router} /> : ui}
+        </QueryClientProvider>
+      )
+      return render(router ? tree : (<QueryClientProvider client={client}>{ui}</QueryClientProvider>))
+    }
+    ```
+  - Prefer `userEvent.setup()` for interactions and `await screen.findBy...`/`waitFor` for assertions.
+
+Testing Protocol
+- Run unit tests: `docker-compose exec frontend npm run test:run`
+- For E2E in-container, install browsers first: `docker-compose exec frontend npx playwright install chromium` then `docker-compose exec frontend npm run e2e`
+- Validate no act warnings appear; verify reduced flakiness and that failing tests either pass or are limited to the deferred text-formatting expectations.
+
+Prompt for the AI Agent:
+```
+Goal: Fix React 19/Router v7 related test failures (act usage, overlapping acts, non-unique queries, router test utils).
+
+Do:
+1) Wrap state updates with act and use async queries (prefer async helpers first)
+   - Search tests for act warnings:
+     - Run: docker-compose exec frontend npm run test:run
+     - Note failing files mentioning "not wrapped in act" or "overlapping act".
+   - For each failing test:
+     - Prefer: `const user = userEvent.setup()` and RTL async queries; only import `act` (from `react`) if necessary.
+     - Replace direct state-changing calls with a single `await act(async () => { /* triggers */ })` when required.
+     - Replace `getBy*` used immediately after async triggers with `await screen.findBy*` or `await waitFor(...)` (keep `getBy*` for synchronous elements).
+     - Ensure no concurrent acts: sequentially `await act(...)` per iteration.
+
+2) Fix non-unique text queries
+   - Replace `getByText('Unknown')` with either:
+     - `const nodes = screen.getAllByText('Unknown'); expect(nodes.length).toBe(/* expected count */)`; or
+     - `within(someScopedContainer).getByText('Unknown')`; or
+     - A role-based query if appropriate (e.g., `getByRole('link', { name: /unknown/i })`).
+
+3) Align router testing utils to v7
+   - If any tests import from 'react-router-dom' for routing helpers, update to:
+     - `import { createMemoryRouter, RouterProvider } from 'react-router'` (or from 'react-router/testing' if using that entry).
+   - Wrap components needing route context with a helper:
+     ```tsx
+     const router = createMemoryRouter([{ path: '/', element: <ComponentUnderTest /> }]);
+     render(<RouterProvider router={router} />);
+     ```
+
+4) Render with app providers
+   - Add a `renderWithProviders` helper that includes `QueryClientProvider` (retry: false) and optional memory router support.
+   - Migrate tests that rely on app context to use the helper.
+
+5) Re-run tests
+   - docker-compose exec frontend npm run test:run
+   - For E2E: docker-compose exec frontend npm run e2e
+
+Notes:
+- Do not change application logic. Only adjust tests (queries, act, and router wrappers).
+- Keep any text-formatting expectation changes (e.g., On_hold vs On Hold) deferred for now.
+```
+
+Rollback:
+- Revert test changes if behavior diverges from user-observable UI.
+
+Success Criteria:
+- No React 19 act warnings or overlapping act errors during unit tests.
+- Router-dependent tests render with memory router without import errors.
+- Remaining failures limited to explicitly deferred text assertions.
+
 ### Step 9 - Final Updates and Optimizations
 Risk Level: LOW | Priority: LOW | Estimated Time: 2-3 hours
 
