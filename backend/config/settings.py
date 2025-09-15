@@ -184,6 +184,14 @@ FEATURES.update({
 # Enable credentials when cookie-based refresh flow is active.
 CORS_ALLOW_CREDENTIALS = bool(FEATURES.get('COOKIE_REFRESH_AUTH'))
 
+# Helper: robust env rate parsing (treat blanks/malformed as default)
+def _rate(env_key: str, default: str) -> str:
+    v = os.getenv(env_key)
+    if v is None:
+        return default
+    v = v.strip()
+    return v if ('/' in v and v.split('/', 1)[0].isdigit()) else default
+
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -213,23 +221,23 @@ REST_FRAMEWORK = {
     'PAGE_SIZE_QUERY_PARAM': 'page_size',  # Allow client to specify page size
     'MAX_PAGE_SIZE': 200,  # Safety cap tuned (Phase 3)
     'DEFAULT_THROTTLE_RATES': {
-        'anon': os.getenv('DRF_THROTTLE_ANON', '100/min'),
-        'user': os.getenv('DRF_THROTTLE_USER', '1000/min'),
-        'hot_endpoint': os.getenv('DRF_THROTTLE_HOT', '300/hour'),  # Special limit for hot endpoints
-        'heatmap': os.getenv('DRF_THROTTLE_HEATMAP', '1200/min'),
-        'skill_match': os.getenv('DRF_THROTTLE_SKILL_MATCH', '600/min'),
-        'project_availability': os.getenv('DRF_THROTTLE_PROJECT_AVAILABILITY', '600/min'),
-        'find_available': os.getenv('DRF_THROTTLE_FIND_AVAILABLE', '600/min'),
-        'grid_snapshot': os.getenv('DRF_THROTTLE_GRID_SNAPSHOT', '600/min'),
-        'login': os.getenv('DRF_THROTTLE_LOGIN', '10/min'),
+        'anon': _rate('DRF_THROTTLE_ANON', '100/min'),
+        'user': _rate('DRF_THROTTLE_USER', '1000/min'),
+        'hot_endpoint': _rate('DRF_THROTTLE_HOT', '300/hour'),  # Special limit for hot endpoints
+        'heatmap': _rate('DRF_THROTTLE_HEATMAP', '1200/min'),
+        'skill_match': _rate('DRF_THROTTLE_SKILL_MATCH', '600/min'),
+        'project_availability': _rate('DRF_THROTTLE_PROJECT_AVAILABILITY', '600/min'),
+        'find_available': _rate('DRF_THROTTLE_FIND_AVAILABLE', '600/min'),
+        'grid_snapshot': _rate('DRF_THROTTLE_GRID_SNAPSHOT', '600/min'),
+        'login': _rate('DRF_THROTTLE_LOGIN', '10/min'),
         # Backup/restore endpoints (Phase 0: Step 0.3)
-        'backup_create': os.getenv('DRF_THROTTLE_BACKUP_CREATE', '2/hour'),
-        'backup_delete': os.getenv('DRF_THROTTLE_BACKUP_DELETE', '5/hour'),
-        'backup_download': os.getenv('DRF_THROTTLE_BACKUP_DOWNLOAD', '20/hour'),
-        'backup_status': os.getenv('DRF_THROTTLE_BACKUP_STATUS', '120/min'),
+        'backup_create': _rate('DRF_THROTTLE_BACKUP_CREATE', '2/hour'),
+        'backup_delete': _rate('DRF_THROTTLE_BACKUP_DELETE', '5/hour'),
+        'backup_download': _rate('DRF_THROTTLE_BACKUP_DOWNLOAD', '20/hour'),
+        'backup_status': _rate('DRF_THROTTLE_BACKUP_STATUS', '120/min'),
         # New granular scopes for restore and upload+restore
-        'backup_restore': os.getenv('DRF_THROTTLE_BACKUP_RESTORE', os.getenv('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
-        'backup_upload_restore': os.getenv('DRF_THROTTLE_BACKUP_UPLOAD_RESTORE', os.getenv('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
+        'backup_restore': _rate('DRF_THROTTLE_BACKUP_RESTORE', _rate('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
+        'backup_upload_restore': _rate('DRF_THROTTLE_BACKUP_UPLOAD_RESTORE', _rate('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
     }
 }
 
