@@ -13,6 +13,9 @@ export DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings}
 echo "Running migrations..."
 python manage.py migrate --noinput
 
+# Dev-safe repair for SimpleJWT blacklist tables when schema mismatches occur
+python manage.py repair_token_blacklist --yes || true
+
 # Skip collectstatic automatically for celery processes (workers/beat)
 IS_CELERY=0
 case "$1" in
