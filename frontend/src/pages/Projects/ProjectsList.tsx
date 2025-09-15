@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Project, Person, Assignment } from '@/types/models';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
@@ -1765,3 +1765,4 @@ function VirtualizedProjectsList({
     </div>
   );
 }
+

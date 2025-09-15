@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { Person, Project, Department, PersonSkill, SkillTag } from '@/types/models';
 import { assignmentsApi, peopleApi, projectsApi, departmentsApi, personSkillsApi, skillTagsApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
@@ -953,3 +953,4 @@ const AssignmentForm: React.FC = () => {
 };
 
 export default AssignmentForm;
+

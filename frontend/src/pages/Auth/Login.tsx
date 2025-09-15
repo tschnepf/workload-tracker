@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { login } from '@/store/auth';
 
 const Login: React.FC = () => {
@@ -68,4 +68,5 @@ const Login: React.FC = () => {
 };
 
 export default Login;
+
 

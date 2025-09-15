@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { Project } from '@/types/models';
 import { projectsApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
@@ -347,3 +347,4 @@ const ProjectForm: React.FC = () => {
 };
 
 export default ProjectForm;
+

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Assignment, Person, Department } from '@/types/models';
 import { assignmentsApi, peopleApi, departmentsApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
@@ -275,3 +275,4 @@ const AssignmentList: React.FC = () => {
 };
 
 export default AssignmentList;
+

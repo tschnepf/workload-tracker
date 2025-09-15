@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 const ComingSoon: React.FC = () => {
   return (
@@ -29,4 +29,5 @@ const ComingSoon: React.FC = () => {
 };
 
 export default ComingSoon;
+
 

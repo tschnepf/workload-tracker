@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Person, PersonSkill, SkillTag, Department, Role } from '@/types/models';
 import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi, rolesApi } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
@@ -1485,3 +1485,4 @@ const PeopleList: React.FC = () => {
 };
 
 export default PeopleList;
+

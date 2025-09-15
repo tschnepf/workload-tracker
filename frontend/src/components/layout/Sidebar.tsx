@@ -1,10 +1,10 @@
-﻿/**
+/**
  * Production Sidebar Component - Always collapsed with hover tooltips
  * Extracted from working mockup and cleaned for production use
  */
 
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 
 // Reusable Icon Component for navigation
 const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type: string, className?: string, isActive?: boolean }) => {
@@ -386,3 +386,4 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
 };
 
 export default Sidebar;
+

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { Person, Department, Role } from '@/types/models';
 import { peopleApi, departmentsApi, rolesApi } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
@@ -349,6 +349,7 @@ const PersonForm: React.FC = () => {
 };
 
 export default PersonForm;
+
 
 
 
