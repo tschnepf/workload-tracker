@@ -419,7 +419,8 @@ if FEATURES.get('LOGIN_PROTECTION'):
         MIDDLEWARE.append('axes.middleware.AxesMiddleware')
     # Thresholds
     AXES_FAILURE_LIMIT = int(os.getenv('AXES_FAILURE_LIMIT', '5'))
-    AXES_COOLOFF_TIME = float(os.getenv('AXES_COOLOFF_TIME', '1'))  # hours
+    # django-axes 8: AXES_COOLOFF_TIME replaced by AXES_COOLOFF (timedelta)
+    AXES_COOLOFF = timedelta(hours=float(os.getenv('AXES_COOLOFF_TIME', '1')))
     AXES_ONLY_USER_FAILURES = True
     AXES_LOCKOUT_PARAMETERS = ['username']
     AXES_RESET_ON_SUCCESS = True
