@@ -915,6 +915,181 @@
                 }
             }
         },
+        "/api/backups/": {
+            "get": {
+                "operationId": "backups_retrieve",
+                "tags": [
+                    "backups"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "backups_create",
+                "tags": [
+                    "backups"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/backups/{id}/": {
+            "delete": {
+                "operationId": "backups_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "backups"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/backups/{id}/download/": {
+            "get": {
+                "operationId": "backups_download_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "backups"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/backups/{id}/restore/": {
+            "post": {
+                "operationId": "backups_restore_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "backups"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/backups/status/": {
+            "get": {
+                "operationId": "backups_status_retrieve",
+                "tags": [
+                    "backups"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/backups/upload-restore/": {
+            "post": {
+                "operationId": "backups_upload_restore_create",
+                "tags": [
+                    "backups"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/dashboard/": {
             "get": {
                 "operationId": "dashboard_retrieve",
@@ -5473,6 +5648,10 @@
             },
             "PaginatedAssignmentList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5500,6 +5679,10 @@
             },
             "PaginatedDeliverableAssignmentList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5527,6 +5710,10 @@
             },
             "PaginatedDeliverableCalendarItemList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5554,6 +5741,10 @@
             },
             "PaginatedDeliverableList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5581,6 +5772,10 @@
             },
             "PaginatedDepartmentList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5608,6 +5803,10 @@
             },
             "PaginatedPersonCapacityHeatmapItemList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5635,6 +5834,10 @@
             },
             "PaginatedPersonList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5662,6 +5865,10 @@
             },
             "PaginatedPersonSkillList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5689,6 +5896,10 @@
             },
             "PaginatedProjectAvailabilityItemList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5716,6 +5927,10 @@
             },
             "PaginatedProjectList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5743,6 +5958,10 @@
             },
             "PaginatedRoleList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5770,6 +5989,10 @@
             },
             "PaginatedSkillMatchResultItemList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5797,6 +6020,10 @@
             },
             "PaginatedSkillTagList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -5824,6 +6051,10 @@
             },
             "PaginatedWorkloadForecastItemList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",

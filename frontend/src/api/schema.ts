@@ -113,6 +113,25 @@ export interface paths {
     /** @description Delete a user account (admin only). */
     delete: operations["auth_users_destroy"];
   };
+  "/api/backups/": {
+    get: operations["backups_retrieve"];
+    post: operations["backups_create"];
+  };
+  "/api/backups/{id}/": {
+    delete: operations["backups_destroy"];
+  };
+  "/api/backups/{id}/download/": {
+    get: operations["backups_download_retrieve"];
+  };
+  "/api/backups/{id}/restore/": {
+    post: operations["backups_restore_create"];
+  };
+  "/api/backups/status/": {
+    get: operations["backups_status_retrieve"];
+  };
+  "/api/backups/upload-restore/": {
+    post: operations["backups_upload_restore_create"];
+  };
   "/api/dashboard/": {
     /** @description Team dashboard with utilization metrics and overview */
     get: operations["dashboard_retrieve"];
@@ -783,7 +802,7 @@ export interface components {
     };
     PaginatedAssignmentList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -794,11 +813,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["Assignment"][];
+      results: components["schemas"]["Assignment"][];
     };
     PaginatedDeliverableAssignmentList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -809,11 +828,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["DeliverableAssignment"][];
+      results: components["schemas"]["DeliverableAssignment"][];
     };
     PaginatedDeliverableCalendarItemList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -824,11 +843,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["DeliverableCalendarItem"][];
+      results: components["schemas"]["DeliverableCalendarItem"][];
     };
     PaginatedDeliverableList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -839,11 +858,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["Deliverable"][];
+      results: components["schemas"]["Deliverable"][];
     };
     PaginatedDepartmentList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -854,11 +873,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["Department"][];
+      results: components["schemas"]["Department"][];
     };
     PaginatedPersonCapacityHeatmapItemList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -869,11 +888,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["PersonCapacityHeatmapItem"][];
+      results: components["schemas"]["PersonCapacityHeatmapItem"][];
     };
     PaginatedPersonList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -884,11 +903,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["Person"][];
+      results: components["schemas"]["Person"][];
     };
     PaginatedPersonSkillList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -899,11 +918,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["PersonSkill"][];
+      results: components["schemas"]["PersonSkill"][];
     };
     PaginatedProjectAvailabilityItemList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -914,11 +933,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["ProjectAvailabilityItem"][];
+      results: components["schemas"]["ProjectAvailabilityItem"][];
     };
     PaginatedProjectList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -929,11 +948,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["Project"][];
+      results: components["schemas"]["Project"][];
     };
     PaginatedRoleList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -944,11 +963,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["Role"][];
+      results: components["schemas"]["Role"][];
     };
     PaginatedSkillMatchResultItemList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -959,11 +978,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["SkillMatchResultItem"][];
+      results: components["schemas"]["SkillMatchResultItem"][];
     };
     PaginatedSkillTagList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -974,11 +993,11 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["SkillTag"][];
+      results: components["schemas"]["SkillTag"][];
     };
     PaginatedWorkloadForecastItemList: {
       /** @example 123 */
-      count?: number;
+      count: number;
       /**
        * Format: uri
        * @example http://api.example.org/accounts/?page=4
@@ -989,7 +1008,7 @@ export interface components {
        * @example http://api.example.org/accounts/?page=2
        */
       previous?: string | null;
-      results?: components["schemas"]["WorkloadForecastItem"][];
+      results: components["schemas"]["WorkloadForecastItem"][];
     };
     /** @description Assignment serializer with weekly hours support */
     PatchedAssignmentRequest: {
@@ -1791,6 +1810,77 @@ export interface operations {
     responses: {
       /** @description No response body */
       204: {
+        content: never;
+      };
+    };
+  };
+  backups_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  backups_create: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  backups_destroy: {
+    parameters: {
+      path: {
+        id: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  backups_download_retrieve: {
+    parameters: {
+      path: {
+        id: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  backups_restore_create: {
+    parameters: {
+      path: {
+        id: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  backups_status_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  backups_upload_restore_create: {
+    responses: {
+      /** @description No response body */
+      200: {
         content: never;
       };
     };
