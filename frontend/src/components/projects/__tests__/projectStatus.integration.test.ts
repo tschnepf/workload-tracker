@@ -35,7 +35,7 @@ describe('Project Status Integration Tests', () => {
     }));
 
     // Mock API failure
-    const mockUpdateProject = require('../../../../hooks/useProjects').useUpdateProject();
+    const mockUpdateProject = require('../../../hooks/useProjects').useUpdateProject();
     mockUpdateProject.mutateAsync.mockRejectedValue(new Error('API Error'));
 
     // Test optimistic update followed by rollback
