@@ -5,6 +5,7 @@
 
 import { renderHook, act } from '@testing-library/react';
 import { useProjectStatus } from '../useProjectStatus';
+import * as projectsHooks from '@/hooks/useProjects';
 import { useProjectStatusSubscription } from '../useProjectStatusSubscription';
 import { vi, describe, beforeEach, test, expect } from 'vitest';
 
@@ -35,7 +36,7 @@ describe('Project Status Integration Tests', () => {
     }));
 
     // Mock API failure
-    const mockUpdateProject = require('../../../hooks/useProjects').useUpdateProject();
+    const mockUpdateProject = projectsHooks.useUpdateProject();
     mockUpdateProject.mutateAsync.mockRejectedValue(new Error('API Error'));
 
     // Test optimistic update followed by rollback
