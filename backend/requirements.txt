@@ -34,7 +34,7 @@ gevent==25.8.2
 celery[redis]==5.5.3
 
 # OpenAPI schema generation
-drf-spectacular==0.27.2
+drf-spectacular==0.28.0
 
 # Offsite sync (S3)
 boto3==1.40.30
