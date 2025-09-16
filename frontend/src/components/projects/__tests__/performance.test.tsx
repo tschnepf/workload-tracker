@@ -4,8 +4,8 @@
  */
 
 import React from 'react';
-import { render, act } from '@testing-library/react';
-import { renderHook } from '@testing-library/react';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useProjectStatus } from '../useProjectStatus';
 import { useProjectStatusSubscription } from '../useProjectStatusSubscription';
 import { vi, describe, test, expect } from 'vitest';
@@ -54,12 +54,12 @@ describe('Performance Benchmarks', () => {
     // Simulate multiple concurrent status updates
     const statusHooks = [];
     for (let i = 0; i < 10; i++) {
-      const { result } = renderHook(() => useProjectStatus({
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }); const wrapper = ({children}: any) => (<QueryClientProvider client={qc}>{children}</QueryClientProvider>); const { result } = renderHook(() => useProjectStatus({
         getCurrentStatus: (projectId) => projects.find(p => p.id === projectId)?.status || 'active',
         onOptimisticUpdate: vi.fn(),
         onSuccess: vi.fn(),
         debug: false // Disable debug for performance testing
-      }));
+      }), { wrapper });
       statusHooks.push(result);
     }
     

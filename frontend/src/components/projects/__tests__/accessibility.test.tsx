@@ -97,8 +97,11 @@ describe('Accessibility Tests', () => {
         />
       );
       
-      const activeOption = screen.getByRole('option', { name: /active/i });
-      expect(activeOption).toHaveAttribute('aria-selected', 'true');
+      const dropdown = screen.getByRole('listbox');
+      const options = Array.from(dropdown.querySelectorAll('[role="option"]')) as HTMLElement[];
+      const selected = options.find(o => o.getAttribute('aria-selected') === 'true');
+      expect(selected).toBeTruthy();
+      expect(selected as HTMLElement).toHaveTextContent(/^Active$/i);
     });
 
     test('keyboard navigation works correctly', async () => {

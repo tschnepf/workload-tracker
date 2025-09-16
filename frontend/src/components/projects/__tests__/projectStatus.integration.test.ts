@@ -52,7 +52,7 @@ describe('Project Status Integration Tests', () => {
     expect(mockOnError).toHaveBeenCalledWith(1, 'API Error');
   });
 
-  test('discriminated union state transitions', () => {
+  test('discriminated union state transitions', async () => {
     const { result } = renderHook(() => useProjectStatus());
 
     // Initial state should be idle
