@@ -64,18 +64,17 @@ describe('Performance Benchmarks', () => {
       statusHooks.push(result);
     }
     
-    // Perform concurrent status updates
-    const updatePromises = statusHooks.map((hook, index) => 
-      act(async () => {
-        try {
-          await hook.current.updateStatus(index + 1, 'completed');
-        } catch (error) {
-          // Expected in test environment
-        }
-      })
-    );
-    
-    await Promise.all(updatePromises);
+    // Perform status updates without overlapping act() calls: batch inside one act
+    const updatePromises = statusHooks.map(async (hook, index) => {
+      try {
+        await hook.current.updateStatus(index + 1, 'completed');
+      } catch (error) {
+        // Expected in test environment
+      }
+    });
+    await act(async () => {
+      await Promise.all(updatePromises);
+    });
     
     const endTime = performance.now();
     const duration = endTime - startTime;

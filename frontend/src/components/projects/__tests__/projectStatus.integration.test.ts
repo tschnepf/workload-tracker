@@ -7,13 +7,13 @@ import { renderHook, act } from '@testing-library/react';
 import { useProjectStatus } from '../useProjectStatus';
 import * as projectsHooks from '@/hooks/useProjects';
 import { useProjectStatusSubscription } from '../useProjectStatusSubscription';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi, describe, beforeEach, test, expect } from 'vitest';
 
-// Mock the projects API
+// Mock the projects API with a stable mutateAsync spy we can control
+const mutateAsync = vi.fn();
 vi.mock('@/hooks/useProjects', () => ({
-  useUpdateProject: () => ({
-    mutateAsync: vi.fn()
-  })
+  useUpdateProject: () => ({ mutateAsync })
 }));
 
 describe('Project Status Integration Tests', () => {
@@ -27,17 +27,18 @@ describe('Project Status Integration Tests', () => {
     const mockOnRollback = vi.fn();
     const mockOnError = vi.fn();
 
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: any) => (<QueryClientProvider client={qc}>{children}</QueryClientProvider>);
     const { result } = renderHook(() => useProjectStatus({
       getCurrentStatus: mockGetCurrentStatus,
       onOptimisticUpdate: mockOnOptimisticUpdate,
       onRollback: mockOnRollback,
       onError: mockOnError,
       maxRetries: 1
-    }));
+    }), { wrapper });
 
     // Mock API failure
-    const mockUpdateProject = projectsHooks.useUpdateProject();
-    mockUpdateProject.mutateAsync.mockRejectedValue(new Error('API Error'));
+    mutateAsync.mockRejectedValueOnce(new Error('API Error'));
 
     // Test optimistic update followed by rollback
     await act(async () => {
@@ -54,7 +55,9 @@ describe('Project Status Integration Tests', () => {
   });
 
   test('discriminated union state transitions', async () => {
-    const { result } = renderHook(() => useProjectStatus());
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: any) => (<QueryClientProvider client={qc}>{children}</QueryClientProvider>);
+    const { result } = renderHook(() => useProjectStatus(), { wrapper });
 
     // Initial state should be idle
     expect(result.current.getUpdateState(1)).toEqual({ type: 'idle' });
