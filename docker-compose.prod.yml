@@ -12,6 +12,8 @@ services:
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - BACKUPS_DIR=/backups
+      - COOKIE_REFRESH_AUTH=true
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
     volumes:
       - ./backend:/app:ro  # Read-only mount for security
       - static_volume:/app/staticfiles
@@ -50,6 +52,7 @@ services:
       args:
         VITE_API_URL: /api
         VITE_OPENAPI_MIGRATION_ENABLED: "true"
+        VITE_COOKIE_REFRESH_AUTH: "true"
         # All endpoint paths migrated to typed client; flags retired
 
   # Nginx reverse proxy and static file server
