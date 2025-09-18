@@ -7,6 +7,7 @@
 */
 
 import { etagStore } from '@/api/etagStore';
+import { resolveApiBase } from '@/utils/apiBase';
 
 type UserSummary = {
   id: number | null;
@@ -40,7 +41,7 @@ export type AuthState = {
   settings: UserSettings;
 };
 
-const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || 'http://localhost:8000/api';
+const API_BASE_URL = resolveApiBase((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || undefined);
 const OPENAPI_MIGRATION_ENABLED = !!(typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_OPENAPI_MIGRATION_ENABLED === 'true');
 const COOKIE_REFRESH = !!(typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_COOKIE_REFRESH_AUTH === 'true');
 
@@ -55,6 +56,37 @@ let state: AuthState = {
   person: null,
   settings: {},
 };
+const authReadyResolvers = new Set<() => void>();
+
+function beginAuthHydration() {
+  authReadyResolvers.clear();
+  if (!state.hydrating) {
+    setState({ hydrating: true });
+  }
+}
+
+function markAuthReady() {
+  if (state.hydrating) {
+    setState({ hydrating: false });
+  }
+  if (authReadyResolvers.size > 0) {
+    const resolvers = Array.from(authReadyResolvers);
+    authReadyResolvers.clear();
+    for (const resolve of resolvers) {
+      resolve();
+    }
+  }
+}
+
+export function waitForAuthReady(): Promise<void> {
+  if (!state.hydrating) {
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    authReadyResolvers.add(resolve);
+  });
+}
+
 
 const listeners = new Set<() => void>();
 
@@ -190,6 +222,7 @@ export async function refreshAccessToken(): Promise<string | null> {
 }
 
 export async function loadFromStorage(): Promise<void> {
+  beginAuthHydration();
   if (COOKIE_REFRESH) {
     // Attempt refresh using cookie; do not rely on localStorage
     await refreshAccessToken();
@@ -204,7 +237,7 @@ export async function loadFromStorage(): Promise<void> {
     await refreshAccessToken();
     await hydrateProfile();
   }
-  setState({ hydrating: false });
+  markAuthReady();
 }
 
 // Lightweight typed client (local) to avoid circular deps
@@ -277,3 +310,5 @@ if (typeof window !== 'undefined') {
 export async function reloadProfile(): Promise<void> {
   await hydrateProfile();
 }
+
+

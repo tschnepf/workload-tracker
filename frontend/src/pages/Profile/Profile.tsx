@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,7 +25,7 @@ const Profile: React.FC = () => {
 
   const accountRole = useMemo(() => auth.user?.accountRole || (auth.user?.is_staff || auth.user?.is_superuser ? 'admin' : 'user'), [auth.user]);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const pid = auth.person?.id;
     if (!pid) {
       setPersonName('');

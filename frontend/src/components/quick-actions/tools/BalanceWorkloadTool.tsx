@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { darkTheme } from '../../../theme/tokens';
 import { assignmentsApi } from '../../../services/api';
 
@@ -8,7 +9,7 @@ const BalanceWorkloadTool: React.FC<Props> = () => {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const run = async () => {
       try {
         // Directly fetch suggestions without bulk warming

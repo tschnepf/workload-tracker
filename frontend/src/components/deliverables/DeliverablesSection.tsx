@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { formatUtcToLocal } from '@/utils/dates';
 import { Project, Deliverable } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
@@ -26,7 +27,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     if (project.id) {
       loadDeliverables();
     }

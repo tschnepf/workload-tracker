@@ -1,4 +1,4 @@
-﻿/**
+/**
  * API service layer - handles all backend communication
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
@@ -6,27 +6,13 @@
 import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse, JobStatus } from '@/types/models';
 import type { BackupListResponse, BackupStatus } from '@/types/backup';
 import { getAccessToken } from '@/utils/auth';
+import { resolveApiBase } from '@/utils/apiBase';
 import { apiClient, authHeaders } from '@/api/client';
 import { refreshAccessToken as refreshAccessTokenSafe } from '@/store/auth';
 import { showToast } from '@/lib/toastBus';
 import { etagStore } from '@/api/etagStore';
 
-function resolveApiBase(): string {
-  const raw = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
-  const fallback = (typeof window !== 'undefined' && window.location)
-    ? `${window.location.origin}/api`
-    : 'http://localhost:8000/api';
-  if (!raw) return fallback;
-  try {
-    const u = new URL(raw);
-    if (!u.hostname) throw new Error('empty-host');
-    return raw;
-  } catch {
-    return fallback;
-  }
-}
-
-const API_BASE_URL = resolveApiBase();
+const API_BASE_URL = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
 // Feature flags for OpenAPI migration (scoped + global)
 const OPENAPI_MIGRATION_ENABLED = (import.meta.env.VITE_OPENAPI_MIGRATION_ENABLED === 'true');
 
@@ -59,7 +45,7 @@ function friendlyErrorMessage(status: number, data: any, fallback: string): stri
 
   switch (status) {
     case 0:
-      return 'Network error — unable to reach the server.';
+      return 'Network error � unable to reach the server.';
     case 400:
       return nonField || firstFieldError || detail || 'Please check the form for errors and try again.';
     case 401:
@@ -1256,3 +1242,4 @@ export const authApi = {
     return;
   },
 };
+

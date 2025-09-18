@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { darkTheme } from '../../../theme/tokens';
 import { deliverablesApi, deliverableAssignmentsApi, peopleApi } from '../../../services/api';
 
@@ -12,7 +13,7 @@ const MilestoneReviewTool: React.FC<Props> = () => {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const run = async () => {
       try {
         const today = new Date();

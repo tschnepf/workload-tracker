@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Department, Person } from '@/types/models';
 import { departmentsApi, peopleApi } from '@/services/api';
 import Sidebar from '@/components/layout/Sidebar';
@@ -24,7 +25,7 @@ const DepartmentsList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [hasAutoSelected, setHasAutoSelected] = useState(false); // Track if we've auto-selected
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadDepartments();
     loadPeople();
   }, []);

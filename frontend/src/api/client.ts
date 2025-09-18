@@ -1,6 +1,6 @@
 import createClient from 'openapi-fetch';
 import type { paths } from './schema';
-import { getAccessToken, refreshAccessToken } from '@/utils/auth';
+import { getAccessToken, refreshAccessToken, waitForAuthReady } from '@/utils/auth';
 import { etagStore } from './etagStore';
 import { showToast } from '@/lib/toastBus';
 
@@ -79,6 +79,7 @@ export const rawClient = createClient<paths>({ baseUrl: API_BASE_URL });
 // Thin wrapper maintaining parity with legacy error semantics and ETag behavior
 export const apiClient = {
   async GET(path: any, opts?: any) {
+    await waitForAuthReady();
     const normalizedPath = ensureTrailingSlash(typeof path === 'string' ? path : String(path));
     const headers = withAuth(opts?.headers);
     const res = await rawClient.GET(normalizedPath as any, { ...opts, headers });
@@ -98,6 +99,7 @@ export const apiClient = {
 };
 
 async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any, opts?: any) {
+  await waitForAuthReady();
   const normalizedPath = ensureTrailingSlash(typeof path === 'string' ? path : String(path));
   let headers = withAuth(opts?.headers);
   // Inject If-Match for detail mutations when we have an ETag
@@ -156,3 +158,4 @@ export function authHeaders(): Record<string, string> {
   const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
+

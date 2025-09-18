@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Loader from '@/components/ui/Loader';
@@ -43,12 +44,12 @@ const Settings: React.FC = () => {
   const [deletingRole, setDeletingRole] = useState<Role | null>(null);
   const [showRoleForm, setShowRoleForm] = useState(false);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
+    if (!auth.accessToken) return;
     loadRoles();
     // Load people options (for admin create-user linking)
     (async () => {
       try {
-        // Use backend autocomplete; default to first page of results
         const list = await peopleApi.autocomplete('', 50);
         setPeopleOptions(list.map(p => ({ id: p.id, name: p.name })));
       } catch (e) {
@@ -68,7 +69,7 @@ const Settings: React.FC = () => {
         setUsersLoading(false);
       }
     })();
-  }, []);
+  }, [auth.accessToken, auth.user?.is_staff]);
 
   const loadRoles = async () => {
     try {

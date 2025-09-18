@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Role } from '@/types/models';
 import { rolesApi } from '@/services/api';
 
@@ -30,7 +31,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
   const [filteredRoles, setFilteredRoles] = useState<Role[]>([]);
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(-1);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     // Initialize form data
     if (role) {
       setFormData({
@@ -325,3 +326,4 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
 };
 
 export default RoleForm;
+

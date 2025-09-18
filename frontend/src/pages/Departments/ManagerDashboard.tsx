@@ -3,7 +3,8 @@
  * Shows department-specific metrics and team management tools
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
@@ -19,11 +20,11 @@ const ManagerDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [weeksPeriod, setWeeksPeriod] = useState<number>(1);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadDepartments();
   }, []);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     if (selectedDepartment) {
       loadDepartmentData();
       loadDepartmentPeople();
@@ -271,3 +272,5 @@ const ManagerDashboard: React.FC = () => {
 };
 
 export default ManagerDashboard;
+
+

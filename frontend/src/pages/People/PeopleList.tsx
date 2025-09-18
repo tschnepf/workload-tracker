@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
 import { Person, PersonSkill, SkillTag, Department, Role } from '@/types/models';
 import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi, rolesApi } from '@/services/api';
@@ -105,7 +106,7 @@ const PeopleList: React.FC = () => {
 
   // Roles are now loaded from API instead of hardcoded
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadPeople();
     loadDepartments(); // Phase 2: Load departments for filter
     loadRoles(); // Phase 1: Load roles for dropdowns
@@ -131,7 +132,7 @@ const PeopleList: React.FC = () => {
     }
   };
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     if (selectedPerson?.id) {
       loadPersonSkills(selectedPerson.id);
     }
@@ -1485,4 +1486,6 @@ const PeopleList: React.FC = () => {
 };
 
 export default PeopleList;
+
+
 

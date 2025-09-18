@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
 import { deliverablesApi } from '../../services/api';
@@ -69,7 +70,7 @@ const MilestoneCalendarPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     let active = true;
     (async () => {
       try {
@@ -250,6 +251,9 @@ const MilestoneCalendarPage: React.FC = () => {
 };
 
 export default MilestoneCalendarPage;
+
+
+
 
 
 

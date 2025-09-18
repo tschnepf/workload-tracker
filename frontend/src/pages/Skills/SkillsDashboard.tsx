@@ -3,7 +3,8 @@
  * Provides comprehensive overview of team skills coverage and gaps
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -43,7 +44,7 @@ const SkillsDashboard: React.FC = () => {
   const [selectedDepartment, setSelectedDepartment] = useState<string>(''); // Empty = all departments
   const [viewMode, setViewMode] = useState<'coverage' | 'gaps' | 'departments'>('coverage');
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadAllData();
   }, []);
 
@@ -469,3 +470,4 @@ const SkillsDashboard: React.FC = () => {
 };
 
 export default SkillsDashboard;
+

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { darkTheme } from '../../../theme/tokens';
 import { peopleApi } from '../../../services/api';
 import UtilizationBadge from '../../ui/UtilizationBadge';
@@ -11,7 +12,7 @@ const FindAvailableTool: React.FC<Props> = () => {
   const [skills, setSkills] = useState<string>('');
   const [minAvail, setMinAvail] = useState<number>(0);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const run = async () => {
       try {
         // Compute current Monday (canonical week)

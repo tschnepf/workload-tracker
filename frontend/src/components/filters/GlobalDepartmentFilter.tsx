@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { darkTheme } from '@/theme/tokens';
 import { departmentsApi } from '@/services/api';
 import type { Department } from '@/types/models';
@@ -26,7 +27,7 @@ export const GlobalDepartmentFilter: React.FC = () => {
   const listRef = useRef<HTMLDivElement>(null);
 
   // Fetch departments once
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     let active = true;
     (async () => {
       try {

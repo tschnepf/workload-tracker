@@ -119,6 +119,17 @@ Complete organizational structure and hierarchy management.
 3. Click any department card to see detailed information in the side panel
 4. Use the legend to understand the visual indicators
 
+---
+
+## Project Assignments Grid (Project‑Centric)
+
+- Route: `/project-assignments`
+- Server‑authoritative: week headers, per‑project totals, deliverables shading, and quick metrics are returned from the backend snapshot.
+- Editing: double‑click a week cell on an assignment row to edit; press Enter to commit. Select a range within the same row to apply to multiple weeks. On success, totals refresh from the server.
+- Status: update project status inline via the status badge. Capability checks apply.
+- Filters: department scope and project status filters (including “Active – No Deliverables”) are pushed to the server. Week horizon control (8/12/16/20).
+- URL state: weeks and status filters sync to the URL for easy sharing; a “People View” link switches to `/assignments`.
+
 #### **Department Reports** (`/departments/reports`)
 **What you can do:**
 - **Performance Analytics**: Compare all departments side-by-side

@@ -1,4 +1,4 @@
-import { getState, refreshAccessToken } from '@/store/auth';
+import { getState, refreshAccessToken, waitForAuthReady } from '@/store/auth';
 
 export function getAccessToken(): string | null {
   try {
@@ -8,5 +8,7 @@ export function getAccessToken(): string | null {
   }
 }
 
-export { refreshAccessToken };
+export { refreshAccessToken, waitForAuthReady };
+
+
 

@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { SkillTag } from '@/types/models';
 import { skillTagsApi } from '@/services/api';
 
@@ -27,7 +28,7 @@ const SkillsFilter: React.FC<SkillsFilterProps> = ({
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadSkills();
   }, []);
 

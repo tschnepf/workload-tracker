@@ -5,6 +5,10 @@ import { initializePerformanceMonitoring } from './utils/monitoring'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router'
 import App from './App'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import Loader from '@/components/ui/Loader'
+import { useAuth } from '@/hooks/useAuth'
+// Initialize ETag enhancements for assignments bulk updates
+import '@/services/etagEnhancer'
 
 // Lazy route components (kept near router for clarity)
 const Dashboard = React.lazy(() => import('./pages/Dashboard'))
@@ -13,6 +17,7 @@ const PersonForm = React.lazy(() => import('./pages/People').then(m => ({ defaul
 const AssignmentList = React.lazy(() => import('./pages/Assignments').then(m => ({ default: m.AssignmentList })))
 const AssignmentForm = React.lazy(() => import('./pages/Assignments').then(m => ({ default: m.AssignmentForm })))
 const AssignmentGrid = React.lazy(() => import('./pages/Assignments').then(m => ({ default: m.AssignmentGrid })))
+const ProjectAssignmentsGrid = React.lazy(() => import('./pages/Assignments').then(m => ({ default: m.ProjectAssignmentsGrid })))
 const DepartmentsList = React.lazy(() => import('./pages/Departments').then(m => ({ default: m.DepartmentsList })))
 const ManagerDashboard = React.lazy(() => import('./pages/Departments').then(m => ({ default: m.ManagerDashboard })))
 const HierarchyView = React.lazy(() => import('./pages/Departments').then(m => ({ default: m.HierarchyView })))
@@ -53,6 +58,7 @@ const router = createBrowserRouter([
       { path: 'departments/hierarchy', element: <RequireAuth><HierarchyView /></RequireAuth> },
       { path: 'departments/reports', element: <RequireAuth><ReportsView /></RequireAuth> },
       { path: 'assignments', element: <RequireAuth><AssignmentGrid /></RequireAuth> },
+      { path: 'project-assignments', element: <RequireAuth><ProjectAssignmentsGrid /></RequireAuth> },
       { path: 'assignments/list', element: <RequireAuth><AssignmentList /></RequireAuth> },
       { path: 'assignments/new', element: <RequireAuth><AssignmentForm /></RequireAuth> },
       { path: 'assignments/:id/edit', element: <RequireAuth><AssignmentForm /></RequireAuth> },
@@ -69,8 +75,20 @@ const router = createBrowserRouter([
   },
 ])
 
+
+function RootApp() {
+  const auth = useAuth();
+  if (auth.hydrating) {
+    return <Loader full message="Loading..." />;
+  }
+  return <RouterProvider router={router} />;
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <RootApp />
   </React.StrictMode>,
 )
+
+
+

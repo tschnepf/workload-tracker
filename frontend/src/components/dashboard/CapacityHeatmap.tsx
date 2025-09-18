@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Card from '../ui/Card';
 import { darkTheme } from '../../theme/tokens';
 import { peopleApi } from '../../services/api';
@@ -13,7 +14,7 @@ const CapacityHeatmap: React.FC<Props> = ({ weeks = 12, department }) => {
   const [rows, setRows] = useState<PersonCapacityHeatmapItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const run = async () => {
       setLoading(true);
       try {

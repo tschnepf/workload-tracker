@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
 import { Project, Person, Assignment } from '@/types/models';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -407,7 +408,7 @@ const ProjectsList: React.FC = () => {
     }
   }, [assignments, precomputePersonSkills]);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     if (selectedProject?.id) {
       loadProjectAssignments(selectedProject.id);
     }
@@ -487,7 +488,7 @@ const ProjectsList: React.FC = () => {
   const caps = useCapabilities();
 
   // Load availability for the selected project once (one burst)
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const loadAvailability = async () => {
       try {
         if (!selectedProject?.id) {
@@ -1765,4 +1766,5 @@ function VirtualizedProjectsList({
     </div>
   );
 }
+
 

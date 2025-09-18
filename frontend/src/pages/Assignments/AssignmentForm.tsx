@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
 import { Person, Project, Department, PersonSkill, SkillTag } from '@/types/models';
 import { assignmentsApi, peopleApi, projectsApi, departmentsApi, personSkillsApi, skillTagsApi } from '@/services/api';
@@ -231,7 +232,7 @@ const AssignmentForm: React.FC = () => {
   // Debounced person search for better performance
   const debouncedPersonSearch = useDebounce(personSearchText, 300);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadPeople();
     loadProjects();
     loadDepartments();
@@ -249,7 +250,7 @@ const AssignmentForm: React.FC = () => {
   }, [skillsInput, skillTags, extractSkillsFromText]);
 
   // Fetch server-side skill match scores when required skills or filters change
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const run = async () => {
       if (projectSkills.length === 0) { setSkillMatchScores(new Map()); return; }
       try {
@@ -267,7 +268,7 @@ const AssignmentForm: React.FC = () => {
   }, [JSON.stringify(projectSkills), deptState.selectedDepartmentId, deptState.includeChildren]);
 
   // Fetch server-side skill match scores for current required skills and department scope
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const run = async () => {
       if (projectSkills.length === 0) { setSkillMatchScores(new Map()); return; }
       try {
@@ -953,4 +954,5 @@ const AssignmentForm: React.FC = () => {
 };
 
 export default AssignmentForm;
+
 

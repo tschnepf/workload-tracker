@@ -3,7 +3,8 @@
  * Provides detailed department performance metrics and insights
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
@@ -39,7 +40,7 @@ const ReportsView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadData();
   }, [selectedTimeframe]);
 
@@ -427,3 +428,5 @@ const ReportsView: React.FC = () => {
 };
 
 export default ReportsView;
+
+

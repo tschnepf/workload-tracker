@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate } from 'react-router';
 import { Assignment, Person, Department } from '@/types/models';
 import { assignmentsApi, peopleApi, departmentsApi } from '@/services/api';
@@ -23,7 +24,7 @@ const AssignmentList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const { state: deptState } = useDepartmentFilter();
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     // Load assignments, people, and departments in parallel. Respect global department filter.
     (async () => {
       try {
@@ -275,4 +276,5 @@ const AssignmentList: React.FC = () => {
 };
 
 export default AssignmentList;
+
 

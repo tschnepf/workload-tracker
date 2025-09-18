@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { SkillTag, PersonSkill } from '@/types/models';
 import { skillTagsApi } from '@/services/api';
 

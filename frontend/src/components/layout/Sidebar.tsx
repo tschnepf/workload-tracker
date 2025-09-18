@@ -168,6 +168,12 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       description: 'Workload allocation'
     },
     { 
+      path: '/project-assignments', 
+      icon: 'assignments', 
+      label: 'Project Assignments',
+      description: 'Projects grouped with assigned people'
+    },
+    { 
       path: '/projects', 
       icon: 'projects', 
       label: 'Projects',

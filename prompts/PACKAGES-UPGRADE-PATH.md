@@ -864,111 +864,22 @@ Rollback:
 
 ---
 
-## VALIDATION & TESTING PROTOCOLS
+### Step 11 - Centralize Auth Guards for Frontend Effects
 
-### Pre-Upgrade Checklist
-- [ ] Full database backup created (manage.py `backup_database` or `make backup-db`)
-- [ ] Git repository clean with all changes committed
-- [ ] Development environment tested and working
-- [ ] All existing tests passing
-- [ ] Performance baseline established
+Goal: Ensure all frontend data-fetching effects only run after the auth store has produced an access token, using a shared helper hook.
 
-### Post-Upgrade Validation (Run after each phase)
-- [ ] All containers start successfully: `docker-compose up -d`
-- [ ] Health check passes: `curl http://localhost:8000/api/health/`
-- [ ] Frontend loads without errors: `curl http://localhost:3000/`
-- [ ] Database migrations successful
-- [ ] Admin interface accessible: `http://localhost:8000/admin`
-- [ ] API endpoints functional
-- [ ] Authentication working correctly
-- [ ] All major user workflows tested
-- [ ] No console errors or warnings
-- [ ] Performance within acceptable range
+Instructions for the AI Agent:
+- Create or reuse `frontend/src/hooks/useAuthenticatedEffect.ts` to wrap `useAuth` and execute a supplied effect only once `accessToken` is available.
+- Update every page or component that currently performs API calls in `useEffect` without this helper to import and use it. Target files include:
+  - Pages: Assignments (Form/Grid/List), Deliverables Calendar, Dashboard, Departments (Lists/Hierarchy/ManagerDashboard/ReportsView), People (List/Form), Projects (List/Form), Reports/TeamForecast, Settings (main + role modals), SkillsDashboard, Profile.
+  - Shared components: `components/dashboard/CapacityHeatmap.tsx`, `components/deliverables/DeliverablesSection.tsx`, `components/filters/GlobalDepartmentFilter.tsx`, `components/quick-actions/tools/{BalanceWorkloadTool, CapacityReportTool, FindAvailableTool, MilestoneReviewTool}.tsx`, `components/skills/{SkillsAutocomplete, SkillsFilter}.tsx`.
+- Remove redundant inline `useAuth` guards once the helper is applied.
+- Confirm all relevant pages still compile and build (`npm run build`).
 
-### Critical User Workflows to Test
-1. Authentication Flow
-   - Login/logout functionality
-   - JWT token refresh
-   - Permission checking
+Testing Protocol:
+- Run `npm run build` to verify TypeScript checks and bundler succeed.
+- Perform targeted smoke tests on key pages (Assignments, Deliverables, Departments, People, Projects, Reports, Settings, Skills, Dashboard, Profile) to ensure data loads without pre-authentication 401s.
 
-2. Core CRUD Operations
-   - Create/edit/delete people
-   - Create/edit/delete projects
-   - Create/edit/delete assignments
-
-3. Assignment Grid Functionality
-   - Load assignment grid
-   - Edit hours inline
-   - Filter by status/department
-   - Export functionality
-
-4. Performance Critical Features
-   - Large dataset handling (100+ people)
-   - Dashboard loading
-   - Real-time updates
-
-### Rollback Procedures
-Each step includes specific rollback instructions, but general process:
-1. Stop containers: `docker-compose down`
-2. Revert package files (package.json, requirements.txt)
-3. Restore database backup if needed
-4. Rebuild containers: `docker-compose build`
-5. Restart services: `docker-compose up -d`
-6. Verify functionality restored
-
----
-
-## RISK MITIGATION STRATEGIES
-
-### High-Risk Upgrades (React 19, React Router v7)
-- Staged Rollout: Test in development -> staging -> production
-- Feature Flags: Use feature toggles for new functionality
-- Parallel Versions: Consider running old/new versions side-by-side temporarily
-- Extended Testing: Allow 2-3 days for comprehensive testing
-
-### Database Migration Safety
-- Always backup before Django upgrades
-- Test migrations on copy of production data
-- Reversible migrations: Ensure all migrations can be safely reversed
-- Monitor performance of migration on large datasets
-
-### Container and Deployment
-- Layer caching: Structure Docker builds to maximize cache reuse
-- Health checks: Ensure all services have proper health check endpoints
-- Zero-downtime: Plan deployment strategy to minimize downtime
-- Resource monitoring: Watch memory/CPU usage during upgrades
-
----
-
-## SUCCESS METRICS
-
-### Performance Targets (Post-Upgrade)
-- Frontend Load Time: <= 3 seconds (React 19 should improve this)
-- API Response Time: <= 200ms for CRUD operations
-- Build Time: <= 30 seconds (Vite 6 should improve this)
-- Bundle Size: No significant increase (monitor with analyzer)
-
-### Security Targets
-- Zero Critical/High vulnerabilities in `npm audit`
-- All packages within 1 major version of latest
-- Security headers properly configured
-- Dependencies with active maintenance
-
-### Compatibility Targets
-- Browser Support: Modern browsers (Chrome/Firefox/Safari/Edge latest)
-- Node.js: 20+
-- Python: 3.10+ (Django 5.2 requirement)
-- PostgreSQL: 14+ (Django 5.2 requirement)
-
----
-
-## FINAL NOTES
-
-1. Prioritize Security: Steps 1-3 should be completed immediately due to security vulnerabilities
-2. Test Thoroughly: Each upgrade builds on the previous ones - a failure in Step 8 shouldn't require redoing Steps 1-7
-3. Document Everything: Keep detailed notes of any custom changes needed for future upgrades
-4. Monitor Performance: Watch for regressions throughout the process
-5. Team Communication: Ensure all team members are aware of upgrade timeline and potential impacts
-6. Backup Strategy: Maintain ability to rollback to any previous step
-
-This upgrade path will modernize your stack while minimizing risk through careful planning and testing. The phased approach allows for early wins (security fixes) while building toward the more complex upgrades (React Router v7).
+Rollback Plan:
+- Revert the helper usage by restoring the per-component `useAuth` guards if issues arise.
+- Delete `frontend/src/hooks/useAuthenticatedEffect.ts` if rolling back the centralized approach.

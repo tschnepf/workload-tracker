@@ -1,14 +1,16 @@
-ï»¿/**
+/**
  * Dashboard page - Team utilization overview
  * Chunk 4: Real dashboard with team metrics and VSCode dark theme
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
 import SkillsFilter from '../components/skills/SkillsFilter';
 import { dashboardApi, departmentsApi, personSkillsApi } from '../services/api';
+import { useAuth } from '@/hooks/useAuth';
 import { formatUtcToLocal } from '@/utils/dates';
 import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
 import { DashboardData, Department, PersonSkill } from '../types/models';
@@ -16,6 +18,7 @@ import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 
 const Dashboard: React.FC = () => {
+  const auth = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,18 +34,20 @@ const Dashboard: React.FC = () => {
   const [heatWeeks, setHeatWeeks] = useState<number>(4);
 
   // Load dashboard when weeks or global department changes
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
+    if (!auth.accessToken) return;
     loadDashboard();
-  }, [weeksPeriod, deptState.selectedDepartmentId]);
+  }, [auth.accessToken, weeksPeriod, deptState.selectedDepartmentId]);
 
   // Load static data once
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
+    if (!auth.accessToken) return;
     loadDepartments();
     loadPeopleSkills();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [auth.accessToken]);
 
-  const heatQuery = useCapacityHeatmap({ departmentId: deptState.selectedDepartmentId, includeChildren: deptState.includeChildren }, heatWeeks, !loading);
+  const heatQuery = useCapacityHeatmap({ departmentId: deptState.selectedDepartmentId, includeChildren: deptState.includeChildren }, heatWeeks, !loading && !!auth.accessToken);
   const heatData = heatQuery.data ?? [];
   const heatLoading = heatQuery.isLoading;
   const heatFetching = heatQuery.isFetching;
@@ -172,15 +177,15 @@ const Dashboard: React.FC = () => {
                   </table>
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-xs text-[#969696]">
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0â€“70%</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70â€“85%</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85â€“100%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0–70%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70–85%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85–100%</div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
-                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshingâ€¦</span>}
+                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
                 </div>
               </div>
             ) : (
-              <div className="text-[#969696]">{heatLoading ? 'Loadingâ€¦' : 'No data'}</div>
+              <div className="text-[#969696]">{heatLoading ? 'Loading…' : 'No data'}</div>
             )}
           </Card>
           )}
@@ -515,11 +520,11 @@ const Dashboard: React.FC = () => {
                   <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[#3e3e42] text-[#969696] text-[10px]">i</span>
                   Tooltips show available hours when provided
                 </span>
-                {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshingâ€¦</span>}
+                {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
               </div>
             </div>
           ) : (
-            <div className="text-[#969696]">{heatLoading ? 'Loadingâ€¦' : 'No data'}</div>
+            <div className="text-[#969696]">{heatLoading ? 'Loading…' : 'No data'}</div>
           )}
         </Card>
 
@@ -572,3 +577,6 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+
+
+

@@ -3,7 +3,8 @@
  * Shows complete department structure with navigation and details
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import DepartmentHierarchy from '@/components/departments/DepartmentHierarchy';
@@ -17,7 +18,7 @@ const HierarchyView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadData();
   }, []);
 
@@ -224,3 +225,4 @@ const HierarchyView: React.FC = () => {
 };
 
 export default HierarchyView;
+

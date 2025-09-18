@@ -3,7 +3,8 @@
  * Chunk 2: Only name + weeklyCapacity fields (progressive usage strategy)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
 import { Person, Department, Role } from '@/types/models';
 import { peopleApi, departmentsApi, rolesApi } from '@/services/api';
@@ -43,7 +44,7 @@ const PersonForm: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const updatePersonMutation = useUpdatePerson();
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadDepartments(); // Phase 2: Always load departments
     loadRoles(); // Load available roles
     if (isEditing && id) {
@@ -349,6 +350,8 @@ const PersonForm: React.FC = () => {
 };
 
 export default PersonForm;
+
+
 
 
 

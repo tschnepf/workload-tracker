@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { darkTheme } from '../../../theme/tokens';
 import { peopleApi } from '../../../services/api';
 
@@ -8,7 +9,7 @@ const CapacityReportTool: React.FC<Props> = () => {
   const [heatmap, setHeatmap] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     const run = async () => {
       try {
         const data = await peopleApi.capacityHeatmap({ weeks: 12 });

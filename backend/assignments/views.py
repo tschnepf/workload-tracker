@@ -125,6 +125,339 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         })
 
     @extend_schema(
+        description=(
+            "Project-centric aggregate snapshot for N weeks ahead (default 12).\n\n"
+            "Response shape: { weekKeys: [YYYY-MM-DD], projects: [{id,name,client,status}],\n"
+            "hoursByProject: { <projectId>: { <weekKey>: hours } },\n"
+            "deliverablesByProjectWeek: { <projectId>: { <weekKey>: count } },\n"
+            "hasFutureDeliverablesByProject: { <projectId>: boolean },\n"
+            "metrics: { projectsCount, peopleAssignedCount, totalHours } }"
+        ),
+        parameters=[
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters'),
+            OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='project_ids', type=str, required=False, description='CSV of project IDs to scope totals (optional)'),
+        ],
+        responses=inline_serializer(
+            name='ProjectGridSnapshotResponse',
+            fields={
+                'weekKeys': serializers.ListField(child=serializers.CharField()),
+                'projects': serializers.ListField(child=inline_serializer(name='ProjectLite', fields={
+                    'id': serializers.IntegerField(),
+                    'name': serializers.CharField(),
+                    'client': serializers.CharField(allow_null=True, required=False),
+                    'status': serializers.CharField(allow_null=True, required=False),
+                })),
+                'hoursByProject': serializers.DictField(child=serializers.DictField(child=serializers.FloatField())),
+                'deliverablesByProjectWeek': serializers.DictField(child=serializers.DictField(child=serializers.IntegerField())),
+                'hasFutureDeliverablesByProject': serializers.DictField(child=serializers.BooleanField()),
+                'metrics': inline_serializer(name='ProjectSnapshotMetrics', fields={
+                    'projectsCount': serializers.IntegerField(),
+                    'peopleAssignedCount': serializers.IntegerField(),
+                    'totalHours': serializers.FloatField(),
+                }),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='project_grid_snapshot', throttle_classes=[GridSnapshotThrottle])
+    def project_grid_snapshot(self, request):
+        from deliverables.models import Deliverable  # lazy import
+        # Cache key based on inputs to avoid recomputation within short TTL
+        try:
+            cache_key = None
+            try:
+                # Compose a stable key of params that affect payload
+                cache_key = (
+                    f"assignments:project_grid_snapshot:"
+                    f"w={request.query_params.get('weeks','12')}:"
+                    f"d={request.query_params.get('department','')}:"
+                    f"c={request.query_params.get('include_children','')}:"
+                    f"s={request.query_params.get('status_in','')}:"
+                    f"hfd={request.query_params.get('has_future_deliverables','')}:"
+                    f"ids={request.query_params.get('project_ids','')}"
+                )
+            except Exception:
+                cache_key = None
+            if cache_key:
+                cached = cache.get(cache_key)
+                if cached:
+                    return Response(cached)
+        except Exception:
+            cache_key = None
+        try:
+            weeks = int(request.query_params.get('weeks', 12))
+        except ValueError:
+            weeks = 12
+        if weeks < 1:
+            weeks = 1
+        if weeks > 26:
+            weeks = 26
+
+        # Department scoping via people of assignments
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        dept_ids = None
+        if dept_param not in (None, ""):
+            try:
+                root = int(dept_param)
+                if include_children:
+                    ids = set()
+                    stack = [root]
+                    from departments.models import Department as Dept
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in (Dept.objects.filter(parent_department_id=current).values_list('id', flat=True)):
+                            if d not in ids:
+                                stack.append(d)
+                    dept_ids = list(ids)
+                else:
+                    dept_ids = [root]
+            except Exception:
+                dept_ids = None
+
+        # Optional project scoping
+        scope_ids = request.query_params.get('project_ids')
+        scope_set = None
+        if scope_ids:
+            try:
+                scope_set = set(int(x) for x in scope_ids.split(',') if x.strip().isdigit())
+            except Exception:
+                scope_set = None
+
+        # Status filter
+        status_in = request.query_params.get('status_in')
+        status_set = None
+        if status_in:
+            status_set = set(s.strip().lower() for s in status_in.split(',') if s.strip())
+
+        # Build week key list (Mondays)
+        today = date.today()
+        monday = today - timedelta(days=(today.weekday()))
+        week_keys = []
+        for i in range(weeks):
+            wk = monday + timedelta(weeks=i)
+            week_keys.append(wk.strftime('%Y-%m-%d'))
+
+        # Base assignments queryset
+        qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
+        if dept_ids:
+            qs = qs.filter(person__department_id__in=dept_ids)
+
+        # If scope_set provided, restrict to those projects
+        if scope_set:
+            qs = qs.filter(project_id__in=scope_set)
+
+        # Derive project list respecting status filter later
+        # Collect projects encountered in assignments
+        project_hours = {}
+        people_per_project = {}
+
+        def hours_for_week_from_json(weekly_hours, monday_str):
+            try:
+                # tolerate +/- 3 days
+                monday_date = date.fromisoformat(monday_str)
+            except Exception:
+                return 0.0
+            for off in (0, 1, 2, 3, -1, -2, -3):
+                k = (monday_date + timedelta(days=off)).strftime('%Y-%m-%d')
+                v = weekly_hours.get(k)
+                try:
+                    if v is not None:
+                        return float(v or 0)
+                except Exception:
+                    return 0.0
+            return 0.0
+
+        # Aggregate hours by project/week and people counts
+        for a in qs:
+            pid = a.project_id
+            if pid is None:
+                continue
+            project_hours.setdefault(pid, {})
+            people_per_project.setdefault(pid, set()).add(a.person_id)
+            wh = a.weekly_hours or {}
+            for wk in week_keys:
+                h = hours_for_week_from_json(wh, wk)
+                if h:
+                    project_hours[pid][wk] = round(project_hours[pid].get(wk, 0.0) + h, 2)
+
+        # Candidate project ids
+        project_ids = list(project_hours.keys()) if project_hours else []
+
+        # Deliverables aggregates (for shading and filters)
+        deliverables_by_week = {}
+        has_future_deliverables = {}
+        try:
+            deliv_qs = Deliverable.objects.filter(project_id__in=project_ids)
+            now = date.today()
+            for d in deliv_qs.only('project_id', 'date'):
+                pid = d.project_id
+                dt = None
+                try:
+                    if d.date:
+                        dt = date.fromisoformat(str(d.date))
+                except Exception:
+                    dt = None
+                if dt is None:
+                    continue
+                if dt >= now:
+                    has_future_deliverables[pid] = True
+                # map to nearest monday key (same tolerance as hours)
+                # Find monday on/after dt - dt.weekday()
+                monday_dt = dt - timedelta(days=dt.weekday())
+                wk = monday_dt.strftime('%Y-%m-%d')
+                if wk in week_keys:
+                    deliverables_by_week.setdefault(pid, {})
+                    deliverables_by_week[pid][wk] = deliverables_by_week[pid].get(wk, 0) + 1
+        except Exception:
+            pass
+
+        # Optional filter: has_future_deliverables
+        hfd_param = request.query_params.get('has_future_deliverables')
+        if hfd_param in ('0', '1'):
+            want_true = (hfd_param == '1')
+            filtered = []
+            for pid in project_ids:
+                has = bool(has_future_deliverables.get(pid))
+                if has == want_true:
+                    filtered.append(pid)
+            project_ids = filtered
+            # Prune aggregates accordingly
+            project_hours = { pid: project_hours[pid] for pid in project_ids if pid in project_hours }
+            people_per_project = { pid: people_per_project.get(pid, set()) for pid in project_ids }
+
+        # Build project list from Project model filtered to those IDs, applying status filter
+        projects_qs = Project.objects.filter(id__in=project_ids)
+        if status_set is not None and len(status_set) > 0:
+            projects_qs = projects_qs.filter(status__in=list(status_set))
+        projects = list(projects_qs.values('id', 'name', 'client', 'status'))
+
+        # Metrics
+        projects_count = len(projects)
+        people_assigned = sum(len(s) for s in people_per_project.values())
+        total_hours = 0.0
+        for pid, wkmap in project_hours.items():
+            for _, v in wkmap.items():
+                total_hours += float(v or 0)
+
+        payload = {
+            'weekKeys': week_keys,
+            'projects': projects,
+            'hoursByProject': project_hours,
+            'deliverablesByProjectWeek': deliverables_by_week,
+            'hasFutureDeliverablesByProject': { str(pid): True for pid in has_future_deliverables.keys() },
+            'metrics': {
+                'projectsCount': projects_count,
+                'peopleAssignedCount': people_assigned,
+                'totalHours': round(total_hours, 2),
+            }
+        }
+        try:
+            if cache_key:
+                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+        except Exception:
+            pass
+        return Response(payload)
+
+    @extend_schema(
+        description="Return authoritative totals for specific projects over current horizon.",
+        parameters=[
+            OpenApiParameter(name='project_ids', type=str, required=True, description='CSV of project IDs'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+        ],
+        responses=inline_serializer(name='ProjectTotalsResponse', fields={
+            'hoursByProject': serializers.DictField(child=serializers.DictField(child=serializers.FloatField()))
+        })
+    )
+    @action(detail=False, methods=['get'], url_path='project_totals', throttle_classes=[GridSnapshotThrottle])
+    def project_totals(self, request):
+        try:
+            weeks = int(request.query_params.get('weeks', 12))
+        except ValueError:
+            weeks = 12
+        if weeks < 1:
+            weeks = 1
+        if weeks > 26:
+            weeks = 26
+
+        ids = request.query_params.get('project_ids')
+        if not ids:
+            return Response({'detail': 'project_ids is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            project_ids = [int(x) for x in ids.split(',') if x.strip().isdigit()]
+        except Exception:
+            return Response({'detail': 'invalid project_ids'}, status=status.HTTP_400_BAD_REQUEST)
+
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        dept_ids = None
+        if dept_param not in (None, ""):
+            try:
+                root = int(dept_param)
+                if include_children:
+                    ids_set = set()
+                    stack = [root]
+                    from departments.models import Department as Dept
+                    while stack:
+                        current = stack.pop()
+                        if current in ids_set:
+                            continue
+                        ids_set.add(current)
+                        for d in (Dept.objects.filter(parent_department_id=current).values_list('id', flat=True)):
+                            if d not in ids_set:
+                                stack.append(d)
+                    dept_ids = list(ids_set)
+                else:
+                    dept_ids = [root]
+            except Exception:
+                dept_ids = None
+
+        today = date.today()
+        monday = today - timedelta(days=(today.weekday()))
+        week_keys = [(monday + timedelta(weeks=i)).strftime('%Y-%m-%d') for i in range(weeks)]
+
+        qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).select_related('person', 'project')
+        if dept_ids:
+            qs = qs.filter(person__department_id__in=dept_ids)
+
+        def hours_for_week_from_json(weekly_hours, monday_str):
+            try:
+                monday_date = date.fromisoformat(monday_str)
+            except Exception:
+                return 0.0
+            for off in (0, 1, 2, 3, -1, -2, -3):
+                k = (monday_date + timedelta(days=off)).strftime('%Y-%m-%d')
+                v = weekly_hours.get(k)
+                try:
+                    if v is not None:
+                        return float(v or 0)
+                except Exception:
+                    return 0.0
+            return 0.0
+
+        project_hours = {}
+        for a in qs:
+            pid = a.project_id
+            if pid is None:
+                continue
+            project_hours.setdefault(pid, {})
+            wh = a.weekly_hours or {}
+            for wk in week_keys:
+                h = hours_for_week_from_json(wh, wk)
+                if h:
+                    project_hours[pid][wk] = round(project_hours[pid].get(wk, 0.0) + h, 2)
+
+        return Response({'hoursByProject': project_hours})
+
+    @extend_schema(
         description="Return compact pre-aggregated grid data for N weeks ahead (default 12).\n\n"
                     "Response shape: { weekKeys: [YYYY-MM-DD], people: [{id, name, weeklyCapacity, department}], hoursByPerson: { <personId>: { <weekKey>: hours } } }",
         parameters=[

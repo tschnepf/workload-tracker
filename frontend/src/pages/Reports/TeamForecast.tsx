@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useMemo, useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
 import { peopleApi, projectsApi, assignmentsApi, deliverablesApi, departmentsApi } from '../../services/api';
@@ -24,7 +25,7 @@ const TeamForecastPage: React.FC = () => {
   const [projDeliverables, setProjDeliverables] = useState<Deliverable[]>([]);
   const [projLoading, setProjLoading] = useState<boolean>(false);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     let active = true;
     setLoading(true);
     setError(null);
@@ -39,18 +40,18 @@ const TeamForecastPage: React.FC = () => {
     return () => { active = false; };
   }, [weeks, deptState.selectedDepartmentId, deptState.includeChildren]);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     projectsApi.list({ page: 1, page_size: 200 })
       .then(p => setProjects(p.results || []))
       .catch(() => {});
   }, []);
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     departmentsApi.list({ page: 1, page_size: 500 })
       .then(p => setDepts(p.results || []))
       .catch(()=>{});
   }, []);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     if (!selectedProject) { setProjAssignments([]); setProjDeliverables([]); return; }
     let active = true;
     setProjLoading(true);
@@ -95,7 +96,7 @@ const TeamForecastPage: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-[#cccccc]">Team Forecast & Project Timeline</h1>
-            <p className="text-[#969696] mt-1">Team utilization outlook and per‑project weekly timeline</p>
+            <p className="text-[#969696] mt-1">Team utilization outlook and per-project weekly timeline</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-[#cbd5e1]">Weeks:</span>
@@ -190,3 +191,5 @@ const ProjectTimeline: React.FC<{ weeks:number; weekStarts:string[]; weeklyTotal
 }
 
 export default TeamForecastPage;
+
+

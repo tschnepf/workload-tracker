@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
 import { Assignment, Person, Deliverable, Project } from '@/types/models';
@@ -21,6 +22,7 @@ interface ProjectWithState extends Project {
   lastUpdated?: number;
 }
 import Layout from '@/components/layout/Layout';
+import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import Toast from '@/components/ui/Toast';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useUpdateProject } from '@/hooks/useProjects';
@@ -228,29 +230,7 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
   );
 });
 
-// Get next 12 Monday dates
-const getNext12Mondays = (): { date: string, display: string, fullDisplay: string }[] => {
-  const today = new Date();
-  const currentMonday = new Date(today);
-  const daysFromMonday = (today.getDay() + 6) % 7;
-  currentMonday.setDate(today.getDate() - daysFromMonday);
-  
-  const mondays: { date: string, display: string, fullDisplay: string }[] = [];
-  for (let i = 0; i < 12; i++) {
-    const monday = new Date(currentMonday);
-    monday.setDate(currentMonday.getDate() + (i * 7));
-    
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    
-    mondays.push({
-      date: monday.toISOString().split('T')[0],
-      display: `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-      fullDisplay: `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    });
-  }
-  return mondays;
-};
+// Removed local Monday computation — weeks come from server snapshot only.
 
 const AssignmentGrid: React.FC = () => {
   const queryClient = useQueryClient();
@@ -360,8 +340,8 @@ const AssignmentGrid: React.FC = () => {
     });
   };
 
-  // Weeks header: from grid snapshot when available; fallback to 12 Mondays
-  const [weeks, setWeeks] = useState<{ date: string; display: string; fullDisplay: string }[]>(getNext12Mondays());
+  // Weeks header: from grid snapshot when available (server weekKeys only)
+  const [weeks, setWeeks] = useState<{ date: string; display: string; fullDisplay: string }[]>([]);
 
   // Create dynamic grid template based on column widths
   const gridTemplate = useMemo(() => {
@@ -743,7 +723,7 @@ const AssignmentGrid: React.FC = () => {
 
 
   // Load data on mount and when department filter changes
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deptState.selectedDepartmentId, deptState.includeChildren]);
@@ -945,17 +925,8 @@ const AssignmentGrid: React.FC = () => {
         snapshot = await assignmentsApi.getGridSnapshot({ weeks: targetWeeks, department: dept, include_children: inc }) as any;
       }
 
-      // Map weekKeys -> weeks state
-      const wk = (snapshot.weekKeys || []).map((mondayStr: string) => {
-        const monday = new Date(mondayStr + 'T00:00:00');
-        const sunday = new Date(monday);
-        sunday.setDate(monday.getDate() + 6);
-        return {
-          date: mondayStr,
-          display: monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          fullDisplay: `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-        };
-      });
+      // Map weekKeys -> weeks state (server authoritative)
+      const wk = toWeekHeader(snapshot.weekKeys || []);
       if (wk.length) setWeeks(wk);
 
       // People list from snapshot (collapsed; assignments empty)
@@ -997,47 +968,8 @@ const AssignmentGrid: React.FC = () => {
       } catch {}
 
     } catch (err: any) {
-      console.warn('Grid snapshot unavailable; falling back to legacy path.', err);
-      try {
-        const deptParams = backendParams; // legacy
-        const [peoplePage, assignmentsPage, deliverablesPage, projectsPage] = await Promise.all([
-          peopleApi.list({ page: 1, page_size: pageSize, ...deptParams }),
-          assignmentsApi.list({ page: 1, page_size: pageSize, ...deptParams }),
-          deliverablesApi.list(undefined, { page: 1, page_size: pageSize }),
-          projectsApi.list({ page: 1, page_size: pageSize })
-        ]);
-
-        setDeliverables(deliverablesPage.results || []);
-        setProjects(projectsPage.results || []);
-        const assignments = assignmentsPage.results || [];
-        setAssignmentsData(assignments);
-        setProjectsData(projectsPage.results || []);
-
-        let peopleData = (peoplePage.results || []) as Person[];
-        if (deptState.selectedDepartmentId != null && !deptState.includeChildren) {
-          const sel = Number(deptState.selectedDepartmentId);
-          peopleData = peopleData.filter(p => (p.department ?? null) === sel);
-        }
-        const peopleWithAssignments: PersonWithAssignments[] = peopleData.map(person => ({
-          ...person,
-          assignments: assignments.filter(assignment => assignment.person === person.id),
-          isExpanded: true
-        }));
-        setPeople(peopleWithAssignments);
-        setHoursByPerson({});
-        setWeeks(getNext12Mondays());
-        setIsSnapshotMode(false);
-        try {
-          trackPerformanceEvent('assignments-grid-load', 1, 'count', {
-            mode: 'legacy',
-            weeks: 12,
-            department: deptState.selectedDepartmentId ?? null,
-            include_children: deptState.includeChildren ? 1 : 0,
-          });
-        } catch {}
-      } catch (fallErr: any) {
-        setError('Failed to load assignment data: ' + (fallErr?.message || 'Unknown error'));
-      }
+      console.warn('Grid snapshot unavailable; not using client aggregation.', err);
+      setError('Failed to load assignment grid snapshot: ' + (err?.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -1844,3 +1776,4 @@ const AssignmentGrid: React.FC = () => {
 };
 
 export default AssignmentGrid;
+

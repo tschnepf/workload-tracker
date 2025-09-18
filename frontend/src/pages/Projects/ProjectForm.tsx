@@ -2,7 +2,8 @@
  * Project Form - Create/Edit project with VSCode dark theme
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
 import { Project } from '@/types/models';
 import { projectsApi } from '@/services/api';
@@ -33,13 +34,13 @@ const ProjectForm: React.FC = () => {
   const [filteredClients, setFilteredClients] = useState<string[]>([]);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     if (isEditing && id) {
       loadProject();
     }
   }, [isEditing, id]);
 
-  useEffect(() => {
+  useAuthenticatedEffect(() => {
     // Load available clients when component mounts
     const loadClients = async () => {
       try {
@@ -347,4 +348,6 @@ const ProjectForm: React.FC = () => {
 };
 
 export default ProjectForm;
+
+
 

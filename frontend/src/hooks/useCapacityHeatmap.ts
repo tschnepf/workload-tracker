@@ -1,5 +1,6 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { peopleApi } from '../services/api';
+import { useAuth } from '@/hooks/useAuth';
 import { PersonCapacityHeatmapItem } from '../types/models';
 
 export function useCapacityHeatmap(
@@ -7,6 +8,8 @@ export function useCapacityHeatmap(
   weeks: number,
   enabled: boolean = true
 ) {
+  const auth = useAuth();
+  const isAuthenticated = !!auth.accessToken;
   return useQuery<PersonCapacityHeatmapItem[], Error>({
     queryKey: ['capacityHeatmap', filter.departmentId ?? 'all', filter.includeChildren ? 1 : 0, weeks],
     queryFn: ({ signal }) =>
@@ -22,6 +25,7 @@ export function useCapacityHeatmap(
     staleTime: 30_000,
     retry: 1,
     refetchOnWindowFocus: true,
-    enabled: enabled && weeks > 0,
+    enabled: enabled && weeks > 0 && isAuthenticated,
   });
 }
+

@@ -1,0 +1,19 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20250916131738
+Username: WIN11-CODER\tim
+RunAs User: WIN11-CODER\tim
+Configuration Name: 
+Machine: WIN11-CODER (Microsoft Windows NT 10.0.26100.0)
+Host Application: powershell.exe -NoLogo -NoProfile -Command Start-Transcript -Path temp_logs.txt -Append; docker logs --tail 0 -f workload-tracker-frontend | Select-Object -First 5; Stop-Transcript
+Process ID: 20344
+PSVersion: 5.1.26100.4768
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.4768
+BuildVersion: 10.0.26100.4768
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is temp_logs.txt
