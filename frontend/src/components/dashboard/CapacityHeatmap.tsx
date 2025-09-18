@@ -31,7 +31,7 @@ const CapacityHeatmap: React.FC<Props> = ({ weeks = 12, department }) => {
     <Card className="bg-[#2d2d30] border-[#3e3e42]">
       <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Capacity Heatmap</h3>
       {loading ? (
-        <div className="text-[#969696]">Loading heatmap…</div>
+        <div className="text-[#969696]">Loading heatmap...</div>
       ) : rows.length === 0 ? (
         <div className="text-[#969696]">No data</div>
       ) : (

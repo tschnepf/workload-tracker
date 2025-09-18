@@ -18,6 +18,8 @@ export interface StatusBadgeProps {
   className?: string;
   onClick?: () => void;
   isUpdating?: boolean;
+  size?: 'xs' | 'sm' | 'md';
+  weight?: 'medium' | 'bold';
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ 
@@ -25,9 +27,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   variant = 'display',
   className = '',
   onClick,
-  isUpdating = false 
+  isUpdating = false,
+  size = 'xs',
+  weight = 'medium'
 }) => {
-  const baseClasses = 'px-2 py-0.5 rounded text-xs font-medium inline-flex items-center gap-1';
+  const sizeClass = size === 'md' ? 'text-base' : size === 'sm' ? 'text-sm' : 'text-xs';
+  const weightClass = weight === 'bold' ? 'font-bold' : 'font-medium';
+  const baseClasses = `px-2 py-0.5 rounded ${sizeClass} ${weightClass} inline-flex items-center gap-1`;
   const colorClasses = getStatusColor(status);
   
   // Enhanced styling for different variants

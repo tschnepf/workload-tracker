@@ -7,7 +7,7 @@ type LoaderProps = {
   className?: string;
 };
 
-const Loader: React.FC<LoaderProps> = ({ message = 'Loading…', full = false, inline = false, className = '' }) => {
+const Loader: React.FC<LoaderProps> = ({ message = 'Loading...', full = false, inline = false, className = '' }) => {
   const containerClasses = inline
     ? className
     : `${className} ${full ? 'min-h-screen' : 'min-h-[60vh]'} flex items-center justify-center`;

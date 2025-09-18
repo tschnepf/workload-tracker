@@ -34,19 +34,19 @@ const QuickActionsPanel: React.FC = () => {
       </div>
 
       <Modal isOpen={openAction === 'find'} onClose={close} title="Find Available" width={1000}>
-        <Suspense fallback={<div>Loading tool…</div>}>
+        <Suspense fallback={<div>Loading tool...</div>}>
           <FindAvailableTool onClose={close} />
         </Suspense>
       </Modal>
 
       <Modal isOpen={openAction === 'balance'} onClose={close} title="Balance Workload" width={1000}>
-        <Suspense fallback={<div>Loading tool…</div>}>
+        <Suspense fallback={<div>Loading tool...</div>}>
           <BalanceWorkloadTool onClose={close} />
         </Suspense>
       </Modal>
 
       <Modal isOpen={openAction === 'milestone'} onClose={close} title="Milestone Review" width={1100}>
-        <Suspense fallback={<div>Loading tool…</div>}>
+        <Suspense fallback={<div>Loading tool...</div>}>
           <MilestoneReviewTool onClose={close} />
         </Suspense>
       </Modal>

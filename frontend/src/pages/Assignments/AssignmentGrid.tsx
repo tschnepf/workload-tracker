@@ -303,6 +303,26 @@ const AssignmentGrid: React.FC = () => {
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
 
+  // Persist column widths (shared with project grid)
+  useEffect(() => {
+    try {
+      const cw = localStorage.getItem('assignGrid:clientColumnWidth');
+      const pw = localStorage.getItem('assignGrid:projectColumnWidth');
+      if (cw) {
+        const n = parseInt(cw, 10); if (!Number.isNaN(n)) setClientColumnWidth(Math.max(80, n));
+      }
+      if (pw) {
+        const n = parseInt(pw, 10); if (!Number.isNaN(n)) setProjectColumnWidth(Math.max(80, n));
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem('assignGrid:clientColumnWidth', String(clientColumnWidth)); } catch {}
+  }, [clientColumnWidth]);
+  useEffect(() => {
+    try { localStorage.setItem('assignGrid:projectColumnWidth', String(projectColumnWidth)); } catch {}
+  }, [projectColumnWidth]);
+
   // New multi-select project status filters (aggregate selection)
   const statusFilterOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'Show All'] as const;
   type StatusFilter = typeof statusFilterOptions[number];
@@ -1425,7 +1445,50 @@ const AssignmentGrid: React.FC = () => {
           <div className="mt-3 flex items-center justify-between gap-6">
             {/* Department filter is now part of page header to stay visible */}
             <div className="flex-1 min-w-[320px]">
-              <GlobalDepartmentFilter />
+              <GlobalDepartmentFilter
+                showCopyLink={false}
+                rightActions={(
+                  <>
+                    <button
+                      className="px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
+                      title="Expand all people"
+                      onClick={async () => {
+                        try {
+                          // Expand all
+                          setPeople(prev => prev.map(p => ({ ...p, isExpanded: true })));
+                          // Load assignments for any person not yet loaded
+                          const allIds = people.map(p => p.id!).filter(Boolean) as number[];
+                          const toLoad = allIds.filter(id => !loadedAssignmentIds.has(id));
+                          if (toLoad.length > 0) {
+                            setLoadingAssignments(prev => { const n = new Set(prev); toLoad.forEach(id => n.add(id)); return n; });
+                            await Promise.all(toLoad.map(async (pid) => {
+                              try {
+                                const rows = await assignmentsApi.byPerson(pid);
+                                setPeople(prev => prev.map(x => x.id === pid ? { ...x, assignments: rows, isExpanded: true } : x));
+                                setLoadedAssignmentIds(prev => new Set(prev).add(pid));
+                              } catch {}
+                              finally {
+                                setLoadingAssignments(prev => { const n = new Set(prev); n.delete(pid); return n; });
+                              }
+                            }));
+                          }
+                        } catch {}
+                      }}
+                    >
+                      Expand All
+                    </button>
+                    <button
+                      className="px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
+                      title="Collapse all people"
+                      onClick={() => {
+                        setPeople(prev => prev.map(p => ({ ...p, isExpanded: false })));
+                      }}
+                    >
+                      Collapse All
+                    </button>
+                  </>
+                )}
+              />
             </div>
             {/* Project Status Filters (multi-select) */}
             <div className="flex flex-wrap items-center gap-1">

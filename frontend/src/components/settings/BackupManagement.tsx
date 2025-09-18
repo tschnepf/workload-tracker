@@ -46,7 +46,7 @@ const BackupManagement: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: async (desc?: string) => backupApi.createBackup(desc && desc.trim() ? desc.trim() : undefined),
     onMutate: () => {
-      showToast('Starting backup…', 'info');
+      showToast('Starting backup...', 'info');
     },
     onSuccess: (res) => {
       showToast('Backup job enqueued', 'success');
@@ -149,7 +149,7 @@ const BackupManagement: React.FC = () => {
             {createMutation.isPending ? 'Starting…' : 'Create Backup'}
           </Button>
           <Button variant="ghost" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? 'Refreshing…' : 'Refresh'}
+            {isFetching ? 'Refreshing...' : 'Refresh'}
           </Button>
         </div>
       </div>
@@ -157,7 +157,7 @@ const BackupManagement: React.FC = () => {
       {/* List */}
       {isLoading ? (
         <div className="py-8">
-          <Loader inline message="Loading backups…" />
+          <Loader inline message="Loading backups..." />
         </div>
       ) : error ? (
         <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
@@ -197,7 +197,7 @@ const BackupManagement: React.FC = () => {
                           onClick={() => handleDownload(b)}
                           disabled={downloading === b.id}
                         >
-                          {downloading === b.id ? 'Downloading…' : 'Download'}
+                          {downloading === b.id ? 'Downloading...' : 'Download'}
                         </Button>
                         <Button
                           variant="danger"

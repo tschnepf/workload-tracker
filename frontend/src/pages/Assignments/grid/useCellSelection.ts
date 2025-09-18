@@ -23,7 +23,7 @@ export type UseCellSelection = {
  * - Drag selection: mouse down anchors; mouse enter extends range until mouse up
  * - Consumers provide ordered `weeks` (YYYY-MM-DD) to determine range semantics
  */
-export function useCellSelection(weeks: string[]): UseCellSelection {
+export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellSelection {
   const [selectedCells, setSelectedCells] = useState<CellKey[]>([]);
   const [selectedCell, setSelectedCell] = useState<CellKey | null>(null);
   const [selectionStart, setSelectionStart] = useState<CellKey | null>(null);
@@ -33,6 +33,11 @@ export function useCellSelection(weeks: string[]): UseCellSelection {
     weeks.forEach((w, i) => map.set(w, i));
     return map;
   }, [weeks]);
+  const rowIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    (rowOrder || []).forEach((rk, i) => map.set(rk, i));
+    return map;
+  }, [rowOrder]);
 
   const buildRange = useCallback((rowKey: string, a: string, b: string): CellKey[] => {
     const ia = weekIndex.get(a);
@@ -56,25 +61,65 @@ export function useCellSelection(weeks: string[]): UseCellSelection {
 
   const onCellMouseEnter = useCallback((rowKey: string, weekKey: string) => {
     if (!isDragging || !selectionStart) return;
-    // Restrict drag selection to same row as anchor
-    if (rowKey !== selectionStart.rowKey) return;
-    const range = buildRange(rowKey, selectionStart.weekKey, weekKey);
-    setSelectedCells(range);
-    setSelectedCell({ rowKey, weekKey });
-  }, [isDragging, selectionStart, buildRange]);
+    const startRow = selectionStart.rowKey;
+    const startWeek = selectionStart.weekKey;
+    const idxA = rowIndex.get(startRow);
+    const idxB = rowIndex.get(rowKey);
+    const hasRowOrder = idxA != null && idxB != null;
 
-  const onCellSelect = useCallback((rowKey: string, weekKey: string, isShiftClick?: boolean) => {
-    if (isShiftClick && selectionStart && selectionStart.rowKey === rowKey) {
-      const range = buildRange(rowKey, selectionStart.weekKey, weekKey);
-      setSelectedCells(range);
+    // Build rectangular selection across rows (if row order provided)
+    if (hasRowOrder && rowOrder && rowOrder.length > 0) {
+      const lo = Math.min(idxA!, idxB!);
+      const hi = Math.max(idxA!, idxB!);
+      const rangeWeeks = buildRange('', startWeek, weekKey).map(c => c.weekKey);
+      const out: CellKey[] = [];
+      for (let i = lo; i <= hi; i++) {
+        const rk = rowOrder[i];
+        rangeWeeks.forEach(wk => out.push({ rowKey: rk, weekKey: wk }));
+      }
+      setSelectedCells(out);
       setSelectedCell({ rowKey, weekKey });
       return;
+    }
+
+    // Fallback: same-row range only
+    if (rowKey !== startRow) return;
+    const range = buildRange(rowKey, startWeek, weekKey);
+    setSelectedCells(range);
+    setSelectedCell({ rowKey, weekKey });
+  }, [isDragging, selectionStart, buildRange, rowIndex, rowOrder]);
+
+  const onCellSelect = useCallback((rowKey: string, weekKey: string, isShiftClick?: boolean) => {
+    if (isShiftClick && selectionStart) {
+      const idxA = rowIndex.get(selectionStart.rowKey);
+      const idxB = rowIndex.get(rowKey);
+      const hasRowOrder = idxA != null && idxB != null && rowOrder && rowOrder.length > 0;
+      if (hasRowOrder) {
+        const lo = Math.min(idxA!, idxB!);
+        const hi = Math.max(idxA!, idxB!);
+        const rangeWeeks = buildRange('', selectionStart.weekKey, weekKey).map(c => c.weekKey);
+        const out: CellKey[] = [];
+        for (let i = lo; i <= hi; i++) {
+          const rk = rowOrder![i];
+          rangeWeeks.forEach(wk => out.push({ rowKey: rk, weekKey: wk }));
+        }
+        setSelectedCells(out);
+        setSelectedCell({ rowKey, weekKey });
+        return;
+      }
+      // Fallback same-row
+      if (selectionStart.rowKey === rowKey) {
+        const range = buildRange(rowKey, selectionStart.weekKey, weekKey);
+        setSelectedCells(range);
+        setSelectedCell({ rowKey, weekKey });
+        return;
+      }
     }
     const single: CellKey = { rowKey, weekKey };
     setSelectionStart(single);
     setSelectedCell(single);
     setSelectedCells([single]);
-  }, [selectionStart, buildRange]);
+  }, [selectionStart, buildRange, rowIndex, rowOrder]);
 
   const clearSelection = useCallback(() => {
     setSelectedCells([]);

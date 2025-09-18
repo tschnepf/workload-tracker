@@ -9,7 +9,12 @@ const INPUT_ID = 'global-dept-filter-input';
 const DESC_ID = 'global-dept-filter-include-children-help';
 const LIVE_ID = 'global-dept-filter-live';
 
-export const GlobalDepartmentFilter: React.FC = () => {
+type Props = {
+  rightActions?: React.ReactNode;
+  showCopyLink?: boolean;
+};
+
+export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = true }) => {
   const { state, setDepartment, clearDepartment, setIncludeChildren } = useDepartmentFilter();
 
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -239,7 +244,7 @@ export const GlobalDepartmentFilter: React.FC = () => {
           aria-controls="global-dept-filter-listbox"
           aria-autocomplete="list"
           aria-label="Global department filter"
-          placeholder={loading ? 'Loading departments…' : 'Search departments'}
+          placeholder={loading ? 'Loading departments...' : 'Search departments'}
           disabled={loading}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
@@ -302,8 +307,16 @@ export const GlobalDepartmentFilter: React.FC = () => {
         When enabled, includes all child departments under the selected department in totals.
       </span>
 
-      {/* Copy link */}
-      <button onClick={handleCopyLink} aria-label="Copy link to current filter" style={buttonStyle}>Copy link</button>
+      {/* Right-side actions */}
+      {rightActions ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {rightActions}
+        </div>
+      ) : (
+        showCopyLink && (
+          <button onClick={handleCopyLink} aria-label="Copy link to current filter" style={buttonStyle}>Copy link</button>
+        )
+      )}
 
       {/* live region */}
       <div id={LIVE_ID} ref={liveRef} aria-live="polite" style={{ position: 'absolute', left: -9999 }} />

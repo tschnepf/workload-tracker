@@ -62,7 +62,7 @@ const RestoreManagement: React.FC = () => {
 
   const startPolling = async (jobId: string, target?: string) => {
     try {
-      setActiveJob({ jobId, target, state: 'STARTED', message: 'Starting…', progress: 0 });
+      setActiveJob({ jobId, target, state: 'STARTED', message: 'Starting...', progress: 0 });
       const started = Date.now();
       // Poll until terminal
       while (true) {
@@ -104,7 +104,7 @@ const RestoreManagement: React.FC = () => {
     });
     if (!ok) return;
     try {
-      showToast('Starting restore…', 'info');
+      showToast('Starting restore...', 'info');
       const res = await backupApi.restoreBackup(b.id, RESTORE_CONFIRM_PHRASE, { jobs, migrate });
       await startPolling(res.jobId, b.filename);
     } catch (e: any) {
@@ -140,7 +140,7 @@ const RestoreManagement: React.FC = () => {
     });
     if (!ok) return;
     try {
-      showToast('Uploading backup…', 'info');
+      showToast('Uploading backup...', 'info');
       const res = await backupApi.uploadAndRestore(uploadFile, RESTORE_CONFIRM_PHRASE, { jobs, migrate });
       await startPolling(res.jobId, uploadFile.name);
       setUploadFile(null);
@@ -177,7 +177,7 @@ const RestoreManagement: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <div className="py-8"><Loader inline message="Loading backups…" /></div>
+          <div className="py-8"><Loader inline message="Loading backups..." /></div>
         ) : error ? (
           <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
             {(error as any)?.message || 'Failed to load backups'}

@@ -33,6 +33,17 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
+    // Avoid watching heavy backup/vendor folders that can hang dev server on startup
+    watch: {
+      ignored: [
+        '**/node_modules-bak/**',
+        '**/dist/**',
+        '**/.next/**',
+        '**/.cache/**',
+        '**/coverage/**',
+        '**/playwright-report/**',
+      ],
+    },
     // Dev proxy to backend to avoid cross-origin and host port issues on Windows
     proxy: {
       '/api': {

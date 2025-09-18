@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿﻿import React, { useEffect, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { darkTheme } from '../../../theme/tokens';
 import { deliverablesApi, deliverableAssignmentsApi, peopleApi } from '../../../services/api';
@@ -103,7 +103,7 @@ const MilestoneReviewTool: React.FC<Props> = () => {
       <div style={{ borderRight: `1px solid ${darkTheme.colors.border.secondary}`, paddingRight: darkTheme.spacing.md }}>
         <div style={{ color: darkTheme.colors.text.secondary, marginBottom: darkTheme.spacing.sm }}>Milestones</div>
         {loading ? (
-          <div style={{ color: darkTheme.colors.text.muted }}>Loading…</div>
+          <div style={{ color: darkTheme.colors.text.muted }}>Loadingâ€¦</div>
         ) : (
           <div style={{ display: 'grid', gap: darkTheme.spacing.xs }}>
             {items.map((i) => (
@@ -118,7 +118,7 @@ const MilestoneReviewTool: React.FC<Props> = () => {
               }}>
                 <div style={{ fontWeight: 600 }}>{i.projectName || `Project ${i.project}`}</div>
                 <div style={{ fontSize: darkTheme.typography.fontSize.sm, color: darkTheme.colors.text.secondary }}>
-                  {i.title} — {i.date}
+                  {i.title} â€” {i.date}
                 </div>
               </button>
             ))}
@@ -150,12 +150,12 @@ const MilestoneReviewTool: React.FC<Props> = () => {
                   minWidth: 240,
                 }}
               >
-                <option value="">+ Add person to milestone…</option>
+                <option value="">+ Add person to milestoneâ€¦</option>
                 {people.filter(p => !shownIds.has(p.id)).map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              {saving && <span style={{ color: darkTheme.colors.text.muted }}>Saving…</span>}
+              {saving && <span style={{ color: darkTheme.colors.text.muted }}>Savingâ€¦</span>}
             </div>
 
             {/* Staff list */}
@@ -246,3 +246,4 @@ const MilestoneReviewTool: React.FC<Props> = () => {
 };
 
 export default MilestoneReviewTool;
+

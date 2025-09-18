@@ -22,17 +22,17 @@ const QuickActionsInline: React.FC = () => {
       <button className={btnCls} onClick={() => open('milestone')}>Milestone Review</button>
 
       <Modal isOpen={openAction === 'find'} onClose={close} title="Find Available" width={900}>
-        <Suspense fallback={<div>Loading…</div>}>
+        <Suspense fallback={<div>Loading...</div>}>
           <FindAvailableTool onClose={close} />
         </Suspense>
       </Modal>
       <Modal isOpen={openAction === 'balance'} onClose={close} title="Balance Workload" width={900}>
-        <Suspense fallback={<div>Loading…</div>}>
+        <Suspense fallback={<div>Loading...</div>}>
           <BalanceWorkloadTool onClose={close} />
         </Suspense>
       </Modal>
       <Modal isOpen={openAction === 'milestone'} onClose={close} title="Milestone Review" width={1000}>
-        <Suspense fallback={<div>Loading…</div>}>
+        <Suspense fallback={<div>Loading...</div>}>
           <MilestoneReviewTool onClose={close} />
         </Suspense>
       </Modal>
@@ -41,4 +41,3 @@ const QuickActionsInline: React.FC = () => {
 };
 
 export default QuickActionsInline;
-

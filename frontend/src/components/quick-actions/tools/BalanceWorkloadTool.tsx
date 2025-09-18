@@ -34,7 +34,7 @@ const BalanceWorkloadTool: React.FC<Props> = () => {
       </div>
       <div>
         {loading ? (
-          <div style={{ color: darkTheme.colors.text.muted }}>Loading suggestions…</div>
+          <div style={{ color: darkTheme.colors.text.muted }}>Loading suggestions...</div>
         ) : (
           <div style={{ display: 'grid', gap: darkTheme.spacing.sm }}>
             {suggestions.length === 0 ? (

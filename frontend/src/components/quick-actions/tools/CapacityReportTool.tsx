@@ -31,7 +31,7 @@ const CapacityReportTool: React.FC<Props> = () => {
       </div>
       <div>
         {loading ? (
-          <div style={{ color: darkTheme.colors.text.muted }}>Loading heatmap…</div>
+          <div style={{ color: darkTheme.colors.text.muted }}>Loading heatmap...</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>

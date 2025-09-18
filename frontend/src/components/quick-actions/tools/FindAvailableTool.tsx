@@ -61,7 +61,7 @@ const FindAvailableTool: React.FC<Props> = () => {
       </div>
       <div>
         {loading ? (
-          <div style={{ color: darkTheme.colors.text.muted }}>Loading people…</div>
+          <div style={{ color: darkTheme.colors.text.muted }}>Loading people...</div>
         ) : (
           <div style={{ display: 'grid', gap: darkTheme.spacing.sm }}>
             {people.map((p) => (
