@@ -1,1 +1,0 @@
-Project Assignments: add manual sorting (client, project, next deliverable) with header clicks and asc/desc toggle
