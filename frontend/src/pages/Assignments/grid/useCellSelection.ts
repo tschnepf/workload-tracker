@@ -4,6 +4,7 @@ import type React from 'react';
 export type CellKey = { rowKey: string; weekKey: string };
 
 export type UseCellSelection = {
+  // Lazily computed (for apply actions). Rendering uses O(1) checks.
   selectedCells: CellKey[];
   selectedCell: CellKey | null;
   selectionStart: CellKey | null;
@@ -12,22 +13,23 @@ export type UseCellSelection = {
   onCellMouseEnter: (rowKey: string, weekKey: string) => void;
   onCellSelect: (rowKey: string, weekKey: string, isShiftClick?: boolean) => void;
   clearSelection: () => void;
+  // O(1) index-based selection check
   isCellSelected: (rowKey: string, weekKey: string) => boolean;
   selectionSummary: string;
 };
 
 /**
- * Generic, row-scoped cell selection hook for spreadsheet-like grids.
- * - Selection range is limited to a single row (rowKey) across contiguous week columns
- * - Shift+Click selects a contiguous range between anchor and target within the same row
- * - Drag selection: mouse down anchors; mouse enter extends range until mouse up
- * - Consumers provide ordered `weeks` (YYYY-MM-DD) to determine range semantics
+ * Range-based, throttled selection model optimized for rendering.
+ * - Uses index math for O(1) isSelected checks (no large arrays during drag)
+ * - rAF-throttles hover updates to avoid excessive re-renders
+ * - Provides a lazily computed selectedCells list for apply/save actions
  */
 export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellSelection {
-  const [selectedCells, setSelectedCells] = useState<CellKey[]>([]);
   const [selectedCell, setSelectedCell] = useState<CellKey | null>(null);
   const [selectionStart, setSelectionStart] = useState<CellKey | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Index maps
   const weekIndex = useMemo(() => {
     const map = new Map<string, number>();
     weeks.forEach((w, i) => map.set(w, i));
@@ -39,90 +41,60 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
     return map;
   }, [rowOrder]);
 
-  const buildRange = useCallback((rowKey: string, a: string, b: string): CellKey[] => {
+  // Helpers for bounds
+  const getWeekBounds = useCallback((a: string, b: string) => {
     const ia = weekIndex.get(a);
     const ib = weekIndex.get(b);
-    if (ia == null || ib == null) return [{ rowKey, weekKey: a }];
+    if (ia == null || ib == null) return { lo: -1, hi: -1 };
+    return { lo: Math.min(ia, ib), hi: Math.max(ia, ib) };
+  }, [weekIndex]);
+
+  const getRowBounds = useCallback((ra: string, rb: string) => {
+    const ia = rowIndex.get(ra);
+    const ib = rowIndex.get(rb);
+    if (ia == null || ib == null) return { lo: -1, hi: -1, multi: false };
     const lo = Math.min(ia, ib);
     const hi = Math.max(ia, ib);
-    const range: CellKey[] = [];
-    for (let i = lo; i <= hi; i++) range.push({ rowKey, weekKey: weeks[i] });
-    return range;
-  }, [weekIndex, weeks]);
+    return { lo, hi, multi: true };
+  }, [rowIndex]);
 
+  // Mouse interactions
   const onCellMouseDown = useCallback((rowKey: string, weekKey: string, ev?: MouseEvent | React.MouseEvent) => {
     try { ev?.preventDefault?.(); } catch {}
     const anchor: CellKey = { rowKey, weekKey };
     setSelectionStart(anchor);
     setSelectedCell(anchor);
-    setSelectedCells([anchor]);
     setIsDragging(true);
   }, []);
 
+  // rAF-throttled hover updates
+  const lastHoverRef = useRef<{ rowKey: string; weekKey: string } | null>(null);
+  const rafIdRef = useRef<number | null>(null);
   const onCellMouseEnter = useCallback((rowKey: string, weekKey: string) => {
     if (!isDragging || !selectionStart) return;
-    const startRow = selectionStart.rowKey;
-    const startWeek = selectionStart.weekKey;
-    const idxA = rowIndex.get(startRow);
-    const idxB = rowIndex.get(rowKey);
-    const hasRowOrder = idxA != null && idxB != null;
-
-    // Build rectangular selection across rows (if row order provided)
-    if (hasRowOrder && rowOrder && rowOrder.length > 0) {
-      const lo = Math.min(idxA!, idxB!);
-      const hi = Math.max(idxA!, idxB!);
-      const rangeWeeks = buildRange('', startWeek, weekKey).map(c => c.weekKey);
-      const out: CellKey[] = [];
-      for (let i = lo; i <= hi; i++) {
-        const rk = rowOrder[i];
-        rangeWeeks.forEach(wk => out.push({ rowKey: rk, weekKey: wk }));
-      }
-      setSelectedCells(out);
-      setSelectedCell({ rowKey, weekKey });
-      return;
-    }
-
-    // Fallback: same-row range only
-    if (rowKey !== startRow) return;
-    const range = buildRange(rowKey, startWeek, weekKey);
-    setSelectedCells(range);
-    setSelectedCell({ rowKey, weekKey });
-  }, [isDragging, selectionStart, buildRange, rowIndex, rowOrder]);
+    const last = lastHoverRef.current;
+    if (last && last.rowKey === rowKey && last.weekKey === weekKey) return;
+    lastHoverRef.current = { rowKey, weekKey };
+    if (rafIdRef.current != null) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const next = lastHoverRef.current;
+      if (!next) return;
+      setSelectedCell({ rowKey: next.rowKey, weekKey: next.weekKey });
+    });
+  }, [isDragging, selectionStart]);
 
   const onCellSelect = useCallback((rowKey: string, weekKey: string, isShiftClick?: boolean) => {
     if (isShiftClick && selectionStart) {
-      const idxA = rowIndex.get(selectionStart.rowKey);
-      const idxB = rowIndex.get(rowKey);
-      const hasRowOrder = idxA != null && idxB != null && rowOrder && rowOrder.length > 0;
-      if (hasRowOrder) {
-        const lo = Math.min(idxA!, idxB!);
-        const hi = Math.max(idxA!, idxB!);
-        const rangeWeeks = buildRange('', selectionStart.weekKey, weekKey).map(c => c.weekKey);
-        const out: CellKey[] = [];
-        for (let i = lo; i <= hi; i++) {
-          const rk = rowOrder![i];
-          rangeWeeks.forEach(wk => out.push({ rowKey: rk, weekKey: wk }));
-        }
-        setSelectedCells(out);
-        setSelectedCell({ rowKey, weekKey });
-        return;
-      }
-      // Fallback same-row
-      if (selectionStart.rowKey === rowKey) {
-        const range = buildRange(rowKey, selectionStart.weekKey, weekKey);
-        setSelectedCells(range);
-        setSelectedCell({ rowKey, weekKey });
-        return;
-      }
+      setSelectedCell({ rowKey, weekKey });
+      return;
     }
     const single: CellKey = { rowKey, weekKey };
     setSelectionStart(single);
     setSelectedCell(single);
-    setSelectedCells([single]);
-  }, [selectionStart, buildRange, rowIndex, rowOrder]);
+  }, [selectionStart]);
 
   const clearSelection = useCallback(() => {
-    setSelectedCells([]);
     setSelectedCell(null);
     setSelectionStart(null);
     setIsDragging(false);
@@ -137,21 +109,56 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
     return () => window.removeEventListener('mouseup', onUp);
   }, []);
 
+  // O(1) selection test
   const isCellSelected = useCallback((rowKey: string, weekKey: string) => {
-    if (selectedCells.length === 0) return false;
-    return selectedCells.some(c => c.rowKey === rowKey && c.weekKey === weekKey);
-  }, [selectedCells]);
+    if (!selectionStart || !selectedCell) return false;
+    const { lo: wl, hi: wh } = getWeekBounds(selectionStart.weekKey, selectedCell.weekKey);
+    const wIdx = weekIndex.get(weekKey);
+    if (wl === -1 || wh === -1 || wIdx == null) return false;
+    if (wIdx < wl || wIdx > wh) return false;
+    if (rowOrder && rowOrder.length > 0) {
+      const { lo: rl, hi: rh, multi } = getRowBounds(selectionStart.rowKey, selectedCell.rowKey);
+      if (!multi) return rowKey === selectionStart.rowKey;
+      const rIdx = rowIndex.get(rowKey);
+      if (rIdx == null) return false;
+      return rIdx >= rl && rIdx <= rh;
+    }
+    return rowKey === selectionStart.rowKey;
+  }, [selectionStart, selectedCell, getWeekBounds, getRowBounds, weekIndex, rowIndex, rowOrder]);
 
   const selectionSummary = useMemo(() => {
-    if (selectedCells.length === 0) return '';
-    // Summarize by row. Most selections are single-row ranges, but support multi-row gracefully.
-    const byRow = new Map<string, number>();
-    selectedCells.forEach(c => byRow.set(c.rowKey, (byRow.get(c.rowKey) || 0) + 1));
-    const rows = byRow.size;
-    const cells = selectedCells.length;
-    const weeksCount = rows === 0 ? 0 : Math.round(cells / rows);
-    return `${rows} row${rows !== 1 ? 's' : ''} × ${weeksCount} week${weeksCount !== 1 ? 's' : ''} = ${cells} cell${cells !== 1 ? 's' : ''}`;
-  }, [selectedCells]);
+    if (!selectionStart || !selectedCell) return '';
+    const { lo: wl, hi: wh } = getWeekBounds(selectionStart.weekKey, selectedCell.weekKey);
+    if (wl === -1 || wh === -1) return '';
+    const weeksCount = wh - wl + 1;
+    let rowsCount = 1;
+    if (rowOrder && rowOrder.length > 0) {
+      const { lo: rl, hi: rh, multi } = getRowBounds(selectionStart.rowKey, selectedCell.rowKey);
+      rowsCount = multi ? (rh - rl + 1) : 1;
+    }
+    const cells = rowsCount * weeksCount;
+    return `${rowsCount} row${rowsCount !== 1 ? 's' : ''} × ${weeksCount} week${weeksCount !== 1 ? 's' : ''} = ${cells} cell${cells !== 1 ? 's' : ''}`;
+  }, [selectionStart, selectedCell, getWeekBounds, getRowBounds, rowOrder]);
+
+  // Lazily compute cells for actions (e.g., when user presses Enter to apply value)
+  const selectedCells = useMemo<CellKey[]>(() => {
+    if (!selectionStart || !selectedCell) return [];
+    const out: CellKey[] = [];
+    const { lo: wl, hi: wh } = getWeekBounds(selectionStart.weekKey, selectedCell.weekKey);
+    if (wl === -1 || wh === -1) return [];
+    if (rowOrder && rowOrder.length > 0) {
+      const { lo: rl, hi: rh, multi } = getRowBounds(selectionStart.rowKey, selectedCell.rowKey);
+      if (multi) {
+        for (let r = rl; r <= rh; r++) {
+          const rk = rowOrder![r];
+          for (let w = wl; w <= wh; w++) out.push({ rowKey: rk, weekKey: weeks[w] });
+        }
+        return out;
+      }
+    }
+    for (let w = wl; w <= wh; w++) out.push({ rowKey: selectionStart.rowKey, weekKey: weeks[w] });
+    return out;
+  }, [selectionStart, selectedCell, getWeekBounds, getRowBounds, weeks, rowOrder]);
 
   return {
     selectedCells,
@@ -166,3 +173,4 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
     selectionSummary,
   };
 }
+

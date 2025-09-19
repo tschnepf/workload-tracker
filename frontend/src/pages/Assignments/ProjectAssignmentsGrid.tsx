@@ -70,6 +70,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
+  // Reload trigger for Refresh All
+  const [reloadCounter, setReloadCounter] = useState<number>(0);
   const isSnapshotMode = true;
   // Column widths + resizing (parity with person grid)
   const [clientColumnWidth, setClientColumnWidth] = useState(210);
@@ -325,7 +327,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     };
     load();
     return () => { mounted = false; };
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, selectedStatusFilters]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, selectedStatusFilters, reloadCounter]);
 
   // --- Deliverable Coloring (reuse calendar colors) ---
   const typeColors: Record<string, string> = {
@@ -508,6 +510,102 @@ const ProjectAssignmentsGrid: React.FC = () => {
     url.set('status', val || null);
   }, [selectedStatusFilters]);
 
+  // Apply a numeric value to the current selection (or active cell)
+  const applyValueToSelection = React.useCallback(async (anchorAssignmentId: number, anchorWeekKey: string, value: number) => {
+    const v = value;
+    if (Number.isNaN(v) || v < 0) { showToast('Enter a valid non-negative number', 'warning'); return; }
+
+    // Determine target cells
+    const selected = selection.selectedCells.length > 0
+      ? selection.selectedCells
+      : [{ rowKey: String(anchorAssignmentId), weekKey: anchorWeekKey }];
+
+    // Build assignments map
+    const assignmentsById = new Map<number, { projectId: number, assignment: Assignment, personId: number | null }>();
+    projects.forEach(pr => {
+      pr.assignments.forEach(a => { if (a?.id != null) assignmentsById.set(a.id, { projectId: pr.id!, assignment: a, personId: (a.person as any) ?? null }); });
+    });
+
+    // Prepare updates
+    const updatesMap = new Map<number, { prev: Record<string, number>, next: Record<string, number>, weeks: Set<string>, personId: number | null, projectId: number }>();
+    const touchedProjects = new Set<number>();
+    for (const c of selected) {
+      const aid = parseInt(c.rowKey, 10);
+      if (Number.isNaN(aid)) continue;
+      const entry = assignmentsById.get(aid);
+      if (!entry) continue;
+      touchedProjects.add(entry.projectId);
+      const prev = updatesMap.get(aid)?.prev || { ...(entry.assignment.weeklyHours || {}) };
+      const next = updatesMap.get(aid)?.next || { ...(entry.assignment.weeklyHours || {}) };
+      next[c.weekKey] = v;
+      const weeksSet = updatesMap.get(aid)?.weeks || new Set<string>();
+      weeksSet.add(c.weekKey);
+      updatesMap.set(aid, { prev, next, weeks: weeksSet, personId: entry.personId, projectId: entry.projectId });
+    }
+
+    // Fire conflict checks in background (parallel)
+    try {
+      const tasks: Promise<any>[] = [];
+      for (const [, info] of updatesMap.entries()) {
+        const personId = info.personId ?? null;
+        if (!personId) continue;
+        for (const wk of info.weeks) {
+          tasks.push(assignmentsApi.checkConflicts(personId, info.projectId, wk, v).catch(() => null));
+        }
+      }
+      Promise.allSettled(tasks).then(results => {
+        const warnings: string[] = [];
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value && Array.isArray(r.value.warnings) && r.value.warnings.length) {
+            warnings.push(...r.value.warnings);
+          }
+        }
+        if (warnings.length) showToast(warnings.join('\n'), 'warning');
+      });
+    } catch {}
+
+    // Optimistic UI + saving flags
+    const savingKeys: string[] = [];
+    updatesMap.forEach((info, aid) => { info.weeks.forEach(wk => savingKeys.push(`${aid}-${wk}`)); });
+    setSavingCells(prevSet => { const s = new Set(prevSet); savingKeys.forEach(k => s.add(k)); return s; });
+    setProjects(prevState => prevState.map(x => {
+      if (!touchedProjects.has(x.id!)) return x;
+      return { ...x, assignments: x.assignments.map(a => { if (!a.id || !updatesMap.has(a.id)) return a; const info = updatesMap.get(a.id)!; return { ...a, weeklyHours: info.next }; }) };
+    }));
+
+    // Persist updates
+    try {
+      const updatesArray = Array.from(updatesMap.entries()).map(([aid, info]) => ({ assignmentId: aid, weeklyHours: info.next }));
+      if (updatesArray.length > 1) {
+        await assignmentsApi.bulkUpdateHours(updatesArray);
+      } else if (updatesArray.length === 1) {
+        await assignmentsApi.update(updatesArray[0].assignmentId, { weeklyHours: updatesArray[0].weeklyHours });
+      }
+      // Refresh totals
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const pidList = Array.from(touchedProjects);
+      if (pidList.length > 0) {
+        const res = await getProjectTotals(pidList, { weeks: weeks.length, department: dept, include_children: inc });
+        setHoursByProject(prev => {
+          const next = { ...prev } as any;
+          pidList.forEach(pid => { next[pid] = (res.hoursByProject[String(pid)] || {}); });
+          return next;
+        });
+      }
+    } catch (err:any) {
+      // Rollback
+      setProjects(prevState => prevState.map(x => {
+        if (!touchedProjects.has(x.id!)) return x;
+        return { ...x, assignments: x.assignments.map(a => { if (!a.id || !updatesMap.has(a.id)) return a; const info = updatesMap.get(a.id)!; return { ...a, weeklyHours: info.prev }; }) };
+      }));
+      showToast(err?.message || 'Failed to update hours', 'error');
+    } finally {
+      setSavingCells(prevSet => { const s = new Set(prevSet); savingKeys.forEach(k => s.delete(k)); return s; });
+      setEditingCell(null);
+    }
+  }, [selection.selectedCells, projects, deptState.selectedDepartmentId, deptState.includeChildren, weeks, assignmentsApi, getProjectTotals]);
+
   // Sorting helpers
   const toggleSort = (key: 'client' | 'project' | 'deliverable') => {
     setSortBy(prev => {
@@ -604,39 +702,49 @@ const ProjectAssignmentsGrid: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Sticky Header */}
         <div ref={headerRef} className="sticky top-0 bg-[#1e1e1e] border-b border-[#3e3e42] z-30 px-6 py-4">
-          {/* Top row: title + subtitle + snapshot chip */}
+          {/* Top row: title + subtitle (left), snapshot chip (right) */}
           <div className="flex items-start justify-between gap-6">
             <div>
               <h1 className="text-2xl font-bold text-[#cccccc]">Project Assignments</h1>
-              <div className="flex items-center gap-3">
-                <p className="text-[#969696] text-sm">Manage team workload allocation across {weeks.length} weeks</p>
-                <span
-                  title={isSnapshotMode ? 'Rendering from server grid snapshot' : 'Server snapshot unavailable; using legacy client aggregation'}
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border ${
-                    isSnapshotMode
-                      ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'
-                      : 'bg-[#3e3e42] text-[#bbbbbb] border-[#4e4e52]'
-                  }`}
-                >
-                  {isSnapshotMode ? 'Snapshot Mode' : 'Legacy Mode'}
-                </span>
+              <p className="text-[#969696] text-sm mt-1">Manage team workload allocation across {weeks.length} weeks</p>
+              {/* Weeks selector + People View link (left, under subtitle) */}
+              <div className="mt-2 flex items-center gap-2 text-xs text-[#969696]">
+                <span>Weeks</span>
+                {[8,12,16,20].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setWeeksHorizon(n)}
+                    className={`px-2 py-0.5 rounded border ${weeksHorizon===n?'border-[#007acc] text-[#e0e0e0] bg-[#007acc]/20':'border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+                {(() => {
+                  const s = Array.from(selectedStatusFilters);
+                  const statusStr = s.includes('Show All') && s.length === 1 ? '' : `&status=${encodeURIComponent(s.join(','))}`;
+                  const href = `/assignments?view=people&weeks=${weeksHorizon}${statusStr}`;
+                  return (
+                    <a
+                      href={href}
+                      className="ml-2 px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
+                    >
+                      People View
+                    </a>
+                  );
+                })()}
               </div>
             </div>
-            <div className="flex items-center gap-3 text-xs text-[#969696]">
-              <span>Weeks</span>
-              {[8,12,16,20].map(n => (
-                <button key={n} onClick={() => setWeeksHorizon(n)} className={`px-2 py-0.5 rounded border ${weeksHorizon===n?'border-[#007acc] text-[#e0e0e0] bg-[#007acc]/20':'border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}>
-                  {n}
-                </button>
-              ))}
-              {(() => {
-                const s = Array.from(selectedStatusFilters);
-                const statusStr = s.includes('Show All') && s.length === 1 ? '' : `&status=${encodeURIComponent(s.join(','))}`;
-                const href = `/assignments?view=people&weeks=${weeksHorizon}${statusStr}`;
-                return (
-                  <a href={href} className="ml-3 px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]">People View</a>
-                );
-              })()}
+            <div className="pt-1">
+              <span
+                title={isSnapshotMode ? 'Rendering from server grid snapshot' : 'Server snapshot unavailable; using legacy client aggregation'}
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border ${
+                  isSnapshotMode
+                    ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'
+                    : 'bg-[#3e3e42] text-[#bbbbbb] border-[#4e4e52]'
+                }`}
+              >
+                {isSnapshotMode ? 'Snapshot Mode' : 'Legacy Mode'}
+              </span>
             </div>
           </div>
           {/* Second row: Department filter + project status filters */}
@@ -1097,117 +1205,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                       if (e.key === 'Enter') {
                                         e.preventDefault();
                                         const v = parseFloat(editingValue);
-                                        if (Number.isNaN(v) || v < 0) { showToast('Enter a valid non-negative number', 'warning'); return; }
-                                        // Determine target cells: use current selection if present, otherwise the active cell
-                                        const selected = selection.selectedCells.length > 0
-                                          ? selection.selectedCells
-                                          : [{ rowKey: String(asn.id), weekKey: w.date }];
-
-                                        // Build a global map of assignments by id (spanning all expanded projects)
-                                        const assignmentsById = new Map<number, { projectId: number, assignment: Assignment, personId: number | null }>();
-                                        projects.forEach(pr => {
-                                          pr.assignments.forEach(a => {
-                                            if (a?.id != null) assignmentsById.set(a.id, { projectId: pr.id!, assignment: a, personId: (a.person as any) ?? null });
-                                          });
-                                        });
-
-                                        // Prepare per-assignment updates across all selected cells
-                                        const updatesMap = new Map<number, { prev: Record<string, number>, next: Record<string, number>, weeks: Set<string>, personId: number | null, projectId: number }>();
-                                        const touchedProjects = new Set<number>();
-                                        for (const c of selected) {
-                                          const aid = parseInt(c.rowKey, 10);
-                                          if (Number.isNaN(aid)) continue;
-                                          const entry = assignmentsById.get(aid);
-                                          if (!entry) continue;
-                                          touchedProjects.add(entry.projectId);
-                                          const prev = updatesMap.get(aid)?.prev || { ...(entry.assignment.weeklyHours || {}) };
-                                          const next = updatesMap.get(aid)?.next || { ...(entry.assignment.weeklyHours || {}) };
-                                          next[c.weekKey] = v;
-                                          const weeksSet = updatesMap.get(aid)?.weeks || new Set<string>();
-                                          weeksSet.add(c.weekKey);
-                                          updatesMap.set(aid, { prev, next, weeks: weeksSet, personId: entry.personId, projectId: entry.projectId });
-                                        }
-
-                                        // Conflict checks (non-blocking)
-                                        try {
-                                          const warnings: string[] = [];
-                                          for (const [, info] of updatesMap.entries()) {
-                                            const personId = info.personId ?? null;
-                                            if (!personId) continue;
-                                            for (const wk of info.weeks) {
-                                              try {
-                                                const res = await assignmentsApi.checkConflicts(personId, info.projectId, wk, v);
-                                                if (res?.warnings?.length) warnings.push(...res.warnings);
-                                              } catch {}
-                                            }
-                                          }
-                                          if (warnings.length) showToast(warnings.join('\n'), 'warning');
-                                        } catch {}
-
-                                        // Optimistic UI + saving flags across all touched assignments
-                                        const savingKeys: string[] = [];
-                                        updatesMap.forEach((info, aid) => { info.weeks.forEach(wk => savingKeys.push(`${aid}-${wk}`)); });
-                                        setSavingCells(prevSet => {
-                                          const s = new Set(prevSet);
-                                          savingKeys.forEach(k => s.add(k));
-                                          return s;
-                                        });
-                                        setProjects(prevState => prevState.map(x => {
-                                          if (!touchedProjects.has(x.id!)) return x;
-                                          return {
-                                            ...x,
-                                            assignments: x.assignments.map(a => {
-                                              if (!a.id || !updatesMap.has(a.id)) return a;
-                                              const info = updatesMap.get(a.id)!;
-                                              return { ...a, weeklyHours: info.next };
-                                            })
-                                          };
-                                        }));
-
-                                        // Send updates in bulk
-                                        try {
-                                          const updatesArray = Array.from(updatesMap.entries()).map(([aid, info]) => ({ assignmentId: aid, weeklyHours: info.next }));
-                                          if (updatesArray.length > 1) {
-                                            await assignmentsApi.bulkUpdateHours(updatesArray);
-                                          } else if (updatesArray.length === 1) {
-                                            await assignmentsApi.update(updatesArray[0].assignmentId, { weeklyHours: updatesArray[0].weeklyHours });
-                                          }
-                                          // Refresh totals for all touched projects
-                                          const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-                                          const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-                                          const pidList = Array.from(touchedProjects);
-                                          if (pidList.length > 0) {
-                                            const res = await getProjectTotals(pidList, { weeks: weeks.length, department: dept, include_children: inc });
-                                            setHoursByProject(prev => {
-                                              const next = { ...prev };
-                                              pidList.forEach(pid => {
-                                                next[pid] = (res.hoursByProject[String(pid)] || {});
-                                              });
-                                              return next;
-                                            });
-                                          }
-                                        } catch (err:any) {
-                                          // Rollback
-                                          setProjects(prevState => prevState.map(x => {
-                                            if (!touchedProjects.has(x.id!)) return x;
-                                            return {
-                                              ...x,
-                                              assignments: x.assignments.map(a => {
-                                                if (!a.id || !updatesMap.has(a.id)) return a;
-                                                const info = updatesMap.get(a.id)!;
-                                                return { ...a, weeklyHours: info.prev };
-                                              })
-                                            };
-                                          }));
-                                          showToast(err?.message || 'Failed to update hours', 'error');
-                                        } finally {
-                                          setSavingCells(prevSet => {
-                                            const s = new Set(prevSet);
-                                            savingKeys.forEach(k => s.delete(k));
-                                            return s;
-                                          });
-                                          setEditingCell(null);
-                                        }
+                                        await applyValueToSelection(asn.id!, w.date, v);
                                       } else if (e.key === 'Escape') {
                                         e.preventDefault();
                                         setEditingCell(null);
@@ -1277,6 +1275,14 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 <div className="w-2 h-2 rounded-full bg-red-500"></div>
                 <span>Overallocated (&gt;100%)</span>
               </div>
+              <button
+                className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                title="Refresh all data"
+                onClick={() => setReloadCounter(c => c + 1)}
+                disabled={loading}
+              >
+                {loading ? 'Refreshing…' : 'Refresh All'}
+              </button>
             </div>
           </div>
 
