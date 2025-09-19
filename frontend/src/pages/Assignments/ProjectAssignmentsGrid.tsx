@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import Layout from '@/components/layout/Layout';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
@@ -259,8 +259,22 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const snap = await getProjectGridSnapshot({ weeks: weeksHorizon, department: dept, include_children: inc, status_in: statusIn, has_future_deliverables: hasFutureParam });
         if (!mounted) return;
         setWeeks(toWeekHeader(snap.weekKeys || []));
-        // Normalize projects
-        const proj: ProjectWithAssignments[] = (snap.projects || []).map(p => ({ id: p.id, name: p.name, client: p.client ?? undefined, status: p.status ?? undefined, assignments: [], isExpanded: false }));
+        // Normalize projects and apply default sort: client name, then project name
+        const proj: ProjectWithAssignments[] = (snap.projects || [])
+          .map(p => ({ id: p.id, name: p.name, client: p.client ?? undefined, status: p.status ?? undefined, assignments: [], isExpanded: false }))
+          .sort((a, b) => {
+            const ac = (a.client || '').toString().trim().toLowerCase();
+            const bc = (b.client || '').toString().trim().toLowerCase();
+            if (ac !== bc) {
+              // Place empty client names last
+              if (!ac && bc) return 1;
+              if (ac && !bc) return -1;
+              return ac.localeCompare(bc);
+            }
+            const an = (a.name || '').toString().trim().toLowerCase();
+            const bn = (b.name || '').toString().trim().toLowerCase();
+            return an.localeCompare(bn);
+          });
         setProjects(proj);
         // Coerce hours map keys to numbers
         const hb: Record<number, Record<string, number>> = {};
@@ -682,10 +696,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
           {!loading && !error && projects.length > 0 && (
             <div className="space-y-1" style={{ minWidth: totalMinWidth }}>
               {projects.map((p) => (
-                <div key={p.id}>
+                <div key={p.id} className="border-b border-[#3e3e42] last:border-b-0">
                   {/* Project summary row */}
                   <div
-                    className="grid items-stretch gap-px p-2 bg-[#2a2a2a] hover:bg-[#2d2d30] transition-colors cursor-pointer"
+                    className="grid items-stretch gap-px p-2 hover:bg-[#2d2d30]/50 transition-colors cursor-pointer"
                     style={{ gridTemplateColumns: gridTemplate }}
                     onClick={async () => {
                       const willExpand = !p.isExpanded;
@@ -727,27 +741,28 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       }
                     }}
                   >
-                    {/* Client */}
-                    <div className="pl-4 pr-2 py-2 text-[#cccccc] text-sm font-bold truncate" title={p.client || ''}>{p.client || ''}</div>
-                    {/* Project name with chevron on left, status aligned to right (parity with Assignments) */}
-                    <div className="pr-2 py-2 text-[#cccccc] text-sm font-bold flex items-center" title={p.name}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <svg
-                          className={`w-3 h-3 transition-transform ${p.isExpanded ? 'rotate-90' : ''}`}
-                          viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"
-                        >
-                          <path d="M8 5l8 7-8 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <span className="font-bold truncate">{p.name}</span>
+                    {/* Client with chevron on left */}
+                    <div className="pl-4 pr-2 py-2 text-[#cccccc] text-sm flex items-center gap-2 truncate" title={p.client || ''}>
+                      <svg
+                        className={`w-3 h-3 transition-transform ${p.isExpanded ? 'rotate-90' : ''}`}
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"
+                      >
+                        <path d="M8 5l8 7-8 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="truncate">{p.client || ''}</span>
+                    </div>
+                    {/* Project name (no chevron) with status aligned to right */}
+                    <div className="pr-2 py-2 text-[#cccccc] text-sm flex items-center" title={p.name}>
+                      <div className="min-w-0 truncate">
+                        <span className="truncate">{p.name}</span>
                       </div>
                       <div className="relative ml-auto" data-dropdown onClick={(e) => e.stopPropagation()}>
                         <StatusBadge
                           status={(p.status as any) || 'active'}
-                          variant={caps.data?.canEditProjects ? 'editable' : 'default'}
-                          onClick={() => p.id && caps.data?.canEditProjects && statusDropdown.toggle(String(p.id))}
+                          // Always render the editable button variant for parity with Assignments
+                          variant="editable"
+                          onClick={() => p.id && statusDropdown.toggle(String(p.id))}
                           isUpdating={p.id ? projectStatus.isUpdating(p.id) : false}
-                          size="sm"
-                          weight="bold"
                         />
                         {p.id && (
                           <StatusDropdown
@@ -771,45 +786,46 @@ const ProjectAssignmentsGrid: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    {/* Actions: refresh totals + add person (icon-only) */}
+                    {/* Actions: add person (left) + refresh (right) to match Assignments */}
                     <div className="py-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      {/* Add person */}
                       <button
-                      className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${p.id && loadingTotals.has(p.id) ? 'bg-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent text-[#cccccc] hover:text-white hover:bg-[#3e3e42]'}`}
-                      onClick={async () => {
-                        if (!p.id) return;
-                        if (loadingTotals.has(p.id)) return;
-                        setLoadingTotals(prev => new Set(prev).add(p.id!));
-                        try {
-                          await refreshTotalsForProject(p.id!);
-                          showToast('Totals refreshed', 'success');
-                        } catch (e: any) {
-                          showToast('Failed to refresh totals: ' + (e?.message || 'Unknown error'), 'error');
-                        } finally {
-                          setLoadingTotals(prev => { const n = new Set(prev); n.delete(p.id!); return n; });
-                        }
-                      }}
-                      title="Refresh totals"
-                    >
-                      {p.id && loadingTotals.has(p.id) ? (
-                        <span className="inline-block w-3 h-3 border-2 border-[#969696] border-t-transparent rounded-full animate-spin" />
-                      ) : (
+                        className="w-7 h-7 flex items-center justify-center text-[#cccccc] hover:text-white hover:bg-[#3e3e42] rounded"
+                        onClick={() => { setIsAddingForProject(prev => prev === p.id ? null : p.id!); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1); }}
+                        title="Add person"
+                      >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                          <path d="M4 4v6h6M20 20v-6h-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          <path d="M20 8a8 8 0 10-6.65 12.9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round"/>
                         </svg>
-                      )}
-                    </button>
-                    {/* Add person icon */}
-                    <button
-                      className="w-7 h-7 flex items-center justify-center text-[#cccccc] hover:text-white hover:bg-[#3e3e42] rounded"
-                      onClick={() => { setIsAddingForProject(prev => prev === p.id ? null : p.id!); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1); }}
-                      title="Add person"
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round"/>
-                      </svg>
-                    </button>
-                  </div>
+                      </button>
+                      {/* Refresh totals */}
+                      <button
+                        className={`w-7 h-7 rounded transition-colors text-center text-sm font-medium leading-none ${p.id && loadingTotals.has(p.id) ? 'bg-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent text-[#cccccc] hover:text-white hover:bg-[#3e3e42]'}`}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Refresh totals"
+                        onClick={async () => {
+                          if (!p.id) return;
+                          if (loadingTotals.has(p.id)) return;
+                          setLoadingTotals(prev => new Set(prev).add(p.id!));
+                          try {
+                            await refreshTotalsForProject(p.id!);
+                            showToast('Totals refreshed', 'success');
+                          } catch (e: any) {
+                            showToast('Failed to refresh totals: ' + (e?.message || 'Unknown error'), 'error');
+                          } finally {
+                            setLoadingTotals(prev => { const n = new Set(prev); n.delete(p.id!); return n; });
+                          }
+                        }}
+                        disabled={p.id ? loadingTotals.has(p.id) : false}
+                        aria-busy={p.id ? loadingTotals.has(p.id) : false}
+                      >
+                        {p.id && loadingTotals.has(p.id) ? (
+                          <span className="inline-block w-3 h-3 border-2 border-[#969696] border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <span aria-hidden>?</span>
+                        )}
+                      </button>
+                    </div>
                     {/* Week totals */}
                     {weeks.map((w) => {
                       const v = (hoursByProject[p.id!] || {})[w.date] || 0;
@@ -831,7 +847,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
                   {/* Expanded assignment rows */}
                   {p.isExpanded && (
-                    <div className="grid gap-px p-2 bg-[#252526]" style={{ gridTemplateColumns: gridTemplate }}>
+                    <div className="p-2">
                       {/* Add person row */}
                       {isAddingForProject === p.id && (
                         <>
@@ -870,7 +886,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                   setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
                                 }
                               }}
-                              placeholder="Search people by name…"
+                              placeholder="Search people by nameâ€¦"
                               className="w-full h-7 bg-[#3e3e42] border border-[#5a5a5e] rounded px-2 text-[#e0e0e0] text-xs"
                             />
                             {/* Dropdown */}
@@ -907,7 +923,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       {/* Loading skeleton for assignments */}
                       {loadingAssignments.has(p.id!) && (
                         <>
-                          <div className="pl-8 pr-2 py-2 text-[#969696] text-xs italic col-span-3">Loading assignments…</div>
+                          <div className="pl-8 pr-2 py-2 text-[#969696] text-xs italic col-span-3">Loading assignmentsâ€¦</div>
                           {weeks.map((w) => (
                             <div key={w.date} className="py-2 border-l border-[#3e3e42]">
                               <div className="mx-auto w-10 h-4 bg-[#2d2d30] animate-pulse rounded" />
@@ -917,13 +933,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       )}
                       {/* Render rows */}
                       {!loadingAssignments.has(p.id!) && p.assignments.map(asn => (
-                        <React.Fragment key={asn.id}>
+                        <div key={asn.id} className="grid gap-px p-1 bg-[#252526] hover:bg-[#2d2d30] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
                           <div className="pl-8 pr-2 py-2 text-[#cccccc] text-xs truncate" title={asn.personName || String(asn.person)}>
                             {asn.personName || `Person #${asn.person}`}
                           </div>
-                          <div className="pr-2 py-2 text-[#969696] text-xs truncate">
-                            {/* free slot for role/notes if needed */}
-                          </div>
+                          <div className="pr-2 py-2 text-[#969696] text-xs truncate"></div>
                           <div className="py-2 flex items-center justify-center">
                             <button
                               className="w-5 h-5 flex items-center justify-center text-[#969696] hover:text-red-400 hover:bg-red-500/20 rounded"
@@ -933,7 +947,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                 try {
                                   await assignmentsApi.delete(asn.id);
                                   setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: x.assignments.filter(a => a.id !== asn.id) } : x));
-                                  // Refresh totals for this project
                                   const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
                                   const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
                                   const res = await getProjectTotals([p.id!], { weeks: weeks.length, department: dept, include_children: inc });
@@ -1139,7 +1152,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                               </div>
                             );
                           })}
-                        </React.Fragment>
+                        </div>
                       ))}
                       {/* Empty state */}
                       {!loadingAssignments.has(p.id!) && p.assignments.length === 0 && (
@@ -1167,7 +1180,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <span>Available (≤70%)</span>
+                <span>Available (â‰¤70%)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
@@ -1193,3 +1206,5 @@ const ProjectAssignmentsGrid: React.FC = () => {
 };
 
 export default ProjectAssignmentsGrid;
+
+

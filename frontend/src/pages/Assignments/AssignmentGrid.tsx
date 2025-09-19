@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Assignment Grid - Real implementation of the spreadsheet-like assignment interface
  * Replaces the form-based AssignmentForm with a modern grid view
  */
@@ -22,11 +22,36 @@ interface ProjectWithState extends Project {
   lastUpdated?: number;
 }
 import Layout from '@/components/layout/Layout';
+import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
 import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import Toast from '@/components/ui/Toast';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useUpdateProject } from '@/hooks/useProjects';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
+
+// Deliverable coloring (shared with calendar/project grid)
+const deliverableTypeColors: Record<string, string> = {
+  bulletin: '#3b82f6',
+  cd: '#fb923c',
+  dd: '#818cf8',
+  ifc: '#06b6d4',
+  ifp: '#f472b6',
+  masterplan: '#a78bfa',
+  sd: '#f59e0b',
+  milestone: '#64748b',
+};
+
+function classifyDeliverableType(input?: string | null): string {
+  const t = (input || '').toLowerCase();
+  if (/(\b)bulletin(\b)/.test(t)) return 'bulletin';
+  if (/(\b)cd(\b)/.test(t)) return 'cd';
+  if (/(\b)dd(\b)/.test(t)) return 'dd';
+  if (/(\b)ifc(\b)/.test(t)) return 'ifc';
+  if (/(\b)ifp(\b)/.test(t)) return 'ifp';
+  if (/(master ?plan)/.test(t)) return 'masterplan';
+  if (/(\b)sd(\b)/.test(t)) return 'sd';
+  return 'milestone';
+}
 
 interface PersonWithAssignments extends Person {
   assignments: Assignment[];
@@ -178,13 +203,35 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
         const isCurrentSelected = isSelected(monday.date);
         const currentHours = assignment.weeklyHours?.[monday.date] || 0;
         const deliverablesForWeek = assignment.project ? getDeliverablesForProjectWeek(assignment.project, monday.date) : [];
-        const hasDeliverable = (deliverablesForWeek?.length || 0) > 0;
+        // Build deduped entries for vertical bars (prefer entries with percentage per type)
+        const deliverableBarEntries: { type: string; percentage?: number }[] = (() => {
+          const map: { type: string; percentage?: number }[] = [];
+          const add = (type: string, pct?: number) => {
+            const numPct = pct == null ? undefined : Number(pct);
+            const existing = map.find(e => e.type === type);
+            if (existing) {
+              if ((existing.percentage == null) && (numPct != null)) existing.percentage = numPct;
+              else if (existing.percentage != null && numPct != null && existing.percentage !== numPct) {
+                if (!map.some(e => e.type === type && e.percentage === numPct)) map.push({ type, percentage: numPct });
+              }
+              return;
+            }
+            map.push({ type, percentage: numPct });
+          };
+          (deliverablesForWeek || []).forEach(d => {
+            const type = classifyDeliverableType((d as any).description);
+            const pct = (d as any).percentage == null ? undefined : Number((d as any).percentage);
+            add(type, pct);
+          });
+          return map;
+        })();
+        const hasDeliverable = deliverableBarEntries.length > 0;
         const deliverableTooltip = hasDeliverable
           ? deliverablesForWeek
               .map(d => {
                 const pct = (d.percentage ?? '') !== '' ? `${d.percentage}% ` : '';
                 const desc = d.description || '';
-                const notes = d.notes ? ` — ${d.notes}` : '';
+                const notes = d.notes ? ` - ${d.notes}` : '';
                 return `${pct}${desc}${notes}`.trim();
               })
               .filter(Boolean)
@@ -197,7 +244,6 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
             className={`
               relative cursor-pointer transition-colors border-l border-[#3e3e42]
               ${isCurrentSelected ? 'bg-[#007acc]/20 border-[#007acc]' : 'hover:bg-[#3e3e42]/50'}
-              ${!isCurrentSelected && hasDeliverable ? ' bg-[#007acc]/10' : ''}
             `}
             onClick={(e) => onCellSelect(personId, assignment.id, monday.date, e.shiftKey)}
             onMouseDown={(e) => { e.preventDefault(); onCellMouseDown(personId, assignment.id, monday.date); }}
@@ -221,6 +267,13 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
             ) : (
               <div className="h-8 flex items-center justify-center text-xs text-[#cccccc]">
                 {currentHours > 0 ? currentHours : ''}
+              </div>
+            )}
+            {hasDeliverable && (
+              <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px] pointer-events-none">
+                {deliverableBarEntries.slice(0,3).map((e, idx) => (
+                  <div key={idx} className="w-[3px] rounded" style={{ background: deliverableTypeColors[e.type] || '#007acc' }} />
+                ))}
               </div>
             )}
           </div>
@@ -362,6 +415,8 @@ const AssignmentGrid: React.FC = () => {
 
   // Weeks header: from grid snapshot when available (server weekKeys only)
   const [weeks, setWeeks] = useState<{ date: string; display: string; fullDisplay: string }[]>([]);
+  const [weeksHorizon, setWeeksHorizon] = useState<number>(12);
+  const url = useGridUrlState();
 
   // Create dynamic grid template based on column widths
   const gridTemplate = useMemo(() => {
@@ -372,6 +427,21 @@ const AssignmentGrid: React.FC = () => {
   const totalMinWidth = useMemo(() => {
     return clientColumnWidth + projectColumnWidth + 40 + (weeks.length * 70) + 20; // +20 for gaps/padding
   }, [clientColumnWidth, projectColumnWidth, weeks.length]);
+
+  // Initialize from URL (weeks + view)
+  useEffect(() => {
+    try {
+      url.set('view', 'people');
+      const w = url.get('weeks');
+      if (w) {
+        const n = parseInt(w, 10);
+        if (!Number.isNaN(n) && n >= 1 && n <= 26) setWeeksHorizon(n);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Persist weeks in URL
+  useEffect(() => { url.set('weeks', String(weeksHorizon)); }, [weeksHorizon]);
 
   // Measure sticky header height so the week header can offset correctly
   const headerRef = useRef<HTMLDivElement | null>(null);
@@ -742,11 +812,11 @@ const AssignmentGrid: React.FC = () => {
   };
 
 
-  // Load data on mount and when department filter changes
+  // Load data on mount and when department filter or weeks horizon changes
   useAuthenticatedEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deptState.selectedDepartmentId, deptState.includeChildren]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon]);
 
   // Global keyboard navigation and direct typing
   useEffect(() => {
@@ -898,7 +968,7 @@ const AssignmentGrid: React.FC = () => {
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
 
       // Heuristic: use async if weeks target > 20 or estimated people count > 400
-      const targetWeeks = 12; // current default
+      const targetWeeks = weeksHorizon;
       let estimatedCount = 0;
       try {
         const headPage = await peopleApi.list({ page: 1, page_size: 1, department: dept, include_children: inc });
@@ -1425,6 +1495,25 @@ const AssignmentGrid: React.FC = () => {
                 >
                   {isSnapshotMode ? 'Snapshot Mode' : 'Legacy Mode'}
                 </span>
+              </div>
+              {/* Weeks controls + Project View */}
+              <div className="flex items-center gap-2 text-xs text-[#969696]">
+                <span>Weeks</span>
+                {[8,12,16,20].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setWeeksHorizon(n)}
+                    className={`px-2 py-0.5 rounded border ${weeksHorizon===n?'border-[#007acc] text-[#e0e0e0] bg-[#007acc]/20':'border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                  >{n}</button>
+                ))}
+                {(() => {
+                  const s = selectedStatusFilters;
+                  const statusStr = s.size===0 || s.has('Show All') ? '' : `&status=${encodeURIComponent(Array.from(s).join(','))}`;
+                  const href = `/project-assignments?view=project&weeks=${weeksHorizon}${statusStr}`;
+                  return (
+                    <a href={href} className="ml-2 px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]">Project View</a>
+                  );
+                })()}
               </div>
             </div>
               <div className="flex items-center gap-4">

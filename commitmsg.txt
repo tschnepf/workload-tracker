@@ -1,0 +1,1 @@
+Project Assignments: make project status pill editable; backend: fix /deliverables/bulk endpoint; default sort client->project on snapshot load

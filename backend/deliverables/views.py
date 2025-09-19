@@ -124,6 +124,57 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Implement bulk fetch with validation and error handling
+        try:
+            # Parse and validate project IDs
+            project_ids = [int(pid.strip()) for pid in project_ids_param.split(',') if pid.strip()]
+
+            if not project_ids:
+                return Response(
+                    {"error": "At least one valid project ID is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Limit to reasonable number of projects to prevent abuse
+            if len(project_ids) > 200:
+                return Response(
+                    {"error": "Maximum 200 project IDs allowed"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Single efficient query to get all deliverables
+            deliverables = (
+                Deliverable.objects
+                .filter(project_id__in=project_ids)
+                .order_by('sort_order', 'percentage', 'date')
+                .select_related('project')
+            )
+
+            # Group deliverables by project_id
+            grouped_deliverables = defaultdict(list)
+            for deliverable in deliverables:
+                serialized_data = DeliverableSerializer(deliverable).data
+                grouped_deliverables[str(deliverable.project_id)].append(serialized_data)
+
+            # Ensure all requested projects are represented in response
+            result = {}
+            for pid in project_ids:
+                result[str(pid)] = grouped_deliverables.get(str(pid), [])
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except ValueError:
+            return Response(
+                {"error": "Invalid project ID format. Use comma-separated integers."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logging.exception("Failed to fetch bulk deliverables")
+            return Response(
+                {"error": f"Failed to fetch bulk deliverables: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @extend_schema(
         parameters=[
             OpenApiParameter(name='start', type=str, required=False, description='YYYY-MM-DD'),
@@ -186,52 +237,6 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             resp['Last-Modified'] = http_date(int(last_updated.timestamp()))
         resp['ETag'] = etag_val
         return resp
-        
-        try:
-            # Parse and validate project IDs
-            project_ids = [int(pid.strip()) for pid in project_ids_param.split(',') if pid.strip()]
-            
-            if not project_ids:
-                return Response(
-                    {"error": "At least one valid project ID is required"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Limit to reasonable number of projects to prevent abuse
-            if len(project_ids) > 200:
-                return Response(
-                    {"error": "Maximum 200 project IDs allowed"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Single efficient query to get all deliverables
-            deliverables = Deliverable.objects.filter(
-                project_id__in=project_ids
-            ).order_by('sort_order', 'percentage', 'date').select_related('project')
-            
-            # Group deliverables by project_id
-            grouped_deliverables = defaultdict(list)
-            for deliverable in deliverables:
-                serialized_data = DeliverableSerializer(deliverable).data
-                grouped_deliverables[str(deliverable.project_id)].append(serialized_data)
-            
-            # Ensure all requested projects are represented in response
-            result = {}
-            for project_id in project_ids:
-                result[str(project_id)] = grouped_deliverables.get(str(project_id), [])
-            
-            return Response(result, status=status.HTTP_200_OK)
-            
-        except ValueError:
-            return Response(
-                {"error": "Invalid project ID format. Use comma-separated integers."}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to fetch bulk deliverables: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
     @extend_schema(
         parameters=[OpenApiParameter(name='weeks', type=int, required=False, description='Lookback window in weeks')],

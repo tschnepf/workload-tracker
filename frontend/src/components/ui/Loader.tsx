@@ -7,6 +7,17 @@ type LoaderProps = {
   className?: string;
 };
 
+// Sanitize loading text to avoid replacement chars (�) and smart punctuation
+function sanitizeMessage(text: string): string {
+  if (!text) return '';
+  return text
+    // Remove Unicode replacement character and zero-width/byte-order marks
+    .replace(/[\uFFFD\u200B\u200C\u200D\uFEFF]/g, '')
+    // Normalize typographic ellipsis … to three dots
+    .replace(/\u2026/g, '...')
+    .trim();
+}
+
 const Loader: React.FC<LoaderProps> = ({ message = 'Loading...', full = false, inline = false, className = '' }) => {
   const containerClasses = inline
     ? className
@@ -16,7 +27,7 @@ const Loader: React.FC<LoaderProps> = ({ message = 'Loading...', full = false, i
     <div role="status" aria-live="polite" aria-busy="true" className={containerClasses}>
       <div className="flex items-center space-x-3">
         <div className="animate-spin motion-reduce:animate-none rounded-full h-6 w-6 border-b-2 border-[#007acc]" aria-hidden="true"></div>
-        <div className="text-[#969696]">{message}</div>
+        <div className="text-[#969696]">{sanitizeMessage(message)}</div>
       </div>
     </div>
   );
