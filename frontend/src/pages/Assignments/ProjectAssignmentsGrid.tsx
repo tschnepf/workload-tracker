@@ -25,6 +25,9 @@ import { useCapabilities } from '@/hooks/useCapabilities';
 const ProjectAssignmentsGrid: React.FC = () => {
   const { state: deptState } = useDepartmentFilter();
   const [weeks, setWeeks] = useState<WeekHeader[]>([]);
+  // Manual sorting state
+  const [sortBy, setSortBy] = useState<'client' | 'project' | 'deliverable'>('client');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   // Projects state must be defined before any hook closures that read it
@@ -505,6 +508,67 @@ const ProjectAssignmentsGrid: React.FC = () => {
     url.set('status', val || null);
   }, [selectedStatusFilters]);
 
+  // Sorting helpers
+  const toggleSort = (key: 'client' | 'project' | 'deliverable') => {
+    setSortBy(prev => {
+      if (prev === key) {
+        setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDir('asc');
+      return key;
+    });
+  };
+
+  const getNextDeliverableIndex = (projectId?: number | null) => {
+    if (!projectId) return Number.POSITIVE_INFINITY;
+    for (let i = 0; i < weeks.length; i++) {
+      const wk = weeks[i]?.date;
+      const entries = (deliverableTypesByProjectWeek[projectId] || {})[wk] || [];
+      if (entries && entries.length > 0) return i;
+    }
+    return Number.POSITIVE_INFINITY;
+  };
+
+  const sortedProjects = React.useMemo(() => {
+    const list = [...projects];
+    const factor = sortDir === 'asc' ? 1 : -1;
+    list.sort((a, b) => {
+      if (sortBy === 'client') {
+        const ac = (a.client || '').toString().trim().toLowerCase();
+        const bc = (b.client || '').toString().trim().toLowerCase();
+        if (ac !== bc) {
+          if (!ac && bc) return 1 * factor; // empty last in asc
+          if (ac && !bc) return -1 * factor;
+          return ac.localeCompare(bc) * factor;
+        }
+        const an = (a.name || '').toString().trim().toLowerCase();
+        const bn = (b.name || '').toString().trim().toLowerCase();
+        return an.localeCompare(bn) * factor;
+      }
+      if (sortBy === 'project') {
+        const an = (a.name || '').toString().trim().toLowerCase();
+        const bn = (b.name || '').toString().trim().toLowerCase();
+        if (an !== bn) return an.localeCompare(bn) * factor;
+        const ac = (a.client || '').toString().trim().toLowerCase();
+        const bc = (b.client || '').toString().trim().toLowerCase();
+        return ac.localeCompare(bc) * factor;
+      }
+      // deliverable: earliest next deliverable in visible window
+      const ai = getNextDeliverableIndex(a.id);
+      const bi = getNextDeliverableIndex(b.id);
+      if (ai !== bi) return (ai - bi) * factor;
+      // tie-breaker: client, then name
+      const ac = (a.client || '').toString().trim().toLowerCase();
+      const bc = (b.client || '').toString().trim().toLowerCase();
+      if (ac !== bc) return ac.localeCompare(bc) * factor;
+      const an = (a.name || '').toString().trim().toLowerCase();
+      const bn = (b.name || '').toString().trim().toLowerCase();
+      return an.localeCompare(bn) * factor;
+    });
+    return list;
+  }, [projects, sortBy, sortDir, weeks, deliverableTypesByProjectWeek]);
+
   // React to URL-expanded changes (back/forward) and sync expansions
   useEffect(() => {
     try {
@@ -660,7 +724,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
         <div ref={headerScrollRef} className="sticky bg-[#2d2d30] border-b border-[#3e3e42] z-20 overflow-x-auto px-6" style={{ top: headerHeight }}>
           <div style={{ minWidth: totalMinWidth }}>
             <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
-              <div className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group">
+              <div
+                className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group cursor-pointer hover:text-[#e0e0e0]"
+                onClick={() => toggleSort('client')}
+                role="button"
+                aria-label="Sort by client"
+                aria-pressed={sortBy === 'client'}
+              >
                 Client
                 <div
                   className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[#007acc]/50 transition-colors"
@@ -668,7 +738,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
                   title="Drag to resize client column"
                 />
               </div>
-              <div className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group">
+              <div
+                className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group cursor-pointer hover:text-[#e0e0e0]"
+                onClick={() => toggleSort('project')}
+                role="button"
+                aria-label="Sort by project"
+                aria-pressed={sortBy === 'project'}
+              >
                 Project
                 <div
                   className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[#007acc]/50 transition-colors"
@@ -678,7 +754,14 @@ const ProjectAssignmentsGrid: React.FC = () => {
               </div>
               <div className="text-center text-xs text-[#969696] px-1">+/-</div>
               {weeks.map((week, index) => (
-                <div key={week.date} className="text-center px-1 select-none" role="columnheader" aria-label={`Week starting ${week.display}`}>
+                <div
+                  key={week.date}
+                  className="text-center px-1 select-none cursor-pointer hover:text-[#e0e0e0]"
+                  role="columnheader"
+                  aria-label={`Week starting ${week.display}`}
+                  onClick={() => toggleSort('deliverable')}
+                  title="Sort by next deliverable date"
+                >
                   <div className="text-xs font-medium text-[#cccccc]">{week.display}</div>
                   <div className="text-[10px] text-[#757575]">W{index + 1}</div>
                 </div>
@@ -695,7 +778,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
           {!loading && !error && projects.length > 0 && (
             <div className="space-y-1" style={{ minWidth: totalMinWidth }}>
-              {projects.map((p) => (
+              {sortedProjects.map((p) => (
                 <div key={p.id} className="border-b border-[#3e3e42] last:border-b-0">
                   {/* Project summary row */}
                   <div
