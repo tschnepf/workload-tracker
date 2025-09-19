@@ -1578,7 +1578,7 @@ const AssignmentGrid: React.FC = () => {
                     <button
                       className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
                       title="Refresh all data"
-                      onClick={() => loadData()}
+                      onClick={async () => { await loadData(); showToast('Refresh complete', 'success'); }}
                       disabled={loading}
                     >
                       {loading ? 'Refreshing…' : 'Refresh All'}

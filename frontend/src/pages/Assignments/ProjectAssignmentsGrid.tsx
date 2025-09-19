@@ -72,6 +72,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
   // Reload trigger for Refresh All
   const [reloadCounter, setReloadCounter] = useState<number>(0);
+  const [pendingRefresh, setPendingRefresh] = useState<boolean>(false);
   const isSnapshotMode = true;
   // Column widths + resizing (parity with person grid)
   const [clientColumnWidth, setClientColumnWidth] = useState(210);
@@ -322,7 +323,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
         if (!mounted) return;
         setError(e?.message || 'Failed to load project grid snapshot');
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          if (pendingRefresh) {
+            try { showToast('Refresh complete', 'success'); } catch {}
+            setPendingRefresh(false);
+          }
+        }
       }
     };
     load();
@@ -800,6 +807,14 @@ const ProjectAssignmentsGrid: React.FC = () => {
                     >
                       Collapse All
                     </button>
+                    <button
+                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      title="Refresh all data"
+                      onClick={() => { setPendingRefresh(true); setReloadCounter(c => c + 1); }}
+                      disabled={loading}
+                    >
+                      {loading ? 'Refreshing…' : 'Refresh All'}
+                    </button>
                   </>
                 )}
               />
@@ -1275,14 +1290,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 <div className="w-2 h-2 rounded-full bg-red-500"></div>
                 <span>Overallocated (&gt;100%)</span>
               </div>
-              <button
-                className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
-                title="Refresh all data"
-                onClick={() => setReloadCounter(c => c + 1)}
-                disabled={loading}
-              >
-                {loading ? 'Refreshing…' : 'Refresh All'}
-              </button>
             </div>
           </div>
 
