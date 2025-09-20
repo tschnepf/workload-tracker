@@ -1,14 +1,14 @@
 # Automatic Hour Reallocation Implementation Plan (Final)
 
 ## Overview
-Implement automatic hour reallocation for assignments when deliverable dates change. The system is Sunday-only end-to-end (no Ã‚Â±3-day tolerance), uses whole-week shifts, stores integer hours only (rounded up), and auto-applies on date change (no confirmation modal). Assignment.weekly_hours is the single source of truth; DeliverableAssignment.weekly_hours is removed.
+Implement automatic hour reallocation for assignments when deliverable dates change. The system is Sunday-only end-to-end (no Ãƒâ€šÃ‚Â±3-day tolerance), uses whole-week shifts, stores integer hours only (rounded up), and auto-applies on date change (no confirmation modal). Assignment.weekly_hours is the single source of truth; DeliverableAssignment.weekly_hours is removed.
 
 ## Current System Snapshot
 
 - Assignment: `weekly_hours` JSON with keys `YYYY-MM-DD` (not strictly Sunday today). Authoritative for aggregates and UI.
 - Deliverable: optional `date`. Ordering is by `sort_order`, then `percentage`, then `date`.
 - DeliverableAssignment: currently includes `weekly_hours`, but it is not used in calculations; it will be removed.
-- Some views use Monday labels and Ã‚Â±3-day tolerance; these will be standardized to Sunday-only.
+- Some views use Monday labels and Ãƒâ€šÃ‚Â±3-day tolerance; these will be standardized to Sunday-only.
 
 ## Core Policies
 
@@ -49,11 +49,15 @@ Frontend week helpers:
   - `getSundaysFrom(start: Date, count: number): string[]`
 - Replace any ad-hoc week generation with these helpers (see Step 8).
 
+
+Timezone handling for week math:
+- Backend: use Django `timezone.now().date()` and pure `date` arithmetic in all places (no `datetime.utcnow()` or `datetime.now()`), so week boundaries are stable.
+- Frontend: implement week helpers with UTC methods (`getUTCDay`, `setUTCDate`). When converting a week key `YYYY-MM-DD` to a Date, use `YYYY-MM-DDT00:00:00Z` (or build from Y/M/D in UTC) to avoid local‑TZ drift.
 Concrete tasks:
 - Implement `weeks.ts` and export the helpers above; add unit tests where applicable.
 - Refactor `pages/Assignments/AssignmentForm.tsx` to import `weeks.ts` helpers for all week key generation and validation.
 - In `AssignmentForm`, remove half-hour increments and ensure hour inputs are integer-only (step=1, min=0) and ceil on change/blur before sending.
-- Repo-wide scan: replace any places generating week keys from Ã¢â‚¬Å“current dateÃ¢â‚¬Â or non-Sunday logic to use `sundayOf(...)` and `weekKey(...)`.
+- Repo-wide scan: replace any places generating week keys from ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œcurrent dateÃƒÂ¢Ã¢â€šÂ¬Ã‚Â or non-Sunday logic to use `sundayOf(...)` and `weekKey(...)`.
 
 ---
 
@@ -74,14 +78,20 @@ Run normalization before enabling auto-reallocation.
 - Remove validation that blocks over-allocation on assignments:
   - Delete the hard cap check (168 h/week) in `AssignmentSerializer` (backend/assignments/serializers.py: around lines 70).
   - Delete the cross-field capacity check loop comparing weekly hours vs `person.weekly_capacity` (backend/assignments/serializers.py: around lines 77 and 85).
-- DeliverableAssignment serializer: remove the 0Ã¢â‚¬â€œ80 per-week cap if the field remains temporarily (backend/deliverables/serializers.py: around lines 88 and 99). This is moot once the field is removed (see Step 7).
+- DeliverableAssignment serializer: remove the 0ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“80 per-week cap if the field remains temporarily (backend/deliverables/serializers.py: around lines 88 and 99). This is moot once the field is removed (see Step 7).
 - Keep non-negativity, type, and date-format validations.
 
 ---
 
 ### Step 4: Backend Refactors to Sunday-Only
 
-- Project grid snapshot (assignments/views): replace Monday keys and Ã‚Â±3-day tolerance with Sunday-only keys.
+
+Explicit timezone refactors:
+- Replace any `datetime.utcnow().date()` or `datetime.now().date()` with `timezone.now().date()` in:
+  - backend/deliverables/views.py (date ranges and defaults)
+  - backend/people/models.py (utilization calculations)
+  - any other modules doing week "now" math
+- Project grid snapshot (assignments/views): replace Monday keys and Ãƒâ€šÃ‚Â±3-day tolerance with Sunday-only keys.
 - People utilization (people/models): remove tolerance scanning; read exact Sunday keys.
 - Deliverable staffing summary (deliverables/views): aggregate from Assignment.weekly_hours using Sunday keys only; do not read DeliverableAssignment.weekly_hours.
 
@@ -92,7 +102,7 @@ Run normalization before enabling auto-reallocation.
 Implement reallocation using strict Sunday keys and integer semantics:
 - Compute `delta_weeks = weeks_between(sunday_of(old_date), sunday_of(new_date))`.
 - Reallocation window rules:
-  - Shift only buckets whose Sunday falls in the original window for the deliverable: `(prev.date + 1 day) Ã¢â€ â€™ old.date`, inclusive. If there is no previous dated deliverable, use the configured lookback (e.g., 6 weeks) as the window.
+  - Shift only buckets whose Sunday falls in the original window for the deliverable: `(prev.date + 1 day) ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ old.date`, inclusive. If there is no previous dated deliverable, use the configured lookback (e.g., 6 weeks) as the window.
   - Do not backfill the new window; users can adjust manually after the move.
   - If the new date crosses earlier than the previous deliverable or later than the next deliverable, still only consider buckets in the original window to avoid cascading across neighbors.
 - For each affected assignment: shift each Sunday bucket in the window by `delta_weeks` weeks.
@@ -101,7 +111,7 @@ Implement reallocation using strict Sunday keys and integer semantics:
 - Performance guardrails:
   - Short-circuit if no buckets exist in the original window; return early with a summary (`assignmentsChanged = 0`).
   - Batch writes and avoid serializer overhead; coerce and write JSON atomically in a service function.
-  - Use Django `bulk_update(assignments_to_update, ['weekly_hours','updated_at'], batch_size=200–500)` inside the same transaction to reduce round trips and refresh ETags reliably.
+  - Use Django `bulk_update(assignments_to_update, ['weekly_hours','updated_at'], batch_size=200â€“500)` inside the same transaction to reduce round trips and refresh ETags reliably.
   - Validate Sunday keys and integer coercion in the service; do not pass this hot path through serializers.
   - All writes store integers.
 
@@ -127,15 +137,15 @@ Implement reallocation using strict Sunday keys and integer semantics:
   - Concurrency & idempotency:
     - Require `If-Match` (ETag) on PATCH; stale updates return 412.
     - Double-PATCH with the same date results in `assignmentsChanged = 0` and no data mutation.
-- Permissions for this action: `IsAuthenticated` (override the default role-based guard). Keep a lightweight audit log at INFO with request id, user id, deliverable id, fromÃ¢â€ â€™to dates, `assignmentsChanged`, and duration.
+- Permissions for this action: `IsAuthenticated` (override the default role-based guard). Keep a lightweight audit log at INFO with request id, user id, deliverable id, fromÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢to dates, `assignmentsChanged`, and duration.
 - Gate by `FEATURES['AUTO_REALLOCATION']` (if disabled, just update the date without reallocation).
 
 ---
 
-### Step 7: Schema Change â€” Remove DeliverableAssignment.weekly_hours
+### Step 7: Schema Change Ã¢â‚¬â€ Remove DeliverableAssignment.weekly_hours
 
 - Frontend first (safe rollout):
-  - Remove weeklyHours from 	ypes/models.ts (around 226–237) for DeliverableAssignment.
+  - Remove weeklyHours from 	ypes/models.ts (around 226â€“237) for DeliverableAssignment.
   - Update deliverableAssignmentsApi.create/update to stop sending weeklyHours.
   - Refactor MilestoneReviewTool (and any callers) to not set weeklyHours.
 - Backend next (after FE lands or coordinated):
@@ -145,6 +155,7 @@ Implement reallocation using strict Sunday keys and integer semantics:
   - Update OpenAPI schema accordingly.
 - Migration hygiene: remove references in admin/serializers/tests in the same PR; add a deprecation note in docs explaining the field was never used for calculations.
 ### Step 8: Frontend Changes (Sunday UI, No Modal)
+- UTC-safe parsing: ensure `weeks.ts` uses UTC date methods; parse `YYYY-MM-DD` week keys as `YYYY-MM-DDT00:00:00Z` (or construct in UTC) when a Date is needed; avoid local parsing functions that can shift dates around DST.
 
 - Make the UI Sunday-based (labels/selectors align to Sundays).
 - On date picker change in Deliverables UI, immediately PATCH the deliverable. Do not show a confirmation modal.
@@ -170,7 +181,7 @@ Implement reallocation using strict Sunday keys and integer semantics:
 - Batch updates to reduce DB round trips; write JSON fields in a single save per assignment when possible.
  - Tunables:
    - `REBALANCE_SYNC_LIMIT` (default 250) controls when to defer to async Celery reallocation.
-   - `BULK_UPDATE_BATCH_SIZE` (default 200–500) controls Django `bulk_update` batch size for write efficiency.
+   - `BULK_UPDATE_BATCH_SIZE` (default 200â€“500) controls Django `bulk_update` batch size for write efficiency.
 
 ---
 
@@ -197,7 +208,9 @@ Frontend tests:
 - Date change triggers PATCH and shows toast with warnings and jump action.
 - Sunday-based labels and grids render correctly.
 
-E2E (Playwright): change date Ã¢â€ â€™ auto-apply Ã¢â€ â€™ grids reflect updated integer hours.
+E2E (Playwright): change date ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ auto-apply ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ grids reflect updated integer hours.
+- Timezone/DST: verify `sunday_of_week` behavior around DST transition weeks to ensure no off‑by‑one.
+
 
 ---
 
@@ -209,7 +222,7 @@ E2E (Playwright): change date Ã¢â€ â€™ auto-apply Ã¢â€ â€™
   - Integer-only storage and rounding-up rule (ceil after collision sum).
   - Auto-apply flow and capacity warnings (non-blocking).
   - UTC date-only policy and DST considerations.
-- Remove garbled characters and remove all references to Ã‚Â±3 days across code, tests, and docs.
+- Remove garbled characters and remove all references to Ãƒâ€šÃ‚Â±3 days across code, tests, and docs.
 - Update OpenAPI schema and client regeneration notes.
 - Add a deprecation note for `DeliverableAssignment.weekly_hours` explaining it was never used for calculations.
 
