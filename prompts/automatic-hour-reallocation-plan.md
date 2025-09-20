@@ -1,14 +1,14 @@
 # Automatic Hour Reallocation Implementation Plan (Final)
 
 ## Overview
-Implement automatic hour reallocation for assignments when deliverable dates change. The system is Sunday-only end-to-end (no ±3-day tolerance), uses whole-week shifts, stores integer hours only (rounded up), and auto-applies on date change (no confirmation modal). Assignment.weekly_hours is the single source of truth; DeliverableAssignment.weekly_hours is removed.
+Implement automatic hour reallocation for assignments when deliverable dates change. The system is Sunday-only end-to-end (no Ã‚Â±3-day tolerance), uses whole-week shifts, stores integer hours only (rounded up), and auto-applies on date change (no confirmation modal). Assignment.weekly_hours is the single source of truth; DeliverableAssignment.weekly_hours is removed.
 
 ## Current System Snapshot
 
 - Assignment: `weekly_hours` JSON with keys `YYYY-MM-DD` (not strictly Sunday today). Authoritative for aggregates and UI.
 - Deliverable: optional `date`. Ordering is by `sort_order`, then `percentage`, then `date`.
 - DeliverableAssignment: currently includes `weekly_hours`, but it is not used in calculations; it will be removed.
-- Some views use Monday labels and ±3-day tolerance; these will be standardized to Sunday-only.
+- Some views use Monday labels and Ã‚Â±3-day tolerance; these will be standardized to Sunday-only.
 
 ## Core Policies
 
@@ -22,6 +22,7 @@ Implement automatic hour reallocation for assignments when deliverable dates cha
 - Permissions: allow any authenticated user to modify deliverable dates (and thus reallocate). Keep lightweight audit logging.
 - Caching/ETags: rely on `updated_at` and existing signals for invalidation; return updated ETags.
 - Timezone: all date math is UTC date-only; `sunday_of_week` uses naive UTC dates to avoid DST issues.
+- Frontend parity: the UI also uses integer hours only (no decimals anywhere) and enforces Sunday-only week keys for all week pickers and grids.
 
 ## Implementation Steps
 
@@ -38,6 +39,21 @@ Add `backend/core/week_utils.py` with helpers:
 Adopt Sunday-only policy across new and refactored code paths.
 
 Unit tests: `backend/core/tests/test_week_utils.py`.
+
+---
+
+Frontend week helpers:
+- Add `frontend/src/utils/weeks.ts` with:
+  - `sundayOf(d: Date): Date`
+  - `weekKey(d: Date): string` (Sunday `YYYY-MM-DD`)
+  - `getSundaysFrom(start: Date, count: number): string[]`
+- Replace any ad-hoc week generation with these helpers (see Step 8).
+
+Concrete tasks:
+- Implement `weeks.ts` and export the helpers above; add unit tests where applicable.
+- Refactor `pages/Assignments/AssignmentForm.tsx` to import `weeks.ts` helpers for all week key generation and validation.
+- In `AssignmentForm`, remove half-hour increments and ensure hour inputs are integer-only (step=1, min=0) and ceil on change/blur before sending.
+- Repo-wide scan: replace any places generating week keys from Ã¢â‚¬Å“current dateÃ¢â‚¬Â or non-Sunday logic to use `sundayOf(...)` and `weekKey(...)`.
 
 ---
 
@@ -58,14 +74,14 @@ Run normalization before enabling auto-reallocation.
 - Remove validation that blocks over-allocation on assignments:
   - Delete the hard cap check (168 h/week) in `AssignmentSerializer` (backend/assignments/serializers.py: around lines 70).
   - Delete the cross-field capacity check loop comparing weekly hours vs `person.weekly_capacity` (backend/assignments/serializers.py: around lines 77 and 85).
-- DeliverableAssignment serializer: remove the 0–80 per-week cap if the field remains temporarily (backend/deliverables/serializers.py: around lines 88 and 99). This is moot once the field is removed (see Step 7).
+- DeliverableAssignment serializer: remove the 0Ã¢â‚¬â€œ80 per-week cap if the field remains temporarily (backend/deliverables/serializers.py: around lines 88 and 99). This is moot once the field is removed (see Step 7).
 - Keep non-negativity, type, and date-format validations.
 
 ---
 
 ### Step 4: Backend Refactors to Sunday-Only
 
-- Project grid snapshot (assignments/views): replace Monday keys and ±3-day tolerance with Sunday-only keys.
+- Project grid snapshot (assignments/views): replace Monday keys and Ã‚Â±3-day tolerance with Sunday-only keys.
 - People utilization (people/models): remove tolerance scanning; read exact Sunday keys.
 - Deliverable staffing summary (deliverables/views): aggregate from Assignment.weekly_hours using Sunday keys only; do not read DeliverableAssignment.weekly_hours.
 
@@ -76,7 +92,7 @@ Run normalization before enabling auto-reallocation.
 Implement reallocation using strict Sunday keys and integer semantics:
 - Compute `delta_weeks = weeks_between(sunday_of(old_date), sunday_of(new_date))`.
 - Reallocation window rules:
-  - Shift only buckets whose Sunday falls in the original window for the deliverable: `(prev.date + 1 day) → old.date`, inclusive. If there is no previous dated deliverable, use the configured lookback (e.g., 6 weeks) as the window.
+  - Shift only buckets whose Sunday falls in the original window for the deliverable: `(prev.date + 1 day) Ã¢â€ â€™ old.date`, inclusive. If there is no previous dated deliverable, use the configured lookback (e.g., 6 weeks) as the window.
   - Do not backfill the new window; users can adjust manually after the move.
   - If the new date crosses earlier than the previous deliverable or later than the next deliverable, still only consider buckets in the original window to avoid cascading across neighbors.
 - For each affected assignment: shift each Sunday bucket in the window by `delta_weeks` weeks.
@@ -92,40 +108,52 @@ Implement reallocation using strict Sunday keys and integer semantics:
 ### Step 6: Auto-Apply on Deliverable Date Change
 
 - Modify the Deliverable update (PATCH) path to detect `date` changes and invoke the reallocation algorithm inside the same DB transaction with row locks (`select_for_update()` on affected assignments in a stable pk order to reduce deadlocks).
-- Response contract (documented in OpenAPI):
-  - `deliverableId: number`
-  - `oldDate: string | null`
-  - `newDate: string | null`
-  - `assignmentsChanged: number`
-  - `capacityWarnings: Array<{ personId: number, weekKey: string, totalHours: number, capacity: number }>`
-  - `touchedWeekKeys: string[]`
+- Compatibility-first response:
+  - Keep PATCH body unchanged (return the updated Deliverable as today).
+  - Add header `X-Reallocation-Summary: <json>` containing:
+    - `deliverableId: number`
+    - `oldDate: string | null`
+    - `newDate: string | null`
+    - `assignmentsChanged: number`
+    - `capacityWarnings: Array<{ personId: number, weekKey: string, totalHours: number, capacity: number }>`
+    - `touchedWeekKeys: string[]`
+  - Frontend: read and JSON-parse this header to show toasts and target cache invalidation.
+  - Optional later: extend OpenAPI to include a typed `reallocationSummary` in the PATCH response body and regenerate the client; until then, use the header for backward-compatibility.
 - Concurrency & idempotency:
   - Require `If-Match` (ETag) on PATCH; stale updates return 412.
   - Double-PATCH with the same date results in `assignmentsChanged = 0` and no data mutation.
-- Permissions for this action: `IsAuthenticated` (override the default role-based guard). Keep a lightweight audit log at INFO with request id, user id, deliverable id, from→to dates, `assignmentsChanged`, and duration.
+- Permissions for this action: `IsAuthenticated` (override the default role-based guard). Keep a lightweight audit log at INFO with request id, user id, deliverable id, fromÃ¢â€ â€™to dates, `assignmentsChanged`, and duration.
 - Gate by `FEATURES['AUTO_REALLOCATION']` (if disabled, just update the date without reallocation).
 
 ---
 
-### Step 7: Schema Change — Remove DeliverableAssignment.weekly_hours
+### Step 7: Schema Change â€” Remove DeliverableAssignment.weekly_hours
 
-- Add a migration to drop `DeliverableAssignment.weekly_hours`.
-- Update `DeliverableAssignmentSerializer` to remove `weeklyHours` and related validation.
-- Adjust any tests that referenced the field.
-- Update OpenAPI and frontend types to remove `weeklyHours` from DeliverableAssignment.
-- Migration hygiene: remove any references in admin, serializers, and tests in the same PR. Verify via code search that no references remain. Add a deprecation note in docs explaining the field was never used for calculations.
-
----
-
+- Frontend first (safe rollout):
+  - Remove weeklyHours from 	ypes/models.ts (around 226–237) for DeliverableAssignment.
+  - Update deliverableAssignmentsApi.create/update to stop sending weeklyHours.
+  - Refactor MilestoneReviewTool (and any callers) to not set weeklyHours.
+- Backend next (after FE lands or coordinated):
+  - Add a migration to drop DeliverableAssignment.weekly_hours.
+  - Update DeliverableAssignmentSerializer to remove weeklyHours and related validation.
+  - Adjust any tests that referenced the field.
+  - Update OpenAPI schema accordingly.
+- Migration hygiene: remove references in admin/serializers/tests in the same PR; add a deprecation note in docs explaining the field was never used for calculations.
 ### Step 8: Frontend Changes (Sunday UI, No Modal)
 
 - Make the UI Sunday-based (labels/selectors align to Sundays).
 - On date picker change in Deliverables UI, immediately PATCH the deliverable. Do not show a confirmation modal.
 - Ensure PATCH includes `If-Match` automatically (existing client behavior) to prevent lost updates.
-- Parse the response summary and show a non-blocking toast with any capacity warnings; include a link/action to jump to impacted person/weeks.
+- Parse  `X-Reallocation-Summary` from PATCH response headers; show a non-blocking toast with any capacity warnings; include a link/action to jump to impacted person/weeks; and use `touchedWeekKeys` for targeted invalidation. 
 - Invalidate cached data for affected assignments, project grid, and deliverables.
 - Centralize Sunday labels via a small date util to keep consistent week headers across views.
 - Remove any usage of DeliverableAssignment.weeklyHours (e.g., Milestone tools) and update types.
+- Hours input policy: enforce integers only across all hour inputs (no 0.5 steps). Use `step=1`, `min=0`, and onChange/onBlur round up to whole numbers. Update any form logic that currently allows half-hours (e.g., Assignments form) to use integer semantics.
+- Types and validation: keep `number` in TypeScript, but document and enforce integer semantics at validation boundaries and via rounding in the UI. Add helper to ceil values before sending to the API.
+- Calendar/week generation: when building week lists in the UI (e.g., Assignment forms and grids), generate keys from the nearest previous Sunday using `sundayOf(today)` and `getSundaysFrom(...)`, or use `availableWeeks` from the backend when provided. Do not start from arbitrary current dates.
+- Explicit refactor items:
+  - Update `pages/Assignments/AssignmentForm.tsx` to use `weeks.ts`; remove any decimal input allowances; apply ceil-on-blur.
+  - Repo-wide: update other components and utilities that generate week lists (projects grids, reports, heatmaps) to rely on Sunday keys via `weeks.ts`.
 
 ---
 
@@ -140,9 +168,9 @@ Implement reallocation using strict Sunday keys and integer semantics:
 
 ### Step 10: Observability & Recovery
 
-- Structured audit logging: request id, user id, deliverable id, from→to, `assignmentsChanged`, duration.
+- Structured audit logging: request id, user id, deliverable id, fromÃ¢â€ â€™to, `assignmentsChanged`, duration.
 - Metrics (if available): total reallocations, assignments updated per op, max weekly spike.
-- Optional recovery: a minimal management command to “undo last reallocation for deliverable X” using the audit snapshot.
+- Optional recovery: a minimal management command to Ã¢â‚¬Å“undo last reallocation for deliverable XÃ¢â‚¬Â using the audit snapshot.
 
 ---
 
@@ -161,7 +189,7 @@ Frontend tests:
 - Date change triggers PATCH and shows toast with warnings and jump action.
 - Sunday-based labels and grids render correctly.
 
-E2E (Playwright): change date → auto-apply → grids reflect updated integer hours.
+E2E (Playwright): change date Ã¢â€ â€™ auto-apply Ã¢â€ â€™ grids reflect updated integer hours.
 
 ---
 
@@ -173,7 +201,7 @@ E2E (Playwright): change date → auto-apply → grids reflect updated integer h
   - Integer-only storage and rounding-up rule (ceil after collision sum).
   - Auto-apply flow and capacity warnings (non-blocking).
   - UTC date-only policy and DST considerations.
-- Remove garbled characters and remove all references to ±3 days across code, tests, and docs.
+- Remove garbled characters and remove all references to Ã‚Â±3 days across code, tests, and docs.
 - Update OpenAPI schema and client regeneration notes.
 - Add a deprecation note for `DeliverableAssignment.weekly_hours` explaining it was never used for calculations.
 
@@ -199,6 +227,7 @@ E2E (Playwright): change date → auto-apply → grids reflect updated integer h
  - [ ] PATCH response includes `touchedWeekKeys`; clients use it for targeted invalidation
  - [ ] Idempotency and ETag-412 behavior verified
  - [ ] UTC date-only policy documented and used in code
+ - [ ] Frontend uses integer-only hour inputs (no decimals) and Sunday-only week keys everywhere
 
 ## Technical Requirements
 
@@ -218,6 +247,6 @@ Proceed sequentially with validation at each step:
 5) Reallocation algorithm (window rules, rounding order, batching)
 6) Transactional auto-apply on PATCH (response schema, ETag)
 7) Schema migration removing DeliverableAssignment.weekly_hours + API/types update
-8) Frontend Sunday UI + auto-apply integration + toasts + week header util
+8) Frontend: add `weeks.ts`; refactor `AssignmentForm` to use it; enforce integer-only inputs; repo-wide Sunday key usage; Sunday UI + auto-apply integration + toasts + week header util
 9) Observability & metrics; optional undo command
 10) Docs + cleanup; enable feature flag; monitor
