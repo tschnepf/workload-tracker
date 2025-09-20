@@ -101,7 +101,9 @@ Implement reallocation using strict Sunday keys and integer semantics:
 - Performance guardrails:
   - Short-circuit if no buckets exist in the original window; return early with a summary (`assignmentsChanged = 0`).
   - Batch writes and avoid serializer overhead; coerce and write JSON atomically in a service function.
-- All writes store integers.
+  - Use Django `bulk_update(assignments_to_update, ['weekly_hours','updated_at'], batch_size=200–500)` inside the same transaction to reduce round trips and refresh ETags reliably.
+  - Validate Sunday keys and integer coercion in the service; do not pass this hot path through serializers.
+  - All writes store integers.
 
 ---
 
@@ -119,9 +121,12 @@ Implement reallocation using strict Sunday keys and integer semantics:
     - `touchedWeekKeys: string[]`
   - Frontend: read and JSON-parse this header to show toasts and target cache invalidation.
   - Optional later: extend OpenAPI to include a typed `reallocationSummary` in the PATCH response body and regenerate the client; until then, use the header for backward-compatibility.
-- Concurrency & idempotency:
-  - Require `If-Match` (ETag) on PATCH; stale updates return 412.
-  - Double-PATCH with the same date results in `assignmentsChanged = 0` and no data mutation.
+ - Scale-aware execution:
+   - If `affectedAssignments > REBALANCE_SYNC_LIMIT` (default 250), enqueue a Celery job (feature-flagged) and return HTTP 202 with a `jobId`; the frontend can poll the existing job status endpoint and show progress.
+   - Otherwise, run synchronously within the request.
+  - Concurrency & idempotency:
+    - Require `If-Match` (ETag) on PATCH; stale updates return 412.
+    - Double-PATCH with the same date results in `assignmentsChanged = 0` and no data mutation.
 - Permissions for this action: `IsAuthenticated` (override the default role-based guard). Keep a lightweight audit log at INFO with request id, user id, deliverable id, fromÃ¢â€ â€™to dates, `assignmentsChanged`, and duration.
 - Gate by `FEATURES['AUTO_REALLOCATION']` (if disabled, just update the date without reallocation).
 
@@ -163,17 +168,20 @@ Implement reallocation using strict Sunday keys and integer semantics:
 - No new indexes/caches initially; measure first.
 - Optional: add a Celery background job for very large projects as a Phase 2 optimization (same service methods), but not required for MVP.
 - Batch updates to reduce DB round trips; write JSON fields in a single save per assignment when possible.
+ - Tunables:
+   - `REBALANCE_SYNC_LIMIT` (default 250) controls when to defer to async Celery reallocation.
+   - `BULK_UPDATE_BATCH_SIZE` (default 200–500) controls Django `bulk_update` batch size for write efficiency.
 
 ---
 
 ### Step 10: Observability & Recovery
 
-- Structured audit logging: request id, user id, deliverable id, fromÃ¢â€ â€™to, `assignmentsChanged`, duration.
+### Step 10: Observability & Recovery
+
+- Structured audit logging: request id, user id, deliverable id, from?to dates,  `assignmentsChanged`, duration. 
 - Metrics (if available): total reallocations, assignments updated per op, max weekly spike.
-- Optional recovery: a minimal management command to Ã¢â‚¬Å“undo last reallocation for deliverable XÃ¢â‚¬Â using the audit snapshot.
-
----
-
+- Audit snapshot (recommended): persist a compact before/after diff for touched assignments (only buckets moved) along with the metadata above; apply a TTL or archive strategy.
+- Optional recovery: a minimal management command to undo the last reallocation for a deliverable by replaying the stored snapshot.
 ### Step 11: Testing and QA
 
 Backend tests:
