@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Department, Person } from '@/types/models';
 import { departmentsApi, peopleApi } from '@/services/api';
-import Sidebar from '@/components/layout/Sidebar';
+import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -139,24 +139,23 @@ const DepartmentsList: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen bg-[#1e1e1e]">
-        <Sidebar />
-        <div className="flex-1 p-8 text-[#cccccc]">
-          Loading departments...
+      <Layout>
+        <div className="h-full min-h-0 flex items-center justify-center">
+          <div className="text-[#cccccc]">Loading departments...</div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="flex h-screen bg-[#1e1e1e]">
-      <Sidebar />
+    <Layout>
+      <div className="h-full min-h-0 flex bg-[#1e1e1e]">
       
       <div className="flex-1 overflow-hidden">
-        <div className="flex h-full">
+        <div className="flex h-full min-h-0">
           
           {/* Left Panel - Department List */}
-          <div className="w-1/3 p-6 border-r border-[#3e3e42] bg-[#252526]">
+          <div className="w-1/3 p-6 border-r border-[#3e3e42] bg-[#252526] min-h-0 overflow-y-auto">
             <div className="mb-6">
               <div className="flex justify-between items-center mb-4">
                 <h1 className="text-2xl font-bold text-[#cccccc]">Departments</h1>
@@ -235,7 +234,7 @@ const DepartmentsList: React.FC = () => {
           </div>
 
           {/* Right Panel - Department Details */}
-          <div className="flex-1 p-6 bg-[#1e1e1e]">
+          <div className="flex-1 p-6 bg-[#1e1e1e] min-h-0 overflow-y-auto">
             {selectedDepartment ? (
               <div>
                 <div className="flex justify-between items-start mb-6">
@@ -353,7 +352,8 @@ const DepartmentsList: React.FC = () => {
           }}
         />
       )}
-    </div>
+      </div>
+    </Layout>
   );
 };
 

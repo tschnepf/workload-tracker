@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import Layout from '@/components/layout/Layout';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
@@ -823,7 +823,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       onClick={() => { setPendingRefresh(true); setReloadCounter(c => c + 1); }}
                       disabled={loading}
                     >
-                      {loading ? 'Refreshing�' : 'Refresh All'}
+                      {loading ? 'Refreshing…' : 'Refresh All'}
                     </button>
                   </>
                 )}
@@ -1012,6 +1012,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                           <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      </button>
                     </div>
                     {/* Week totals */}
                     {weeks.map((w) => {
@@ -1073,7 +1075,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                   setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
                                 }
                               }}
-                              placeholder="Search people by name…"
+                              placeholder="Search people by nameâ€¦"
                               className="w-full h-7 bg-[#3e3e42] border border-[#5a5a5e] rounded px-2 text-[#e0e0e0] text-xs"
                             />
                             {/* Dropdown */}
@@ -1110,7 +1112,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       {/* Loading skeleton for assignments */}
                       {loadingAssignments.has(p.id!) && (
                         <>
-                          <div className="pl-8 pr-2 py-2 text-[#969696] text-xs italic col-span-3">Loading assignments…</div>
+                          <div className="pl-8 pr-2 py-2 text-[#969696] text-xs italic col-span-3">Loading assignmentsâ€¦</div>
                           {weeks.map((w) => (
                             <div key={w.date} className="py-2 border-l border-[#3e3e42]">
                               <div className="mx-auto w-10 h-4 bg-[#2d2d30] animate-pulse rounded" />
@@ -1257,7 +1259,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <span>Available (≤70%)</span>
+                <span>Available (â‰¤70%)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
@@ -1283,5 +1285,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
 };
 
 export default ProjectAssignmentsGrid;
+
 
 

@@ -10,7 +10,7 @@ import Input from '@/components/ui/Input';
 import Loader from '@/components/ui/Loader';
 import { Role } from '@/types/models';
 import { rolesApi, peopleApi, authApi } from '@/services/api';
-import Sidebar from '@/components/layout/Sidebar';
+import Layout from '@/components/layout/Layout';
 import RoleList from './components/RoleList';
 import RoleForm from './components/RoleForm';
 import RoleDeleteConfirm from './components/RoleDeleteConfirm';
@@ -121,25 +121,23 @@ const Settings: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex">
-        <Sidebar />
-        <div className="flex-1 p-6">
+      <Layout>
+        <div className="h-full min-h-0 p-6">
           <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
             <div className="py-10">
               <div className="max-w-md mx-auto">
-                <Loader inline message="Loading settings…" />
+                <Loader inline message="Loading settings..." />
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="flex">
-      <Sidebar />
-      <div className="flex-1 p-6">
+    <Layout>
+      <div className="h-full min-h-0 p-6 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold text-[#cccccc] mb-6">Settings</h1>
 
@@ -380,7 +378,7 @@ const Settings: React.FC = () => {
           />
         )}
       </div>
-    </div>
+    </Layout>
   );
 };
 

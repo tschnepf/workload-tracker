@@ -5,6 +5,7 @@ import { initializePerformanceMonitoring } from './utils/monitoring'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router'
 import App from './App'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+ 
 import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/hooks/useAuth'
 // Initialize ETag enhancements for assignments bulk updates
@@ -43,7 +44,6 @@ const router = createBrowserRouter([
     children: [
       // Public
       { path: 'login', element: <Login /> },
-
       // Redirect root to dashboard (protected)
       { index: true, element: <RequireAuth><Navigate to="/dashboard" replace /></RequireAuth> },
 

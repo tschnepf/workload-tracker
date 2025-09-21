@@ -23,7 +23,7 @@ interface PersonWithAvailability extends Person {
   skillMatchScore?: number;
   hasSkillMatch?: boolean;
 }
-import Sidebar from '@/components/layout/Sidebar';
+import Layout from '@/components/layout/Layout';
 import { showToast } from '@/lib/toastBus';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -1156,19 +1156,20 @@ const ProjectsList: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#1e1e1e] flex items-center justify-center">
-        <div className="text-[#969696]">Loading projects...</div>
-      </div>
+      <Layout>
+        <div className="h-full min-h-0 flex items-center justify-center">
+          <div className="text-[#969696]">Loading projects...</div>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#1e1e1e] flex">
-      <Sidebar />
-      <div className="flex-1 flex h-screen bg-[#1e1e1e]">
+    <Layout>
+      <div className="h-full min-h-0 flex bg-[#1e1e1e]">
         
         {/* Left Panel - Projects List */}
-        <div className="w-1/2 border-r border-[#3e3e42] flex flex-col min-w-0">
+        <div className="w-1/2 border-r border-[#3e3e42] flex flex-col min-w-0 min-h-0 overflow-y-auto">
           
           {/* Header */}
           <div className="p-3 border-b border-[#3e3e42]">
@@ -1292,7 +1293,7 @@ const ProjectsList: React.FC = () => {
         </div>
 
         {/* Right Panel - Project Details */}
-        <div className="w-1/2 flex flex-col bg-[#2d2d30] min-w-0">
+        <div className="w-1/2 flex flex-col bg-[#2d2d30] min-w-0 min-h-0 overflow-y-auto">
           {loading ? (
             <div className="p-4 space-y-3">
               <Skeleton rows={6} className="h-5" />
@@ -1672,7 +1673,7 @@ const ProjectsList: React.FC = () => {
         </div>
       </div>
       {/* Toasts are shown globally via ToastHost */}
-    </div>
+    </Layout>
   );
 };
 
@@ -1766,5 +1767,6 @@ function VirtualizedProjectsList({
     </div>
   );
 }
+
 
 

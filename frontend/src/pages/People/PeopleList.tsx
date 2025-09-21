@@ -11,7 +11,7 @@ import { Person, PersonSkill, SkillTag, Department, Role } from '@/types/models'
 import { peopleApi, personSkillsApi, skillTagsApi, departmentsApi, rolesApi } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
 import { showToast } from '@/lib/toastBus';
-import Sidebar from '@/components/layout/Sidebar';
+import Layout from '@/components/layout/Layout';
 import SkillsAutocomplete from '@/components/skills/SkillsAutocomplete';
 import PeopleListTable from './PeopleListTable';
 
@@ -690,20 +690,20 @@ const PeopleList: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#1e1e1e] flex items-center justify-center">
-        <div className="text-[#969696]">Loading people...</div>
-      </div>
+      <Layout>
+        <div className="h-full min-h-0 flex items-center justify-center">
+          <div className="text-[#969696]">Loading people...</div>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <>
-    <div className="min-h-screen bg-[#1e1e1e] flex">
-      <Sidebar />
-      <div className="flex-1 flex h-screen bg-[#1e1e1e]">
+    <Layout>
+      <div className="h-full min-h-0 flex bg-[#1e1e1e]">
         
         {/* Left Panel - People List */}
-        <div className="w-1/2 border-r border-[#3e3e42] flex flex-col min-w-0">
+        <div className="w-1/2 border-r border-[#3e3e42] flex flex-col min-w-0 min-h-0 overflow-y-auto">
           
           {/* Header */}
           <div className="p-3 border-b border-[#3e3e42]">
@@ -1008,7 +1008,7 @@ const PeopleList: React.FC = () => {
         </div>
 
         {/* Right Panel - Person Details */}
-        <div className="w-1/2 flex flex-col bg-[#2d2d30] min-w-0">
+        <div className="w-1/2 flex flex-col bg-[#2d2d30] min-w-0 min-h-0 overflow-y-auto">
           {loading ? (
             <div className="p-4 space-y-3">
               <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
@@ -1479,9 +1479,8 @@ const PeopleList: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
-    {/* Toasts are shown globally via ToastHost */}
-  </>
+      {/* Toasts are shown globally via ToastHost */}
+    </Layout>
   );
 };
 

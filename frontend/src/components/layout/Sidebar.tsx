@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router';
+import TooltipPortal from '@/components/ui/TooltipPortal';
 
 // Reusable Icon Component for navigation
 const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type: string, className?: string, isActive?: boolean }) => {
@@ -117,23 +118,7 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
   }
 };
 
-// Tooltip Component for hover labels
-const Tooltip = ({ children, title, description }: { children: React.ReactNode, title: string, description: string }) => (
-  <div className="group/tooltip relative">
-    {children}
-    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-[#2d2d30] border border-[#3e3e42] rounded-md shadow-lg z-50 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 pointer-events-none min-w-[180px]">
-      <div className="text-[#cccccc] text-sm font-medium mb-1">
-        {title}
-      </div>
-      <div className="text-[#969696] text-xs">
-        {description}
-      </div>
-      {/* Arrow pointing to the icon */}
-      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#3e3e42]" />
-      <div className="absolute right-full top-1/2 -translate-y-1/2 translate-x-px border-4 border-transparent border-r-[#2d2d30]" />
-    </div>
-  </div>
-);
+// Tooltips render via portal for menu items so they never get clipped by the scrollbox
 
 type SidebarProps = {
   showLabels?: boolean; // When true, render text labels next to icons (used for mobile drawer)
@@ -237,26 +222,28 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
   const linkLayoutClass = showLabels ? 'justify-start gap-3 w-full' : 'justify-center';
 
   return (
-    <div className={`bg-[#2d2d30] border-r border-[#3e3e42] flex-shrink-0 ${widthClass}`}>
-      
+    <div className={`bg-[#2d2d30] border-r border-[#3e3e42] flex-shrink-0 ${widthClass} h-screen flex flex-col z-10`}>
+
       {/* Header */}
-      <div className="h-16 flex items-center border-b border-[#3e3e42] relative">
-        <Tooltip title="Workload Tracker" description="Resource Management System">
+      <div className="h-16 flex items-center border-b border-[#3e3e42] relative flex-shrink-0">
+        <TooltipPortal title="Workload Tracker" description="Resource Management System">
           <div className="w-full h-full flex items-center justify-center">
             <div className="w-8 h-8 bg-[#007acc] rounded flex items-center justify-center">
               <span className="text-white text-sm font-bold">WT</span>
             </div>
           </div>
-        </Tooltip>
+        </TooltipPortal>
       </div>
 
-      {/* Navigation Menu */}
-      <nav className="flex-1 py-4">
+      {/* Scrollable middle: Navigation Menu */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+      <nav className="py-4" role="navigation" aria-label="Primary">
         <div className="space-y-1 px-3">
           {menuItems.map((item) => (
-            <Tooltip key={item.path} title={item.label} description={item.description}>
+            <TooltipPortal key={item.path} title={item.label} description={item.description}>
               <Link
                 to={item.path}
+                aria-label={!showLabels ? item.label : undefined}
                 className={`
                   group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
                   ${isActive(item.path) 
@@ -276,7 +263,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                   <span className="text-[#cccccc] text-sm">{item.label}</span>
                 )}
               </Link>
-            </Tooltip>
+            </TooltipPortal>
           ))}
         </div>
 
@@ -284,9 +271,10 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
         <div className="my-4 mx-6 border-t border-[#3e3e42]" />
         <div className="space-y-1 px-3">
           {departmentItems.map((item) => (
-            <Tooltip key={item.path} title={item.label} description={item.description}>
+            <TooltipPortal key={item.path} title={item.label} description={item.description}>
               <Link
                 to={item.path}
+                aria-label={!showLabels ? item.label : undefined}
                 className={`
                   group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
                   ${isActive(item.path) 
@@ -306,7 +294,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                   <span className="text-[#cccccc] text-sm">{item.label}</span>
                 )}
               </Link>
-            </Tooltip>
+            </TooltipPortal>
           ))}
         </div>
 
@@ -314,9 +302,10 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
         <div className="my-4 mx-6 border-t border-[#3e3e42]" />
         <div className="space-y-1 px-3">
           {systemItems.map((item) => (
-            <Tooltip key={item.path} title={item.label} description={item.description}>
+            <TooltipPortal key={item.path} title={item.label} description={item.description}>
               <Link
                 to={item.path}
+                aria-label={!showLabels ? item.label : undefined}
                 className={`
                   group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
                   ${isActive(item.path) 
@@ -336,50 +325,49 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                   <span className="text-[#cccccc] text-sm">{item.label}</span>
                 )}
               </Link>
-            </Tooltip>
+            </TooltipPortal>
           ))}
         </div>
-
-
-        {/* Separator */}
-        <div className="my-6 mx-6 border-t border-[#3e3e42]" />
-
-        {/* Bottom Section */}
-        <div className="px-3 space-y-1">
-          {/* User Profile */}
-          <Tooltip title="User Profile" description="Account settings">
-            <Link
-              to="/profile"
-              className={`flex items-center rounded-md hover:bg-[#3e3e42]/50 cursor-pointer transition-colors px-3 py-2.5 ${linkLayoutClass}`}
-            >
-              <div className="w-6 h-6 bg-[#007acc] rounded-full flex items-center justify-center flex-shrink-0">
-                <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </div>
-              {showLabels && (
-                <span className="text-[#cccccc] text-sm">Profile</span>
-              )}
-            </Link>
-          </Tooltip>
-
-          {/* Help */}
-          <Tooltip title="Help & Support" description="Documentation and assistance">
-            <Link
-              to="/help"
-              className={`flex items-center rounded-md text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50 transition-colors px-3 py-2.5 ${linkLayoutClass}`}
-            >
-              <div className="flex-shrink-0">
-                <IconComponent type="help" className="w-4 h-4" />
-              </div>
-              {showLabels && (
-                <span className="text-[#cccccc] text-sm">Help</span>
-              )}
-            </Link>
-          </Tooltip>
-        </div>
       </nav>
+      </div>
+
+      {/* Bottom Section (pinned) */}
+      <div className="px-3 space-y-1 py-4 border-t border-[#3e3e42] flex-shrink-0">
+        {/* User Profile */}
+        <TooltipPortal title="User Profile" description="Account settings">
+          <Link
+            to="/profile"
+            aria-label={!showLabels ? 'Profile' : undefined}
+            className={`flex items-center rounded-md hover:bg-[#3e3e42]/50 cursor-pointer transition-colors px-3 py-2.5 ${linkLayoutClass}`}
+          >
+            <div className="w-6 h-6 bg-[#007acc] rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
+            {showLabels && (
+              <span className="text-[#cccccc] text-sm">Profile</span>
+            )}
+          </Link>
+        </TooltipPortal>
+
+        {/* Help */}
+        <TooltipPortal title="Help & Support" description="Documentation and assistance">
+          <Link
+            to="/help"
+            aria-label={!showLabels ? 'Help' : undefined}
+            className={`flex items-center rounded-md text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50 transition-colors px-3 py-2.5 ${linkLayoutClass}`}
+          >
+            <div className="flex-shrink-0">
+              <IconComponent type="help" className="w-4 h-4" />
+            </div>
+            {showLabels && (
+              <span className="text-[#cccccc] text-sm">Help</span>
+            )}
+          </Link>
+        </TooltipPortal>
+      </div>
     </div>
   );
 };
