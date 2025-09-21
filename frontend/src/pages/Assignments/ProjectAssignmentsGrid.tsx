@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import Layout from '@/components/layout/Layout';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
@@ -823,7 +823,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       onClick={() => { setPendingRefresh(true); setReloadCounter(c => c + 1); }}
                       disabled={loading}
                     >
-                      {loading ? 'Refreshing…' : 'Refresh All'}
+                      {loading ? 'Refreshing�' : 'Refresh All'}
                     </button>
                   </>
                 )}
@@ -1012,35 +1012,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                           <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round"/>
-                        </svg>
-                      </button>
-                      {/* Refresh totals */}
-                      <button
-                        className={`w-7 h-7 rounded transition-colors text-center text-sm font-medium leading-none ${p.id && loadingTotals.has(p.id) ? 'bg-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent text-[#cccccc] hover:text-white hover:bg-[#3e3e42]'}`}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Refresh totals"
-                        onClick={async () => {
-                          if (!p.id) return;
-                          if (loadingTotals.has(p.id)) return;
-                          setLoadingTotals(prev => new Set(prev).add(p.id!));
-                          try {
-                            await refreshTotalsForProject(p.id!);
-                            showToast('Totals refreshed', 'success');
-                          } catch (e: any) {
-                            showToast('Failed to refresh totals: ' + (e?.message || 'Unknown error'), 'error');
-                          } finally {
-                            setLoadingTotals(prev => { const n = new Set(prev); n.delete(p.id!); return n; });
-                          }
-                        }}
-                        disabled={p.id ? loadingTotals.has(p.id) : false}
-                        aria-busy={p.id ? loadingTotals.has(p.id) : false}
-                      >
-                        {p.id && loadingTotals.has(p.id) ? (
-                          <span className="inline-block w-3 h-3 border-2 border-[#969696] border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <span aria-hidden>?</span>
-                        )}
-                      </button>
                     </div>
                     {/* Week totals */}
                     {weeks.map((w) => {
@@ -1102,7 +1073,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                   setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
                                 }
                               }}
-                              placeholder="Search people by nameâ€¦"
+                              placeholder="Search people by name…"
                               className="w-full h-7 bg-[#3e3e42] border border-[#5a5a5e] rounded px-2 text-[#e0e0e0] text-xs"
                             />
                             {/* Dropdown */}
@@ -1139,7 +1110,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       {/* Loading skeleton for assignments */}
                       {loadingAssignments.has(p.id!) && (
                         <>
-                          <div className="pl-8 pr-2 py-2 text-[#969696] text-xs italic col-span-3">Loading assignmentsâ€¦</div>
+                          <div className="pl-8 pr-2 py-2 text-[#969696] text-xs italic col-span-3">Loading assignments…</div>
                           {weeks.map((w) => (
                             <div key={w.date} className="py-2 border-l border-[#3e3e42]">
                               <div className="mx-auto w-10 h-4 bg-[#2d2d30] animate-pulse rounded" />
@@ -1286,7 +1257,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <span>Available (â‰¤70%)</span>
+                <span>Available (≤70%)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
