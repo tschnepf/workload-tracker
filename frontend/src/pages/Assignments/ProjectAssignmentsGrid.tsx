@@ -223,6 +223,41 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
   };
 
+  // Refresh assignments for a specific project
+  const refreshProjectAssignments = async (projectId: number) => {
+    setLoadingAssignments(prev => new Set(prev).add(projectId));
+    try {
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc } as any);
+      const rows = (resp as any).results || [];
+      setProjects(prev => prev.map(p => (p.id === projectId ? { ...p, assignments: rows } : p)));
+      showToast('Project assignments refreshed', 'success');
+    } catch (e: any) {
+      showToast('Failed to refresh project assignments: ' + (e?.message || 'Unknown error'), 'error');
+    } finally {
+      setLoadingAssignments(prev => { const n = new Set(prev); n.delete(projectId); return n; });
+    }
+  };
+
+  // Refresh assignments for all projects (both expanded and collapsed)
+  const refreshAllAssignments = async () => {
+    if (projects.length === 0) {
+      showToast('No projects available to refresh', 'warning');
+      return;
+    }
+
+    try {
+      // Refresh assignments for all projects in parallel
+      await Promise.all(
+        projects.map(project => refreshProjectAssignments(project.id!))
+      );
+      showToast(`Refreshed assignments for all ${projects.length} projects`, 'success');
+    } catch (error) {
+      showToast('Failed to refresh some project assignments', 'error');
+    }
+  };
+
   // Initialize from URL params once
   React.useEffect(() => {
     try {
@@ -772,40 +807,22 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 rightActions={(
                   <>
                     <button
-                      className="px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
-                      title="Expand all projects"
+                      className={`px-2 py-0.5 rounded border border-[#3e3e42] text-xs transition-colors ${loadingAssignments.size > 0 ? 'text-[#969696] cursor-wait' : 'text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      title="Expand all projects and refresh their assignments"
                       onClick={async () => {
                         try {
-                          // Mark all expanded first
+                          // Expand all projects first
                           setProjects(prev => prev.map(p => ({ ...p, isExpanded: true })));
                           // Update URL expanded list
                           const ids = projects.map(p => p.id!).filter(Boolean);
                           if (ids.length > 0) url.set('expanded', ids.join(','));
-                          // Load assignments for any project that doesn't have them
-                          const missing = projects.filter(p => (p.id && (!p.assignments || p.assignments.length === 0))).map(p => p.id!) as number[];
-                          if (missing.length > 0) {
-                            const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-                            const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-                            setLoadingAssignments(prev => {
-                              const n = new Set(prev);
-                              missing.forEach(id => n.add(id));
-                              return n;
-                            });
-                            await Promise.all(missing.map(async (pid) => {
-                              try {
-                                const resp = await assignmentsApi.list({ project: pid, department: dept, include_children: inc } as any);
-                                const rows = (resp as any).results || [];
-                                setProjects(prev => prev.map(x => x.id === pid ? { ...x, assignments: rows, isExpanded: true } : x));
-                              } catch {}
-                              finally {
-                                setLoadingAssignments(prev => { const n = new Set(prev); n.delete(pid); return n; });
-                              }
-                            }));
-                          }
+                          // Refresh assignments for all projects to ensure up-to-date data
+                          await refreshAllAssignments();
                         } catch {}
                       }}
+                      disabled={loadingAssignments.size > 0}
                     >
-                      Expand All
+                      {loadingAssignments.size > 0 ? 'Expanding…' : 'Expand All'}
                     </button>
                     <button
                       className="px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
@@ -818,12 +835,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       Collapse All
                     </button>
                     <button
-                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
-                      title="Refresh all data"
-                      onClick={() => { setPendingRefresh(true); setReloadCounter(c => c + 1); }}
-                      disabled={loading}
+                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading || loadingAssignments.size > 0 ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      title="Refresh assignments for all projects"
+                      onClick={refreshAllAssignments}
+                      disabled={loading || loadingAssignments.size > 0}
                     >
-                      {loading ? 'Refreshing…' : 'Refresh All'}
+                      {loadingAssignments.size > 0 ? 'Refreshing…' : 'Refresh All'}
                     </button>
                   </>
                 )}

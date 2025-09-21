@@ -1123,6 +1123,24 @@ const AssignmentGrid: React.FC = () => {
     }
   };
 
+  // Refresh assignments for all people (both expanded and collapsed)
+  const refreshAllAssignments = async () => {
+    if (people.length === 0) {
+      showToast('No people available to refresh', 'warning');
+      return;
+    }
+
+    try {
+      // Refresh assignments for all people in parallel
+      await Promise.all(
+        people.map(person => refreshPersonAssignments(person.id!))
+      );
+      showToast(`Refreshed assignments for all ${people.length} people`, 'success');
+    } catch (error) {
+      showToast('Failed to refresh some assignments', 'error');
+    }
+  };
+
   // Toggle person expansion
   const togglePersonExpanded = (personId: number) => {
     const person = people.find(p => p.id === personId);
@@ -1548,32 +1566,19 @@ const AssignmentGrid: React.FC = () => {
                 rightActions={(
                   <>
                     <button
-                      className="px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
-                      title="Expand all people"
+                      className={`px-2 py-0.5 rounded border border-[#3e3e42] text-xs transition-colors ${loadingAssignments.size > 0 ? 'text-[#969696] cursor-wait' : 'text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      title="Expand all people and refresh their assignments"
                       onClick={async () => {
                         try {
-                          // Expand all
+                          // Expand all people first
                           setPeople(prev => prev.map(p => ({ ...p, isExpanded: true })));
-                          // Load assignments for any person not yet loaded
-                          const allIds = people.map(p => p.id!).filter(Boolean) as number[];
-                          const toLoad = allIds.filter(id => !loadedAssignmentIds.has(id));
-                          if (toLoad.length > 0) {
-                            setLoadingAssignments(prev => { const n = new Set(prev); toLoad.forEach(id => n.add(id)); return n; });
-                            await Promise.all(toLoad.map(async (pid) => {
-                              try {
-                                const rows = await assignmentsApi.byPerson(pid);
-                                setPeople(prev => prev.map(x => x.id === pid ? { ...x, assignments: rows, isExpanded: true } : x));
-                                setLoadedAssignmentIds(prev => new Set(prev).add(pid));
-                              } catch {}
-                              finally {
-                                setLoadingAssignments(prev => { const n = new Set(prev); n.delete(pid); return n; });
-                              }
-                            }));
-                          }
+                          // Refresh assignments for all people to ensure up-to-date data
+                          await refreshAllAssignments();
                         } catch {}
                       }}
+                      disabled={loadingAssignments.size > 0}
                     >
-                      Expand All
+                      {loadingAssignments.size > 0 ? 'Expanding…' : 'Expand All'}
                     </button>
                     <button
                       className="px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
@@ -1585,12 +1590,12 @@ const AssignmentGrid: React.FC = () => {
                       Collapse All
                     </button>
                     <button
-                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
-                      title="Refresh all data"
-                      onClick={async () => { await loadData(); showToast('Refresh complete', 'success'); }}
-                      disabled={loading}
+                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading || loadingAssignments.size > 0 ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      title="Refresh assignments for all people"
+                      onClick={refreshAllAssignments}
+                      disabled={loading || loadingAssignments.size > 0}
                     >
-                      {loading ? 'Refreshing…' : 'Refresh All'}
+                      {loadingAssignments.size > 0 ? 'Refreshing…' : 'Refresh All'}
                     </button>
                   </>
                 )}
