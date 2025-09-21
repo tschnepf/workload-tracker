@@ -101,7 +101,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (normalized to Monday)'),
+            OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Sunday key)'),
             OpenApiParameter(name='department', type=int, required=False, description='Filter people by department id'),
             OpenApiParameter(name='include_children', type=int, required=False, description='Include child departments (0|1)'),
             OpenApiParameter(name='candidates_only', type=int, required=False, description='Limit to departments already staffing this project (0|1)')
@@ -113,18 +113,19 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         """Return availability snapshot for people relevant to the project context.
 
         Response items: { personId, personName, totalHours, capacity, availableHours, utilizationPercent }
-        Uses Monday as canonical week key; tolerant to JSON keys +/- 3 days in assignments.
+        Uses Sunday as canonical week key; exact JSON key lookup (no tolerance).
         """
         from datetime import date as _date, timedelta as _td, datetime as _dt
         try:
-            # Normalize week to Monday
+            # Normalize week to Sunday
             week_str = request.query_params.get('week')
             if week_str:
                 d = _dt.strptime(week_str, '%Y-%m-%d').date()
             else:
                 today = _date.today()
                 d = today
-            week_monday = d - _td(days=d.weekday())
+            from core.week_utils import sunday_of_week
+            week_monday = sunday_of_week(d)
         except Exception:
             return Response({'detail': 'Invalid week format, expected YYYY-MM-DD'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -269,16 +270,6 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                                 val = float(wh[wk_key] or 0)
                             except (TypeError, ValueError):
                                 val = 0.0
-                        else:
-                            for off in range(-3, 4):
-                                d2 = week_monday + _td(days=off)
-                                k2 = d2.strftime('%Y-%m-%d')
-                                if k2 in wh:
-                                    try:
-                                        val = float(wh[k2] or 0)
-                                    except (TypeError, ValueError):
-                                        val = 0.0
-                                    break
                         allocated += val
                     available = max(0.0, cap - allocated)
                     util = round((allocated / cap * 100.0), 1) if cap > 0 else 0.0

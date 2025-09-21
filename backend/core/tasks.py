@@ -48,29 +48,20 @@ def generate_grid_snapshot_async(self, weeks: int = 12, department: Optional[int
     asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id')
     people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
 
-    # Mondays for requested horizon
+    # Sundays for requested horizon (Sunday-only policy)
+    from core.week_utils import sunday_of_week
     today = date.today()
-    start_monday = today - timedelta(days=today.weekday())
-    week_keys = [(start_monday + timedelta(weeks=w)).strftime('%Y-%m-%d') for w in range(weeks)]
+    start_sunday = sunday_of_week(today)
+    week_keys = [(start_sunday + timedelta(weeks=w)).isoformat() for w in range(weeks)]
 
     # helper: tolerate +/- 3 days against provided Monday key
-    def hours_for_week_from_json(weekly_hours: dict, monday_key: str) -> float:
+    def hours_for_week_from_json(weekly_hours: dict, sunday_key: str) -> float:
         if not weekly_hours:
             return 0.0
-        if monday_key in weekly_hours:
-            try:
-                return float(weekly_hours[monday_key] or 0)
-            except Exception:
-                return 0.0
-        monday_date = date.fromisoformat(monday_key)
-        for off in range(-3, 4):
-            k = (monday_date + timedelta(days=off)).strftime('%Y-%m-%d')
-            if k in weekly_hours:
-                try:
-                    return float(weekly_hours[k] or 0)
-                except Exception:
-                    return 0.0
-        return 0.0
+        try:
+            return float(weekly_hours.get(sunday_key) or 0)
+        except Exception:
+            return 0.0
 
     total = max(1, people_qs.count())
     processed = 0

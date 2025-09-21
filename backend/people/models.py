@@ -50,6 +50,111 @@ class Person(models.Model):
     def __str__(self):
         return self.name
     
+    def get_current_utilization_sunday(self):
+        """Sunday-only current utilization based on weekly hours."""
+        from datetime import datetime
+        from core.week_utils import sunday_of_week
+
+        active_assignments = self.assignments.filter(is_active=True)
+
+        today = datetime.now().date()
+        current_week_key = sunday_of_week(today).strftime('%Y-%m-%d')
+
+        total_allocated_hours = 0.0
+        assignment_details = []
+        for assignment in active_assignments:
+            wh = assignment.weekly_hours or {}
+            try:
+                v = float(wh.get(current_week_key) or 0)
+            except Exception:
+                v = 0.0
+            total_allocated_hours += v
+            if v > 0:
+                assignment_details.append({
+                    'project_name': assignment.project_name,
+                    'weekly_hours': v,
+                    'date_key_used': current_week_key,
+                    'allocation_percentage': min(100, (v / self.weekly_capacity * 100)) if self.weekly_capacity > 0 else 0,
+                })
+
+        total_percentage = (total_allocated_hours / self.weekly_capacity * 100) if self.weekly_capacity > 0 else 0
+        available_hours = max(0, (self.weekly_capacity or 0) - total_allocated_hours)
+
+        return {
+            'total_percentage': round(total_percentage, 1),
+            'allocated_hours': round(total_allocated_hours, 1),
+            'available_hours': round(available_hours, 1),
+            'is_overallocated': total_allocated_hours > (self.weekly_capacity or 0),
+            'current_week': current_week_key,
+            'assignments': assignment_details,
+        }
+
+    def get_utilization_over_weeks_sunday(self, weeks=1):
+        """Sunday-only utilization aggregated over multiple weeks (average)."""
+        from datetime import datetime, timedelta
+        from core.week_utils import sunday_of_week
+
+        active_assignments = self.assignments.filter(is_active=True)
+
+        today = datetime.now().date()
+        start_sunday = sunday_of_week(today)
+        week_keys = [(start_sunday + timedelta(weeks=w)).strftime('%Y-%m-%d') for w in range(int(weeks or 1))]
+
+        total_allocated_hours = 0.0
+        assignment_details = []
+        week_totals = {wk: 0.0 for wk in week_keys}
+
+        for assignment in active_assignments:
+            wh = assignment.weekly_hours or {}
+            assignment_total_hours = 0.0
+            assignment_weeks_with_data = 0
+            for wk in week_keys:
+                try:
+                    v = float(wh.get(wk) or 0)
+                except Exception:
+                    v = 0.0
+                if v > 0:
+                    assignment_total_hours += v
+                    assignment_weeks_with_data += 1
+                    week_totals[wk] += v
+            total_allocated_hours += assignment_total_hours
+            if assignment_total_hours > 0:
+                assignment_details.append({
+                    'project_name': assignment.project_name,
+                    'total_hours': assignment_total_hours,
+                    'average_weekly_hours': assignment_total_hours / weeks if weeks else assignment_total_hours,
+                    'weeks_with_data': assignment_weeks_with_data,
+                    'allocation_percentage': min(100, ((assignment_total_hours / (weeks or 1)) / (self.weekly_capacity or 1) * 100)) if self.weekly_capacity > 0 else 0,
+                })
+
+        average_weekly_hours = total_allocated_hours / weeks if weeks else total_allocated_hours
+        average_percentage = (average_weekly_hours / self.weekly_capacity * 100) if self.weekly_capacity > 0 else 0
+        average_available_hours = max(0, (self.weekly_capacity or 0) - average_weekly_hours)
+
+        peak_weekly_hours = max(week_totals.values()) if week_totals else 0.0
+        peak_percentage = (peak_weekly_hours / self.weekly_capacity * 100) if self.weekly_capacity > 0 else 0
+        peak_week_key = None
+        if peak_weekly_hours > 0:
+            for wk, val in week_totals.items():
+                if val == peak_weekly_hours:
+                    peak_week_key = wk
+                    break
+
+        return {
+            'total_percentage': round(average_percentage, 1),
+            'allocated_hours': round(average_weekly_hours, 1),
+            'available_hours': round(average_available_hours, 1),
+            'is_overallocated': average_weekly_hours > (self.weekly_capacity or 0),
+            'peak_percentage': round(round(peak_percentage, 2), 1),
+            'peak_weekly_hours': round(peak_weekly_hours, 1),
+            'peak_week_key': peak_week_key,
+            'is_peak_overallocated': peak_weekly_hours > (self.weekly_capacity or 0),
+            'weeks_analyzed': weeks,
+            'week_keys': week_keys,
+            'week_totals': {k: round(v, 1) for k, v in week_totals.items()},
+            'total_hours_all_weeks': round(total_allocated_hours, 1),
+            'assignments': assignment_details,
+        }
     def get_current_utilization(self):
         """Calculate current utilization based on weekly hours (RETROFIT)"""
         from datetime import datetime, timedelta

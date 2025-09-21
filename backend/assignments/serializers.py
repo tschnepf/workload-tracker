@@ -49,45 +49,33 @@ class AssignmentSerializer(serializers.ModelSerializer):
         }
     
     def validate_weeklyHours(self, value):
-        """Validate weekly hours data structure and values"""
+        """Validate weekly hours data structure and values.
+
+        Over-allocation is allowed; we only check structure, date format, and non-negativity.
+        """
         if not isinstance(value, dict):
             raise serializers.ValidationError("Weekly hours must be a dictionary")
-        
-        # Validate each week's hours
+
+        from datetime import datetime
         for week_key, hours in value.items():
             # Validate week key format (should be YYYY-MM-DD)
             try:
-                from datetime import datetime
                 datetime.strptime(week_key, '%Y-%m-%d')
             except ValueError:
                 raise serializers.ValidationError(f"Invalid week date format: {week_key}. Use YYYY-MM-DD")
-            
-            # Validate hours value
+
+            # Validate hours value (non-negative, numeric). No hard caps.
             try:
                 hours_float = float(hours)
                 if hours_float < 0:
                     raise serializers.ValidationError(f"Hours cannot be negative for week {week_key}")
-                if hours_float > 168:  # Max hours in a week
-                    raise serializers.ValidationError(f"Hours cannot exceed 168 per week for week {week_key}")
             except (ValueError, TypeError):
                 raise serializers.ValidationError(f"Invalid hours value for week {week_key}: {hours}")
-        
+
         return value
     
     def validate(self, attrs):
-        """Cross-field validation"""
-        weekly_hours = attrs.get('weekly_hours', {})
-        person = attrs.get('person')
-        
-        # If we have a person, validate against their capacity
-        if person and weekly_hours:
-            person_capacity = person.weekly_capacity
-            for week_key, hours in weekly_hours.items():
-                if float(hours) > person_capacity:
-                    raise serializers.ValidationError(
-                        f"Hours for week {week_key} ({hours}) exceeds person's capacity ({person_capacity}h)"
-                    )
-        
+        """Cross-field validation: allow overages; no blocking caps."""
         return attrs
     
     def create(self, validated_data):

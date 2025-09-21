@@ -203,6 +203,14 @@ Uncomment and configure the HTTPS server block in `nginx/sites-available/workloa
 
 ## Deployment Checklist
 
+- Hour Reallocation Rollout (Steps)
+  - Precheck: Ensure feature flag `AUTO_REALLOCATION` is set as desired (default: enabled).
+  - Step 1 — Normalize: Run `python manage.py normalize_weekly_hours --dry-run` then `--apply`.
+  - Step 2 — Deploy: Ship code and migrations (incl. removal of `DeliverableAssignment.weekly_hours`).
+  - Step 3 — Enable: Confirm `AUTO_REALLOCATION` enabled and restart app.
+  - Step 4 — Verify: Change a deliverable date and verify the response includes `reallocation` summary.
+  - Optional — Undo: Use `python manage.py undo_last_reallocation <deliverable_id> [--revert-date]` if needed.
+
 - [ ] Environment variables configured
 - [ ] SSL certificates in place (if using HTTPS)
 - [ ] Database backups scheduled

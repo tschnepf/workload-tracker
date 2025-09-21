@@ -339,6 +339,9 @@ FEATURES.update({
 # Enable credentials when cookie-based refresh flow is active.
 CORS_ALLOW_CREDENTIALS = bool(FEATURES.get('COOKIE_REFRESH_AUTH'))
 
+# Automatic hour reallocation feature flag (default: enabled)
+FEATURES.update({'AUTO_REALLOCATION': True})
+
 # Performance monitoring configuration
 # Silk enablement: default to on in DEBUG, but allow explicit override.
 _silk_env = os.getenv('SILK_ENABLED')

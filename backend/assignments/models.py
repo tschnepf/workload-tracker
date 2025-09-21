@@ -75,10 +75,15 @@ class Assignment(models.Model):
         return self.weekly_hours.get(week_sunday, 0)
     
     def set_hours_for_week(self, week_sunday, hours):
-        """Set hours for a specific week"""
+        """Set hours for a specific week (integer, rounded up)."""
         if self.weekly_hours is None:
             self.weekly_hours = {}
-        self.weekly_hours[week_sunday] = max(0, float(hours))
+        try:
+            from math import ceil
+            n = int(ceil(float(hours)))
+        except Exception:
+            n = 0
+        self.weekly_hours[week_sunday] = max(0, n)
     
     @property
     def total_hours(self):

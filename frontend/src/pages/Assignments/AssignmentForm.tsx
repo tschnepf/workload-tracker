@@ -13,6 +13,7 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { getSundaysFrom } from '@/utils/weeks';
 
 interface WeeklyHours {
   [weekKey: string]: number;
@@ -24,24 +25,12 @@ interface AssignmentFormData {
   weeklyHours: WeeklyHours;
 }
 
-// Helper function to get the next 12 weeks starting from current week (Sunday)
-const getNext12Weeks = (): string[] => {
-  const today = new Date();
-  const currentSunday = new Date(today);
-  currentSunday.setDate(today.getDate() - ((today.getDay()) % 7));
-  
-  const weeks: string[] = [];
-  for (let i = 0; i < 12; i++) {
-    const weekDate = new Date(currentSunday);
-    weekDate.setDate(currentSunday.getDate() + (i * 7));
-    weeks.push(weekDate.toISOString().split('T')[0]); // YYYY-MM-DD format
-  }
-  return weeks;
-};
+// Weeks are generated via UTC-safe helpers (Sunday keys)
+const getNext12Weeks = (): string[] => getSundaysFrom(new Date(), 12);
 
 // Helper function to format week display
 const formatWeekDisplay = (weekKey: string): string => {
-  const date = new Date(weekKey + 'T00:00:00');
+  const date = new Date(weekKey + 'T00:00:00Z');
   const endDate = new Date(date);
   endDate.setDate(date.getDate() + 6);
   
@@ -442,12 +431,17 @@ const AssignmentForm: React.FC = () => {
     }
   };
 
+  const toCeilInt = (v: number) => {
+    const n = Math.ceil(Number(v));
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+
   const handleWeeklyHoursChange = (weekKey: string, hours: number) => {
     setFormData(prev => ({
       ...prev,
       weeklyHours: {
         ...prev.weeklyHours,
-        [weekKey]: Math.max(0, hours)
+        [weekKey]: toCeilInt(hours)
       }
     }));
 
@@ -462,7 +456,7 @@ const AssignmentForm: React.FC = () => {
     if (bulkHours >= 0) {
       const newWeeklyHours: WeeklyHours = {};
       availableWeeks.forEach(week => {
-        newWeeklyHours[week] = bulkHours;
+        newWeeklyHours[week] = Math.ceil(bulkHours);
       });
       setFormData(prev => ({ ...prev, weeklyHours: newWeeklyHours }));
     }
@@ -847,9 +841,9 @@ const AssignmentForm: React.FC = () => {
                 <input
                   type="number"
                   min="0"
-                  step="0.5"
+                  step="1"
                   value={bulkHours}
-                  onChange={(e) => setBulkHours(Math.max(0, parseFloat(e.target.value) || 0))}
+                  onChange={(e) => setBulkHours(Math.max(0, Math.ceil(parseFloat(e.target.value) || 0)))}
                   className="px-3 py-1 rounded border text-sm bg-slate-600 border-slate-500 text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none w-20"
                   placeholder="0"
                 />
@@ -901,9 +895,9 @@ const AssignmentForm: React.FC = () => {
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
+                          step="1"
                           value={currentHours}
-                          onChange={(e) => handleWeeklyHoursChange(weekKey, parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleWeeklyHoursChange(weekKey, Math.ceil(parseFloat(e.target.value) || 0))}
                           className={`w-full px-2 py-1 text-sm rounded border ${
                             isOverCapacity
                               ? 'bg-red-900/50 border-red-500 text-red-300'

@@ -1,0 +1,638 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e9]: WT
+      - navigation [ref=e10]:
+        - generic [ref=e11]:
+          - link [ref=e13] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e15] [cursor=pointer]
+          - link [ref=e21] [cursor=pointer]:
+            - /url: /people
+            - img [ref=e23] [cursor=pointer]
+          - link [ref=e29] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e31] [cursor=pointer]
+          - link [ref=e35] [cursor=pointer]:
+            - /url: /assignments
+            - img [ref=e37] [cursor=pointer]
+          - link [ref=e41] [cursor=pointer]:
+            - /url: /project-assignments
+            - img [ref=e43] [cursor=pointer]
+          - link [ref=e47] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e49] [cursor=pointer]
+          - link [ref=e52] [cursor=pointer]:
+            - /url: /reports/forecast
+            - img [ref=e54] [cursor=pointer]
+          - link [ref=e57] [cursor=pointer]:
+            - /url: /deliverables/calendar
+            - img [ref=e59] [cursor=pointer]
+          - link [ref=e62] [cursor=pointer]:
+            - /url: /skills
+            - img [ref=e64] [cursor=pointer]
+          - link [ref=e68] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e70] [cursor=pointer]
+        - generic [ref=e74]:
+          - link [ref=e76] [cursor=pointer]:
+            - /url: /departments/manager
+            - img [ref=e78] [cursor=pointer]
+          - link [ref=e83] [cursor=pointer]:
+            - /url: /departments/hierarchy
+            - img [ref=e85] [cursor=pointer]
+          - link [ref=e92] [cursor=pointer]:
+            - /url: /departments/reports
+            - img [ref=e94] [cursor=pointer]
+        - link [ref=e99] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e101] [cursor=pointer]
+        - generic [ref=e105]:
+          - link [ref=e107] [cursor=pointer]:
+            - /url: /profile
+            - img [ref=e109] [cursor=pointer]
+          - link [ref=e113] [cursor=pointer]:
+            - /url: /help
+            - img [ref=e115] [cursor=pointer]
+    - generic [ref=e119]:
+      - generic [ref=e120]:
+        - generic [ref=e121]:
+          - generic [ref=e122]:
+            - heading "Projects" [level=1] [ref=e123]
+            - link "+ New" [ref=e124] [cursor=pointer]:
+              - /url: /projects/new
+              - button "+ New" [ref=e125] [cursor=pointer]
+          - generic [ref=e126]:
+            - generic [ref=e127]:
+              - generic [ref=e128]: "Filter by Status:"
+              - generic [ref=e129]:
+                - button "Filter projects by active" [ref=e130] [cursor=pointer]: Active
+                - button "Filter projects by active ca" [ref=e131] [cursor=pointer]: Active CA
+                - button "Filter projects by on hold" [ref=e132] [cursor=pointer]: On Hold
+                - button "Filter projects by completed" [ref=e133] [cursor=pointer]: Completed
+                - button "Filter projects by cancelled" [ref=e134] [cursor=pointer]: Cancelled
+                - button "Filter projects by active - no dates" [ref=e135] [cursor=pointer]: Active - No Dates
+                - button "Filter projects by no assignments" [ref=e136] [cursor=pointer]: No Assignments
+                - button "Filter projects by show all" [pressed] [ref=e137] [cursor=pointer]: Show All
+            - textbox "Search projects" [ref=e139]
+        - generic [ref=e140]:
+          - generic [ref=e141]:
+            - generic [ref=e142] [cursor=pointer]: CLIENT
+            - generic [ref=e143] [cursor=pointer]:
+              - text: PROJECT
+              - generic [ref=e144] [cursor=pointer]: ▲
+            - generic [ref=e145] [cursor=pointer]: TYPE
+            - generic [ref=e146] [cursor=pointer]: STATUS
+          - generic [ref=e147]:
+            - generic [ref=e148] [cursor=pointer]:
+              - generic [ref=e149] [cursor=pointer]: 1GServers
+              - generic [ref=e150] [cursor=pointer]:
+                - generic [ref=e151] [cursor=pointer]: 1GServers Due Diligence
+                - generic [ref=e152] [cursor=pointer]: 25.028.01
+              - generic [ref=e153] [cursor=pointer]: Active
+              - generic [ref=e155] [cursor=pointer]: Active
+            - generic [ref=e156] [cursor=pointer]:
+              - generic [ref=e157] [cursor=pointer]: Switch Electric
+              - generic [ref=e158] [cursor=pointer]:
+                - generic [ref=e159] [cursor=pointer]: ADC - PHX07
+                - generic [ref=e160] [cursor=pointer]: "24.004"
+              - generic [ref=e161] [cursor=pointer]: Completed
+              - generic [ref=e163] [cursor=pointer]: Completed
+            - generic [ref=e164] [cursor=pointer]:
+              - generic [ref=e165] [cursor=pointer]: Switch
+              - generic [ref=e166] [cursor=pointer]:
+                - generic [ref=e167] [cursor=pointer]: ATL11
+                - generic [ref=e168] [cursor=pointer]: No Number
+              - generic [ref=e169] [cursor=pointer]: Completed
+              - generic [ref=e171] [cursor=pointer]: Completed
+            - generic [ref=e172] [cursor=pointer]:
+              - generic [ref=e173] [cursor=pointer]: Switch
+              - generic [ref=e174] [cursor=pointer]:
+                - generic [ref=e175] [cursor=pointer]: ATS12
+                - generic [ref=e176] [cursor=pointer]: No Number
+              - generic [ref=e177] [cursor=pointer]: Active
+              - generic [ref=e179] [cursor=pointer]: Active
+            - generic [ref=e180] [cursor=pointer]:
+              - generic [ref=e181] [cursor=pointer]: BHE
+              - generic [ref=e182] [cursor=pointer]:
+                - generic [ref=e183] [cursor=pointer]: BHE Canada Mechanical Cooling Solution
+                - generic [ref=e184] [cursor=pointer]: "25.041"
+              - generic [ref=e185] [cursor=pointer]: Completed
+              - generic [ref=e187] [cursor=pointer]: Completed
+            - generic [ref=e188] [cursor=pointer]:
+              - generic [ref=e189] [cursor=pointer]: CyrusOne
+              - generic [ref=e190] [cursor=pointer]:
+                - generic [ref=e191] [cursor=pointer]: Chandler Campus Energy Study
+                - generic [ref=e192] [cursor=pointer]: "25.054"
+              - generic [ref=e193] [cursor=pointer]: Completed
+              - generic [ref=e195] [cursor=pointer]: Completed
+            - generic [ref=e196] [cursor=pointer]:
+              - generic [ref=e197] [cursor=pointer]: CyrusOne
+              - generic [ref=e198] [cursor=pointer]:
+                - generic [ref=e199] [cursor=pointer]: Chandler PHX7 & 8 PDU Cooling
+                - generic [ref=e200] [cursor=pointer]: 25.055.01
+              - generic [ref=e201] [cursor=pointer]: Completed
+              - generic [ref=e203] [cursor=pointer]: Completed
+            - generic [ref=e204] [cursor=pointer]:
+              - generic [ref=e205] [cursor=pointer]: CyrusOne
+              - generic [ref=e206] [cursor=pointer]:
+                - generic [ref=e207] [cursor=pointer]: CHI06A (old CHI8)
+                - generic [ref=e208] [cursor=pointer]: "25.022"
+              - generic [ref=e209] [cursor=pointer]: On Hold
+              - generic [ref=e211] [cursor=pointer]: On Hold
+            - generic [ref=e212] [cursor=pointer]:
+              - generic [ref=e213] [cursor=pointer]: CyrusOne
+              - generic [ref=e214] [cursor=pointer]:
+                - generic [ref=e215] [cursor=pointer]: CHI10
+                - generic [ref=e216] [cursor=pointer]: "24.026"
+              - generic [ref=e217] [cursor=pointer]: On Hold
+              - generic [ref=e219] [cursor=pointer]: On Hold
+            - generic [ref=e220] [cursor=pointer]:
+              - generic [ref=e221] [cursor=pointer]: ADC
+              - generic [ref=e222] [cursor=pointer]:
+                - generic [ref=e223] [cursor=pointer]: CMH01
+                - generic [ref=e224] [cursor=pointer]: "27.078"
+              - generic [ref=e225] [cursor=pointer]: Active
+              - generic [ref=e227] [cursor=pointer]: Active
+            - generic [ref=e228] [cursor=pointer]:
+              - generic [ref=e229] [cursor=pointer]: ADC
+              - generic [ref=e230] [cursor=pointer]:
+                - generic [ref=e231] [cursor=pointer]: CMH02
+                - generic [ref=e232] [cursor=pointer]: "25.005"
+              - generic [ref=e233] [cursor=pointer]: Active
+              - generic [ref=e235] [cursor=pointer]: Active
+            - generic [ref=e236] [cursor=pointer]:
+              - generic [ref=e237] [cursor=pointer]: ADC
+              - generic [ref=e238] [cursor=pointer]:
+                - generic [ref=e239] [cursor=pointer]: CMH02 TFO
+                - generic [ref=e240] [cursor=pointer]: No Number
+              - generic [ref=e241] [cursor=pointer]: Active
+              - generic [ref=e243] [cursor=pointer]: Active
+            - generic [ref=e244] [cursor=pointer]:
+              - generic [ref=e245] [cursor=pointer]: ADC
+              - generic [ref=e246] [cursor=pointer]:
+                - generic [ref=e247] [cursor=pointer]: CMH03
+                - generic [ref=e248] [cursor=pointer]: 25.005.1
+              - generic [ref=e249] [cursor=pointer]: Active
+              - generic [ref=e251] [cursor=pointer]: Active
+            - generic [ref=e252] [cursor=pointer]:
+              - generic [ref=e253] [cursor=pointer]: Iron Mountain
+              - generic [ref=e254] [cursor=pointer]:
+                - generic [ref=e255] [cursor=pointer]: Corgan – IMDC – CHI1 B3 Upfit
+                - generic [ref=e256] [cursor=pointer]: "24.044"
+              - generic [ref=e257] [cursor=pointer]: On Hold
+              - generic [ref=e259] [cursor=pointer]: On Hold
+            - generic [ref=e260] [cursor=pointer]:
+              - generic [ref=e261] [cursor=pointer]: Databank
+              - generic [ref=e262] [cursor=pointer]:
+                - generic [ref=e263] [cursor=pointer]: DataBank-DFW_Design DFW12
+                - generic [ref=e264] [cursor=pointer]: "24.001"
+              - generic [ref=e265] [cursor=pointer]: Active CA
+              - generic [ref=e267] [cursor=pointer]: Active CA
+            - generic [ref=e268] [cursor=pointer]:
+              - generic [ref=e269] [cursor=pointer]: Stack
+              - generic [ref=e270] [cursor=pointer]:
+                - generic [ref=e271] [cursor=pointer]: DFW01C - Greenfield
+                - generic [ref=e272] [cursor=pointer]: "25.006"
+              - generic [ref=e273] [cursor=pointer]: On Hold
+              - generic [ref=e275] [cursor=pointer]: On Hold
+            - generic [ref=e276] [cursor=pointer]:
+              - generic [ref=e277] [cursor=pointer]: Stack
+              - generic [ref=e278] [cursor=pointer]:
+                - generic [ref=e279] [cursor=pointer]: DFW02B
+                - generic [ref=e280] [cursor=pointer]: "25.052"
+              - generic [ref=e281] [cursor=pointer]: Active
+              - generic [ref=e283] [cursor=pointer]: Active
+            - generic [ref=e284] [cursor=pointer]:
+              - generic [ref=e285] [cursor=pointer]: Loenbro
+              - generic [ref=e286] [cursor=pointer]:
+                - generic [ref=e287] [cursor=pointer]: DFW10 Temp Power
+                - generic [ref=e288] [cursor=pointer]: "25.034"
+              - generic [ref=e289] [cursor=pointer]: Active
+              - generic [ref=e291] [cursor=pointer]: Active
+            - generic [ref=e292] [cursor=pointer]:
+              - generic [ref=e293] [cursor=pointer]: CyrusOne
+              - generic [ref=e294] [cursor=pointer]:
+                - generic [ref=e295] [cursor=pointer]: DFW17
+                - generic [ref=e296] [cursor=pointer]: "25.035"
+              - generic [ref=e297] [cursor=pointer]: Completed
+              - generic [ref=e299] [cursor=pointer]: Completed
+            - generic [ref=e300] [cursor=pointer]:
+              - generic [ref=e301] [cursor=pointer]: Jane Street
+              - generic [ref=e302] [cursor=pointer]:
+                - generic [ref=e303] [cursor=pointer]: DH12 DLC Expansion
+                - generic [ref=e304] [cursor=pointer]: "24.048"
+              - generic [ref=e305] [cursor=pointer]: Active
+              - generic [ref=e307] [cursor=pointer]: Active
+            - generic [ref=e308] [cursor=pointer]:
+              - generic [ref=e309] [cursor=pointer]: Internal
+              - generic [ref=e310] [cursor=pointer]:
+                - generic [ref=e311] [cursor=pointer]: E2E Project 1758430413860
+                - generic [ref=e312] [cursor=pointer]: No Number
+              - generic [ref=e313] [cursor=pointer]: Active
+              - generic [ref=e315] [cursor=pointer]: Active
+            - generic [ref=e316] [cursor=pointer]:
+              - generic [ref=e317] [cursor=pointer]: Internal
+              - generic [ref=e318] [cursor=pointer]:
+                - generic [ref=e319] [cursor=pointer]: E2E Project 1758430472787
+                - generic [ref=e320] [cursor=pointer]: No Number
+              - generic [ref=e321] [cursor=pointer]: Active
+              - generic [ref=e323] [cursor=pointer]: Active
+            - generic [active] [ref=e324] [cursor=pointer]:
+              - generic [ref=e325] [cursor=pointer]: Internal
+              - generic [ref=e326] [cursor=pointer]:
+                - generic [ref=e327] [cursor=pointer]: E2E Project 1758430499281
+                - generic [ref=e328] [cursor=pointer]: No Number
+              - generic [ref=e329] [cursor=pointer]: Active
+              - generic [ref=e331] [cursor=pointer]: Active
+            - generic [ref=e332] [cursor=pointer]:
+              - generic [ref=e333] [cursor=pointer]: Applied Digital
+              - generic [ref=e334] [cursor=pointer]:
+                - generic [ref=e335] [cursor=pointer]: ELN02 Generator Plant
+                - generic [ref=e336] [cursor=pointer]: "24.062"
+              - generic [ref=e337] [cursor=pointer]: Active
+              - generic [ref=e339] [cursor=pointer]: Active
+            - generic [ref=e340] [cursor=pointer]:
+              - generic [ref=e341] [cursor=pointer]: Applied Digital
+              - generic [ref=e342] [cursor=pointer]:
+                - generic [ref=e343] [cursor=pointer]: ELN02 TFO
+                - generic [ref=e344] [cursor=pointer]: "24.032"
+              - generic [ref=e345] [cursor=pointer]: Active
+              - generic [ref=e347] [cursor=pointer]: Active
+            - generic [ref=e348] [cursor=pointer]:
+              - generic [ref=e349] [cursor=pointer]: Applied Digital
+              - generic [ref=e350] [cursor=pointer]:
+                - generic [ref=e351] [cursor=pointer]: ELN03 Greenfield
+                - generic [ref=e352] [cursor=pointer]: "24.031"
+              - generic [ref=e353] [cursor=pointer]: Active
+              - generic [ref=e355] [cursor=pointer]: Active
+            - generic [ref=e356] [cursor=pointer]:
+              - generic [ref=e357] [cursor=pointer]: Applied Digital
+              - generic [ref=e358] [cursor=pointer]:
+                - generic [ref=e359] [cursor=pointer]: ELN03 TFO
+                - generic [ref=e360] [cursor=pointer]: No Number
+              - generic [ref=e361] [cursor=pointer]: Active
+              - generic [ref=e363] [cursor=pointer]: Active
+            - generic [ref=e364] [cursor=pointer]:
+              - generic [ref=e365] [cursor=pointer]: Applied Digital
+              - generic [ref=e366] [cursor=pointer]:
+                - generic [ref=e367] [cursor=pointer]: ELN04 - Greenfield
+                - generic [ref=e368] [cursor=pointer]: "24.081"
+              - generic [ref=e369] [cursor=pointer]: Active
+              - generic [ref=e371] [cursor=pointer]: Active
+            - generic [ref=e372] [cursor=pointer]:
+              - generic [ref=e373] [cursor=pointer]: Holder
+              - generic [ref=e374] [cursor=pointer]:
+                - generic [ref=e375] [cursor=pointer]: Eppley
+                - generic [ref=e376] [cursor=pointer]: "24.005"
+              - generic [ref=e377] [cursor=pointer]: Active
+              - generic [ref=e379] [cursor=pointer]: Active
+            - generic [ref=e380] [cursor=pointer]:
+              - generic [ref=e381] [cursor=pointer]: Evocative
+              - generic [ref=e382] [cursor=pointer]:
+                - generic [ref=e383] [cursor=pointer]: Evocative SC3
+                - generic [ref=e384] [cursor=pointer]: "25.027"
+              - generic [ref=e385] [cursor=pointer]: Active
+              - generic [ref=e387] [cursor=pointer]: Active
+            - generic [ref=e388] [cursor=pointer]:
+              - generic [ref=e389] [cursor=pointer]: Fibrebond
+              - generic [ref=e390] [cursor=pointer]:
+                - generic [ref=e391] [cursor=pointer]: Fibrebond T&M
+                - generic [ref=e392] [cursor=pointer]: "24.049"
+              - generic [ref=e393] [cursor=pointer]: Active
+              - generic [ref=e395] [cursor=pointer]: Active
+            - generic [ref=e396] [cursor=pointer]:
+              - generic [ref=e397] [cursor=pointer]: Align Comm.
+              - generic [ref=e398] [cursor=pointer]:
+                - generic [ref=e399] [cursor=pointer]: G-Research
+                - generic [ref=e400] [cursor=pointer]: No Number
+              - generic [ref=e401] [cursor=pointer]: Active
+              - generic [ref=e403] [cursor=pointer]: Active
+            - generic [ref=e404] [cursor=pointer]:
+              - generic [ref=e405] [cursor=pointer]: Align Comm.
+              - generic [ref=e406] [cursor=pointer]:
+                - generic [ref=e407] [cursor=pointer]: GAZ2
+                - generic [ref=e408] [cursor=pointer]: 25.048.01
+              - generic [ref=e409] [cursor=pointer]: Completed
+              - generic [ref=e411] [cursor=pointer]: Completed
+            - generic [ref=e412] [cursor=pointer]:
+              - generic [ref=e413] [cursor=pointer]: GDC
+              - generic [ref=e414] [cursor=pointer]:
+                - generic [ref=e415] [cursor=pointer]: GDC-Albuquerque, NM - 50,000 Acres
+                - generic [ref=e416] [cursor=pointer]: "24.021"
+              - generic [ref=e417] [cursor=pointer]: On Hold
+              - generic [ref=e419] [cursor=pointer]: On Hold
+            - generic [ref=e420] [cursor=pointer]:
+              - generic [ref=e421] [cursor=pointer]: Align Comm.
+              - generic [ref=e422] [cursor=pointer]:
+                - generic [ref=e423] [cursor=pointer]: IAD44 - S105/S205
+                - generic [ref=e424] [cursor=pointer]: "25.008"
+              - generic [ref=e425] [cursor=pointer]: Completed
+              - generic [ref=e427] [cursor=pointer]: Completed
+            - generic [ref=e428] [cursor=pointer]:
+              - generic [ref=e429] [cursor=pointer]: Iron Mountain
+              - generic [ref=e430] [cursor=pointer]:
+                - generic [ref=e431] [cursor=pointer]: IMDC - AZP2B1 - SC02 - Fit Out
+                - generic [ref=e432] [cursor=pointer]: "25.009"
+              - generic [ref=e433] [cursor=pointer]: Active
+              - generic [ref=e435] [cursor=pointer]: Active
+            - generic [ref=e436] [cursor=pointer]:
+              - generic [ref=e437] [cursor=pointer]: Iron Mountain
+              - generic [ref=e438] [cursor=pointer]:
+                - generic [ref=e439] [cursor=pointer]: IMDC - CHI B4/B5
+                - generic [ref=e440] [cursor=pointer]: "25.032"
+              - generic [ref=e441] [cursor=pointer]: Active
+              - generic [ref=e443] [cursor=pointer]: Active
+            - generic [ref=e444] [cursor=pointer]:
+              - generic [ref=e445] [cursor=pointer]: Prologis
+              - generic [ref=e446] [cursor=pointer]:
+                - generic [ref=e447] [cursor=pointer]: Las Vegas
+                - generic [ref=e448] [cursor=pointer]: 25.XXX
+              - generic [ref=e449] [cursor=pointer]: Active
+              - generic [ref=e451] [cursor=pointer]: Active
+            - generic [ref=e452] [cursor=pointer]:
+              - generic [ref=e453] [cursor=pointer]: Megawatt
+              - generic [ref=e454] [cursor=pointer]:
+                - generic [ref=e455] [cursor=pointer]: Lowell, MA DH FO (Nvidia)
+                - generic [ref=e456] [cursor=pointer]: No Number
+              - generic [ref=e457] [cursor=pointer]: Active
+              - generic [ref=e459] [cursor=pointer]: Active
+            - generic [ref=e460] [cursor=pointer]:
+              - generic [ref=e461] [cursor=pointer]: Megawatt
+              - generic [ref=e462] [cursor=pointer]:
+                - generic [ref=e463] [cursor=pointer]: Megawatt - Plano TX
+                - generic [ref=e464] [cursor=pointer]: "25.021"
+              - generic [ref=e465] [cursor=pointer]: Active
+              - generic [ref=e467] [cursor=pointer]: Active
+            - generic [ref=e468] [cursor=pointer]:
+              - generic [ref=e469] [cursor=pointer]: Switch Electric
+              - generic [ref=e470] [cursor=pointer]:
+                - generic [ref=e471] [cursor=pointer]: MSFT - PHX86
+                - generic [ref=e472] [cursor=pointer]: "25.011"
+              - generic [ref=e473] [cursor=pointer]: Active
+              - generic [ref=e475] [cursor=pointer]: Active
+            - generic [ref=e476] [cursor=pointer]:
+              - generic [ref=e477] [cursor=pointer]: Switch Electric
+              - generic [ref=e478] [cursor=pointer]:
+                - generic [ref=e479] [cursor=pointer]: MSFT-PHX81
+                - generic [ref=e480] [cursor=pointer]: "24.007"
+              - generic [ref=e481] [cursor=pointer]: Active
+              - generic [ref=e483] [cursor=pointer]: Active
+            - generic [ref=e484] [cursor=pointer]:
+              - generic [ref=e485] [cursor=pointer]: Stack
+              - generic [ref=e486] [cursor=pointer]:
+                - generic [ref=e487] [cursor=pointer]: NAL01B - Greenfield
+                - generic [ref=e488] [cursor=pointer]: "25.004"
+              - generic [ref=e489] [cursor=pointer]: On Hold
+              - generic [ref=e491] [cursor=pointer]: On Hold
+            - generic [ref=e492] [cursor=pointer]:
+              - generic [ref=e493] [cursor=pointer]: Nexus Alarm
+              - generic [ref=e494] [cursor=pointer]:
+                - generic [ref=e495] [cursor=pointer]: Nexus Alarm and Suppression
+                - generic [ref=e496] [cursor=pointer]: "25.007"
+              - generic [ref=e497] [cursor=pointer]: Active
+              - generic [ref=e499] [cursor=pointer]: Active
+            - generic [ref=e500] [cursor=pointer]:
+              - generic [ref=e501] [cursor=pointer]: Stack
+              - generic [ref=e502] [cursor=pointer]:
+                - generic [ref=e503] [cursor=pointer]: NVA09-Greenfield
+                - generic [ref=e504] [cursor=pointer]: "25.059"
+              - generic [ref=e505] [cursor=pointer]: Active
+              - generic [ref=e507] [cursor=pointer]: Active
+            - generic [ref=e508] [cursor=pointer]:
+              - generic [ref=e509] [cursor=pointer]: CyrusOne
+              - generic [ref=e510] [cursor=pointer]:
+                - generic [ref=e511] [cursor=pointer]: PHX3 DH50 PDU Adder
+                - generic [ref=e512] [cursor=pointer]: "24.020"
+              - generic [ref=e513] [cursor=pointer]: Active
+              - generic [ref=e515] [cursor=pointer]: Active
+            - generic [ref=e516] [cursor=pointer]:
+              - generic [ref=e517] [cursor=pointer]: Align
+              - generic [ref=e518] [cursor=pointer]:
+                - generic [ref=e519] [cursor=pointer]: PHX3 Vega 2.0
+                - generic [ref=e520] [cursor=pointer]: "24.079"
+              - generic [ref=e521] [cursor=pointer]: Completed
+              - generic [ref=e523] [cursor=pointer]: Completed
+            - generic [ref=e524] [cursor=pointer]:
+              - generic [ref=e525] [cursor=pointer]: Arco
+              - generic [ref=e526] [cursor=pointer]:
+                - generic [ref=e527] [cursor=pointer]: Project Anaconda Phase 1
+                - generic [ref=e528] [cursor=pointer]: "25.039"
+              - generic [ref=e529] [cursor=pointer]: On Hold
+              - generic [ref=e531] [cursor=pointer]: On Hold
+            - generic [ref=e532] [cursor=pointer]:
+              - generic [ref=e533] [cursor=pointer]: Prologis
+              - generic [ref=e534] [cursor=pointer]:
+                - generic [ref=e535] [cursor=pointer]: Project Athena - San Jose CA
+                - generic [ref=e536] [cursor=pointer]: "25.014"
+              - generic [ref=e537] [cursor=pointer]: Active
+              - generic [ref=e539] [cursor=pointer]: Active
+            - generic [ref=e540] [cursor=pointer]:
+              - generic [ref=e541] [cursor=pointer]: Prologis
+              - generic [ref=e542] [cursor=pointer]:
+                - generic [ref=e543] [cursor=pointer]: Project Intrepid
+                - generic [ref=e544] [cursor=pointer]: "25.040"
+              - generic [ref=e545] [cursor=pointer]: On Hold
+              - generic [ref=e547] [cursor=pointer]: On Hold
+            - generic [ref=e548] [cursor=pointer]:
+              - generic [ref=e549] [cursor=pointer]: Align
+              - generic [ref=e550] [cursor=pointer]:
+                - generic [ref=e551] [cursor=pointer]: Project Longhorn - DH5
+                - generic [ref=e552] [cursor=pointer]: "24.010"
+              - generic [ref=e553] [cursor=pointer]: Completed
+              - generic [ref=e555] [cursor=pointer]: Completed
+            - generic [ref=e556] [cursor=pointer]:
+              - generic [ref=e557] [cursor=pointer]: Align
+              - generic [ref=e558] [cursor=pointer]:
+                - generic [ref=e559] [cursor=pointer]: Project Longhorn DH6 Electrical Peer Review
+                - generic [ref=e560] [cursor=pointer]: "24.017"
+              - generic [ref=e561] [cursor=pointer]: Completed
+              - generic [ref=e563] [cursor=pointer]: Completed
+            - generic [ref=e564] [cursor=pointer]:
+              - generic [ref=e565] [cursor=pointer]: Stack
+              - generic [ref=e566] [cursor=pointer]:
+                - generic [ref=e567] [cursor=pointer]: Project Miner
+                - generic [ref=e568] [cursor=pointer]: No Number
+              - generic [ref=e569] [cursor=pointer]: Active
+              - generic [ref=e571] [cursor=pointer]: Active
+            - generic [ref=e572] [cursor=pointer]:
+              - generic [ref=e573] [cursor=pointer]: Align Comm.
+              - generic [ref=e574] [cursor=pointer]:
+                - generic [ref=e575] [cursor=pointer]: Project ORD2 Peer Review in facility ORD11 Suite 400
+                - generic [ref=e576] [cursor=pointer]: "24.067"
+              - generic [ref=e577] [cursor=pointer]: Completed
+              - generic [ref=e579] [cursor=pointer]: Completed
+            - generic [ref=e580] [cursor=pointer]:
+              - generic [ref=e581] [cursor=pointer]: Prologis
+              - generic [ref=e582] [cursor=pointer]:
+                - generic [ref=e583] [cursor=pointer]: Project Steel
+                - generic [ref=e584] [cursor=pointer]: "25.013"
+              - generic [ref=e585] [cursor=pointer]: On Hold
+              - generic [ref=e587] [cursor=pointer]: On Hold
+            - generic [ref=e588] [cursor=pointer]:
+              - generic [ref=e589] [cursor=pointer]: Align Comm.
+              - generic [ref=e590] [cursor=pointer]:
+                - generic [ref=e591] [cursor=pointer]: Q1908-DLR R108
+                - generic [ref=e592] [cursor=pointer]: "25.002"
+              - generic [ref=e593] [cursor=pointer]: Completed
+              - generic [ref=e595] [cursor=pointer]: Completed
+            - generic [ref=e596] [cursor=pointer]:
+              - generic [ref=e597] [cursor=pointer]: Switch Electric
+              - generic [ref=e598] [cursor=pointer]:
+                - generic [ref=e599] [cursor=pointer]: QTS - PHX62
+                - generic [ref=e600] [cursor=pointer]: "24.003"
+              - generic [ref=e601] [cursor=pointer]: Active
+              - generic [ref=e603] [cursor=pointer]: Active
+            - generic [ref=e604] [cursor=pointer]:
+              - generic [ref=e605] [cursor=pointer]: Switch Electric
+              - generic [ref=e606] [cursor=pointer]:
+                - generic [ref=e607] [cursor=pointer]: QTS-NAL1-QN02 - BIM Support
+                - generic [ref=e608] [cursor=pointer]: "25.019"
+              - generic [ref=e609] [cursor=pointer]: Active
+              - generic [ref=e611] [cursor=pointer]: Active
+            - generic [ref=e612] [cursor=pointer]:
+              - generic [ref=e613] [cursor=pointer]: Related
+              - generic [ref=e614] [cursor=pointer]:
+                - generic [ref=e615] [cursor=pointer]: Related Companies - Michigan - 12MW Network Bldg
+                - generic [ref=e616] [cursor=pointer]: "25.067"
+              - generic [ref=e617] [cursor=pointer]: Active
+              - generic [ref=e619] [cursor=pointer]: Active
+            - generic [ref=e620] [cursor=pointer]:
+              - generic [ref=e621] [cursor=pointer]: PointOne
+              - generic [ref=e622] [cursor=pointer]:
+                - generic [ref=e623] [cursor=pointer]: Remington Bldg 1
+                - generic [ref=e624] [cursor=pointer]: "24.056"
+              - generic [ref=e625] [cursor=pointer]: Active
+              - generic [ref=e627] [cursor=pointer]: Active
+            - generic [ref=e628] [cursor=pointer]:
+              - generic [ref=e629] [cursor=pointer]: PointOne
+              - generic [ref=e630] [cursor=pointer]:
+                - generic [ref=e631] [cursor=pointer]: Remington Bldg 2 & 3
+                - generic [ref=e632] [cursor=pointer]: 24.056.5
+              - generic [ref=e633] [cursor=pointer]: Active
+              - generic [ref=e635] [cursor=pointer]: Active
+            - generic [ref=e636] [cursor=pointer]:
+              - generic [ref=e637] [cursor=pointer]: PointOne
+              - generic [ref=e638] [cursor=pointer]:
+                - generic [ref=e639] [cursor=pointer]: Richmond Campus Masterplanning
+                - generic [ref=e640] [cursor=pointer]: No Number
+              - generic [ref=e641] [cursor=pointer]: Active
+              - generic [ref=e643] [cursor=pointer]: Active
+            - generic [ref=e644] [cursor=pointer]:
+              - generic [ref=e645] [cursor=pointer]: Clayco
+              - generic [ref=e646] [cursor=pointer]:
+                - generic [ref=e647] [cursor=pointer]: Stack - Temp Power
+                - generic [ref=e648] [cursor=pointer]: "25.015"
+              - generic [ref=e649] [cursor=pointer]: On Hold
+              - generic [ref=e651] [cursor=pointer]: On Hold
+            - generic [ref=e652] [cursor=pointer]:
+              - generic [ref=e653] [cursor=pointer]: TCG
+              - generic [ref=e654] [cursor=pointer]:
+                - generic [ref=e655] [cursor=pointer]: TCG - Project Sailfish
+                - generic [ref=e656] [cursor=pointer]: "24.053"
+              - generic [ref=e657] [cursor=pointer]: On Hold
+              - generic [ref=e659] [cursor=pointer]: On Hold
+            - generic [ref=e660] [cursor=pointer]:
+              - generic [ref=e661] [cursor=pointer]: TCG
+              - generic [ref=e662] [cursor=pointer]:
+                - generic [ref=e663] [cursor=pointer]: Upland for RestorCap
+                - generic [ref=e664] [cursor=pointer]: "24.047"
+              - generic [ref=e665] [cursor=pointer]: Active
+              - generic [ref=e667] [cursor=pointer]: Active
+            - generic [ref=e668] [cursor=pointer]:
+              - generic [ref=e669] [cursor=pointer]: Iron Mountain
+              - generic [ref=e670] [cursor=pointer]:
+                - generic [ref=e671] [cursor=pointer]: VA11
+                - generic [ref=e672] [cursor=pointer]: No Number
+              - generic [ref=e673] [cursor=pointer]: Active
+              - generic [ref=e675] [cursor=pointer]: Active
+            - generic [ref=e676] [cursor=pointer]:
+              - generic [ref=e677] [cursor=pointer]: CyrusOne
+              - generic [ref=e678] [cursor=pointer]:
+                - generic [ref=e679] [cursor=pointer]: Yorkville (CHI11)
+                - generic [ref=e680] [cursor=pointer]: "25.053"
+              - generic [ref=e681] [cursor=pointer]: Active
+              - generic [ref=e683] [cursor=pointer]: Active
+      - generic [ref=e684]:
+        - generic [ref=e686]:
+          - generic [ref=e687]:
+            - heading "E2E Project 1758430499281" [level=2] [ref=e688]
+            - generic [ref=e689]:
+              - generic [ref=e690]:
+                - generic [ref=e691]: "Client:"
+                - generic [ref=e692]: Internal
+              - generic [ref=e693]:
+                - generic [ref=e694]: "Status:"
+                - button "Active" [ref=e696] [cursor=pointer]:
+                  - text: Active
+                  - img [ref=e697] [cursor=pointer]
+              - generic [ref=e699]:
+                - generic [ref=e700]: "Project Number:"
+                - generic [ref=e701]: No Number
+          - generic [ref=e702]:
+            - link "Edit Project" [ref=e703] [cursor=pointer]:
+              - /url: /projects/93/edit
+              - button "Edit Project" [ref=e704] [cursor=pointer]
+            - button "Delete" [ref=e705] [cursor=pointer]
+        - generic [ref=e706]:
+          - generic [ref=e707]:
+            - generic [ref=e708]:
+              - heading "Assignments" [level=3] [ref=e709]
+              - generic [ref=e710]:
+                - generic "Show only Team Members already staffing this project (people in departments already assigned here). Turn off to include everyone in the selected department scope." [ref=e711] [cursor=pointer]:
+                  - 'checkbox "Team Members only Help: Team Members only filter" [checked] [ref=e712]'
+                  - generic [ref=e713] [cursor=pointer]: Team Members only
+                  - 'generic "Help: Team Members only filter" [ref=e714]': "?"
+                - button "+ Add Assignment" [ref=e715] [cursor=pointer]
+            - generic [ref=e717]:
+              - generic [ref=e718]: No assignments yet
+              - generic [ref=e719]: Click "Add Assignment" to get started
+          - generic [ref=e720]:
+            - generic [ref=e721]:
+              - heading "Deliverables" [level=3] [ref=e722]
+              - button "+ Add Deliverable" [ref=e723] [cursor=pointer]
+            - generic [ref=e724]:
+              - generic [ref=e725]:
+                - generic [ref=e730]:
+                  - generic [ref=e731]: 35%
+                  - generic [ref=e732]: SD
+                  - generic [ref=e733]: "-"
+                  - generic [ref=e734]: "-"
+                - generic [ref=e735]:
+                  - button "Edit" [ref=e736] [cursor=pointer]
+                  - button "Del" [ref=e737] [cursor=pointer]
+              - generic [ref=e738]:
+                - generic [ref=e743]:
+                  - generic [ref=e744]: 75%
+                  - generic [ref=e745]: DD
+                  - generic [ref=e746]: "-"
+                  - generic [ref=e747]: "-"
+                - generic [ref=e748]:
+                  - button "Edit" [ref=e749] [cursor=pointer]
+                  - button "Del" [ref=e750] [cursor=pointer]
+              - generic [ref=e751]:
+                - generic [ref=e756]:
+                  - generic [ref=e757]: 95%
+                  - generic [ref=e758]: IFP
+                  - generic [ref=e759]: "-"
+                  - generic [ref=e760]: "-"
+                - generic [ref=e761]:
+                  - button "Edit" [ref=e762] [cursor=pointer]
+                  - button "Del" [ref=e763] [cursor=pointer]
+              - generic [ref=e764]:
+                - generic [ref=e769]:
+                  - generic [ref=e770]: 100%
+                  - generic [ref=e771]: IFC
+                  - generic [ref=e772]: "-"
+                  - generic [ref=e773]: "-"
+                - generic [ref=e774]:
+                  - button "Edit" [ref=e775] [cursor=pointer]
+                  - button "Del" [ref=e776] [cursor=pointer]
+  - generic [ref=e777]:
+    - img [ref=e779]
+    - button "Open Tanstack query devtools" [ref=e827] [cursor=pointer]:
+      - img [ref=e828] [cursor=pointer]
+```

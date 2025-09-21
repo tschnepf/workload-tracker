@@ -94,8 +94,6 @@ class DeliverableAssignment(models.Model):
         on_delete=models.CASCADE,
         related_name='deliverable_assignments',
     )
-    # Follow Assignment.weekly_hours JSON convention: {"YYYY-MM-DD": hours}
-    weekly_hours = models.JSONField(default=dict)
     role_on_milestone = models.CharField(max_length=100, blank=True, null=True)
 
     # System fields
@@ -108,3 +106,29 @@ class DeliverableAssignment(models.Model):
 
     def __str__(self):
         return f"DeliverableAssignment(d={self.deliverable_id}, p={self.person_id})"
+
+
+class ReallocationAudit(models.Model):
+    """Persist a compact snapshot of an auto-reallocation operation.
+
+    Stores minimal before/after diffs for touched assignments and metadata
+    to enable observability and optional undo.
+    """
+
+    deliverable = models.ForeignKey('deliverables.Deliverable', on_delete=models.CASCADE, related_name='reallocation_audits')
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='reallocation_audits')
+    user_id = models.IntegerField(blank=True, null=True)
+    old_date = models.DateField()
+    new_date = models.DateField()
+    delta_weeks = models.IntegerField(default=0)
+    assignments_changed = models.IntegerField(default=0)
+    touched_week_keys = models.JSONField(default=list)
+    # Map[assignment_id] -> { prev: {weekKey: int}, next: {weekKey: int} }
+    snapshot = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self) -> str:
+        return f"ReallocAudit(d={self.deliverable_id}, dw={self.delta_weeks}, changed={self.assignments_changed})"

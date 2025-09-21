@@ -227,7 +227,6 @@ export interface DeliverableAssignment {
   id?: number;
   deliverable: number; // Deliverable ID
   person: number; // Person ID
-  weeklyHours: { [weekKey: string]: number };
   roleOnMilestone?: string | null;
   isActive?: boolean;
   personName?: string; // Read-only

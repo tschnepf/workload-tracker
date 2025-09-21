@@ -28,6 +28,7 @@ import Toast from '@/components/ui/Toast';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useUpdateProject } from '@/hooks/useProjects';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
+import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 
 // Deliverable coloring (shared with calendar/project grid)
 const deliverableTypeColors: Record<string, string> = {
@@ -1064,6 +1065,14 @@ const AssignmentGrid: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Refresh grid when global grid refresh events are emitted (e.g., deliverable date changes)
+  useEffect(() => {
+    const unsub = subscribeGridRefresh(() => {
+      try { loadData(); } catch {}
+    });
+    return unsub;
+  }, []);
 
   // Load a person's assignments once when expanding
   const ensureAssignmentsLoaded = async (personId: number) => {

@@ -70,7 +70,7 @@ const MilestoneReviewTool: React.FC<Props> = () => {
     if (!selectedDeliverableId || !personId) return;
     setSaving(true);
     try {
-      await deliverableAssignmentsApi.create({ deliverable: selectedDeliverableId, person: personId, weeklyHours: {}, roleOnMilestone: '' });
+      await deliverableAssignmentsApi.create({ deliverable: selectedDeliverableId, person: personId, roleOnMilestone: '' } as any);
       await refreshSummary();
     } finally {
       setSaving(false);

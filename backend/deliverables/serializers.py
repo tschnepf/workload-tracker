@@ -55,7 +55,6 @@ class DeliverableAssignmentSerializer(serializers.ModelSerializer):
     """Serializer for linking people to deliverables with weekly hours."""
 
     # CamelCase API fields mapped to snake_case model fields
-    weeklyHours = serializers.JSONField(source='weekly_hours')
     roleOnMilestone = serializers.CharField(source='role_on_milestone', allow_null=True, allow_blank=True, required=False)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
@@ -70,7 +69,6 @@ class DeliverableAssignmentSerializer(serializers.ModelSerializer):
             'id',
             'deliverable',
             'person',
-            'weeklyHours',
             'roleOnMilestone',
             'is_active',
             'personName',
@@ -84,25 +82,8 @@ class DeliverableAssignmentSerializer(serializers.ModelSerializer):
             'is_active': {'required': False},
         }
 
-    # Validation following R2 prompt (Sunday keys, 0-80 hours, sanitize role)
-    def validate_weeklyHours(self, value):  # Field name is the serializer field
-        if not isinstance(value, dict):
-            raise serializers.ValidationError("Weekly hours must be a dictionary")
-        for date_key, hours in value.items():
-            try:
-                date_obj = datetime.strptime(date_key, '%Y-%m-%d')
-                if date_obj.weekday() != 6:  # Sunday == 6
-                    raise serializers.ValidationError(f"Week key {date_key} must be a Sunday")
-            except ValueError:
-                raise serializers.ValidationError(f"Invalid date format: {date_key}. Use YYYY-MM-DD Sunday")
-            if not isinstance(hours, (int, float)) or hours < 0 or hours > 80:
-                raise serializers.ValidationError(f"Hours must be 0-80, got: {hours}")
-        return value
-
-    # Support alternate method name for clarity in code references
-    def validate_weekly_hours(self, value):
-        return self.validate_weeklyHours(value)
-
+    # Validation for role
+    
     def validate_roleOnMilestone(self, value):
         if value is None:
             return None

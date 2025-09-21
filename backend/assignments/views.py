@@ -236,13 +236,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if status_in:
             status_set = set(s.strip().lower() for s in status_in.split(',') if s.strip())
 
-        # Build week key list (Mondays)
+        # Build week key list (Sundays)
+        from core.week_utils import sunday_of_week
         today = date.today()
-        monday = today - timedelta(days=(today.weekday()))
-        week_keys = []
-        for i in range(weeks):
-            wk = monday + timedelta(weeks=i)
-            week_keys.append(wk.strftime('%Y-%m-%d'))
+        start_sunday = sunday_of_week(today)
+        week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
         # Base assignments queryset
         qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
@@ -258,21 +256,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         project_hours = {}
         people_per_project = {}
 
-        def hours_for_week_from_json(weekly_hours, monday_str):
+        def hours_for_week_from_json(weekly_hours, sunday_key):
             try:
-                # tolerate +/- 3 days
-                monday_date = date.fromisoformat(monday_str)
+                v = weekly_hours.get(sunday_key)
+                return float(v or 0)
             except Exception:
                 return 0.0
-            for off in (0, 1, 2, 3, -1, -2, -3):
-                k = (monday_date + timedelta(days=off)).strftime('%Y-%m-%d')
-                v = weekly_hours.get(k)
-                try:
-                    if v is not None:
-                        return float(v or 0)
-                except Exception:
-                    return 0.0
-            return 0.0
 
         # Aggregate hours by project/week and people counts
         for a in qs:
@@ -308,10 +297,9 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     continue
                 if dt >= now:
                     has_future_deliverables[pid] = True
-                # map to nearest monday key (same tolerance as hours)
-                # Find monday on/after dt - dt.weekday()
-                monday_dt = dt - timedelta(days=dt.weekday())
-                wk = monday_dt.strftime('%Y-%m-%d')
+                # Map deliverable date to Sunday-of-week key
+                from core.week_utils import sunday_of_week
+                wk = sunday_of_week(dt).isoformat()
                 if wk in week_keys:
                     deliverables_by_week.setdefault(pid, {})
                     deliverables_by_week[pid][wk] = deliverables_by_week[pid].get(wk, 0) + 1
@@ -420,28 +408,21 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 dept_ids = None
 
+        from core.week_utils import sunday_of_week
         today = date.today()
-        monday = today - timedelta(days=(today.weekday()))
-        week_keys = [(monday + timedelta(weeks=i)).strftime('%Y-%m-%d') for i in range(weeks)]
+        start_sunday = sunday_of_week(today)
+        week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
         qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).select_related('person', 'project')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
 
-        def hours_for_week_from_json(weekly_hours, monday_str):
+        def hours_for_week_from_json(weekly_hours, sunday_key):
             try:
-                monday_date = date.fromisoformat(monday_str)
+                v = weekly_hours.get(sunday_key)
+                return float(v or 0)
             except Exception:
                 return 0.0
-            for off in (0, 1, 2, 3, -1, -2, -3):
-                k = (monday_date + timedelta(days=off)).strftime('%Y-%m-%d')
-                v = weekly_hours.get(k)
-                try:
-                    if v is not None:
-                        return float(v or 0)
-                except Exception:
-                    return 0.0
-            return 0.0
 
         project_hours = {}
         for a in qs:
@@ -593,10 +574,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                             pass
                         time.sleep(0.05)
                 if payload is None:
-                    # Compute week keys (Mondays)
+                    # Compute week keys (Sundays)
+                    from core.week_utils import sunday_of_week
                     today = date.today()
-                    start_monday = today - timedelta(days=today.weekday())
-                    week_keys = [(start_monday + timedelta(weeks=w)).strftime('%Y-%m-%d') for w in range(weeks)]
+                    start_sunday = sunday_of_week(today)
+                    week_keys = [(start_sunday + timedelta(weeks=w)).isoformat() for w in range(weeks)]
 
                     # Build people list
                     people_list = []
@@ -609,25 +591,13 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         })
 
                     # Build hours map per person
-                    def hours_for_week_from_json(weekly_hours: dict, monday_key: str) -> float:
+                    def hours_for_week_from_json(weekly_hours: dict, sunday_key: str) -> float:
                         if not weekly_hours:
                             return 0.0
-                        # Exact Monday key
-                        if monday_key in weekly_hours:
-                            try:
-                                return float(weekly_hours[monday_key] or 0)
-                            except (TypeError, ValueError):
-                                return 0.0
-                        # Tolerant +/- 3 days
-                        monday_date = date.fromisoformat(monday_key)
-                        for off in range(-3, 4):
-                            k = (monday_date + timedelta(days=off)).strftime('%Y-%m-%d')
-                            if k in weekly_hours:
-                                try:
-                                    return float(weekly_hours[k] or 0)
-                                except (TypeError, ValueError):
-                                    return 0.0
-                        return 0.0
+                        try:
+                            return float(weekly_hours.get(sunday_key) or 0)
+                        except (TypeError, ValueError):
+                            return 0.0
 
                     hours_by_person = {}
                     for p in people_qs:

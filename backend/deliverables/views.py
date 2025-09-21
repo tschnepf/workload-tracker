@@ -16,7 +16,7 @@ from django.utils.http import http_date
 from datetime import datetime
 from collections import defaultdict
 import logging
-from .models import Deliverable, DeliverableAssignment
+from .models import Deliverable, DeliverableAssignment, ReallocationAudit
 from .serializers import (
     DeliverableSerializer,
     DeliverableAssignmentSerializer,
@@ -25,6 +25,11 @@ from .serializers import (
 from assignments.models import Assignment
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
+from django.conf import settings
+
+from .reallocation import reallocate_weekly_hours
+from datetime import timedelta, date as _date
+from core.week_utils import sunday_of_week
 
 
 class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
@@ -58,6 +63,133 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         
         # Use default pagination
         return super().list(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        """PATCH deliverable. If date changes and feature flag enabled, reallocate hours.
+
+        Response includes optional 'reallocation' summary with keys:
+        { deltaWeeks, assignmentsChanged, touchedWeekKeys }
+        """
+        instance: Deliverable = self.get_object()
+        old_date = instance.date
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        new_date = serializer.validated_data.get('date', old_date)
+
+        do_realloc = (
+            settings.FEATURES.get('AUTO_REALLOCATION') and
+            'date' in serializer.validated_data and
+            old_date != new_date and
+            new_date is not None and old_date is not None
+        )
+
+        realloc_summary = None
+        if do_realloc:
+            # Compute window from neighbors around the old date
+            prev = (
+                Deliverable.objects.filter(project_id=instance.project_id, date__lt=old_date)
+                .exclude(id=instance.id)
+                .order_by('-date')
+                .first()
+            )
+            nxt = (
+                Deliverable.objects.filter(project_id=instance.project_id, date__gt=old_date)
+                .exclude(id=instance.id)
+                .order_by('date')
+                .first()
+            )
+            win_start = (prev.date + timedelta(days=1)) if (prev and prev.date) else None
+            win_end = (nxt.date - timedelta(days=1)) if (nxt and nxt.date) else None
+
+            # Compute delta weeks
+            try:
+                dw = (sunday_of_week(new_date) - sunday_of_week(old_date)).days // 7
+            except Exception:
+                dw = 0
+
+            assignments = Assignment.objects.filter(project_id=instance.project_id, is_active=True)
+            changed_objs = []
+            touched: set[str] = set()
+            changed_count = 0
+
+            with transaction.atomic():
+                # Save deliverable first to persist date change in the same transaction
+                instance = serializer.save()
+                audit_snapshot = {}
+                for a in assignments.select_for_update():
+                    wh_before = dict(a.weekly_hours or {})
+                    if not wh_before:
+                        continue
+                    wh_after = reallocate_weekly_hours(wh_before, old_date, new_date, window=(win_start, win_end))
+                    if wh_after != wh_before:
+                        changed_count += 1
+                        a.weekly_hours = wh_after
+                        changed_objs.append(a)
+                        # Collect touched keys where values changed or moved
+                        before_keys = set(wh_before.keys())
+                        after_keys = set(wh_after.keys())
+                        changed_keys = before_keys.symmetric_difference(after_keys)
+                        # Also include keys whose values changed even if keys remain
+                        common = before_keys & after_keys
+                        for k in common:
+                            try:
+                                if float(wh_before.get(k) or 0) != float(wh_after.get(k) or 0):
+                                    changed_keys.add(k)
+                            except Exception:
+                                changed_keys.add(k)
+                        touched.update(changed_keys)
+                        # Store per-assignment diff snapshot (changed keys only)
+                        prev_subset = {k: int(wh_before.get(k) or 0) for k in sorted(changed_keys) if k in wh_before}
+                        next_subset = {k: int(wh_after.get(k) or 0) for k in sorted(changed_keys) if k in wh_after}
+                        audit_snapshot[str(a.id)] = {'prev': prev_subset, 'next': next_subset}
+
+                if changed_objs:
+                    # Bulk update weekly_hours
+                    Assignment.objects.bulk_update(changed_objs, ['weekly_hours'])
+
+                # Persist audit snapshot for observability and optional undo
+                try:
+                    ReallocationAudit.objects.create(
+                        deliverable=instance,
+                        project=instance.project,
+                        user_id=getattr(getattr(request, 'user', None), 'id', None),
+                        old_date=old_date,
+                        new_date=new_date,
+                        delta_weeks=dw,
+                        assignments_changed=changed_count,
+                        touched_week_keys=sorted(touched),
+                        snapshot=audit_snapshot,
+                    )
+                except Exception:
+                    # Non-blocking: failure to persist audit must not fail request
+                    pass
+
+            realloc_summary = {
+                'deltaWeeks': dw,
+                'assignmentsChanged': changed_count,
+                'touchedWeekKeys': sorted(touched),
+            }
+
+            try:
+                logging.getLogger('request').info("deliverable_reallocation", extra={
+                    'event': 'deliverable_reallocation',
+                    'deliverable_id': instance.id,
+                    'project_id': instance.project_id,
+                    'user_id': getattr(getattr(request, 'user', None), 'id', None),
+                    'delta_weeks': dw,
+                    'assignments_changed': changed_count,
+                    'touched_weeks_count': len(realloc_summary['touchedWeekKeys']),
+                })
+            except Exception:
+                pass
+
+            data = self.get_serializer(instance).data
+            data['reallocation'] = realloc_summary
+            return Response(data)
+
+        # Default path: just save and return
+        instance = serializer.save()
+        return Response(self.get_serializer(instance).data)
     
     @extend_schema(
         request=inline_serializer(name='DeliverableReorderRequest', fields={

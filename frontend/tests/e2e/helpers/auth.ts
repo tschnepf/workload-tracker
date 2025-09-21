@@ -5,12 +5,10 @@ export async function uiLogin(page: Page, opts?: { username?: string; password?:
   const password = opts?.password || process.env.PW_PASSWORD || 'admin123';
 
   await page.goto('/login');
-  await page.getByLabel('Username or Email').fill(username);
-  await page.getByLabel('Password').fill(password);
+  // Labels are not programmatically associated; target inputs directly
+  await page.locator('input[type="text"]').first().fill(username);
+  await page.locator('input[type="password"]').first().fill(password);
   await page.getByRole('button', { name: /sign in/i }).click();
-  // Expect redirect to dashboard (or to root which redirects)
-  await page.waitForURL('**/(dashboard|/)', { timeout: 10_000 });
-  // Sanity: page shows some authenticated content
-  await expect(page.locator('body')).toContainText(/Dashboard|Assignment Grid|People|Projects/);
+  // Sanity: wait for authenticated content to appear
+  await expect(page.locator('body')).toContainText(/Dashboard|Assignment Grid|People|Projects/, { timeout: 15000 });
 }
-

@@ -17,6 +17,7 @@ import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
 import { useCapabilities } from '@/hooks/useCapabilities';
+import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 
 // Project Assignments Grid (scaffold)
 // Prescriptive: lean, best-practice; no client-side week calculations.
@@ -335,6 +336,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
     load();
     return () => { mounted = false; };
   }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, selectedStatusFilters, reloadCounter]);
+
+  // Listen for global grid refresh events and trigger reload
+  useEffect(() => {
+    const unsub = subscribeGridRefresh(() => {
+      setPendingRefresh(true);
+      setReloadCounter((c) => c + 1);
+    });
+    return unsub;
+  }, []);
 
   // --- Deliverable Coloring (reuse calendar colors) ---
   const typeColors: Record<string, string> = {

@@ -32,7 +32,7 @@ class CapacityAnalysisService:
 
         result: List[Dict] = []
         for p in people_queryset:
-            util = p.get_utilization_over_weeks(weeks=weeks)
+            util = p.get_utilization_over_weeks_sunday(weeks=weeks)
             result.append({
                 'id': p.id,
                 'name': p.name,
@@ -58,26 +58,22 @@ class CapacityAnalysisService:
 
         The queryset should prefetch active assignments to avoid N+1 at call site.
         """
-        # Start from Monday of current week
+        # Sunday-only week starts
+        from core.week_utils import sunday_of_week
         today = date.today()
-        start_monday = today - timedelta(days=today.weekday())
-        week_starts = [start_monday + timedelta(weeks=w) for w in range(weeks)]
+        start_sunday = sunday_of_week(today)
+        week_starts = [start_sunday + timedelta(weeks=w) for w in range(weeks)]
 
         # Total capacity across team (constant across weeks)
         total_capacity_per_week = sum((p.weekly_capacity or 0) for p in people_queryset)
 
-        def hours_for_week(assignment, monday_date: date) -> float:
+        def hours_for_week(assignment, sunday_date: date) -> float:
             wh = assignment.weekly_hours or {}
-            key = monday_date.strftime('%Y-%m-%d')
-            if key in wh:
-                return float(wh[key] or 0)
-            # Tolerant search +/- 3 days (covers Sunday-stored keys)
-            for offset in range(-3, 4):
-                d = monday_date + timedelta(days=offset)
-                k = d.strftime('%Y-%m-%d')
-                if k in wh:
-                    return float(wh[k] or 0)
-            return 0.0
+            key = sunday_date.strftime('%Y-%m-%d')
+            try:
+                return float(wh.get(key) or 0)
+            except Exception:
+                return 0.0
 
         try:
             version = cache.get('analytics_cache_version', 1)

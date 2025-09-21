@@ -10,6 +10,8 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { formatUtcToLocal } from '@/utils/dates';
 import { Project, Deliverable } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
+import { emitGridRefresh } from '@/lib/gridRefreshBus';
+import { showToast } from '@/lib/toastBus';
 import { useQueryClient } from '@tanstack/react-query';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 
@@ -72,7 +74,18 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
 
   const handleUpdateDeliverable = async (id: number, deliverableData: Partial<Deliverable>) => {
     try {
-      await deliverablesApi.update(id, deliverableData);
+      const updated = await deliverablesApi.update(id, deliverableData);
+      try {
+        const anyUpdated: any = updated as any;
+        const r = anyUpdated && anyUpdated.reallocation;
+        if (r && typeof r === 'object') {
+          const n = Number(r.assignmentsChanged || 0);
+          const w = Array.isArray(r.touchedWeekKeys) ? r.touchedWeekKeys.length : 0;
+          const dw = Number(r.deltaWeeks || 0);
+          showToast(`Auto-reallocated hours (${dw >= 0 ? '+' : ''}${dw} weeks): ${n} assignments, ${w} weeks touched`, 'info');
+          try { emitGridRefresh({ touchedWeekKeys: Array.isArray(r.touchedWeekKeys) ? r.touchedWeekKeys : undefined, reason: 'deliverable-date-change' }); } catch {}
+        }
+      } catch {}
       await loadDeliverables();
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       setEditingId(null);
@@ -148,6 +161,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-base font-semibold text-[#cccccc]">Deliverables</h3>
         <button
+          data-testid="add-deliverable-btn"
           onClick={handleAddDeliverable}
           className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors"
         >
@@ -270,7 +284,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
 
   if (editing) {
     return (
-      <div className="p-2 bg-[#3e3e42]/50 rounded border border-[#3e3e42]">
+      <div className="p-2 bg-[#3e3e42]/50 rounded border border-[#3e3e42]" data-testid={`deliverable-row-${deliverable.id}`}>
         <div className="grid grid-cols-6 gap-2 items-center text-xs mb-2">
           <div className="text-[#969696] font-medium w-4"></div> {/* Drag handle space */}
           <div className="text-[#969696] font-medium">%</div>
