@@ -228,14 +228,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
     }
   ];
 
-  const systemItems = [
-    { 
-      path: '/settings', 
-      icon: 'settings', 
-      label: 'Settings',
-      description: 'System configuration'
-    }
-  ];
+  const systemItems: Array<{ path: string; icon: string; label: string; description?: string }> = [];
 
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
