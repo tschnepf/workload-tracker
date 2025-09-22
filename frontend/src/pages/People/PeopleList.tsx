@@ -551,7 +551,33 @@ const PeopleList: React.FC = () => {
     }
   };
 
-  // Extract unique locations from people data
+  // Helper function to get consolidated location options
+  const getLocationOptions = () => {
+    const locationCounts = new Map();
+    const remoteLocations = new Set();
+
+    people.forEach(person => {
+      const location = person.location?.trim();
+      if (!location) return;
+
+      if (location.toLowerCase().includes('remote')) {
+        remoteLocations.add(location);
+        locationCounts.set('Remote', (locationCounts.get('Remote') || 0) + 1);
+      } else {
+        locationCounts.set(location, (locationCounts.get(location) || 0) + 1);
+      }
+    });
+
+    return Array.from(locationCounts.entries())
+      .map(([location, count]) => ({
+        location,
+        count,
+        isConsolidated: location === 'Remote' && remoteLocations.size > 1
+      }))
+      .sort((a, b) => a.location.localeCompare(b.location));
+  };
+
+  // Extract unique locations from people data (for autocomplete)
   const uniqueLocations = Array.from(new Set(
     people
       .map(person => person.location?.trim())
@@ -640,9 +666,19 @@ const PeopleList: React.FC = () => {
         departmentFilter.includes(person.department?.toString() || '') ||
         (departmentFilter.includes('unassigned') && !person.department);
       
-      // Location filter - Multi-select
-      const matchesLocation = locationFilter.length === 0 || 
-        locationFilter.includes(person.location?.trim() || '') ||
+      // Location filter - Multi-select with special Remote handling
+      const matchesLocation = locationFilter.length === 0 ||
+        locationFilter.some(filterLocation => {
+          const personLocation = person.location?.trim() || '';
+
+          // Special case: "Remote" filter includes any location containing "remote" (case-insensitive)
+          if (filterLocation === 'Remote') {
+            return personLocation.toLowerCase().includes('remote');
+          }
+
+          // All other filters use exact matching
+          return filterLocation === personLocation;
+        }) ||
         (locationFilter.includes('unspecified') && (!person.location || person.location.trim() === ''));
       
       return matchesSearch && matchesDepartment && matchesLocation;
@@ -869,7 +905,7 @@ const PeopleList: React.FC = () => {
                     >
                       Not Specified ({people.filter(p => !p.location || p.location.trim() === '').length})
                     </button>
-                    {uniqueLocations.map((location) => (
+                    {getLocationOptions().map(({ location, count, isConsolidated }) => (
                       <button
                         key={location}
                         onClick={() => {
@@ -882,7 +918,10 @@ const PeopleList: React.FC = () => {
                         }`}
                         disabled={locationFilter.includes(location)}
                       >
-                        {location} ({people.filter(p => p.location?.trim() === location).length})
+                        {location} ({count})
+                        {isConsolidated && (
+                          <span className="text-xs opacity-75 ml-1">- includes all remote</span>
+                        )}
                       </button>
                     ))}
                   </div>
