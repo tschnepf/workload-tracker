@@ -100,6 +100,76 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         return response
 
     @extend_schema(
+        responses=inline_serializer(name='ProjectPreDeliverableSettingsResponse', fields={
+            'projectId': serializers.IntegerField(),
+            'settings': serializers.ListSerializer(child=inline_serializer(name='ProjectTypeSetting', fields={
+                'typeId': serializers.IntegerField(),
+                'typeName': serializers.CharField(),
+                'isEnabled': serializers.BooleanField(),
+                'daysBefore': serializers.IntegerField(allow_null=True),
+                'source': serializers.ChoiceField(choices=['project','global','default'])
+            }))
+        })
+    )
+    @action(detail=True, methods=['get', 'put'], url_path='pre-deliverable-settings')
+    def pre_deliverable_settings(self, request, pk=None):
+        from deliverables.models import PreDeliverableType
+        from core.models import PreDeliverableGlobalSettings
+        from .models import ProjectPreDeliverableSettings
+
+        try:
+            project = Project.objects.get(pk=pk)
+        except Project.DoesNotExist:
+            return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method.lower() == 'get':
+            types = PreDeliverableType.objects.all().order_by('sort_order', 'name')
+            proj_map = {s.pre_deliverable_type_id: s for s in ProjectPreDeliverableSettings.objects.filter(project=project)}
+            glob_map = {g.pre_deliverable_type_id: g for g in PreDeliverableGlobalSettings.objects.select_related('pre_deliverable_type')}
+            items = []
+            for t in types:
+                if t.id in proj_map:
+                    s = proj_map[t.id]
+                    items.append({'typeId': t.id, 'typeName': t.name, 'isEnabled': s.is_enabled, 'daysBefore': s.days_before, 'source': 'project'})
+                elif t.id in glob_map:
+                    g = glob_map[t.id]
+                    items.append({'typeId': t.id, 'typeName': t.name, 'isEnabled': g.is_enabled_by_default, 'daysBefore': g.default_days_before, 'source': 'global'})
+                else:
+                    items.append({'typeId': t.id, 'typeName': t.name, 'isEnabled': t.is_active, 'daysBefore': t.default_days_before, 'source': 'default'})
+            return Response({'projectId': project.id, 'settings': items})
+
+        # PUT
+        if not request.user.is_staff:
+            return Response({'detail': 'Only admins may update project pre-deliverable settings'}, status=status.HTTP_403_FORBIDDEN)
+        payload = request.data or {}
+        settings_list = payload.get('settings') or []
+        if not isinstance(settings_list, list):
+            return Response({'error': 'settings must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+        for entry in settings_list:
+            try:
+                type_id = int(entry.get('typeId'))
+            except Exception:
+                return Response({'error': 'typeId required'}, status=status.HTTP_400_BAD_REQUEST)
+            is_enabled = bool(entry.get('isEnabled'))
+            days_before = entry.get('daysBefore')
+            if days_before is None:
+                # Remove override to fall back to global/default
+                ProjectPreDeliverableSettings.objects.filter(project=project, pre_deliverable_type_id=type_id).delete()
+                continue
+            try:
+                days_before = int(days_before)
+            except Exception:
+                return Response({'error': 'daysBefore must be an integer or null'}, status=status.HTTP_400_BAD_REQUEST)
+            if days_before < 0:
+                return Response({'error': 'daysBefore must be >= 0'}, status=status.HTTP_400_BAD_REQUEST)
+            ProjectPreDeliverableSettings.objects.update_or_create(
+                project=project, pre_deliverable_type_id=type_id,
+                defaults={'days_before': days_before, 'is_enabled': is_enabled}
+            )
+        # Return updated view
+        return self.pre_deliverable_settings(request._request, pk=pk)  # type: ignore
+
+    @extend_schema(
         parameters=[
             OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Sunday key)'),
             OpenApiParameter(name='department', type=int, required=False, description='Filter people by department id'),

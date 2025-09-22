@@ -318,3 +318,13 @@ Sources: `prompts/R2-REBUILD-004-MANAGER-FEATURES.md`, `prompts/R2-REBUILD-002-B
 - **Alternative**: Consider CDN-based Brotli (e.g., Cloudflare auto-enables Brotli)
 - **Estimated Timeline**: 1-2 days
 - **Trigger**: When asset sizes grow significantly or CDN migration is planned
+
+---
+
+## Notifications & Scheduling
+
+- Add email templates (HTML/text) and wiring for Celery Beat schedules
+  - Create HTML and plain-text templates for individual reminders and daily digests
+  - Configure Celery Beat entries to schedule reminder and digest tasks
+  - Gate schedules behind env flags and document configuration
+

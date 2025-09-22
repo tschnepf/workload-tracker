@@ -8,9 +8,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='deliverableassignment',
-            name='weekly_hours',
-        ),
+        migrations.RunSQL(
+            sql='ALTER TABLE "deliverables_deliverableassignment" DROP COLUMN IF EXISTS "weekly_hours"',
+            reverse_sql=migrations.RunSQL.noop
+        )
     ]
-

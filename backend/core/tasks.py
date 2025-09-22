@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Optional
 from datetime import date, timedelta
 
 from celery import shared_task
+import os
 from django.db.models import Prefetch
 
 
@@ -232,3 +233,58 @@ def bulk_skill_matching_async(self, skills: List[str], filters: Dict[str, Any]) 
 
     results.sort(key=lambda x: (-x['score'], x['name']))
     return results[:limit]
+
+
+@shared_task(bind=True, soft_time_limit=120)
+def send_pre_deliverable_reminders(self):
+    # Gated by env flags
+    if os.getenv('PRED_ITEMS_NOTIFICATIONS_ENABLED', 'false').lower() != 'true':
+        return {'sent': 0}
+    from core.models import NotificationPreference, NotificationLog
+    from deliverables.services import PreDeliverableService
+    from django.core.mail import send_mail
+    from datetime import date as _date
+    sent = 0
+    for pref in NotificationPreference.objects.select_related('user'):
+        if not pref.email_pre_deliverable_reminders:
+            continue
+        upcoming = PreDeliverableService.get_upcoming_for_user(pref.user, days_ahead=max(0, int(pref.reminder_days_before or 1)))
+        for it in upcoming:
+            subject = f"Reminder: {getattr(it.pre_deliverable_type, 'name', 'Pre-Deliverable')} ({it.generated_date})"
+            body = f"Project: {getattr(it.deliverable.project, 'name', '')}\nDeliverable: {it.deliverable.description or 'Milestone'}\nDue: {it.generated_date}"
+            ok = True
+            try:
+                if pref.user.email:
+                    send_mail(subject, body, None, [pref.user.email])
+                    sent += 1
+            except Exception:
+                ok = False
+            NotificationLog.objects.create(user=pref.user, pre_deliverable_item=it, notification_type='reminder', sent_at=_date.today(), email_subject=subject, success=ok)
+    return {'sent': sent}
+
+
+@shared_task(bind=True, soft_time_limit=120)
+def send_daily_digest(self):
+    if os.getenv('PRED_ITEMS_DIGEST_ENABLED', 'false').lower() != 'true':
+        return {'sent': 0}
+    from core.models import NotificationPreference, NotificationLog
+    from deliverables.services import PreDeliverableService
+    from django.core.mail import send_mail
+    from datetime import date as _date
+    sent = 0
+    for pref in NotificationPreference.objects.select_related('user'):
+        if not pref.daily_digest:
+            continue
+        items = PreDeliverableService.get_upcoming_for_user(pref.user, days_ahead=max(0, int(pref.reminder_days_before or 1)))
+        subject = 'Daily Pre-Deliverables Digest'
+        lines = [f"- {getattr(it.pre_deliverable_type, 'name', '')} • {getattr(it.deliverable.project, 'name', '')} • {it.generated_date}" for it in items]
+        body = '\n'.join(lines) if lines else 'No upcoming items.'
+        ok = True
+        try:
+            if pref.user.email:
+                send_mail(subject, body, None, [pref.user.email])
+                sent += 1
+        except Exception:
+            ok = False
+        NotificationLog.objects.create(user=pref.user, pre_deliverable_item=None, notification_type='digest', sent_at=_date.today(), email_subject=subject, success=ok)
+    return {'sent': sent}

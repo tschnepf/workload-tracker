@@ -4,6 +4,8 @@ import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
 import { deliverablesApi } from '../../services/api';
 import { DeliverableCalendarItem } from '../../types/models';
+import { resolveApiBase } from '@/utils/apiBase';
+import { getAccessToken } from '@/utils/auth';
 import { darkTheme } from '../../theme/tokens';
 
 function fmtDate(date: Date): string {
@@ -27,6 +29,9 @@ const typeColors: Record<string, string> = {
   masterplan: '#a78bfa',
   sd: '#f59e0b',
   milestone: '#64748b',
+  // Pre‑deliverables: extremely subtle, near‑background tint
+  // Use rgba for transparency; avoid overpowering main deliverables
+  pre_deliverable: 'rgba(147, 197, 253, 0.08)',
 };
 
 function classify(item: DeliverableCalendarItem): string {
@@ -56,6 +61,18 @@ function buildTooltip(ev: DeliverableCalendarItem): string {
   return parts ? `${ev.title} - ${parts}` : (ev.title || 'Deliverable');
 }
 
+function buildPreLabel(it: any): string {
+  const client = (it.projectClient || '').trim();
+  const proj = (it.projectName || '').trim();
+  const type = (it.preDeliverableType || '').trim();
+  const parts = [client, proj, type].filter(Boolean);
+  return parts.length ? parts.join(' ') : 'Pre-Deliverable';
+}
+
+type CalendarItemUnion = (DeliverableCalendarItem & { itemType?: 'deliverable' }) | {
+  itemType: 'pre_deliverable'; id: number; parentDeliverableId: number; project: number; projectName?: string | null; projectClient?: string | null; preDeliverableType?: string; title: string; date: string | null; isCompleted: boolean; isOverdue?: boolean;
+};
+
 const MilestoneCalendarPage: React.FC = () => {
   const [anchor, setAnchor] = useState<Date>(() => startOfWeekSunday(new Date()));
   const [weeksCount, setWeeksCount] = useState<number>(8);
@@ -66,9 +83,10 @@ const MilestoneCalendarPage: React.FC = () => {
     return fmtDate(d);
   }, [anchor, weeksCount]);
 
-  const [items, setItems] = useState<DeliverableCalendarItem[]>([]);
+  const [items, setItems] = useState<CalendarItemUnion[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPre, setShowPre] = useState<boolean>(true);
 
   useAuthenticatedEffect(() => {
     let active = true;
@@ -76,8 +94,23 @@ const MilestoneCalendarPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await deliverablesApi.calendar(start, end);
-        if (active) setItems(data || []);
+        // Try unified endpoint first; fallback to legacy calendar
+        const base = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
+        const token = getAccessToken();
+        try {
+          const params = new URLSearchParams();
+          if (start) params.set('start', start);
+          if (end) params.set('end', end);
+          const resp = await fetch(`${base}/deliverables/calendar_with_pre_items/?${params.toString()}`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
+          if (resp.ok) {
+            const union = await resp.json();
+            if (active) setItems(union || []);
+            return;
+          }
+        } catch {}
+        // Fallback
+        const legacy = await deliverablesApi.calendar(start, end);
+        if (active) setItems((legacy || []).map(it => ({ ...it, itemType: 'deliverable' as const })));
       } catch (e: any) {
         if (active) setError(e?.message || 'Failed to load calendar');
       } finally {
@@ -88,14 +121,15 @@ const MilestoneCalendarPage: React.FC = () => {
   }, [start, end]);
 
   const dateMap = useMemo(() => {
-    const m = new Map<string, DeliverableCalendarItem[]>();
+    const m = new Map<string, CalendarItemUnion[]>();
     for (const it of items) {
       if (!it.date) continue;
       if (!m.has(it.date)) m.set(it.date, []);
+      if (it.itemType === 'pre_deliverable' && !showPre) continue;
       m.get(it.date)!.push(it);
     }
     return m;
-  }, [items]);
+  }, [items, showPre]);
 
   const weeks: Date[][] = useMemo(() => {
     const rows: Date[][] = [];
@@ -182,7 +216,7 @@ const MilestoneCalendarPage: React.FC = () => {
                       const monthShades = ['#2d2d30', '#2a2a2e', '#26262a', '#232327', '#1f1f24'];
                       if (monthOffset < 0) monthOffset = 0; // don't special-shade prior-month spill
                       const monthBg = monthShades[monthOffset % monthShades.length];
-                      const dayItems = (dateMap.get(key) || []).sort((a, b) => (a.projectName || '').localeCompare(b.projectName || ''));
+                      const dayItems = (dateMap.get(key) || []).sort((a, b) => (('projectName' in a ? a.projectName||'' : '')).localeCompare(('projectName' in b ? b.projectName||'' : '')));
                       return (
                         <div key={j} className="border-r border-[#3e3e42] last:border-r-0 p-2 align-top" style={{ position: 'relative', background: monthBg }}>
                           <div className="text-xs text-[#94a3b8] mb-1 flex items-center gap-1">
@@ -190,13 +224,22 @@ const MilestoneCalendarPage: React.FC = () => {
                           </div>
                           <div className="space-y-1">
                             {dayItems.map((ev) => {
-                              const type = classify(ev);
+                              const isPre = (ev as any).itemType === 'pre_deliverable';
+                              const type = isPre ? 'pre_deliverable' : classify(ev as DeliverableCalendarItem);
                               const color = typeColors[type] || typeColors.milestone;
+                              const label = isPre ? buildPreLabel(ev) : buildEventLabel(ev as DeliverableCalendarItem);
                               return (
-                                <div key={`${ev.id}-${ev.date}`} title={buildTooltip(ev)}
-                                     className="text-xs text-white rounded px-2 py-1 truncate"
-                                     style={{ background: color }}>
-                                  {buildEventLabel(ev)}
+                                <div
+                                  key={`${ev.id}-${ev.date}`}
+                                  title={label}
+                                  className={`text-xs text-white rounded px-2 py-1 truncate ${isPre ? 'border' : ''}`}
+                                  style={{
+                                    background: color,
+                                    // Subtle border to hint presence without drawing focus
+                                    border: isPre ? '1px solid rgba(147, 197, 253, 0.25)' : undefined,
+                                  }}
+                                >
+                                  {label}
                                 </div>
                               );
                             })}
@@ -230,6 +273,16 @@ const MilestoneCalendarPage: React.FC = () => {
                       {label}
                     </div>
                   ))}
+                  <div className="flex items-center gap-2 text-[#cbd5e1]">
+                    <span className="inline-block w-3 h-3 rounded" style={{ background: typeColors['pre_deliverable'] }} />
+                    Pre-Deliverable
+                  </div>
+                  <div className="mt-3">
+                    <label className="inline-flex items-center gap-2 text-[#cbd5e1]">
+                      <input type="checkbox" checked={showPre} onChange={e => setShowPre(e.currentTarget.checked)} />
+                      Show Pre-Deliverables
+                    </label>
+                  </div>
                 </div>
               </div>
             </Card>

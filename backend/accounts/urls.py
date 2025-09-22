@@ -12,4 +12,5 @@ urlpatterns = [
     path('users/', views.ListUsersView.as_view(), name='auth_users'),
     path('users/<int:user_id>/', views.DeleteUserView.as_view(), name='auth_delete_user'),
     path('admin_audit/', views.AdminAuditLogsView.as_view(), name='auth_admin_audit'),
+    path('notification-preferences/', views.NotificationPreferencesView.as_view(), name='notification_preferences'),
 ]

@@ -17,10 +17,12 @@ from .serializers import (
     CreateUserRequestSerializer,
     SetPasswordRequestSerializer,
     UserListItemSerializer,
+    NotificationPreferencesSerializer,
 )
 from people.models import Person
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from core.models import NotificationPreference
 
 
 class HotEndpointThrottle(ScopedRateThrottle):
@@ -318,6 +320,27 @@ class DeleteUserView(APIView):
             pass
         target.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NotificationPreferencesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=NotificationPreferencesSerializer)
+    def get(self, request):
+        pref, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        return Response(NotificationPreferencesSerializer.from_model(pref))
+
+    @extend_schema(request=NotificationPreferencesSerializer, responses=NotificationPreferencesSerializer)
+    def put(self, request):
+        pref, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        ser = NotificationPreferencesSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        pref.email_pre_deliverable_reminders = data['emailPreDeliverableReminders']
+        pref.reminder_days_before = data['reminderDaysBefore']
+        pref.daily_digest = data['dailyDigest']
+        pref.save(update_fields=['email_pre_deliverable_reminders', 'reminder_days_before', 'daily_digest', 'updated_at'])
+        return Response(NotificationPreferencesSerializer.from_model(pref))
 
 
 class AdminAuditLogsView(APIView):

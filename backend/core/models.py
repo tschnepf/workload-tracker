@@ -69,3 +69,26 @@ class PreDeliverableGlobalSettings(models.Model):
         except PreDeliverableType.DoesNotExist:
             return None
 
+
+class NotificationPreference(models.Model):
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='notification_preferences')
+    email_pre_deliverable_reminders = models.BooleanField(default=True)
+    reminder_days_before = models.PositiveIntegerField(default=1)
+    daily_digest = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"NotifPrefs({self.user_id})"
+
+
+class NotificationLog(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    pre_deliverable_item = models.ForeignKey('deliverables.PreDeliverableItem', null=True, on_delete=models.SET_NULL)
+    notification_type = models.CharField(max_length=20)
+    sent_at = models.DateTimeField()
+    email_subject = models.CharField(max_length=200)
+    success = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-sent_at']

@@ -1,4 +1,4 @@
-/**
+ï»¿/**
  * Dashboard page - Team utilization overview
  * Chunk 4: Real dashboard with team metrics and VSCode dark theme
  */
@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
+import UpcomingPreDeliverablesWidget from '../components/dashboard/UpcomingPreDeliverablesWidget';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
 import SkillsFilter from '../components/skills/SkillsFilter';
 import { dashboardApi, departmentsApi, personSkillsApi } from '../services/api';
@@ -168,6 +169,7 @@ const Dashboard: React.FC = () => {
                             return (
                               <td key={wk} title={`${wk} - ${(row as any).availableByWeek && (row as any).availableByWeek[wk] != null ? `${(row as any).availableByWeek[wk]}h available` : `${Math.round(row.weekTotals[wk] || 0)}h allocated`}`} style={{ padding: 2 }}>
                                 <div style={{ width: 16, height: 16, background: bg, opacity: 0.7, borderRadius: 3, border: '1px solid #64748b', margin: '0 auto' }} />
+        <UpcomingPreDeliverablesWidget />
                               </td>
                             );
                           })}
@@ -177,15 +179,15 @@ const Dashboard: React.FC = () => {
                   </table>
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-xs text-[#969696]">
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0–70%</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70–85%</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85–100%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0â€“70%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70â€“85%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85â€“100%</div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
-                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
+                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshingâ€¦</span>}
                 </div>
               </div>
             ) : (
-              <div className="text-[#969696]">{heatLoading ? 'Loading…' : 'No data'}</div>
+              <div className="text-[#969696]">{heatLoading ? 'Loadingâ€¦' : 'No data'}</div>
             )}
           </Card>
           )}
@@ -520,11 +522,11 @@ const Dashboard: React.FC = () => {
                   <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[#3e3e42] text-[#969696] text-[10px]">i</span>
                   Tooltips show available hours when provided
                 </span>
-                {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
+                {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshingâ€¦</span>}
               </div>
             </div>
           ) : (
-            <div className="text-[#969696]">{heatLoading ? 'Loading…' : 'No data'}</div>
+            <div className="text-[#969696]">{heatLoading ? 'Loadingâ€¦' : 'No data'}</div>
           )}
         </Card>
 

@@ -6,6 +6,7 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 
 from .models import UserProfile, AdminAuditLog
+from core.models import NotificationPreference
 
 logger = logging.getLogger(__name__)
 
@@ -200,3 +201,17 @@ class UserListItemSerializer(serializers.Serializer):
     groups = serializers.ListField(child=serializers.CharField())
     role = serializers.CharField()
     person = UserListPersonSerializer(allow_null=True, required=False)
+
+
+class NotificationPreferencesSerializer(serializers.Serializer):
+    emailPreDeliverableReminders = serializers.BooleanField()
+    reminderDaysBefore = serializers.IntegerField(min_value=0)
+    dailyDigest = serializers.BooleanField()
+
+    @staticmethod
+    def from_model(p: NotificationPreference):
+        return {
+            'emailPreDeliverableReminders': p.email_pre_deliverable_reminders,
+            'reminderDaysBefore': p.reminder_days_before,
+            'dailyDigest': p.daily_digest,
+        }

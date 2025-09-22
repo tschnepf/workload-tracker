@@ -1,4 +1,4 @@
-"""
+﻿"""
 URL configuration for workload-tracker project.
 """
 from django.contrib import admin
@@ -130,9 +130,12 @@ urlpatterns = [
     path('api/departments/', include('departments.urls')),
     path('api/skills/', include('skills.urls')),
     path('api/core/', include('core.urls')),
+    path('api/reports/', include('reports.urls')),
+    path('api/core/', include('core.urls')),
     path('api/', include('roles.urls')),
 ]
 
 # Add Silk profiling URLs in development/debug mode
 if settings.SILK_ENABLED:
     urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
+

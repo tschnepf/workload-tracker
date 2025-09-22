@@ -11,6 +11,7 @@ import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
+import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';
 
 const ProjectForm: React.FC = () => {
   const navigate = useNavigate();
@@ -342,6 +343,13 @@ const ProjectForm: React.FC = () => {
 
           </form>
         </Card>
+
+        {/* Project-specific pre-deliverable settings */}
+        {isEditing && id && (
+          <div className="mt-6">
+            <ProjectPreDeliverableSettings projectId={parseInt(id)} />
+          </div>
+        )}
       </div>
     </Layout>
   );

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Django settings for workload-tracker project.
 """
 
@@ -57,6 +57,7 @@ LOCAL_APPS = [
     'monitoring',
     'roles',
     'accounts',
+    'reports',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -165,9 +166,9 @@ BACKUP_UPLOAD_MAX_BYTES = int(os.getenv('BACKUP_UPLOAD_MAX_BYTES', str(5 * 1024 
 
 # Feature flags for progressive enhancement
 FEATURES = {
-    'USE_PROJECT_OBJECTS': True,   # ◎. Chunk 5 Complete - Project objects implemented
-    'USE_DEPARTMENTS': True,       # ◎. Chunk 6 Active - Department filtering enabled
-    'USE_SKILLS': True,            # ◎. Chunk 6 Active - Skills tagging system enabled
+    'USE_PROJECT_OBJECTS': True,   # â—Ž. Chunk 5 Complete - Project objects implemented
+    'USE_DEPARTMENTS': True,       # â—Ž. Chunk 6 Active - Department filtering enabled
+    'USE_SKILLS': True,            # â—Ž. Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
 }
 
@@ -321,9 +322,9 @@ if _csrf_from_env:
 
 # Feature flags for progressive enhancement
 FEATURES = {
-    'USE_PROJECT_OBJECTS': True,   # ✅ Chunk 5 Complete - Project objects implemented
-    'USE_DEPARTMENTS': True,       # ✅ Chunk 6 Active - Department filtering enabled
-    'USE_SKILLS': True,            # ✅ Chunk 6 Active - Skills tagging system enabled
+    'USE_PROJECT_OBJECTS': True,   # âœ… Chunk 5 Complete - Project objects implemented
+    'USE_DEPARTMENTS': True,       # âœ… Chunk 6 Active - Department filtering enabled
+    'USE_SKILLS': True,            # âœ… Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
 }
 
@@ -486,3 +487,5 @@ CSP_POLICY = os.getenv(
 )
 # Optional absolute/relative endpoint to receive violation reports
 CSP_REPORT_URI = os.getenv('CSP_REPORT_URI', '/csp-report/')
+
+

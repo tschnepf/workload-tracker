@@ -448,6 +448,22 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         return Response(items + pre_items)
 
     @extend_schema(
+        parameters=[OpenApiParameter(name='days_ahead', type=int, required=False)],
+    )
+    @action(detail=False, methods=['get'])
+    def personal_pre_deliverables(self, request):
+        """Upcoming pre-deliverable items for the authenticated user (default 14 days)."""
+        try:
+            days = int(request.query_params.get('days_ahead') or 14)
+        except Exception:
+            days = 14
+        from .serializers import PreDeliverableItemSerializer
+        from .services import PreDeliverableService
+        qs = PreDeliverableService.get_upcoming_for_user(request.user, days_ahead=days)
+        ser = PreDeliverableItemSerializer(qs, many=True)
+        return Response(ser.data)
+
+    @extend_schema(
         parameters=[OpenApiParameter(name='weeks', type=int, required=False, description='Lookback window in weeks')],
         responses=inline_serializer(name='DeliverableStaffingSummaryItem', fields={
             'linkId': serializers.IntegerField(allow_null=True, required=False),
