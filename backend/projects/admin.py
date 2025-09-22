@@ -10,7 +10,7 @@ from django.utils.html import format_html
 from django.contrib.admin import helpers
 from django.template.response import TemplateResponse
 from django.http import HttpResponse
-from .models import Project
+from .models import Project, ProjectPreDeliverableSettings
 from .utils.excel_handler import export_projects_to_excel, import_projects_from_file
 from .utils.csv_handler import (
     export_projects_to_csv, 
@@ -236,3 +236,11 @@ class ProjectAdmin(admin.ModelAdmin):
         )
         
         return response
+
+
+@admin.register(ProjectPreDeliverableSettings)
+class ProjectPreDeliverableSettingsAdmin(admin.ModelAdmin):
+    list_display = ('project', 'pre_deliverable_type', 'days_before', 'is_enabled', 'created_at')
+    list_filter = ('is_enabled', 'pre_deliverable_type')
+    search_fields = ('project__name', 'pre_deliverable_type__name')
+    ordering = ('project__name', 'pre_deliverable_type__sort_order')

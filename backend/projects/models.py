@@ -39,3 +39,41 @@ class Project(models.Model):
     
     def __str__(self):
         return self.name
+
+
+class ProjectPreDeliverableSettings(models.Model):
+    """Per-project customization of pre-deliverable generation rules."""
+
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='pre_deliverable_settings')
+    pre_deliverable_type = models.ForeignKey('deliverables.PreDeliverableType', on_delete=models.CASCADE)
+    days_before = models.PositiveIntegerField()
+    is_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [['project', 'pre_deliverable_type']]
+        ordering = ['project__name', 'pre_deliverable_type__sort_order']
+        verbose_name = 'Project Pre-Deliverable Setting'
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.project.name} - {self.pre_deliverable_type.name}"
+
+    @classmethod
+    def get_project_settings(cls, project_instance: 'Project'):
+        """Return dict mapping pre_deliverable_type_id -> settings for the project.
+
+        Shape: { type_id: { 'days_before': int, 'is_enabled': bool, 'type_name': str } }
+        """
+        settings = {}
+        qs = (
+            cls.objects.filter(project=project_instance)
+            .select_related('pre_deliverable_type')
+        )
+        for setting in qs:
+            settings[setting.pre_deliverable_type.id] = {
+                'days_before': setting.days_before,
+                'is_enabled': setting.is_enabled,
+                'type_name': setting.pre_deliverable_type.name,
+            }
+        return settings
