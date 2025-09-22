@@ -6,6 +6,21 @@ NEVER write manual field mappings - always use these base classes.
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
 
+
+class PreDeliverableGlobalSettingsItemSerializer(serializers.Serializer):
+    typeId = serializers.IntegerField()
+    typeName = serializers.CharField()
+    defaultDaysBefore = serializers.IntegerField()
+    isEnabledByDefault = serializers.BooleanField()
+    sortOrder = serializers.IntegerField(required=False)
+    isActive = serializers.BooleanField(required=False)
+
+
+class PreDeliverableGlobalSettingsUpdateSerializer(serializers.Serializer):
+    typeId = serializers.IntegerField()
+    defaultDaysBefore = serializers.IntegerField(min_value=0)
+    isEnabledByDefault = serializers.BooleanField()
+
 class AutoMappedSerializer(serializers.ModelSerializer):
     """Base class that auto-maps field names from registry"""
     

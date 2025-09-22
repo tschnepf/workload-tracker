@@ -523,6 +523,147 @@
                 }
             }
         },
+        "/api/assignments/project_grid_snapshot/": {
+            "get": {
+                "operationId": "assignments_project_grid_snapshot_retrieve",
+                "description": "Project-centric aggregate snapshot for N weeks ahead (default 12).\n\nResponse shape: { weekKeys: [YYYY-MM-DD], projects: [{id,name,client,status}],\nhoursByProject: { <projectId>: { <weekKey>: hours } },\ndeliverablesByProjectWeek: { <projectId>: { <weekKey>: count } },\nhasFutureDeliverablesByProject: { <projectId>: boolean },\nmetrics: { projectsCount, peopleAssignedCount, totalHours } }",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "has_future_deliverables",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "project_ids",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of project IDs to scope totals (optional)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "status_in",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of project status filters"
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of weeks (1-26), default 12"
+                    }
+                ],
+                "tags": [
+                    "assignments"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectGridSnapshotResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/assignments/project_totals/": {
+            "get": {
+                "operationId": "assignments_project_totals_retrieve",
+                "description": "Return authoritative totals for specific projects over current horizon.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "project_ids",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of project IDs",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of weeks (1-26), default 12"
+                    }
+                ],
+                "tags": [
+                    "assignments"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectTotalsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/assignments/rebalance_suggestions/": {
             "get": {
                 "operationId": "assignments_rebalance_suggestions_retrieve",
@@ -1090,6 +1231,86 @@
                 }
             }
         },
+        "/api/core/pre-deliverable-global-settings/": {
+            "get": {
+                "operationId": "core_pre_deliverable_global_settings_list",
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/PreDeliverableGlobalSettingsItem"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "core_pre_deliverable_global_settings_update",
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GlobalSettingsUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GlobalSettingsUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GlobalSettingsUpdateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/PreDeliverableGlobalSettingsItem"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/dashboard/": {
             "get": {
                 "operationId": "dashboard_retrieve",
@@ -1323,7 +1544,7 @@
             },
             "patch": {
                 "operationId": "deliverables_partial_update",
-                "description": "CRUD operations for deliverables\nSupports filtering by project and manual reordering",
+                "description": "PATCH deliverable. If date changes and feature flag enabled, reallocate hours.\n\nResponse includes optional 'reallocation' summary with keys:\n{ deltaWeeks, assignmentsChanged, touchedWeekKeys }",
                 "parameters": [
                     {
                         "in": "path",
@@ -1917,6 +2138,469 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PaginatedDeliverableCalendarItemList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/calendar_with_pre_items/": {
+            "get": {
+                "operationId": "deliverables_calendar_with_pre_items_retrieve",
+                "description": "CRUD operations for deliverables\nSupports filtering by project and manual reordering",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "end",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "YYYY-MM-DD"
+                    },
+                    {
+                        "in": "query",
+                        "name": "mine_only",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "start",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "YYYY-MM-DD"
+                    },
+                    {
+                        "in": "query",
+                        "name": "type_id",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Deliverable"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/pre_deliverable_items/": {
+            "get": {
+                "operationId": "deliverables_pre_deliverable_items_list",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedPreDeliverableItemList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "deliverables_pre_deliverable_items_create",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PreDeliverableItemRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PreDeliverableItemRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PreDeliverableItemRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PreDeliverableItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/pre_deliverable_items/{id}/": {
+            "get": {
+                "operationId": "deliverables_pre_deliverable_items_retrieve",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Pre-Deliverable Item.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PreDeliverableItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "deliverables_pre_deliverable_items_update",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Pre-Deliverable Item.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PreDeliverableItemRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PreDeliverableItemRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PreDeliverableItemRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PreDeliverableItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "deliverables_pre_deliverable_items_partial_update",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Pre-Deliverable Item.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPreDeliverableItemRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPreDeliverableItemRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPreDeliverableItemRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PreDeliverableItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "deliverables_pre_deliverable_items_destroy",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Pre-Deliverable Item.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/deliverables/pre_deliverable_items/{id}/complete/": {
+            "post": {
+                "operationId": "deliverables_pre_deliverable_items_complete_create",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Pre-Deliverable Item.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PreDeliverableItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/pre_deliverable_items/{id}/uncomplete/": {
+            "post": {
+                "operationId": "deliverables_pre_deliverable_items_uncomplete_create",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Pre-Deliverable Item.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PreDeliverableItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/pre_deliverable_items/bulk_complete/": {
+            "post": {
+                "operationId": "deliverables_pre_deliverable_items_bulk_complete_create",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkCompleteRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkCompleteRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkCompleteRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BulkCompleteResponse"
                                 }
                             }
                         },
@@ -3577,7 +4261,7 @@
         "/api/projects/{id}/availability/": {
             "get": {
                 "operationId": "projects_availability_list",
-                "description": "Return availability snapshot for people relevant to the project context.\n\nResponse items: { personId, personName, totalHours, capacity, availableHours, utilizationPercent }\nUses Monday as canonical week key; tolerant to JSON keys +/- 3 days in assignments.",
+                "description": "Return availability snapshot for people relevant to the project context.\n\nResponse items: { personId, personName, totalHours, capacity, availableHours, utilizationPercent }\nUses Sunday as canonical week key; exact JSON key lookup (no tolerance).",
                 "parameters": [
                     {
                         "in": "query",
@@ -3627,7 +4311,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "YYYY-MM-DD (normalized to Monday)"
+                        "description": "YYYY-MM-DD (Sunday key)"
                     }
                 ],
                 "tags": [
@@ -5053,6 +5737,42 @@
                     "utilization_percent"
                 ]
             },
+            "BulkCompleteRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "ids"
+                ]
+            },
+            "BulkCompleteResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "updatedCount": {
+                        "type": "integer"
+                    },
+                    "failed": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "failed",
+                    "success",
+                    "updatedCount"
+                ]
+            },
             "BulkUpdateHoursResponse": {
                 "type": "object",
                 "properties": {
@@ -5255,11 +5975,16 @@
                         "type": "string",
                         "format": "date-time",
                         "readOnly": true
+                    },
+                    "preItems": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "createdAt",
                     "id",
+                    "preItems",
                     "project",
                     "updatedAt"
                 ]
@@ -5278,7 +6003,6 @@
                     "person": {
                         "type": "integer"
                     },
-                    "weeklyHours": {},
                     "roleOnMilestone": {
                         "type": "string",
                         "nullable": true
@@ -5312,8 +6036,7 @@
                     "person",
                     "personName",
                     "projectId",
-                    "updatedAt",
-                    "weeklyHours"
+                    "updatedAt"
                 ]
             },
             "DeliverableAssignmentRequest": {
@@ -5326,7 +6049,6 @@
                     "person": {
                         "type": "integer"
                     },
-                    "weeklyHours": {},
                     "roleOnMilestone": {
                         "type": "string",
                         "nullable": true
@@ -5337,8 +6059,7 @@
                 },
                 "required": [
                     "deliverable",
-                    "person",
-                    "weeklyHours"
+                    "person"
                 ]
             },
             "DeliverableCalendarItem": {
@@ -5568,6 +6289,20 @@
                 "required": [
                     "isActive",
                     "name"
+                ]
+            },
+            "GlobalSettingsUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "settings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PreDeliverableGlobalSettingsUpdateRequest"
+                        }
+                    }
+                },
+                "required": [
+                    "settings"
                 ]
             },
             "GridSnapshotAsyncResponse": {
@@ -5894,6 +6629,37 @@
                     }
                 }
             },
+            "PaginatedPreDeliverableItemList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PreDeliverableItem"
+                        }
+                    }
+                }
+            },
             "PaginatedProjectAvailabilityItemList": {
                 "type": "object",
                 "required": [
@@ -6124,7 +6890,6 @@
                     "person": {
                         "type": "integer"
                     },
-                    "weeklyHours": {},
                     "roleOnMilestone": {
                         "type": "string",
                         "nullable": true
@@ -6257,6 +7022,38 @@
                         "type": "string",
                         "format": "date",
                         "nullable": true
+                    }
+                }
+            },
+            "PatchedPreDeliverableItemRequest": {
+                "type": "object",
+                "properties": {
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "preDeliverableTypeId": {
+                        "type": "integer"
+                    },
+                    "generatedDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "daysBefore": {
+                        "type": "integer"
+                    },
+                    "isCompleted": {
+                        "type": "boolean"
+                    },
+                    "completedDate": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "isActive": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -6688,6 +7485,187 @@
                     "strengths"
                 ]
             },
+            "PreDeliverableGlobalSettingsItem": {
+                "type": "object",
+                "properties": {
+                    "typeId": {
+                        "type": "integer"
+                    },
+                    "typeName": {
+                        "type": "string"
+                    },
+                    "defaultDaysBefore": {
+                        "type": "integer"
+                    },
+                    "isEnabledByDefault": {
+                        "type": "boolean"
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "defaultDaysBefore",
+                    "isEnabledByDefault",
+                    "typeId",
+                    "typeName"
+                ]
+            },
+            "PreDeliverableGlobalSettingsUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "typeId": {
+                        "type": "integer"
+                    },
+                    "defaultDaysBefore": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "isEnabledByDefault": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "defaultDaysBefore",
+                    "isEnabledByDefault",
+                    "typeId"
+                ]
+            },
+            "PreDeliverableItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "preDeliverableTypeId": {
+                        "type": "integer"
+                    },
+                    "typeName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "generatedDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "daysBefore": {
+                        "type": "integer"
+                    },
+                    "isCompleted": {
+                        "type": "boolean"
+                    },
+                    "completedDate": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "completedBy": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "displayName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "isOverdue": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "parentDeliverable": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "assignedPeople": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "itemType": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "assignedPeople",
+                    "completedBy",
+                    "createdAt",
+                    "daysBefore",
+                    "deliverable",
+                    "displayName",
+                    "generatedDate",
+                    "id",
+                    "isActive",
+                    "isCompleted",
+                    "isOverdue",
+                    "itemType",
+                    "parentDeliverable",
+                    "preDeliverableTypeId",
+                    "typeName",
+                    "updatedAt"
+                ]
+            },
+            "PreDeliverableItemRequest": {
+                "type": "object",
+                "properties": {
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "preDeliverableTypeId": {
+                        "type": "integer"
+                    },
+                    "generatedDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "daysBefore": {
+                        "type": "integer"
+                    },
+                    "isCompleted": {
+                        "type": "boolean"
+                    },
+                    "completedDate": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "daysBefore",
+                    "deliverable",
+                    "generatedDate",
+                    "isActive",
+                    "isCompleted",
+                    "preDeliverableTypeId"
+                ]
+            },
             "Project": {
                 "type": "object",
                 "properties": {
@@ -6818,6 +7796,82 @@
                     "projectFilters"
                 ]
             },
+            "ProjectGridSnapshotResponse": {
+                "type": "object",
+                "properties": {
+                    "weekKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "projects": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProjectLite"
+                        }
+                    },
+                    "hoursByProject": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "number",
+                                "format": "double"
+                            }
+                        }
+                    },
+                    "deliverablesByProjectWeek": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "hasFutureDeliverablesByProject": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "boolean"
+                        }
+                    },
+                    "metrics": {
+                        "$ref": "#/components/schemas/ProjectSnapshotMetrics"
+                    }
+                },
+                "required": [
+                    "deliverablesByProjectWeek",
+                    "hasFutureDeliverablesByProject",
+                    "hoursByProject",
+                    "metrics",
+                    "projects",
+                    "weekKeys"
+                ]
+            },
+            "ProjectLite": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "client": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "status": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
+                ]
+            },
             "ProjectRequest": {
                 "type": "object",
                 "properties": {
@@ -6861,6 +7915,44 @@
                 },
                 "required": [
                     "name"
+                ]
+            },
+            "ProjectSnapshotMetrics": {
+                "type": "object",
+                "properties": {
+                    "projectsCount": {
+                        "type": "integer"
+                    },
+                    "peopleAssignedCount": {
+                        "type": "integer"
+                    },
+                    "totalHours": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "required": [
+                    "peopleAssignedCount",
+                    "projectsCount",
+                    "totalHours"
+                ]
+            },
+            "ProjectTotalsResponse": {
+                "type": "object",
+                "properties": {
+                    "hoursByProject": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "number",
+                                "format": "double"
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "hoursByProject"
                 ]
             },
             "RecentAssignment": {

@@ -10,6 +10,8 @@ import Input from '@/components/ui/Input';
 import Loader from '@/components/ui/Loader';
 import { Role } from '@/types/models';
 import { rolesApi, peopleApi, authApi } from '@/services/api';
+import { resolveApiBase } from '@/utils/apiBase';
+import { getAccessToken } from '@/utils/auth';
 import Layout from '@/components/layout/Layout';
 import RoleList from './components/RoleList';
 import RoleForm from './components/RoleForm';
@@ -38,6 +40,10 @@ const Settings: React.FC = () => {
   const [users, setUsers] = useState<Array<{ id: number; username: string; email: string; role: 'admin'|'manager'|'user'; person: { id: number; name: string } | null }>>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersMsg, setUsersMsg] = useState<string | null>(null);
+  // Pre-deliverable defaults (admin)
+  const [preDefaults, setPreDefaults] = useState<Array<{ typeId: number; typeName: string; defaultDaysBefore: number; isEnabledByDefault: boolean }>>([]);
+  const [preDefaultsLoading, setPreDefaultsLoading] = useState(false);
+  const [preDefaultsDirty, setPreDefaultsDirty] = useState(false);
   
   // Role management state
   const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -67,6 +73,25 @@ const Settings: React.FC = () => {
         // ignore; shown only for admins
       } finally {
         setUsersLoading(false);
+      }
+    })();
+    // Load pre-deliverable defaults (admin)
+    (async () => {
+      if (!auth.user?.is_staff) return;
+      try {
+        setPreDefaultsLoading(true);
+        const base = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
+        const resp = await fetch(`${base}/core/pre-deliverable-global-settings/`, {
+          headers: { 'Authorization': `Bearer ${getAccessToken()}` }
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        setPreDefaults(data || []);
+        setPreDefaultsDirty(false);
+      } catch (e) {
+        // non-fatal
+      } finally {
+        setPreDefaultsLoading(false);
       }
     })();
   }, [auth.accessToken, auth.user?.is_staff]);
@@ -155,6 +180,10 @@ const Settings: React.FC = () => {
             <a href="#role-management" className="ml-2 text-[#cccccc] hover:text-white">Role Management</a>
             <span className="mx-2 text-[#3e3e42]">|</span>
             <a href="#backup-restore" className="text-[#cccccc] hover:text-white">Backup &amp; Restore</a>
+            {auth.user?.is_staff && (<>
+              <span className="mx-2 text-[#3e3e42]">|</span>
+              <a href="#pre-deliverable-defaults" className="text-[#cccccc] hover:text-white">Pre-Deliverable Defaults</a>
+            </>)}
           </div>
 
           {/* Role Management Section */}
@@ -337,6 +366,89 @@ const Settings: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Admin: Pre-Deliverable Defaults */}
+          {auth.user?.is_staff && (
+            <div id="pre-deliverable-defaults" className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6 mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-[#cccccc] mb-1">Pre-Deliverable Defaults</h2>
+                  <p className="text-sm text-[#969696]">Configure default timing for auto-generated pre-deliverable items.</p>
+                </div>
+                <Button
+                  disabled={!preDefaultsDirty || preDefaultsLoading}
+                  onClick={async () => {
+                    const base = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
+                    const resp = await fetch(`${base}/core/pre-deliverable-global-settings/`, {
+                      method: 'PUT',
+                      headers: {
+                        'Authorization': `Bearer ${getAccessToken()}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ settings: preDefaults.map(d => ({ typeId: d.typeId, defaultDaysBefore: d.defaultDaysBefore, isEnabledByDefault: d.isEnabledByDefault })) })
+                    });
+                    if (!resp.ok) {
+                      alert(`Failed to save (HTTP ${resp.status})`);
+                      return;
+                    }
+                    const data = await resp.json();
+                    setPreDefaults(data || []);
+                    setPreDefaultsDirty(false);
+                  }}
+                >Save</Button>
+              </div>
+              {preDefaultsLoading ? (
+                <div className="text-[#cccccc]">Loading defaults…</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="text-[#cbd5e1]">
+                      <tr>
+                        <th className="py-2 pr-4 text-left">Type</th>
+                        <th className="py-2 pr-4 text-left">Days Before</th>
+                        <th className="py-2 pr-4 text-left">Enabled</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[#e5e7eb]">
+                      {preDefaults.map((row, idx) => (
+                        <tr className="border-t border-[#3e3e42]" key={row.typeId}>
+                          <td className="py-2 pr-4">{row.typeName}</td>
+                          <td className="py-2 pr-4">
+                            <input
+                              type="number"
+                              min={0}
+                              max={30}
+                              className="w-24 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1"
+                              value={row.defaultDaysBefore}
+                              onChange={e => {
+                                const v = Math.max(0, Math.min(30, Number((e.target as HTMLInputElement).value)));
+                                const next = [...preDefaults];
+                                next[idx] = { ...row, defaultDaysBefore: v };
+                                setPreDefaults(next);
+                                setPreDefaultsDirty(true);
+                              }}
+                            />
+                          </td>
+                          <td className="py-2 pr-4">
+                            <input
+                              type="checkbox"
+                              checked={!!row.isEnabledByDefault}
+                              onChange={e => {
+                                const next = [...preDefaults];
+                                next[idx] = { ...row, isEnabledByDefault: (e.target as HTMLInputElement).checked };
+                                setPreDefaults(next);
+                                setPreDefaultsDirty(true);
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
