@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from datetime import datetime, timedelta
@@ -21,6 +22,9 @@ def sunday_of_week(date):
 class WorkloadForecastApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='user_forecast', password='pw')
+        self.client.force_authenticate(user=self.user)
         self.p1 = Person.objects.create(name='Alice', weekly_capacity=40)
         self.p2 = Person.objects.create(name='Bob', weekly_capacity=30)
 
@@ -77,6 +81,9 @@ class WorkloadForecastApiTests(TestCase):
 class WorkloadForecastDepartmentFilterTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='user_forecast2', password='pw')
+        self.client.force_authenticate(user=self.user)
         # Departments: Root A -> Child B, Sibling C
         self.dept_a = Department.objects.create(name='A')
         self.dept_b = Department.objects.create(
@@ -153,4 +160,3 @@ class WorkloadForecastDepartmentFilterTests(TestCase):
         self.assertEqual(data[0]['totalCapacity'], total_capacity)
         # Allocated includes all: 10 + 5 + 7 = 22
         self.assertEqual(data[0]['totalAllocated'], 22)
-

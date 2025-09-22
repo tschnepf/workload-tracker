@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from datetime import date, timedelta
@@ -11,6 +12,9 @@ from deliverables.models import Deliverable, DeliverableAssignment
 class DeliverablesCalendarApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='cal_user', password='pw')
+        self.client.force_authenticate(user=self.user)
         self.project = Project.objects.create(name="Project A")
         self.person = Person.objects.create(name="Sarah", weekly_capacity=36)
 
@@ -18,11 +22,11 @@ class DeliverablesCalendarApiTests(TestCase):
         self.d1 = Deliverable.objects.create(project=self.project, description="Kickoff", date=date(2025, 9, 7))
         self.d2 = Deliverable.objects.create(project=self.project, percentage=50, date=date(2025, 9, 21))
 
-        # Assignments: one for d1, two for d2
-        DeliverableAssignment.objects.create(deliverable=self.d1, person=self.person, weekly_hours={"2025-09-07": 4})
+        # Assignments: one for d1, two for d2 (no weekly hours on link model)
+        DeliverableAssignment.objects.create(deliverable=self.d1, person=self.person)
         p2 = Person.objects.create(name="Alex", weekly_capacity=36)
-        DeliverableAssignment.objects.create(deliverable=self.d2, person=self.person, weekly_hours={"2025-09-21": 6})
-        DeliverableAssignment.objects.create(deliverable=self.d2, person=p2, weekly_hours={"2025-09-21": 2})
+        DeliverableAssignment.objects.create(deliverable=self.d2, person=self.person)
+        DeliverableAssignment.objects.create(deliverable=self.d2, person=p2)
 
     def test_calendar_date_filtering_and_counts(self):
         resp = self.client.get('/api/deliverables/calendar/?start=2025-09-14&end=2025-09-28')

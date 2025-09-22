@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from datetime import datetime, timedelta
@@ -18,6 +19,9 @@ def sunday_of_week(date):
 class RebalanceSuggestionsApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='user_rebalance', password='pw')
+        self.client.force_authenticate(user=self.user)
         # Overallocated person
         dept, _ = Department.objects.get_or_create(name='Engineering')
         role, _ = Role.objects.get_or_create(name='Engineer')

@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from datetime import datetime, timedelta
@@ -19,6 +20,10 @@ def sunday_of_week(date):
 class CapacityHeatmapApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        # Authenticate (endpoint requires IsAuthenticated)
+        User = get_user_model()
+        self.user = User.objects.create_user(username='user_heatmap', password='pw')
+        self.client.force_authenticate(user=self.user)
         self.dept_eng, _ = Department.objects.get_or_create(name='Engineering')
         self.dept_ops, _ = Department.objects.get_or_create(name='Operations')
         self.p1 = Person.objects.create(name='Alice', weekly_capacity=40, department=self.dept_eng)
