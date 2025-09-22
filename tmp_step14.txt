@@ -1,0 +1,630 @@
+The implementation follows established patterns in the codebase and maintains consistency with existing architecture and design principles.
+# Pre-Deliverable Items Implementation Plan
+**Workload Tracker - Auto-Generated Pre-Deliverable Calendar Items**
+
+Note: “Settings” in this plan refers to the Settings page in the frontend UI (`frontend/src/pages/Settings/Settings.tsx`). We will not create a new Django app named “settings”; global defaults are exposed via backend endpoints and edited from that UI.
+
+## Overview
+This plan implements automatic generation of pre-deliverable items (sub-milestones) that appear on assigned team members' calendars before main deliverables. Each deliverable will automatically create configurable lead-time items based on default settings that can be customized per project and globally through the Settings interface.
+
+## Current System Analysis
+The workload tracker has:
+- **Deliverables Model**: Links to projects, has dates, descriptions, assignments
+- **DeliverableAssignment Model**: Links people to deliverables with roles
+- **Calendar System**: Displays deliverables on a calendar view
+- **Settings System**: Role management and backup/restore functionality
+- **Assignment System**: Weekly hours allocation for project assignments
+
+## Architecture Design
+
+### Database Schema Changes
+1. **PreDeliverableType Model**: Define types of pre-deliverable items (unique `name`, positive `default_days_before`).
+2. **PreDeliverableItem Model**: Generated items linked to main deliverables (add UniqueConstraint on `(deliverable, pre_deliverable_type)` and indexes for calendar queries).
+3. **ProjectPreDeliverableSettings Model**: Per-project customization of pre-deliverable rules (FK to `Project`, UniqueConstraint on `(project, pre_deliverable_type)`).
+4. **PreDeliverableGlobalSettings Model (core app)**: System-wide default pre-deliverable rules (OneToOne with `PreDeliverableType`).
+
+### Frontend Components
+1. **Settings Interface**: Configure default pre-deliverable rules in the existing Settings page (UI)
+2. **Project Settings**: Override defaults per project
+3. **Calendar Enhancement**: Display pre-deliverable items with visual distinction
+4. **Assignment Calendar**: Show pre-deliverables for assigned team members only
+
+### Feature Flag
+- Add `FEATURES['USE_PRE_DELIVERABLES']` to gate new generation/signals and the combined calendar endpoint; default on in dev.
+
+## Implementation Steps
+
+---
+
+### Step 1: Create Pre-Deliverable Type Model
+**Prompt for AI Agent:**
+```
+Create a new Django model called PreDeliverableType in the deliverables app. This model should define the types of pre-deliverable items that can be automatically generated. The model should include:
+
+Fields:
+- name: CharField(max_length=100) - Name of the pre-deliverable type
+- description: TextField(blank=True) - Description of what this type represents
+- default_days_before: IntegerField - Default number of working days before the main deliverable
+- is_active: BooleanField(default=True) - Whether this type is available for use
+- sort_order: IntegerField(default=0) - Display order in UI
+- created_at: DateTimeField(auto_now_add=True)
+- updated_at: DateTimeField(auto_now=True)
+
+Create the following default instances via a data migration:
+1. Specification TOC (3 days before)
+2. Specifications (1 day before)
+3. Model Delivery (1 day before)
+4. Sheet List (1 day before)
+
+Follow Django best practices for models, include proper meta class with ordering, add str method, and create appropriate migration files. Add the model to admin.py for administrative access. Use snake_case naming conventions consistent with the existing codebase.
+```
+
+---
+
+### Step 2: Create Pre-Deliverable Item Model
+**Prompt for AI Agent:**
+```
+Create a new Django model called PreDeliverableItem in the deliverables app. This model represents automatically generated pre-deliverable items that are created based on main deliverables. The model should include:
+
+Fields:
+- deliverable: ForeignKey to Deliverable model with on_delete=CASCADE and related_name='pre_items'
+- pre_deliverable_type: ForeignKey to PreDeliverableType model with on_delete=CASCADE
+- generated_date: DateField - The calculated date for this pre-deliverable item
+- days_before: IntegerField - Number of working days before the main deliverable (can be customized per item)
+- is_completed: BooleanField(default=False) - Whether this pre-deliverable is done
+- completed_date: DateField(blank=True, null=True) - When it was actually completed
+- notes: TextField(blank=True) - Additional notes for this specific pre-deliverable
+- is_active: BooleanField(default=True) - Whether this item should be displayed
+- created_at: DateTimeField(auto_now_add=True)
+- updated_at: DateTimeField(auto_now=True)
+
+Add a property method called 'display_name' that combines the pre_deliverable_type name with the parent deliverable description.
+
+Add a method called 'get_assigned_people' that returns people assigned to the parent deliverable.
+
+Follow Django best practices including meta class ordering by generated_date, str method, and proper foreign key relationships. Add to admin.py for administrative access.
+```
+
+---
+
+### Step 3: Create Project Settings Model for Customization
+**Prompt for AI Agent:**
+```
+Create a new Django model called ProjectPreDeliverableSettings in the projects app. This model allows per-project customization of pre-deliverable generation rules. The model should include:
+
+Fields:
+- project: ForeignKey to Project model with on_delete=CASCADE and related_name='pre_deliverable_settings'
+- pre_deliverable_type: ForeignKey to PreDeliverableType model
+- days_before: IntegerField - Custom number of working days before deliverable for this project
+- is_enabled: BooleanField(default=True) - Whether this type is enabled for this project
+- created_at: DateTimeField(auto_now_add=True)
+- updated_at: DateTimeField(auto_now=True)
+
+Add unique_together constraint for project and pre_deliverable_type to prevent duplicates.
+
+Create a class method called 'get_project_settings' that takes a project instance and returns a dictionary mapping pre-deliverable type IDs to their custom settings for that project, falling back to default settings from PreDeliverableType model.
+
+Add to admin.py and follow Django best practices with appropriate meta class and str method.
+```
+
+---
+
+### Step 4: Create Global Settings Model for System Defaults
+**Prompt for AI Agent:**
+```
+Create a new Django model called PreDeliverableGlobalSettings in the existing `core` app (do not create a new 'settings' app). This model stores system-wide default settings for pre-deliverable generation. The model should include:
+
+Fields:
+- pre_deliverable_type: OneToOneField to PreDeliverableType model with on_delete=CASCADE and related_name='global_settings'
+- default_days_before: IntegerField - System default for days before deliverable
+- is_enabled_by_default: BooleanField(default=True) - Whether new projects should have this type enabled by default
+- created_at: DateTimeField(auto_now_add=True)
+- updated_at: DateTimeField(auto_now=True)
+
+Create a class method called 'get_effective_settings' that returns the effective settings for a given project and pre-deliverable type, checking in this order:
+1. Project-specific settings (ProjectPreDeliverableSettings)
+2. Global settings (PreDeliverableGlobalSettings)
+3. Pre-deliverable type defaults
+
+Add data migration to create default global settings for all existing PreDeliverableType instances.
+
+Follow Django standards, add to admin, and include proper app configuration.
+```
+
+---
+
+### Step 5: Implement Pre-Deliverable Generation Service
+**Prompt for AI Agent:**
+```
+Create a service class called PreDeliverableService in deliverables/services.py. This service handles automatic generation and management of pre-deliverable items. The service should include:
+
+Methods:
+1. generate_pre_deliverables(deliverable_instance) - Creates pre-deliverable items for a given deliverable based on project and global settings
+2. update_pre_deliverables(deliverable_instance) - Updates existing pre-deliverable items when the main deliverable date changes
+3. delete_pre_deliverables(deliverable_instance) - Removes all pre-deliverable items for a deliverable
+4. calculate_working_days_before(target_date, days_before) - (use core.services.WorkingDaysService) Calculates the actual date considering working days (exclude weekends)
+5. get_effective_settings_for_project(project_instance) - Returns the effective pre-deliverable settings for a project
+
+The service should:
+- Handle date calculations properly, skipping weekends when counting working days
+- Use the PreDeliverableGlobalSettings.get_effective_settings method to determine what to generate
+- Only generate pre-deliverables for deliverables that have dates assigned
+- Avoid creating duplicates by checking for existing pre-deliverable items
+- Log generation activities for debugging
+
+Use clean, well-documented code following Python best practices. Include proper error handling and type hints where appropriate.
+```
+
+---
+
+### Step 6: Add Django Signals for Automatic Generation
+**Prompt for AI Agent:**
+```
+Create Django signals in deliverables/signals.py to automatically manage pre-deliverable items when deliverables are created, updated, or deleted. The signals should handle:
+
+1. post_save signal for Deliverable model:
+   - When a new deliverable is created with a date, generate pre-deliverable items
+   - When an existing deliverable's date is updated, update all related pre-deliverable dates
+   - When a deliverable is assigned a date for the first time, generate pre-deliverable items
+
+2. post_delete signal for Deliverable model:
+   - When a deliverable is deleted, clean up all related pre-deliverable items
+
+3. post_save signal for ProjectPreDeliverableSettings model:
+   - When project settings are updated, regenerate pre-deliverables for affected deliverables
+
+The signals should:
+- Use the PreDeliverableService methods created in Step 5
+- Include proper error handling and logging
+- Avoid infinite loops or cascade issues
+- Only trigger generation when appropriate (deliverable has date, project settings exist, etc.)
+
+Make sure to connect the signals properly in the app configuration. Follow Django signal best practices and include comprehensive error handling.
+```
+
+---
+
+### Step 7: Update Deliverable Serializers and Views
+**Prompt for AI Agent:**
+```
+Update the existing DeliverableViewSet in deliverables/views.py and related serializers to include pre-deliverable items in API responses. Make the following changes:
+
+1. Update the Deliverable serializer to include a 'pre_items' field that shows related pre-deliverable items with their details
+
+2. Create a new PreDeliverableItemSerializer with fields:
+   - id, pre_deliverable_type (nested), generated_date, days_before, is_completed, completed_date, notes, display_name
+
+3. Add a new action to DeliverableViewSet called 'regenerate_pre_items' that allows manual regeneration of pre-deliverable items for a specific deliverable
+
+4. Create a new ViewSet called PreDeliverableItemViewSet with:
+   - List and retrieve actions for pre-deliverable items
+   - Update action for marking items as completed
+   - Filter by deliverable, project, and date range
+
+5. Add a new calendar endpoint to include pre-deliverable items in the response, keeping the existing endpoint unchanged for backward compatibility:
+   - New: GET /api/deliverables/calendar-with-pre-items/?start=YYYY-MM-DD&end=YYYY-MM-DD
+   - Include both deliverables and pre-deliverable items with a distinct `item_type` field ('deliverable' | 'pre_deliverable') and `parent_deliverable_id` (for pre-items), plus `pre_deliverable_type` (name)
+
+Add proper permissions, filtering, and pagination. Follow existing code patterns in the codebase for consistency. Include comprehensive API documentation and maintain the existing naming conventions (snake_case for backend). Ensure PreDeliverableItemViewSet only allows assigned users (or managers/admins) to mark completion.
+```
+
+---
+
+### Step 8: Create Settings Interface for Global Defaults
+**Prompt for AI Agent:**
+```
+Create a new settings interface for managing global pre-deliverable defaults. Add to the existing Settings page (frontend/src/pages/Settings/Settings.tsx) a new section called "Pre-Deliverable Defaults".
+
+The interface should include:
+
+1. A card component displaying current global pre-deliverable settings
+2. An edit form that allows administrators to modify:
+   - Default days before for each pre-deliverable type
+   - Whether each type is enabled by default for new projects
+   - Sort order for display
+
+3. API integration with new endpoints for:
+   - GET /api/core/pre-deliverable-global-settings/
+   - PUT /api/core/pre-deliverable-global-settings/
+
+4. Form validation ensuring days_before values are positive integers
+5. Success/error feedback using the existing toast system
+6. Proper loading states and error handling
+
+Create the corresponding Django views and serializers for the settings API endpoints. Use the existing VSCode dark theme colors and component patterns established in the Settings page. Only show this section to admin users using the existing auth system.
+
+Follow the established file structure and naming conventions. Test the API endpoints and ensure proper error handling.
+```
+
+---
+
+### Step 9: Add Project-Specific Pre-Deliverable Settings
+**Prompt for AI Agent:**
+```
+Add project-specific pre-deliverable settings to the Project form and detail views. Make the following updates:
+
+1. Create a new component ProjectPreDeliverableSettings.tsx in frontend/src/components/projects/ that allows editing pre-deliverable settings for a specific project
+
+2. Add this component to the Project form (frontend/src/pages/Projects/ProjectForm.tsx) as a new section
+
+3. The component should display:
+   - Current global defaults for reference
+   - Override controls for each pre-deliverable type
+   - Enable/disable toggles for each type
+   - Custom days_before input fields
+   - Reset to defaults button
+
+4. Create API endpoints for project-specific settings:
+   - GET /api/projects/{id}/pre-deliverable-settings/
+   - PUT /api/projects/{id}/pre-deliverable-settings/
+
+5. Update the project detail API to include current pre-deliverable settings
+
+Create the corresponding Django views, serializers, and URL patterns. Use proper form validation and error handling. Follow the existing project management UI patterns and use the established VSCode dark theme colors.
+
+The interface should clearly indicate when settings are overridden vs using defaults, and provide easy reset functionality.
+```
+
+---
+
+### Step 10: Enhance Calendar to Display Pre-Deliverable Items
+**Prompt for AI Agent:**
+```
+Update the existing calendar component (frontend/src/pages/Deliverables/Calendar.tsx) to display pre-deliverable items with visual distinction from main deliverables. Make the following changes:
+
+1. Call the new combined calendar endpoint that includes pre-deliverable items while keeping the existing endpoint intact:
+   - Use GET /api/deliverables/calendar-with-pre-items/?start=YYYY-MM-DD&end=YYYY-MM-DD
+
+2. Modify the calendar display to show pre-deliverable items with:
+   - Smaller, lighter colored bars/indicators
+   - Different border style (dashed or dotted)
+   - Prefix or suffix indicating it's a pre-deliverable (e.g., "PRE: Specification TOC")
+   - Tooltip showing the parent deliverable and type
+
+3. Add filtering options to the calendar:
+   - Toggle to show/hide pre-deliverable items
+   - Filter by pre-deliverable type
+   - Filter by assignment (show only items for deliverables you're assigned to)
+
+4. Update the calendar legend to include pre-deliverable item indicators
+
+5. Add hover interactions showing:
+   - Parent deliverable information
+   - Assigned team members
+   - Completion status
+
+Maintain the existing calendar functionality while seamlessly integrating pre-deliverable items. Use consistent color schemes but ensure clear visual distinction. Follow the established VSCode dark theme patterns and ensure responsive design.
+
+Test the calendar with various combinations of deliverables and pre-deliverable items to ensure proper display and performance.
+```
+
+---
+
+### Step 11: Create Personal Calendar View for Assigned Pre-Deliverables
+**Prompt for AI Agent:**
+```
+Create a new personal calendar view that shows pre-deliverable items specifically for the logged-in user's assigned deliverables. Create the following:
+
+1. New component PersonalCalendarView.tsx in frontend/src/pages/Calendar/ that displays:
+   - Only pre-deliverable items for deliverables where the user is assigned
+   - A more compact, task-focused view optimized for personal planning
+   - Ability to mark pre-deliverable items as completed
+   - Integration with existing assignment system
+
+2. API endpoint for personal pre-deliverable items:
+   - GET /api/deliverables/pre-items/personal/?days_ahead=14
+   - POST /api/deliverables/pre-items/{id}/mark_completed/
+
+3. Navigation integration:
+   - Add "My Pre-Deliverables" to the main navigation
+   - Update routing in App.tsx
+
+4. Features for the personal view:
+   - Week/month view options
+   - Grouping by project or deliverable
+   - Completion tracking with progress indicators
+   - Upcoming items highlighting (items due within 3 days)
+
+5. Dashboard integration:
+   - Add a "Upcoming Pre-Deliverables" widget to the main dashboard
+   - Show count of overdue pre-deliverable items
+
+Create the corresponding backend views and serializers for personal calendar data. Use efficient queries to only fetch relevant data for the authenticated user. Follow established authentication and permission patterns.
+
+Ensure the interface is intuitive for individual contributors to track their pre-deliverable responsibilities.
+```
+
+---
+
+### Step 12: Add Completion Tracking and Reporting
+**Prompt for AI Agent:**
+```
+Implement completion tracking and reporting features for pre-deliverable items. Create the following functionality:
+
+1. Completion workflow:
+   - API endpoints for marking pre-deliverable items as complete/incomplete
+   - Automatic completion date recording
+   - Validation that pre-deliverable items can only be completed by assigned team members
+
+2. Reporting dashboard component PreDeliverableReports.tsx:
+   - Completion rates by project
+   - Average completion time vs planned time
+   - Frequently missed pre-deliverable types
+   - Team performance on pre-deliverable adherence
+
+3. Project progress tracking:
+   - Visual indicators on project pages showing pre-deliverable completion status
+   - Alerts for overdue pre-deliverable items
+   - Progress bars showing completed vs total pre-deliverable items
+
+4. API endpoints for reporting:
+   - GET /api/reports/pre-deliverable-completion/
+   - GET /api/projects/{id}/pre-deliverable-progress/
+
+5. Integration with existing assignment system:
+   - Link pre-deliverable completion to assignment hours tracking
+   - Show pre-deliverable status in assignment grids
+
+Create comprehensive Django views with proper aggregation queries for reporting data. Use efficient database queries and include proper caching for frequently accessed reports.
+
+Follow the existing reporting patterns and ensure the interface provides actionable insights for project managers and team members.
+```
+
+---
+
+### Step 13: Add Notification System for Pre-Deliverable Reminders
+**Prompt for AI Agent:**
+```
+Implement a notification system for pre-deliverable item reminders. Create the following:
+
+1. Notification model in a new notifications app:
+   - NotificationPreference model for user notification settings
+   - NotificationLog model for tracking sent notifications
+   - Support for email and in-app notification types
+
+2. Pre-deliverable reminder service:
+   - Daily task to check for upcoming pre-deliverable items
+   - Configurable reminder timing (1 day before, 3 days before, etc.)
+   - Email notifications using Django's email framework
+   - In-app notification system
+
+3. User notification preferences in Settings:
+   - Toggle for pre-deliverable email reminders
+   - Configurable reminder timing preferences
+   - Digest vs immediate notification options
+
+4. In-app notification display:
+   - Notification bell icon in the main navigation
+   - Dropdown showing recent notifications
+   - Mark as read functionality
+
+5. Celery task integration:
+   - Scheduled task for sending daily reminder emails
+   - Background processing for notification generation
+   - Integration with existing Celery configuration
+
+Create the notification infrastructure using Django's built-in email framework and existing Celery setup. Design the notification preferences UI following the established Settings page patterns.
+
+Ensure notifications are relevant, timely, and not overwhelming. Include proper unsubscribe mechanisms and respect user preferences.
+```
+
+---
+
+### Step 14: Implement Working Days Calculation Service
+**Prompt for AI Agent:**
+```
+Create a robust working days calculation service that properly handles business day calculations for pre-deliverable date generation. Create the following:
+
+1. WorkingDaysService class in core/services.py with methods:
+   - calculate_working_days_before(target_date, business_days) - Calculate date X business days before target
+   - calculate_working_days_after(start_date, business_days) - Calculate date X business days after start
+   - is_working_day(date) - Determine if a date is a working day
+   - get_working_days_between(start_date, end_date) - Count working days between dates
+
+2. Holiday support:
+   - Holiday model for company holidays
+   - Integration with holiday calculations
+   - Settings page for managing company holidays
+
+3. Timezone handling:
+   - Proper timezone support for date calculations
+   - Integration with user/company timezone settings
+   - UTC storage with local timezone display
+
+4. Configuration options:
+   - Configurable work week (5-day vs 6-day)
+   - Custom working days definition
+   - Regional holiday calendar support
+
+5. Testing suite:
+   - Comprehensive unit tests for date calculations
+   - Edge case testing (weekends, holidays, month boundaries)
+   - Performance testing for bulk calculations
+
+Update the PreDeliverableService to use this new working days service. Ensure all date calculations throughout the system use consistent business logic.
+
+Create proper documentation for the service including examples of common use cases. Follow Python best practices and include type hints and comprehensive error handling.
+```
+
+---
+
+### Step 15: Create Migration Strategy and Data Validation
+**Prompt for AI Agent:**
+```
+Create a comprehensive migration strategy for rolling out pre-deliverable items to existing projects. Implement the following:
+
+1. Data migration script:
+   - Analyze existing deliverables and generate pre-deliverable items retroactively
+   - Handle edge cases like deliverables without dates or past deliverables
+   - Batch processing for large datasets
+
+2. Validation management command:
+   - Django management command to validate pre-deliverable item consistency
+   - Check for orphaned pre-deliverable items
+   - Verify date calculations are correct
+   - Report on data integrity issues
+
+3. Rollback capability:
+   - Management command to remove all generated pre-deliverable items
+   - Safe rollback without affecting main deliverable data
+   - Data export before major changes
+
+4. Performance optimization:
+   - Database indexes for efficient pre-deliverable queries
+   - Query optimization for calendar and reporting views
+   - Caching strategy for frequently accessed data
+
+5. Monitoring and logging:
+   - Logging for pre-deliverable generation activities
+   - Performance monitoring for new database operations
+   - Error tracking and alerting
+
+Create comprehensive documentation for the migration process including:
+- Pre-migration checklist
+- Step-by-step migration instructions
+- Post-migration validation procedures
+- Troubleshooting guide
+
+Ensure the migration can be safely executed on production systems with minimal downtime and clear rollback procedures.
+```
+
+---
+
+### Step 16: Frontend Testing and Quality Assurance
+**Prompt for AI Agent:**
+```
+Create comprehensive frontend tests for the pre-deliverable items feature. Implement the following testing strategy:
+
+1. Unit tests for new components:
+   - PreDeliverableSettings component tests
+   - PersonalCalendarView component tests
+   - Pre-deliverable item display components
+   - API service method tests
+
+2. Integration tests:
+   - Calendar integration with pre-deliverable items
+   - Settings page integration
+   - Project form integration
+   - Personal dashboard integration
+
+3. End-to-end test scenarios:
+   - Create deliverable and verify pre-deliverable generation
+   - Modify deliverable date and verify updates cascade
+   - Change project settings and verify effects
+   - Complete pre-deliverable workflow testing
+
+4. Accessibility testing:
+   - Screen reader compatibility for new components
+   - Keyboard navigation support
+   - Color contrast validation
+   - ARIA label verification
+
+5. Performance testing:
+   - Calendar rendering with large numbers of pre-deliverable items
+   - Settings page load time with many pre-deliverable types
+   - API response time testing
+
+Use the existing testing framework and patterns established in the codebase. Create test data fixtures for consistent testing scenarios.
+
+Include visual regression testing for calendar and settings interfaces. Document test coverage and create guidelines for ongoing test maintenance.
+```
+
+---
+
+### Step 17: Documentation and User Guide Creation
+**Prompt for AI Agent:**
+```
+Create comprehensive documentation for the pre-deliverable items feature. Create the following documentation:
+
+1. User Guide (frontend/docs/pre-deliverable-guide.md):
+   - How to configure global pre-deliverable defaults
+   - Setting up project-specific pre-deliverable rules
+   - Using the personal calendar for pre-deliverable tracking
+   - Completing pre-deliverable items workflow
+
+2. Administrator Guide (backend/docs/pre-deliverable-admin.md):
+   - Database schema overview
+   - Migration procedures
+   - Troubleshooting common issues
+   - Performance tuning recommendations
+
+3. Developer Documentation (docs/pre-deliverable-api.md):
+   - API endpoint documentation
+   - Service class documentation
+   - Integration patterns for future enhancements
+   - Database query optimization guide
+
+4. Configuration Reference:
+   - Environment variable documentation
+   - Settings model field reference
+   - Default configuration values
+   - Customization options
+
+5. FAQ and Troubleshooting:
+   - Common user questions and answers
+   - Known limitations and workarounds
+   - Performance considerations
+   - Data migration issues and solutions
+
+Update the main project README.md to include references to the new pre-deliverable feature. Create screenshots and diagrams showing the user interface and workflow.
+
+Follow the existing documentation style and ensure all documentation is clear, comprehensive, and maintainable.
+```
+
+---
+
+### Step 18: Final Integration Testing and Production Readiness
+**Prompt for AI Agent:**
+```
+Perform final integration testing and prepare the pre-deliverable items feature for production deployment. Complete the following tasks:
+
+1. End-to-end system testing:
+   - Test complete workflow from deliverable creation to pre-deliverable completion
+   - Verify calendar display accuracy across different screen sizes
+   - Test notification delivery and timing
+   - Validate reporting accuracy and performance
+
+2. Data integrity validation:
+   - Run data consistency checks on existing test data
+   - Verify no orphaned records or broken relationships
+   - Confirm all database constraints are properly enforced
+   - Test cascade delete operations
+
+3. Performance validation:
+   - Load testing with realistic data volumes
+   - API response time verification under load
+   - Database query performance analysis
+   - Frontend rendering performance with many items
+
+4. Security review:
+   - Verify proper authentication and authorization on all new endpoints
+   - Test API parameter validation and sanitization
+   - Confirm user data isolation and privacy
+   - Review for potential SQL injection or XSS vulnerabilities
+
+5. Production deployment checklist:
+   - Environment variable configuration guide
+   - Database migration execution plan
+   - Static file deployment verification
+   - Cache configuration and warming
+   - Monitoring and alerting setup
+
+Create a deployment guide with step-by-step instructions for production rollout. Include rollback procedures and post-deployment verification steps.
+
+Document any known limitations or areas for future enhancement. Provide recommendations for ongoing maintenance and monitoring.
+```
+
+## Summary
+
+This implementation plan provides a comprehensive approach to adding pre-deliverable items to the workload tracker system. The plan is broken down into 18 discrete steps, each with detailed prompts for AI-assisted implementation.
+
+Key features delivered:
+- Automatic generation of pre-deliverable items based on configurable rules
+- Global and project-specific settings for customization
+- Enhanced calendar views showing pre-deliverable items
+- Personal calendar for individual team members
+- Completion tracking and reporting
+- Notification system for reminders
+- Comprehensive testing and documentation
+
+The implementation follows established patterns in the codebase and maintains consistency with existing architecture and design principles.
