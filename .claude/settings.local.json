@@ -43,7 +43,8 @@
       "Bash(chmod:*)",
       "Bash(docker exec:*)",
       "Bash(git merge:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(dir \"C:\\Users\\tim\\VScode\\workload-tracker\\backend\\core\")"
     ],
     "deny": [],
     "ask": [],

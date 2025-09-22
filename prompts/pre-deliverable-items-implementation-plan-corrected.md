@@ -29,33 +29,39 @@ The workload tracker has:
 
 ## Implementation Steps
 
+Execution order & phases (to minimize integration risk):
+- Phase 1: Foundation (Steps 1–6)
+- Phase 2: Core Logic (Steps 7–8 + validation)
+- Phase 3: API Layer (Step 9 + testing + type generation)
+- Phase 4: Frontend (Steps 10–13)
+- Phase 5: Integration/Reporting/Notifications (Steps 14–15)
+
 ---
 
-### Step 1: Create Working Days Calculation Service
+### Step 1: Add Business Day Helpers (no new services module)
 **Prompt for AI Agent:**
 ```
-Create a robust working days calculation service in core/services.py that handles business day calculations for pre-deliverable date generation. This must be implemented first as other services depend on it.
+Add robust business day calculation helpers colocated with existing date/week utilities, not in a new services package.
 
-Create a WorkingDaysService class with these methods:
-- calculate_working_days_before(target_date, business_days) - Calculate date X business days before target
-- calculate_working_days_after(start_date, business_days) - Calculate date X business days after start
-- is_working_day(date) - Determine if a date is a working day (exclude weekends)
-- get_working_days_between(start_date, end_date) - Count working days between dates
+Location:
+- Prefer extending `backend/core/week_utils.py` (new functions), or add `backend/core/business_days.py` if separation improves clarity.
+- Do NOT create `core/services.py` or a new `core/services/` package (keeps with repo conventions).
+
+Provide these pure functions (no class):
+- working_days_before(target_date: date, business_days: int) -> date
+- working_days_after(start_date: date, business_days: int) -> date
+- is_working_day(d: date) -> bool  # weekends excluded
+- count_working_days_between(start_date: date, end_date: date) -> int
 
 Implementation requirements:
-- Use Python datetime and timedelta for calculations
-- Exclude weekends (Saturday/Sunday) when counting business days
-- Include comprehensive error handling for invalid dates
-- Add type hints throughout
-- Create unit tests for edge cases (month boundaries, year boundaries)
-- Document with clear examples
+- Use Python datetime/timedelta; exclude weekends only (holidays later).
+- Input validation and helpful errors for invalid dates/negative counts.
+- Type hints and docstrings with examples.
+- Unit tests for boundaries (month/year) and weekend edge cases.
 
-For now, implement basic weekend exclusion. Holiday support can be added later. Ensure the service is stateless and thread-safe.
-
-Test scenarios to include:
-- calculate_working_days_before('2024-01-15', 3) should return '2024-01-10' (skipping weekend)
-- Handle edge cases like target dates on weekends
-- Validate input parameters (positive business_days, valid dates)
+Example scenarios:
+- working_days_before(date(2024,1,15), 3) == date(2024,1,10)
+- If target/start lands on a weekend, adjust correctly when counting.
 ```
 
 ---
@@ -245,7 +251,7 @@ Create migration utilities and validation commands before implementing the gener
 
 Create Django management command 'validate_pre_deliverable_data' in core/management/commands/:
 1. Check for orphaned PreDeliverableItem records (deliverable deleted but items remain)
-2. Verify all generated_date calculations are correct using WorkingDaysService
+2. Verify all generated_date calculations are correct using the business-day helper functions from Step 1 (core.week_utils.*)
 3. Report inconsistencies between PreDeliverableItem.days_before and actual calculation
 4. Check for duplicate pre-deliverable items (same deliverable+type combination)
 5. Validate that all active PreDeliverableType instances have global settings
@@ -270,6 +276,14 @@ Add database indexes for performance:
 - ProjectPreDeliverableSettings: INDEX on (project_id, is_enabled)
 
 Include comprehensive logging using Python logging module and follow Django command best practices.
+
+Migration dependencies and ordering:
+- Ensure cross-app dependencies are explicit:
+  - deliverables: add `PreDeliverableType` (schema + seed data)
+  - projects: add `ProjectPreDeliverableSettings` depending on the deliverables migration creating `PreDeliverableType`
+  - core: add `PreDeliverableGlobalSettings` depending on the same deliverables migration
+- Verify dependency graphs in `backend/*/migrations/` to avoid "table doesn't exist" errors.
+- Run migrations in order on a clean DB and an existing DB to validate.
 ```
 
 ---
@@ -279,19 +293,19 @@ Include comprehensive logging using Python logging module and follow Django comm
 ```
 Create a service class called PreDeliverableService in deliverables/services.py. This handles automatic generation and management of pre-deliverable items.
 
-The service should use the WorkingDaysService from Step 1 and models from Steps 2-5.
+The service should use the business-day helper functions from Step 1 and models from Steps 2–5.
 
 Methods to implement:
 1. generate_pre_deliverables(deliverable_instance):
    - Get effective settings for the deliverable's project
    - Create PreDeliverableItem for each enabled type
-   - Use WorkingDaysService to calculate dates
+   - Use business-day helpers to calculate dates
    - Avoid creating duplicates (check existing items first)
    - Return list of created items
 
 2. update_pre_deliverables(deliverable_instance, old_date, new_date):
    - Update generated_date for all related pre-deliverable items
-   - Recalculate dates using WorkingDaysService
+   - Recalculate dates using business-day helpers
    - Handle case where new_date is None (delete items)
    - Return count of updated items
 
@@ -306,7 +320,7 @@ Methods to implement:
    - Return summary of changes
 
 5. get_upcoming_for_user(user, days_ahead=14):
-   - Get pre-deliverable items for deliverables assigned to user
+   - Get pre-deliverable items for deliverables assigned to the user (via DeliverableAssignment links)
    - Filter by generated_date within days_ahead
    - Include parent deliverable and project info
    - Order by generated_date
@@ -319,7 +333,45 @@ Implementation requirements:
 - Validate input parameters
 - Include docstrings with usage examples
 
+Notes on model usage and performance:
+- Do not assume weekly hours exist on DeliverableAssignment (weekly hours live on assignments.Assignment).
+- When determining assigned people, rely on DeliverableAssignment presence; join to assignments.Assignment only when hours are explicitly needed (e.g., staffing summaries), not for generation.
+- Prefer transaction.on_commit for any follow-up side effects.
+
 Create unit tests covering all methods and edge cases. Follow Python service layer best practices.
+```
+
+Method signatures and return shapes (suggested):
+```python
+from typing import List, Dict, Any, Tuple
+from django.db import transaction
+
+class PreDeliverableService:
+    @staticmethod
+    @transaction.atomic
+    def generate_pre_deliverables(deliverable: Deliverable) -> List[PreDeliverableItem]:
+        """Create items per effective settings; skip duplicates. Returns created items."""
+
+    @staticmethod
+    @transaction.atomic
+    def update_pre_deliverables(deliverable: Deliverable, old_date: date, new_date: date | None) -> int:
+        """Recalculate generated_date; delete items if new_date is None. Returns count updated."""
+
+    @staticmethod
+    @transaction.atomic
+    def delete_pre_deliverables(deliverable: Deliverable) -> int:
+        """Delete all related items. Returns count deleted."""
+
+    @staticmethod
+    @transaction.atomic
+    def regenerate_pre_deliverables(deliverable: Deliverable) -> Dict[str, int]:
+        """Delete + recreate items; preserve completion where possible.
+        Returns { 'deleted': int, 'created': int, 'preservedCompleted': int }.
+        """
+
+    @staticmethod
+    def get_upcoming_for_user(user: User, days_ahead: int = 14) -> List[PreDeliverableItem]:
+        """Return items assigned to user's Person due within horizon (ordered by generated_date)."""
 ```
 
 ---
@@ -335,7 +387,7 @@ Signals to implement:
    @receiver(post_save, sender=Deliverable)
    def handle_deliverable_save(sender, instance, created, **kwargs):
    - On create: Generate pre-deliverables if date is set
-   - On update: Check if date field changed, update pre-deliverables accordingly
+   - On update: Precisely detect date field changes using previous value vs saved value; update pre-deliverables accordingly; skip no-op saves
    - Include throttling: don't regenerate if updated within last 5 minutes
    - Use cache to track recent regenerations
 
@@ -362,8 +414,9 @@ Signal safety measures:
 - Use signal_kwargs to prevent infinite loops
 - Include try/except blocks with proper logging
 - Add signal.disconnect() during testing
-- Use transaction.on_commit() for post-transaction execution
+- Use transaction.on_commit() for post-transaction execution (so side effects run after commit)
 - Include rate limiting using Django cache
+- Avoid N+1 by batching and/or delegating bulk work to Celery tasks
 
 Connect signals in deliverables/apps.py ready() method. Add comprehensive error handling and logging throughout.
 
@@ -394,6 +447,116 @@ Update existing deliverable API and create new endpoints for pre-deliverable fun
    - Update: Allow updating is_completed, notes, completed_date only
    - No create/delete (managed automatically)
    - Add custom action 'mark_completed' for easy completion
+   - Router wiring (backend/deliverables/urls.py): router.register(r'pre_deliverable_items', PreDeliverableItemViewSet, basename='pre-deliverable-item')
+   - Add custom actions for complete/uncomplete/bulk_complete under this viewset
+
+Serializer field mapping (camelCase on API, snake_case on model):
+1) PreDeliverableItemSerializer (deliverables/serializers.py):
+   - id
+   - deliverable (int)
+   - preDeliverableTypeId: IntegerField(source='pre_deliverable_type_id')
+   - typeName: CharField(source='pre_deliverable_type.name', read_only=True)
+   - generatedDate: DateField(source='generated_date', format='%Y-%m-%d')
+   - daysBefore: IntegerField(source='days_before')
+   - isCompleted: BooleanField(source='is_completed')
+   - completedDate: DateField(source='completed_date', allow_null=True, required=False, format='%Y-%m-%d')
+   - completedBy: SerializerMethodField()  # returns { id, username } or null
+   - notes
+   - isActive: BooleanField(source='is_active')
+   - createdAt: DateTimeField(source='created_at', read_only=True)
+   - updatedAt: DateTimeField(source='updated_at', read_only=True)
+   - displayName: SerializerMethodField()  # f"{typeName} - {deliverable.description or 'Milestone'}"
+   - isOverdue: SerializerMethodField()
+   - parentDeliverable: SerializerMethodField()  # { id, description, date }
+   - assignedPeople: SerializerMethodField()  # Array[{ id, name }]
+   - itemType: SerializerMethodField()  # constant 'pre_deliverable'
+
+2) Calendar union items for calendar_with_pre_items (documented response):
+   - deliverable items (existing):
+     { itemType: 'deliverable', id, project, projectName, projectClient?, title, date, isCompleted, assignmentCount }
+   - pre-deliverable items:
+     { itemType: 'pre_deliverable', id, parentDeliverableId, project, projectName, projectClient?, preDeliverableType, title, date, isCompleted, isOverdue }
+
+PreDeliverableItemViewSet filters (query params):
+- deliverable: int
+- project: int
+- type_id: int
+- start: YYYY-MM-DD (generated_date >= start)
+- end: YYYY-MM-DD (generated_date <= end)
+- is_completed: 0|1
+- is_active: 0|1
+- mine_only: 0|1 (only items assigned to current user's Person)
+
+Example: GET /api/deliverables/calendar_with_pre_items/?start=2025-10-01&end=2025-10-31
+```
+[
+  { "itemType": "deliverable", "id": 42, "project": 7, "projectName": "HQ", "title": "IFC", "date": "2025-10-15", "isCompleted": false, "assignmentCount": 3 },
+  { "itemType": "pre_deliverable", "id": 311, "parentDeliverableId": 42, "project": 7, "projectName": "HQ", "preDeliverableType": "Specifications", "title": "PRE: Specifications", "date": "2025-10-14", "isCompleted": false, "isOverdue": false }
+]
+```
+
+Serializers and filters (module paths):
+- backend/deliverables/serializers.py
+  - class PreDeliverableItemSerializer(serializers.ModelSerializer)
+  - class CalendarWithPreItemsItemSerializer(serializers.Serializer)  # or use inline_serializer in view
+- backend/deliverables/filters.py
+  - class PreDeliverableItemFilter(django_filters.FilterSet)
+
+FilterSet example (backend/deliverables/filters.py):
+```python
+import django_filters
+from deliverables.models import PreDeliverableItem
+
+class PreDeliverableItemFilter(django_filters.FilterSet):
+    start = django_filters.DateFilter(field_name='generated_date', lookup_expr='gte')
+    end = django_filters.DateFilter(field_name='generated_date', lookup_expr='lte')
+    project = django_filters.NumberFilter(field_name='deliverable__project_id')
+    type_id = django_filters.NumberFilter(field_name='pre_deliverable_type_id')
+    is_completed = django_filters.BooleanFilter(field_name='is_completed')
+    is_active = django_filters.BooleanFilter(field_name='is_active')
+
+    class Meta:
+        model = PreDeliverableItem
+        fields = ['deliverable', 'project', 'type_id', 'start', 'end', 'is_completed', 'is_active']
+```
+
+OpenAPI annotations (drf-spectacular snippets):
+```python
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
+from rest_framework import serializers
+
+# In PreDeliverableItemViewSet
+@extend_schema(
+    parameters=[
+        OpenApiParameter('deliverable', int, OpenApiParameter.QUERY),
+        OpenApiParameter('project', int, OpenApiParameter.QUERY),
+        OpenApiParameter('type_id', int, OpenApiParameter.QUERY),
+        OpenApiParameter('start', str, OpenApiParameter.QUERY, description='YYYY-MM-DD'),
+        OpenApiParameter('end', str, OpenApiParameter.QUERY, description='YYYY-MM-DD'),
+        OpenApiParameter('is_completed', bool, OpenApiParameter.QUERY),
+        OpenApiParameter('is_active', bool, OpenApiParameter.QUERY),
+        OpenApiParameter('mine_only', bool, OpenApiParameter.QUERY),
+    ],
+    responses=PreDeliverableItemSerializer(many=True)
+)
+def list(self, request, *args, **kwargs):
+    return super().list(request, *args, **kwargs)
+
+@extend_schema(request=None, responses=PreDeliverableItemSerializer)
+@action(detail=True, methods=['post'], url_path='complete')
+def complete(self, request, pk=None): ...
+
+@extend_schema(request=None, responses=PreDeliverableItemSerializer)
+@action(detail=True, methods=['post'], url_path='uncomplete')
+def uncomplete(self, request, pk=None): ...
+
+@extend_schema(
+    request=inline_serializer(name='BulkCompleteRequest', fields={'ids': serializers.ListField(child=serializers.IntegerField())}),
+    responses=inline_serializer(name='BulkCompleteResponse', fields={'success': serializers.BooleanField(), 'updatedCount': serializers.IntegerField(), 'failed': serializers.ListField(child=serializers.IntegerField())})
+)
+@action(detail=False, methods=['post'], url_path='bulk_complete')
+def bulk_complete(self, request): ...
+```
 
 4. Add action to DeliverableViewSet:
    @action(detail=True, methods=['post'])
@@ -401,19 +564,62 @@ Update existing deliverable API and create new endpoints for pre-deliverable fun
    - Manually regenerate pre-deliverable items for a deliverable
    - Return count of items created/updated
 
-5. Create new calendar endpoint for pre-deliverable items:
-   - URL: /api/deliverables/calendar-with-pre-items/
+5. Create new calendar endpoint for pre-deliverable items (do not change the existing calendar action):
+   - Action name: calendar_with_pre_items (snake_case to match existing patterns)
+   - URL: /api/deliverables/calendar_with_pre_items/
    - Include both deliverables and pre-deliverable items
-   - Add 'item_type' field: 'deliverable' or 'pre_deliverable'
-   - Maintain existing calendar API for backward compatibility
+   - Add 'item_type' (or 'itemType' in the serializer) field: 'deliverable' | 'pre_deliverable'
+   - Maintain existing /api/deliverables/calendar/ unchanged for backward compatibility
+   - ETag/Last-Modified: compute across both deliverables and pre-items for conditional responses
+
+OpenAPI annotation for calendar_with_pre_items action:
+```python
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter('start', str, OpenApiParameter.QUERY, description='YYYY-MM-DD'),
+        OpenApiParameter('end', str, OpenApiParameter.QUERY, description='YYYY-MM-DD'),
+        OpenApiParameter('mine_only', bool, OpenApiParameter.QUERY),
+        OpenApiParameter('type_id', int, OpenApiParameter.QUERY),
+    ],
+    responses=serializers.ListSerializer(child=inline_serializer(
+        name='CalendarWithPreItemsItem',
+        fields={
+            'itemType': serializers.ChoiceField(choices=['deliverable','pre_deliverable']),
+            'id': serializers.IntegerField(),
+            'parentDeliverableId': serializers.IntegerField(required=False),
+            'project': serializers.IntegerField(),
+            'projectName': serializers.CharField(allow_null=True, required=False),
+            'projectClient': serializers.CharField(allow_null=True, required=False),
+            'preDeliverableType': serializers.CharField(required=False),
+            'title': serializers.CharField(),
+            'date': serializers.DateField(allow_null=True),
+            'isCompleted': serializers.BooleanField(),
+            'isOverdue': serializers.BooleanField(required=False),
+            'assignmentCount': serializers.IntegerField(required=False),
+        }
+    ))
+)
+@action(detail=False, methods=['get'], url_path='calendar_with_pre_items')
+def calendar_with_pre_items(self, request): ...
+```
 
 6. Add filtering and permissions:
    - Users can only see pre-deliverable items for deliverables they're assigned to
-   - Managers can see all pre-deliverable items for their projects
+   - Managers can see all pre-deliverable items (Manager group) until a project manager field exists; if a project owner/manager FK is added later, scope visibility to those projects
    - Admins can see everything
    - Add proper DRF filtering backends
 
-Update deliverables/urls.py to include new ViewSet. Add API documentation using drf-spectacular decorators. Follow existing API patterns for consistency.
+Update deliverables/urls.py to include new ViewSet/action. Add API documentation using drf-spectacular decorators. Follow existing API patterns for consistency (see existing deliverables actions like 'calendar' and 'staffing_summary').
+
+OpenAPI and frontend type generation:
+- After serializers and endpoints are in place, regenerate the OpenAPI schema and typed client.
+- Do NOT manually edit frontend/src/types/models.ts.
+- Run:
+  - make openapi-schema (to write backend/openapi.json)
+  - make openapi-client (to refresh frontend/src/api/schema.ts)
+- Optional: make generate-types generates frontend/src/types/generated.ts from the Django field registry. Only adopt it where explicitly wired; it does not overwrite models.ts.
 ```
 
 ---
@@ -465,6 +671,51 @@ Styling requirements:
 Create corresponding Django API endpoints:
 - GET /api/core/pre-deliverable-global-settings/
 - PUT /api/core/pre-deliverable-global-settings/
+
+URL wiring:
+- Add backend/core/urls.py and register the above routes
+- Include in backend/config/urls.py: path('api/core/', include('core.urls'))
+
+Implementation detail (backend/core/views.py):
+- Create PreDeliverableGlobalSettingsView (APIView) with GET (list all types + global settings) and PUT (bulk update settings)
+- Permissions: IsAuthenticated + IsAdminUser
+- Serializer: lightweight DTO for { typeId, defaultDaysBefore, isEnabledByDefault }
+
+Request/Response shapes:
+- GET /api/core/pre-deliverable-global-settings/
+```
+[
+  { "typeId": 1, "typeName": "Specification TOC", "defaultDaysBefore": 3, "isEnabledByDefault": true, "sortOrder": 10, "isActive": true },
+  { "typeId": 2, "typeName": "Specifications", "defaultDaysBefore": 1, "isEnabledByDefault": true, "sortOrder": 20, "isActive": true }
+]
+```
+- PUT /api/core/pre-deliverable-global-settings/
+```
+{ "settings": [
+  { "typeId": 1, "defaultDaysBefore": 4, "isEnabledByDefault": true },
+  { "typeId": 2, "defaultDaysBefore": 2, "isEnabledByDefault": false }
+]}
+```
+- Response: same as GET after update
+
+Serializers (backend/core/serializers.py):
+- class PreDeliverableGlobalSettingsItemSerializer(serializers.Serializer)
+- class PreDeliverableGlobalSettingsUpdateSerializer(serializers.Serializer)
+
+OpenAPI annotations:
+```python
+from drf_spectacular.utils import extend_schema
+
+class PreDeliverableGlobalSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(responses=PreDeliverableGlobalSettingsItemSerializer(many=True))
+    def get(self, request): ...
+
+    @extend_schema(request=inline_serializer(name='GlobalSettingsUpdate', fields={'settings': PreDeliverableGlobalSettingsUpdateSerializer(many=True)}),
+                   responses=PreDeliverableGlobalSettingsItemSerializer(many=True))
+    def put(self, request): ...
+```
 
 Test the integration thoroughly and ensure it doesn't break existing Settings functionality.
 ```
@@ -521,6 +772,58 @@ Backend API endpoints to create:
 - PUT /api/projects/{id}/pre-deliverable-settings/
 - For new projects, show global defaults only
 
+Implementation detail (backend/projects/views.py):
+- Implement as actions on ProjectViewSet:
+  @action(detail=True, methods=['get', 'put'], url_path='pre-deliverable-settings')
+  def pre_deliverable_settings(self, request, pk=None): ...
+- Permissions: GET for IsAuthenticated; PUT restricted to IsAdminUser (or Manager if policy allows)
+- Use ProjectPreDeliverableSettings + PreDeliverableGlobalSettings to compute defaults vs overrides
+
+Request/Response shapes:
+- GET /api/projects/{id}/pre-deliverable-settings/
+```
+{
+  "projectId": 7,
+  "settings": [
+    { "typeId": 1, "typeName": "Specification TOC", "isEnabled": true, "daysBefore": 3, "source": "project" },
+    { "typeId": 2, "typeName": "Specifications", "isEnabled": true, "daysBefore": 1, "source": "global" },
+    { "typeId": 3, "typeName": "Model Delivery", "isEnabled": false, "daysBefore": null, "source": "default" }
+  ]
+}
+```
+- PUT /api/projects/{id}/pre-deliverable-settings/
+```
+{ "settings": [
+  { "typeId": 1, "isEnabled": true, "daysBefore": 4 },
+  { "typeId": 2, "isEnabled": false, "daysBefore": null }
+]}
+```
+- Response: same as GET after update
+
+Semantics:
+- A payload entry with daysBefore=null indicates "remove project-specific override" (fall back to global/default). The API should delete the ProjectPreDeliverableSettings row for that (project, type) if present.
+
+OpenAPI annotation for ProjectViewSet action:
+```python
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
+
+@extend_schema(
+    responses=inline_serializer(name='ProjectPreDeliverableSettingsResponse', fields={
+        'projectId': serializers.IntegerField(),
+        'settings': serializers.ListSerializer(child=inline_serializer(name='ProjectTypeSetting', fields={
+            'typeId': serializers.IntegerField(),
+            'typeName': serializers.CharField(),
+            'isEnabled': serializers.BooleanField(),
+            'daysBefore': serializers.IntegerField(allow_null=True),
+            'source': serializers.ChoiceField(choices=['project','global','default'])
+        }))
+    })
+)
+@action(detail=True, methods=['get','put'], url_path='pre-deliverable-settings')
+def pre_deliverable_settings(self, request, pk=None): ...
+```
+
 Error handling:
 - Network errors with retry options
 - Validation errors with clear messaging
@@ -537,13 +840,20 @@ Include comprehensive testing and ensure form integration works smoothly.
 Enhance the existing calendar component (frontend/src/pages/Deliverables/Calendar.tsx) to display pre-deliverable items with clear visual distinction from main deliverables.
 
 Calendar API updates:
-1. Modify the existing calendar API call to include pre-deliverable items
-2. Use new endpoint: /api/deliverables/calendar-with-pre-items/?start={start}&end={end}
-3. Maintain backward compatibility with existing calendar functionality
+1. Add a new API call (do not change the existing one): use /api/deliverables/calendar_with_pre_items/?start={start}&end={end}
+2. Extend `deliverablesApi` with a `calendarWithPreItems(start?, end?)` method following existing patterns
+3. Maintain backward compatibility in the UI: try the new endpoint first and on 404/501/Not Implemented fall back to the existing `calendar` results seamlessly
+
+Query params and response:
+- Query params: start (YYYY-MM-DD), end (YYYY-MM-DD), mine_only=0|1, type_id (optional filter)
+- Response: Array of union items as defined in Step 9 (deliverable | pre_deliverable)
+
+Serializer hint (backend/deliverables/serializers.py):
+- Use an inline serializer in annotation, or define CalendarWithPreItemsItemSerializer as shown in Step 9.
 
 Visual enhancements to Calendar.tsx:
-1. Update the DeliverableCalendarItem type to include:
-   - item_type: 'deliverable' | 'pre_deliverable'
+1. Update the item type used by the calendar to include (use generated OpenAPI types or compose a local union type; do not edit frontend/src/types/models.ts directly):
+   - itemType: 'deliverable' | 'pre_deliverable'
    - parent_deliverable_id?: number (for pre-deliverables)
    - pre_deliverable_type?: string
 
@@ -551,9 +861,10 @@ Visual enhancements to Calendar.tsx:
    - Add new type: 'pre_deliverable'
    - Use different visual styling for pre-deliverable items
 
-3. Update typeColors to include pre-deliverable styling:
-   - pre_deliverable: '#64748b' (muted gray)
-   - Use semi-transparent background for pre-deliverable items
+3. Refactor color mapping to be extensible and avoid conflicts:
+   - Extract `typeColors` to a shared util (e.g., frontend/src/utils/calendarColors.ts)
+   - Add explicit styling for `pre_deliverable` without overriding existing deliverable colors
+   - Consider using a distinct border or pattern plus a muted palette for pre-deliverables (semi-transparent is fine)
 
 4. Visual distinctions for pre-deliverable items:
    - Smaller height (reduced padding)
@@ -612,7 +923,7 @@ Widget features:
 Component structure:
 1. Props: { className?: string }
 2. API integration:
-   - Use new endpoint: /api/calendar/personal-pre-deliverables/?days_ahead=14
+   - Use new endpoint: /api/deliverables/personal_pre_deliverables/?days_ahead=14
    - Auto-refresh every 5 minutes
    - Handle loading and error states
 
@@ -647,10 +958,55 @@ Styling requirements:
 - Normal items: Default styling
 - Completed items: Strikethrough with green accent
 
-API endpoints to create:
-- GET /api/calendar/personal-pre-deliverables/ (with filters)
-- POST /api/pre-deliverable-items/{id}/complete/
-- PATCH /api/pre-deliverable-items/{id}/ (for notes)
+API endpoints to create (snake_case, follow deliverables patterns):
+- GET /api/deliverables/personal_pre_deliverables/ (with filters like days_ahead)
+- POST /api/deliverables/pre_deliverable_items/{id}/complete/
+- PATCH /api/deliverables/pre_deliverable_items/{id}/ (for notes)
+
+Implementation detail:
+- Implement personal_pre_deliverables as an @action(detail=False, methods=['get'], url_path='personal_pre_deliverables') on DeliverableViewSet for a unified calendar-like response, or as an action on PreDeliverableItemViewSet (e.g., /pre_deliverable_items/personal/). Use the first option to keep path stability as designed above.
+- Permissions: IsAuthenticated; filter results to the requesting user's linked Person assignments
+
+Response format (personal_pre_deliverables):
+```
+[
+  {
+    "id": 311,
+    "generatedDate": "2025-10-14",
+    "preDeliverableType": "Specifications",
+    "parentDeliverable": { "id": 42, "description": "IFC", "date": "2025-10-15" },
+    "project": 7,
+    "projectName": "HQ",
+    "projectClient": "Acme",
+    "isCompleted": false,
+    "isOverdue": false,
+    "notes": null
+  }
+]
+```
+Completion endpoints:
+- POST /api/deliverables/pre_deliverable_items/{id}/complete/
+  - Body: none
+  - Response: updated item (PreDeliverableItemSerializer)
+- POST /api/deliverables/pre_deliverable_items/{id}/uncomplete/
+  - Body: none
+  - Response: updated item
+- POST /api/deliverables/pre_deliverable_items/bulk_complete/
+  - Body: { "ids": [311, 322, ...] }
+  - Response: { "success": true, "updatedCount": 2, "failed": [] }
+
+OpenAPI annotations:
+```python
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+
+# personal_pre_deliverables
+@extend_schema(
+    parameters=[OpenApiParameter('days_ahead', int, OpenApiParameter.QUERY)],
+    responses=PreDeliverableItemSerializer(many=True)
+)
+@action(detail=False, methods=['get'], url_path='personal_pre_deliverables')
+def personal_pre_deliverables(self, request): ...
+```
 
 Error handling:
 - Network failures with retry
@@ -674,13 +1030,15 @@ Implement completion tracking workflow and basic reporting for pre-deliverable i
 
 Completion workflow enhancements:
 1. Update PreDeliverableItemViewSet with completion actions:
-   - POST /api/pre-deliverable-items/{id}/complete/
-   - POST /api/pre-deliverable-items/{id}/uncomplete/
-   - Validate user permissions (must be assigned to parent deliverable)
+   - POST /api/deliverables/pre_deliverable_items/{id}/complete/
+   - POST /api/deliverables/pre_deliverable_items/{id}/uncomplete/
+   - Override permission_classes to [IsAuthenticated] (not the global RoleBasedAccessPermission)
+   - Validate user permissions in-action: the requesting user's linked Person must be assigned to the parent deliverable
+   - Manager group: allow access to all pre-deliverable items; Admins always allowed
    - Auto-set completed_date and completed_by fields
 
 2. Add bulk completion endpoint:
-   - POST /api/pre-deliverable-items/bulk-complete/
+   - POST /api/deliverables/pre_deliverable_items/bulk_complete/
    - Accept array of item IDs
    - Return success/failure counts
 
@@ -700,13 +1058,15 @@ Create PreDeliverableReports component in frontend/src/pages/Reports/:
    - Identify improvement or decline patterns
 
 API endpoints for reporting:
-- GET /api/reports/pre-deliverable-completion/
-  - Query params: date_from, date_to, project_id, type_id
-  - Return aggregated completion data
-- GET /api/reports/pre-deliverable-team-performance/
-  - Return per-person completion statistics
-- GET /api/reports/pre-deliverable-trends/
-  - Return time-series completion data
+- Option A (recommended): Create a new 'reports' app and wire config/urls.py with path('api/reports/', include('reports.urls')).
+  - GET /api/reports/pre-deliverable-completion/
+    - Query params: date_from, date_to, project_id, type_id
+    - Return aggregated completion data
+  - GET /api/reports/pre-deliverable-team-performance/
+    - Return per-person completion statistics
+  - GET /api/reports/pre-deliverable-trends/
+    - Return time-series completion data
+- Option B: Add as actions under the existing dashboard app only if aligned with its scope.
 
 Project progress integration:
 1. Add pre-deliverable progress to project detail views
@@ -772,6 +1132,10 @@ Email templates in core/templates/emails/:
 2. pre_deliverable_digest.html - Daily digest
 3. Include both HTML and plain text versions
 
+Template variables:
+- reminder: { userName, generatedDate, typeName, parentDeliverable: { id, description, date }, projectName, projectClient, completeUrl }
+- digest: { userName, overdueItems: [...], dueToday: [...], upcomingItems: [...], managePrefsUrl }
+
 Settings integration:
 1. Add notification preferences section to Settings page
 2. Simple form with toggle switches and number input
@@ -779,11 +1143,46 @@ Settings integration:
    - GET /api/accounts/notification-preferences/
    - PUT /api/accounts/notification-preferences/
 
+Request/Response shapes:
+- GET /api/accounts/notification-preferences/
+```
+{ "emailPreDeliverableReminders": true, "reminderDaysBefore": 1, "dailyDigest": false }
+```
+- PUT /api/accounts/notification-preferences/
+```
+{ "emailPreDeliverableReminders": true, "reminderDaysBefore": 2, "dailyDigest": true }
+```
+- Response: same as GET after update
+
+OpenAPI annotations (accounts preferences):
+```python
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
+
+class NotificationPreferencesSerializer(serializers.Serializer):
+    emailPreDeliverableReminders = serializers.BooleanField()
+    reminderDaysBefore = serializers.IntegerField(min_value=0)
+    dailyDigest = serializers.BooleanField()
+
+class NotificationPreferencesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=NotificationPreferencesSerializer)
+    def get(self, request): ...
+
+    @extend_schema(request=NotificationPreferencesSerializer, responses=NotificationPreferencesSerializer)
+    def put(self, request): ...
+```
+
 Celery configuration:
 1. Add to existing Celery setup in config/celery.py
 2. Schedule daily task using Celery Beat:
    - send_pre_deliverable_reminders: Daily at 8 AM
    - send_daily_digest: Daily at 7 AM
+3. Gate schedules behind env flags to allow controlled rollout:
+   - PRED_ITEMS_NOTIFICATIONS_ENABLED=true to enable reminder schedules
+   - PRED_ITEMS_DIGEST_ENABLED=true to enable digest schedules
+   - Allow overriding crons via env (e.g., PRED_ITEMS_REMINDER_CRON, PRED_ITEMS_DIGEST_CRON)
 
 Email configuration requirements:
 - Use Django's existing email framework
@@ -822,7 +1221,7 @@ Database indexes to create:
    - INDEX (deliverable_id, is_active, generated_date) - For deliverable detail queries
    - INDEX (generated_date, is_completed) - For calendar range queries
    - INDEX (is_completed, generated_date DESC) - For overdue item queries
-   - INDEX (deliverable__project_id, generated_date) - For project reporting
+   - Note: do not attempt cross-table indexes like (deliverable__project_id, ...). Use joins on the FK and rely on existing FK indexes.
 
 2. ProjectPreDeliverableSettings indexes:
    - INDEX (project_id, is_enabled) - For settings lookup
@@ -832,21 +1231,24 @@ Database indexes to create:
    - INDEX (user_id, sent_at DESC) - For user notification history
    - INDEX (notification_type, sent_at) - For admin reporting
 
-Create migration with proper index definitions:
+Create migration with proper index definitions using Django's AddIndex/models.Index (portable, DB-agnostic):
 ```python
-from django.db import migrations
+from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('deliverables', '0001_initial'),
+        ('deliverables', 'XXXX_previous'),
     ]
 
     operations = [
-        migrations.RunSQL([
-            "CREATE INDEX idx_predeliverable_deliverable_active_date ON deliverables_predeliverableitem(deliverable_id, is_active, generated_date);",
-            "CREATE INDEX idx_predeliverable_calendar ON deliverables_predeliverableitem(generated_date, is_completed);",
-            # ... other indexes
-        ]),
+        migrations.AddIndex(
+            model_name='predeliverableitem',
+            index=models.Index(fields=['deliverable', 'is_active', 'generated_date'], name='predeliv_deliv_active_date'),
+        ),
+        migrations.AddIndex(
+            model_name='predeliverableitem',
+            index=models.Index(fields=['generated_date', 'is_completed'], name='predeliv_calendar'),
+        ),
     ]
 ```
 
@@ -870,7 +1272,7 @@ Caching implementation:
 1. Cache personal dashboard data for 5 minutes
 2. Cache project settings for 30 minutes
 3. Cache global settings for 1 hour
-4. Use cache invalidation on settings changes
+4. Use cache invalidation on settings changes (invalidate on PreDeliverableType, PreDeliverableGlobalSettings, and ProjectPreDeliverableSettings changes)
 
 API response optimization:
 1. Implement pagination for list endpoints
@@ -1171,11 +1573,15 @@ This corrected implementation plan addresses the 16 critical issues identified i
 **Key Corrections Made:**
 - **Fixed Model Relationships**: Changed ProjectPreDeliverableSettings to use ForeignKey with unique constraints instead of impossible OneToOneField design
 - **Avoided App Conflicts**: Used existing core app instead of creating conflicting 'settings' app
-- **Proper Dependency Order**: Moved WorkingDaysService to Step 1 and restructured dependencies
+- **Proper Dependency Order**: Added business-day helper functions in Step 1 (no new service class) and referenced them consistently across steps
 - **Backward Compatibility**: Enhanced existing calendar API instead of breaking changes
 - **Integration Focus**: Used existing Settings page and Project form structure
 - **Performance First**: Added database indexes, caching, and optimization in Step 16
 - **Migration Strategy**: Moved data migration planning to Step 6, before implementation
+- **Endpoint Consistency**: Normalized new endpoints under `/api/deliverables/...` and added URL wiring for `/api/core/...`
+- **Type Generation**: Corrected OpenAPI/type-gen flow (schema.ts via openapi-client; optional generated.ts via generate-types; do not edit models.ts)
+- **Indexes & Migrations**: Replaced raw SQL with Django AddIndex and removed cross-table index suggestion
+- **Permissions + Signals**: Clarified manager semantics and viewset overrides; added transaction.on_commit guidance for signals
 
 **Improved Architecture:**
 - Logical step progression with proper dependencies
