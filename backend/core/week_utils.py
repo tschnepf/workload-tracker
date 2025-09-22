@@ -116,11 +116,8 @@ def working_days_before(target_date: date, business_days: int) -> date:
     if business_days < 0:
         raise ValueError("business_days cannot be negative")
 
-    # Normalize weekend targets back to the previous working day
+    # Step backwards one day at a time, counting only working days
     cur = target_date
-    while not is_working_day(cur):
-        cur -= timedelta(days=1)
-
     remaining = business_days
     while remaining > 0:
         cur -= timedelta(days=1)
@@ -151,11 +148,8 @@ def working_days_after(start_date: date, business_days: int) -> date:
     if business_days < 0:
         raise ValueError("business_days cannot be negative")
 
-    # Normalize weekend starts to the next working day
+    # Step forwards one day at a time, counting only working days
     cur = start_date
-    while not is_working_day(cur):
-        cur += timedelta(days=1)
-
     remaining = business_days
     while remaining > 0:
         cur += timedelta(days=1)
