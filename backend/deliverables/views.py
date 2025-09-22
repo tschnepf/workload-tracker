@@ -21,6 +21,7 @@ from .serializers import (
     DeliverableSerializer,
     DeliverableAssignmentSerializer,
     DeliverableCalendarItemSerializer,
+    PreDeliverableItemSerializer,
 )
 from assignments.models import Assignment
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
@@ -30,6 +31,8 @@ from django.conf import settings
 from .reallocation import reallocate_weekly_hours
 from datetime import timedelta, date as _date
 from core.week_utils import sunday_of_week
+from .models import PreDeliverableItem
+from .services import PreDeliverableService
 
 
 class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
@@ -371,6 +374,80 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         return resp
 
     @extend_schema(
+        parameters=[
+            OpenApiParameter(name='start', type=str, required=False, description='YYYY-MM-DD'),
+            OpenApiParameter(name='end', type=str, required=False, description='YYYY-MM-DD'),
+            OpenApiParameter(name='mine_only', type=bool, required=False),
+            OpenApiParameter(name='type_id', type=int, required=False),
+        ],
+    )
+    @action(detail=False, methods=['get'])
+    def calendar_with_pre_items(self, request):
+        start_str = request.query_params.get('start')
+        end_str = request.query_params.get('end')
+        mine_only = request.query_params.get('mine_only') in ('1', 'true', 'True')
+        type_id = request.query_params.get('type_id')
+        start_date = parse_date(start_str) if start_str else None
+        end_date = parse_date(end_str) if end_str else None
+
+        qs = (
+            Deliverable.objects.all()
+            .select_related('project')
+            .annotate(
+                assignmentCount=Count('assignments', filter=Q(assignments__is_active=True))
+            )
+        )
+        if start_date:
+            qs = qs.filter(date__gte=start_date)
+        if end_date:
+            qs = qs.filter(date__lte=end_date)
+        if not start_date and not end_date:
+            qs = qs.filter(date__isnull=False)
+
+        items = [{
+            'itemType': 'deliverable',
+            **DeliverableCalendarItemSerializer(d).data
+        } for d in qs]
+
+        pre_qs = PreDeliverableItem.objects.select_related('deliverable', 'deliverable__project', 'pre_deliverable_type')
+        if start_date:
+            pre_qs = pre_qs.filter(generated_date__gte=start_date)
+        if end_date:
+            pre_qs = pre_qs.filter(generated_date__lte=end_date)
+        if type_id:
+            try:
+                pre_qs = pre_qs.filter(pre_deliverable_type_id=int(type_id))
+            except ValueError:
+                pass
+        if mine_only:
+            from accounts.models import UserProfile
+            try:
+                prof = UserProfile.objects.select_related('person').get(user=request.user)
+                pid = getattr(prof.person, 'id', None)
+            except UserProfile.DoesNotExist:
+                pid = None
+            if pid:
+                pre_qs = pre_qs.filter(deliverable__assignments__person_id=pid, deliverable__assignments__is_active=True)
+            else:
+                pre_qs = pre_qs.none()
+
+        pre_items = [{
+            'itemType': 'pre_deliverable',
+            'id': pi.id,
+            'parentDeliverableId': pi.deliverable_id,
+            'project': pi.deliverable.project_id,
+            'projectName': getattr(pi.deliverable.project, 'name', None),
+            'projectClient': getattr(pi.deliverable.project, 'client', None),
+            'preDeliverableType': getattr(pi.pre_deliverable_type, 'name', None),
+            'title': f"PRE: {getattr(pi.pre_deliverable_type, 'name', '')}",
+            'date': pi.generated_date,
+            'isCompleted': pi.is_completed,
+            'isOverdue': pi.is_overdue,
+        } for pi in pre_qs]
+
+        return Response(items + pre_items)
+
+    @extend_schema(
         parameters=[OpenApiParameter(name='weeks', type=int, required=False, description='Lookback window in weeks')],
         responses=inline_serializer(name='DeliverableStaffingSummaryItem', fields={
             'linkId': serializers.IntegerField(allow_null=True, required=False),
@@ -529,4 +606,106 @@ class DeliverableAssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return Response({"error": "person must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
+
+
+class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
+    serializer_class = PreDeliverableItemSerializer
+    queryset = (
+        PreDeliverableItem.objects.select_related('deliverable', 'deliverable__project', 'pre_deliverable_type')
+        .order_by('generated_date')
+    )
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        params = request.query_params
+        if 'deliverable' in params:
+            try:
+                qs = qs.filter(deliverable_id=int(params.get('deliverable')))
+            except ValueError:
+                pass
+        if 'project' in params:
+            try:
+                qs = qs.filter(deliverable__project_id=int(params.get('project')))
+            except ValueError:
+                pass
+        if 'type_id' in params:
+            try:
+                qs = qs.filter(pre_deliverable_type_id=int(params.get('type_id')))
+            except ValueError:
+                pass
+        start = params.get('start')
+        if start:
+            d = parse_date(start)
+            if d:
+                qs = qs.filter(generated_date__gte=d)
+        end = params.get('end')
+        if end:
+            d = parse_date(end)
+            if d:
+                qs = qs.filter(generated_date__lte=d)
+        if 'is_completed' in params:
+            val = params.get('is_completed') in ('1', 'true', 'True')
+            qs = qs.filter(is_completed=val)
+        if 'is_active' in params:
+            val = params.get('is_active') in ('1', 'true', 'True')
+            qs = qs.filter(is_active=val)
+        if params.get('mine_only') in ('1', 'true', 'True'):
+            from accounts.models import UserProfile
+            try:
+                prof = UserProfile.objects.select_related('person').get(user=request.user)
+                pid = getattr(prof.person, 'id', None)
+            except UserProfile.DoesNotExist:
+                pid = None
+            if pid:
+                qs = qs.filter(deliverable__assignments__person_id=pid, deliverable__assignments__is_active=True)
+            else:
+                qs = qs.none()
+        self.queryset = qs
+        return super().list(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        data = request.data.copy()
+        allowed = {'isCompleted', 'completedDate', 'notes'}
+        for k in list(data.keys()):
+            if k not in allowed:
+                data.pop(k)
+        if 'isCompleted' in data:
+            data['is_completed'] = data.pop('isCompleted')
+        if 'completedDate' in data:
+            data['completed_date'] = data.pop('completedDate')
+        request._full_data = data  # type: ignore
+        return super().partial_update(request, *args, **kwargs)
+
+    @extend_schema(request=None, responses=PreDeliverableItemSerializer)
+    @action(detail=True, methods=['post'], url_path='complete')
+    def complete(self, request, pk=None):
+        obj: PreDeliverableItem = self.get_object()
+        obj.mark_completed(request.user)
+        return Response(PreDeliverableItemSerializer(obj).data)
+
+    @extend_schema(request=None, responses=PreDeliverableItemSerializer)
+    @action(detail=True, methods=['post'], url_path='uncomplete')
+    def uncomplete(self, request, pk=None):
+        obj: PreDeliverableItem = self.get_object()
+        obj.is_completed = False
+        obj.completed_date = None
+        obj.completed_by = None
+        obj.save(update_fields=['is_completed', 'completed_date', 'completed_by', 'updated_at'])
+        return Response(PreDeliverableItemSerializer(obj).data)
+
+    @extend_schema(request=inline_serializer(name='BulkCompleteRequest', fields={'ids': serializers.ListField(child=serializers.IntegerField())}),
+                   responses=inline_serializer(name='BulkCompleteResponse', fields={'success': serializers.BooleanField(), 'updatedCount': serializers.IntegerField(), 'failed': serializers.ListField(child=serializers.IntegerField())}))
+    @action(detail=False, methods=['post'], url_path='bulk_complete')
+    def bulk_complete(self, request):
+        ids = request.data.get('ids') or []
+        ok = 0
+        failed = []
+        for i in ids:
+            try:
+                obj = PreDeliverableItem.objects.get(id=i)
+                obj.mark_completed(request.user)
+                ok += 1
+            except Exception:
+                failed.append(i)
+        return Response({'success': True, 'updatedCount': ok, 'failed': failed})
 

@@ -5,7 +5,7 @@ Follows R2-REBUILD-STANDARDS.md: snake_case -> camelCase transformation
 
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
-from .models import Deliverable, DeliverableAssignment
+from .models import Deliverable, DeliverableAssignment, PreDeliverableItem
 from datetime import datetime
 from projects.models import Project
 
@@ -19,6 +19,7 @@ class DeliverableSerializer(serializers.ModelSerializer):
     completedDate = serializers.DateField(source='completed_date', required=False, allow_null=True, format='%Y-%m-%d')
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    preItems = serializers.SerializerMethodField(required=False)
     
     # Date field with proper formatting
     date = serializers.DateField(required=False, allow_null=True, format='%Y-%m-%d')
@@ -36,7 +37,8 @@ class DeliverableSerializer(serializers.ModelSerializer):
             'isCompleted', 
             'completedDate',
             'createdAt',
-            'updatedAt'
+            'updatedAt',
+            'preItems',
         ]
         extra_kwargs = {
             'percentage': {'required': False, 'allow_null': True},
@@ -49,6 +51,13 @@ class DeliverableSerializer(serializers.ModelSerializer):
         if value is not None and (value < 0 or value > 100):
             raise serializers.ValidationError("Percentage must be between 0 and 100")
         return value
+
+    def get_preItems(self, obj):
+        include = bool(self.context.get('include_pre_items'))
+        if not include:
+            return None
+        items = obj.pre_items.all().select_related('pre_deliverable_type')
+        return PreDeliverableItemSerializer(items, many=True).data
 
 
 class DeliverableAssignmentSerializer(serializers.ModelSerializer):
@@ -118,3 +127,56 @@ class DeliverableCalendarItemSerializer(serializers.Serializer):
         if pct is not None:
             return f"{pct}%"
         return 'Milestone'
+
+
+class PreDeliverableItemSerializer(serializers.ModelSerializer):
+    preDeliverableTypeId = serializers.IntegerField(source='pre_deliverable_type_id')
+    typeName = serializers.CharField(source='pre_deliverable_type.name', read_only=True)
+    generatedDate = serializers.DateField(source='generated_date', format='%Y-%m-%d')
+    daysBefore = serializers.IntegerField(source='days_before')
+    isCompleted = serializers.BooleanField(source='is_completed')
+    completedDate = serializers.DateField(source='completed_date', allow_null=True, required=False, format='%Y-%m-%d')
+    completedBy = serializers.SerializerMethodField()
+    isActive = serializers.BooleanField(source='is_active')
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    displayName = serializers.SerializerMethodField()
+    isOverdue = serializers.SerializerMethodField()
+    parentDeliverable = serializers.SerializerMethodField()
+    assignedPeople = serializers.SerializerMethodField()
+    itemType = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PreDeliverableItem
+        fields = [
+            'id', 'deliverable', 'preDeliverableTypeId', 'typeName', 'generatedDate', 'daysBefore',
+            'isCompleted', 'completedDate', 'completedBy', 'notes', 'isActive', 'createdAt', 'updatedAt',
+            'displayName', 'isOverdue', 'parentDeliverable', 'assignedPeople', 'itemType'
+        ]
+        extra_kwargs = {
+            'deliverable': {'required': True},
+            'notes': {'required': False, 'allow_blank': True},
+        }
+
+    def get_completedBy(self, obj):
+        u = getattr(obj, 'completed_by', None)
+        if not u:
+            return None
+        return {'id': u.id, 'username': getattr(u, 'username', None)}
+
+    def get_displayName(self, obj):
+        return obj.display_name
+
+    def get_isOverdue(self, obj):
+        return obj.is_overdue
+
+    def get_parentDeliverable(self, obj):
+        d = obj.deliverable
+        return {'id': d.id, 'description': d.description, 'date': d.date.isoformat() if d.date else None}
+
+    def get_assignedPeople(self, obj):
+        people = obj.get_assigned_people().only('id', 'name')
+        return [{'id': p.id, 'name': p.name} for p in people]
+
+    def get_itemType(self, obj):
+        return 'pre_deliverable'

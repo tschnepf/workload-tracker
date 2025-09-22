@@ -5,10 +5,11 @@ Follows R2-REBUILD-STANDARDS.md: snake_case URL patterns
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import DeliverableViewSet, DeliverableAssignmentViewSet
+from .views import DeliverableViewSet, DeliverableAssignmentViewSet, PreDeliverableItemViewSet
 
 router = DefaultRouter()
 router.register(r'assignments', DeliverableAssignmentViewSet, basename='deliverable-assignment')
+router.register(r'pre_deliverable_items', PreDeliverableItemViewSet, basename='pre-deliverable-item')
 router.register(r'', DeliverableViewSet, basename='deliverable')
 
 urlpatterns = router.urls
