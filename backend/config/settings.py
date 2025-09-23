@@ -58,6 +58,7 @@ LOCAL_APPS = [
     'roles',
     'accounts',
     'reports',
+    'personal',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -165,12 +166,14 @@ BACKUP_OFFSITE_PREFIX = os.getenv('BACKUP_OFFSITE_PREFIX', '')
 BACKUP_UPLOAD_MAX_BYTES = int(os.getenv('BACKUP_UPLOAD_MAX_BYTES', str(5 * 1024 * 1024 * 1024)))
 
 # Feature flags for progressive enhancement
-FEATURES = {
+# Initialize and populate FEATURES
+FEATURES = {}
+FEATURES.update({
     'USE_PROJECT_OBJECTS': True,   # â—Ž. Chunk 5 Complete - Project objects implemented
     'USE_DEPARTMENTS': True,       # â—Ž. Chunk 6 Active - Department filtering enabled
     'USE_SKILLS': True,            # â—Ž. Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
-}
+})
 
 # Security/auth flags via env
 FEATURES.update({
@@ -179,6 +182,11 @@ FEATURES.update({
     'SHORT_TTL_AGGREGATES': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
     'AUTH_ENFORCED': os.getenv('AUTH_ENFORCED', 'true').lower() == 'true',
     'ASYNC_JOBS': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
+    # Always-on flag for safe server-side weekly-hours operations
+    'AUTO_REALLOCATION': True,
+    # Week key policy controls (Section 3/4)
+    'WEEK_KEYS_CANONICAL': os.getenv('WEEK_KEYS_CANONICAL', 'sunday').lower(),
+    'WEEK_KEYS_TRANSITION_READ_BOTH': os.getenv('WEEK_KEYS_TRANSITION_READ_BOTH', 'true').lower() == 'true',
 })
 
 # With header-only JWT auth, do not allow credentials by default.
@@ -340,8 +348,7 @@ FEATURES.update({
 # Enable credentials when cookie-based refresh flow is active.
 CORS_ALLOW_CREDENTIALS = bool(FEATURES.get('COOKIE_REFRESH_AUTH'))
 
-# Automatic hour reallocation feature flag (default: enabled)
-FEATURES.update({'AUTO_REALLOCATION': True})
+# (AUTO_REALLOCATION already enabled earlier)
 
 # Performance monitoring configuration
 # Silk enablement: default to on in DEBUG, but allow explicit override.

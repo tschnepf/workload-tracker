@@ -129,6 +129,7 @@ urlpatterns = [
     path('api/deliverables/', include('deliverables.urls')),
     path('api/departments/', include('departments.urls')),
     path('api/skills/', include('skills.urls')),
+    path('api/personal/', include('personal.urls')),
     path('api/core/', include('core.urls')),
     path('api/reports/', include('reports.urls')),
     path('api/core/', include('core.urls')),
