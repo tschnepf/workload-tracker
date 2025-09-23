@@ -1,4 +1,4 @@
-﻿"""
+"""
 URL configuration for workload-tracker project.
 """
 from django.contrib import admin
@@ -90,9 +90,15 @@ def capabilities_view(request):
         'cache': {
             'shortTtlAggregates': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
             'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
-        }
+        },
+        'personalDashboard': True,
     }
     return JsonResponse(caps)
+        'cache': {
+            'shortTtlAggregates': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
+            'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
+        }
+    }
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -139,4 +145,5 @@ urlpatterns = [
 # Add Silk profiling URLs in development/debug mode
 if settings.SILK_ENABLED:
     urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
+
 

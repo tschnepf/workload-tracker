@@ -8,6 +8,7 @@ import MyScheduleStrip from '@/components/personal/MyScheduleStrip';
 import { apiClient, authHeaders } from '@/api/client';
 import Button from '@/components/ui/Button';
 import { useNavigate } from 'react-router';
+import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useAuth } from '@/hooks/useAuth';
 
 const PersonalDashboard: React.FC = () => {
@@ -30,6 +31,7 @@ const PersonalDashboard: React.FC = () => {
 
   React.useEffect(() => {
     let cancelled = false;
+    const startTs = performance.now();
     async function load() {
       if (!personId) return;
       setLoading(true);
@@ -44,8 +46,16 @@ const PersonalDashboard: React.FC = () => {
         setProjects(data.projects || []);
         setDeliverables(data.deliverables || []);
         setSchedule(data.schedule || null);
+        try {
+          const dur = performance.now() - startTs;
+          trackPerformanceEvent('personal_dashboard_mount_ms', Math.round(dur), 'ms', { ok: true });
+        } catch {}
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Failed to load personal work');
+        try {
+          const dur = performance.now() - startTs;
+          trackPerformanceEvent('personal_dashboard_mount_ms', Math.round(dur), 'ms', { ok: false });
+        } catch {}
       } finally {
         if (!cancelled) setLoading(false);
       }
