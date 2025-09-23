@@ -44,13 +44,13 @@ class PersonalWorkView(APIView):
                 inm = request.META.get('HTTP_IF_NONE_MATCH')
                 if cached is not None and inm and inm.strip('"') == cached.get('etag'):
                     resp = Response(status=304)
-                    resp['ETag'] = f'"{cached.get('etag')}"'
+                    resp['ETag'] = '"' + str(cached.get('etag')) + '"'
                     if cached.get('last_modified'):
                         resp['Last-Modified'] = http_date(cached['last_modified'])
                     return resp
                 if cached is not None:
                     resp = Response(cached['data'])
-                    resp['ETag'] = f'"{cached.get('etag')}"'
+                    resp['ETag'] = '"' + str(cached.get('etag')) + '"'
                     if cached.get('last_modified'):
                         resp['Last-Modified'] = http_date(cached['last_modified'])
                     return resp
@@ -103,9 +103,16 @@ class PersonalWorkView(APIView):
                 'nextDeliverableDate': getattr(next_deliv, 'date', None)
             })
 
-        # Deliverables list (next few across projects)
+        # Deliverables list (upcoming only, next few across projects)
         deliverables = list(
-            Deliverable.objects.filter(project_id__in=list(seen_proj)).order_by('date')[:20]
+            Deliverable.objects
+            .filter(
+                project_id__in=list(seen_proj),
+                is_completed=False,
+                date__gte=today,
+            )
+            .select_related('project')
+            .order_by('date')[:20]
         )
         deliv_items = [
             {
