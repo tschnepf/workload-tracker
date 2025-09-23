@@ -25,7 +25,29 @@ Comprehensive team member management with capacity tracking.
 4. Assign to departments and add skill tags as needed
 5. Use the search bar to quickly find team members
 
----
+
+## My Work (Personal Dashboard)
+
+A focused, personal view showing your assignments, upcoming pre-deliverables, near-term schedule, and alerts.
+
+- Where: Sidebar ? "My Work" (`/my-work`) — visible when enabled by administrators
+- What you'll see:
+  - Summary: your utilization %, allocated vs available hours for the current week
+  - Pre-deliverables: your due/overdue pre-items (e.g., Specs, TOC) with quick complete actions
+  - Deliverables: next milestones across your active projects
+  - Projects: your projects with next milestone dates
+  - Schedule: compact week-by-week capacity strip
+- Performance: page prefetches when you hover; second visits are faster due to caching and ETags
+- Tips:
+  - Link your account to a Person profile (admin can assist) to enable this view
+  - Use quick actions to open Assignments and Calendar scoped to you
+
+Administrators
+- Toggle availability via `PERSONAL_DASHBOARD` flag (frontend) and feature flags in backend settings
+- Capabilities endpoint (`/api/capabilities/`) advertises `personalDashboard: true` for client gating
+- Aggregated endpoint: `GET /api/personal/work/` (ETag + short-TTL cache)
+
+------
 
 ## Serializer & Naming Discipline
 
@@ -365,4 +387,5 @@ This also ensures a corresponding UserProfile exists via signals.
 - DEBUG=false in production (enforced in docker-compose.prod.yml).
 - Set SECRET_KEY, ALLOWED_HOSTS, and CORS_ALLOWED_ORIGINS via env.
 - If behind a proxy/ingress, Django honors X-Forwarded-* headers (SECURE_PROXY_SSL_HEADER, USE_X_FORWARDED_HOST).
+
 
