@@ -87,11 +87,16 @@ const PersonalDashboard: React.FC = () => {
     );
   }
 
+  React.useEffect(() => {
+    const el = document.getElementById('mywork-heading');
+    if (el) try { (el as HTMLElement).focus(); } catch {}
+  }, []);
+
   return (
     <Layout>
       <div className="space-y-6">
         <header>
-          <h1 className="text-3xl font-bold text-[#cccccc]">My Work</h1>
+          <h1 className="text-3xl font-bold text-[#cccccc]" tabIndex={-1} id="mywork-heading">My Work</h1>
           <p className="text-[#969696] mt-2">Your assignments, milestones, and schedule</p>
         </header>
 
@@ -125,7 +130,7 @@ const PersonalDashboard: React.FC = () => {
         {summary && alerts ? (
           <MySummaryCard summary={summary} alerts={alerts} />
         ) : (
-          <section aria-busy="true" className="bg-[#2d2d30] border border-[#3e3e42] rounded p-4">
+          <section aria-busy="true" role="status" className="bg-[#2d2d30] border border-[#3e3e42] rounded p-4">
             <div className="h-5 w-40 bg-[#3e3e42] rounded mb-3" />
             <div className="h-3 w-full bg-[#3e3e42] rounded mb-2" />
             <div className="h-3 w-5/6 bg-[#3e3e42] rounded" />
