@@ -64,6 +64,22 @@ export interface paths {
     /** @description Start async grid snapshot job and return task ID for polling. */
     get: operations["assignments_grid_snapshot_async_retrieve"];
   };
+  "/api/assignments/project_grid_snapshot/": {
+    /**
+     * @description Project-centric aggregate snapshot for N weeks ahead (default 12).
+     *
+     * Response shape: { weekKeys: [YYYY-MM-DD], projects: [{id,name,client,status}],
+     * hoursByProject: { <projectId>: { <weekKey>: hours } },
+     * deliverablesByProjectWeek: { <projectId>: { <weekKey>: count } },
+     * hasFutureDeliverablesByProject: { <projectId>: boolean },
+     * metrics: { projectsCount, peopleAssignedCount, totalHours } }
+     */
+    get: operations["assignments_project_grid_snapshot_retrieve"];
+  };
+  "/api/assignments/project_totals/": {
+    /** @description Return authoritative totals for specific projects over current horizon. */
+    get: operations["assignments_project_totals_retrieve"];
+  };
   "/api/assignments/rebalance_suggestions/": {
     /**
      * @description Suggest non-destructive rebalancing ideas across the next N weeks
@@ -96,6 +112,10 @@ export interface paths {
   "/api/auth/me/": {
     /** @description Return the current user's profile with settings and optional person link. */
     get: operations["auth_me_retrieve"];
+  };
+  "/api/auth/notification-preferences/": {
+    get: operations["auth_notification_preferences_retrieve"];
+    put: operations["auth_notification_preferences_update"];
   };
   "/api/auth/set_password/": {
     /** @description Set password for a target user (staff only). */
@@ -132,6 +152,10 @@ export interface paths {
   "/api/backups/upload-restore/": {
     post: operations["backups_upload_restore_create"];
   };
+  "/api/core/pre-deliverable-global-settings/": {
+    get: operations["core_pre_deliverable_global_settings_list"];
+    put: operations["core_pre_deliverable_global_settings_update"];
+  };
   "/api/dashboard/": {
     /** @description Team dashboard with utilization metrics and overview */
     get: operations["dashboard_retrieve"];
@@ -162,8 +186,10 @@ export interface paths {
      */
     delete: operations["deliverables_destroy"];
     /**
-     * @description CRUD operations for deliverables
-     * Supports filtering by project and manual reordering
+     * @description PATCH deliverable. If date changes and feature flag enabled, reallocate hours.
+     *
+     * Response includes optional 'reallocation' summary with keys:
+     * { deltaWeeks, assignmentsChanged, touchedWeekKeys }
      */
     patch: operations["deliverables_partial_update"];
   };
@@ -220,6 +246,99 @@ export interface paths {
      * GET /api/deliverables/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD
      */
     get: operations["deliverables_calendar_list"];
+  };
+  "/api/deliverables/calendar_with_pre_items/": {
+    /**
+     * @description CRUD operations for deliverables
+     * Supports filtering by project and manual reordering
+     */
+    get: operations["deliverables_calendar_with_pre_items_retrieve"];
+  };
+  "/api/deliverables/personal_pre_deliverables/": {
+    /** @description Upcoming pre-deliverable items for the authenticated user (default 14 days). */
+    get: operations["deliverables_personal_pre_deliverables_retrieve"];
+  };
+  "/api/deliverables/pre_deliverable_items/": {
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    get: operations["deliverables_pre_deliverable_items_list"];
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    post: operations["deliverables_pre_deliverable_items_create"];
+  };
+  "/api/deliverables/pre_deliverable_items/{id}/": {
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    get: operations["deliverables_pre_deliverable_items_retrieve"];
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    put: operations["deliverables_pre_deliverable_items_update"];
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    delete: operations["deliverables_pre_deliverable_items_destroy"];
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    patch: operations["deliverables_pre_deliverable_items_partial_update"];
+  };
+  "/api/deliverables/pre_deliverable_items/{id}/complete/": {
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    post: operations["deliverables_pre_deliverable_items_complete_create"];
+  };
+  "/api/deliverables/pre_deliverable_items/{id}/uncomplete/": {
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    post: operations["deliverables_pre_deliverable_items_uncomplete_create"];
+  };
+  "/api/deliverables/pre_deliverable_items/bulk_complete/": {
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    post: operations["deliverables_pre_deliverable_items_bulk_complete_create"];
   };
   "/api/deliverables/reorder/": {
     /**
@@ -359,6 +478,9 @@ export interface paths {
      */
     get: operations["people_workload_forecast_list"];
   };
+  "/api/personal/work/": {
+    get: operations["personal_work_retrieve"];
+  };
   "/api/projects/": {
     /** @description Get all projects with conditional request support (ETag/Last-Modified) and bulk loading */
     get: operations["projects_list"];
@@ -410,9 +532,27 @@ export interface paths {
      * @description Return availability snapshot for people relevant to the project context.
      *
      * Response items: { personId, personName, totalHours, capacity, availableHours, utilizationPercent }
-     * Uses Monday as canonical week key; tolerant to JSON keys +/- 3 days in assignments.
+     * Uses Sunday as canonical week key; exact JSON key lookup (no tolerance).
      */
     get: operations["projects_availability_list"];
+  };
+  "/api/projects/{id}/pre-deliverable-settings/": {
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    get: operations["projects_pre_deliverable_settings_retrieve"];
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    put: operations["projects_pre_deliverable_settings_update"];
   };
   "/api/projects/export_excel/": {
     /** @description Export projects to Excel with streaming response for large datasets */
@@ -442,6 +582,12 @@ export interface paths {
   "/api/projects/import_excel/": {
     /** @description Import projects from Excel with progress tracking */
     post: operations["projects_import_excel_create"];
+  };
+  "/api/reports/pre-deliverable-completion/": {
+    get: operations["reports_pre_deliverable_completion_retrieve"];
+  };
+  "/api/reports/pre-deliverable-team-performance/": {
+    get: operations["reports_pre_deliverable_team_performance_retrieve"];
   };
   "/api/roles/": {
     /**
@@ -626,6 +772,14 @@ export interface components {
       /** Format: double */
       utilization_percent: number;
     };
+    BulkCompleteRequestRequest: {
+      ids: number[];
+    };
+    BulkCompleteResponse: {
+      success: boolean;
+      updatedCount: number;
+      failed: number[];
+    };
     BulkUpdateHoursResponse: {
       success: boolean;
       results: components["schemas"]["BulkUpdateResultItem"][];
@@ -683,13 +837,13 @@ export interface components {
       createdAt: string;
       /** Format: date-time */
       updatedAt: string;
+      preItems: string;
     };
     /** @description Serializer for linking people to deliverables with weekly hours. */
     DeliverableAssignment: {
       id: number;
       deliverable: number;
       person: number;
-      weeklyHours: unknown;
       roleOnMilestone?: string | null;
       is_active?: boolean;
       personName: string;
@@ -703,7 +857,6 @@ export interface components {
     DeliverableAssignmentRequest: {
       deliverable: number;
       person: number;
-      weeklyHours: unknown;
       roleOnMilestone?: string | null;
       is_active?: boolean;
     };
@@ -779,6 +932,9 @@ export interface components {
       description?: string;
       isActive: boolean;
     };
+    GlobalSettingsUpdateRequest: {
+      settings: components["schemas"]["PreDeliverableGlobalSettingsUpdateRequest"][];
+    };
     GridSnapshotAsyncResponse: {
       jobId: string;
     };
@@ -799,6 +955,16 @@ export interface components {
     };
     LinkPersonRequestRequest: {
       person_id?: number | null;
+    };
+    NotificationPreferences: {
+      emailPreDeliverableReminders: boolean;
+      reminderDaysBefore: number;
+      dailyDigest: boolean;
+    };
+    NotificationPreferencesRequest: {
+      emailPreDeliverableReminders: boolean;
+      reminderDaysBefore: number;
+      dailyDigest: boolean;
     };
     PaginatedAssignmentList: {
       /** @example 123 */
@@ -920,6 +1086,21 @@ export interface components {
       previous?: string | null;
       results: components["schemas"]["PersonSkill"][];
     };
+    PaginatedPreDeliverableItemList: {
+      /** @example 123 */
+      count: number;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=4
+       */
+      next?: string | null;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=2
+       */
+      previous?: string | null;
+      results: components["schemas"]["PreDeliverableItem"][];
+    };
     PaginatedProjectAvailabilityItemList: {
       /** @example 123 */
       count: number;
@@ -1025,7 +1206,6 @@ export interface components {
     PatchedDeliverableAssignmentRequest: {
       deliverable?: number;
       person?: number;
-      weeklyHours?: unknown;
       roleOnMilestone?: string | null;
       is_active?: boolean;
     };
@@ -1073,6 +1253,18 @@ export interface components {
       notes?: string;
       /** Format: date */
       lastUsed?: string | null;
+    };
+    PatchedPreDeliverableItemRequest: {
+      deliverable?: number;
+      preDeliverableTypeId?: number;
+      /** Format: date */
+      generatedDate?: string;
+      daysBefore?: number;
+      isCompleted?: boolean;
+      /** Format: date */
+      completedDate?: string | null;
+      notes?: string;
+      isActive?: boolean;
     };
     PatchedProjectRequest: {
       name?: string;
@@ -1206,6 +1398,55 @@ export interface components {
       development: components["schemas"]["PersonSkillSummary"][];
       learning: components["schemas"]["PersonSkillSummary"][];
     };
+    PreDeliverableGlobalSettingsItem: {
+      typeId: number;
+      typeName: string;
+      defaultDaysBefore: number;
+      isEnabledByDefault: boolean;
+      sortOrder?: number;
+      isActive?: boolean;
+    };
+    PreDeliverableGlobalSettingsUpdateRequest: {
+      typeId: number;
+      defaultDaysBefore: number;
+      isEnabledByDefault: boolean;
+    };
+    PreDeliverableItem: {
+      id: number;
+      deliverable: number;
+      preDeliverableTypeId: number;
+      typeName: string;
+      /** Format: date */
+      generatedDate: string;
+      daysBefore: number;
+      isCompleted: boolean;
+      /** Format: date */
+      completedDate?: string | null;
+      completedBy: string;
+      notes?: string;
+      isActive: boolean;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+      displayName: string;
+      isOverdue: string;
+      parentDeliverable: string;
+      assignedPeople: string;
+      itemType: string;
+    };
+    PreDeliverableItemRequest: {
+      deliverable: number;
+      preDeliverableTypeId: number;
+      /** Format: date */
+      generatedDate: string;
+      daysBefore: number;
+      isCompleted: boolean;
+      /** Format: date */
+      completedDate?: string | null;
+      notes?: string;
+      isActive: boolean;
+    };
     Project: {
       id: number;
       name: string;
@@ -1248,6 +1489,34 @@ export interface components {
         [key: string]: components["schemas"]["ProjectFilterItem"];
       };
     };
+    ProjectGridSnapshotResponse: {
+      weekKeys: string[];
+      projects: components["schemas"]["ProjectLite"][];
+      hoursByProject: {
+        [key: string]: {
+          [key: string]: number;
+        };
+      };
+      deliverablesByProjectWeek: {
+        [key: string]: {
+          [key: string]: number;
+        };
+      };
+      hasFutureDeliverablesByProject: {
+        [key: string]: boolean;
+      };
+      metrics: components["schemas"]["ProjectSnapshotMetrics"];
+    };
+    ProjectLite: {
+      id: number;
+      name: string;
+      client?: string | null;
+      status?: string | null;
+    };
+    ProjectPreDeliverableSettingsResponse: {
+      projectId: number;
+      settings: components["schemas"]["ProjectTypeSetting"][];
+    };
     ProjectRequest: {
       name: string;
       status?: components["schemas"]["StatusEnum"];
@@ -1261,6 +1530,26 @@ export interface components {
       estimatedHours?: number | null;
       /** @default true */
       isActive?: boolean;
+    };
+    ProjectSnapshotMetrics: {
+      projectsCount: number;
+      peopleAssignedCount: number;
+      /** Format: double */
+      totalHours: number;
+    };
+    ProjectTotalsResponse: {
+      hoursByProject: {
+        [key: string]: {
+          [key: string]: number;
+        };
+      };
+    };
+    ProjectTypeSetting: {
+      typeId: number;
+      typeName: string;
+      isEnabled: boolean;
+      daysBefore: number | null;
+      source: components["schemas"]["SourceEnum"];
     };
     RecentAssignment: {
       person: string;
@@ -1336,6 +1625,13 @@ export interface components {
       category?: string;
       description?: string;
     };
+    /**
+     * @description * `project` - project
+     * * `global` - global
+     * * `default` - default
+     * @enum {string}
+     */
+    SourceEnum: "project" | "global" | "default";
     /**
      * @description * `planning` - Planning
      * * `active` - Active
@@ -1664,6 +1960,60 @@ export interface operations {
     };
   };
   /**
+   * @description Project-centric aggregate snapshot for N weeks ahead (default 12).
+   *
+   * Response shape: { weekKeys: [YYYY-MM-DD], projects: [{id,name,client,status}],
+   * hoursByProject: { <projectId>: { <weekKey>: hours } },
+   * deliverablesByProjectWeek: { <projectId>: { <weekKey>: count } },
+   * hasFutureDeliverablesByProject: { <projectId>: boolean },
+   * metrics: { projectsCount, peopleAssignedCount, totalHours } }
+   */
+  assignments_project_grid_snapshot_retrieve: {
+    parameters: {
+      query?: {
+        department?: number;
+        /** @description 0|1 */
+        has_future_deliverables?: number;
+        /** @description 0|1 */
+        include_children?: number;
+        /** @description CSV of project IDs to scope totals (optional) */
+        project_ids?: string;
+        /** @description CSV of project status filters */
+        status_in?: string;
+        /** @description Number of weeks (1-26), default 12 */
+        weeks?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectGridSnapshotResponse"];
+        };
+      };
+    };
+  };
+  /** @description Return authoritative totals for specific projects over current horizon. */
+  assignments_project_totals_retrieve: {
+    parameters: {
+      query: {
+        department?: number;
+        /** @description 0|1 */
+        include_children?: number;
+        /** @description CSV of project IDs */
+        project_ids: string;
+        /** @description Number of weeks (1-26), default 12 */
+        weeks?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectTotalsResponse"];
+        };
+      };
+    };
+  };
+  /**
    * @description Suggest non-destructive rebalancing ideas across the next N weeks
    * (default 12).
    *
@@ -1753,6 +2103,31 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["UserProfile"];
+        };
+      };
+    };
+  };
+  auth_notification_preferences_retrieve: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["NotificationPreferences"];
+        };
+      };
+    };
+  };
+  auth_notification_preferences_update: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NotificationPreferencesRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["NotificationPreferencesRequest"];
+        "multipart/form-data": components["schemas"]["NotificationPreferencesRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["NotificationPreferences"];
         };
       };
     };
@@ -1885,6 +2260,31 @@ export interface operations {
       };
     };
   };
+  core_pre_deliverable_global_settings_list: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PreDeliverableGlobalSettingsItem"][];
+        };
+      };
+    };
+  };
+  core_pre_deliverable_global_settings_update: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GlobalSettingsUpdateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["GlobalSettingsUpdateRequest"];
+        "multipart/form-data": components["schemas"]["GlobalSettingsUpdateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PreDeliverableGlobalSettingsItem"][];
+        };
+      };
+    };
+  };
   /** @description Team dashboard with utilization metrics and overview */
   dashboard_retrieve: {
     parameters: {
@@ -2003,8 +2403,10 @@ export interface operations {
     };
   };
   /**
-   * @description CRUD operations for deliverables
-   * Supports filtering by project and manual reordering
+   * @description PATCH deliverable. If date changes and feature flag enabled, reallocate hours.
+   *
+   * Response includes optional 'reallocation' summary with keys:
+   * { deltaWeeks, assignmentsChanged, touchedWeekKeys }
    */
   deliverables_partial_update: {
     parameters: {
@@ -2244,6 +2646,257 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["PaginatedDeliverableCalendarItemList"];
+        };
+      };
+    };
+  };
+  /**
+   * @description CRUD operations for deliverables
+   * Supports filtering by project and manual reordering
+   */
+  deliverables_calendar_with_pre_items_retrieve: {
+    parameters: {
+      query?: {
+        /** @description YYYY-MM-DD */
+        end?: string;
+        mine_only?: boolean;
+        /** @description YYYY-MM-DD */
+        start?: string;
+        type_id?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["Deliverable"];
+        };
+      };
+    };
+  };
+  /** @description Upcoming pre-deliverable items for the authenticated user (default 14 days). */
+  deliverables_personal_pre_deliverables_retrieve: {
+    parameters: {
+      query?: {
+        days_ahead?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["Deliverable"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedPreDeliverableItemList"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PreDeliverableItemRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PreDeliverableItemRequest"];
+        "multipart/form-data": components["schemas"]["PreDeliverableItemRequest"];
+      };
+    };
+    responses: {
+      201: {
+        content: {
+          "application/json": components["schemas"]["PreDeliverableItem"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_retrieve: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Pre-Deliverable Item. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PreDeliverableItem"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Pre-Deliverable Item. */
+        id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PreDeliverableItemRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PreDeliverableItemRequest"];
+        "multipart/form-data": components["schemas"]["PreDeliverableItemRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PreDeliverableItem"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_destroy: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Pre-Deliverable Item. */
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_partial_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Pre-Deliverable Item. */
+        id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PatchedPreDeliverableItemRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedPreDeliverableItemRequest"];
+        "multipart/form-data": components["schemas"]["PatchedPreDeliverableItemRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PreDeliverableItem"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_complete_create: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Pre-Deliverable Item. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PreDeliverableItem"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_uncomplete_create: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Pre-Deliverable Item. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PreDeliverableItem"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  deliverables_pre_deliverable_items_bulk_complete_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BulkCompleteRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["BulkCompleteRequestRequest"];
+        "multipart/form-data": components["schemas"]["BulkCompleteRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["BulkCompleteResponse"];
         };
       };
     };
@@ -2811,6 +3464,14 @@ export interface operations {
       };
     };
   };
+  personal_work_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
   /** @description Get all projects with conditional request support (ETag/Last-Modified) and bulk loading */
   projects_list: {
     parameters: {
@@ -2955,7 +3616,7 @@ export interface operations {
    * @description Return availability snapshot for people relevant to the project context.
    *
    * Response items: { personId, personName, totalHours, capacity, availableHours, utilizationPercent }
-   * Uses Monday as canonical week key; tolerant to JSON keys +/- 3 days in assignments.
+   * Uses Sunday as canonical week key; exact JSON key lookup (no tolerance).
    */
   projects_availability_list: {
     parameters: {
@@ -2968,7 +3629,7 @@ export interface operations {
         include_children?: number;
         /** @description A page number within the paginated result set. */
         page?: number;
-        /** @description YYYY-MM-DD (normalized to Monday) */
+        /** @description YYYY-MM-DD (Sunday key) */
         week?: string;
       };
       path: {
@@ -2980,6 +3641,57 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["PaginatedProjectAvailabilityItemList"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  projects_pre_deliverable_settings_retrieve: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this project. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectPreDeliverableSettingsResponse"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  projects_pre_deliverable_settings_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this project. */
+        id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+        "multipart/form-data": components["schemas"]["ProjectRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectPreDeliverableSettingsResponse"];
         };
       };
     };
@@ -3041,6 +3753,22 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["Project"];
         };
+      };
+    };
+  };
+  reports_pre_deliverable_completion_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  reports_pre_deliverable_team_performance_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
       };
     };
   };
