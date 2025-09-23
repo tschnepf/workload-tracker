@@ -5,6 +5,7 @@ import MySummaryCard, { Summary, Alerts } from '@/components/personal/MySummaryC
 import MyProjectsCard, { ProjectItem } from '@/components/personal/MyProjectsCard';
 import MyDeliverablesCard, { DeliverableItem } from '@/components/personal/MyDeliverablesCard';
 import MyScheduleStrip from '@/components/personal/MyScheduleStrip';
+import QuickActionsCard from '@/components/personal/QuickActionsCard';
 import { apiClient, authHeaders } from '@/api/client';
 import Button from '@/components/ui/Button';
 import { useNavigate } from 'react-router';
@@ -136,7 +137,7 @@ const PersonalDashboard: React.FC = () => {
           </div>
         </section>
 
-        {/* Summary */}
+        {/* Summary (full width) */}
         {summary && alerts ? (
           <MySummaryCard summary={summary} alerts={alerts} />
         ) : (
@@ -147,16 +148,23 @@ const PersonalDashboard: React.FC = () => {
           </section>
         )}
 
-        {/* Pre-Deliverables (live data via existing endpoint) */}
-        <UpcomingPreDeliverablesWidget />
+        {/* Compact widgets grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {/* Pre-Deliverables */}
+          <UpcomingPreDeliverablesWidget className="min-h-[220px] h-full" />
+          {/* Deliverables */}
+          <MyDeliverablesCard className="min-h-[220px] h-full" deliverables={deliverables} />
+          {/* Projects */}
+          <MyProjectsCard className="min-h-[220px] h-full" projects={projects} />
+          {/* Quick Actions */}
+          <QuickActionsCard className="min-h-[220px] h-full"
+            onOpenAssignments={openAssignmentsMe}
+            onOpenCalendar={openCalendarMine}
+            onCompleteDueToday={bulkCompleteDueToday}
+          />
+        </div>
 
-        {/* Deliverables */}
-        <MyDeliverablesCard deliverables={deliverables} />
-
-        {/* Projects */}
-        <MyProjectsCard projects={projects} />
-
-        {/* Schedule */}
+        {/* Schedule (full width) */}
         {schedule ? (
           <MyScheduleStrip weekKeys={schedule.weekKeys} weeklyCapacity={schedule.weeklyCapacity} weekTotals={schedule.weekTotals} />
         ) : null}
