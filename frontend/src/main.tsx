@@ -5,6 +5,7 @@ import { initializePerformanceMonitoring } from './utils/monitoring'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router'
 import App from './App'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import { getFlag } from '@/lib/flags'
  
 import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/hooks/useAuth'
@@ -33,6 +34,7 @@ const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast')
 const Login = React.lazy(() => import('./pages/Auth/Login'))
 const Profile = React.lazy(() => import('./pages/Profile/Profile'))
 const ComingSoon = React.lazy(() => import('./pages/ComingSoon/ComingSoon'))
+const PersonalDashboard = React.lazy(() => import('./pages/Personal/PersonalDashboard'))
 
 // Initialize performance monitoring
 initializePerformanceMonitoring()
@@ -71,6 +73,11 @@ const router = createBrowserRouter([
       { path: 'deliverables/calendar', element: <RequireAuth><MilestoneCalendar /></RequireAuth> },
       { path: 'reports/forecast', element: <RequireAuth><TeamForecastPage /></RequireAuth> },
       { path: 'help', element: <RequireAuth><ComingSoon /></RequireAuth> },
+      { path: 'my-work', element: (getFlag('PERSONAL_DASHBOARD', true) ? (
+        <RequireAuth><PersonalDashboard /></RequireAuth>
+      ) : (
+        <RequireAuth><Navigate to="/dashboard" replace /></RequireAuth>
+      )) },
     ],
   },
 ])
