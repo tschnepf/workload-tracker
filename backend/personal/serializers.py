@@ -22,6 +22,7 @@ class PersonalProjectItemSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField(allow_null=True)
     client = serializers.CharField(allow_null=True, required=False)
+    status = serializers.CharField(allow_null=True, required=False)
     nextDeliverableDate = serializers.DateField(allow_null=True, required=False)
 
 
@@ -47,4 +48,3 @@ class PersonalWorkSerializer(serializers.Serializer):
     deliverables = PersonalDeliverableItemSerializer(many=True)
     preItems = PreDeliverableItemSerializer(many=True)
     schedule = PersonalScheduleSerializer()
-
