@@ -100,6 +100,7 @@ class PersonalWorkView(APIView):
                 'id': p.id,
                 'name': getattr(p, 'name', None),
                 'client': getattr(p, 'client', None),
+                'status': getattr(p, 'status', None),
                 'nextDeliverableDate': getattr(next_deliv, 'date', None)
             })
 
