@@ -4,8 +4,15 @@
  */
 
 import React from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate, useNavigation } from 'react-router';
 import TooltipPortal from '@/components/ui/TooltipPortal';
+import { useAuth } from '@/hooks/useAuth';
+import { getFlag } from '@/lib/flags';
+import { prefetchRoute, wasPrefetched } from '@/routes/prefetch';
+import { prefetchDataForRoute } from '@/routes/prefetchData';
+import { startViewTransition, supportsViewTransitions } from '@/utils/viewTransitions';
+import { trackPerformanceEvent } from '@/utils/monitoring';
+import { setPendingPath, useNavFeedback } from '@/lib/navFeedback';
 
 // Reusable Icon Component for navigation
 const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type: string, className?: string, isActive?: boolean }) => {
@@ -126,8 +133,18 @@ type SidebarProps = {
 
 const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
   const location = useLocation();
+  const nav = useNavigation();
+  const { pendingPath: localPendingPath } = useNavFeedback();
+  const navigate = useNavigate();
+  const auth = useAuth();
 
   const menuItems = [
+    ...(getFlag('PERSONAL_DASHBOARD', true) ? [{
+      path: '/my-work',
+      icon: 'dashboard',
+      label: 'My Work',
+      description: 'Your assignments & milestones'
+    }] : []),
     { 
       path: '/dashboard', 
       icon: 'dashboard', 
@@ -216,7 +233,13 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
   const systemItems: Array<{ path: string; icon: string; label: string; description?: string }> = [];
 
 
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+  const pendingPath = (nav as any)?.location?.pathname as string | undefined;
+  const isActive = (path: string) => {
+    if (location.pathname === path || location.pathname.startsWith(path + '/')) return true;
+    if (pendingPath && (pendingPath === path || pendingPath.startsWith(path + '/'))) return true;
+    if (localPendingPath && (localPendingPath === path || localPendingPath.startsWith(path + '/'))) return true;
+    return false;
+  };
 
   const widthClass = showLabels ? 'w-64' : 'w-16';
   const linkLayoutClass = showLabels ? 'justify-start gap-3 w-full' : 'justify-center';
@@ -243,6 +266,35 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
             <TooltipPortal key={item.path} title={item.label} description={item.description}>
               <Link
                 to={item.path}
+                onMouseEnter={() => {
+                  if (!auth?.accessToken) return; // gate by auth
+                  if (!getFlag('ROUTE_PREFETCH', true)) return;
+                  prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
+                  prefetchDataForRoute(item.path).catch(() => {});
+                }}
+                onFocus={() => {
+                  if (!auth?.accessToken) return;
+                  if (!getFlag('ROUTE_PREFETCH', true)) return;
+                  prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
+                  prefetchDataForRoute(item.path).catch(() => {});
+                }}
+                onClick={(e) => {
+                  // Wrap navigation in a view transition when enabled
+                  const enableVT = getFlag('VIEW_TRANSITIONS', false) && supportsViewTransitions();
+                  // Mark local pending immediately for instant sidebar feedback
+                  setPendingPath(item.path);
+                  if (!enableVT) {
+                    // Record prefetch hit/miss telemetry
+                    const hit = wasPrefetched(item.path);
+                    trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
+                    return; // allow default link navigation
+                  }
+                  e.preventDefault();
+                  const hit = wasPrefetched(item.path);
+                  trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
+                  startViewTransition(() => navigate(item.path)).catch(() => navigate(item.path));
+                }}
+                aria-current={isActive(item.path) ? 'page' : undefined}
                 aria-label={!showLabels ? item.label : undefined}
                 className={`
                   group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
@@ -274,6 +326,32 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
             <TooltipPortal key={item.path} title={item.label} description={item.description}>
               <Link
                 to={item.path}
+                onMouseEnter={() => {
+                  if (!auth?.accessToken) return;
+                  if (!getFlag('ROUTE_PREFETCH', true)) return;
+                  prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
+                  prefetchDataForRoute(item.path).catch(() => {});
+                }}
+                onFocus={() => {
+                  if (!auth?.accessToken) return;
+                  if (!getFlag('ROUTE_PREFETCH', true)) return;
+                  prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
+                  prefetchDataForRoute(item.path).catch(() => {});
+                }}
+                onClick={(e) => {
+                  const enableVT = getFlag('VIEW_TRANSITIONS', false) && supportsViewTransitions();
+                  setPendingPath(item.path);
+                  if (!enableVT) {
+                    const hit = wasPrefetched(item.path);
+                    trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
+                    return;
+                  }
+                  e.preventDefault();
+                  const hit = wasPrefetched(item.path);
+                  trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
+                  startViewTransition(() => navigate(item.path)).catch(() => navigate(item.path));
+                }}
+                aria-current={isActive(item.path) ? 'page' : undefined}
                 aria-label={!showLabels ? item.label : undefined}
                 className={`
                   group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
@@ -337,6 +415,32 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
         <TooltipPortal title="User Profile" description="Account settings">
           <Link
             to="/profile"
+            onMouseEnter={() => {
+              if (!auth?.accessToken) return;
+              if (!getFlag('ROUTE_PREFETCH', true)) return;
+              prefetchRoute('/profile', { delayMs: 120 }).catch(() => {});
+              prefetchDataForRoute('/profile').catch(() => {});
+            }}
+            onFocus={() => {
+              if (!auth?.accessToken) return;
+              if (!getFlag('ROUTE_PREFETCH', true)) return;
+              prefetchRoute('/profile', { delayMs: 120 }).catch(() => {});
+              prefetchDataForRoute('/profile').catch(() => {});
+            }}
+            onClick={(e) => {
+              const enableVT = getFlag('VIEW_TRANSITIONS', false) && supportsViewTransitions();
+              setPendingPath('/profile');
+              if (!enableVT) {
+                const hit = wasPrefetched('/profile');
+                trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: '/profile', status: hit ? 'hit' : 'miss' });
+                return;
+              }
+              e.preventDefault();
+              const hit = wasPrefetched('/profile');
+              trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: '/profile', status: hit ? 'hit' : 'miss' });
+              startViewTransition(() => navigate('/profile')).catch(() => navigate('/profile'));
+            }}
+            aria-current={isActive('/profile') ? 'page' : undefined}
             aria-label={!showLabels ? 'Profile' : undefined}
             className={`flex items-center rounded-md hover:bg-[#3e3e42]/50 cursor-pointer transition-colors px-3 py-2.5 ${linkLayoutClass}`}
           >
@@ -356,6 +460,32 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
         <TooltipPortal title="Help & Support" description="Documentation and assistance">
           <Link
             to="/help"
+            onMouseEnter={() => {
+              if (!auth?.accessToken) return;
+              if (!getFlag('ROUTE_PREFETCH', true)) return;
+              prefetchRoute('/help', { delayMs: 120 }).catch(() => {});
+              prefetchDataForRoute('/help').catch(() => {});
+            }}
+            onFocus={() => {
+              if (!auth?.accessToken) return;
+              if (!getFlag('ROUTE_PREFETCH', true)) return;
+              prefetchRoute('/help', { delayMs: 120 }).catch(() => {});
+              prefetchDataForRoute('/help').catch(() => {});
+            }}
+            onClick={(e) => {
+              const enableVT = getFlag('VIEW_TRANSITIONS', false) && supportsViewTransitions();
+              setPendingPath('/help');
+              if (!enableVT) {
+                const hit = wasPrefetched('/help');
+                trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: '/help', status: hit ? 'hit' : 'miss' });
+                return;
+              }
+              e.preventDefault();
+              const hit = wasPrefetched('/help');
+              trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: '/help', status: hit ? 'hit' : 'miss' });
+              startViewTransition(() => navigate('/help')).catch(() => navigate('/help'));
+            }}
+            aria-current={isActive('/help') ? 'page' : undefined}
             aria-label={!showLabels ? 'Help' : undefined}
             className={`flex items-center rounded-md text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50 transition-colors px-3 py-2.5 ${linkLayoutClass}`}
           >

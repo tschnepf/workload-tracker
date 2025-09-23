@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { resolveApiBase } from '@/utils/apiBase';
-import { getAccessToken } from '@/utils/auth';
+import { authHeaders, apiClient } from '@/api/client';
 
 type Item = {
   id: number;
@@ -26,11 +25,21 @@ const UpcomingPreDeliverablesWidget: React.FC<{ className?: string }> = ({ class
     try {
       setLoading(true);
       setError(null);
-      const base = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
-      const resp = await fetch(`${base}/deliverables/personal_pre_deliverables/?days_ahead=14`, { headers: { 'Authorization': `Bearer ${getAccessToken()}` } });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      setItems(data || []);
+      const today = new Date();
+      const end = new Date();
+      end.setDate(today.getDate() + 14);
+      const startStr = today.toISOString().slice(0, 10);
+      const endStr = end.toISOString().slice(0, 10);
+      const res = await apiClient.GET('/deliverables/pre_deliverable_items/' as any, {
+        params: { query: { mine_only: 1, start: startStr, end: endStr } },
+        headers: authHeaders(),
+      });
+      if ((res as any).error) throw (res as any).error;
+      const data = ((res as any).data || []).map((it: any) => ({
+        ...it,
+        preDeliverableType: it.preDeliverableType ?? it.typeName,
+      }));
+      setItems(data);
     } catch (e: any) {
       setError(e?.message || 'Failed to load pre-deliverables');
     } finally {
@@ -46,9 +55,11 @@ const UpcomingPreDeliverablesWidget: React.FC<{ className?: string }> = ({ class
 
   const markComplete = async (id: number) => {
     try {
-      const base = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
-      const resp = await fetch(`${base}/deliverables/pre_deliverable_items/${id}/complete/`, { method: 'POST', headers: { 'Authorization': `Bearer ${getAccessToken()}` } });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const res = await apiClient.POST('/deliverables/pre_deliverable_items/{id}/complete/' as any, {
+        params: { path: { id } },
+        headers: authHeaders(),
+      });
+      if ((res as any).error) throw (res as any).error;
       await load();
     } catch (e: any) {
       alert(e?.message || 'Failed to complete');
@@ -88,4 +99,3 @@ const UpcomingPreDeliverablesWidget: React.FC<{ className?: string }> = ({ class
 };
 
 export default UpcomingPreDeliverablesWidget;
-
