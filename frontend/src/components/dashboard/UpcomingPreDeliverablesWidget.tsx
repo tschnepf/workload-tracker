@@ -31,11 +31,13 @@ const UpcomingPreDeliverablesWidget: React.FC<{ className?: string }> = ({ class
       const startStr = today.toISOString().slice(0, 10);
       const endStr = end.toISOString().slice(0, 10);
       const res = await apiClient.GET('/deliverables/pre_deliverable_items/' as any, {
-        params: { query: { mine_only: 1, start: startStr, end: endStr } },
+        params: { query: { mine_only: 1, start: startStr, end: endStr, page_size: 100 } },
         headers: authHeaders(),
       });
       if ((res as any).error) throw (res as any).error;
-      const data = ((res as any).data || []).map((it: any) => ({
+      const payload: any = (res as any).data;
+      const list: any[] = Array.isArray(payload) ? payload : ((payload && payload.results) || []);
+      const data = list.map((it: any) => ({
         ...it,
         preDeliverableType: it.preDeliverableType ?? it.typeName,
       }));
