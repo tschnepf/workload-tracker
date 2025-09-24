@@ -18,7 +18,14 @@ Principles
 
 2) Define minimal token set
 - Prompt:
-  > Propose a minimal set of CSS variables for the UI primitives: --bg, --surface, --card, --border, --text, --muted, --primary, --primaryHover, --accent, --focus, and calendar shades --shade0..--shade4. Map current default theme values to these variables in a table. Do not change any component yet.
+  > Propose a minimal set of CSS variables for the UI primitives. Include base and hover/alpha-friendly tokens to avoid Tailwind opacity suffixes with CSS variables:
+  >
+  > - Core: --bg, --surface, --card, --border, --borderSubtle, --text, --muted
+  > - Brand: --primary, --primaryHover, --accent, --focus
+  > - Hover/overlays: --surfaceHover, --cardHover, --surfaceOverlay (pre-baked alpha), --borderOverlay
+  > - Calendar: --shade0, --shade1, --shade2, --shade3, --shade4
+  >
+  > Map current default theme values to these variables in a table. Do not change any component yet.
 
 ---
 
@@ -27,14 +34,25 @@ Principles
 3) Add theme CSS classes and tokens
 - Prompt:
   > Create `src/styles/themes.css` (or extend `src/index.css`) with theme classes `.theme-default`, `.theme-smc-navy`, `.theme-steel-cyan`, `.theme-triad`, `.theme-midnight`, `.theme-sky`, `.theme-topbar`. Each class must define the CSS variables from Phase 0 Step 2. Import this stylesheet once in the frontend entry. No component refactors yet.
+  >
+  > Align base HTML/CSS with variables and remove hardcoded dark defaults that would override schemes:
+  > - In `frontend/index.html`, do not force a dark background via fixed colors; in the critical inline CSS, use variable-driven values with safe fallbacks (e.g., `background: var(--bg, #1e1e1e); color: var(--text, #cccccc);`).
+  > - In `frontend/src/index.css`, replace global dark `body` styles with `background-color: var(--bg); color: var(--text);`.
+  > - Choose a single root (`document.documentElement`) for applying both the `dark` class and `.theme-*` class.
 
 4) Add a small ThemeManager
 - Prompt:
-  > Implement a lean ThemeManager utility that: (1) reads a `theme` value from localStorage; (2) applies a theme class to `<body>` as early as possible (before React hydration to avoid FOUC); (3) exposes `getTheme()` and `setTheme(name: string)` that updates the class and persists the value. Add unit tests for set/get behavior. Do not refactor components yet.
+  > Implement a lean ThemeManager that becomes the single source of truth for both display mode and color scheme:
+  > - Mode (light/dark/system) continues to use the `dark` class per Tailwind’s `darkMode: 'class'` setting.
+  > - Color scheme applies a `.theme-<name>` class (e.g., `.theme-default`, `.theme-sky`).
+  > - Apply both classes to `document.documentElement` as early as possible (before hydration) to prevent FOUC.
+  > - Provide `getMode()/setMode()` and `getColorScheme()/setColorScheme()` APIs and persist both to localStorage.
+  > - Update the existing `useThemeFromSettings` hook to delegate to ThemeManager (do not directly toggle classes in the hook).
+  > - Add unit tests for set/get behavior and unknown-value fallback to `'system'`/`'default'`.
 
 5) Dev toggle (temporary)
 - Prompt:
-  > Add a dev‑only query override `?theme=sky` (or any known theme). If present, apply immediately and persist via ThemeManager. This is for developer preview only and should be clearly documented. Do not ship prominent UI based on this.
+  > Add a dev‑only query override `?colorScheme=sky` (or any known scheme). If present, apply immediately and persist via ThemeManager. This is for developer preview only and should be clearly documented. Do not ship prominent UI based on this.
 
 ---
 
@@ -63,6 +81,15 @@ Testing (Phase 2)
 ---
 
 ## Phase 3 — Calendar Shading Tokens
+
+## Phase 2.5 â€” Layout Shell Tokenization
+
+- Prompt:
+  > Replace inline `darkTheme` usages and hardcoded hex values in top-level shells with CSS variables. Specifically:
+  > - `frontend/src/components/layout/Layout.tsx`: header background/border and any inline colors should read from `var(--surface)`, `var(--border)`, `var(--text)`, and focus tokens.
+  > - Remove direct imports of `darkTheme` for styling; keep logic intact.
+  > - Ensure page wrappers and any global surfaces (e.g., app background) use `var(--bg)`/`var(--surface)` rather than fixed `#1e1e1e`/slate classes.
+  > Do not alter layout structure or behavior. Complete this before exposing a user-facing scheme switcher.
 
 10) CalendarGrid: month shading and today
 - Prompt:
@@ -143,6 +170,8 @@ Testing (Phase 5)
 - ThemeManager with localStorage persistence and early boot application
 - Tokenized shared components (Card, Sidebar, Buttons, inputs/tables)
 - CalendarGrid shading refactored to theme variables
+  
+  Note: `colorScheme` is separate from `theme` (light/dark/system) and controls only the palette applied via CSS variables. `theme` toggles display mode via the `dark` class.
 - Backend + frontend support for per‑user `colorScheme`
 - Settings UI to switch themes, persisted and applied at boot
 - QA and docs
@@ -184,3 +213,26 @@ The following refinements make the plan fool‑proof and avoid common pitfalls:
 8) Accessibility
 - Validate WCAG AA contrast for text and key controls for every theme. Adjust token values where needed. Ensure focus rings remain visible on all backgrounds.
 
+2a) Opacity and hover with CSS variables
+- Avoid Tailwind’s `/opacity` suffix with CSS variables (e.g., `bg-[var(--surface)]/50`). Prefer dedicated hover/overlay tokens with baked alpha such as `--surfaceHover`/`--surfaceOverlay`, and use them via `hover:bg-[var(--surfaceHover)]`.
+
+5a) Frontend types
+- Add `colorScheme?: string` to the `UserSettings` type and wire it through hydration and `setSettings` flows. Keep `theme` (light/dark/system) behavior unchanged.
+
+7a) Layout shell coverage
+- Before exposing a user-facing scheme switcher, include the layout/header shell tokenization so global surfaces adhere to tokens, preventing mixed styles.
+
+9) Theme vs color scheme separation
+- Treat `theme` as display mode (`light`/`dark`/`system`) and `colorScheme` as palette (`default`, `sky`, etc.). ThemeManager controls both; the hook delegates to ThemeManager. Apply classes to `document.documentElement`.
+
+10) Base HTML/CSS alignment
+- Remove global hardcoded dark background/classes from `index.html`/`index.css` and switch to variable-driven base styles to avoid conflicts with applied schemes.
+
+11) Dev override parameter
+- Use `?colorScheme=sky` for the developer override (not `?theme=`) to avoid colliding with the light/dark/system mode.
+
+12) Tests and staged rollout
+- Components with tests asserting explicit color classes (e.g., `StatusBadge`) should be deferred to a later phase to avoid breaking tests. When tokenizing those, update tests to assert semantic classes or data attributes rather than specific hex/Tailwind color names.
+
+13) Scrollbar and utilities
+- Replace fixed-color scrollbar utilities with variable-driven equivalents or add tokens for scrollbar track/thumb for consistency across schemes.
