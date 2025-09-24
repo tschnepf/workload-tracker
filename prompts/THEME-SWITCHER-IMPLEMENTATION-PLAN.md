@@ -80,16 +80,15 @@ Testing (Phase 2)
 
 ---
 
-## Phase 3 — Calendar Shading Tokens
-
-## Phase 2.5 â€” Layout Shell Tokenization
+## Phase 2.5 � Layout Shell Tokenization
 
 - Prompt:
-  > Replace inline `darkTheme` usages and hardcoded hex values in top-level shells with CSS variables. Specifically:
-  > - `frontend/src/components/layout/Layout.tsx`: header background/border and any inline colors should read from `var(--surface)`, `var(--border)`, `var(--text)`, and focus tokens.
-  > - Remove direct imports of `darkTheme` for styling; keep logic intact.
-  > - Ensure page wrappers and any global surfaces (e.g., app background) use `var(--bg)`/`var(--surface)` rather than fixed `#1e1e1e`/slate classes.
+  > Replace inline darkTheme usages and hardcoded hex values in top-level shells with CSS variables. Specifically:
+  > - rontend/src/components/layout/Layout.tsx: header background/border and any inline colors should read from ar(--surface), ar(--border), ar(--text), and focus tokens.
+  > - Remove direct imports of darkTheme for styling; keep logic intact.
+  > - Ensure page wrappers and any global surfaces (e.g., app background) use ar(--bg)/ar(--surface) rather than fixed #1e1e1e/slate classes.
   > Do not alter layout structure or behavior. Complete this before exposing a user-facing scheme switcher.
+## Phase 3 � Calendar Shading Tokens
 
 10) CalendarGrid: month shading and today
 - Prompt:
@@ -101,11 +100,11 @@ Testing (Phase 2)
 
 Testing (Phase 3)
 - Prompt:
-  > Verify calendar visual parity in default theme. Switch themes (via dev query) and confirm shading and today indicator render correctly. Check that pills/labels remain readable.
+  > Verify calendar visual parity in default theme. Switch color schemes (via dev query) and confirm shading and today indicator render correctly. Check that pills/labels remain readable.
 
 ---
 
-## Phase 4 — Backend Support for Per‑User Theme
+## Phase 4 � Backend Support for Per-User Color Scheme
 
 12) Extend UserSettings (backend)
 - Prompt:
@@ -133,7 +132,7 @@ Testing (Phase 4)
 
 Testing (Phase 5)
 - Prompt:
-  > Manually switch themes via the UI. Confirm immediate application and persisted reload. Test on the My Work page, Team Dashboard, and Assignments grid. Verify focus and contrast.
+  > Manually Switch color schemes via the UI. Confirm immediate application and persisted reload. Test on the My Work page, Team Dashboard, and Assignments grid. Verify focus and contrast.
 
 ---
 
@@ -173,7 +172,7 @@ Testing (Phase 5)
   
   Note: `colorScheme` is separate from `theme` (light/dark/system) and controls only the palette applied via CSS variables. `theme` toggles display mode via the `dark` class.
 - Backend + frontend support for per‑user `colorScheme`
-- Settings UI to switch themes, persisted and applied at boot
+- Settings UI to Switch color schemes, persisted and applied at boot
 - QA and docs
 
 ## Notes
