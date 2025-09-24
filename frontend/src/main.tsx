@@ -47,7 +47,7 @@ const router = createBrowserRouter([
       // Public
       { path: 'login', element: <Login /> },
       // Redirect root to dashboard (protected)
-      { index: true, element: <RequireAuth><Navigate to="/dashboard" replace /></RequireAuth> },
+      { index: true, element: <RequireAuth><Navigate to="/my-work" replace /></RequireAuth> },
 
       // Protected routes
       { path: 'dashboard', element: <RequireAuth><Dashboard /></RequireAuth> },
