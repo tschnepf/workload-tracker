@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My Work – Triad</title>
+<style>
+:root{--bg:#0A1420;--bg2:#0C1928;--surface:#0E1D2C;--card:rgba(16,29,44,.88);--border:#1C2E42;--text:#E6F2FF;--muted:#9AB6D4;--primary:#0D6EA3;--accent:#1091C9;--accent2:#96C9E8;--focus:#1091C9}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,var(--bg),var(--bg2))}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:linear-gradient(180deg,#0E1D2C,#0B1724);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.nav{padding:12px 0;overflow:auto}.nav .icon{height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted)}.nav .icon.active{color:var(--accent);background:rgba(16,145,201,.15);border-left:2px solid var(--accent)}
+.main{padding:16px 20px;overflow:auto}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--card);backdrop-filter:blur(2px);border:1px solid var(--border);border-radius:8px;padding:16px}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}.btn:hover{background:#12A8E2}
+.muted{color:var(--muted)}
+.cal{border:1px solid var(--border);border-radius:8px;overflow:hidden}.cal-head{display:grid;grid-template-columns:repeat(7,1fr);background:#10233A;color:var(--muted)}.cal-head div{padding:8px 10px;border-right:1px solid var(--border)}
+.row{display:grid;grid-template-columns:repeat(7,1fr)}.cell{padding:8px;border-right:1px solid var(--border);border-top:1px solid var(--border);min-height:84px}
+.m0{background:#102031}.m1{background:#11263A}.m2{background:#132B43}.m3{background:#15314D}.m4{background:#173758}
+.pill{font-size:11px;color:#fff;border-radius:4px;padding:2px 6px;margin:2px 0;display:inline-block}.pill-acc{background:var(--accent)}.pill-sky{background:var(--accent2);color:#0A1420}
+.pill-pre{background:rgba(150,201,232,.08);border:1px solid rgba(150,201,232,.25);color:var(--text)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div><div class="nav"><div class="icon active">▦</div><div class="icon">👤</div></div></aside>
+  <main class="main">
+    <h1 style="margin:8px 0 4px">My Work</h1><div class="muted">Brand triad accents (navy, teal, sky)</div>
+    <section class="card" style="margin-top:12px"><h3 style="margin:0 0 8px">My Summary</h3><div class="muted">Upcoming work spread evenly.</div></section>
+    <section class="grid" style="margin-top:16px">
+      <div class="card" style="grid-column:span 2">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0">Calendar</h3><div><button class="btn">Prev</button> <button class="btn" style="background:#0000;border:1px solid var(--border)">Today</button> <button class="btn">Next</button></div></div>
+        <div class="cal">
+          <div class="cal-head"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+          <div class="row"><div class="cell m0"><div class="pill pill-acc">IFC – ADC</div></div><div class="cell m0"></div><div class="cell m0"><div class="pill pill-sky">Design</div></div><div class="cell m0"></div><div class="cell m0"></div><div class="cell m0"></div><div class="cell m0"></div></div>
+          <div class="row"><div class="cell m1"></div><div class="cell m1"><div class="pill pill-pre">PRE: Docs</div></div><div class="cell m1"></div><div class="cell m1"></div><div class="cell m1"></div><div class="cell m1"></div><div class="cell m1"></div></div>
+        </div>
+      </div>
+      <div class="card"><h3>My Projects</h3><ul><li>CMH02</li><li>1GServers</li></ul></div>
+      <div class="card"><h3>Upcoming Pre‑Deliverables</h3><div class="muted">No upcoming items</div></div>
+      <div class="card"><h3>My Deliverables</h3><ul><li>IFP – CMH03 (10‑10)</li></ul></div>
+    </section>
+  </main>
+</div>
+</body></html>
+

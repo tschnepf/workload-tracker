@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Work – SMC Navy</title>
+  <style>
+    :root {
+      --bg:#0C1624; --surface:#101C2E; --card:#0F1B2B; --border:#1A2A40;
+      --text:#E6F2FF; --muted:#9FBBD6; --primary:#0D6EA3; --primaryHover:#1187C6;
+      --accent:#94C9EA; --focus:#34A5DE;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .app{display:grid;grid-template-columns:64px 1fr;height:100%}
+    .sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+    .logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+    .logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+    .nav{padding:12px 0;overflow:auto}
+    .nav .icon{height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+    .nav .icon.active{color:var(--primary);background:rgba(13,110,163,.15);border-left:2px solid var(--primary)}
+
+    .main{padding:16px 20px;overflow:auto}
+    h1{margin:8px 0 4px 0;font-size:22px}
+    .muted{color:var(--muted)}
+
+    .grid{display:grid;gap:16px}
+    /* 3 columns on wide, 2 on medium, 1 on small */
+    @media (min-width: 1200px){ .grid{grid-template-columns:repeat(3,minmax(0,1fr))} }
+    @media (min-width: 800px) and (max-width:1199px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+    @media (max-width: 799px){ .grid{grid-template-columns:1fr} }
+
+    .card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+    .card h3{margin:0 0 8px 0;font-size:14px}
+    .btn{background:var(--primary);color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+    .btn:hover{background:var(--primaryHover)}
+    .toolbar{display:flex;gap:8px;align-items:center}
+
+    /* Calendar */
+    .cal{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+    .cal-head{display:grid;grid-template-columns:repeat(7,1fr);background:#13223A;color:var(--muted)}
+    .cal-head div{padding:8px 10px;border-right:1px solid var(--border)}
+    .cal-body .row{display:grid;grid-template-columns:repeat(7,1fr)}
+    .cal-cell{padding:8px;border-right:1px solid var(--border);border-top:1px solid var(--border);min-height:84px;position:relative}
+    /* month shading */
+    .shade-0{background:#0F1B2B}.shade-1{background:#102034}.shade-2{background:#11243B}.shade-3{background:#132846}.shade-4{background:#142D4F}
+    .today{background:var(--primary);color:#fff;border-radius:4px;padding:0 4px}
+    .pill{font-size:11px;color:#fff;border-radius:4px;padding:2px 6px;margin:2px 0;display:inline-block}
+    .pill-blue{background:#0D6EA3}
+    .pill-sky{background:#94C9EA;color:#0C1624}
+    .pill-pre{background:rgba(148,201,234,.08);border:1px solid rgba(148,201,234,.25);color:var(--text)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"/></div>
+      <div class="nav">
+        <div class="icon">▦</div>
+        <div class="icon active">▦</div>
+        <div class="icon">👤</div>
+        <div class="icon">📁</div>
+        <div class="icon">📊</div>
+      </div>
+    </aside>
+    <main class="main">
+      <header>
+        <h1>My Work</h1>
+        <div class="muted">Your assignments, milestones, and schedule</div>
+      </header>
+
+      <!-- Summary -->
+      <section class="card" style="margin-top:12px">
+        <h3>My Summary</h3>
+        <div class="muted">Heads up: next week looks overallocated.</div>
+        <div style="display:flex;gap:24px;margin-top:8px">
+          <div><strong>Utilization</strong><div>83%</div></div>
+          <div><strong>Allocated</strong><div>77h</div></div>
+          <div><strong>Available</strong><div>0h</div></div>
+          <div><strong>Overdue Pre‑Items</strong><div>0</div></div>
+        </div>
+      </section>
+
+      <!-- Row 1: Calendar (2 cols) + Projects (1 col) -->
+      <section class="grid" style="margin-top:16px">
+        <div class="card" style="grid-column:span 2">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <h3 style="margin:0">Calendar</h3>
+            <div class="toolbar">
+              <button class="btn">Prev</button>
+              <button class="btn" style="background:transparent;color:var(--text);border:1px solid var(--border)">Today</button>
+              <button class="btn">Next</button>
+              <label class="muted" style="display:flex;gap:6px;align-items:center">
+                <input type="checkbox" checked /> Show Pre‑Deliverables
+              </label>
+            </div>
+          </div>
+          <div class="cal">
+            <div class="cal-head">
+              <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            </div>
+            <div class="cal-body">
+              <!-- 5 weeks mock -->
+              <div class="row">
+                <div class="cal-cell shade-0"><span class="today">24</span><div class="pill pill-blue">IFC – CMH02</div></div>
+                <div class="cal-cell shade-0"></div>
+                <div class="cal-cell shade-0"><div class="pill pill-sky">Spec – TOC</div></div>
+                <div class="cal-cell shade-0"><div class="pill pill-pre">PRE: Review</div></div>
+                <div class="cal-cell shade-0"></div>
+                <div class="cal-cell shade-0"></div>
+                <div class="cal-cell shade-0"></div>
+              </div>
+              <div class="row">
+                <div class="cal-cell shade-1"></div>
+                <div class="cal-cell shade-1"><div class="pill pill-blue">ADC – CMH03</div></div>
+                <div class="cal-cell shade-1"></div>
+                <div class="cal-cell shade-1"></div>
+                <div class="cal-cell shade-1"><div class="pill pill-pre">PRE: Sheets</div></div>
+                <div class="cal-cell shade-1"></div>
+                <div class="cal-cell shade-1"></div>
+              </div>
+              <div class="row">
+                <div class="cal-cell shade-2"></div>
+                <div class="cal-cell shade-2"></div>
+                <div class="cal-cell shade-2"><div class="pill pill-sky">Stakeholder</div></div>
+                <div class="cal-cell shade-2"></div>
+                <div class="cal-cell shade-2"></div>
+                <div class="cal-cell shade-2"></div>
+                <div class="cal-cell shade-2"></div>
+              </div>
+              <div class="row">
+                <div class="cal-cell shade-3"></div>
+                <div class="cal-cell shade-3"><div class="pill pill-blue">IFP – CMH03</div></div>
+                <div class="cal-cell shade-3"></div>
+                <div class="cal-cell shade-3"></div>
+                <div class="cal-cell shade-3"></div>
+                <div class="cal-cell shade-3"><div class="pill pill-pre">PRE: Specs</div></div>
+                <div class="cal-cell shade-3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>My Projects</h3>
+          <div class="muted">Active</div>
+          <ul>
+            <li>1GServers Due Diligence</li>
+            <li>ADC CMH02</li>
+            <li>IFC CMH02</li>
+            <li>Remington Campus Masterplanning</li>
+          </ul>
+        </div>
+        <!-- Row 2 -->
+        <div class="card">
+          <h3>My Upcoming Pre‑Deliverables</h3>
+          <div class="muted">No upcoming items</div>
+        </div>
+        <div class="card">
+          <h3>My Deliverables</h3>
+          <ul>
+            <li>Milestone – 1GServers DD – 2025‑09‑27</li>
+            <li>IFC – CMH02 – 2025‑09‑30</li>
+            <li>IFP – DPW028 – 2025‑10‑10</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
+

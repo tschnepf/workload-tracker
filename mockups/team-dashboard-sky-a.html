@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Team Dashboard – Sky A</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#0F83C5}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.nav{padding:12px 0;overflow:auto}.nav .icon{height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted)}.nav .icon.active{color:var(--primary);background:rgba(126,196,245,.18);border-left:2px solid var(--primary)}
+.main{padding:16px 20px;overflow:auto}
+.toolbar{display:flex;gap:10px;margin-bottom:12px}
+.chip{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px}
+.chip.primary{background:var(--primary);border-color:var(--primary);color:#0E131A}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.card h3{margin:0 0 8px 0}
+.muted{color:var(--muted)}
+/* simple heatmap */
+.heat{display:grid;grid-template-columns:repeat(12,1fr);gap:4px}
+.heat .c{height:18px;border-radius:3px;background:#1d2935}
+.h1{background:#2a3b4f}.h2{background:#35506b}.h3{background:#406586}.h4{background:#4b7aa1}.h5{background:#7EC4F5}
+table{width:100%;border-collapse:collapse}
+th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}
+th{color:var(--muted);font-weight:600}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div><div class="nav"><div class="icon active">▥</div><div class="icon">👤</div></div></aside>
+  <main class="main">
+    <h1 style="margin:8px 0 6px">Team Dashboard</h1>
+    <div class="toolbar"><button class="chip">All depts</button><button class="chip">Last 4 weeks</button><button class="chip primary">Export CSV</button></div>
+
+    <!-- Row 1: Summary (2 cols) + Heatmap (1 col) -->
+    <section class="grid">
+      <div class="card" style="grid-column:span 2">
+        <h3>Summary</h3>
+        <div style="display:flex;gap:20px;flex-wrap:wrap">
+          <div><strong>Total People</strong><div>42</div><div class="muted">active</div></div>
+          <div><strong>Avg Utilization</strong><div>79%</div><div class="muted">last 4w</div></div>
+          <div><strong>Peak Utilization</strong><div>94%</div><div class="muted">week 2025‑10‑05</div></div>
+          <div><strong>Overallocated</strong><div>6</div><div class="muted">currently</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Team Heatmap</h3>
+        <div class="heat">
+          <div class="c h1"></div><div class="c h2"></div><div class="c h3"></div><div class="c h4"></div><div class="c h5"></div>
+          <div class="c h2"></div><div class="c h3"></div><div class="c h4"></div><div class="c h5"></div><div class="c h1"></div>
+          <div class="c h3"></div><div class="c h4"></div>
+        </div>
+        <div class="muted" style="margin-top:6px">darker = lighter load • sky = heavy</div>
+      </div>
+
+      <!-- Row 2: Team Overview and Available People -->
+      <div class="card">
+        <h3>Team Overview</h3>
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Util%</th><th>Capacity</th></tr></thead>
+          <tbody>
+            <tr><td>Jane Smith</td><td>PM</td><td>84%</td><td>36h</td></tr>
+            <tr><td>Alex Green</td><td>Designer</td><td>62%</td><td>36h</td></tr>
+            <tr><td>Chris Lee</td><td>Engineer</td><td>97%</td><td>40h</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Available People</h3>
+        <ul style="margin:0;padding-left:18px">
+          <li>Alex Green — 14h available</li>
+          <li>Sam Patel — 10h available</li>
+          <li>Kim Tran — 8h available</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Recent Assignments</h3>
+        <ul style="margin:0;padding-left:18px">
+          <li>IFP – CMH03 · Jordan · 2025‑09‑18</li>
+          <li>ADC – CMH04 · Priya · 2025‑09‑17</li>
+          <li>IFC – DPW028 · Omar · 2025‑09‑15</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>
+

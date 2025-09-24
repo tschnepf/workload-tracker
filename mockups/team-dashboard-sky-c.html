@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Team Dashboard – Sky C</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border)}
+.main{padding:16px 20px;overflow:auto}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.chip{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px}
+.chip input{vertical-align:middle}
+.grid{display:grid;gap:16px;grid-template-columns:1fr 1fr 1fr}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px}
+.muted{color:var(--muted)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <h1 style="margin:8px 0 6px">Team Dashboard</h1>
+    <div class="toolbar">
+      <div class="chip"><input type="checkbox" checked> Include sub‑departments</div>
+      <div class="chip">Dept: Engineering</div>
+      <div class="chip">Weeks: 4</div>
+      <div class="chip" style="background:var(--primary);border-color:var(--primary);color:#0E131A">Copy link</div>
+    </div>
+    <section class="grid">
+      <div class="tile"><div class="muted">Total People</div><div style="font-size:22px;font-weight:700">42</div></div>
+      <div class="tile"><div class="muted">Avg Utilization</div><div style="font-size:22px;font-weight:700">79%</div></div>
+      <div class="tile"><div class="muted">Overallocated</div><div style="font-size:22px;font-weight:700">6</div></div>
+      <div class="card" style="grid-column:span 2"><h3 style="margin:0 0 8px">Utilization Distribution</h3>
+        <div style="display:flex;gap:10px">
+          <div class="tile" style="flex:1"><div class="muted">Underutilized</div><div>9</div></div>
+          <div class="tile" style="flex:1"><div class="muted">Optimal</div><div>22</div></div>
+          <div class="tile" style="flex:1"><div class="muted">High</div><div>5</div></div>
+          <div class="tile" style="flex:1"><div class="muted">Overallocated</div><div>6</div></div>
+        </div>
+      </div>
+      <div class="card"><h3 style="margin:0 0 8px">Recent Activity</h3>
+        <ul style="margin:0;padding-left:18px">
+          <li>Jordan assigned to IFP – CMH03</li>
+          <li>Audit: 2 rebalances applied</li>
+          <li>Priya removed from ADC – CMH01</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>
+

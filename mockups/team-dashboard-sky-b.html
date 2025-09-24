@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Team Dashboard – Sky B</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(4,1fr)}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+.tile .k{font-size:22px;font-weight:700}
+.grid{display:grid;gap:16px;grid-template-columns:2fr 1fr}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.muted{color:var(--muted)}
+.heat{display:grid;grid-template-columns:repeat(20,1fr);gap:3px}
+.h0{height:12px;background:#1d2833;border-radius:2px}.h1{background:#233141}.h2{background:#2a3a4f}.h3{background:#31435d}.h4{background:#38506e}.h5{background:#7EC4F5}
+table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px;text-align:left}th{color:var(--muted)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <h1 style="margin:8px 0 6px">Team Dashboard</h1>
+    <!-- Metric tiles row -->
+    <section class="tiles">
+      <div class="tile"><div class="muted">Total People</div><div class="k">42</div></div>
+      <div class="tile"><div class="muted">Avg Utilization</div><div class="k">79%</div></div>
+      <div class="tile"><div class="muted">Peak Utilization</div><div class="k">94%</div></div>
+      <div class="tile"><div class="muted">Overallocated</div><div class="k">6</div></div>
+    </section>
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Capacity Heat</h3>
+        <div class="heat">
+          <div class="h1"></div><div class="h2"></div><div class="h3"></div><div class="h4"></div><div class="h5"></div>
+          <div class="h2"></div><div class="h3"></div><div class="h4"></div><div class="h1"></div><div class="h0"></div>
+          <div class="h3"></div><div class="h4"></div><div class="h2"></div><div class="h1"></div><div class="h0"></div>
+          <div class="h5"></div><div class="h4"></div><div class="h3"></div><div class="h2"></div><div class="h1"></div>
+        </div>
+        <div class="muted" style="margin-top:6px">left = past • right = future</div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Recent Assignments</h3>
+        <table>
+          <thead><tr><th>Person</th><th>Project</th><th>Date</th></tr></thead>
+          <tbody>
+            <tr><td>Jordan</td><td>IFP – CMH03</td><td>2025‑09‑18</td></tr>
+            <tr><td>Priya</td><td>ADC – CMH04</td><td>2025‑09‑17</td></tr>
+            <tr><td>Omar</td><td>IFC – DPW028</td><td>2025‑09‑15</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>
+
