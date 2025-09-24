@@ -137,6 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
   const { pendingPath: localPendingPath } = useNavFeedback();
   const navigate = useNavigate();
   const auth = useAuth();
+  const [logoError, setLogoError] = React.useState(false);
 
   const menuItems = [
     ...(getFlag('PERSONAL_DASHBOARD', true) ? [{
@@ -251,8 +252,20 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       <div className="h-16 flex items-center border-b border-[#3e3e42] relative flex-shrink-0">
         <TooltipPortal title="Workload Tracker" description="Resource Management System">
           <div className="w-full h-full flex items-center justify-center">
-            <div className="w-8 h-8 bg-[#007acc] rounded flex items-center justify-center">
-              <span className="text-white text-sm font-bold">WT</span>
+            {/* Brand logo: served from public/brand. Fallback to initials if missing. */}
+            <div className="w-8 h-8 rounded flex items-center justify-center">
+              {!logoError ? (
+                <img
+                  src="/brand/SMC-TRIANGLE.png"
+                  alt="Brand"
+                  className="max-w-[2rem] max-h-[2rem] object-contain"
+                  onError={() => setLogoError(true)}
+                />
+              ) : (
+                <div className="w-8 h-8 bg-[#007acc] rounded flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">WT</span>
+                </div>
+              )}
             </div>
           </div>
         </TooltipPortal>
