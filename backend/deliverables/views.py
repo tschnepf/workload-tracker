@@ -404,6 +404,22 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if not start_date and not end_date:
             qs = qs.filter(date__isnull=False)
 
+        # Apply person scoping to deliverables when mine_only is requested
+        if mine_only:
+            from accounts.models import UserProfile
+            try:
+                prof = UserProfile.objects.select_related('person').get(user=request.user)
+                pid = getattr(prof.person, 'id', None)
+            except UserProfile.DoesNotExist:
+                pid = None
+            if pid:
+                qs = qs.filter(
+                    Q(assignments__person_id=pid, assignments__is_active=True)
+                    | Q(project__assignment__person_id=pid, project__assignment__is_active=True)
+                ).distinct()
+            else:
+                qs = qs.none()
+
         items = [{
             'itemType': 'deliverable',
             **DeliverableCalendarItemSerializer(d).data
@@ -427,7 +443,10 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except UserProfile.DoesNotExist:
                 pid = None
             if pid:
-                pre_qs = pre_qs.filter(deliverable__assignments__person_id=pid, deliverable__assignments__is_active=True)
+                pre_qs = pre_qs.filter(
+                    Q(deliverable__assignments__person_id=pid, deliverable__assignments__is_active=True)
+                    | Q(deliverable__project__assignment__person_id=pid, deliverable__project__assignment__is_active=True)
+                ).distinct()
             else:
                 pre_qs = pre_qs.none()
 

@@ -5,7 +5,7 @@ import MySummaryCard, { Summary, Alerts } from '@/components/personal/MySummaryC
 import MyProjectsCard, { ProjectItem } from '@/components/personal/MyProjectsCard';
 import MyDeliverablesCard, { DeliverableItem } from '@/components/personal/MyDeliverablesCard';
 import MyScheduleStrip from '@/components/personal/MyScheduleStrip';
-import QuickActionsCard from '@/components/personal/QuickActionsCard';
+import PersonalCalendarWidget from '@/components/personal/PersonalCalendarWidget';
 import { apiClient, authHeaders } from '@/api/client';
 import Button from '@/components/ui/Button';
 import { useNavigate } from 'react-router';
@@ -65,15 +65,10 @@ const PersonalDashboard: React.FC = () => {
     return () => { cancelled = true };
   }, [personId]);
 
-  const openAssignmentsMe = () => {
-    navigate('/assignments');
-  };
-
-  const openCalendarMine = () => {
-    navigate('/deliverables/calendar');
-  };
-
-  const bulkCompleteDueToday = async () => {
+  // Quick actions removed from My Work per request
+  const openAssignmentsMe = React.useCallback(() => navigate('/assignments'), [navigate]);
+  const openCalendarMine = React.useCallback(() => navigate('/deliverables/calendar'), [navigate]);
+  const bulkCompleteDueToday = React.useCallback(async () => {
     try {
       const today = new Date();
       const d = today.toISOString().slice(0, 10);
@@ -82,10 +77,10 @@ const PersonalDashboard: React.FC = () => {
       const ids = items.map(i => i.id);
       if (ids.length === 0) return;
       await apiClient.POST('/deliverables/pre_deliverable_items/bulk_complete/' as any, { body: { ids } as any, headers: authHeaders() });
-    } catch (e) {
-      // noop; widget reload will reflect later
+    } catch {
+      // silent failure; next reload will reflect state
     }
-  };
+  }, []);
 
   if (!personId) {
     return (
@@ -149,19 +144,15 @@ const PersonalDashboard: React.FC = () => {
         )}
 
         {/* Compact widgets grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {/* Pre-Deliverables */}
           <UpcomingPreDeliverablesWidget className="min-h-[220px] h-full" />
           {/* Deliverables */}
           <MyDeliverablesCard className="min-h-[220px] h-full" deliverables={deliverables} />
           {/* Projects */}
           <MyProjectsCard className="min-h-[220px] h-full" projects={projects} />
-          {/* Quick Actions */}
-          <QuickActionsCard className="min-h-[220px] h-full"
-            onOpenAssignments={openAssignmentsMe}
-            onOpenCalendar={openCalendarMine}
-            onCompleteDueToday={bulkCompleteDueToday}
-          />
+          {/* My Calendar (personal) */}
+          <PersonalCalendarWidget className="min-h-[220px] h-full md:col-span-2 xl:col-span-1" />
         </div>
 
         {/* Schedule (full width) */}

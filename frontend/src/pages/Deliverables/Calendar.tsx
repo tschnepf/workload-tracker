@@ -7,67 +7,8 @@ import { DeliverableCalendarItem } from '../../types/models';
 import { resolveApiBase } from '@/utils/apiBase';
 import { getAccessToken } from '@/utils/auth';
 import { darkTheme } from '../../theme/tokens';
-
-function fmtDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function startOfWeekSunday(d: Date): Date {
-  const date = new Date(d);
-  const day = date.getDay(); // 0=Sun
-  date.setDate(date.getDate() - day);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-const typeColors: Record<string, string> = {
-  bulletin: '#3b82f6',
-  cd: '#fb923c',
-  dd: '#818cf8',
-  ifc: '#06b6d4',
-  ifp: '#f472b6',
-  masterplan: '#a78bfa',
-  sd: '#f59e0b',
-  milestone: '#64748b',
-  // Pre‑deliverables: extremely subtle, near‑background tint
-  // Use rgba for transparency; avoid overpowering main deliverables
-  pre_deliverable: 'rgba(147, 197, 253, 0.08)',
-};
-
-function classify(item: DeliverableCalendarItem): string {
-  const t = (item.title || '').toLowerCase();
-  if (/(\b)bulletin(\b)/.test(t)) return 'bulletin';
-  if (/(\b)cd(\b)/.test(t)) return 'cd';
-  if (/(\b)dd(\b)/.test(t)) return 'dd';
-  if (/(\b)ifc(\b)/.test(t)) return 'ifc';
-  if (/(\b)ifp(\b)/.test(t)) return 'ifp';
-  if (/(master ?plan)/.test(t)) return 'masterplan';
-  if (/(\b)sd(\b)/.test(t)) return 'sd';
-  return 'milestone';
-}
-
-function buildEventLabel(ev: DeliverableCalendarItem): string {
-  const base = (ev.title || '').trim();
-  const client = (ev.projectClient || '').trim();
-  const proj = (ev.projectName || `Project ${ev.project}` || '').trim();
-  const extras = [client, proj].filter(Boolean).join(' ');
-  return extras ? `${base} - ${extras}` : base;
-}
-
-function buildTooltip(ev: DeliverableCalendarItem): string {
-  const client = (ev.projectClient || '').trim();
-  const proj = (ev.projectName || `Project ${ev.project}` || '').trim();
-  const parts = [client, proj].filter(Boolean).join(' ');
-  return parts ? `${ev.title} - ${parts}` : (ev.title || 'Deliverable');
-}
-
-function buildPreLabel(it: any): string {
-  const client = (it.projectClient || '').trim();
-  const proj = (it.projectName || '').trim();
-  const type = (it.preDeliverableType || '').trim();
-  const parts = [client, proj, type].filter(Boolean);
-  return parts.length ? parts.join(' ') : 'Pre-Deliverable';
-}
+import CalendarGrid from '@/components/deliverables/CalendarGrid';
+import { fmtDate, startOfWeekSunday, typeColors } from '@/components/deliverables/calendar.utils';
 
 type CalendarItemUnion = (DeliverableCalendarItem & { itemType?: 'deliverable' }) | {
   itemType: 'pre_deliverable'; id: number; parentDeliverableId: number; project: number; projectName?: string | null; projectClient?: string | null; preDeliverableType?: string; title: string; date: string | null; isCompleted: boolean; isOverdue?: boolean;
@@ -202,53 +143,8 @@ const MilestoneCalendarPage: React.FC = () => {
             ) : error ? (
               <div className="p-4 text-red-400">{error}</div>
             ) : (
-              <div>
-                {weeks.map((row, i) => (
-                  <div key={i} className="grid grid-cols-7 border-b border-[#3e3e42] min-h-[96px]">
-                    {row.map((d, j) => {
-                      const key = fmtDate(d);
-                      const isFirst = d.getDate() === 1;
-                      const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
-                      const anchorIdx = anchor.getFullYear() * 12 + anchor.getMonth();
-                      const cellIdx = d.getFullYear() * 12 + d.getMonth();
-                      let monthOffset = cellIdx - anchorIdx;
-                      // Use a 5-shade rolling palette for month backgrounds
-                      const monthShades = ['#2d2d30', '#2a2a2e', '#26262a', '#232327', '#1f1f24'];
-                      if (monthOffset < 0) monthOffset = 0; // don't special-shade prior-month spill
-                      const monthBg = monthShades[monthOffset % monthShades.length];
-                      const dayItems = (dateMap.get(key) || []).sort((a, b) => (('projectName' in a ? a.projectName||'' : '')).localeCompare(('projectName' in b ? b.projectName||'' : '')));
-                      return (
-                        <div key={j} className="border-r border-[#3e3e42] last:border-r-0 p-2 align-top" style={{ position: 'relative', background: monthBg }}>
-                          <div className="text-xs text-[#94a3b8] mb-1 flex items-center gap-1">
-                            <span className={`inline-block px-1 rounded ${isToday(d) ? 'bg-[#007acc] text-white' : ''}`}>{isFirst ? `${monthShort} ${d.getDate()}` : d.getDate()}</span>
-                          </div>
-                          <div className="space-y-1">
-                            {dayItems.map((ev) => {
-                              const isPre = (ev as any).itemType === 'pre_deliverable';
-                              const type = isPre ? 'pre_deliverable' : classify(ev as DeliverableCalendarItem);
-                              const color = typeColors[type] || typeColors.milestone;
-                              const label = isPre ? buildPreLabel(ev) : buildEventLabel(ev as DeliverableCalendarItem);
-                              return (
-                                <div
-                                  key={`${ev.id}-${ev.date}`}
-                                  title={label}
-                                  className={`text-xs text-white rounded px-2 py-1 truncate ${isPre ? 'border' : ''}`}
-                                  style={{
-                                    background: color,
-                                    // Subtle border to hint presence without drawing focus
-                                    border: isPre ? '1px solid rgba(147, 197, 253, 0.25)' : undefined,
-                                  }}
-                                >
-                                  {label}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <CalendarGrid items={items} anchor={anchor} weeksCount={weeksCount} showPre={showPre} />
               </div>
             )}
           </Card>
@@ -304,6 +200,8 @@ const MilestoneCalendarPage: React.FC = () => {
 };
 
 export default MilestoneCalendarPage;
+
+
 
 
 
