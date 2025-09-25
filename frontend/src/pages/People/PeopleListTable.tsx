@@ -56,7 +56,7 @@ const PeopleListTable: React.FC<Props> = ({
                 className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
                   bulkMode
                     ? 'hover:bg-[var(--surfaceHover)]'
-                    : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[#007acc]/20 border-[var(--primary)]' : ''}`
+                    : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : ''}`
                 }`}
                 tabIndex={0}
               >
@@ -91,7 +91,7 @@ const PeopleListTable: React.FC<Props> = ({
             className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
               bulkMode
                 ? 'hover:bg-[var(--surfaceHover)]'
-                : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[#007acc]/20 border-[var(--primary)]' : ''}`
+                : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : ''}`
             }`}
             tabIndex={0}
           >
@@ -123,7 +123,7 @@ const PeopleListTable: React.FC<Props> = ({
   }, [items, bulkMode, selectedPersonId, selectedPeopleIds, onRowClick, onToggleSelect, enableVirtual]);
 
   return (
-    <div className="overflow-y-auto h-full" ref={listParentRef}>
+    <div className="overflow-y-auto h-full bg-[var(--card)]" ref={listParentRef}>
       {content}
     </div>
   );
