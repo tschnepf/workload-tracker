@@ -29,6 +29,7 @@ export type UserSettings = {
   defaultDepartmentId?: number | null;
   includeChildren?: boolean;
   theme?: 'light' | 'dark' | 'system';
+  colorScheme?: string;
   schemaVersion?: number;
 };
 
