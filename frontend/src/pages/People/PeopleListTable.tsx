@@ -33,7 +33,7 @@ const PeopleListTable: React.FC<Props> = ({
     if (items.length === 0) {
       return (
         <div className="flex items-center justify-center py-12">
-          <div className="text-center text-[#969696]">
+          <div className="text-center text-[var(--muted)]">
             <div className="text-lg mb-2">No people found</div>
             <div className="text-sm">Try adjusting your search or create a new person</div>
           </div>
@@ -53,10 +53,10 @@ const PeopleListTable: React.FC<Props> = ({
                 key={person.id ?? index}
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
                 onClick={bulkMode ? undefined : () => onRowClick(person, index)}
-                className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] transition-colors focus:outline-none ${
+                className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
                   bulkMode
-                    ? 'hover:bg-[#3e3e42]/30'
-                    : `cursor-pointer hover:bg-[#3e3e42]/50 ${selectedPersonId === person.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''}`
+                    ? 'hover:bg-[var(--surfaceHover)]'
+                    : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[#007acc]/20 border-[var(--primary)]' : ''}`
                 }`}
                 tabIndex={0}
               >
@@ -66,15 +66,15 @@ const PeopleListTable: React.FC<Props> = ({
                       type="checkbox"
                       checked={person.id ? selectedPeopleIds.has(person.id) : false}
                       onChange={(e) => person.id && onToggleSelect(person.id, e.target.checked)}
-                      className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-2"
+                      className="w-3 h-3 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
                     />
                   </div>
                 )}
-                <div className="col-span-3 text-[#cccccc] font-medium">{person.name}</div>
-                <div className="col-span-2 text-[#969696] text-xs">{person.departmentName || 'None'}</div>
-                <div className="col-span-2 text-[#969696] text-xs">{person.location || 'Not specified'}</div>
-                <div className="col-span-2 text-[#969696] text-xs">{person.weeklyCapacity || 36}h/week</div>
-                <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[#969696] text-xs`}>{person.roleName || 'Not specified'}</div>
+                <div className="col-span-3 text-[var(--text)] font-medium">{person.name}</div>
+                <div className="col-span-2 text-[var(--muted)] text-xs">{person.departmentName || 'None'}</div>
+                <div className="col-span-2 text-[var(--muted)] text-xs">{person.location || 'Not specified'}</div>
+                <div className="col-span-2 text-[var(--muted)] text-xs">{person.weeklyCapacity || 36}h/week</div>
+                <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[var(--muted)] text-xs`}>{person.roleName || 'Not specified'}</div>
               </div>
             );
           })}
@@ -88,10 +88,10 @@ const PeopleListTable: React.FC<Props> = ({
           <div
             key={person.id}
             onClick={bulkMode ? undefined : () => onRowClick(person, index)}
-            className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] transition-colors focus:outline-none ${
+            className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
               bulkMode
-                ? 'hover:bg-[#3e3e42]/30'
-                : `cursor-pointer hover:bg-[#3e3e42]/50 ${selectedPersonId === person.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''}`
+                ? 'hover:bg-[var(--surfaceHover)]'
+                : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[#007acc]/20 border-[var(--primary)]' : ''}`
             }`}
             tabIndex={0}
           >
@@ -101,15 +101,15 @@ const PeopleListTable: React.FC<Props> = ({
                   type="checkbox"
                   checked={selectedPeopleIds.has(person.id!)}
                   onChange={(e) => onToggleSelect(person.id!, e.target.checked)}
-                  className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-2"
+                  className="w-3 h-3 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
                 />
               </div>
             )}
-            <div className="col-span-3 text-[#cccccc] font-medium">{person.name}</div>
-            <div className="col-span-2 text-[#969696] text-xs">{person.departmentName || 'None'}</div>
-            <div className="col-span-2 text-[#969696] text-xs">{person.location || 'Not specified'}</div>
-            <div className="col-span-2 text-[#969696] text-xs">{person.weeklyCapacity || 36}h/week</div>
-            <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[#969696] text-xs`}>{person.roleName || 'Not specified'}</div>
+            <div className="col-span-3 text-[var(--text)] font-medium">{person.name}</div>
+            <div className="col-span-2 text-[var(--muted)] text-xs">{person.departmentName || 'None'}</div>
+            <div className="col-span-2 text-[var(--muted)] text-xs">{person.location || 'Not specified'}</div>
+            <div className="col-span-2 text-[var(--muted)] text-xs">{person.weeklyCapacity || 36}h/week</div>
+            <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[var(--muted)] text-xs`}>{person.roleName || 'Not specified'}</div>
           </div>
         ))}
         {/* Buffer rows to prevent last person from being cut off */}
