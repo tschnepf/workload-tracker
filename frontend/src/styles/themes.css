@@ -52,16 +52,59 @@
   --primaryHover: #0ea5e9; /* sky-500 */
   --focus: #0ea5e9;
 }
-
+/* Midnight scheme: deep navy surfaces and shades */
 .theme-midnight {
   --bg: #0b0f19;
   --surface: #121826;
   --card: #161e31;
   --border: #2a3550;
+  --borderSubtle: #394768;
   --text: #e5e7eb;
   --muted: #9ca3af;
   --primary: #60a5fa;
   --primaryHover: #3b82f6;
   --focus: #3b82f6;
+  /* Calendar shades + overlays tuned for midnight */
+  --shade0: #161e31;
+  --shade1: #151b2c;
+  --shade2: #131a28;
+  --shade3: #101624;
+  --shade4: #0e1420;
+  --surfaceOverlay: rgba(32, 45, 73, 0.45);
+  --borderOverlay: rgba(59, 82, 118, 0.35);
 }
 
+
+
+
+/* Navy-forward palette for SMC branding */
+.theme-smc-navy {
+  --primary: #1e3a8a; /* blue-900 */
+  --primaryHover: #2563eb; /* blue-600 */
+  --accent: #0ea5e9; /* sky-500 */
+  --focus: #2563eb;
+}
+
+/* Steel/Cyan accent palette */
+.theme-steel-cyan {
+  --primary: #06b6d4; /* cyan-500 */
+  --primaryHover: #0891b2; /* cyan-600 */
+  --accent: #67e8f9; /* cyan-300 */
+  --focus: #0891b2;
+}
+
+/* Triad palette: warm primary with green accent */
+.theme-triad {
+  --primary: #f59e0b; /* amber-500 */
+  --primaryHover: #d97706; /* amber-600 */
+  --accent: #10b981; /* emerald-500 */
+  --focus: #d97706;
+}
+
+/* Topbar emphasis palette (violet primary) */
+.theme-topbar {
+  --primary: #8b5cf6; /* violet-500 */
+  --primaryHover: #7c3aed; /* violet-600 */
+  --accent: #3b82f6; /* blue-500 */
+  --focus: #7c3aed;
+}

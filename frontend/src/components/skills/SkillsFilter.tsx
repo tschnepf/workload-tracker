@@ -78,7 +78,7 @@ const SkillsFilter: React.FC<SkillsFilterProps> = ({
     <div ref={containerRef} className={`relative ${className}`}>
       {/* Input Area */}
       <div
-        className="min-h-[42px] px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus-within:border-[#007acc] cursor-text"
+        className="min-h-[42px] px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus-within:border-[var(--focus)] cursor-text"
         onClick={() => setIsOpen(true)}
       >
         {/* Selected Skills Tags */}
@@ -115,7 +115,7 @@ const SkillsFilter: React.FC<SkillsFilterProps> = ({
           onChange={(e) => setSearchTerm(e.target.value)}
           onFocus={() => setIsOpen(true)}
           placeholder={selectedSkills.length > 0 ? "Add more skills..." : placeholder}
-          className="bg-transparent border-none outline-none text-[#cccccc] placeholder-[#969696] w-full text-sm"
+          className="bg-transparent border-none outline-none text-[var(--text)] placeholder-[var(--muted)] w-full text-sm"
         />
       </div>
       
@@ -131,19 +131,19 @@ const SkillsFilter: React.FC<SkillsFilterProps> = ({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 max-h-48 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 overflow-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 max-h-48 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg z-50 overflow-auto">
           {loading && (
-            <div className="px-3 py-2 text-sm text-[#969696]">Loading skills...</div>
+            <div className="px-3 py-2 text-sm text-[var(--muted)]">Loading skills...</div>
           )}
           
           {!loading && filteredSkills.length === 0 && searchTerm && (
-            <div className="px-3 py-2 text-sm text-[#969696]">
+            <div className="px-3 py-2 text-sm text-[var(--muted)]">
               No skills found matching "{searchTerm}"
             </div>
           )}
           
           {!loading && filteredSkills.length === 0 && !searchTerm && selectedSkills.length === availableSkills.length && (
-            <div className="px-3 py-2 text-sm text-[#969696]">
+            <div className="px-3 py-2 text-sm text-[var(--muted)]">
               All available skills selected
             </div>
           )}
@@ -152,19 +152,19 @@ const SkillsFilter: React.FC<SkillsFilterProps> = ({
             <button
               key={skill.id}
               onClick={() => handleSkillSelect(skill.name)}
-              className="w-full px-3 py-2 text-left text-sm text-[#cccccc] hover:bg-[#3e3e42] transition-colors"
+              className="w-full px-3 py-2 text-left text-sm text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
             >
               <div className="flex items-center justify-between">
                 <span>{skill.name}</span>
                 {skill.category && (
-                  <span className="text-xs text-[#969696]">{skill.category}</span>
+                  <span className="text-xs text-[var(--muted)]">{skill.category}</span>
                 )}
               </div>
             </button>
           ))}
           
           {filteredSkills.length > 10 && (
-            <div className="px-3 py-2 text-xs text-[#969696] border-t border-[#3e3e42]">
+            <div className="px-3 py-2 text-xs text-[var(--muted)] border-t border-[var(--border)]">
               {filteredSkills.length - 10} more skills available...
             </div>
           )}

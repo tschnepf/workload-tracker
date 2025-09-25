@@ -502,7 +502,7 @@ const Dashboard: React.FC = () => {
                         else if (pct > 70) bg = '#3b82f6';
                         return (
                           <td key={`cell-${row.id}-${wk}`} title={`${wk} - ${Math.round(h)}h`} style={{ padding: 3, textAlign: 'center' }}>
-                            <div style={{ width: 20, height: 20, background: bg, opacity: 0.9, borderRadius: 3, border: 1px solid var(--border), margin: '0 auto' }} />
+                            <div style={{ width: 20, height: 20, background: bg, opacity: 0.9, borderRadius: 3, border: '1px solid var(--border)', margin: '0 auto' }} />
                           </td>
                         );
                       })}

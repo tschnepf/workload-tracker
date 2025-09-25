@@ -8,7 +8,7 @@ const MilestoneReviewTool = React.lazy(() => import('./tools/MilestoneReviewTool
 type ActionKey = 'find' | 'balance' | 'milestone' | null;
 
 const btnCls =
-  'px-2 py-1 text-xs rounded border transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cbd5e1] hover:bg-[#4e4e52]';
+  'px-2 py-1 text-xs rounded border transition-colors bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]';
 
 const QuickActionsInline: React.FC = () => {
   const [openAction, setOpenAction] = useState<ActionKey>(null);
