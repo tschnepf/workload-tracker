@@ -45,7 +45,7 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
     <div className={className}>
       <div className="min-w-[600px] border border-[#3e3e42] rounded">
         {/* Header row: Sun..Sat */}
-        <div className="grid grid-cols-7 text-xs text-[#94a3b8] bg-[#232327]">
+        <div className="grid grid-cols-7 text-xs text-[#94a3b8] bg-[var(--shade3)]">
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
             <div key={d} className="px-2 py-2 border-r border-[#3e3e42] last:border-r-0">{d}</div>
           ))}
@@ -53,21 +53,21 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
         {/* Weeks */}
         <div>
           {weeks.map((row, i) => (
-            <div key={i} className="grid grid-cols-7 border-t border-[#3e3e42]">
+            <div key={i} className="grid grid-cols-7 border-t border-[var(--border)]">
               {row.map((d, j) => {
                 const key = fmtDate(d);
                 // subtle month shading palette
                 const anchorIdx = anchor.getFullYear() * 12 + anchor.getMonth();
                 const cellIdx = d.getFullYear() * 12 + d.getMonth();
                 let monthOffset = cellIdx - anchorIdx;
-                const monthShades = ['#2d2d30', '#2a2a2e', '#26262a', '#232327', '#1f1f24'];
                 if (monthOffset < 0) monthOffset = 0;
-                const monthBg = monthShades[monthOffset % monthShades.length];
+                const shadeIdx = Math.abs(monthOffset % 5);
+                const monthBg = `var(--shade${shadeIdx})`;
                 const dayItems = (dateMap.get(key) || []).sort((a, b) => (('projectName' in a ? a.projectName||'' : '')).localeCompare(('projectName' in b ? b.projectName||'' : '')));
                 return (
-                  <div key={j} className="border-r border-[#3e3e42] last:border-r-0 p-2 align-top" style={{ position: 'relative', background: monthBg }}>
+                  <div key={j} className="border-r border-[var(--border)] last:border-r-0 p-2 align-top" style={{ position: 'relative', background: monthBg }}>
                     <div className="text-xs text-[#94a3b8] mb-1 flex items-center gap-1">
-                      <span className={`inline-block px-1 rounded ${isToday(d) ? 'bg-[#007acc] text-white' : ''}`}>{d.getDate()}</span>
+                      <span className={`inline-block px-1 rounded ${isToday(d) ? 'bg-[var(--primary)] text-white' : ''}`}>{d.getDate()}</span>
                     </div>
                     <div className="space-y-1">
                       {dayItems.map((ev) => {
@@ -80,7 +80,7 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
                             key={`${ev.id}-${(ev as any).date}`}
                             title={label}
                             className={`text-xs text-white rounded px-2 py-1 truncate ${isPre ? 'border' : ''}`}
-                            style={{ background: color, border: isPre ? '1px solid rgba(147, 197, 253, 0.25)' : undefined }}
+                            style={{ background: color, border: isPre ? '1px solid var(--borderOverlay)' : undefined }}
                           >
                             {label}
                           </div>
@@ -99,4 +99,3 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
 };
 
 export default CalendarGrid;
-
