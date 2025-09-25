@@ -113,13 +113,13 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
   return (
     <Card className={className}>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-[#cccccc] font-semibold">My Calendar</div>
+        <div className="text-[var(--text)] font-semibold">My Calendar</div>
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={prevWeek}>Prev</Button>
           <Button size="sm" onClick={today}>Today</Button>
           <Button size="sm" onClick={nextWeek}>Next</Button>
           <select
-            className="ml-2 bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] text-sm px-2 py-1"
+            className="ml-2 bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] text-sm px-2 py-1"
             value={weeksCount}
             onChange={(e) => setWeeksCount(Math.max(1, Math.min(12, parseInt(e.target.value || '6'))))}
           >

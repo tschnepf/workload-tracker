@@ -25,19 +25,27 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
     : sorted;
 
   return (
-    <Card className={`bg-[#2d2d30] border-[#3e3e42] ${className || ''}`}>
+    <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-[#cccccc]">My Projects</h3>
+          <h3 className="text-lg font-semibold text-[var(--text)]">My Projects</h3>
           <div className="text-xs text-[#94a3b8]">{filtered.length}</div>
         </div>
         {/* Status filters */}
-        <div className="flex flex-wrap gap-2 mb-3">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <button
+            onClick={() => setSelected([])}
+            className={`px-2 py-0.5 rounded text-xs border ${selected.length === 0 ? 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)]' : 'bg-transparent border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface)]/50'}`}
+            title="Show all projects"
+            aria-pressed={selected.length === 0}
+          >
+            Show All
+          </button>
           {allStatusOptions.map((s) => (
             <button
               key={s}
               onClick={() => toggle(s)}
-              className={`px-2 py-0.5 rounded text-xs border ${selected.includes(s) ? 'bg-[#3e3e42] border-[#3e3e42]' : 'bg-transparent border-[#3e3e42]'} ${getStatusColor(s)}`}
+              className={`px-2 py-0.5 rounded text-xs border ${selected.includes(s) ? 'bg-[var(--surface)] border-[var(--border)]' : 'bg-transparent border-[var(--border)]'} ${getStatusColor(s)}`}
               aria-pressed={selected.includes(s)}
               title={`Filter by ${formatStatus(s)}`}
             >
@@ -46,13 +54,13 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
           ))}
         </div>
         {filtered.length === 0 ? (
-          <div className="text-[#969696] text-sm">No projects match the selected status</div>
+          <div className="text-[var(--muted)] text-sm">No projects match the selected status</div>
         ) : (
           <ul className="space-y-2 text-sm">
             {filtered.map(p => (
               <li key={p.id} className="grid grid-cols-[minmax(140px,200px)_1fr_auto] gap-4 items-center">
                 <div className="text-[#94a3b8] whitespace-nowrap overflow-hidden text-ellipsis">{p.client || '—'}</div>
-                <div className="text-[#cccccc]"><Link to={`/projects/${p.id}/edit`} className="hover:underline">{p.name || `Project ${p.id}`}</Link></div>
+                <div className="text-[var(--text)]"><Link to={`/projects/${p.id}/edit`} className="hover:underline">{p.name || `Project ${p.id}`}</Link></div>
                 <div className={`text-xs ${getStatusColor(p.status || '')}`}>{formatStatus(p.status || '')}</div>
               </li>
             ))}

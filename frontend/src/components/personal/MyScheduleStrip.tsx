@@ -10,10 +10,10 @@ type Props = {
 
 const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals, className }) => {
   return (
-    <Card className={`bg-[#2d2d30] border-[#3e3e42] ${className || ''}`}>
+    <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-[#cccccc]">My Schedule</h3>
+          <h3 className="text-lg font-semibold text-[var(--text)]">My Schedule</h3>
           <div className="text-xs text-[#94a3b8]">Capacity {weeklyCapacity}h</div>
         </div>
         <div className="flex gap-2 items-center" aria-label="Next weeks utilization">

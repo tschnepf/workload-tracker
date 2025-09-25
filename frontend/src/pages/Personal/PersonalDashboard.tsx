@@ -85,9 +85,9 @@ const PersonalDashboard: React.FC = () => {
   if (!personId) {
     return (
       <Layout>
-        <div className="p-8 text-center text-[#cccccc]">
+        <div className="p-8 text-center text-[var(--text)]">
           <h1 className="text-3xl font-bold mb-2">My Work</h1>
-          <p className="text-[#969696]">Your account is not linked to a Person profile yet. Please contact your administrator.</p>
+          <p className="text-[var(--muted)]">Your account is not linked to a Person profile yet. Please contact your administrator.</p>
         </div>
       </Layout>
     );
@@ -102,15 +102,15 @@ const PersonalDashboard: React.FC = () => {
     <Layout>
       <div className="space-y-6">
         <header>
-          <h1 className="text-3xl font-bold text-[#cccccc]" tabIndex={-1} id="mywork-heading">My Work</h1>
-          <p className="text-[#969696] mt-2">Your assignments, milestones, and schedule</p>
+          <h1 className="text-3xl font-bold text-[var(--text)]" tabIndex={-1} id="mywork-heading">My Work</h1>
+          <p className="text-[var(--muted)] mt-2">Your assignments, milestones, and schedule</p>
         </header>
 
         {/* Preferences & Quick Actions */}
-        <section className="bg-[#2d2d30] border border-[#3e3e42] rounded p-4">
+        <section className="bg-[var(--card)] border border-[var(--border)] rounded p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 text-sm">
-              <label className="text-[#969696]">Horizon Weeks:</label>
+              <label className="text-[var(--muted)]">Horizon Weeks:</label>
               <input
                 type="number"
                 min={1}
@@ -121,7 +121,7 @@ const PersonalDashboard: React.FC = () => {
                   setHorizonWeeks(v);
                   try { localStorage.setItem('personalDashboard.horizonWeeks', String(v)); } catch {}
                 }}
-                className="w-16 px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none"
+                className="w-16 px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--focus)] focus:outline-none"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -136,23 +136,22 @@ const PersonalDashboard: React.FC = () => {
         {summary && alerts ? (
           <MySummaryCard summary={summary} alerts={alerts} />
         ) : (
-          <section aria-busy="true" role="status" className="bg-[#2d2d30] border border-[#3e3e42] rounded p-4">
-            <div className="h-5 w-40 bg-[#3e3e42] rounded mb-3" />
-            <div className="h-3 w-full bg-[#3e3e42] rounded mb-2" />
-            <div className="h-3 w-5/6 bg-[#3e3e42] rounded" />
+          <section aria-busy="true" role="status" className="bg-[var(--card)] border border-[var(--border)] rounded p-4">
+            <div className="h-5 w-40 bg-[var(--surface)] rounded mb-3" />
+            <div className="h-3 w-full bg-[var(--surface)] rounded mb-2" />
+            <div className="h-3 w-5/6 bg-[var(--surface)] rounded" />
           </section>
         )}
 
         {/* Compact widgets grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {/* Pre-Deliverables */}
-          <UpcomingPreDeliverablesWidget className="min-h-[220px] h-full" />
-          {/* Deliverables */}
-          <MyDeliverablesCard className="min-h-[220px] h-full" deliverables={deliverables} />
-          {/* Projects */}
+          {/* My Calendar (personal) — 2 columns wide under summary */}
+          <PersonalCalendarWidget className="min-h-[220px] h-full md:col-span-2 xl:col-span-2" />
+          {/* Projects (top-right) */}
           <MyProjectsCard className="min-h-[220px] h-full" projects={projects} />
-          {/* My Calendar (personal) */}
-          <PersonalCalendarWidget className="min-h-[220px] h-full md:col-span-2 xl:col-span-1" />
+          {/* Move these down below the calendar row */}
+          <UpcomingPreDeliverablesWidget className="min-h-[220px] h-full" />
+          <MyDeliverablesCard className="min-h-[220px] h-full" deliverables={deliverables} />
         </div>
 
         {/* Schedule (full width) */}
