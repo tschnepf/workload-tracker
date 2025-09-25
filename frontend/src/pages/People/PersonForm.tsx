@@ -190,10 +190,10 @@ const PersonForm: React.FC = () => {
       <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#cccccc]">
+        <h1 className="text-2xl font-bold text-[var(--text)]">
           {isEditing ? 'Edit Person' : 'Add New Person'}
         </h1>
-        <p className="text-[#969696] mt-1">
+        <p className="text-[var(--muted)] mt-1">
           {isEditing ? 'Update team member information' : 'Add a new team member to track their workload'}
         </p>
       </div>
@@ -213,7 +213,7 @@ const PersonForm: React.FC = () => {
       )}
 
       {/* Form */}
-      <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
+      <Card className="bg-[var(--card)] border-[var(--border)] p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           
           {/* Name Field */}
@@ -226,9 +226,9 @@ const PersonForm: React.FC = () => {
               placeholder="Enter full name"
               required
               error={validationErrors.name}
-              className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+              className="bg-[var(--surface)] border-[var(--border)] text-[var(--text)]"
             />
-            <p className="text-[#969696] text-sm mt-1">
+            <p className="text-[var(--muted)] text-sm mt-1">
               This will be displayed in reports and assignments
             </p>
           </div>
@@ -247,22 +247,22 @@ const PersonForm: React.FC = () => {
               max="80"
               required
               error={validationErrors.weeklyCapacity}
-              className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+              className="bg-[var(--surface)] border-[var(--border)] text-[var(--text)]"
             />
-            <p className="text-[#969696] text-sm mt-1">
+            <p className="text-[var(--muted)] text-sm mt-1">
               Typical full-time: 40h, Part-time: 20h, Contractor: 36h
             </p>
           </div>
 
           {/* Role Field */}
           <div>
-            <label className="block text-sm font-medium text-[#cccccc] mb-2">
+            <label className="block text-sm font-medium text-[var(--text)] mb-2">
               Role/Title *
             </label>
             <select
               value={formData.role || ''}
               onChange={(e) => handleChange('role', e.target.value)}
-              className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent min-h-[44px]"
+              className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
               disabled={loading}
               required
             >
@@ -276,20 +276,20 @@ const PersonForm: React.FC = () => {
             {validationErrors.role && (
               <p className="text-red-400 text-sm mt-1">{validationErrors.role}</p>
             )}
-            <p className="text-[#969696] text-sm mt-1">
+            <p className="text-[var(--muted)] text-sm mt-1">
               Select the person's role within the organization
             </p>
           </div>
 
           {/* Department Field - Phase 2 */}
           <div>
-            <label className="block text-sm font-medium text-[#cccccc] mb-2">
+            <label className="block text-sm font-medium text-[var(--text)] mb-2">
               Department
             </label>
             <select
               value={formData.department || ''}
               onChange={(e) => handleChange('department', e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent min-h-[44px]"
+              className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
               disabled={loading}
             >
               <option value="">None Assigned</option>
@@ -299,7 +299,7 @@ const PersonForm: React.FC = () => {
                 </option>
               ))}
             </select>
-            <p className="text-[#969696] text-sm mt-1">
+            <p className="text-[var(--muted)] text-sm mt-1">
               Assign this person to a department for organizational tracking
             </p>
           </div>
@@ -312,9 +312,9 @@ const PersonForm: React.FC = () => {
               value={formData.location}
               onChange={(e) => handleChange('location', e.target.value)}
               placeholder="e.g., New York, NY or Remote"
-              className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+              className="bg-[var(--surface)] border-[var(--border)] text-[var(--text)]"
             />
-            <p className="text-[#969696] text-sm mt-1">
+            <p className="text-[var(--muted)] text-sm mt-1">
               City and state, or indicate if remote. Leave blank if not specified.
             </p>
           </div>
