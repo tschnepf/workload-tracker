@@ -1,13 +1,6 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-
-function applyTheme(theme: 'light' | 'dark' | 'system' | undefined) {
-  const root = document.documentElement;
-  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const shouldDark = theme === 'dark' || (theme === 'system' && prefersDark);
-  if (shouldDark) root.classList.add('dark');
-  else root.classList.remove('dark');
-}
+import { setMode } from '@/theme/themeManager';
 
 export function useThemeFromSettings() {
   const auth = useAuth();
@@ -15,7 +8,7 @@ export function useThemeFromSettings() {
     // Apply theme when settings change after hydration
     if (auth.hydrating) return;
     const t = (auth.settings?.theme as 'light' | 'dark' | 'system' | undefined) || undefined;
-    applyTheme(t);
+    if (t) setMode(t);
   }, [auth.hydrating, auth.settings?.theme]);
 }
 
