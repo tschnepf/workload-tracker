@@ -21,7 +21,7 @@ export const typeColors: Record<string, string> = {
   masterplan: '#a78bfa',
   sd: '#f59e0b',
   milestone: '#64748b',
-  pre_deliverable: 'rgba(147, 197, 253, 0.08)',
+  pre_deliverable: 'var(--surfaceOverlay)',
 };
 
 export function classify(item: DeliverableCalendarItem | any): string {
@@ -55,4 +55,3 @@ export function buildPreLabel(it: any): string {
 export function isPre(item: any): boolean {
   return (item as any).itemType === 'pre_deliverable';
 }
-
