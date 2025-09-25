@@ -12,7 +12,8 @@
   }
   
   body {
-    @apply bg-slate-900 text-slate-50;
+    background-color: var(--bg);
+    color: var(--text);
   }
 }
 

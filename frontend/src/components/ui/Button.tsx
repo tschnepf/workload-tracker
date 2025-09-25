@@ -20,11 +20,11 @@ const Button: React.FC<ButtonProps> = ({
 }) => {
   // VSCode-style dark theme button variants - NEVER hardcode colors
   const variants = {
-    primary: 'bg-[#007acc] hover:bg-[#1e90ff] text-white shadow-sm',
-    secondary: 'bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] shadow-sm',
+    primary: 'bg-[var(--primary)] hover:bg-[var(--primaryHover)] text-white shadow-sm',
+    secondary: 'bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] shadow-sm',
     danger: 'bg-red-500 hover:bg-red-400 text-white shadow-sm',
-    ghost: 'bg-transparent hover:bg-[#3e3e42] text-[#969696] border border-[#3e3e42]'
-  };
+    ghost: 'bg-transparent hover:bg-[var(--surfaceHover)] text-[var(--muted)] border border-[var(--border)]'
+  } as const;
 
   const sizes = {
     sm: 'px-3 py-1.5 text-sm',
@@ -32,7 +32,7 @@ const Button: React.FC<ButtonProps> = ({
     lg: 'px-6 py-3 text-base'
   };
 
-  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors motion-reduce:transition-none focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:ring-offset-2 focus:ring-offset-[#1e1e1e] disabled:opacity-50 disabled:pointer-events-none min-h-[44px] touch-manipulation';
+  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors motion-reduce:transition-none focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:ring-offset-2 focus:ring-offset-[var(--bg)] disabled:opacity-50 disabled:pointer-events-none min-h-[44px] touch-manipulation';
 
   return (
     <button

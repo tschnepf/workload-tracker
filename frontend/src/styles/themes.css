@@ -1,0 +1,67 @@
+/* Theme CSS Variables: default palette (VSCode-like dark) */
+/* Applied via .theme-<name> on documentElement */
+
+:root {
+  /* Provide safe defaults to avoid FOUC when no theme class present */
+  --bg: #1e1e1e;
+  --surface: #252526;
+  --card: #2d2d30;
+  --border: #3e3e42;
+  --borderSubtle: #47474a;
+  --text: #cccccc;
+  --muted: #969696;
+  --primary: #007acc;
+  --primaryHover: #1e90ff;
+  --accent: #8b5cf6;
+  --focus: #007acc;
+  /* Hover/overlay tokens (pre-baked alpha) */
+  --surfaceHover: rgba(62, 62, 66, 0.5);
+  --cardHover: rgba(62, 62, 66, 0.5);
+  --surfaceOverlay: rgba(62, 62, 66, 0.5);
+  --borderOverlay: rgba(62, 62, 66, 0.3);
+  /* Calendar shades */
+  --shade0: #2d2d30;
+  --shade1: #2a2a2e;
+  --shade2: #26262a;
+  --shade3: #232327;
+  --shade4: #1f1f24;
+}
+
+.theme-default {
+  --bg: #1e1e1e;
+  --surface: #252526;
+  --card: #2d2d30;
+  --border: #3e3e42;
+  --borderSubtle: #47474a;
+  --text: #cccccc;
+  --muted: #969696;
+  --primary: #007acc;
+  --primaryHover: #1e90ff;
+  --accent: #8b5cf6;
+  --focus: #007acc;
+  --surfaceHover: rgba(62, 62, 66, 0.5);
+  --cardHover: rgba(62, 62, 66, 0.5);
+  --surfaceOverlay: rgba(62, 62, 66, 0.5);
+  --borderOverlay: rgba(62, 62, 66, 0.3);
+  --shade0: #2d2d30; --shade1: #2a2a2e; --shade2: #26262a; --shade3: #232327; --shade4: #1f1f24;
+}
+
+/* Additional schemes can be tuned later; scaffold a couple of variants */
+.theme-sky {
+  --primary: #38bdf8; /* sky-400 */
+  --primaryHover: #0ea5e9; /* sky-500 */
+  --focus: #0ea5e9;
+}
+
+.theme-midnight {
+  --bg: #0b0f19;
+  --surface: #121826;
+  --card: #161e31;
+  --border: #2a3550;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --primary: #60a5fa;
+  --primaryHover: #3b82f6;
+  --focus: #3b82f6;
+}
+

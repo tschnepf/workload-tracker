@@ -15,7 +15,7 @@ interface CardProps {
 const Card: React.FC<CardProps> = ({ children, className = '', title, onClick }) => {
   // VSCode-style dark theme card styling - consistent across all cards
   const baseStyles = `
-    bg-[#2d2d30] border border-[#3e3e42] 
+    bg-[var(--card)] border border-[var(--border)]
     rounded-lg shadow-lg shadow-black/5
     p-6
   `;
@@ -23,7 +23,7 @@ const Card: React.FC<CardProps> = ({ children, className = '', title, onClick })
   return (
     <div className={`${baseStyles} ${className}`} onClick={onClick}>
       {title && (
-        <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
+        <h3 className="text-lg font-semibold text-[var(--text)] mb-4">
           {title}
         </h3>
       )}

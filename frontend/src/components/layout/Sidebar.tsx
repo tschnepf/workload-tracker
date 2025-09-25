@@ -246,10 +246,10 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
   const linkLayoutClass = showLabels ? 'justify-start gap-3 w-full' : 'justify-center';
 
   return (
-    <div className={`bg-[#2d2d30] border-r border-[#3e3e42] flex-shrink-0 ${widthClass} h-screen flex flex-col z-10`}>
+    <div className={`bg-[var(--surface)] border-r border-[var(--border)] flex-shrink-0 ${widthClass} h-screen flex flex-col z-10`}>
 
       {/* Header */}
-      <div className="h-16 flex items-center border-b border-[#3e3e42] relative flex-shrink-0">
+      <div className="h-16 flex items-center border-b border-[var(--border)] relative flex-shrink-0">
         <TooltipPortal title="Workload Tracker" description="Resource Management System">
           {/* Match nav icon alignment: center within px-3 gutter */}
           <div className="w-full h-full flex items-center">
@@ -262,7 +262,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                   onError={() => setLogoError(true)}
                 />
               ) : (
-                <div className="w-8 h-8 bg-[#007acc] rounded flex items-center justify-center mx-auto relative left-[3px]">
+                <div className="w-8 h-8 bg-[var(--primary)] rounded flex items-center justify-center mx-auto relative left-[3px]">
                   <span className="text-white text-sm leading-8 font-bold">WT</span>
                 </div>
               )}
@@ -312,8 +312,8 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                 className={`
                   group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
                   ${isActive(item.path) 
-                    ? 'bg-[#007acc]/10 border-r-2 border-[#007acc] text-[#007acc]' 
-                    : 'text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50'
+                    ? 'bg-[var(--primary)]/10 border-r-2 border-[var(--primary)] text-[var(--primary)]' 
+                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
                   }
                 `}
               >
@@ -325,7 +325,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                   />
                 </div>
                 {showLabels && (
-                  <span className="text-[#cccccc] text-sm">{item.label}</span>
+                  <span className="text-[var(--text)] text-sm">{item.label}</span>
                 )}
               </Link>
             </TooltipPortal>
@@ -333,7 +333,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
         </div>
 
         {/* Department Advanced Features */}
-        <div className="my-4 mx-6 border-t border-[#3e3e42]" />
+        <div className="my-4 mx-6 border-t border-[var(--border)]" />
         <div className="space-y-1 px-3">
           {departmentItems.map((item) => (
             <TooltipPortal key={item.path} title={item.label} description={item.description}>
@@ -369,8 +369,8 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                 className={`
                   group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
                   ${isActive(item.path) 
-                    ? 'bg-[#007acc]/10 border-r-2 border-[#007acc] text-[#007acc]' 
-                    : 'text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50'
+                    ? 'bg-[var(--primary)]/10 border-r-2 border-[var(--primary)] text-[var(--primary)]' 
+                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
                   }
                 `}
               >
@@ -382,7 +382,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                   />
                 </div>
                 {showLabels && (
-                  <span className="text-[#cccccc] text-sm">{item.label}</span>
+                  <span className="text-[var(--text)] text-sm">{item.label}</span>
                 )}
               </Link>
             </TooltipPortal>
@@ -390,7 +390,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
         </div>
 
         {/* System Items */}
-        <div className="my-4 mx-6 border-t border-[#3e3e42]" />
+        <div className="my-4 mx-6 border-t border-[var(--border)]" />
         <div className="space-y-1 px-3">
           {systemItems.map((item) => (
             <TooltipPortal key={item.path} title={item.label} description={item.description}>
@@ -400,8 +400,8 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                 className={`
                   group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
                   ${isActive(item.path) 
-                    ? 'bg-[#007acc]/10 border-r-2 border-[#007acc] text-[#007acc]' 
-                    : 'text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50'
+                    ? 'bg-[var(--primary)]/10 border-r-2 border-[var(--primary)] text-[var(--primary)]' 
+                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
                   }
                 `}
               >
@@ -413,7 +413,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
                   />
                 </div>
                 {showLabels && (
-                  <span className="text-[#cccccc] text-sm">{item.label}</span>
+                  <span className="text-[var(--text)] text-sm">{item.label}</span>
                 )}
               </Link>
             </TooltipPortal>
@@ -423,7 +423,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       </div>
 
       {/* Bottom Section (pinned) */}
-      <div className="px-3 space-y-1 py-4 border-t border-[#3e3e42] flex-shrink-0">
+      <div className="px-3 space-y-1 py-4 border-t border-[var(--border)] flex-shrink-0">
         {/* User Profile */}
         <TooltipPortal title="User Profile" description="Account settings">
           <Link
@@ -455,16 +455,16 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
             }}
             aria-current={isActive('/profile') ? 'page' : undefined}
             aria-label={!showLabels ? 'Profile' : undefined}
-            className={`flex items-center rounded-md hover:bg-[#3e3e42]/50 cursor-pointer transition-colors px-3 py-2.5 ${linkLayoutClass}`}
+            className={`flex items-center rounded-md hover:bg-[var(--surfaceHover)] cursor-pointer transition-colors px-3 py-2.5 ${linkLayoutClass}`}
           >
-            <div className="w-6 h-6 bg-[#007acc] rounded-full flex items-center justify-center flex-shrink-0">
+            <div className="w-6 h-6 bg-[var(--primary)] rounded-full flex items-center justify-center flex-shrink-0">
               <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
             </div>
             {showLabels && (
-              <span className="text-[#cccccc] text-sm">Profile</span>
+              <span className="text-[var(--text)] text-sm">Profile</span>
             )}
           </Link>
         </TooltipPortal>
@@ -500,13 +500,13 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
             }}
             aria-current={isActive('/help') ? 'page' : undefined}
             aria-label={!showLabels ? 'Help' : undefined}
-            className={`flex items-center rounded-md text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50 transition-colors px-3 py-2.5 ${linkLayoutClass}`}
+            className={`flex items-center rounded-md text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors px-3 py-2.5 ${linkLayoutClass}`}
           >
             <div className="flex-shrink-0">
               <IconComponent type="help" className="w-4 h-4" />
             </div>
             {showLabels && (
-              <span className="text-[#cccccc] text-sm">Help</span>
+              <span className="text-[var(--text)] text-sm">Help</span>
             )}
           </Link>
         </TooltipPortal>

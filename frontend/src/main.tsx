@@ -1,3 +1,4 @@
+import './styles/themes.css'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
@@ -6,11 +7,16 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router'
 import App from './App'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { getFlag } from '@/lib/flags'
+import { bootFromDevQuery, boot as bootTheme } from './theme/themeManager'
  
 import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/hooks/useAuth'
 // Initialize ETag enhancements for assignments bulk updates
 import '@/services/etagEnhancer'
+
+// Apply theme early based on dev query and persisted settings
+bootFromDevQuery(window.location.search)
+bootTheme()
 
 // Lazy route components (kept near router for clarity)
 const Dashboard = React.lazy(() => import('./pages/Dashboard'))
@@ -96,6 +102,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <RootApp />
   </React.StrictMode>,
 )
-
 
 
