@@ -16,6 +16,7 @@ ALLOWED_SETTING_KEYS = {
     "defaultDepartmentId",
     "includeChildren",
     "theme",
+    "colorScheme",
     "schemaVersion",
 }
 
@@ -55,6 +56,15 @@ def sanitize_settings(payload: Dict) -> Tuple[Dict, set]:
         value = str(payload.get("theme") or "").strip().lower()
         if value in ALLOWED_THEME_VALUES:
             cleaned["theme"] = value
+
+    # colorScheme: string (pass-through)
+    if "colorScheme" in payload:
+        try:
+            value = str(payload.get("colorScheme") or "").strip()
+            if value:
+                cleaned["colorScheme"] = value
+        except Exception:
+            pass
 
     # schemaVersion: number
     if "schemaVersion" in payload:
