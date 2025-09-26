@@ -24,21 +24,23 @@ interface PersonWithAvailability extends Person {
   hasSkillMatch?: boolean;
 }
 import Layout from '@/components/layout/Layout';
+import ProjectsSkeleton from '@/components/skeletons/ProjectsSkeleton';
 import { showToast } from '@/lib/toastBus';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import Skeleton from '@/components/ui/Skeleton';
+import { getFlag } from '@/lib/flags';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
 
 // Loading component for DeliverablesSection
 const DeliverablesSectionLoader: React.FC = () => (
-  <div className="border border-[#3e3e42] rounded-lg p-6 bg-[#2d2d30]">
+  <div className="border border-[var(--border)] rounded-lg p-6 bg-[var(--card)]">
     <div className="flex items-center justify-center py-8">
       <div className="flex items-center space-x-3">
-        <div className="animate-spin motion-reduce:animate-none rounded-full h-6 w-6 border-b-2 border-[#007acc]"></div>
-        <div className="text-[#969696]">Loading deliverables...</div>
+        <div className="animate-spin motion-reduce:animate-none rounded-full h-6 w-6 border-b-2 border-[var(--primary)]"></div>
+        <div className="text-[var(--muted)]">Loading deliverables...</div>
       </div>
     </div>
   </div>
@@ -80,10 +82,10 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
 }) => {
   if (isEditing) {
     return (
-      <div className="p-3 bg-[#3e3e42]/50 rounded border border-[#3e3e42]">
+      <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]">
         <div className="grid grid-cols-4 gap-4 items-center">
           {/* Person Name (read-only) */}
-          <div className="text-[#cccccc]">{assignment.personName || 'Unknown'}</div>
+          <div className="text-[var(--text)]">{assignment.personName || 'Unknown'}</div>
           
           {/* Role Input with Autocomplete */}
           <div className="relative">
@@ -92,18 +94,18 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
               placeholder="Role on project..."
               value={editData.roleSearch}
               onChange={(e) => onRoleSearch(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+              className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
               autoFocus
             />
             
             {/* Role Search Results Dropdown */}
             {roleSearchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
                 {roleSearchResults.map((role) => (
                   <button
                     key={role}
                     onClick={() => onRoleSelect(role)}
-                    className="w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0"
+                    className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0"
                   >
                     {role}
                   </button>
@@ -122,7 +124,7 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
               placeholder="Hours"
               value={editData.currentWeekHours}
               onChange={(e) => onHoursChange(parseFloat(e.target.value) || 0)}
-              className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+              className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
             />
           </div>
 
@@ -130,13 +132,13 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
           <div className="flex gap-1">
             <button
               onClick={onSave}
-              className="px-2 py-1 text-xs rounded border bg-[#007acc] border-[#007acc] text-white hover:bg-[#005fa3] transition-colors"
+              className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] transition-colors"
             >
               Save
             </button>
             <button
               onClick={onCancel}
-              className="px-2 py-1 text-xs rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42] transition-colors"
+              className="px-2 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
             >
               Cancel
             </button>
@@ -147,11 +149,11 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
   }
 
   return (
-    <div className="flex justify-between items-center p-2 bg-[#3e3e42]/30 rounded">
+    <div className="flex justify-between items-center p-2 bg-[var(--cardHover)] rounded">
       <div className="flex-1">
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <div className="text-[#cccccc]">{assignment.personName || 'Unknown'}</div>
+            <div className="text-[var(--text)]">{assignment.personName || 'Unknown'}</div>
             {/* Person Skills (Read-only) */}
             <div className="flex flex-wrap gap-1 mt-1">
               {assignment.personSkills?.filter(skill => skill.skillType === 'strength').slice(0, 3).map((skill, index) => (
@@ -160,18 +162,18 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
                 </span>
               ))}
               {assignment.personSkills?.filter(skill => skill.skillType === 'strength').length === 0 && (
-                <span className="text-[#969696] text-xs">No skills listed</span>
+                <span className="text-[var(--muted)] text-xs">No skills listed</span>
               )}
             </div>
           </div>
-          <div className="text-[#969696]">{assignment.roleOnProject || 'Team Member'}</div>
-          <div className="text-[#969696]">{getCurrentWeekHours(assignment)}h</div>
+          <div className="text-[var(--muted)]">{assignment.roleOnProject || 'Team Member'}</div>
+          <div className="text-[var(--muted)]">{getCurrentWeekHours(assignment)}h</div>
         </div>
       </div>
       <div className="flex gap-1">
         <button 
           onClick={onEdit}
-          className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[#cccccc] hover:bg-[#3e3e42] hover:border-[#3e3e42] transition-colors"
+          className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[var(--text)] hover:bg-[var(--cardHover)] hover:border-[var(--border)] transition-colors"
         >
           Edit
         </button>
@@ -207,14 +209,14 @@ const PersonSearchResult = React.memo<PersonSearchResultProps>(({
       role="option"
       aria-selected={isSelected}
       aria-describedby={`person-${person.id}-details`}
-      className={`w-full text-left px-2 py-2 text-xs hover:bg-[#3e3e42] transition-colors border-b border-[#3e3e42] last:border-b-0 ${
-        isSelected ? 'bg-[#3e3e42]' : ''
+      className={`w-full text-left px-2 py-2 text-xs hover:bg-[var(--cardHover)] transition-colors border-b border-[var(--border)] last:border-b-0 ${
+        isSelected ? 'bg-[var(--surfaceOverlay)]' : ''
       }`}
     >
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <div className="text-[#cccccc] font-medium">{person.name}</div>
-          <div className="text-[#969696] text-xs">{person.role}</div>
+          <div className="text-[var(--text)] font-medium">{person.name}</div>
+          <div className="text-[var(--muted)] text-xs">{person.role}</div>
           
           {/* Skills Display */}
           <div className="flex flex-wrap gap-1 mt-1">
@@ -230,10 +232,10 @@ const PersonSearchResult = React.memo<PersonSearchResultProps>(({
         </div>
         
         <div className="text-right ml-2" id={`person-${person.id}-details`}>
-          <div className="text-[#cccccc] text-xs font-medium">
+          <div className="text-[var(--text)] text-xs font-medium">
             {person.availableHours?.toFixed(1) || '0'}h available
           </div>
-          <div className="text-[#969696] text-xs">
+          <div className="text-[var(--muted)] text-xs">
             {person.utilizationPercent?.toFixed(0) || '0'}% utilized
           </div>
         </div>
@@ -1148,7 +1150,7 @@ const ProjectsList: React.FC = () => {
     if (sortBy !== column) return null;
     
     return (
-      <span className="ml-1 text-[#007acc]">
+      <span className="ml-1 text-[var(--primary)]">
         {sortDirection === 'asc' ? '▲' : '▼'}
       </span>
     );
@@ -1157,26 +1159,24 @@ const ProjectsList: React.FC = () => {
   if (loading) {
     return (
       <Layout>
-        <div className="h-full min-h-0 flex items-center justify-center">
-          <div className="text-[#969696]">Loading projects...</div>
-        </div>
+        <ProjectsSkeleton />
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="h-full min-h-0 flex bg-[#1e1e1e]">
+      <div className="h-full min-h-0 flex bg-[var(--bg)]">
         
         {/* Left Panel - Projects List */}
-        <div className="w-1/2 border-r border-[#3e3e42] flex flex-col min-w-0 min-h-0 overflow-y-auto">
+        <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto">
           
           {/* Header */}
-          <div className="p-3 border-b border-[#3e3e42]">
+          <div className="p-3 border-b border-[var(--border)]">
             <div className="flex justify-between items-center mb-2">
-              <h1 className="text-lg font-semibold text-[#cccccc]">Projects</h1>
+              <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
               <Link to="/projects/new">
-                <button className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
+                <button className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors">
                   + New
                 </button>
               </Link>
@@ -1186,7 +1186,7 @@ const ProjectsList: React.FC = () => {
             <div className="space-y-2">
               {/* Status Filter */}
               <div>
-                <label className="text-xs text-[#969696] mb-1 block">Filter by Status:</label>
+                <label className="text-xs text-[var(--muted)] mb-1 block">Filter by Status:</label>
                 <div className="flex flex-wrap gap-1">
                   {statusOptions.map((status) => (
                     <button
@@ -1194,8 +1194,8 @@ const ProjectsList: React.FC = () => {
                       onClick={() => setStatusFilter(status)}
                       className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                         statusFilter === status
-                          ? 'bg-[#007acc] border-[#007acc] text-white'
-                          : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/80'
+                          ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                          : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
                       }`}
                       aria-label={`Filter projects by ${formatFilterStatus(status).toLowerCase()}`}
                       aria-pressed={statusFilter === status}
@@ -1213,7 +1213,7 @@ const ProjectsList: React.FC = () => {
                   placeholder="Search projects"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+                  className="w-full px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
                 />
               </div>
             </div>
@@ -1228,8 +1228,8 @@ const ProjectsList: React.FC = () => {
 
           {/* Filter metadata status */}
           {(filterMetaLoading || filterMetaError) && (
-            <div className={`p-3 border-b ${filterMetaError ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[#2d2d30] border-[#3e3e42]'}`}>
-              <div className={`text-sm ${filterMetaError ? 'text-amber-400' : 'text-[#969696]'}`}>
+            <div className={`p-3 border-b ${filterMetaError ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[var(--card)] border-[var(--border)]'}`}>
+              <div className={`text-sm ${filterMetaError ? 'text-amber-400' : 'text-[var(--muted)]'}`}>
                 {filterMetaError ? (
                   <div className="flex items-center gap-2">
                     <span>Filter data unavailable; special filters temporarily disabled.</span>
@@ -1262,17 +1262,17 @@ const ProjectsList: React.FC = () => {
           {/* Projects Table */}
           <div className="flex-1 overflow-hidden">
             {/* Table Header */}
-            <div className="grid grid-cols-8 gap-2 px-2 py-1.5 text-xs text-[#969696] font-medium border-b border-[#3e3e42] bg-[#2d2d30]">
-              <div className="col-span-2 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('client')}>
+            <div className="grid grid-cols-8 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
+              <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => handleSort('client')}>
                 CLIENT<SortIcon column="client" />
               </div>
-              <div className="col-span-3 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('name')}>
+              <div className="col-span-3 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => handleSort('name')}>
                 PROJECT<SortIcon column="name" />
               </div>
-              <div className="col-span-1 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('type')}>
+              <div className="col-span-1 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => handleSort('type')}>
                 TYPE<SortIcon column="type" />
               </div>
-              <div className="col-span-2 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('status')}>
+              <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => handleSort('status')}>
                 STATUS<SortIcon column="status" />
               </div>
             </div>
@@ -1293,7 +1293,7 @@ const ProjectsList: React.FC = () => {
         </div>
 
         {/* Right Panel - Project Details */}
-        <div className="w-1/2 flex flex-col bg-[#2d2d30] min-w-0 min-h-0 overflow-y-auto">
+        <div className="w-1/2 flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto">
           {loading ? (
             <div className="p-4 space-y-3">
               <Skeleton rows={6} className="h-5" />
@@ -1301,23 +1301,23 @@ const ProjectsList: React.FC = () => {
           ) : selectedProject ? (
             <>
               {/* Project Header */}
-              <div className="p-4 border-b border-[#3e3e42]">
+              <div className="p-4 border-b border-[var(--border)]">
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h2 className="text-xl font-bold text-[#cccccc] mb-2">
+                    <h2 className="text-xl font-bold text-[var(--text)] mb-2">
                       {selectedProject.name}
                     </h2>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <div className="text-[#969696] text-xs">Client:</div>
-                        <div className="text-[#cccccc]">{selectedProject.client || 'No Client'}</div>
+                        <div className="text-[var(--muted)] text-xs">Client:</div>
+                        <div className="text-[var(--text)]">{selectedProject.client || 'No Client'}</div>
                       </div>
                       <div>
-                        <div className="text-[#969696] text-xs">Status:</div>
+                        <div className="text-[var(--muted)] text-xs">Status:</div>
                         <div className="relative status-dropdown-container">
                           <button
                             onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-                            className={`${getStatusColor(selectedProject.status || '')} hover:bg-[#3e3e42]/50 px-2 py-1 rounded text-sm transition-colors cursor-pointer flex items-center gap-1`}
+                            className={`${getStatusColor(selectedProject.status || '')} hover:bg-[var(--surfaceHover)] px-2 py-1 rounded text-sm transition-colors cursor-pointer flex items-center gap-1`}
                           >
                             {formatStatus(selectedProject.status || '')}
                             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1326,13 +1326,13 @@ const ProjectsList: React.FC = () => {
                           </button>
                           
                           {statusDropdownOpen && (
-                            <div className="absolute top-full left-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 min-w-[120px]">
+                            <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[120px]">
                               {editableStatusOptions.map((status) => (
                                 <button
                                   key={status}
                                   onClick={() => handleStatusChange(status)}
-                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-[#3e3e42] transition-colors first:rounded-t last:rounded-b ${
-                                    selectedProject.status === status ? 'bg-[#007acc]/20' : ''
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--cardHover)] transition-colors first:rounded-t last:rounded-b ${
+                                    selectedProject.status === status ? 'bg-[var(--surfaceOverlay)]' : ''
                                   }`}
                                 >
                                   <span className="flex items-center gap-2">
@@ -1345,20 +1345,20 @@ const ProjectsList: React.FC = () => {
                         </div>
                       </div>
                       <div>
-                        <div className="text-[#969696] text-xs">Project Number:</div>
-                        <div className="text-[#cccccc]">{selectedProject.projectNumber || 'No Number'}</div>
+                        <div className="text-[var(--muted)] text-xs">Project Number:</div>
+                        <div className="text-[var(--text)]">{selectedProject.projectNumber || 'No Number'}</div>
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <Link to={`/projects/${selectedProject.id}/edit`}>
-                      <button className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
+                      <button className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors">
                         Edit Project
                       </button>
                     </Link>
                     <button 
                       onClick={() => selectedProject.id && handleDelete(selectedProject.id)}
-                      className="px-2 py-0.5 text-xs rounded border bg-transparent border-[#3e3e42] text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-colors"
+                      className="px-2 py-0.5 text-xs rounded border bg-transparent border-[var(--border)] text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-colors"
                     >
                       Delete
                     </button>
@@ -1366,22 +1366,22 @@ const ProjectsList: React.FC = () => {
                 </div>
 
                 {selectedProject.description && (
-                  <div className="mt-3 pt-3 border-t border-[#3e3e42]">
-                    <div className="text-[#969696] text-xs mb-1">Description:</div>
-                    <div className="text-[#cccccc] text-sm">{selectedProject.description}</div>
+                  <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                    <div className="text-[var(--muted)] text-xs mb-1">Description:</div>
+                    <div className="text-[var(--text)] text-sm">{selectedProject.description}</div>
                   </div>
                 )}
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {/* Assignments Section */}
-                <div className="pb-4 border-b border-[#3e3e42]">
+                <div className="pb-4 border-b border-[var(--border)]">
                   <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-base font-semibold text-[#cccccc]">
+                    <h3 className="text-base font-semibold text-[var(--text)]">
                       Assignments
                     </h3>
                     <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-1 text-xs text-[#cbd5e1] cursor-pointer" title="Show only Team Members already staffing this project (people in departments already assigned here). Turn off to include everyone in the selected department scope.">
+                      <label className="flex items-center gap-1 text-xs text-[var(--text)] cursor-pointer" title="Show only Team Members already staffing this project (people in departments already assigned here). Turn off to include everyone in the selected department scope.">
                         <input
                           type="checkbox"
                           checked={candidatesOnly}
@@ -1389,7 +1389,7 @@ const ProjectsList: React.FC = () => {
                         />
                         <span>Team Members only</span>
                         <span
-                          className="ml-1 inline-flex items-center justify-center w-3 h-3 rounded-full bg-[#3e3e42] text-[#969696] cursor-help"
+                          className="ml-1 inline-flex items-center justify-center w-3 h-3 rounded-full bg-[var(--card)] text-[var(--muted)] cursor-help"
                           title="Show only Team Members already staffing this project (people in departments already assigned here). Turn off to include everyone in the selected department scope."
                           aria-label="Help: Team Members only filter"
                         >
@@ -1398,7 +1398,7 @@ const ProjectsList: React.FC = () => {
                       </label>
                       <button 
                         onClick={handleAddAssignment}
-                        className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors"
+                        className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors"
                       >
                         + Add Assignment
                       </button>
@@ -1412,10 +1412,10 @@ const ProjectsList: React.FC = () => {
                         <div key={assignment.id}>
                           {editingAssignment === assignment.id ? (
                             // Editing mode
-                            <div className="p-3 bg-[#3e3e42]/50 rounded border border-[#3e3e42]">
+                            <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]">
                               <div className="grid grid-cols-4 gap-4 items-center">
                                 {/* Person Name (read-only) */}
-                                <div className="text-[#cccccc]">{assignment.personName || 'Unknown'}</div>
+                                <div className="text-[var(--text)]">{assignment.personName || 'Unknown'}</div>
                                 
                                 {/* Role Input with Autocomplete */}
                                 <div className="relative">
@@ -1424,18 +1424,18 @@ const ProjectsList: React.FC = () => {
                                     placeholder="Role on project..."
                                     value={editData.roleSearch}
                                     onChange={(e) => handleRoleSearch(e.target.value)}
-                                    className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+                                    className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
                                     autoFocus
                                   />
                                   
                                   {/* Role Search Results Dropdown */}
                                   {roleSearchResults.length > 0 && (
-                                    <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
                                       {roleSearchResults.map((role) => (
                                         <button
                                           key={role}
                                           onClick={() => handleRoleSelect(role)}
-                                          className="w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0"
+                                          className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0"
                                         >
                                           {role}
                                         </button>
@@ -1454,7 +1454,7 @@ const ProjectsList: React.FC = () => {
                                     placeholder="Hours"
                                     value={editData.currentWeekHours}
                                     onChange={(e) => setEditData(prev => ({ ...prev, currentWeekHours: parseFloat(e.target.value) || 0 }))}
-                                    className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                    className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                   />
                                 </div>
 
@@ -1462,13 +1462,13 @@ const ProjectsList: React.FC = () => {
                                 <div className="flex gap-1">
                                   <button
                                     onClick={() => assignment.id && handleSaveEdit(assignment.id)}
-                                    className="px-2 py-1 text-xs rounded border bg-[#007acc] border-[#007acc] text-white hover:bg-[#005fa3] transition-colors"
+                                    className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] transition-colors"
                                   >
                                     Save
                                   </button>
                                   <button
                                     onClick={handleCancelEdit}
-                                    className="px-2 py-1 text-xs rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42] transition-colors"
+                                    className="px-2 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
                                   >
                                     Cancel
                                   </button>
@@ -1477,11 +1477,11 @@ const ProjectsList: React.FC = () => {
                             </div>
                           ) : (
                             // Display mode
-                            <div className="flex justify-between items-center p-2 bg-[#3e3e42]/30 rounded">
+                            <div className="flex justify-between items-center p-2 bg-[var(--cardHover)] rounded">
                               <div className="flex-1">
                                 <div className="grid grid-cols-3 gap-4">
                                   <div>
-                                    <div className="text-[#cccccc]">{assignment.personName || 'Unknown'}</div>
+                                    <div className="text-[var(--text)]">{assignment.personName || 'Unknown'}</div>
                                     {/* Person Skills (Read-only) */}
                                     <div className="flex flex-wrap gap-1 mt-1">
                                       {assignment.personSkills?.filter(skill => skill.skillType === 'strength').slice(0, 3).map((skill, index) => (
@@ -1490,18 +1490,18 @@ const ProjectsList: React.FC = () => {
                                         </span>
                                       ))}
                                       {assignment.personSkills?.filter(skill => skill.skillType === 'strength').length === 0 && (
-                                        <span className="text-[#969696] text-xs">No skills listed</span>
+                                        <span className="text-[var(--muted)] text-xs">No skills listed</span>
                                       )}
                                     </div>
                                   </div>
-                                  <div className="text-[#969696]">{assignment.roleOnProject || 'Team Member'}</div>
-                                  <div className="text-[#969696]">{getCurrentWeekHours(assignment)}h</div>
+                                  <div className="text-[var(--muted)]">{assignment.roleOnProject || 'Team Member'}</div>
+                                  <div className="text-[var(--muted)]">{getCurrentWeekHours(assignment)}h</div>
                                 </div>
                               </div>
                               <div className="flex gap-1">
                                 <button 
                                   onClick={() => handleEditAssignment(assignment)}
-                                  className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[#cccccc] hover:bg-[#3e3e42] hover:border-[#3e3e42] transition-colors"
+                                  className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[var(--text)] hover:bg-[var(--cardHover)] hover:border-[var(--border)] transition-colors"
                                 >
                                   Edit
                                 </button>
@@ -1518,18 +1518,18 @@ const ProjectsList: React.FC = () => {
                       ))
                     ) : !showAddAssignment ? (
                       <div className="text-center py-8">
-                        <div className="text-[#969696] text-sm">No assignments yet</div>
-                        <div className="text-[#969696] text-xs mt-1">Click "Add Assignment" to get started</div>
+                        <div className="text-[var(--muted)] text-sm">No assignments yet</div>
+                        <div className="text-[var(--muted)] text-xs mt-1">Click "Add Assignment" to get started</div>
                       </div>
                     ) : null}
 
                     {/* Add Assignment Form */}
                     {showAddAssignment && (
-                      <div className="p-3 bg-[#3e3e42]/50 rounded border border-[#3e3e42]">
+                      <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]">
                         <div className="grid grid-cols-3 gap-4 mb-3">
-                          <div className="text-[#969696] text-xs uppercase font-medium">PERSON</div>
-                          <div className="text-[#969696] text-xs uppercase font-medium">ROLE</div>
-                          <div className="text-[#969696] text-xs uppercase font-medium">ACTIONS</div>
+                          <div className="text-[var(--muted)] text-xs uppercase font-medium">PERSON</div>
+                          <div className="text-[var(--muted)] text-xs uppercase font-medium">ROLE</div>
+                          <div className="text-[var(--muted)] text-xs uppercase font-medium">ACTIONS</div>
                         </div>
                         
                         <div className="grid grid-cols-3 gap-4 items-center">
@@ -1547,7 +1547,7 @@ const ProjectsList: React.FC = () => {
                               aria-haspopup="listbox"
                               aria-owns="person-search-results"
                               aria-describedby="person-search-help"
-                              className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+                              className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
                               autoFocus
                             />
                             
@@ -1566,14 +1566,14 @@ const ProjectsList: React.FC = () => {
                               <div 
                                 id="person-search-results"
                                 role="listbox"
-                                className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto"
+                                className="absolute top-full left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-32 overflow-y-auto"
                               >
                                 {personSearchResults.map((person, index) => (
                                   <button
                                     key={person.id}
                                     onClick={() => handlePersonSelect(person)}
-                                    className={`w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0 ${
-                                      selectedPersonIndex === index ? 'bg-[#007acc]/30 border-[#007acc]' : ''
+                                    className={`w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
+                                      selectedPersonIndex === index ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
                                     }`}
                                   >
                                     <div className="flex items-center justify-between">
@@ -1585,7 +1585,7 @@ const ProjectsList: React.FC = () => {
                                       )}
                                     </div>
                                     <div className="flex justify-between items-center">
-                                      <div className="text-[#969696]">{person.role}</div>
+                                      <div className="text-[var(--muted)]">{person.role}</div>
                                       {person.availableHours !== undefined && (
                                         <div className="flex items-center gap-2">
                                           <span className={`text-xs px-1 py-0.5 rounded ${
@@ -1596,7 +1596,7 @@ const ProjectsList: React.FC = () => {
                                           }`}>
                                             {person.availableHours}h available
                                           </span>
-                                          <span className="text-[#969696] text-xs">
+                                          <span className="text-[var(--muted)] text-xs">
                                             ({person.utilizationPercent}% used)
                                           </span>
                                         </div>
@@ -1615,17 +1615,17 @@ const ProjectsList: React.FC = () => {
                               placeholder="Role on project..."
                               value={newAssignment.roleSearch}
                               onChange={(e) => handleNewAssignmentRoleSearch(e.target.value)}
-                              className="w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+                              className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
                             />
                             
                             {/* Role Search Results Dropdown */}
                             {roleSearchResults.length > 0 && (
-                              <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
+                              <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
                                 {roleSearchResults.map((role) => (
                                   <button
                                     key={role}
                                     onClick={() => handleNewAssignmentRoleSelect(role)}
-                                    className="w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0"
+                                    className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0"
                                   >
                                     {role}
                                   </button>
@@ -1639,13 +1639,13 @@ const ProjectsList: React.FC = () => {
                             <button
                               onClick={handleSaveAssignment}
                               disabled={!newAssignment.selectedPerson}
-                              className="px-2 py-1 text-xs rounded border bg-[#007acc] border-[#007acc] text-white hover:bg-[#005fa3] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                               Save
                             </button>
                             <button
                               onClick={handleCancelAddAssignment}
-                              className="px-2 py-1 text-xs rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42] transition-colors"
+                              className="px-2 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
                             >
                               Cancel
                             </button>
@@ -1664,7 +1664,7 @@ const ProjectsList: React.FC = () => {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-[#969696]">
+              <div className="text-center text-[var(--muted)]">
                 <div className="text-lg mb-2">Select a project</div>
                 <div className="text-sm">Choose a project from the list to view details</div>
               </div>
@@ -1690,13 +1690,13 @@ function VirtualizedProjectsList({
   onSelect: (p: Project, index: number) => void;
 }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const enableVirtual = projects.length > 200;
+  const enableVirtual = getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
 
   if (projects.length === 0) {
     return (
       <div className="overflow-y-auto h-full">
         <div className="flex items-center justify-center py-12">
-          <div className="text-center text-[#969696]">
+          <div className="text-center text-[var(--muted)]">
             <div className="text-lg mb-2">No projects found</div>
             <div className="text-sm">Try adjusting your filters or create a new project</div>
           </div>
@@ -1712,17 +1712,17 @@ function VirtualizedProjectsList({
           <div
             key={project.id}
             onClick={() => onSelect(project, index)}
-            className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
-              selectedProjectId === project.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
+            className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+              selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
             }`}
             tabIndex={0}
           >
-            <div className="col-span-2 text-[#969696] text-xs">{project.client || 'No Client'}</div>
+            <div className="col-span-2 text-[var(--muted)] text-xs">{project.client || 'No Client'}</div>
             <div className="col-span-3">
-              <div className="text-[#cccccc] font-medium leading-tight">{project.name}</div>
-              <div className="text-[#969696] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
+              <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
+              <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
             </div>
-            <div className="col-span-1 text-[#969696] text-xs">{formatStatus(project.status || '')}</div>
+            <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
             <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
           </div>
         ))}
@@ -1748,17 +1748,17 @@ function VirtualizedProjectsList({
               key={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => onSelect(project, v.index)}
-              className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
-                selectedProjectId === project.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
+              className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+                selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
               }`}
               tabIndex={0}
             >
-              <div className="col-span-2 text-[#969696] text-xs">{project.client || 'No Client'}</div>
+              <div className="col-span-2 text-[var(--muted)] text-xs">{project.client || 'No Client'}</div>
               <div className="col-span-3">
-                <div className="text-[#cccccc] font-medium leading-tight">{project.name}</div>
-                <div className="text-[#969696] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
+                <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
+                <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
               </div>
-              <div className="col-span-1 text-[#969696] text-xs">{formatStatus(project.status || '')}</div>
+              <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
               <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
             </div>
           );
@@ -1767,6 +1767,28 @@ function VirtualizedProjectsList({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
