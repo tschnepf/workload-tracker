@@ -113,16 +113,20 @@ const MilestoneCalendarPage: React.FC = () => {
             <p className="text-[#969696] mt-1">Weeks start on Sunday; current week at top</p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={goPrev} className="px-3 py-1.5 text-sm rounded bg-[#3e3e42] text-[#cbd5e1] hover:bg-[#4e4e52]">&lt; Prev Week</button>
-            <button onClick={goNext} className="px-3 py-1.5 text-sm rounded bg-[#3e3e42] text-[#cbd5e1] hover:bg-[#4e4e52]">Next Week &gt;</button>
+            <button onClick={goPrev} className="px-3 py-1.5 text-sm rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]">&lt; Prev Week</button>
+            <button onClick={goNext} className="px-3 py-1.5 text-sm rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]">Next Week &gt;</button>
             <div className="flex items-center gap-2 ml-2">
-              <span className="text-sm text-[#cbd5e1]">Weeks:</span>
+              <span className="text-sm text-[var(--muted)]">Weeks:</span>
               {[8, 12, 16].map((w) => (
                 <button
                   key={w}
                   onClick={() => setWeeksCount(w)}
                   aria-pressed={weeksCount === w}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${weeksCount === w ? "bg-[#007acc] text-white" : "bg-[#3e3e42] text-[#cbd5e1] hover:bg-[#4e4e52]"}`}
+                  className={`px-2 py-1 text-xs rounded border transition-colors ${
+                    weeksCount === w
+                      ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                      : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'
+                  }`}
                 >
                   {w}
                 </button>
