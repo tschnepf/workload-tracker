@@ -53,7 +53,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const statusDropdown = useDropdownManager<string>();
   const { emitStatusChange } = useProjectStatusSubscription({ debug: false });
   const projectStatus = useProjectStatus({
-    onSuccess: (pid, newStatus) => emitStatusChange({ projectId: pid, newStatus }),
+    onSuccess: (pid, newStatus) => {
+      const p = projects.find(x => x.id === pid);
+      const oldStatus = (p?.status as any) || 'active';
+      emitStatusChange(pid, oldStatus, newStatus);
+    },
     getCurrentStatus: (pid) => {
       const p = projects.find(x => x.id === pid);
       return (p?.status as any) || 'active';
@@ -753,20 +757,24 @@ const ProjectAssignmentsGrid: React.FC = () => {
     <Layout>
       <div className="flex-1 flex flex-col min-w-0">
         {/* Sticky Header */}
-        <div ref={headerRef} className="sticky top-0 bg-[#1e1e1e] border-b border-[#3e3e42] z-30 px-6 py-4">
+        <div ref={headerRef} className="sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] z-30 px-6 py-4">
           {/* Top row: title + subtitle (left), snapshot chip (right) */}
           <div className="flex items-start justify-between gap-6">
             <div>
-              <h1 className="text-2xl font-bold text-[#cccccc]">Project Assignments</h1>
-              <p className="text-[#969696] text-sm mt-1">Manage team workload allocation across {weeks.length} weeks</p>
+              <h1 className="text-2xl font-bold text-[var(--text)]">Project Assignments</h1>
+              <p className="text-[var(--muted)] text-sm mt-1">Manage team workload allocation across {weeks.length} weeks</p>
               {/* Weeks selector + People View link (left, under subtitle) */}
-              <div className="mt-2 flex items-center gap-2 text-xs text-[#969696]">
+              <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
                 <span>Weeks</span>
                 {[8,12,16,20].map(n => (
                   <button
                     key={n}
                     onClick={() => setWeeksHorizon(n)}
-                    className={`px-2 py-0.5 rounded border ${weeksHorizon===n?'border-[#007acc] text-[#e0e0e0] bg-[#007acc]/20':'border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                    className={`px-2 py-0.5 rounded border text-xs transition-colors ${
+                      weeksHorizon===n
+                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                        : 'bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+                    }`}
                   >
                     {n}
                   </button>
@@ -778,7 +786,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                   return (
                     <a
                       href={href}
-                      className="ml-2 px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
+                      className="ml-2 px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
                     >
                       People View
                     </a>
@@ -792,7 +800,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border ${
                   isSnapshotMode
                     ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'
-                    : 'bg-[#3e3e42] text-[#bbbbbb] border-[#4e4e52]'
+                    : 'bg-[var(--card)] text-[var(--muted)] border-[var(--border)]'
                 }`}
               >
                 {isSnapshotMode ? 'Snapshot Mode' : 'Legacy Mode'}
@@ -807,7 +815,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 rightActions={(
                   <>
                     <button
-                      className={`px-2 py-0.5 rounded border border-[#3e3e42] text-xs transition-colors ${loadingAssignments.size > 0 ? 'text-[#969696] cursor-wait' : 'text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      className={`px-2 py-0.5 rounded border border-[var(--border)] text-xs transition-colors ${
+                        loadingAssignments.size > 0
+                          ? 'text-[var(--muted)] cursor-wait'
+                          : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+                      }`}
                       title="Expand all projects and refresh their assignments"
                       onClick={async () => {
                         try {
@@ -825,7 +837,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       {loadingAssignments.size > 0 ? 'Expanding…' : 'Expand All'}
                     </button>
                     <button
-                      className="px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
+                      className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
                       title="Collapse all projects"
                       onClick={() => {
                         setProjects(prev => prev.map(p => ({ ...p, isExpanded: false })));
@@ -835,7 +847,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       Collapse All
                     </button>
                     <button
-                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading || loadingAssignments.size > 0 ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${
+                        loading || loadingAssignments.size > 0
+                          ? 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] cursor-wait'
+                          : 'bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+                      }`}
                       title="Refresh assignments for all projects"
                       onClick={refreshAllAssignments}
                       disabled={loading || loadingAssignments.size > 0}
@@ -855,8 +871,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
                     onClick={() => toggleStatusFilter(opt)}
                     className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                       isActive
-                        ? 'bg-[#007acc] border-[#007acc] text-white'
-                        : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
+                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                        : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
                     }`}
                     aria-pressed={isActive}
                     aria-label={`Filter: ${opt}`}
@@ -871,11 +887,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
         </div>
 
         {/* Sticky week header aligned to measured header height */}
-        <div ref={headerScrollRef} className="sticky bg-[#2d2d30] border-b border-[#3e3e42] z-20 overflow-x-auto px-6" style={{ top: headerHeight }}>
+        <div ref={headerScrollRef} className="sticky bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto px-6" style={{ top: headerHeight }}>
           <div style={{ minWidth: totalMinWidth }}>
             <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
               <div
-                className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group cursor-pointer hover:text-[#e0e0e0]"
+                className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group cursor-pointer hover:text-[var(--text)]"
                 onClick={() => toggleSort('client')}
                 role="button"
                 aria-label="Sort by client"
@@ -883,13 +899,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
               >
                 Client
                 <div
-                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[#007acc]/50 transition-colors"
+                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--primaryHover)] transition-colors"
                   onMouseDown={(e) => startColumnResize('client', e)}
                   title="Drag to resize client column"
                 />
               </div>
               <div
-                className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group cursor-pointer hover:text-[#e0e0e0]"
+                className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group cursor-pointer hover:text-[var(--text)]"
                 onClick={() => toggleSort('project')}
                 role="button"
                 aria-label="Sort by project"
@@ -897,23 +913,23 @@ const ProjectAssignmentsGrid: React.FC = () => {
               >
                 Project
                 <div
-                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[#007acc]/50 transition-colors"
+                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--primaryHover)] transition-colors"
                   onMouseDown={(e) => startColumnResize('project', e)}
                   title="Drag to resize project column"
                 />
               </div>
-              <div className="text-center text-xs text-[#969696] px-1">+/-</div>
+              <div className="text-center text-xs text-[var(--muted)] px-1">+/-</div>
               {weeks.map((week, index) => (
                 <div
                   key={week.date}
-                  className="text-center px-1 select-none cursor-pointer hover:text-[#e0e0e0]"
+                  className="text-center px-1 select-none cursor-pointer hover:text-[var(--text)]"
                   role="columnheader"
                   aria-label={`Week starting ${week.display}`}
                   onClick={() => toggleSort('deliverable')}
                   title="Sort by next deliverable date"
                 >
-                  <div className="text-xs font-medium text-[#cccccc]">{week.display}</div>
-                  <div className="text-[10px] text-[#757575]">W{index + 1}</div>
+                  <div className="text-xs font-medium text-[var(--text)]">{week.display}</div>
+                  <div className="text-[10px] text-[var(--muted)]">W{index + 1}</div>
                 </div>
               ))}
             </div>
@@ -923,16 +939,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
         {/* Projects grid (totals by week, server authoritative) */}
         <div ref={bodyScrollRef} className="px-6 py-4 overflow-x-auto">
           {!loading && !error && projects.length === 0 && (
-            <div className="text-[#969696]">No projects found in scope.</div>
+            <div className="text-[var(--muted)]">No projects found in scope.</div>
           )}
 
           {!loading && !error && projects.length > 0 && (
             <div className="space-y-1" style={{ minWidth: totalMinWidth }}>
               {sortedProjects.map((p) => (
-                <div key={p.id} className="border-b border-[#3e3e42] last:border-b-0">
+                <div key={p.id} className="border-b border-[var(--border)] last:border-b-0">
                   {/* Project summary row */}
                   <div
-                    className="grid items-stretch gap-px p-2 hover:bg-[#2d2d30]/50 transition-colors cursor-pointer"
+                    className="grid items-stretch gap-px p-2 hover:bg-[var(--surfaceHover)] transition-colors cursor-pointer"
                     style={{ gridTemplateColumns: gridTemplate }}
                     onClick={async () => {
                       const willExpand = !p.isExpanded;
@@ -975,7 +991,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                     }}
                   >
                     {/* Client with chevron on left */}
-                    <div className="pl-4 pr-2 py-2 text-[#cccccc] text-sm flex items-center gap-2 truncate" title={p.client || ''}>
+                    <div className="pl-4 pr-2 py-2 text-[var(--text)] text-sm flex items-center gap-2 truncate" title={p.client || ''}>
                       <svg
                         className={`w-3 h-3 transition-transform ${p.isExpanded ? 'rotate-90' : ''}`}
                         viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"
@@ -985,7 +1001,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       <span className="truncate">{p.client || ''}</span>
                     </div>
                     {/* Project name (no chevron) with status aligned to right */}
-                    <div className="pr-2 py-2 text-[#cccccc] text-sm flex items-center" title={p.name}>
+                    <div className="pr-2 py-2 text-[var(--text)] text-sm flex items-center" title={p.name}>
                       <div className="min-w-0 truncate">
                         <span className="truncate">{p.name}</span>
                       </div>
@@ -1023,7 +1039,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                     <div className="py-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                       {/* Add person */}
                       <button
-                        className="w-7 h-7 flex items-center justify-center text-[#cccccc] hover:text-white hover:bg-[#3e3e42] rounded"
+                        className="w-7 h-7 flex items-center justify-center text-[var(--text)] hover:text-[var(--text)] hover:bg-[var(--cardHover)] rounded"
                         onClick={() => { setIsAddingForProject(prev => prev === p.id ? null : p.id!); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1); }}
                         title="Add person"
                       >
@@ -1042,7 +1058,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                           {entries.length > 0 && (
                             <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px]">
                               {entries.slice(0,3).map((e, idx) => (
-                                <div key={idx} className="w-[3px] rounded" style={{ background: typeColors[e.type] || '#007acc' }} />
+                                <div key={idx} className="w-[3px] rounded" style={{ background: typeColors[e.type] || 'var(--primary)' }} />
                               ))}
                             </div>
                           )}
@@ -1093,15 +1109,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                 }
                               }}
                               placeholder="Search people by nameâ€¦"
-                              className="w-full h-7 bg-[#3e3e42] border border-[#5a5a5e] rounded px-2 text-[#e0e0e0] text-xs"
+                              className="w-full h-7 bg-[var(--card)] border border-[var(--border)] rounded px-2 text-[var(--text)] text-xs"
                             />
                             {/* Dropdown */}
                             {personResults.length > 0 && (
-                              <div className="mt-1 max-h-48 overflow-auto bg-[#2a2a2a] border border-[#3e3e42] rounded shadow-lg">
+                              <div className="mt-1 max-h-48 overflow-auto bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg">
                                 {personResults.map((r, idx) => (
                                   <div
                                     key={r.id}
-                                    className={`px-2 py-1 text-xs cursor-pointer ${idx===selectedPersonIndex ? 'bg-[#007acc]/30 text-[#e0e0e0]' : 'text-[#cccccc] hover:bg-[#2d2d30]'}`}
+                                    className={`px-2 py-1 text-xs cursor-pointer ${idx===selectedPersonIndex ? 'bg-[var(--surfaceOverlay)] text-[var(--text)]' : 'text-[var(--text)] hover:bg-[var(--cardHover)]'}`}
                                     onMouseDown={async () => {
                                       if (!p.id) return;
                                       try {
@@ -1129,24 +1145,24 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       {/* Loading skeleton for assignments */}
                       {loadingAssignments.has(p.id!) && (
                         <>
-                          <div className="pl-8 pr-2 py-2 text-[#969696] text-xs italic col-span-3">Loading assignmentsâ€¦</div>
+                          <div className="pl-8 pr-2 py-2 text-[var(--muted)] text-xs italic col-span-3">Loading assignments…</div>
                           {weeks.map((w) => (
-                            <div key={w.date} className="py-2 border-l border-[#3e3e42]">
-                              <div className="mx-auto w-10 h-4 bg-[#2d2d30] animate-pulse rounded" />
+                            <div key={w.date} className="py-2 border-l border-[var(--border)]">
+                              <div className="mx-auto w-10 h-4 bg-[var(--card)] animate-pulse rounded" />
                             </div>
                           ))}
                         </>
                       )}
                       {/* Render rows */}
                       {!loadingAssignments.has(p.id!) && p.assignments.map(asn => (
-                        <div key={asn.id} className="grid gap-px p-1 bg-[#252526] hover:bg-[#2d2d30] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
-                          <div className="pl-8 pr-2 py-2 text-[#cccccc] text-xs truncate" title={asn.personName || String(asn.person)}>
+                        <div key={asn.id} className="grid gap-px p-1 bg-[var(--surface)] hover:bg-[var(--cardHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
+                          <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={asn.personName || String(asn.person)}>
                             {asn.personName || `Person #${asn.person}`}
                           </div>
-                          <div className="pr-2 py-2 text-[#969696] text-xs truncate"></div>
+                          <div className="pr-2 py-2 text-[var(--muted)] text-xs truncate"></div>
                           <div className="py-2 flex items-center justify-center">
                             <button
-                              className="w-5 h-5 flex items-center justify-center text-[#969696] hover:text-red-400 hover:bg-red-500/20 rounded"
+                              className="w-5 h-5 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded"
                               title="Remove assignment"
                               onClick={async () => {
                                 if (!asn.id || !p.id) return;
@@ -1176,7 +1192,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                             return (
                               <div
                                 key={key}
-                                className={`relative cursor-pointer transition-colors border-l border-[#3e3e42] ${selection.isCellSelected(String(asn.id), w.date) ? 'bg-[#007acc]/20 border-[#007acc]' : 'hover:bg-[#3e3e42]/50'}`}
+                                className={`relative cursor-pointer transition-colors border-l border-[var(--border)] ${selection.isCellSelected(String(asn.id), w.date) ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : 'hover:bg-[var(--surfaceHover)]'}`}
                                 onMouseDown={(e) => { e.preventDefault(); selection.onCellMouseDown(String(asn.id), w.date, e as any); }}
                                 onMouseEnter={() => selection.onCellMouseEnter(String(asn.id), w.date)}
                                 onClick={(e) => selection.onCellSelect(String(asn.id), w.date, (e as any).shiftKey)}
@@ -1226,23 +1242,23 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                         setEditingCell(null);
                                       }
                                     }}
-                                    className="w-full h-8 px-1 text-xs bg-[#1e1e1e] text-[#cccccc] border border-[#007acc] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield] text-center"
+                                    className="w-full h-8 px-1 text-xs bg-[var(--bg)] text-[var(--text)] border border-[var(--primary)] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield] text-center"
                                   />
                                 ) : (
-                                  <div className="h-8 flex items-center justify-center text-xs text-[#cccccc]">
+                                  <div className="h-8 flex items-center justify-center text-xs text-[var(--text)]">
                                     {hours > 0 ? hours : ''}
                                   </div>
                                 )}
                                 {((deliverableTypesByProjectWeek[p.id!] || {})[w.date] || []).length > 0 && (
                                   <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px] pointer-events-none">
                                     {((deliverableTypesByProjectWeek[p.id!] || {})[w.date] || []).slice(0,3).map((e, idx) => (
-                                      <div key={idx} className="w-[3px] rounded" style={{ background: typeColors[e.type] || '#007acc' }} />
+                                      <div key={idx} className="w-[3px] rounded" style={{ background: typeColors[e.type] || 'var(--primary)' }} />
                                     ))}
                                   </div>
                                 )}
                                 {isSaving && (
                                   <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <span className="inline-block w-3 h-3 border-2 border-[#969696] border-t-transparent rounded-full animate-spin" />
+                                    <span className="inline-block w-3 h-3 border-2 border-[var(--muted)] border-t-transparent rounded-full animate-spin" />
                                   </span>
                                 )}
                               </div>
@@ -1252,14 +1268,14 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       ))}
                       {/* Empty state */}
                       {!loadingAssignments.has(p.id!) && p.assignments.length === 0 && (
-                        <div className="grid gap-px p-1 bg-[#252526]" style={{ gridTemplateColumns: gridTemplate }}>
+                        <div className="grid gap-px p-1 bg-[var(--surface)]" style={{ gridTemplateColumns: gridTemplate }}>
                           <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
-                            <div className="text-[#757575] text-xs italic">No assignments</div>
+                            <div className="text-[var(--muted)] text-xs italic">No assignments</div>
                           </div>
                           <div></div>
                           {weeks.map((week) => (
                             <div key={week.date} className="flex items-center justify-center">
-                              <div className="w-12 h-6 flex items-center justify-center text-[#757575] text-xs">-</div>
+                              <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs">-</div>
                             </div>
                           ))}
                         </div>
@@ -1272,7 +1288,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
           )}
 
           {/* Status Bar (Utilization Legend) */}
-          <div className="flex justify-between items-center text-xs text-[#969696] px-1 mt-2">
+          <div className="flex justify-between items-center text-xs text-[var(--muted)] px-1 mt-2">
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>

@@ -138,12 +138,12 @@ const AssignmentList: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-[#cccccc]">Project Assignments</h1>
+            <h1 className="text-2xl font-bold text-[var(--text)]">Project Assignments</h1>
             {/* Global Department info pill */}
             {deptState.selectedDepartmentId != null && (
               <div className="mt-2 flex items-center gap-2 text-xs">
-                <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-[#3e3e42] text-[#cbd5e1] border border-[#3e3e42]">
-                  Filtered by: <strong className="text-[#e5e7eb]">
+                <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-[var(--card)] text-[var(--text)] border border-[var(--border)]">
+                  Filtered by: <strong className="text-[var(--text)]">
                     {(() => {
                       const d = departments.find(d => d.id === Number(deptState.selectedDepartmentId));
                       return d?.name || `Dept ${deptState.selectedDepartmentId}`;
@@ -152,7 +152,7 @@ const AssignmentList: React.FC = () => {
                 </span>
                 <button
                   type="button"
-                  className="px-2 py-1 rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]"
+                  className="px-2 py-1 rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
                   onClick={() => {
                     const input = document.getElementById('global-dept-filter-input') as HTMLInputElement | null;
                     input?.focus();
@@ -163,7 +163,7 @@ const AssignmentList: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  className="px-2 py-1 rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]"
+                  className="px-2 py-1 rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
                   onClick={async () => {
                     try { await navigator.clipboard.writeText(window.location.href); } catch {}
                   }}
