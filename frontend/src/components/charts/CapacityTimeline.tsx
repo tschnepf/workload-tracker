@@ -83,7 +83,7 @@ export const CapacityTimeline: React.FC<CapacityTimelineProps> = ({ weeklyData, 
 
   const data = useMemo(() => aggregate(weeklyData, scale), [weeklyData, scale]);
 
-  if (!data.length) return <div className="text-[#969696]">No data</div>;
+  if (!data.length) return <div className="text-[var(--muted)]">No data</div>;
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<{
@@ -221,7 +221,7 @@ export const CapacityTimeline: React.FC<CapacityTimelineProps> = ({ weeklyData, 
 };
 
 const LegendDot: React.FC<{ color: string; label: string; box?: boolean }> = ({ color, label, box }) => (
-  <div className="flex items-center gap-2 text-[#cbd5e1] text-xs">
+  <div className="flex items-center gap-2 text-[var(--text)] text-xs">
     <span
       style={{ background: color, width: 12, height: 6, display: 'inline-block', borderRadius: box ? 2 : 999 }}
       aria-hidden

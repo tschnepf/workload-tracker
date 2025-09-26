@@ -95,40 +95,48 @@ const TeamForecastPage: React.FC = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-[#cccccc]">Team Forecast & Project Timeline</h1>
-            <p className="text-[#969696] mt-1">Team utilization outlook and per-project weekly timeline</p>
+            <h1 className="text-3xl font-bold text-[var(--text)]">Team Forecast & Project Timeline</h1>
+            <p className="text-[var(--muted)] mt-1">Team utilization outlook and per-project weekly timeline</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-[#cbd5e1]">Weeks:</span>
+            <span className="text-sm text-[var(--muted)]">Weeks:</span>
             {[8, 12, 16].map(w => (
               <button key={w} onClick={() => setWeeks(w)} aria-pressed={weeks===w}
-                className={`px-2 py-1 text-xs rounded ${weeks===w? 'bg-[#007acc] text-white':'bg-[#3e3e42] text-[#cbd5e1] hover:bg-[#4e4e52]'}`}>
+                className={`px-2 py-1 text-xs rounded border transition-colors ${
+                  weeks===w
+                    ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                    : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'
+                }`}>
                 {w}
               </button>
             ))}
           </div>
         </div>
 
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
+        <Card className="bg-[var(--card)] border-[var(--border)]">
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-[#cccccc] font-semibold">Capacity Timeline</div>
+              <div className="text-[var(--text)] font-semibold">Capacity Timeline</div>
               <div className="flex items-center gap-2">
                 {/* Scale toggles */}
                 {(['week','month','quarter','year'] as const).map(s => (
                   <button key={s} onClick={()=> setScale(s)} aria-pressed={scale===s}
-                    className={`px-2 py-1 text-xs rounded ${scale===s? 'bg-[#007acc] text-white':'bg-[#3e3e42] text-[#cbd5e1] hover:bg-[#4e4e52]'}`}>{s[0].toUpperCase()+s.slice(1)}</button>
+                    className={`px-2 py-1 text-xs rounded border transition-colors ${
+                      scale===s
+                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                        : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'
+                    }`}>{s[0].toUpperCase()+s.slice(1)}</button>
                 ))}
                 {/* Department filter (bound to global) */}
                 <select value={deptState.selectedDepartmentId ?? ''} onChange={(e)=> setDepartment(e.target.value ? Number(e.target.value) : null)}
-                  className="ml-3 px-2 py-1 text-xs bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cbd5e1] focus:border-[#007acc]">
+                  className="ml-3 px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)]">
                   <option value="">All Departments</option>
                   {depts.map(d => <option key={d.id} value={d.id as number}>{d.name}</option>)}
                 </select>
               </div>
             </div>
             {loading ? (
-              <div className="text-[#969696]">Loading forecast...</div>
+              <div className="text-[var(--muted)]">Loading forecast...</div>
             ) : error ? (
               <div className="text-red-400">{error}</div>
             ) : (
@@ -137,12 +145,12 @@ const TeamForecastPage: React.FC = () => {
           </div>
         </Card>
 
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
+        <Card className="bg-[var(--card)] border-[var(--border)]">
           <div className="p-4 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="text-[#cccccc] font-semibold">Project Timeline</div>
+              <div className="text-[var(--text)] font-semibold">Project Timeline</div>
               <select value={selectedProject} onChange={(e)=> setSelectedProject(e.target.value? Number(e.target.value):'')}
-                className="px-2 py-1 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cbd5e1] focus:border-[#007acc] focus:outline-none min-w-[220px]">
+                className="px-2 py-1 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none min-w-[220px]">
                 <option value="">Select a project...</option>
                 {projects.map(p => (
                   <option key={p.id} value={p.id as number}>{p.name}</option>
@@ -150,9 +158,9 @@ const TeamForecastPage: React.FC = () => {
               </select>
             </div>
             {selectedProject === '' ? (
-              <div className="text-[#969696]">Choose a project to view its weekly assignment timeline and deliverable markers.</div>
+              <div className="text-[var(--muted)]">Choose a project to view its weekly assignment timeline and deliverable markers.</div>
             ) : projLoading ? (
-              <div className="text-[#969696]">Loading project data...</div>
+              <div className="text-[var(--muted)]">Loading project data...</div>
             ) : (
               <ProjectTimeline weeks={weeks} weekStarts={weekStarts} weeklyTotals={projWeeklyTotals} deliverables={projDeliverables} />
             )}
@@ -166,7 +174,7 @@ const TeamForecastPage: React.FC = () => {
 // Old ForecastChart removed in favor of CapacityTimeline
 
 const ProjectTimeline: React.FC<{ weeks:number; weekStarts:string[]; weeklyTotals:number[]; deliverables: Deliverable[] }>=({ weeks, weekStarts, weeklyTotals, deliverables })=>{
-  if (!weekStarts || weekStarts.length===0) return <div className="text-[#969696]">No data</div>;
+  if (!weekStarts || weekStarts.length===0) return <div className="text-[var(--muted)]">No data</div>;
   const max = Math.max(10, ...weeklyTotals) * 1.1;
   return (
     <div className="space-y-2">
@@ -176,16 +184,16 @@ const ProjectTimeline: React.FC<{ weeks:number; weekStarts:string[]; weeklyTotal
             const h = Math.max(2, Math.round((v/max)*120));
             return (
               <div key={i} className="flex flex-col items-center">
-                <div title={`${v}h`} className="w-full bg-[#3e3e42] rounded" style={{ height: 124 }}>
-                  <div className="bg-[#3b82f6] rounded" style={{ height: h }} />
+                <div title={`${v}h`} className="w-full bg-[var(--border)] rounded" style={{ height: 124 }}>
+                  <div className="bg-[var(--primary)] rounded" style={{ height: h }} />
                 </div>
-                <div className="text-[10px] text-[#94a3b8] mt-1">{weekStarts[i].slice(5)}</div>
+                <div className="text-[10px] text-[var(--muted)] mt-1">{weekStarts[i].slice(5)}</div>
               </div>
             );
           })}
         </div>
       </div>
-      <div className="text-[#cbd5e1] text-xs">Deliverables: {deliverables?.length || 0}</div>
+      <div className="text-[var(--text)] text-xs">Deliverables: {deliverables?.length || 0}</div>
     </div>
   );
 }
