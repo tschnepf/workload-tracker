@@ -157,13 +157,13 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
   };
 
   return (
-    <div className="border-t border-[#3e3e42] pt-4">
+    <div className="border-t border-[var(--border)] pt-4">
       <div className="flex justify-between items-center mb-2">
-        <h3 className="text-base font-semibold text-[#cccccc]">Deliverables</h3>
+        <h3 className="text-base font-semibold text-[var(--text)]">Deliverables</h3>
         <button
           data-testid="add-deliverable-btn"
           onClick={handleAddDeliverable}
-          className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors"
+          className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors"
         >
           + Add Deliverable
         </button>
@@ -176,11 +176,11 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
       )}
 
       {loading ? (
-        <div className="text-center py-4 text-[#969696] text-sm">Loading deliverables...</div>
+        <div className="text-center py-4 text-[var(--muted)] text-sm">Loading deliverables...</div>
       ) : deliverables.length === 0 && !showAddForm ? (
         <div className="text-center py-8">
-          <div className="text-[#969696] text-sm">No deliverables yet</div>
-          <div className="text-[#969696] text-xs mt-1">Click "Add Deliverable" to get started</div>
+          <div className="text-[var(--muted)] text-sm">No deliverables yet</div>
+          <div className="text-[var(--muted)] text-xs mt-1">Click "Add Deliverable" to get started</div>
         </div>
       ) : (
         <div className="space-y-1">
@@ -276,22 +276,22 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
       className="cursor-grab active:cursor-grabbing flex flex-col justify-center items-center w-4 h-4 mr-2"
       onMouseDown={onDragStart}
     >
-      <div className="w-3 h-0.5 bg-[#969696] mb-0.5"></div>
-      <div className="w-3 h-0.5 bg-[#969696] mb-0.5"></div>
-      <div className="w-3 h-0.5 bg-[#969696]"></div>
+      <div className="w-3 h-0.5 bg-[var(--muted)] mb-0.5"></div>
+      <div className="w-3 h-0.5 bg-[var(--muted)] mb-0.5"></div>
+      <div className="w-3 h-0.5 bg-[var(--muted)]"></div>
     </div>
   );
 
   if (editing) {
     return (
-      <div className="p-2 bg-[#3e3e42]/50 rounded border border-[#3e3e42]" data-testid={`deliverable-row-${deliverable.id}`}>
+      <div className="p-2 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]" data-testid={`deliverable-row-${deliverable.id}`}>
         <div className="grid grid-cols-6 gap-2 items-center text-xs mb-2">
-          <div className="text-[#969696] font-medium w-4"></div> {/* Drag handle space */}
-          <div className="text-[#969696] font-medium">%</div>
-          <div className="text-[#969696] font-medium">DESCRIPTION</div>
-          <div className="text-[#969696] font-medium">DATE</div>
-          <div className="text-[#969696] font-medium">NOTES</div>
-          <div className="text-[#969696] font-medium">ACTIONS</div>
+          <div className="text-[var(--muted)] font-medium w-4"></div> {/* Drag handle space */}
+          <div className="text-[var(--muted)] font-medium">%</div>
+          <div className="text-[var(--muted)] font-medium">DESCRIPTION</div>
+          <div className="text-[var(--muted)] font-medium">DATE</div>
+          <div className="text-[var(--muted)] font-medium">NOTES</div>
+          <div className="text-[var(--muted)] font-medium">ACTIONS</div>
         </div>
         
         <div className="grid grid-cols-6 gap-2 items-start">
@@ -309,7 +309,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
               percentage: e.target.value ? Number(e.target.value) : null
             })}
             placeholder="%"
-            className="px-1 py-0.5 bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] text-xs [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+            className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
           />
 
           {/* Description Input */}
@@ -318,7 +318,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             value={editData.description}
             onChange={(e) => setEditData({ ...editData, description: e.target.value })}
             placeholder="Description"
-            className="px-1 py-0.5 bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] text-xs"
+            className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
           />
 
           {/* Date Input with Remove Button */}
@@ -327,7 +327,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
               type="date"
               value={editData.date || ''}
               onChange={(e) => setEditData({ ...editData, date: e.target.value || null })}
-              className="px-1 py-0.5 bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] text-xs w-full pr-5"
+              className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs w-full pr-5"
             />
             {editData.date && (
               <button
@@ -345,20 +345,20 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             value={editData.notes}
             onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
             placeholder="Notes"
-            className="px-1 py-0.5 bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] text-xs"
+            className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
           />
 
           {/* Action Buttons */}
           <div className="flex gap-1">
             <button
               onClick={() => onSave(editData)}
-              className="px-1 py-0.5 bg-[#007acc] text-white text-xs rounded hover:bg-[#005fa3] transition-colors"
+              className="px-1 py-0.5 bg-[var(--primary)] text-white text-xs rounded hover:bg-[var(--primaryHover)] transition-colors"
             >
               Save
             </button>
             <button
               onClick={onCancel}
-              className="px-1 py-0.5 bg-transparent border border-[#3e3e42] text-[#969696] text-xs rounded hover:text-[#cccccc] hover:bg-[#3e3e42] transition-colors"
+              className="px-1 py-0.5 bg-transparent border border-[var(--border)] text-[var(--muted)] text-xs rounded hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
             >
               Cancel
             </button>
@@ -374,7 +374,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             onChange={(e) => setEditData({ ...editData, isCompleted: e.target.checked })}
             className="w-3 h-3"
           />
-          <label htmlFor={`completed-${deliverable.id}`} className="text-xs text-[#cccccc]">
+          <label htmlFor={`completed-${deliverable.id}`} className="text-xs text-[var(--text)]">
             Mark as completed
           </label>
         </div>
@@ -388,10 +388,10 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
         isDragged 
           ? 'opacity-50 transform scale-95' 
           : isDraggedOver 
-            ? 'bg-[#007acc]/20 border border-[#007acc]/50' 
+            ? 'bg-[var(--surfaceOverlay)] border border-[var(--primary)]' 
             : deliverable.isCompleted 
-              ? 'bg-[#3e3e42]/20 border border-[#3e3e42]/50' 
-              : 'bg-[#3e3e42]/30'
+              ? 'bg-[var(--surfaceOverlay)] border border-[var(--border)]' 
+              : 'bg-[var(--card)] border border-[var(--border)]'
       }`}
       draggable={!editing}
       onDragStart={onDragStart}
@@ -405,16 +405,16 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
 
       {/* Content Grid */}
       <div className="grid grid-cols-4 gap-4 flex-1">
-        <div className={`${deliverable.isCompleted ? 'text-[#969696] line-through' : 'text-[#cccccc]'}`}>
+        <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
           {deliverable.percentage !== null ? `${deliverable.percentage}%` : '-'}
         </div>
-        <div className={`${deliverable.isCompleted ? 'text-[#969696] line-through' : 'text-[#cccccc]'}`}>
+        <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
           {deliverable.description || '-'}
         </div>
-        <div className="text-[#969696]">
+        <div className="text-[var(--muted)]">
           {deliverable.date ? formatUtcToLocal(deliverable.date) : '-'}
         </div>
-        <div className="text-[#969696]">
+        <div className="text-[var(--muted)]">
           {deliverable.notes || '-'}
         </div>
       </div>
@@ -426,7 +426,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
         )}
         <button
           onClick={onEdit}
-          className="text-[#cccccc] hover:bg-[#3e3e42] px-1 py-0.5 rounded text-xs transition-colors"
+          className="text-[var(--text)] hover:bg-[var(--cardHover)] px-1 py-0.5 rounded text-xs transition-colors"
         >
           Edit
         </button>
@@ -459,14 +459,14 @@ const AddDeliverableForm: React.FC<AddDeliverableFormProps> = ({ onSave, onCance
   };
 
   return (
-    <div className="p-2 bg-[#3e3e42]/50 rounded border border-[#3e3e42] mt-2">
+    <div className="p-2 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)] mt-2">
       <div className="grid grid-cols-6 gap-2 items-center text-xs mb-2">
-        <div className="text-[#969696] font-medium w-4"></div> {/* Drag handle space */}
-        <div className="text-[#969696] font-medium">%</div>
-        <div className="text-[#969696] font-medium">DESCRIPTION</div>
-        <div className="text-[#969696] font-medium">DATE</div>
-        <div className="text-[#969696] font-medium">NOTES</div>
-        <div className="text-[#969696] font-medium">ACTIONS</div>
+        <div className="text-[var(--muted)] font-medium w-4"></div> {/* Drag handle space */}
+        <div className="text-[var(--muted)] font-medium">%</div>
+        <div className="text-[var(--muted)] font-medium">DESCRIPTION</div>
+        <div className="text-[var(--muted)] font-medium">DATE</div>
+        <div className="text-[var(--muted)] font-medium">NOTES</div>
+        <div className="text-[var(--muted)] font-medium">ACTIONS</div>
       </div>
       
       <div className="grid grid-cols-6 gap-2 items-center">
@@ -483,7 +483,7 @@ const AddDeliverableForm: React.FC<AddDeliverableFormProps> = ({ onSave, onCance
             percentage: e.target.value ? Number(e.target.value) : null
           })}
           placeholder="% (optional)"
-          className="px-1 py-0.5 bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] text-xs [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+          className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
         />
         
         <input
@@ -491,14 +491,14 @@ const AddDeliverableForm: React.FC<AddDeliverableFormProps> = ({ onSave, onCance
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           placeholder="Description (optional)"
-          className="px-1 py-0.5 bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] text-xs"
+          className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
         />
         
         <input
           type="date"
           value={formData.date || ''}
           onChange={(e) => setFormData({ ...formData, date: e.target.value || null })}
-          className="px-1 py-0.5 bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] text-xs"
+          className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
         />
         
         <input
@@ -506,19 +506,19 @@ const AddDeliverableForm: React.FC<AddDeliverableFormProps> = ({ onSave, onCance
           value={formData.notes}
           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           placeholder="Notes (optional)"
-          className="px-1 py-0.5 bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] text-xs"
+          className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
         />
         
         <div className="flex gap-1">
           <button
             onClick={handleSave}
-            className="px-1 py-0.5 bg-[#007acc] text-white text-xs rounded hover:bg-[#005fa3] transition-colors"
+            className="px-1 py-0.5 bg-[var(--primary)] text-white text-xs rounded hover:bg-[var(--primaryHover)] transition-colors"
           >
             Add
           </button>
           <button
             onClick={onCancel}
-            className="px-1 py-0.5 bg-transparent border border-[#3e3e42] text-[#969696] text-xs rounded hover:text-[#cccccc] hover:bg-[#3e3e42] transition-colors"
+            className="px-1 py-0.5 bg-transparent border border-[var(--border)] text-[var(--muted)] text-xs rounded hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
           >
             Cancel
           </button>
