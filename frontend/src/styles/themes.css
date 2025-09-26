@@ -15,10 +15,11 @@
   --accent: #8b5cf6;
   --focus: #007acc;
   /* Hover/overlay tokens (pre-baked alpha) */
-  --surfaceHover: rgba(62, 62, 66, 0.5);
-  --cardHover: rgba(62, 62, 66, 0.5);
-  --surfaceOverlay: rgba(62, 62, 66, 0.5);
-  --borderOverlay: rgba(62, 62, 66, 0.3);
+  /* Slightly tinted by primary for clearer theme feedback */
+  --surfaceHover: rgba(0, 122, 204, 0.12);
+  --cardHover: rgba(0, 122, 204, 0.10);
+  --surfaceOverlay: rgba(0, 122, 204, 0.14);
+  --borderOverlay: rgba(0, 122, 204, 0.20);
   /* Calendar shades */
   --shade0: #2d2d30;
   --shade1: #2a2a2e;
@@ -39,18 +40,54 @@
   --primaryHover: #1e90ff;
   --accent: #8b5cf6;
   --focus: #007acc;
-  --surfaceHover: rgba(62, 62, 66, 0.5);
-  --cardHover: rgba(62, 62, 66, 0.5);
-  --surfaceOverlay: rgba(62, 62, 66, 0.5);
-  --borderOverlay: rgba(62, 62, 66, 0.3);
+  --surfaceHover: rgba(0, 122, 204, 0.12);
+  --cardHover: rgba(0, 122, 204, 0.10);
+  --surfaceOverlay: rgba(0, 122, 204, 0.14);
+  --borderOverlay: rgba(0, 122, 204, 0.20);
   --shade0: #2d2d30; --shade1: #2a2a2e; --shade2: #26262a; --shade3: #232327; --shade4: #1f1f24;
+}
+
+/* Light mode palette (brand-aligned) */
+.theme-light {
+  --bg: #f7f9fc;
+  /* Lighter shell for contrast against cards */
+  --surface: #f8fafc;
+  --card: #ffffff;
+  /* Slightly darker divider for legibility */
+  --border: #d1d5db;
+  --borderSubtle: #eef1f4;
+  --text: #111827;
+  /* Darken muted to improve AA on light backgrounds */
+  --muted: #4b5563;
+  --primary: #1e3a8a; /* navy */
+  --primaryHover: #2563eb; /* bright blue */
+  --accent: #0ea5e9; /* sky */
+  --focus: #2563eb;
+  --surfaceHover: rgba(37, 99, 235, 0.08);
+  --cardHover: rgba(37, 99, 235, 0.06);
+  --surfaceOverlay: rgba(37, 99, 235, 0.12);
+  --borderOverlay: rgba(37, 99, 235, 0.30);
+  --shade0: #ffffff; --shade1: #fbfdff; --shade2: #f7faff; --shade3: #f3f7ff; --shade4: #eff5ff;
 }
 
 /* Additional schemes can be tuned later; scaffold a couple of variants */
 .theme-sky {
+  /* Blue-sky tinted dark surfaces */
+  --bg: #0e1822;
+  --surface: #12202c;
+  --card: #162838;
+  --border: #224159;
+  --borderSubtle: #2b4e69;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
   --primary: #38bdf8; /* sky-400 */
   --primaryHover: #0ea5e9; /* sky-500 */
   --focus: #0ea5e9;
+  --surfaceHover: rgba(34, 65, 89, 0.35);
+  --cardHover: rgba(34, 65, 89, 0.35);
+  --surfaceOverlay: rgba(34, 65, 89, 0.45);
+  --borderOverlay: rgba(34, 65, 89, 0.35);
+  --shade0: #162838; --shade1: #142233; --shade2: #121e2e; --shade3: #101a29; --shade4: #0e1724;
 }
 /* Midnight scheme: deep navy surfaces and shades */
 .theme-midnight {
@@ -77,34 +114,45 @@
 
 
 
-/* Navy-forward palette for SMC branding */
-.theme-smc-navy {
+/* Navy palette */
+.theme-navy {
+  /* Navy-forward palette */
+  --bg: #0b1220;
+  --surface: #101a2c;
+  --card: #13203a;
+  --border: #223a5a;
+  --borderSubtle: #2c4a74;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
   --primary: #1e3a8a; /* blue-900 */
   --primaryHover: #2563eb; /* blue-600 */
   --accent: #0ea5e9; /* sky-500 */
   --focus: #2563eb;
-}
-
-/* Steel/Cyan accent palette */
-.theme-steel-cyan {
-  --primary: #06b6d4; /* cyan-500 */
-  --primaryHover: #0891b2; /* cyan-600 */
-  --accent: #67e8f9; /* cyan-300 */
-  --focus: #0891b2;
+  --surfaceHover: rgba(34, 58, 90, 0.35);
+  --cardHover: rgba(34, 58, 90, 0.35);
+  --surfaceOverlay: rgba(34, 58, 90, 0.45);
+  --borderOverlay: rgba(44, 74, 116, 0.35);
+  --shade0: #13203a; --shade1: #111c33; --shade2: #0f182d; --shade3: #0d1526; --shade4: #0b1220;
 }
 
 /* Triad palette: warm primary with green accent */
 .theme-triad {
+  --bg: #14110b;
+  --surface: #19140d;
+  --card: #1f1a11;
+  --border: #3a2f1e;
+  --borderSubtle: #4a3b26;
+  --text: #f3f4f6;
+  --muted: #b3a899;
   --primary: #f59e0b; /* amber-500 */
   --primaryHover: #d97706; /* amber-600 */
   --accent: #10b981; /* emerald-500 */
   --focus: #d97706;
+  --surfaceHover: rgba(74, 59, 38, 0.35);
+  --cardHover: rgba(74, 59, 38, 0.35);
+  --surfaceOverlay: rgba(58, 47, 30, 0.45);
+  --borderOverlay: rgba(74, 59, 38, 0.35);
+  --shade0: #1f1a11; --shade1: #1c170f; --shade2: #19140d; --shade3: #17120c; --shade4: #14110b;
 }
 
-/* Topbar emphasis palette (violet primary) */
-.theme-topbar {
-  --primary: #8b5cf6; /* violet-500 */
-  --primaryHover: #7c3aed; /* violet-600 */
-  --accent: #3b82f6; /* blue-500 */
-  --focus: #7c3aed;
-}
+/* (Steel Cyan and Topbar themes removed) */

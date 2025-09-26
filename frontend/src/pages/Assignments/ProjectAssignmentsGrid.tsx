@@ -1053,7 +1053,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       const v = (hoursByProject[p.id!] || {})[w.date] || 0;
                       const entries = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || [];
                       return (
-                        <div key={w.date} className="relative py-2 flex items-center justify-center text-[#cccccc] text-xs border-l border-[#3e3e42]" title={entries.length ? entries.map(e => `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`).join('\n') : undefined}>
+                        <div key={w.date} className="relative py-2 flex items-center justify-center text-[var(--text)] text-xs font-medium border-l border-[var(--border)]" title={entries.length ? entries.map(e => `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`).join('\n') : undefined}>
                           {v > 0 ? v : ''}
                           {entries.length > 0 && (
                             <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px]">
@@ -1242,10 +1242,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                         setEditingCell(null);
                                       }
                                     }}
-                                    className="w-full h-8 px-1 text-xs bg-[var(--bg)] text-[var(--text)] border border-[var(--primary)] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield] text-center"
+                                    className="w-full h-8 px-1 text-xs bg-[var(--bg)] text-[var(--text)] font-medium border border-[var(--primary)] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield] text-center"
                                   />
                                 ) : (
-                                  <div className="h-8 flex items-center justify-center text-xs text-[var(--text)]">
+                                  <div className="h-8 flex items-center justify-center text-xs text-[var(--text)] font-medium">
                                     {hours > 0 ? hours : ''}
                                   </div>
                                 )}

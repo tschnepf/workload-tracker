@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
-import { darkTheme } from '@/theme/tokens';
+// Tokenized: use CSS variables (themes.css) instead of fixed dark theme
 import { departmentsApi } from '@/services/api';
 import type { Department } from '@/types/models';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
@@ -165,9 +165,9 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
   };
 
   const inputStyle: React.CSSProperties = {
-    backgroundColor: darkTheme.colors.background.tertiary,
-    color: darkTheme.colors.text.primary,
-    border: `1px solid ${darkTheme.colors.border.primary}`,
+    backgroundColor: 'var(--surface)',
+    color: 'var(--text)',
+    border: '1px solid var(--border)',
     borderRadius: '6px',
     padding: '6px 8px',
     minWidth: 220,
@@ -182,15 +182,15 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
     maxHeight: 280,
     overflowY: 'auto',
     width: '100%',
-    backgroundColor: darkTheme.colors.background.tertiary,
-    border: `1px solid ${darkTheme.colors.border.primary}`,
+    backgroundColor: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: '6px',
   };
 
   const buttonStyle: React.CSSProperties = {
-    backgroundColor: darkTheme.colors.background.tertiary,
-    color: darkTheme.colors.text.secondary,
-    border: `1px solid ${darkTheme.colors.border.secondary}`,
+    backgroundColor: 'var(--surface)',
+    color: 'var(--text)',
+    border: '1px solid var(--border)',
     borderRadius: '6px',
     padding: '6px 8px',
   };
@@ -207,9 +207,9 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
       {state.selectedDepartmentId != null && (
         <div
           style={{
-            backgroundColor: darkTheme.colors.background.tertiary,
-            color: darkTheme.colors.text.secondary,
-            border: `1px solid ${darkTheme.colors.border.secondary}`,
+            backgroundColor: 'var(--surface)',
+            color: 'var(--text)',
+            border: '1px solid var(--border)',
             borderRadius: '999px',
             padding: '2px 8px',
             display: 'flex',
@@ -223,7 +223,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
             aria-label="Clear department filter"
             style={{
               background: 'transparent',
-              color: darkTheme.colors.text.secondary,
+              color: 'var(--muted)',
               border: 'none',
               cursor: 'pointer',
             }}
@@ -260,10 +260,10 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
             style={listboxStyle}
           >
             {error && (
-              <div style={{ padding: 8, color: darkTheme.colors.semantic.error }}>Error: {error}</div>
+              <div style={{ padding: 8, color: '#ef4444' }}>Error: {error}</div>
             )}
             {!error && results.length === 0 && (
-              <div style={{ padding: 8, color: darkTheme.colors.text.muted }}>No results</div>
+              <div style={{ padding: 8, color: 'var(--muted)' }}>No results</div>
             )}
             {!error && results.map((dep, idx) => (
               <div
@@ -275,8 +275,8 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
                 style={{
                   padding: '6px 8px',
                   cursor: 'pointer',
-                  backgroundColor: idx === highlightIndex ? darkTheme.colors.background.elevated : 'transparent',
-                  color: darkTheme.colors.text.primary,
+                  backgroundColor: idx === highlightIndex ? 'var(--surfaceHover)' : 'transparent',
+                  color: 'var(--text)',
                 }}
               >
                 {dep.name}
@@ -301,7 +301,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           aria-describedby={DESC_ID}
           disabled={state.selectedDepartmentId == null}
         />
-        <label htmlFor="global-include-children" style={{ color: darkTheme.colors.text.secondary }}>Include sub-departments</label>
+        <label htmlFor="global-include-children" style={{ color: 'var(--muted)' }}>Include sub-departments</label>
       </div>
       <span id={DESC_ID} style={{ position: 'absolute', left: -9999 }}>
         When enabled, includes all child departments under the selected department in totals.

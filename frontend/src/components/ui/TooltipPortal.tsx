@@ -62,20 +62,20 @@ export const TooltipPortal: React.FC<TooltipPortalProps> = ({ title, description
             pointerEvents: 'none',
           }}
         >
-          <div className="px-3 py-2 bg-[#2d2d30] border border-[#3e3e42] rounded-md shadow-lg min-w-[180px] max-w-[280px]">
-            <div className="text-[#cccccc] text-sm font-medium mb-1">{title}</div>
-            {description && <div className="text-[#bdbdbd] text-xs">{description}</div>}
+          <div className="px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-md shadow-lg min-w-[180px] max-w-[280px]">
+            <div className="text-[var(--text)] text-sm font-medium mb-1">{title}</div>
+            {description && <div className="text-[var(--muted)] text-xs">{description}</div>}
           </div>
           {/* Arrow */}
           {!pos.placeLeft ? (
             <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full">
-              <div className="border-4 border-transparent border-r-[#3e3e42]" />
-              <div className="-ml-px border-4 border-transparent border-r-[#2d2d30]" />
+              <div className="border-4 border-transparent border-r-[var(--border)]" />
+              <div className="-ml-px border-4 border-transparent border-r-[var(--card)]" />
             </div>
           ) : (
             <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full">
-              <div className="border-4 border-transparent border-l-[#3e3e42]" />
-              <div className="-mr-px border-4 border-transparent border-l-[#2d2d30]" />
+              <div className="border-4 border-transparent border-l-[var(--border)]" />
+              <div className="-mr-px border-4 border-transparent border-l-[var(--card)]" />
             </div>
           )}
         </div>,
@@ -86,4 +86,3 @@ export const TooltipPortal: React.FC<TooltipPortalProps> = ({ title, description
 };
 
 export default TooltipPortal;
-

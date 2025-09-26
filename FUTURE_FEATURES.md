@@ -2,6 +2,35 @@
 
 This document tracks planned features and improvements for the Workload Tracker application.
 
+### Sunday-only Week Keys Transition Completion
+
+Goal: Fully standardize on Sunday-based week keys across backend, frontend, data, and docs; remove all Monday-based logic and fallbacks.
+
+Implementation Steps:
+1. Frontend alignment
+   - Update `frontend/src/pages/Assignments/grid/utils.ts` to consume Sunday week keys and generate headers accordingly.
+   - Remove any Monday-based assumptions in components, hooks, and tests; adjust fixtures to Sunday keys.
+2. Backend alignment
+   - Enforce Sunday-only keys in `weekly_hours` with a validator; add warnings during a short deprecation window.
+   - Replace any Monday-based help text/docs in serializers (e.g., people) with Sunday wording.
+3. Data migration
+   - Implement a management command to re-key `weekly_hours` JSON from non-Sunday dates to the Sunday of the same week (idempotent; dry-run + report modes).
+   - Run in staging; verify parity metrics; then run in production during a low-traffic window (with backups).
+4. Transition removal
+   - Disable the “read-both (±3 days)” transition layer and remove fallback code paths.
+   - Delete transitional tests; add Sunday-only tests for utilization and grid rendering.
+5. Documentation and help
+   - Update in-app help and README/docs to state Sunday-as-canonical.
+   - Add a troubleshooting note for legacy exports/imports referencing Monday.
+6. Acceptance criteria
+   - No remaining references to Monday-based week starts in code/docs.
+   - All `weekly_hours` keys validate as Sundays.
+   - Frontend grid renders correct headers and values using Sunday keys.
+   - Parity report shows expected utilization totals pre/post migration.
+7. Rollback plan
+   - Feature flag to re-enable transition read mode if regressions are detected.
+   - Re-run migration in reverse (if necessary) using snapshot/backup restore process.
+
 ## 🚨 High Priority - Performance & Scalability
 
 ### 1. Bulk API Pagination Safeguards
@@ -209,6 +238,41 @@ This document tracks planned features and improvements for the Workload Tracker 
 - Settings: already support `REDIS_URL` env; LocMem fallback remains.
 - Validation:
   - Bring up: `docker-compose up -d --build redis backend` and verify redis healthy.
+
+---
+
+### Global Search (Header)
+
+- Description: Add a fast, global search in the top‑right header to find people, projects, departments, and assignments from anywhere.
+- UX
+  - Input placeholder: “Search people, projects…” with a compact “Search” button.
+  - Keyboard: Ctrl/Cmd+K to focus/expand, Arrow keys to navigate results, Enter to open.
+  - Result groups: People, Projects, Departments, Assignments (with small badges and subtle separators).
+  - No‑results state with suggestions and recent searches.
+- Scope (MVP)
+  - Client‑side typeahead that calls a single backend endpoint (e.g., `/search?q=`) which federates across core entities and returns a ranked, trimmed result set.
+  - Debounced requests (≈200 ms) with request cancellation; limit 8–10 results per group.
+  - Highlight matching substrings in result labels; include small context (e.g., project client, department name).
+- API Sketch
+  - GET `/search?q=string&limit=8`
+  - Response
+    ```json
+    {
+      "people": [{"id":1,"name":"Alex Mehner","department":"Electrical"}],
+      "projects": [{"id":42,"name":"Transit Hub","client":"Metro"}],
+      "departments": [{"id":7,"name":"Mechanical"}],
+      "assignments": [{"id":999,"person":"Brett Grossman","project":"Harbor"}]
+    }
+    ```
+- Implementation Notes
+  - Frontend: isolated `GlobalSearch` component; tokenized styles (light/dark friendly), accessible listbox pattern.
+  - Backend: aggregator view that queries capped subsets with simple ranking (ILIKE/tsvector/Trigram depending on DB extensions available).
+  - Performance: enforce tight caps per group; add total timeout budget (e.g., 150 ms backend target) and return partial groups when hitting limits.
+  - Telemetry: record anonymized query length bins and group clicks to improve defaults; never store raw queries server‑side.
+- Accessibility
+  - ARIA attributes for combobox/listbox; screen‑reader friendly labels; focus ring uses `--focus` token.
+  - Provide Escape to close; restore focus to the trigger.
+- Estimated Timeline: 1–2 days (MVP) + 1 day for improved ranking/highlights.
   - Shell check: `from django.core.cache import cache; cache.set('k','v',60); cache.get('k')` via `manage.py shell`.
   - Endpoint timing: call `/api/people/capacity_heatmap/` and `/api/people/workload_forecast/` twice; expect HIT on second call.
 - Security/ops: restrict Redis exposure (bridge network), set memory limits, optional eviction policy (`allkeys-lru`).

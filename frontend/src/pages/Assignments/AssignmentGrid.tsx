@@ -22,6 +22,7 @@ interface ProjectWithState extends Project {
   lastUpdated?: number;
 }
 import Layout from '@/components/layout/Layout';
+import AssignmentsSkeleton from '@/components/skeletons/AssignmentsSkeleton';
 import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
 import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import Toast from '@/components/ui/Toast';
@@ -135,11 +136,11 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
   const projectName = assignment.projectDisplayName || project?.name || '';
 
   return (
-    <div className="grid gap-px p-1 bg-[#252526] hover:bg-[#2d2d30] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
+    <div className="grid gap-px p-1 bg-[var(--surface)] hover:bg-[var(--surfaceHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
       {/* Client Name Column */}
       <div className="flex items-center py-1 pl-[60px] pr-2">
         <div className="min-w-0 flex-1">
-          <div className="text-[#969696] text-xs truncate" title={clientName}>
+          <div className="text-[var(--muted)] text-xs truncate" title={clientName}>
             {clientName || '—'}
           </div>
         </div>
@@ -149,7 +150,7 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
       <div className="flex items-center py-1 pr-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="text-[#cccccc] text-xs truncate flex-1" title={projectName}>
+            <div className="text-[var(--text)] text-xs truncate flex-1" title={projectName}>
               {projectName}
             </div>
 
@@ -189,7 +190,7 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
       <div className="flex items-center justify-center">
         <button 
           onClick={() => onRemoveAssignment(assignment.id)}
-          className="w-4 h-4 flex items-center justify-center text-[#969696] hover:text-red-400 hover:bg-red-500/20 rounded transition-colors"
+          className="w-4 h-4 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded transition-colors"
           title="Remove assignment"
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,8 +244,8 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
           <div 
             key={monday.date}
             className={`
-              relative cursor-pointer transition-colors border-l border-[#3e3e42]
-              ${isCurrentSelected ? 'bg-[#007acc]/20 border-[#007acc]' : 'hover:bg-[#3e3e42]/50'}
+              relative cursor-pointer transition-colors border-l border-[var(--border)]
+              ${isCurrentSelected ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : 'hover:bg-[var(--surfaceHover)]'}
             `}
             onClick={(e) => onCellSelect(personId, assignment.id, monday.date, e.shiftKey)}
             onMouseDown={(e) => { e.preventDefault(); onCellMouseDown(personId, assignment.id, monday.date); }}
@@ -262,18 +263,18 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
                     if (e.key === 'Enter') onEditSave();
                     if (e.key === 'Escape') onEditCancel();
                   }}
-                  className="w-full h-8 px-1 text-xs bg-[#1e1e1e] text-[#cccccc] border border-[#007acc] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield]"
+                  className="w-full h-8 px-1 text-xs bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] focus:border-[var(--focus)] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield]"
                   autoFocus
                 />
             ) : (
-              <div className="h-8 flex items-center justify-center text-xs text-[#cccccc]">
+              <div className="h-8 flex items-center justify-center text-xs text-[var(--text)]">
                 {currentHours > 0 ? currentHours : ''}
               </div>
             )}
             {hasDeliverable && (
               <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px] pointer-events-none">
                 {deliverableBarEntries.slice(0,3).map((e, idx) => (
-                  <div key={idx} className="w-[3px] rounded" style={{ background: deliverableTypeColors[e.type] || '#007acc' }} />
+                  <div key={idx} className="w-[3px] rounded" style={{ background: deliverableTypeColors[e.type] || 'var(--primary)' }} />
                 ))}
               </div>
             )}
@@ -1472,20 +1473,43 @@ const AssignmentGrid: React.FC = () => {
 
   // Get utilization badge styling
   const getUtilizationBadgeStyle = (hours: number, capacity: number) => {
-    if (hours === 0) return 'bg-[#3e3e42] text-[#969696]';
+    if (hours === 0) return 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--borderSubtle)]';
     const percentage = (hours / capacity) * 100;
-    if (percentage <= 70) return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-    if (percentage <= 85) return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
-    if (percentage <= 100) return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
-    return 'bg-red-500/20 text-red-300 border border-red-500/30';
+    // Light-mode friendly by default; override for dark with `dark:` variants
+    if (percentage <= 70) {
+      return [
+        'border',
+        // Light
+        'bg-emerald-100 text-emerald-700 border-emerald-300',
+        // Dark
+        'dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30',
+      ].join(' ');
+    }
+    if (percentage <= 85) {
+      return [
+        'border',
+        'bg-blue-100 text-blue-700 border-blue-300',
+        'dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30',
+      ].join(' ');
+    }
+    if (percentage <= 100) {
+      return [
+        'border',
+        'bg-amber-100 text-amber-700 border-amber-300',
+        'dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30',
+      ].join(' ');
+    }
+    return [
+      'border',
+      'bg-red-100 text-red-700 border-red-300',
+      'dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30',
+    ].join(' ');
   };
 
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-[#969696]">Loading assignments...</div>
-        </div>
+        <AssignmentsSkeleton />
       </Layout>
     );
   }
@@ -1505,32 +1529,32 @@ const AssignmentGrid: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Sticky Header Section */}
-        <div ref={headerRef} className="sticky top-0 bg-[#1e1e1e] border-b border-[#3e3e42] z-30 px-6 py-4">
+  <div ref={headerRef} className="sticky top-0 bg-[var(--bg)] border-b border-[var(--border)] z-30 px-6 py-4">
           {/* Top row: title + counts */}
           <div className="flex items-start justify-between gap-6">
             <div>
-              <h1 className="text-2xl font-bold text-[#cccccc]">Assignment Grid</h1>
+  <h1 className="text-2xl font-bold text-[var(--text)]">Assignment Grid</h1>
               <div className="flex items-center gap-3">
-                <p className="text-[#969696] text-sm">Manage team workload allocation across {weeks.length} weeks</p>
+  <p className="text-[var(--muted)] text-sm">Manage team workload allocation across {weeks.length} weeks</p>
                 <span
                   title={isSnapshotMode ? 'Rendering from server grid snapshot' : 'Server snapshot unavailable; using legacy client aggregation'}
                   className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border ${
                     isSnapshotMode
                       ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'
-                      : 'bg-[#3e3e42] text-[#bbbbbb] border-[#4e4e52]'
+                      : 'bg-[var(--surface)] text-[var(--muted)] border-[var(--borderSubtle)]'
                   }`}
                 >
                   {isSnapshotMode ? 'Snapshot Mode' : 'Legacy Mode'}
                 </span>
               </div>
               {/* Weeks controls + Project View */}
-              <div className="flex items-center gap-2 text-xs text-[#969696]">
+              <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
                 <span>Weeks</span>
                 {[8,12,16,20].map(n => (
                   <button
                     key={n}
                     onClick={() => setWeeksHorizon(n)}
-                    className={`px-2 py-0.5 rounded border ${weeksHorizon===n?'border-[#007acc] text-[#e0e0e0] bg-[#007acc]/20':'border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                    className={`px-2 py-0.5 rounded border ${weeksHorizon===n?'border-[var(--primary)] text-[var(--text)] bg-[var(--surfaceHover)]':'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'}`}
                   >{n}</button>
                 ))}
                 {(() => {
@@ -1538,20 +1562,20 @@ const AssignmentGrid: React.FC = () => {
                   const statusStr = s.size===0 || s.has('Show All') ? '' : `&status=${encodeURIComponent(Array.from(s).join(','))}`;
                   const href = `/project-assignments?view=project&weeks=${weeksHorizon}${statusStr}`;
                   return (
-                    <a href={href} className="ml-2 px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]">Project View</a>
+                    <a href={href} className="ml-2 px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]">Project View</a>
                   );
                 })()}
               </div>
             </div>
               <div className="flex items-center gap-4">
-                <div className="text-xs text-[#969696]">
+                <div className="text-xs text-[var(--muted)]">
                   {people.length} people • {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
                 </div>
                 {asyncJobId && (
-                  <div className="flex items-center gap-2 text-xs text-[#cccccc]">
-                    <span className="inline-block w-3 h-3 border-2 border-[#969696] border-t-transparent rounded-full animate-spin" />
+                  <div className="flex items-center gap-2 text-xs text-[var(--text)]">
+                    <span className="inline-block w-3 h-3 border-2 border-[var(--muted)] border-t-transparent rounded-full animate-spin" />
                     <span>Generating snapshot… {asyncProgress}%</span>
-                    {asyncMessage && <span className="text-[#969696]">({asyncMessage})</span>}
+                    {asyncMessage && <span className="text-[var(--muted)]">({asyncMessage})</span>}
                   </div>
                 )}
               </div>
@@ -1566,7 +1590,7 @@ const AssignmentGrid: React.FC = () => {
                 rightActions={(
                   <>
                     <button
-                      className={`px-2 py-0.5 rounded border border-[#3e3e42] text-xs transition-colors ${loadingAssignments.size > 0 ? 'text-[#969696] cursor-wait' : 'text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      className={`px-2 py-0.5 rounded border border-[var(--border)] text-xs transition-colors ${loadingAssignments.size > 0 ? 'text-[var(--muted)] cursor-wait' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
                       title="Expand all people and refresh their assignments"
                       onClick={async () => {
                         try {
@@ -1581,7 +1605,7 @@ const AssignmentGrid: React.FC = () => {
                       {loadingAssignments.size > 0 ? 'Expanding…' : 'Expand All'}
                     </button>
                     <button
-                      className="px-2 py-0.5 rounded border border-[#3e3e42] text-xs text-[#9aa0a6] hover:text-[#cfd8dc]"
+                      className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
                       title="Collapse all people"
                       onClick={() => {
                         setPeople(prev => prev.map(p => ({ ...p, isExpanded: false })));
@@ -1590,7 +1614,7 @@ const AssignmentGrid: React.FC = () => {
                       Collapse All
                     </button>
                     <button
-                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading || loadingAssignments.size > 0 ? 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent border-[#3e3e42] text-[#9aa0a6] hover:text-[#cfd8dc]'}`}
+                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${loading || loadingAssignments.size > 0 ? 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)] cursor-wait' : 'bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'}`}
                       title="Refresh assignments for all people"
                       onClick={refreshAllAssignments}
                       disabled={loading || loadingAssignments.size > 0}
@@ -1611,8 +1635,8 @@ const AssignmentGrid: React.FC = () => {
                     onClick={() => toggleStatusFilter(status)}
                     className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                       isActive
-                        ? 'bg-[#007acc] border-[#007acc] text-white'
-                        : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
+                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                        : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
                     }`}
                     aria-pressed={isActive}
                     aria-label={`Filter: ${formatFilterStatus(status)}`}
@@ -1626,34 +1650,34 @@ const AssignmentGrid: React.FC = () => {
         </div>
 
         {/* Sticky Week Header - positioned directly below measured header */}
-        <div className="sticky bg-[#2d2d30] border-b border-[#3e3e42] z-20 overflow-x-auto" style={{ top: headerHeight }}>
+        <div className="sticky bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto" style={{ top: headerHeight }}>
           <div style={{ minWidth: totalMinWidth }}>
             <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
               {/* Client column header with resize handle */}
-              <div className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group">
+              <div className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group">
                 Client
                 <div
-                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[#007acc]/50 transition-colors"
+                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--surfaceHover)] transition-colors"
                   onMouseDown={(e) => startColumnResize('client', e)}
                   title="Drag to resize client column"
                 />
               </div>
 
               {/* Project column header with resize handle */}
-              <div className="font-medium text-[#cccccc] text-sm px-2 py-1 relative group">
+              <div className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group">
                 Project
                 <div
-                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[#007acc]/50 transition-colors"
+                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--surfaceHover)] transition-colors"
                   onMouseDown={(e) => startColumnResize('project', e)}
                   title="Drag to resize project column"
                 />
               </div>
 
-              <div className="text-center text-xs text-[#969696] px-1">+/-</div>
+              <div className="text-center text-xs text-[var(--muted)] px-1">+/-</div>
               {weeks.map((week, index) => (
                 <div key={week.date} className="text-center px-1">
-                  <div className="text-xs font-medium text-[#cccccc]">{week.display}</div>
-                  <div className="text-[10px] text-[#757575]">W{index + 1}</div>
+                  <div className="text-xs font-medium text-[var(--text)]">{week.display}</div>
+                  <div className="text-[10px] text-[var(--muted)]">W{index + 1}</div>
                 </div>
               ))}
             </div>
@@ -1663,24 +1687,24 @@ const AssignmentGrid: React.FC = () => {
         
 
         {/* Full Width Grid Container */}
-        <div className="flex-1 overflow-x-auto bg-[#1e1e1e]">
+        <div className="flex-1 overflow-x-auto bg-[var(--bg)]">
           <div style={{ minWidth: totalMinWidth }}>
 
             {/* Data Rows */}
             <div>
               {people.map((person) => (
-                <div key={person.id} className="border-b border-[#3e3e42] last:border-b-0">
+                <div key={person.id} className="border-b border-[var(--border)] last:border-b-0">
                   
                   {/* Person Row */}
-                  <div className="grid gap-px p-2 hover:bg-[#2d2d30]/50 transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
+                  <div className="grid gap-px p-2 hover:bg-[var(--surfaceHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
 
                     {/* Person Info - Spans both client and project columns */}
                     <div className="col-span-2 flex items-center">
                       <button
                         onClick={() => togglePersonExpanded(person.id!)}
-                        className="flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left hover:bg-[#3e3e42]/50 transition-all duration-200 rounded-sm"
+                        className="flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left hover:bg-[var(--surfaceHover)] transition-all duration-200 rounded-sm"
                       >
-                        <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[#969696]">
+                        <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[var(--muted)]">
                           <svg
                             width="12"
                             height="12"
@@ -1698,8 +1722,8 @@ const AssignmentGrid: React.FC = () => {
                           </svg>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-[#cccccc] text-sm truncate">{person.name}</div>
-                          <div className="text-xs text-[#969696]">{person.role} • {person.weeklyCapacity}h/wk</div>
+                          <div className="font-medium text-[var(--text)] text-sm truncate">{person.name}</div>
+                          <div className="text-xs text-[var(--muted)]">{person.role} • {person.weeklyCapacity}h/wk</div>
                         </div>
                       </button>
                     </div>
@@ -1707,7 +1731,7 @@ const AssignmentGrid: React.FC = () => {
                     {/* Add Assignment Button */}
                     <div className="flex items-center justify-center gap-1">
                       <button
-                        className="w-7 h-7 rounded text-white hover:text-[#969696] hover:bg-[#3e3e42] transition-colors text-center text-sm font-medium leading-none font-mono"
+                        className="w-7 h-7 rounded text-white hover:text-[var(--muted)] hover:bg-[var(--surface)] transition-colors text-center text-sm font-medium leading-none font-mono"
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Add new assignment"
                         onClick={() => {
@@ -1718,7 +1742,7 @@ const AssignmentGrid: React.FC = () => {
                         +
                       </button>
                       <button
-                        className={`w-7 h-7 rounded transition-colors text-center text-sm font-medium leading-none ${loadingAssignments.has(person.id!) ? 'bg-[#3e3e42] text-[#969696] cursor-wait' : 'bg-transparent text-[#cccccc] hover:text-white hover:bg-[#3e3e42]'}`}
+                        className={`w-7 h-7 rounded transition-colors text-center text-sm font-medium leading-none ${loadingAssignments.has(person.id!) ? 'bg-[var(--surface)] text-[var(--muted)] cursor-wait' : 'bg-transparent text-[var(--text)] hover:text-white hover:bg-[var(--surface)]'}`}
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Refresh assignments"
                         onClick={() => refreshPersonAssignments(person.id!)}
@@ -1726,7 +1750,7 @@ const AssignmentGrid: React.FC = () => {
                         aria-busy={loadingAssignments.has(person.id!)}
                       >
                         {loadingAssignments.has(person.id!) ? (
-                          <span className="inline-block w-3 h-3 border-2 border-[#969696] border-t-transparent rounded-full animate-spin" />
+                          <span className="inline-block w-3 h-3 border-2 border-[var(--muted)] border-t-transparent rounded-full animate-spin" />
                         ) : (
                           <span aria-hidden>↻</span>
                         )}
@@ -1751,12 +1775,12 @@ const AssignmentGrid: React.FC = () => {
                   {person.isExpanded && loadingAssignments.has(person.id!) && (
                     <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
                       <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
-                        <div className="text-[#969696] text-xs">Loading assignments…</div>
+                        <div className="text-[var(--muted)] text-xs">Loading assignments…</div>
                       </div>
                       <div></div>
                       {weeks.map((week) => (
                         <div key={week.date} className="flex items-center justify-center">
-                          <div className="w-12 h-6 flex items-center justify-center text-[#757575] text-xs">—</div>
+                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs">—</div>
                         </div>
                       ))}
                     </div>
@@ -1795,7 +1819,7 @@ const AssignmentGrid: React.FC = () => {
 
                   {/* Add Assignment Form */}
                   {person.isExpanded && isAddingAssignment === person.id && (
-                    <div className="grid gap-px p-1 bg-[#2d2d30] border border-blue-500/30" style={{ gridTemplateColumns: gridTemplate }}>
+                    <div className="grid gap-px p-1 bg-[var(--card)] border border-[var(--border)]" style={{ gridTemplateColumns: gridTemplate }}>
                       <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2 relative">
                         <input
                           type="text"
@@ -1835,25 +1859,25 @@ const AssignmentGrid: React.FC = () => {
                             }
                           }}
                           placeholder="Search projects (name, client, number)..."
-                          className="w-full px-2 py-1 text-xs bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+                          className="w-full px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
                           autoFocus
                         />
                         
                         {/* Project Search Dropdown */}
                         {showProjectDropdown && projectSearchResults.length > 0 && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-48 overflow-y-auto">
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg z-50 max-h-48 overflow-y-auto">
                             {projectSearchResults.map((project, index) => (
                               <button
                                 key={project.id}
                                 onClick={() => handleProjectSelect(project)}
-                                className={`w-full text-left px-2 py-1 text-xs transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0 ${
+                                className={`w-full text-left px-2 py-1 text-xs transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
                                   selectedDropdownIndex === index 
-                                    ? 'bg-[#007acc]/30 border-[#007acc]' 
-                                    : 'hover:bg-[#3e3e42]'
+                                    ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' 
+                                    : 'hover:bg-[var(--surface)]'
                                 }`}
                               >
                                 <div className="font-medium">{project.name}</div>
-                                <div className="text-[#969696]">
+                                <div className="text-[var(--muted)]">
                                   {[project.client, project.projectNumber].filter(Boolean).join(' • ')}
                                 </div>
                               </button>
@@ -1871,7 +1895,7 @@ const AssignmentGrid: React.FC = () => {
                           ✓
                         </button>
                         <button 
-                          className="w-5 h-5 rounded bg-[#3e3e42] hover:bg-[#4e4e52] text-white text-xs font-medium transition-colors flex items-center justify-center"
+                          className="w-5 h-5 rounded bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] text-xs font-medium transition-colors flex items-center justify-center"
                           title="Cancel"
                           onClick={() => {
                             setIsAddingAssignment(null);
@@ -1886,7 +1910,7 @@ const AssignmentGrid: React.FC = () => {
                       </div>
                       {weeks.map((week) => (
                         <div key={week.date} className="flex items-center justify-center">
-                          <div className="w-12 h-6 flex items-center justify-center text-[#757575] text-xs">—</div>
+                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs">—</div>
                         </div>
                       ))}
                     </div>
@@ -1894,16 +1918,16 @@ const AssignmentGrid: React.FC = () => {
 
                   {/* Empty State */}
                   {person.isExpanded && person.assignments.length === 0 && (
-                    <div className="grid gap-px p-1 bg-[#252526]" style={{ gridTemplateColumns: gridTemplate }}>
+                    <div className="grid gap-px p-1 bg-[var(--surface)]" style={{ gridTemplateColumns: gridTemplate }}>
                       <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
-                        <div className="text-[#757575] text-xs italic">
+                        <div className="text-[var(--muted)] text-xs italic">
                           No assignments
                         </div>
                       </div>
                       <div></div>
                       {weeks.map((week) => (
                         <div key={week.date} className="flex items-center justify-center">
-                          <div className="w-12 h-6 flex items-center justify-center text-[#757575] text-xs">—</div>
+                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs">—</div>
                         </div>
                       ))}
                     </div>
@@ -1915,7 +1939,7 @@ const AssignmentGrid: React.FC = () => {
         </div>
 
         {/* Status Bar */}
-        <div className="flex justify-between items-center text-xs text-[#969696] px-1">
+        <div className="flex justify-between items-center text-xs text-[var(--muted)] px-1">
           <div className="flex gap-6">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
@@ -1950,4 +1974,3 @@ const AssignmentGrid: React.FC = () => {
 };
 
 export default AssignmentGrid;
-

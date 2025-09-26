@@ -41,7 +41,10 @@ export function applyMode(mode?: Mode): void {
 
 export function applyScheme(name?: string): void {
   const el = root();
-  const scheme = (name || getColorScheme() || 'default').toLowerCase();
+  let scheme = (name || getColorScheme() || 'default').toLowerCase();
+  // Backward-compat aliases and removals
+  if (scheme === 'smc-navy') scheme = 'navy';
+  if (scheme === 'steel-cyan' || scheme === 'topbar') scheme = 'default';
   // Remove any previous theme-* classes
   Array.from(el.classList).forEach(cls => {
     if (cls.startsWith('theme-')) el.classList.remove(cls);

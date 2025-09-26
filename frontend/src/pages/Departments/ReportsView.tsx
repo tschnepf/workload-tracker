@@ -210,16 +210,16 @@ const ReportsView: React.FC = () => {
           
           {/* Timeframe Selector */}
           <div className="flex items-center gap-3">
-            <label className="text-sm text-[#969696]">Timeframe:</label>
+            <label className="text-sm text-[var(--muted)]">Timeframe:</label>
             <div className="flex gap-1">
               {[1, 2, 4, 8, 12].map((weeks) => (
                 <button
                   key={weeks}
                   onClick={() => setSelectedTimeframe(weeks)}
-                  className={`px-3 py-1 text-sm rounded transition-colors ${
+                  className={`px-3 py-1 text-sm rounded border transition-colors focus-visible:ring-2 ring-[var(--focus)] ring-offset-1 ring-offset-[var(--card)] ${
                     selectedTimeframe === weeks
-                      ? 'bg-[#007acc] text-white'
-                      : 'bg-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
+                      ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                      : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
                   }`}
                 >
                   {weeks}w
@@ -362,15 +362,15 @@ const ReportsView: React.FC = () => {
           {/* Utilization Distribution */}
           <Card className="bg-[#2d2d30] border-[#3e3e42]">
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
+              <h3 className="text-lg font-semibold text-[var(--text)] mb-4">
                 Department Utilization Distribution
               </h3>
               <div className="space-y-3">
                 {reports.map((report) => (
                   <div key={report.department.id} className="flex items-center justify-between">
-                    <span className="text-sm text-[#cccccc]">{report.department.name}</span>
+                    <span className="text-sm text-[var(--text)]">{report.department.name}</span>
                     <div className="flex items-center gap-2">
-                      <div className="w-20 h-2 bg-[#3e3e42] rounded-full overflow-hidden">
+                      <div className="w-20 h-2 bg-[var(--border)] rounded-full overflow-hidden">
                         <div 
                           className={`h-full ${
                             report.metrics.avgUtilization < 70 ? 'bg-emerald-400' :
@@ -380,7 +380,7 @@ const ReportsView: React.FC = () => {
                           style={{ width: `${Math.min(100, report.metrics.avgUtilization)}%` }}
                         />
                       </div>
-                      <span className="text-sm text-[#969696] w-12 text-right">
+                      <span className="text-sm text-[var(--muted)] w-12 text-right">
                         {report.metrics.avgUtilization.toFixed(0)}%
                       </span>
                     </div>
@@ -391,9 +391,9 @@ const ReportsView: React.FC = () => {
           </Card>
 
           {/* Resource Availability */}
-          <Card className="bg-[#2d2d30] border-[#3e3e42]">
+          <Card className="bg-[var(--card)] border-[var(--border)]">
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
+              <h3 className="text-lg font-semibold text-[var(--text)] mb-4">
                 Available Resources
               </h3>
               <div className="space-y-3">
@@ -402,19 +402,19 @@ const ReportsView: React.FC = () => {
                   .sort((a, b) => b.metrics.availableHours - a.metrics.availableHours)
                   .map((report) => (
                     <div key={report.department.id} className="flex items-center justify-between">
-                      <span className="text-sm text-[#cccccc]">{report.department.name}</span>
+                      <span className="text-sm text-[var(--text)]">{report.department.name}</span>
                       <div className="text-right">
                         <div className="text-sm text-emerald-400 font-medium">
                           {Math.round(report.metrics.availableHours)}h available
                         </div>
-                        <div className="text-xs text-[#969696]">
+                        <div className="text-xs text-[var(--muted)]">
                           {report.metrics.teamSize} people
                         </div>
                       </div>
                     </div>
                   ))}
                 {reports.filter(r => r.metrics.availableHours > 0).length === 0 && (
-                  <div className="text-center text-[#969696] py-4">
+                  <div className="text-center text-[var(--muted)] py-4">
                     No departments have available capacity
                   </div>
                 )}
