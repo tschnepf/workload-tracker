@@ -11,6 +11,7 @@ from datetime import datetime
 from ..serializers import PersonSerializer
 from ..models import Person
 from core.utils.excel import write_headers, auto_fit_columns, create_excel_response
+from core.utils.excel_sanitize import sanitize_cell
 
 
 def export_people_to_excel(queryset, filename=None):
@@ -56,11 +57,14 @@ def _create_people_sheet(workbook, queryset):
     serializer = PersonSerializer(queryset, many=True)
     serialized_data = serializer.data
     
-    # Write data rows
+    # Write data rows (sanitize strings and force text type to avoid Excel formulas)
     for row_idx, person_data in enumerate(serialized_data, start=2):
         for col_idx, header in enumerate(headers, start=1):
             value = person_data.get(header, '')
-            sheet.cell(row=row_idx, column=col_idx, value=value)
+            safe_value = sanitize_cell(value) if isinstance(value, str) else value
+            cell = sheet.cell(row=row_idx, column=col_idx, value=safe_value)
+            if isinstance(value, str):
+                cell.data_type = 's'
     
     auto_fit_columns(sheet)
 

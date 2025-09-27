@@ -11,6 +11,15 @@ Notes
    - Command: curl -I http://localhost/
    - Command: curl -I https://localhost/ (if HTTPS configured)
 
+Out‑of‑Scope Failures Tracking
+- When running full or targeted tests, if a failure is unrelated to the current phase’s scope, record it in `prompts/FAILING-TESTS-TRIAGE.md` instead of fixing it inline.
+- For each entry, include:
+  - Test path (module.class.method)
+  - Symptom (expected vs actual)
+  - Likely affected UI/flow and suspected code area
+  - One‑line repro command (e.g., `docker compose exec backend python manage.py test <test> -v 2`)
+- Keep this list updated as you discover additional out‑of‑scope issues; schedule a follow‑up task to resolve the triage list after the phases land.
+
 ## Phase 1 — Strengthen CSP (remove unsafe-inline for styles) **COMPLETED**
  - Impact: Requires rebuild (frontend + backend + nginx)
  - Editing rules: Use apply_patch for all file changes. Preserve formatting and existing line endings. Do not use shell writes (Set-Content/echo/sed) to modify code. Do not insert literal '\r\n' sequences; let the patch handle newlines. Avoid bulk regex replacements; submit minimal, contextual patches.
