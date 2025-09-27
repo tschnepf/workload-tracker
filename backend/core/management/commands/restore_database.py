@@ -287,9 +287,18 @@ class Command(BaseCommand):
                     except Exception:
                         pass
                     proc = subprocess.Popen(["psql", "-v", "ON_ERROR_STOP=1"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    assert proc.stdin is not None
+                    if proc.stdin is None:
+                        # Defensive: avoid relying on assert (stripped under -O)
+                        try:
+                            proc.terminate()
+                        except Exception:
+                            pass
+                        raise CommandError("psql restore failed: no stdin pipe available")
                     shutil.copyfileobj(gz, proc.stdin)
-                    proc.stdin.close()
+                    try:
+                        proc.stdin.close()
+                    except Exception:
+                        pass
                     out, err = proc.communicate()
                     if proc.returncode != 0:
                         e = (err or b"").decode("utf-8", "ignore").strip()
