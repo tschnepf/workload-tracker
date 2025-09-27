@@ -263,6 +263,14 @@ SPECTACULAR_SETTINGS = {
     'SCHEMA_PATH_PREFIX': r'/api',
 }
 
+# Gate OpenAPI schema serving in production. Leave open in dev by default.
+OPENAPI_PUBLIC = os.getenv('OPENAPI_PUBLIC', 'true' if DEBUG else 'false').lower() == 'true'
+if not OPENAPI_PUBLIC:
+    # Require authentication to access the OpenAPI schema in prod
+    SPECTACULAR_SETTINGS['SERVE_PERMISSIONS'] = [
+        'rest_framework.permissions.IsAuthenticated'
+    ]
+
 # SimpleJWT configuration
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
