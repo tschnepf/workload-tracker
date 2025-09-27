@@ -123,8 +123,8 @@ AGGREGATE_CACHE_TTL=30
 ### File Import Safety (People/Projects)
 
 - Upload size limits (defaults; override via env):
-  - `PEOPLE_UPLOAD_MAX_BYTES` (default 10 MiB)
-  - `PROJECTS_UPLOAD_MAX_BYTES` (default 10 MiB)
+  - `PEOPLE_UPLOAD_MAX_BYTES` (default 100 MiB)
+  - `PROJECTS_UPLOAD_MAX_BYTES` (default 100 MiB)
 - Projects import storage: uploads are streamed to a private path under `BACKUPS_DIR/incoming/projects` before parsing; not web‑served.
 - Excel hardening: `.xlsx/.xls` imports are validated against ceilings before parsing:
   - Sheets ≤ 10; Rows per sheet ≤ 100,000; Total cells ≤ 5,000,000.
