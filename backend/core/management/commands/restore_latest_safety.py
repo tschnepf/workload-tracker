@@ -78,10 +78,18 @@ class Command(BaseCommand):
                 import gzip
                 with gzip.open(path, "rb") as gz:
                     p = subprocess.Popen(["psql", "-v", "ON_ERROR_STOP=1"], env=env_tmp, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    assert p.stdin is not None
+                    if p.stdin is None:
+                        try:
+                            p.terminate()
+                        except Exception:
+                            pass
+                        raise RuntimeError("psql restore failed: no stdin pipe available")
                     import shutil
                     shutil.copyfileobj(gz, p.stdin)
-                    p.stdin.close()
+                    try:
+                        p.stdin.close()
+                    except Exception:
+                        pass
                     out, err = p.communicate()
                     if p.returncode != 0:
                         raise RuntimeError((err or b"").decode("utf-8", "ignore")[:2000])
@@ -124,4 +132,3 @@ class Command(BaseCommand):
         except Exception:
             pass
         return ""
-
