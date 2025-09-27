@@ -14,7 +14,12 @@ from core.etag import ETagConditionalMixin
 from .serializers import ProjectSerializer, ProjectFilterMetadataSerializer, ProjectAvailabilityItemSerializer
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from rest_framework import serializers
+import logging
+import os
+import time
+from django.conf import settings as django_settings
 from .utils.excel_handler import export_projects_to_excel, import_projects_from_file
+from core.utils.xlsx_limits import enforce_xlsx_limits
 from deliverables.models import Deliverable
 from assignments.models import Assignment
 from people.models import Person
@@ -636,32 +641,96 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'success': False,
                 'error': 'No file provided'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        excel_file = request.FILES['file']
-        
-        # Validate file type
-        if not excel_file.name.endswith(('.xlsx', '.xls', '.csv')):
-            return Response({
-                'success': False,
-                'error': 'File must be Excel (.xlsx/.xls) or CSV format'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+
+        logger = logging.getLogger('security')
+        upload = request.FILES['file']
+
+        # Validate file type (extension + basic MIME check)
+        filename = upload.name
+        fname_l = filename.lower()
+        if not fname_l.endswith(('.xlsx', '.xls', '.csv')):
+            logger.warning('projects_import_unsupported_ext', extra={'filename': filename})
+            return Response({'success': False, 'error': 'File must be Excel (.xlsx/.xls) or CSV (.csv) format'}, status=status.HTTP_400_BAD_REQUEST)
+
+        ctype = getattr(upload, 'content_type', '') or ''
+        allowed_types = {
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',  # .xlsx
+            'application/vnd.ms-excel',  # .xls (and sometimes mislabeled csv)
+            'text/csv',
+            'application/csv',
+        }
+        # If a content type is provided and it is not an allowed type, reject
+        if ctype and ctype not in allowed_types:
+            logger.warning('projects_import_bad_ctype', extra={'filename': filename, 'content_type': ctype})
+            return Response({'success': False, 'error': f'Unsupported content type: {ctype}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Enforce size limits (pre-flight)
+        max_bytes = int(getattr(django_settings, 'PROJECTS_UPLOAD_MAX_BYTES', 10 * 1024 * 1024))
+        fsize = getattr(upload, 'size', None)
+        if isinstance(fsize, int) and fsize > max_bytes:
+            logger.warning('projects_import_too_large_prefetch', extra={'filename': filename, 'size': fsize, 'limit': max_bytes})
+            return Response({'success': False, 'error': 'File too large'}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+        # Persist uploaded file to a private, non-web-served directory (under BACKUPS_DIR)
+        safe_dir = os.path.join(getattr(django_settings, 'BACKUPS_DIR', '/backups'), 'incoming', 'projects')
+        try:
+            os.makedirs(safe_dir, exist_ok=True)
+        except Exception:
+            pass
+        safe_name = f"{int(time.time())}_{os.path.basename(filename)}"
+        safe_path = os.path.join(safe_dir, safe_name)
+
+        # Stream to disk while enforcing size limit
+        try:
+            written = 0
+            with open(safe_path, 'wb') as out:
+                for chunk in upload.chunks():
+                    out.write(chunk)
+                    written += len(chunk)
+                    if written > max_bytes:
+                        raise ValueError('upload_exceeds_limit')
+        except Exception as e:
+            try:
+                if os.path.exists(safe_path):
+                    os.remove(safe_path)
+            except Exception:
+                pass
+            if str(e) == 'upload_exceeds_limit':
+                logger.warning('projects_import_too_large_stream', extra={'filename': filename, 'limit': max_bytes})
+                return Response({'success': False, 'error': 'File too large'}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+            logger.warning('projects_import_store_failed', extra={'filename': filename, 'err': e.__class__.__name__})
+            return Response({'success': False, 'error': 'Failed to store upload'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # If Excel, enforce XLSX safety ceilings before heavy parse
+        try:
+            if fname_l.endswith(('.xlsx', '.xls')):
+                enforce_xlsx_limits(safe_path)
+        except ValueError as ve:
+            code = str(ve) or 'xlsx_limits_violation'
+            logger.warning('projects_import_xlsx_limits', extra={'filename': filename, 'code': code})
+            try:
+                os.remove(safe_path)
+            except Exception:
+                pass
+            return Response({'success': False, 'error': 'Excel file exceeds allowed structure limits', 'code': code}, status=status.HTTP_400_BAD_REQUEST)
+
         # Get options
         update_existing = request.data.get('update_existing', 'true').lower() == 'true'
         include_assignments = request.data.get('include_assignments', 'true').lower() == 'true'
         include_deliverables = request.data.get('include_deliverables', 'true').lower() == 'true'
         dry_run = request.data.get('dry_run', 'false').lower() == 'true'
-        
-        # For large files, this could be enhanced with background processing
-        # For now, process synchronously with result
+
+        # Process synchronously from the stored file
+        # Get options
         try:
-            results = import_projects_from_file(
-                excel_file,
-                update_existing=update_existing,
-                include_assignments=include_assignments,
-                include_deliverables=include_deliverables,
-                dry_run=dry_run
-            )
+            with open(safe_path, 'rb') as fh:
+                results = import_projects_from_file(
+                    fh,
+                    update_existing=update_existing,
+                    include_assignments=include_assignments,
+                    include_deliverables=include_deliverables,
+                    dry_run=dry_run
+                )
             
             # Add progress indicator for UI
             results['progress'] = 100
@@ -670,12 +739,8 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return Response(results, status=status.HTTP_200_OK)
             
         except Exception as e:
-            return Response({
-                'success': False,
-                'error': f'Import failed: {str(e)}',
-                'progress': 0,
-                'stage': 'error'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.warning('projects_import_failed', extra={'filename': filename, 'err': e.__class__.__name__})
+            return Response({'success': False, 'error': f'Import failed: {str(e)}', 'progress': 0, 'stage': 'error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['get'])
     def export_template(self, request):

@@ -168,6 +168,9 @@ BACKUP_UPLOAD_MAX_BYTES = int(os.getenv('BACKUP_UPLOAD_MAX_BYTES', str(5 * 1024 
 # People import upload limits (bytes). Default 10 MiB.
 PEOPLE_UPLOAD_MAX_BYTES = int(os.getenv('PEOPLE_UPLOAD_MAX_BYTES', str(10 * 1024 * 1024)))
 
+# Projects import upload limits (bytes). Default 10 MiB.
+PROJECTS_UPLOAD_MAX_BYTES = int(os.getenv('PROJECTS_UPLOAD_MAX_BYTES', str(10 * 1024 * 1024)))
+
 # Feature flags for progressive enhancement
 # Initialize and populate FEATURES
 FEATURES = {}
