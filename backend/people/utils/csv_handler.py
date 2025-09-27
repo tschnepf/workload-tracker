@@ -9,6 +9,7 @@ from datetime import datetime
 import codecs
 from ..serializers import PersonSerializer
 from ..models import Person
+from core.utils.excel_sanitize import sanitize_cell
 
 
 def export_people_to_csv(queryset, filename=None):
@@ -35,7 +36,7 @@ def export_people_to_csv(queryset, filename=None):
     serializer = PersonSerializer(queryset, many=True)
     serialized_data = serializer.data
     
-    # Write data rows
+    # Write data rows (sanitize strings to prevent CSV injection)
     for person_data in serialized_data:
         row = []
         for header in headers:
@@ -43,6 +44,8 @@ def export_people_to_csv(queryset, filename=None):
             # Handle None values
             if value is None:
                 value = ''
+            if isinstance(value, str):
+                value = sanitize_cell(value)
             row.append(str(value))
         writer.writerow(row)
     

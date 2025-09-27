@@ -31,7 +31,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\accounts\\serializers.py#L66",
@@ -65,7 +65,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\accounts\\serializers.py#L132",
@@ -99,7 +99,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\accounts\\signals.py#L34",
@@ -133,7 +133,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\accounts\\tests\\test_auth_endpoints.py#L14",
@@ -167,7 +167,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\accounts\\tests\\test_auth_endpoints.py#L16",
@@ -201,7 +201,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\accounts\\tests\\test_auth_endpoints.py#L81",
@@ -235,7 +235,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\accounts\\views.py#L131",
@@ -269,7 +269,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\accounts\\views.py#L212",
@@ -303,7 +303,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\accounts\\views.py#L239",
@@ -337,7 +337,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\accounts\\views.py#L319",
@@ -371,7 +371,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\assignments\\apps.py#L11",
@@ -405,7 +405,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\assignments\\tests\\test_department_filter.py#L24",
@@ -439,7 +439,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\assignments\\tests\\test_rebalance_suggestions.py#L23",
@@ -473,7 +473,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\assignments\\views.py#L126",
@@ -507,7 +507,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\assignments\\views.py#L149",
@@ -541,7 +541,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\assignments\\views.py#L354",
@@ -575,7 +575,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\assignments\\views.py#L400",
@@ -609,7 +609,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\assignments\\views.py#L574",
@@ -643,7 +643,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\assignments\\views.py#L594",
@@ -677,7 +677,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\assignments\\views.py#L621",
@@ -711,7 +711,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\assignments\\views.py#L672",
@@ -745,7 +745,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\assignments\\views.py#L678",
@@ -779,7 +779,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\assignments\\views.py#L785",
@@ -813,7 +813,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\assignments\\views.py#L787",
@@ -847,7 +847,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\config\\settings.py#L110",
@@ -881,7 +881,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B404:backend\\core\\backup_service.py#L8",
@@ -915,7 +915,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b404-import-subprocess"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_service.py#L80",
@@ -949,7 +949,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\backup_service.py#L144",
@@ -983,7 +983,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\backup_service.py#L144",
@@ -1017,7 +1017,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_service.py#L258",
@@ -1051,7 +1051,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_tasks.py#L97",
@@ -1085,7 +1085,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_tasks.py#L99",
@@ -1119,7 +1119,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_utils.py#L115",
@@ -1153,7 +1153,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_views.py#L76",
@@ -1187,7 +1187,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_views.py#L121",
@@ -1221,7 +1221,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_views.py#L143",
@@ -1255,7 +1255,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_views.py#L188",
@@ -1289,7 +1289,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_views.py#L243",
@@ -1323,7 +1323,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\backup_views.py#L265",
@@ -1357,7 +1357,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\core\\etag.py#L26",
@@ -1391,7 +1391,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\etag.py#L35",
@@ -1425,7 +1425,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\job_views.py#L33",
@@ -1459,7 +1459,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\job_views.py#L100",
@@ -1493,7 +1493,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\job_views.py#L110",
@@ -1527,7 +1527,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\job_views.py#L136",
@@ -1561,7 +1561,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\job_views.py#L153",
@@ -1595,7 +1595,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\job_views.py#L201",
@@ -1629,7 +1629,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B404:backend\\core\\management\\commands\\backup_database.py#L7",
@@ -1663,7 +1663,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b404-import-subprocess"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\backup_database.py#L58",
@@ -1697,7 +1697,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\backup_database.py#L58",
@@ -1731,7 +1731,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\backup_database.py#L74",
@@ -1765,7 +1765,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\backup_database.py#L74",
@@ -1799,7 +1799,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B112:backend\\core\\management\\commands\\backup_database.py#L99",
@@ -1833,7 +1833,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\backup_database.py#L199",
@@ -1867,7 +1867,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\backup_database.py#L203",
@@ -1901,7 +1901,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\backup_database.py#L252",
@@ -1935,7 +1935,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\cleanup_backups.py#L50",
@@ -1969,7 +1969,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B112:backend\\core\\management\\commands\\normalize_weekly_hours.py#L30",
@@ -2003,7 +2003,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B112:backend\\core\\management\\commands\\normalize_weekly_hours.py#L92",
@@ -2037,7 +2037,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B404:backend\\core\\management\\commands\\restore_database.py#L6",
@@ -2071,7 +2071,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b404-import-subprocess"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L54",
@@ -2105,7 +2105,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L54",
@@ -2139,7 +2139,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L71",
@@ -2173,7 +2173,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L71",
@@ -2207,7 +2207,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L92",
@@ -2241,7 +2241,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L92",
@@ -2275,7 +2275,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L93",
@@ -2309,7 +2309,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L104",
@@ -2343,7 +2343,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L104",
@@ -2377,7 +2377,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L144",
@@ -2411,7 +2411,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L144",
@@ -2445,7 +2445,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B112:backend\\core\\management\\commands\\restore_database.py#L166",
@@ -2479,7 +2479,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L169",
@@ -2513,7 +2513,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L189",
@@ -2547,7 +2547,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L200",
@@ -2581,7 +2581,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L209",
@@ -2615,7 +2615,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L209",
@@ -2649,7 +2649,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L226",
@@ -2683,7 +2683,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L244",
@@ -2717,7 +2717,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L265",
@@ -2751,7 +2751,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L275",
@@ -2785,7 +2785,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L277",
@@ -2819,7 +2819,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L277",
@@ -2853,7 +2853,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L287",
@@ -2887,7 +2887,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L289",
@@ -2921,7 +2921,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L289",
@@ -2955,7 +2955,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B101:backend\\core\\management\\commands\\restore_database.py#L290",
@@ -2989,7 +2989,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b101_assert_used.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L302",
@@ -3023,7 +3023,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_database.py#L311",
@@ -3057,7 +3057,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_database.py#L311",
@@ -3091,7 +3091,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L313",
@@ -3125,7 +3125,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_database.py#L332",
@@ -3159,7 +3159,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B404:backend\\core\\management\\commands\\restore_latest_safety.py#L5",
@@ -3193,7 +3193,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b404-import-subprocess"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_latest_safety.py#L58",
@@ -3227,7 +3227,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_latest_safety.py#L58",
@@ -3261,7 +3261,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_latest_safety.py#L73",
@@ -3295,7 +3295,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_latest_safety.py#L80",
@@ -3329,7 +3329,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_latest_safety.py#L80",
@@ -3363,7 +3363,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B101:backend\\core\\management\\commands\\restore_latest_safety.py#L81",
@@ -3397,7 +3397,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b101_assert_used.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_latest_safety.py#L101",
@@ -3431,7 +3431,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_latest_safety.py#L101",
@@ -3465,7 +3465,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_latest_safety.py#L104",
@@ -3499,7 +3499,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_latest_safety.py#L104",
@@ -3533,7 +3533,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B607:backend\\core\\management\\commands\\restore_latest_safety.py#L114",
@@ -3567,7 +3567,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b607_start_process_with_partial_path.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B603:backend\\core\\management\\commands\\restore_latest_safety.py#L114",
@@ -3601,7 +3601,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b603_subprocess_without_shell_equals_true.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_latest_safety.py#L115",
@@ -3635,7 +3635,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\restore_latest_safety.py#L124",
@@ -3669,7 +3669,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\sync_backups.py#L90",
@@ -3703,7 +3703,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\sync_backups.py#L104",
@@ -3737,7 +3737,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\test_aggregation_performance.py#L31",
@@ -3771,7 +3771,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\management\\commands\\test_aggregation_performance.py#L51",
@@ -3805,7 +3805,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\middleware.py#L37",
@@ -3839,7 +3839,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\middleware.py#L70",
@@ -3873,7 +3873,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\middleware.py#L72",
@@ -3907,7 +3907,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\middleware.py#L76",
@@ -3941,7 +3941,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\middleware.py#L82",
@@ -3975,7 +3975,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\middleware.py#L101",
@@ -4009,7 +4009,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\middleware.py#L119",
@@ -4043,7 +4043,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\middleware.py#L154",
@@ -4077,7 +4077,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\models.py#L46",
@@ -4111,7 +4111,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B310:backend\\core\\notifications.py#L19",
@@ -4145,7 +4145,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b310-urllib-urlopen"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\tasks.py#L94",
@@ -4179,7 +4179,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\tasks.py#L100",
@@ -4213,7 +4213,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\tasks.py#L154",
@@ -4247,7 +4247,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\tasks.py#L224",
@@ -4281,7 +4281,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\core\\tasks.py#L230",
@@ -4315,7 +4315,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\core\\tests\\test_backup.py#L17",
@@ -4349,7 +4349,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\core\\tests\\test_backup.py#L18",
@@ -4383,7 +4383,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\core\\tests\\test_backup.py#L210",
@@ -4417,7 +4417,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\dashboard\\views.py#L168",
@@ -4451,7 +4451,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B112:backend\\deliverables\\reallocation.py#L51",
@@ -4485,7 +4485,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B112:backend\\deliverables\\reallocation.py#L63",
@@ -4519,7 +4519,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B112:backend\\deliverables\\reallocation.py#L87",
@@ -4553,7 +4553,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\deliverables\\tests\\test_calendar.py#L16",
@@ -4587,7 +4587,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\deliverables\\tests\\test_calendar_union_mine_only.py#L18",
@@ -4621,7 +4621,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\deliverables\\tests\\test_calendar_union_mine_only.py#L19",
@@ -4655,7 +4655,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\deliverables\\tests\\test_deliverable_assignments.py#L15",
@@ -4689,7 +4689,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\deliverables\\views.py#L166",
@@ -4723,7 +4723,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\deliverables\\views.py#L186",
@@ -4757,7 +4757,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\departments\\apps.py#L11",
@@ -4791,7 +4791,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\departments\\signals.py#L15",
@@ -4825,7 +4825,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\monitoring\\management\\commands\\monitor_performance.py#L299",
@@ -4859,7 +4859,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\monitoring\\tests.py#L186",
@@ -4893,7 +4893,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\apps.py#L11",
@@ -4927,7 +4927,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\signals.py#L16",
@@ -4961,7 +4961,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\tasks.py#L90",
@@ -4995,7 +4995,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\people\\tests\\test_capacity_heatmap.py#L25",
@@ -5029,7 +5029,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\people\\tests\\test_department_filter.py#L16",
@@ -5063,7 +5063,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\people\\tests\\test_workload_forecast.py#L26",
@@ -5097,7 +5097,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\people\\tests\\test_workload_forecast.py#L85",
@@ -5131,7 +5131,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L135",
@@ -5165,7 +5165,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\people\\views.py#L156",
@@ -5199,7 +5199,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L500",
@@ -5233,7 +5233,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\people\\views.py#L527",
@@ -5267,7 +5267,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L556",
@@ -5301,7 +5301,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L621",
@@ -5335,7 +5335,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L625",
@@ -5369,7 +5369,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L717",
@@ -5403,7 +5403,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\people\\views.py#L751",
@@ -5437,7 +5437,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L771",
@@ -5471,7 +5471,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L793",
@@ -5505,7 +5505,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L855",
@@ -5539,7 +5539,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L859",
@@ -5573,7 +5573,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L949",
@@ -5607,7 +5607,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L965",
@@ -5641,7 +5641,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L1075",
@@ -5675,7 +5675,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\people\\views.py#L1114",
@@ -5709,7 +5709,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L1135",
@@ -5743,7 +5743,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L1162",
@@ -5777,7 +5777,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L1171",
@@ -5811,7 +5811,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L1176",
@@ -5845,7 +5845,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\people\\views.py#L1203",
@@ -5879,7 +5879,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\personal\\tests.py#L19",
@@ -5913,7 +5913,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\personal\\tests.py#L27",
@@ -5947,7 +5947,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\personal\\views.py#L57",
@@ -5981,7 +5981,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\personal\\views.py#L82",
@@ -6015,7 +6015,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\personal\\views.py#L176",
@@ -6049,7 +6049,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\personal\\views.py#L199",
@@ -6083,7 +6083,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\projects\\tests\\test_filter_metadata.py#L19",
@@ -6117,7 +6117,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\projects\\views.py#L67",
@@ -6151,7 +6151,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\projects\\views.py#L240",
@@ -6185,7 +6185,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\projects\\views.py#L285",
@@ -6219,7 +6219,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\projects\\views.py#L326",
@@ -6253,7 +6253,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\projects\\views.py#L359",
@@ -6287,7 +6287,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B110:backend\\projects\\views.py#L363",
@@ -6321,7 +6321,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B324:backend\\projects\\views.py#L561",
@@ -6355,7 +6355,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\reports\\tests.py#L16",
@@ -6389,7 +6389,7 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   },
   {
     "id": "B106:backend\\reports\\tests.py#L48",
@@ -6423,6 +6423,6 @@
     "references": [
       "https://bandit.readthedocs.io/en/1.8.6/plugins/b106_hardcoded_password_funcarg.html"
     ],
-    "first_seen": "2025-09-27T18:59:00Z"
+    "first_seen": "2025-09-27T20:26:10Z"
   }
 ]

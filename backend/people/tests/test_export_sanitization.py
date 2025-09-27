@@ -30,3 +30,20 @@ class PeopleExportSanitizationTests(TestCase):
             self.assertTrue(val.startswith("="))
         finally:
             wb.close()
+
+    def test_csv_name_starting_with_equals_is_escaped(self):
+        # Create a record with dangerous prefix
+        p = Person.objects.create(name='=SUM(A1:A2)', weekly_capacity=36)
+        from people.utils.csv_handler import export_people_to_csv
+        resp = export_people_to_csv(Person.objects.filter(id=p.id))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.content.decode('utf-8')
+        # Parse CSV to extract first data row
+        import csv, io
+        reader = csv.reader(io.StringIO(data))
+        rows = list(reader)
+        # rows[0] headers, rows[1] data; 'name' is first column
+        self.assertGreaterEqual(len(rows), 2)
+        name_cell = rows[1][0]
+        # Expect a leading apostrophe to neutralize formula execution
+        self.assertTrue(name_cell.startswith("'="))
