@@ -145,6 +145,34 @@ Acceptance Criteria
 - Test suite passes without Slack-related tests.
 - Commands previously importing Slack still run without behavioral changes (use logging when needed).
 
+## 👤 Self‑Service Edits (Object‑Level Writes for Regular Users)
+
+Context
+- Today, regular users are deny‑by‑default for writes; Admins/Managers perform edits. We added object‑level checks mainly to prevent cross‑object writes.
+
+Goal
+- Allow regular (non‑manager) users to edit only their own linked Person record and their own Assignments while preserving RBAC for everything else.
+
+Scope & Steps
+1. Permissions logic
+   - Update `backend/accounts/permissions.py:RoleBasedAccessPermission.has_object_permission` to return True for:
+     - `people.person` when `obj.id == request.user.profile.person_id`.
+     - `assignments.assignment` when `obj.person_id == request.user.profile.person_id`.
+   - Keep Admins/Managers allowed for all relevant writes; other models remain manager/admin‑only.
+2. Tests
+   - Add tests asserting regular users can PATCH their own Person and their own Assignments; still 403 for others.
+   - Keep existing deny/403 tests for cross‑object edits.
+3. API docs / UI
+   - Document allowed self‑edits (which fields are user‑editable) and leave sensitive fields admin‑only.
+   - UI: enable inline editing for the user’s own profile fields and assignment notes/hours as applicable.
+4. Audit & rate limiting
+   - Ensure changes still flow through existing throttles; add AdminAuditLog entries where appropriate.
+
+Acceptance Criteria
+- Regular users can successfully edit their own Person and their own Assignments; 403 on others.
+- Admin/Manager behavior unchanged.
+- Tests cover permit/deny matrix; docs updated.
+
 **Estimated Timeline**: 1-2 days
 **Trigger Point**: When any API dataset exceeds 1,000 records
 
