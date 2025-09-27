@@ -120,6 +120,24 @@ AGGREGATE_CACHE_TTL=30
 - Static file access restrictions
 - Development tools disabled (Silk, debug mode)
 
+### Content Security Policy (CSP)
+
+- Backend injects a CSP header via `CSPMiddleware` with rollout flags:
+  - `CSP_ENABLED=true|false`
+  - `CSP_REPORT_ONLY=true|false` (keep `true` in dev/staging; set `false` in production)
+  - `CSP_REPORT_URI` (defaults to `/csp-report/`)
+- Default policy (no unsafe-inline):
+  - `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'`
+- Nonces/hashes:
+  - The middleware generates a per-request nonce and appends `'nonce-<value>'` to `script-src` and `style-src`.
+  - Prefer moving inline scripts/styles into bundled assets. If inline is unavoidable in Django templates, add `nonce` attributes using `request.csp_nonce`.
+- Nginx mirrors the CSP header for static assets in `nginx/sites-available/workload-tracker.conf` (both HTTP/HTTPS blocks).
+- Rollout guidance:
+  1. Enable CSP in report-only mode and review violations (fonts, inline snippets, third-party).
+  2. Address violations (self-host fonts or expand CSP origins as needed).
+  3. Switch to enforcement in production (`CSP_REPORT_ONLY=false`).
+  4. Keep report endpoint active to monitor regressions.
+
 ## Monitoring
 
 ### Health Checks

@@ -492,7 +492,7 @@ CSP_ENABLED = os.getenv('CSP_ENABLED', 'true').lower() == 'true'
 CSP_REPORT_ONLY = os.getenv('CSP_REPORT_ONLY', 'true' if DEBUG else 'false').lower() == 'true'
 CSP_POLICY = os.getenv(
     'CSP_POLICY',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
     "font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
 )
 # Optional absolute/relative endpoint to receive violation reports

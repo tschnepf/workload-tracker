@@ -137,7 +137,7 @@ class CSPMiddleware:
         self.get_response = get_response
         self.enabled = getattr(settings, 'CSP_ENABLED', True)
         self.report_only = getattr(settings, 'CSP_REPORT_ONLY', True)
-        self.policy = getattr(settings, 'CSP_POLICY', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'")
+        self.policy = getattr(settings, 'CSP_POLICY', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'")
         self.report_uri = getattr(settings, 'CSP_REPORT_URI', None)
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
@@ -145,7 +145,38 @@ class CSPMiddleware:
         if not self.enabled:
             return response
         header_name = 'Content-Security-Policy-Report-Only' if self.report_only else 'Content-Security-Policy'
+        # Generate a nonce for this response and attach for potential template use
+        try:
+            import os as _os
+            import base64 as _b64
+            nonce_bytes = _os.urandom(16)
+            nonce = _b64.b64encode(nonce_bytes).decode('ascii')
+        except Exception:
+            nonce = None
+        # Stash on request for templates that might use it
+        try:
+            setattr(request, 'csp_nonce', nonce)
+        except Exception:
+            pass
+
+        # Expand policy with nonce support: if policy contains "{nonce}", replace; otherwise append nonce to script/style directives
         value = self.policy
+        try:
+            if nonce and '{nonce}' in value:
+                value = value.replace('{nonce}', nonce)
+            elif nonce:
+                # Append 'nonce-...' into script-src and style-src directives when present
+                parts = [p.strip() for p in value.split(';') if p.strip()]
+                for i, part in enumerate(parts):
+                    lower = part.lower()
+                    if lower.startswith('script-src '):
+                        parts[i] = f"{part} 'nonce-{nonce}'"
+                    elif lower.startswith('style-src '):
+                        parts[i] = f"{part} 'nonce-{nonce}'"
+                value = '; '.join(parts)
+        except Exception:
+            # Fallback to raw policy if manipulation fails
+            value = self.policy
         if self.report_uri:
             # Append report-uri at the end
             value = f"{value}; report-uri {self.report_uri}"
