@@ -208,3 +208,11 @@
   - MD5 for ETag: Not used for security; acceptable. Optionally switch to `blake2b` or `md5(..., usedforsecurity=False)` to silence tools.
 - Tracking
   - All triaged items remain in `security/security-findings.json` with justification tags. Promote any item to open if context changes or evidence strengthens.
+## Authorization Policy Decision — RBAC vs. Object-Level
+
+- Decision: Keep RBAC (Admin/Manager writes) as the baseline. Add targeted object-level ownership checks for end-user self-service only.
+  - People: Non‑manager users may modify only their own linked Person (via `UserProfile.person`). Deny cross‑person edits. Admins/Managers unaffected.
+  - Assignments: Non‑manager users may modify only assignments for their own Person. Admins/Managers unaffected.
+  - Projects/Deliverables: Writes remain Admin/Manager only; no end‑user ownership model.
+- Implementation: `backend/accounts/permissions.py` now implements `has_object_permission` to enforce the above. Tests added under `backend/people/tests/test_object_permissions.py`.
+- Status: Implemented; leaving overall RBAC policy intact while preventing cross‑object writes by regular users.
