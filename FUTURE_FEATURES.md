@@ -111,12 +111,39 @@ Implementation Steps:
    - Response time tracking for bulk endpoints
    - Memory usage alerts
    - Dataset growth monitoring
-   - Automated alerts when approaching limits
+  - Automated alerts when approaching limits
 
 6. **Database Optimization**:
-   - Add database indexes for frequently queried fields
-   - Implement query optimization for large datasets
-   - Consider database-level pagination improvements
+  - Add database indexes for frequently queried fields
+  - Implement query optimization for large datasets
+  - Consider database-level pagination improvements
+
+## 🧹 Cleanup — Remove Slack Notifications (dead code)
+
+Context
+- The codebase contains an optional Slack webhook helper (`backend/core/notifications.py`) referenced by a few management commands, but Slack is not part of the target stack and is not planned for adoption.
+
+Goal
+- Remove Slack notification code and references to reduce maintenance surface and avoid confusion.
+
+Scope & Steps
+1. Delete helper and imports
+   - Remove `backend/core/notifications.py` and any imports of `notify_slack` in:
+     - `backend/core/management/commands/cleanup_backups.py`
+     - `backend/core/management/commands/sync_backups.py`
+     - `backend/core/management/commands/restore_latest_safety.py`
+   - Replace with no-op comments or standard logging where appropriate.
+2. Environment docs
+   - Remove `SLACK_WEBHOOK_URL` from `.env.example` and any docs.
+3. Tests
+   - Remove Slack webhook validation tests (if present) and adjust any command tests that assumed Slack calls.
+4. Security plan alignment
+   - Remove or mark Phase 15 (Slack webhook handling) as “not applicable”.
+
+Acceptance Criteria
+- No references to Slack or `SLACK_WEBHOOK_URL` remain in code or docs.
+- Test suite passes without Slack-related tests.
+- Commands previously importing Slack still run without behavioral changes (use logging when needed).
 
 **Estimated Timeline**: 1-2 days
 **Trigger Point**: When any API dataset exceeds 1,000 records
