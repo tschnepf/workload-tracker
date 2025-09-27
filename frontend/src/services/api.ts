@@ -1,4 +1,4 @@
-/**
+ï»¿/**
  * API service layer - handles all backend communication
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
@@ -11,6 +11,7 @@ import { apiClient, authHeaders } from '@/api/client';
 import { refreshAccessToken as refreshAccessTokenSafe } from '@/store/auth';
 import { showToast } from '@/lib/toastBus';
 import { etagStore } from '@/api/etagStore';
+import { friendlyErrorMessage as _friendlyErrorMessage } from '@/api/errors';
 
 const API_BASE_URL = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
 // Feature flags for OpenAPI migration (scoped + global)
@@ -29,47 +30,9 @@ class ApiError extends Error {
 
 const IS_DEV = import.meta.env && (import.meta.env.DEV ?? false);
 
+// Delegate to shared error mapper to avoid duplication
 function friendlyErrorMessage(status: number, data: any, fallback: string): string {
-  // Try common DRF shapes first
-  const detail = typeof data === 'object' && data ? (data.detail || data.message || data.error) : null;
-  const nonField = Array.isArray(data?.non_field_errors) ? data.non_field_errors[0] : null;
-  const firstFieldError = (() => {
-    if (data && typeof data === 'object') {
-      for (const [k, v] of Object.entries(data)) {
-        if (k === 'detail' || k === 'message' || k === 'non_field_errors') continue;
-        if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'string') return v[0] as string;
-      }
-    }
-    return null;
-  })();
-
-  switch (status) {
-    case 0:
-      return 'Network error — unable to reach the server.';
-    case 400:
-      return nonField || firstFieldError || detail || 'Please check the form for errors and try again.';
-    case 401:
-      return 'Your session has expired. Please sign in again.';
-    case 403:
-      return 'You do not have permission to perform this action.';
-    case 404:
-      return 'We could not find what you were looking for.';
-    case 409:
-      return 'A conflict occurred. Please refresh and try again.';
-    case 412:
-      return 'This record changed since you loaded it. Refresh and retry.';
-    case 413:
-      return 'The request is too large. Try narrowing your selection.';
-    case 429:
-      return 'Too many requests. Please slow down and try again soon.';
-    case 500:
-    case 502:
-    case 503:
-    case 504:
-      return 'Something went wrong on our side. Please try again.';
-    default:
-      return detail || fallback;
-  }
+  return _friendlyErrorMessage(status, data, fallback);
 }
 
 // Lightweight in-memory cache to coalesce duplicate GETs and short-cache results
@@ -1242,4 +1205,5 @@ export const authApi = {
     return;
   },
 };
+
 

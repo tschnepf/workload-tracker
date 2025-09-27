@@ -79,7 +79,7 @@ const ManagerDashboard: React.FC = () => {
     return (
       <Layout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-[#969696]">Loading manager dashboard...</div>
+          <div className="text-[var(--muted)]">Loading manager dashboard...</div>
         </div>
       </Layout>
     );
@@ -91,13 +91,13 @@ const ManagerDashboard: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-[#cccccc]">
+            <h1 className="text-3xl font-bold text-[var(--text)]">
               Manager Dashboard
             </h1>
-            <p className="text-[#969696] mt-2">
+            <p className="text-[var(--muted)] mt-2">
               Department-focused management and team insights
               {selectedDepartmentInfo && (
-                <span className="block mt-1 text-[#cccccc]">
+                <span className="block mt-1 text-[var(--text)]">
                   Managing: {selectedDepartmentInfo.name}
                 </span>
               )}
@@ -105,14 +105,14 @@ const ManagerDashboard: React.FC = () => {
           </div>
           
           {/* Controls */}
-          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-6">
             {/* Department Selector */}
             <div className="flex items-center gap-3">
-              <label className="text-sm text-[#969696]">Department:</label>
+              <label className="text-sm text-[var(--muted)]">Department:</label>
               <select
                 value={selectedDepartment}
                 onChange={(e) => setSelectedDepartment(e.target.value)}
-                className="px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] focus:border-[#007acc] focus:outline-none min-w-[140px]"
+                className="px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none min-w-[140px]"
               >
                 <option value="">Select Department...</option>
                 {departments.map((dept) => (
@@ -125,16 +125,16 @@ const ManagerDashboard: React.FC = () => {
             
             {/* Time Period Selector */}
             <div className="flex items-center gap-3">
-              <label className="text-sm text-[#969696]">Period:</label>
+              <label className="text-sm text-[var(--muted)]">Period:</label>
               <div className="flex gap-1">
                 {[1, 2, 4, 8].map((weeks) => (
                   <button
                     key={weeks}
                     onClick={() => setWeeksPeriod(weeks)}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
+                    className={`px-2 py-1 text-xs rounded border transition-colors ${
                       weeksPeriod === weeks
-                        ? 'bg-[#007acc] text-white'
-                        : 'bg-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#4e4e52]'
+                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                        : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
                     }`}
                   >
                     {weeks}w
@@ -152,8 +152,8 @@ const ManagerDashboard: React.FC = () => {
         )}
 
         {!selectedDepartment ? (
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-8 text-center">
-            <div className="text-[#969696]">
+          <Card className="bg-[var(--card)] border-[var(--border)] p-8 text-center">
+            <div className="text-[var(--muted)]">
               <h3 className="text-lg mb-2">Select a Department</h3>
               <p>Choose a department to view management insights and team metrics</p>
             </div>
@@ -162,58 +162,58 @@ const ManagerDashboard: React.FC = () => {
           <>
             {/* Department Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="bg-[#2d2d30] border-[#3e3e42]">
-                <div className="text-[#969696] text-sm">Team Members</div>
-                <div className="text-2xl font-bold text-[#cccccc]">
+              <Card className="bg-[var(--card)] border-[var(--border)]">
+                <div className="text-[var(--muted)] text-sm">Team Members</div>
+                <div className="text-2xl font-bold text-[var(--text)]">
                   {dashboardData.summary.total_people}
                 </div>
-                <div className="text-xs text-[#969696] mt-1">
+                <div className="text-xs text-[var(--muted)] mt-1">
                   In {selectedDepartmentInfo?.name}
                 </div>
               </Card>
               
-              <Card className="bg-[#2d2d30] border-[#3e3e42]">
-                <div className="text-[#969696] text-sm">Department Utilization</div>
+              <Card className="bg-[var(--card)] border-[var(--border)]">
+                <div className="text-[var(--muted)] text-sm">Department Utilization</div>
                 <div className="text-2xl font-bold text-blue-400">
                   {dashboardData.summary.avg_utilization}%
                 </div>
-                <div className="text-xs text-[#969696] mt-1">
+                <div className="text-xs text-[var(--muted)] mt-1">
                   {weeksPeriod === 1 ? 'Current week' : `${weeksPeriod}-week average`}
                 </div>
               </Card>
               
-              <Card className="bg-[#2d2d30] border-[#3e3e42]">
-                <div className="text-[#969696] text-sm">Active Assignments</div>
-                <div className="text-2xl font-bold text-[#cccccc]">
+              <Card className="bg-[var(--card)] border-[var(--border)]">
+                <div className="text-[var(--muted)] text-sm">Active Assignments</div>
+                <div className="text-2xl font-bold text-[var(--text)]">
                   {dashboardData.summary.total_assignments}
                 </div>
-                <div className="text-xs text-[#969696] mt-1">
+                <div className="text-xs text-[var(--muted)] mt-1">
                   Department projects
                 </div>
               </Card>
               
-              <Card className="bg-[#2d2d30] border-[#3e3e42]">
-                <div className="text-[#969696] text-sm">Needs Attention</div>
+              <Card className="bg-[var(--card)] border-[var(--border)]">
+                <div className="text-[var(--muted)] text-sm">Needs Attention</div>
                 <div className="text-2xl font-bold text-red-400">
                   {dashboardData.summary.overallocated_count}
                 </div>
-                <div className="text-xs text-[#969696] mt-1">
+                <div className="text-xs text-[var(--muted)] mt-1">
                   Overallocated people
                 </div>
               </Card>
             </div>
 
             {/* Team Overview */}
-            <Card className="bg-[#2d2d30] border-[#3e3e42]">
-              <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
+            <Card className="bg-[var(--card)] border-[var(--border)]">
+              <h3 className="text-lg font-semibold text-[var(--text)] mb-4">
                 Team Management Overview
               </h3>
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {dashboardData.team_overview.map(person => (
-                  <div key={person.id} className="flex items-center justify-between p-3 bg-[#3e3e42]/50 rounded-lg">
+                  <div key={person.id} className="flex items-center justify-between p-3 bg-[var(--surfaceHover)] rounded-lg border border-[var(--border)]">
                     <div className="flex-1">
-                      <div className="font-medium text-[#cccccc]">{person.name}</div>
-                      <div className="text-sm text-[#969696]">
+                      <div className="font-medium text-[var(--text)]">{person.name}</div>
+                      <div className="text-sm text-[var(--muted)]">
                         {person.role} • {person.allocated_hours}h / {person.capacity}h
                       </div>
                       {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (
@@ -235,7 +235,7 @@ const ManagerDashboard: React.FC = () => {
                 ))}
                 
                 {dashboardData.team_overview.length === 0 && (
-                  <div className="text-center py-8 text-[#969696]">
+                  <div className="text-center py-8 text-[var(--muted)]">
                     No team members found in this department
                   </div>
                 )}
@@ -243,24 +243,24 @@ const ManagerDashboard: React.FC = () => {
             </Card>
 
             {/* Manager Actions Panel */}
-            <Card className="bg-[#2d2d30] border-[#3e3e42]">
-              <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
+            <Card className="bg-[var(--card)] border-[var(--border)]">
+              <h3 className="text-lg font-semibold text-[var(--text)] mb-4">
                 Quick Actions
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button className="p-4 bg-[#3e3e42]/50 rounded-lg border border-[#3e3e42] hover:bg-[#3e3e42]/70 transition-colors text-left">
-                  <div className="text-[#cccccc] font-medium mb-1">👥 Manage Team</div>
-                  <div className="text-sm text-[#969696]">Add, edit, or reassign team members</div>
+                <button className="p-4 bg-[var(--surfaceHover)] rounded-lg border border-[var(--border)] hover:bg-[var(--surfaceOverlay)] transition-colors text-left">
+                  <div className="text-[var(--text)] font-medium mb-1">👥 Manage Team</div>
+                  <div className="text-sm text-[var(--muted)]">Add, edit, or reassign team members</div>
                 </button>
                 
-                <button className="p-4 bg-[#3e3e42]/50 rounded-lg border border-[#3e3e42] hover:bg-[#3e3e42]/70 transition-colors text-left">
-                  <div className="text-[#cccccc] font-medium mb-1">📊 View Reports</div>
-                  <div className="text-sm text-[#969696]">Department performance analytics</div>
+                <button className="p-4 bg-[var(--surfaceHover)] rounded-lg border border-[var(--border)] hover:bg-[var(--surfaceOverlay)] transition-colors text-left">
+                  <div className="text-[var(--text)] font-medium mb-1">📊 View Reports</div>
+                  <div className="text-sm text-[var(--muted)]">Department performance analytics</div>
                 </button>
                 
-                <button className="p-4 bg-[#3e3e42]/50 rounded-lg border border-[#3e3e42] hover:bg-[#3e3e42]/70 transition-colors text-left">
-                  <div className="text-[#cccccc] font-medium mb-1">⚖️ Balance Workload</div>
-                  <div className="text-sm text-[#969696]">Redistribute assignments</div>
+                <button className="p-4 bg-[var(--surfaceHover)] rounded-lg border border-[var(--border)] hover:bg-[var(--surfaceOverlay)] transition-colors text-left">
+                  <div className="text-[var(--text)] font-medium mb-1">⚖️ Balance Workload</div>
+                  <div className="text-sm text-[var(--muted)]">Redistribute assignments</div>
                 </button>
               </div>
             </Card>
@@ -272,5 +272,6 @@ const ManagerDashboard: React.FC = () => {
 };
 
 export default ManagerDashboard;
+
 
 

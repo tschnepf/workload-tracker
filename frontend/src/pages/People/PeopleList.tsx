@@ -736,7 +736,7 @@ const PeopleList: React.FC = () => {
 
   return (
     <Layout>
-      <div className="h-full min-h-0 flex bg-[#1e1e1e]">
+      <div className="h-full min-h-0 flex bg-[var(--bg)]">
         
         {/* Left Panel - People List */}
         <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto">
@@ -766,7 +766,7 @@ const PeopleList: React.FC = () => {
               <div className="department-filter relative">
                 <div 
                   onClick={() => setShowDepartmentDropdown(!showDepartmentDropdown)}
-                  className="w-full px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] min-h-[32px] flex flex-wrap items-center gap-1 cursor-pointer hover:border-[#007acc] focus:border-[var(--focus)]"
+                  className="w-full px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] min-h-[32px] flex flex-wrap items-center gap-1 cursor-pointer hover:border-[var(--focus)] focus:border-[var(--focus)]"
                 >
                   {departmentFilter.length === 0 ? (
                     <span className="text-[var(--muted)]">All Departments</span>
@@ -778,7 +778,7 @@ const PeopleList: React.FC = () => {
                         return (
                           <span
                             key={index}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-[var(--surfaceHover)] text-[var(--text)] rounded text-xs border border-[#007acc]/30"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-[var(--surfaceHover)] text-[var(--text)] rounded text-xs border border-[var(--primary)]"
                           >
                             {displayName}
                             <button
@@ -786,7 +786,7 @@ const PeopleList: React.FC = () => {
                                 e.stopPropagation();
                                 setDepartmentFilter(prev => prev.filter(d => d !== deptId));
                               }}
-                              className="hover:text-[#007acc] hover:bg-[#007acc]/30 rounded-full w-3 h-3 flex items-center justify-center"
+                              className="hover:text-[var(--primary)] hover:bg-[var(--surfaceHover)] rounded-full w-3 h-3 flex items-center justify-center"
                             >
                               ×
                             </button>
@@ -850,7 +850,7 @@ const PeopleList: React.FC = () => {
               <div className="location-filter relative">
                 <div 
                   onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-                  className="w-full px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] min-h-[32px] flex flex-wrap items-center gap-1 cursor-pointer hover:border-[#007acc] focus:border-[var(--focus)]"
+                  className="w-full px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] min-h-[32px] flex flex-wrap items-center gap-1 cursor-pointer hover:border-[var(--focus)] focus:border-[var(--focus)]"
                 >
                   {locationFilter.length === 0 ? (
                     <span className="text-[var(--muted)]">All Locations</span>
@@ -859,7 +859,7 @@ const PeopleList: React.FC = () => {
                       {locationFilter.map((location, index) => (
                         <span
                           key={index}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-[var(--surfaceHover)] text-[var(--text)] rounded text-xs border border-[#007acc]/30"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-[var(--surfaceHover)] text-[var(--text)] rounded text-xs border border-[var(--primary)]"
                         >
                           {location === 'unspecified' ? 'Not Specified' : location}
                           <button
@@ -867,7 +867,7 @@ const PeopleList: React.FC = () => {
                               e.stopPropagation();
                               setLocationFilter(prev => prev.filter(l => l !== location));
                             }}
-                            className="hover:text-[#007acc] hover:bg-[#007acc]/30 rounded-full w-3 h-3 flex items-center justify-center"
+                            className="hover:text-[var(--primary)] hover:bg-[var(--surfaceHover)] rounded-full w-3 h-3 flex items-center justify-center"
                           >
                             ×
                           </button>
@@ -938,7 +938,7 @@ const PeopleList: React.FC = () => {
                   }}
                   className={`px-2 py-1 text-xs rounded border transition-colors ${
                     bulkMode 
-                      ? 'bg-[#007acc] border-[#007acc] text-white' 
+                      ? 'bg-[var(--primary)] border-[var(--primary)] text-white' 
                       : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]'
                   }`}
                 >
@@ -1031,7 +1031,7 @@ const PeopleList: React.FC = () => {
                 <button
                   onClick={handleBulkAssignment}
                   disabled={!bulkDepartment}
-                  className="px-3 py-1.5 text-sm rounded bg-[#007acc] text-white hover:bg-[#005fa3] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1.5 text-sm rounded bg-[var(--primary)] text-white hover:bg-[var(--primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Assign
                 </button>
@@ -1076,7 +1076,7 @@ const PeopleList: React.FC = () => {
                           }}
                           onBlur={handleNameSave}
                           disabled={isUpdatingPerson}
-                          className="text-xl font-bold bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50 w-full"
+                          className="text-xl font-bold bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50 w-full"
                           autoFocus
                         />
                         <div className="text-xs text-[var(--muted)] mt-1">
@@ -1102,7 +1102,7 @@ const PeopleList: React.FC = () => {
                             savePersonField('role', roleId);
                           }}
                           disabled={isUpdatingPerson}
-                          className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
+                          className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
                         >
                           <option value="">Select Role...</option>
                           {roles.map((role) => (
@@ -1125,7 +1125,7 @@ const PeopleList: React.FC = () => {
                             onChange={(e) => handlePersonFieldChange('weeklyCapacity', parseInt(e.target.value) || 36)}
                             onBlur={() => savePersonField('weeklyCapacity')}
                             disabled={isUpdatingPerson}
-                            className="w-16 px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-16 px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                           <span className="text-[var(--muted)]">hours/week</span>
                         </div>
@@ -1149,7 +1149,7 @@ const PeopleList: React.FC = () => {
                             savePersonField('department', deptId);
                           }}
                           disabled={isUpdatingPerson}
-                          className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
+                          className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
                         >
                           <option value="">No Department</option>
                           {departments.map((dept) => (
@@ -1217,7 +1217,7 @@ const PeopleList: React.FC = () => {
                           }}
                           placeholder="e.g., New York, NY or Remote"
                           disabled={isUpdatingPerson}
-                          className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent disabled:opacity-50"
+                          className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
                         />
                         
                         {/* Location Autocomplete Dropdown */}
@@ -1230,7 +1230,7 @@ const PeopleList: React.FC = () => {
                                 onMouseEnter={() => setSelectedLocationIndex(index)}
                                 className={`w-full text-left px-3 py-2 text-sm transition-colors border-b border-[var(--border)] last:border-b-0 ${
                                   selectedLocationIndex === index
-                                    ? 'bg-[var(--surfaceHover)] text-[var(--text)] border-[#007acc]/30'
+                                    ? 'bg-[var(--surfaceHover)] text-[var(--text)] border-[var(--primary)]'
                                     : 'text-[var(--text)] hover:bg-[var(--surface)]'
                                 }`}
                               >
@@ -1244,8 +1244,8 @@ const PeopleList: React.FC = () => {
                   </div>
                   <div className="flex gap-2 items-start">
                     {isUpdatingPerson && (
-                      <div className="px-2 py-0.5 text-xs text-[#007acc] flex items-center gap-1">
-                        <div className="w-3 h-3 border border-[#007acc] border-t-transparent rounded-full animate-spin motion-reduce:animate-none"></div>
+                      <div className="px-2 py-0.5 text-xs text-[var(--focus)] flex items-center gap-1">
+                        <div className="w-3 h-3 border border-[var(--focus)] border-t-transparent rounded-full animate-spin motion-reduce:animate-none"></div>
                         Saving...
                       </div>
                     )}
@@ -1359,7 +1359,7 @@ const PeopleList: React.FC = () => {
                       <>
                         <button 
                           onClick={handleSkillsSave}
-                          className="px-2 py-0.5 text-xs rounded border bg-[#007acc] border-[#007acc] text-white hover:bg-[#005fa3] transition-colors"
+                            className="px-2 py-0.5 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] transition-colors"
                         >
                           Save Skills
                         </button>
@@ -1373,7 +1373,7 @@ const PeopleList: React.FC = () => {
                     ) : (
                       <button 
                         onClick={handleSkillsEdit}
-                        className="px-2 py-0.5 text-xs rounded border bg-[#007acc] border-[#007acc] text-white hover:bg-[#005fa3] transition-colors"
+                        className="px-2 py-0.5 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] transition-colors"
                       >
                         Edit Skills
                       </button>

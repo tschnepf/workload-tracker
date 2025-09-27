@@ -8,6 +8,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Department, Person } from '@/types/models';
 import { departmentsApi, peopleApi } from '@/services/api';
 import Layout from '@/components/layout/Layout';
+import DepartmentsSkeleton from '@/components/skeletons/DepartmentsSkeleton';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -140,25 +141,23 @@ const DepartmentsList: React.FC = () => {
   if (loading) {
     return (
       <Layout>
-        <div className="h-full min-h-0 flex items-center justify-center">
-          <div className="text-[#cccccc]">Loading departments...</div>
-        </div>
+        <DepartmentsSkeleton />
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="h-full min-h-0 flex bg-[#1e1e1e]">
+      <div className="h-full min-h-0 flex bg-[var(--bg)]">
       
       <div className="flex-1 overflow-hidden">
         <div className="flex h-full min-h-0">
           
           {/* Left Panel - Department List */}
-          <div className="w-1/3 p-6 border-r border-[#3e3e42] bg-[#252526] min-h-0 overflow-y-auto">
+          <div className="w-1/3 p-6 border-r border-[var(--border)] bg-[var(--surface)] min-h-0 overflow-y-auto">
             <div className="mb-6">
               <div className="flex justify-between items-center mb-4">
-                <h1 className="text-2xl font-bold text-[#cccccc]">Departments</h1>
+                <h1 className="text-2xl font-bold text-[var(--text)]">Departments</h1>
                 <Button 
                   variant="primary" 
                   onClick={handleCreateDepartment}
@@ -185,8 +184,8 @@ const DepartmentsList: React.FC = () => {
               {filteredAndSortedDepartments.map((department, index) => (
                 <Card
                   key={department.id}
-                  className={`p-4 cursor-pointer transition-colors bg-[#2d2d30] border-[#3e3e42] hover:bg-[#3e3e42]/50 ${
-                    selectedDepartment?.id === department.id ? 'ring-2 ring-[#007acc]' : ''
+                  className={`p-4 cursor-pointer transition-colors bg-[var(--card)] border-[var(--border)] hover:bg-[var(--surfaceHover)] ${
+                    selectedDepartment?.id === department.id ? 'ring-2 ring-[var(--focus)]' : ''
                   }`}
                   onClick={() => {
                     setSelectedDepartment(department);
@@ -195,19 +194,19 @@ const DepartmentsList: React.FC = () => {
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
-                      <h3 className="font-semibold text-[#cccccc] mb-1">
+                      <h3 className="font-semibold text-[var(--text)] mb-1">
                         {department.name}
                       </h3>
-                      <p className="text-sm text-[#969696] mb-2">
+                      <p className="text-sm text-[var(--muted)] mb-2">
                         Manager: {department.managerName || 'None'}
                       </p>
                       {department.description && (
-                        <p className="text-sm text-[#969696] line-clamp-2">
+                        <p className="text-sm text-[var(--muted)] line-clamp-2">
                           {department.description}
                         </p>
                       )}
                       {department.parentDepartment && (
-                        <p className="text-xs text-[#969696] mt-1">
+                        <p className="text-xs text-[var(--muted)] mt-1">
                           Parent: {getParentDepartmentName(department.parentDepartment)}
                         </p>
                       )}
@@ -226,7 +225,7 @@ const DepartmentsList: React.FC = () => {
               ))}
 
               {filteredAndSortedDepartments.length === 0 && (
-                <div className="text-center py-8 text-[#969696]">
+                <div className="text-center py-8 text-[var(--muted)]">
                   {searchTerm ? 'No departments match your search.' : 'No departments found.'}
                 </div>
               )}
@@ -234,12 +233,12 @@ const DepartmentsList: React.FC = () => {
           </div>
 
           {/* Right Panel - Department Details */}
-          <div className="flex-1 p-6 bg-[#1e1e1e] min-h-0 overflow-y-auto">
+          <div className="flex-1 p-6 bg-[var(--bg)] min-h-0 overflow-y-auto">
             {selectedDepartment ? (
               <div>
                 <div className="flex justify-between items-start mb-6">
                   <div>
-                    <h2 className="text-2xl font-bold text-[#cccccc] mb-2">
+                    <h2 className="text-2xl font-bold text-[var(--text)] mb-2">
                       {selectedDepartment.name}
                     </h2>
                     <div className="flex items-center space-x-4">
@@ -269,38 +268,38 @@ const DepartmentsList: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                  <Card className="p-6 bg-[#2d2d30] border-[#3e3e42]">
-                    <h3 className="font-semibold text-[#cccccc] mb-4">Department Info</h3>
+                  <Card className="p-6 bg-[var(--card)] border-[var(--border)]">
+                    <h3 className="font-semibold text-[var(--text)] mb-4">Department Info</h3>
                     <div className="space-y-3">
                       <div>
-                        <span className="text-sm text-[#969696]">Name:</span>
-                        <p className="text-[#cccccc]">{selectedDepartment.name}</p>
+                        <span className="text-sm text-[var(--muted)]">Name:</span>
+                        <p className="text-[var(--text)]">{selectedDepartment.name}</p>
                       </div>
                       <div>
-                        <span className="text-sm text-[#969696]">Manager:</span>
-                        <p className="text-[#cccccc]">{selectedDepartment.managerName || 'None assigned'}</p>
+                        <span className="text-sm text-[var(--muted)]">Manager:</span>
+                        <p className="text-[var(--text)]">{selectedDepartment.managerName || 'None assigned'}</p>
                       </div>
                       <div>
-                        <span className="text-sm text-[#969696]">Parent Department:</span>
-                        <p className="text-[#cccccc]">
+                        <span className="text-sm text-[var(--muted)]">Parent Department:</span>
+                        <p className="text-[var(--text)]">
                           {getParentDepartmentName(selectedDepartment.parentDepartment)}
                         </p>
                       </div>
                       {selectedDepartment.description && (
                         <div>
-                          <span className="text-sm text-[#969696]">Description:</span>
-                          <p className="text-[#cccccc] mt-1">{selectedDepartment.description}</p>
+                          <span className="text-sm text-[var(--muted)]">Description:</span>
+                          <p className="text-[var(--text)] mt-1">{selectedDepartment.description}</p>
                         </div>
                       )}
                     </div>
                   </Card>
 
-                  <Card className="p-6 bg-[#2d2d30] border-[#3e3e42]">
-                    <h3 className="font-semibold text-[#cccccc] mb-4">System Info</h3>
+                  <Card className="p-6 bg-[var(--card)] border-[var(--border)]">
+                    <h3 className="font-semibold text-[var(--text)] mb-4">System Info</h3>
                     <div className="space-y-3">
                       <div>
-                        <span className="text-sm text-[#969696]">Created:</span>
-                        <p className="text-[#cccccc]">
+                        <span className="text-sm text-[var(--muted)]">Created:</span>
+                        <p className="text-[var(--text)]">
                           {selectedDepartment.createdAt ? 
                             new Date(selectedDepartment.createdAt).toLocaleDateString() : 
                             'Unknown'
@@ -308,8 +307,8 @@ const DepartmentsList: React.FC = () => {
                         </p>
                       </div>
                       <div>
-                        <span className="text-sm text-[#969696]">Updated:</span>
-                        <p className="text-[#cccccc]">
+                        <span className="text-sm text-[var(--muted)]">Updated:</span>
+                        <p className="text-[var(--text)]">
                           {selectedDepartment.updatedAt ? 
                             new Date(selectedDepartment.updatedAt).toLocaleDateString() : 
                             'Unknown'
@@ -317,7 +316,7 @@ const DepartmentsList: React.FC = () => {
                         </p>
                       </div>
                       <div>
-                        <span className="text-sm text-[#969696]">Status:</span>
+                        <span className="text-sm text-[var(--muted)]">Status:</span>
                         <p className={selectedDepartment.isActive ? 'text-emerald-400' : 'text-gray-400'}>
                           {selectedDepartment.isActive ? 'Active' : 'Inactive'}
                         </p>
@@ -327,7 +326,7 @@ const DepartmentsList: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full text-[#969696]">
+              <div className="flex items-center justify-center h-full text-[var(--muted)]">
                 <div className="text-center">
                   <h3 className="text-xl mb-2">Select a Department</h3>
                   <p>Choose a department from the list to view details</p>

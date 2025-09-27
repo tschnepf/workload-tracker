@@ -10,6 +10,7 @@ from django.http import HttpResponse
 from datetime import datetime
 from ..serializers import PersonSerializer
 from ..models import Person
+from core.utils.excel import write_headers, auto_fit_columns, create_excel_response
 
 
 def export_people_to_excel(queryset, filename=None):
@@ -33,7 +34,7 @@ def export_people_to_excel(queryset, filename=None):
     if 'Sheet' in workbook.sheetnames:
         del workbook['Sheet']
     
-    return _create_excel_response(workbook, filename)
+    return create_excel_response(workbook, filename)
 
 
 def _create_people_sheet(workbook, queryset):
@@ -49,7 +50,7 @@ def _create_people_sheet(workbook, queryset):
     ]
     
     # Write headers with styling
-    _write_excel_headers(sheet, headers)
+    write_headers(sheet, headers)
     
     # Serialize data using PersonSerializer
     serializer = PersonSerializer(queryset, many=True)
@@ -61,7 +62,7 @@ def _create_people_sheet(workbook, queryset):
             value = person_data.get(header, '')
             sheet.cell(row=row_idx, column=col_idx, value=value)
     
-    _auto_fit_columns(sheet)
+    auto_fit_columns(sheet)
 
 
 def _create_people_template_sheet(workbook):
@@ -74,7 +75,7 @@ def _create_people_template_sheet(workbook):
         'notes', 'isActive'
     ]
     
-    _write_excel_headers(template_sheet, headers)
+    write_headers(template_sheet, headers)
     
     # Add example row (leave ID blank for new people, or use existing ID for updates)
     example_data = [
@@ -89,7 +90,7 @@ def _create_people_template_sheet(workbook):
                                end_color="E6F3FF", 
                                fill_type="solid")
     
-    _auto_fit_columns(template_sheet)
+    auto_fit_columns(template_sheet)
 
 
 def _create_people_instructions_sheet(workbook):
@@ -139,40 +140,16 @@ def _create_people_instructions_sheet(workbook):
 
 
 def _write_excel_headers(sheet, headers):
-    """Write headers with formatting."""
-    for col_idx, header in enumerate(headers, start=1):
-        cell = sheet.cell(row=1, column=col_idx, value=header)
-        cell.font = Font(bold=True)
-        cell.fill = PatternFill(start_color="366092", 
-                               end_color="366092", 
-                               fill_type="solid")
-        cell.font = Font(color="FFFFFF", bold=True)
-        cell.alignment = Alignment(horizontal="center")
+    # Backward-compat wrapper for existing imports; delegate to shared util
+    write_headers(sheet, headers)
 
 
 def _auto_fit_columns(sheet):
-    """Auto-fit column widths."""
-    for column in sheet.columns:
-        max_length = 0
-        column_letter = get_column_letter(column[0].column)
-        
-        for cell in column:
-            if cell.value:
-                max_length = max(max_length, len(str(cell.value)))
-        
-        adjusted_width = min(max_length + 2, 50)
-        sheet.column_dimensions[column_letter].width = adjusted_width
+    auto_fit_columns(sheet)
 
 
 def _create_excel_response(workbook, filename):
-    """Create HTTP response with Excel file."""
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
-    workbook.save(response)
-    return response
+    return create_excel_response(workbook, filename)
 
 
 def import_people_from_excel(file, update_existing=True, dry_run=False, progress_callback=None):

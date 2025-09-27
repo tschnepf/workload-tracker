@@ -67,26 +67,42 @@ def export_people_excel_task(self, filters: Dict[str, Any] | None = None) -> Dic
 
 @shared_task(bind=True)
 def import_people_excel_task(self, storage_path: str, update_existing: bool = True, dry_run: bool = False) -> Dict[str, Any]:
-    """Import people from a previously uploaded Excel file (stored in default storage)."""
+    """Import people from a previously uploaded Excel file.
+
+    Supports either a default_storage key or an absolute filesystem path.
+    """
     self.update_state(state='STARTED', meta={'progress': 5, 'message': 'Starting import'})
     try:
-        with default_storage.open(storage_path, 'rb') as f:
+        # If an absolute path exists on disk, open directly; otherwise use default_storage
+        if os.path.isabs(storage_path) and os.path.exists(storage_path):
+            fh = open(storage_path, 'rb')
+            close_fh = True
+        else:
+            fh = default_storage.open(storage_path, 'rb')
+            close_fh = True
+        try:
             self.update_state(state='PROGRESS', meta={'progress': 30, 'message': 'Processing file'})
-            results = import_people_from_excel(f, update_existing=update_existing, dry_run=dry_run)
-            # Ensure structure contains counts for UI
-            total = int(results.get('total_rows', 0) or 0)
-            success = int(results.get('success_count', 0) or 0)
-            errors = int(results.get('error_count', 0) or 0)
-            meta = {
-                'success': True,
-                'total_rows': total,
-                'success_count': success,
-                'error_count': errors,
-                'details': results,
-            }
-            self.update_state(state='PROGRESS', meta={'progress': 95, 'message': 'Import complete'})
-            return meta
+            results = import_people_from_excel(fh, update_existing=update_existing, dry_run=dry_run)
+        finally:
+            if close_fh:
+                try:
+                    fh.close()
+                except Exception:
+                    pass
+
+        # Ensure structure contains counts for UI
+        total = int(results.get('total_rows', 0) or 0)
+        success = int(results.get('success_count', 0) or 0)
+        errors = int(results.get('error_count', 0) or 0)
+        meta = {
+            'success': True,
+            'total_rows': total,
+            'success_count': success,
+            'error_count': errors,
+            'details': results,
+        }
+        self.update_state(state='PROGRESS', meta={'progress': 95, 'message': 'Import complete'})
+        return meta
     except Exception as e:
         # Let Celery mark as FAILURE with exception; also include meta for clients
         raise e
-

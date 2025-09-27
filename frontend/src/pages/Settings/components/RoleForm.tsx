@@ -192,9 +192,9 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg w-full max-w-md mx-4">
-        <div className="px-6 py-4 border-b border-[#3e3e42]">
-          <h2 className="text-lg font-semibold text-[#cccccc]">
+      <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg w-full max-w-md mx-4">
+        <div className="px-6 py-4 border-b border-[var(--border)]">
+          <h2 className="text-lg font-semibold text-[var(--text)]">
             {role ? 'Edit Role' : 'Add New Role'}
           </h2>
         </div>
@@ -208,7 +208,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
 
           {/* Role Name Field with Autocomplete */}
           <div className="relative">
-            <label className="block text-sm font-medium text-[#cccccc] mb-2">
+            <label className="block text-sm font-medium text-[var(--text)] mb-2">
               Role Name <span className="text-red-400">*</span>
             </label>
             <input
@@ -227,8 +227,8 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
                   setShowNameAutocomplete(false);
                 }, 150);
               }}
-              className={`w-full px-3 py-2 bg-[#3e3e42] border rounded text-[#cccccc] placeholder-[#969696] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent ${
-                validationErrors.name ? 'border-red-500' : 'border-[#3e3e42]'
+              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent ${
+                validationErrors.name ? 'border-red-500' : 'border-[var(--border)]'
               }`}
               placeholder="e.g., Senior Engineer, Product Manager"
               disabled={loading}
@@ -236,17 +236,17 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
             
             {/* Name Autocomplete Dropdown */}
             {showNameAutocomplete && filteredRoles.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-40 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-40 overflow-y-auto">
                 {filteredRoles.map((role, index) => (
                   <button
                     key={role.id}
                     type="button"
                     onClick={() => selectRoleName(role.name)}
                     onMouseEnter={() => setSelectedRoleIndex(index)}
-                    className={`w-full text-left px-3 py-2 text-sm transition-colors border-b border-[#3e3e42] last:border-b-0 ${
+                    className={`w-full text-left px-3 py-2 text-sm transition-colors border-b border-[var(--border)] last:border-b-0 ${
                       selectedRoleIndex === index
-                        ? 'bg-[#007acc]/20 text-[#007acc] border-[#007acc]/30'
-                        : 'text-[#cccccc] hover:bg-[#3e3e42]'
+                        ? 'bg-[var(--surfaceOverlay)] text-[var(--primary)] border-[var(--primary)]/30'
+                        : 'text-[var(--text)] hover:bg-[var(--cardHover)]'
                     }`}
                   >
                     {role.name}
@@ -262,7 +262,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
 
           {/* Description Field */}
           <div>
-            <label className="block text-sm font-medium text-[#cccccc] mb-2">
+            <label className="block text-sm font-medium text-[var(--text)] mb-2">
               Description
             </label>
             <textarea
@@ -273,8 +273,8 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
                   setValidationErrors(prev => ({ ...prev, description: '' }));
                 }
               }}
-              className={`w-full px-3 py-2 bg-[#3e3e42] border rounded text-[#cccccc] placeholder-[#969696] focus:outline-none focus:ring-1 focus:ring-[#007acc] focus:border-transparent resize-none ${
-                validationErrors.description ? 'border-red-500' : 'border-[#3e3e42]'
+              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent resize-none ${
+                validationErrors.description ? 'border-red-500' : 'border-[var(--border)]'
               }`}
               placeholder="Describe the role's responsibilities and requirements"
               rows={3}
@@ -292,21 +292,21 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
               id="isActive"
               checked={formData.isActive}
               onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
-              className="mr-3 h-4 w-4 text-[#007acc] focus:ring-[#007acc] border-[#3e3e42] rounded bg-[#3e3e42]"
+              className="mr-3 h-4 w-4 text-[var(--primary)] focus:ring-[var(--primary)] border-[var(--border)] rounded bg-[var(--card)]"
               disabled={loading}
             />
-            <label htmlFor="isActive" className="text-sm text-[#cccccc]">
+            <label htmlFor="isActive" className="text-sm text-[var(--text)]">
               Role is active and available for assignment
             </label>
           </div>
         </form>
 
         {/* Form Actions */}
-        <div className="px-6 py-4 border-t border-[#3e3e42] flex gap-3">
+        <div className="px-6 py-4 border-t border-[var(--border)] flex gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 px-4 py-2 text-[#969696] border border-[#3e3e42] rounded hover:bg-[#3e3e42]/50 transition-colors"
+            className="flex-1 px-4 py-2 text-[var(--muted)] border border-[var(--border)] rounded hover:bg-[var(--surfaceHover)] transition-colors"
             disabled={loading}
           >
             Cancel
@@ -314,7 +314,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
           <button
             type="submit"
             onClick={handleSubmit}
-            className="flex-1 px-4 py-2 bg-[#007acc] hover:bg-[#005a9e] text-white rounded font-medium transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primaryHover)] text-white rounded font-medium transition-colors disabled:opacity-50"
             disabled={loading}
           >
             {loading ? (role ? 'Updating...' : 'Creating...') : (role ? 'Update Role' : 'Create Role')}

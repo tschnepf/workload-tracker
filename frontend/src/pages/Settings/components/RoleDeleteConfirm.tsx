@@ -49,7 +49,7 @@ const RoleDeleteConfirm: React.FC<RoleDeleteConfirmProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg w-full max-w-md mx-4">
+      <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg w-full max-w-md mx-4">
         <div className="px-6 py-4">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center">
@@ -59,14 +59,14 @@ const RoleDeleteConfirm: React.FC<RoleDeleteConfirmProps> = ({
                 <line x1="9" y1="9" x2="15" y2="15"/>
               </svg>
             </div>
-            <h2 className="text-lg font-semibold text-[#cccccc]">Delete Role</h2>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Delete Role</h2>
           </div>
 
           <div className="mb-6">
-            <p className="text-[#cccccc] mb-2">
+            <p className="text-[var(--text)] mb-2">
               Are you sure you want to delete the role <span className="font-semibold text-red-400">"{role.name}"</span>?
             </p>
-            <p className="text-[#969696] text-sm">
+            <p className="text-[var(--muted)] text-sm">
               This action cannot be undone. If this role is currently assigned to any people, 
               the deletion will be prevented.
             </p>
@@ -79,20 +79,20 @@ const RoleDeleteConfirm: React.FC<RoleDeleteConfirmProps> = ({
           )}
 
           {/* Role Details */}
-          <div className="mb-6 p-4 bg-[#3e3e42]/30 rounded border border-[#3e3e42]">
+          <div className="mb-6 p-4 bg-[var(--surfaceHover)] rounded border border-[var(--border)]">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-[#cccccc]">Role Name:</span>
-              <span className="text-sm text-[#cccccc]">{role.name}</span>
+              <span className="text-sm font-medium text-[var(--text)]">Role Name:</span>
+              <span className="text-sm text-[var(--text)]">{role.name}</span>
             </div>
             {role.description && (
               <div className="flex items-start justify-between mb-2">
-                <span className="text-sm font-medium text-[#cccccc] mr-3">Description:</span>
-                <span className="text-sm text-[#969696] text-right flex-1">{role.description}</span>
+                <span className="text-sm font-medium text-[var(--text)] mr-3">Description:</span>
+                <span className="text-sm text-[var(--muted)] text-right flex-1">{role.description}</span>
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-[#cccccc]">Status:</span>
-              <span className={`text-sm ${role.isActive ? 'text-emerald-400' : 'text-[#969696]'}`}>
+              <span className="text-sm font-medium text-[var(--text)]">Status:</span>
+              <span className={`text-sm ${role.isActive ? 'text-emerald-400' : 'text-[var(--muted)]'}`}>
                 {role.isActive ? 'Active' : 'Inactive'}
               </span>
             </div>
@@ -118,11 +118,11 @@ const RoleDeleteConfirm: React.FC<RoleDeleteConfirmProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="px-6 py-4 border-t border-[#3e3e42] flex gap-3">
+        <div className="px-6 py-4 border-t border-[var(--border)] flex gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 px-4 py-2 text-[#969696] border border-[#3e3e42] rounded hover:bg-[#3e3e42]/50 transition-colors"
+            className="flex-1 px-4 py-2 text-[var(--muted)] border border-[var(--border)] rounded hover:bg-[var(--surfaceHover)] transition-colors"
             disabled={loading}
           >
             Cancel

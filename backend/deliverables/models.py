@@ -142,7 +142,7 @@ class PreDeliverableType(models.Model):
 
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
-    default_days_before = models.IntegerField(validators=[MinValueValidator(1)])
+    default_days_before = models.IntegerField(validators=[MinValueValidator(0)])
     is_active = models.BooleanField(default=True)
     sort_order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

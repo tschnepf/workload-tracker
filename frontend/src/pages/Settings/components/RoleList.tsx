@@ -47,7 +47,7 @@ const RoleList: React.FC<RoleListProps> = ({
   }) => (
     <button
       onClick={() => handleColumnSort(column)}
-      className={`flex items-center gap-1 text-left hover:text-[#cccccc] transition-colors ${className}`}
+      className={`flex items-center gap-1 text-left hover:text-[var(--text)] transition-colors ${className}`}
     >
       {children}
       {sortBy === column && (
@@ -92,7 +92,7 @@ const RoleList: React.FC<RoleListProps> = ({
 
   if (loading) {
     return (
-      <div className="text-[#969696] py-8 text-center">
+      <div className="text-[var(--muted)] py-8 text-center">
         Loading roles...
       </div>
     );
@@ -100,7 +100,7 @@ const RoleList: React.FC<RoleListProps> = ({
 
   if (roles.length === 0) {
     return (
-      <div className="text-[#969696] py-8 text-center">
+      <div className="text-[var(--muted)] py-8 text-center">
         <div className="mb-2">No roles found</div>
         <div className="text-sm">Click "Add Role" to create your first role</div>
       </div>
@@ -112,20 +112,20 @@ const RoleList: React.FC<RoleListProps> = ({
       {/* Mobile: stacked cards */}
       <div className="block sm:hidden space-y-2">
         {sortedRoles.map((role) => (
-          <div key={role.id} className="bg-[#2d2d30] border border-[#3e3e42] rounded p-3">
+          <div key={role.id} className="bg-[var(--card)] border border-[var(--border)] rounded p-3">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="text-[#cccccc] font-medium">{role.name}</div>
-                <div className="text-[#969696] text-xs mt-1">
+                <div className="text-[var(--text)] font-medium">{role.name}</div>
+                <div className="text-[var(--muted)] text-xs mt-1">
                   {role.description || 'No description'}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`inline-block w-2 h-2 rounded-full ${role.isActive ? 'bg-emerald-400' : 'bg-[#969696]'}`} title={role.isActive ? 'Active' : 'Inactive'} />
+                <span className={`inline-block w-2 h-2 rounded-full ${role.isActive ? 'bg-emerald-400' : 'bg-[var(--muted)]'}`} title={role.isActive ? 'Active' : 'Inactive'} />
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => onEditRole(role)}
-                    className="text-[#969696] hover:text-[#007acc] p-1 rounded transition-colors"
+                    className="text-[var(--muted)] hover:text-[var(--primary)] p-1 rounded transition-colors"
                     aria-label={`Edit role ${role.name}`}
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -135,7 +135,7 @@ const RoleList: React.FC<RoleListProps> = ({
                   </button>
                   <button
                     onClick={() => onDeleteRole(role)}
-                    className="text-[#969696] hover:text-red-400 p-1 rounded transition-colors"
+                    className="text-[var(--muted)] hover:text-red-400 p-1 rounded transition-colors"
                     aria-label={`Delete role ${role.name}`}
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -148,7 +148,7 @@ const RoleList: React.FC<RoleListProps> = ({
                 </div>
               </div>
             </div>
-            <div className="text-[#969696] text-xs mt-2">
+            <div className="text-[var(--muted)] text-xs mt-2">
               Created: {role.createdAt ? formatUtcToLocal(role.createdAt) : '-'}
             </div>
           </div>
@@ -158,7 +158,7 @@ const RoleList: React.FC<RoleListProps> = ({
       {/* Desktop/tablet: original table layout */}
       <div className="hidden sm:block overflow-x-auto">
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-[#3e3e42]/30 border-b border-[#3e3e42] text-sm font-medium text-[#969696] rounded-t-md">
+        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-[var(--surfaceHover)] border-b border-[var(--border)] text-sm font-medium text-[var(--muted)] rounded-t-md">
           <div className="col-span-3">
             <SortableHeader column="name">ROLE NAME</SortableHeader>
           </div>
@@ -173,27 +173,27 @@ const RoleList: React.FC<RoleListProps> = ({
         </div>
 
         {/* Table Body */}
-        <div className="divide-y divide-[#3e3e42]">
+        <div className="divide-y divide-[var(--border)]">
           {sortedRoles.map((role) => (
             <div
               key={role.id}
-              className="grid grid-cols-12 gap-4 px-4 py-4 hover:bg-[#3e3e42]/20 transition-colors"
+              className="grid grid-cols-12 gap-4 px-4 py-4 hover:bg-[var(--surfaceHover)] transition-colors"
             >
               {/* Role Name */}
               <div className="col-span-3">
-                <div className="font-medium text-[#cccccc]">{role.name}</div>
+                <div className="font-medium text-[var(--text)]">{role.name}</div>
               </div>
 
               {/* Description */}
               <div className="col-span-5">
-                <div className="text-[#969696] text-sm">
+                <div className="text-[var(--muted)] text-sm">
                   {role.description || 'No description'}
                 </div>
               </div>
 
               {/* Created Date */}
               <div className="col-span-2">
-                <div className="text-[#969696] text-sm">
+                <div className="text-[var(--muted)] text-sm">
                   {role.createdAt ? formatUtcToLocal(role.createdAt) : '-'}
                 </div>
               </div>
@@ -201,7 +201,7 @@ const RoleList: React.FC<RoleListProps> = ({
               {/* Status */}
               <div className="col-span-1 text-center">
                 <span className={`inline-block w-2 h-2 rounded-full ${
-                  role.isActive ? 'bg-emerald-400' : 'bg-[#969696]'
+                  role.isActive ? 'bg-emerald-400' : 'bg-[var(--muted)]'
                 }`} title={role.isActive ? 'Active' : 'Inactive'} />
               </div>
 
@@ -210,7 +210,7 @@ const RoleList: React.FC<RoleListProps> = ({
                 <div className="flex items-center justify-center gap-1">
                   <button
                     onClick={() => onEditRole(role)}
-                    className="text-[#969696] hover:text-[#007acc] p-1 rounded transition-colors"
+                    className="text-[var(--muted)] hover:text-[var(--primary)] p-1 rounded transition-colors"
                     title="Edit role"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -220,7 +220,7 @@ const RoleList: React.FC<RoleListProps> = ({
                   </button>
                   <button
                     onClick={() => onDeleteRole(role)}
-                    className="text-[#969696] hover:text-red-400 p-1 rounded transition-colors"
+                    className="text-[var(--muted)] hover:text-red-400 p-1 rounded transition-colors"
                     title="Delete role"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

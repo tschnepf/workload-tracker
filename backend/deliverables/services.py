@@ -9,6 +9,7 @@ from django.db.models import Prefetch, Q
 
 from core.week_utils import working_days_before
 from core.models import PreDeliverableGlobalSettings
+from projects.models import ProjectPreDeliverableSettings
 from .models import (
     Deliverable,
     DeliverableAssignment,
@@ -40,25 +41,51 @@ class PreDeliverableService:
         if deliverable.date is None:
             return []
 
-        created: List[PreDeliverableItem] = []
-        for t in PreDeliverableType.objects.filter(is_active=True).order_by('sort_order', 'name'):
-            eff = PreDeliverableGlobalSettings.get_effective_settings(deliverable.project, t.id)
-            if not eff or not eff.get('is_enabled', True):
-                continue
-            days_before = int(eff.get('days_before') or 0)
-            gen_date = working_days_before(deliverable.date, days_before)
+        # Batch load active types
+        types = list(PreDeliverableType.objects.filter(is_active=True).order_by('sort_order', 'name'))
+        if not types:
+            return []
+        type_ids = [t.id for t in types]
 
-            # Avoid duplicates
-            existing = PreDeliverableItem.objects.filter(
-                deliverable=deliverable, pre_deliverable_type=t
-            ).first()
-            if existing:
+        # Preload existing items for this deliverable to avoid duplicates
+        existing_type_ids = set(
+            PreDeliverableItem.objects
+            .filter(deliverable=deliverable, pre_deliverable_type_id__in=type_ids)
+            .values_list('pre_deliverable_type_id', flat=True)
+        )
+
+        # Batch-resolve effective settings
+        # 1) Project-specific overrides
+        proj_map = ProjectPreDeliverableSettings.get_project_settings(deliverable.project)
+        # 2) Global defaults for all types
+        glob_qs = PreDeliverableGlobalSettings.objects.filter(pre_deliverable_type_id__in=type_ids)
+        glob_map = {g.pre_deliverable_type_id: g for g in glob_qs}
+
+        created: List[PreDeliverableItem] = []
+        for t in types:
+            # Resolve effective settings without extra queries per type
+            if t.id in proj_map:
+                eff_days = int(proj_map[t.id]['days_before'])
+                eff_enabled = bool(proj_map[t.id]['is_enabled'])
+            elif t.id in glob_map:
+                g = glob_map[t.id]
+                eff_days = int(getattr(g, 'default_days_before') or 0)
+                eff_enabled = bool(getattr(g, 'is_enabled_by_default', True))
+            else:
+                eff_days = int(getattr(t, 'default_days_before') or 0)
+                eff_enabled = bool(getattr(t, 'is_active', True))
+
+            if not eff_enabled:
                 continue
+            if t.id in existing_type_ids:
+                continue
+
+            gen_date = working_days_before(deliverable.date, eff_days)
             item = PreDeliverableItem.objects.create(
                 deliverable=deliverable,
                 pre_deliverable_type=t,
                 generated_date=gen_date,
-                days_before=days_before,
+                days_before=eff_days,
             )
             created.append(item)
         return created
@@ -100,7 +127,9 @@ class PreDeliverableService:
 
         Attempts to preserve completion flags when the type matches.
         """
-        prev = {it.pre_deliverable_type_id: (it.is_completed, it.completed_date) for it in deliverable.pre_items.all()}
+        # Lock current items for this deliverable to avoid concurrent races
+        items_qs = PreDeliverableItem.objects.select_for_update().filter(deliverable=deliverable)
+        prev = {it.pre_deliverable_type_id: (it.is_completed, it.completed_date) for it in items_qs}
         deleted = PreDeliverableService.delete_pre_deliverables(deliverable)
         created = PreDeliverableService.generate_pre_deliverables(deliverable)
         preserved = 0
@@ -162,4 +191,3 @@ class PreDeliverableService:
             gen_date = working_days_before(deliverable.date, days_before)
             out.append({'type': t.name, 'date': gen_date.isoformat(), 'days_before': days_before})
         return out
-

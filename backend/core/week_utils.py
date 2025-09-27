@@ -16,7 +16,7 @@ Implementation notes:
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import List
+from typing import List, Optional, Mapping, Any
 
 
 def sunday_of_week(d: date) -> date:
@@ -185,3 +185,35 @@ def count_working_days_between(start_date: date, end_date: date) -> int:
             count += 1
         cur += timedelta(days=1)
     return count
+
+
+def get_week_value(weekly_hours: Optional[Mapping[str, Any]], sunday_date: date, window: int = 3) -> float:
+    """Return numeric value from a weekly_hours dict for the given Sunday date.
+
+    - weekly_hours keys are date strings (YYYY-MM-DD), ideally Sunday keys.
+    - During transition, tolerate +/- `window` days to read Monday-based keys.
+    - Returns 0.0 if no value or unparsable.
+    """
+    if not weekly_hours:
+        return 0.0
+    try:
+        key = sunday_date.strftime('%Y-%m-%d')
+        if key in weekly_hours:
+            try:
+                return float(weekly_hours.get(key) or 0)
+            except Exception:
+                return 0.0
+        # Transition mode: read nearby dates within window days
+        if window and window > 0:
+            for off in range(-int(window), int(window) + 1):
+                if off == 0:
+                    continue
+                k = (sunday_date + timedelta(days=off)).strftime('%Y-%m-%d')
+                if k in weekly_hours:
+                    try:
+                        return float(weekly_hours.get(k) or 0)
+                    except Exception:
+                        return 0.0
+    except Exception:
+        return 0.0
+    return 0.0

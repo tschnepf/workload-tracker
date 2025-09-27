@@ -24,13 +24,15 @@ from accounts.token_views import (
     ThrottledTokenLogoutView,
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 def health_check(request):
     """Health check endpoint for Docker and monitoring"""
     return JsonResponse({
         'status': 'healthy',
         'service': 'backend',
-        'environment': os.getenv('DEBUG', 'false'),
     })
 
 
@@ -73,8 +75,10 @@ def readiness_check(request):
     return JsonResponse(data, status=200 if ok else 503)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def capabilities_view(request):
-    """Advertise backend feature capabilities for clients to decide rollouts.
+    """Advertise backend feature capabilities (requires authentication).
 
     Returns booleans and simple settings for aggregate endpoints, async jobs, and cache TTL hints.
     """
@@ -93,12 +97,7 @@ def capabilities_view(request):
         },
         'personalDashboard': True,
     }
-    return JsonResponse(caps)
-        'cache': {
-            'shortTtlAggregates': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
-            'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
-        }
-    }
+    return Response(caps)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -1,4 +1,5 @@
 from django.db import migrations, models
+import django.db.models
 
 
 class Migration(migrations.Migration):
@@ -10,11 +11,11 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddIndex(
             model_name='predeliverableitem',
-            index=models.Index(fields=['deliverable', 'is_active', 'generated_date'], name='predeliv_deliv_active_date'),
+            index=models.Index(fields=['generated_date'], name='pdi_gen_date_idx'),
         ),
         migrations.AddIndex(
             model_name='predeliverableitem',
-            index=models.Index(fields=['generated_date', 'is_completed'], name='predeliv_calendar'),
+            index=models.Index(fields=['generated_date'], name='pdi_gen_date_active_idx', condition=models.Q(('is_active', True))),
         ),
     ]
 

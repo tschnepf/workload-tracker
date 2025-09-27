@@ -124,7 +124,7 @@ const Settings: React.FC = () => {
       <div className="flex">
         <Sidebar />
         <div className="flex-1 p-6">
-          <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
             <div className="py-10">
               <div className="max-w-md mx-auto">
                 <Loader inline message="Loading settings…" />
@@ -141,7 +141,7 @@ const Settings: React.FC = () => {
       <Sidebar />
       <div className="flex-1 p-6">
         <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold text-[#cccccc] mb-6">Settings</h1>
+          <h1 className="text-2xl font-bold text-[var(--text)] mb-6">Settings</h1>
 
           {/* (User Account section removed per feedback) */}
           
@@ -152,19 +152,19 @@ const Settings: React.FC = () => {
           )}
 
           {/* Quick section navigation */}
-          <div className="mb-4 text-sm text-[#969696]">
+          <div className="mb-4 text-sm text-[var(--muted)]">
             Sections:
-            <a href="#role-management" className="ml-2 text-[#cccccc] hover:text-white">Role Management</a>
-            <span className="mx-2 text-[#3e3e42]">|</span>
-            <a href="#backup-restore" className="text-[#cccccc] hover:text-white">Backup &amp; Restore</a>
+            <a href="#role-management" className="ml-2 text-[var(--text)] hover:text-[var(--text)]">Role Management</a>
+            <span className="mx-2 text-[var(--border)]">|</span>
+            <a href="#backup-restore" className="text-[var(--text)] hover:text-[var(--text)]">Backup &amp; Restore</a>
           </div>
 
           {/* Role Management Section */}
-          <div id="role-management" className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
+          <div id="role-management" className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-xl font-semibold text-[#cccccc] mb-1">Role Management</h2>
-                <p className="text-[#969696] text-sm">
+                <h2 className="text-xl font-semibold text-[var(--text)] mb-1">Role Management</h2>
+                <p className="text-[var(--muted)] text-sm">
                   Manage job roles used throughout the system. Roles can be assigned to people and used for reporting.
                 </p>
               </div>
@@ -183,9 +183,9 @@ const Settings: React.FC = () => {
 
           {/* Admin: Create New User */}
           {auth.user?.is_staff && (
-            <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6 mt-6">
-              <h2 className="text-xl font-semibold text-[#cccccc] mb-4">Create User (Admin)</h2>
-              {createMsg && <div className="text-sm text-[#cccccc] mb-2">{createMsg}</div>}
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mt-6">
+              <h2 className="text-xl font-semibold text-[var(--text)] mb-4">Create User (Admin)</h2>
+              {createMsg && <div className="text-sm text-[var(--text)] mb-2">{createMsg}</div>}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Input label="Username" autoComplete="username" value={newUsername} onChange={e => setNewUsername((e.target as HTMLInputElement).value)} />
@@ -197,17 +197,17 @@ const Settings: React.FC = () => {
                   <Input label="Initial Password" type="password" autoComplete="new-password" value={newUserPassword} onChange={e => setNewUserPassword((e.target as HTMLInputElement).value)} />
                 </div>
                 <div>
-                  <label className="block text-sm text-[#969696] mb-1">Role</label>
-                  <select className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2 min-h-[44px]" value={newUserRole} onChange={e => setNewUserRole(e.target.value as any)}>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Role</label>
+                  <select className="w-full bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[44px] focus:border-[var(--primary)]" value={newUserRole} onChange={e => setNewUserRole(e.target.value as any)}>
                     <option value="user">User</option>
                     <option value="manager">Manager</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-[#969696] mb-1">Link to Person (optional)</label>
+                  <label className="block text-sm text-[var(--muted)] mb-1">Link to Person (optional)</label>
                   <select
-                    className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2 min-h-[44px]"
+                    className="w-full bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[44px] focus:border-[var(--primary)]"
                     value={newUserPersonId}
                     onChange={(e) => setNewUserPersonId(e.target.value === '' ? '' : Number(e.target.value))}
                   >
@@ -247,33 +247,33 @@ const Settings: React.FC = () => {
           )}
 
           {auth.user?.is_staff && (
-            <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6 mt-6">
-              <h2 className="text-xl font-semibold text-[#cccccc] mb-4">Users</h2>
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mt-6">
+              <h2 className="text-xl font-semibold text-[var(--text)] mb-4">Users</h2>
               {usersLoading ? (
-                <div className="text-[#cccccc]">Loading users…</div>
+                <div className="text-[var(--text)]">Loading users…</div>
               ) : (
                 <div>
-                  {usersMsg && <div className="text-sm text-[#cccccc] mb-2">{usersMsg}</div>}
+                  {usersMsg && <div className="text-sm text-[var(--text)] mb-2">{usersMsg}</div>}
                   {/* Card list on small screens */}
                   <div className="block sm:hidden space-y-3">
                     {users.map(u => (
                       <div
                         key={u.id}
-                        className="rounded-lg border border-[#3e3e42] bg-[#252526] p-4"
+                        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <div className="text-[#cccccc] font-medium text-base">{u.username}</div>
-                            <div className="text-[#969696] text-sm">{u.email || 'No email'}</div>
+                            <div className="text-[var(--text)] font-medium text-base">{u.username}</div>
+                            <div className="text-[var(--muted)] text-sm">{u.email || 'No email'}</div>
                           </div>
-                          <span className="text-xs px-2 py-1 rounded bg-[#3e3e42] text-[#cccccc] capitalize">{u.role}</span>
+                          <span className="text-xs px-2 py-1 rounded bg-[var(--card)] text-[var(--text)] border border-[var(--border)] capitalize">{u.role}</span>
                         </div>
-                        <div className="mt-2 text-sm text-[#969696]">
-                          Linked Person: <span className="text-[#cccccc]">{u.person ? u.person.name : 'None'}</span>
+                        <div className="mt-2 text-sm text-[var(--muted)]">
+                          Linked Person: <span className="text-[var(--text)]">{u.person ? u.person.name : 'None'}</span>
                         </div>
                         <div className="mt-3">
                           <button
-                            className="inline-flex items-center justify-center min-h-[44px] px-4 py-2 rounded-md text-sm text-red-400 hover:text-red-300 hover:bg-[#3e3e42] disabled:opacity-50"
+                            className="inline-flex items-center justify-center min-h-[44px] px-4 py-2 rounded-md text-sm text-red-400 hover:text-red-300 hover:bg-[var(--cardHover)] disabled:opacity-50"
                             disabled={u.id === auth.user?.id}
                             onClick={async () => {
                               setUsersMsg(null);
@@ -299,7 +299,7 @@ const Settings: React.FC = () => {
                   {/* Table on sm and up */}
                   <div className="hidden sm:block overflow-auto">
                     <table className="min-w-full text-sm text-left">
-                      <thead className="text-[#969696]">
+                      <thead className="text-[var(--muted)]">
                         <tr>
                           <th className="py-2 pr-4">Username</th>
                           <th className="py-2 pr-4">Email</th>
@@ -308,9 +308,9 @@ const Settings: React.FC = () => {
                           <th className="py-2 pr-4">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="text-[#cccccc]">
+                      <tbody className="text-[var(--text)]">
                         {users.map(u => (
-                          <tr key={u.id} className="border-t border-[#3e3e42]">
+                          <tr key={u.id} className="border-t border-[var(--border)]">
                             <td className="py-2 pr-4">{u.username}</td>
                             <td className="py-2 pr-4">{u.email}</td>
                             <td className="py-2 pr-4 capitalize">{u.role}</td>
@@ -346,10 +346,10 @@ const Settings: React.FC = () => {
 
           {/* Admin-only: Backup & Restore Section */}
           {auth.user?.is_staff && (
-            <div id="backup-restore" className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6 mt-6">
+            <div id="backup-restore" className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mt-6">
               <div className="mb-6">
-                <h2 className="text-xl font-semibold text-[#cccccc] mb-1">Backup &amp; Restore</h2>
-                <p className="text-[#969696] text-sm">
+                <h2 className="text-xl font-semibold text-[var(--text)] mb-1">Backup &amp; Restore</h2>
+                <p className="text-[var(--muted)] text-sm">
                   Create and download database backups, and restore from existing or uploaded backups. Restoring will overwrite all current data.
                 </p>
               </div>
@@ -385,3 +385,7 @@ const Settings: React.FC = () => {
 };
 
 export default Settings;
+
+
+
+

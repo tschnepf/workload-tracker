@@ -19,6 +19,7 @@ from people.models import Person
 from people.serializers import PersonSerializer
 from assignments.models import Assignment
 from assignments.serializers import AssignmentSerializer
+from core.utils.excel import write_headers, auto_fit_columns, create_excel_response
 
 
 def export_projects_to_excel(queryset, filename=None, is_template=False):
@@ -51,7 +52,7 @@ def export_projects_to_excel(queryset, filename=None, is_template=False):
     if 'Sheet' in workbook.sheetnames:
         del workbook['Sheet']
     
-    return _create_excel_response(workbook, filename)
+    return create_excel_response(workbook, filename)
 
 
 def _create_template_projects_sheet(workbook):
@@ -66,7 +67,7 @@ def _create_template_projects_sheet(workbook):
     ]
     
     # Write headers with styling
-    _write_excel_headers(sheet, headers)
+    write_headers(sheet, headers)
     
     # Example project data rows
     example_projects = [
@@ -83,7 +84,7 @@ def _create_template_projects_sheet(workbook):
             # Light blue background for example data
             cell.fill = PatternFill(start_color="E3F2FD", end_color="E3F2FD", fill_type="solid")
     
-    _auto_fit_columns(sheet)
+    auto_fit_columns(sheet)
 
 
 def _create_template_assignments_sheet(workbook):
@@ -97,7 +98,7 @@ def _create_template_assignments_sheet(workbook):
         'totalHours', 'notes', 'isActive'
     ]
     
-    _write_excel_headers(assignments_sheet, headers)
+    write_headers(assignments_sheet, headers)
     
     # Example assignment data rows with personRole for auto-creation
     example_assignments = [
@@ -116,7 +117,7 @@ def _create_template_assignments_sheet(workbook):
             # Light green background for example data
             cell.fill = PatternFill(start_color="E8F5E8", end_color="E8F5E8", fill_type="solid")
     
-    _auto_fit_columns(assignments_sheet)
+    auto_fit_columns(assignments_sheet)
 
 
 def _create_template_deliverables_sheet(workbook):
@@ -129,7 +130,7 @@ def _create_template_deliverables_sheet(workbook):
         'date', 'sortOrder', 'isCompleted', 'completedDate', 'notes'
     ]
     
-    _write_excel_headers(deliverables_sheet, headers)
+    write_headers(deliverables_sheet, headers)
     
     # Example deliverable data rows
     example_deliverables = [
@@ -149,7 +150,7 @@ def _create_template_deliverables_sheet(workbook):
             # Light orange background for example data
             cell.fill = PatternFill(start_color="FFF3E0", end_color="FFF3E0", fill_type="solid")
     
-    _auto_fit_columns(deliverables_sheet)
+    auto_fit_columns(deliverables_sheet)
 
 
 def _create_projects_sheet(workbook, queryset):
@@ -164,7 +165,7 @@ def _create_projects_sheet(workbook, queryset):
     ]
     
     # Write headers with styling
-    _write_excel_headers(sheet, headers)
+    write_headers(sheet, headers)
     
     # Serialize data using ProjectSerializer
     serializer = ProjectSerializer(queryset, many=True)
@@ -182,7 +183,7 @@ def _create_projects_sheet(workbook, queryset):
             
             sheet.cell(row=row_idx, column=col_idx, value=value)
     
-    _auto_fit_columns(sheet)
+    auto_fit_columns(sheet)
 
 
 def _create_assignments_sheet(workbook, queryset):
@@ -196,7 +197,7 @@ def _create_assignments_sheet(workbook, queryset):
         'totalHours', 'notes', 'isActive'
     ]
     
-    _write_excel_headers(assignments_sheet, headers)
+    write_headers(assignments_sheet, headers)
     
     row_idx = 2
     
@@ -228,7 +229,7 @@ def _create_assignments_sheet(workbook, queryset):
             
             row_idx += 1
     
-    _auto_fit_columns(assignments_sheet)
+    auto_fit_columns(assignments_sheet)
 
 
 def _create_deliverables_sheet(workbook, queryset):
@@ -241,7 +242,7 @@ def _create_deliverables_sheet(workbook, queryset):
         'date', 'sortOrder', 'isCompleted', 'completedDate', 'notes'
     ]
     
-    _write_excel_headers(deliverables_sheet, headers)
+    write_headers(deliverables_sheet, headers)
     
     row_idx = 2
     
@@ -267,7 +268,7 @@ def _create_deliverables_sheet(workbook, queryset):
             
             row_idx += 1
     
-    _auto_fit_columns(deliverables_sheet)
+    auto_fit_columns(deliverables_sheet)
 
 
 def _create_projects_template_sheet(workbook):
@@ -351,7 +352,7 @@ def _create_projects_template_sheet(workbook):
         cell = template_sheet.cell(row=14, column=col_idx, value=value)
         cell.fill = PatternFill(start_color="FFF3E0", end_color="FFF3E0", fill_type="solid")
     
-    _auto_fit_columns(template_sheet)
+    auto_fit_columns(template_sheet)
 
 
 def _create_projects_instructions_sheet(workbook):
@@ -434,42 +435,20 @@ def _create_projects_instructions_sheet(workbook):
         elif instruction.startswith(("PROJECTS SHEET", "ASSIGNMENTS SHEET", "DELIVERABLES SHEET", "MULTI-SHEET", "IMPORT PROCESS", "MATCHING LOGIC", "WEEKLY HOURS", "ERROR PREVENTION")):
             cell.font = Font(bold=True, size=12)
     
-    _auto_fit_columns(instructions_sheet)
+    auto_fit_columns(instructions_sheet)
 
 
 def _write_excel_headers(sheet, headers):
-    """Write headers with formatting."""
-    for col_idx, header in enumerate(headers, start=1):
-        cell = sheet.cell(row=1, column=col_idx, value=header)
-        cell.font = Font(bold=True)
-        cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-        cell.font = Font(color="FFFFFF", bold=True)
-        cell.alignment = Alignment(horizontal="center")
+    # Backward-compat wrapper for existing imports; delegate to shared util
+    write_headers(sheet, headers)
 
 
 def _auto_fit_columns(sheet):
-    """Auto-fit column widths."""
-    for column in sheet.columns:
-        max_length = 0
-        column_letter = get_column_letter(column[0].column)
-        
-        for cell in column:
-            if cell.value:
-                max_length = max(max_length, len(str(cell.value)))
-        
-        adjusted_width = min(max_length + 2, 50)
-        sheet.column_dimensions[column_letter].width = adjusted_width
+    auto_fit_columns(sheet)
 
 
 def _create_excel_response(workbook, filename):
-    """Create HTTP response with Excel file."""
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
-    workbook.save(response)
-    return response
+    return create_excel_response(workbook, filename)
 
 
 # IMPORT FUNCTIONALITY - Phase 6 Implementation

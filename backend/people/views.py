@@ -232,7 +232,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Apply any filters from query params
         role = request.query_params.get('role')
         if role:
-            queryset = queryset.filter(role__icontains=role)
+            # Role is a ForeignKey; filter by role name for substring match
+            queryset = queryset.filter(role__name__icontains=role)
             
         department = request.query_params.get('department')
         if department:
@@ -905,13 +906,34 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         excel_file = request.FILES['file']
-        
-        # Validate file type
-        if not excel_file.name.endswith(('.xlsx', '.xls')):
+
+        # Validate file type (extension + basic MIME check)
+        filename = excel_file.name
+        if not filename.lower().endswith(('.xlsx', '.xls')):
             return Response({
                 'success': False,
                 'error': 'File must be Excel format (.xlsx or .xls)'
             }, status=status.HTTP_400_BAD_REQUEST)
+        ctype = getattr(excel_file, 'content_type', '') or ''
+        allowed_types = {
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',  # .xlsx
+            'application/vnd.ms-excel',  # .xls
+        }
+        # If a content type is provided and it is not an allowed Excel type, reject
+        if ctype and ctype not in allowed_types:
+            return Response({
+                'success': False,
+                'error': f'Unsupported content type: {ctype}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Enforce size limits
+        max_bytes = int(getattr(django_settings, 'PEOPLE_UPLOAD_MAX_BYTES', 10 * 1024 * 1024))
+        fsize = getattr(excel_file, 'size', None)
+        if isinstance(fsize, int) and fsize > max_bytes:
+            return Response({
+                'success': False,
+                'error': 'File too large'
+            }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
         
         # Get options
         update_existing = request.data.get('update_existing', 'true').lower() == 'true'
@@ -920,12 +942,34 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         # When async jobs are enabled, submit background task and return job id
         if django_settings.FEATURES.get('ASYNC_JOBS') and import_people_excel_task is not None:
-            # Persist uploaded file to storage for worker to access
-            # Use a safe path under media storage
-            filename = excel_file.name
-            storage_key = f"imports/people/{int(time.time())}_{os.path.basename(filename)}"
-            default_storage.save(storage_key, excel_file)
-            task = import_people_excel_task.delay(storage_key, update_existing=update_existing, dry_run=dry_run)
+            # Persist uploaded file to a private, non-web-served directory (under BACKUPS_DIR)
+            safe_dir = os.path.join(getattr(django_settings, 'BACKUPS_DIR', '/backups'), 'incoming', 'people')
+            try:
+                os.makedirs(safe_dir, exist_ok=True)
+            except Exception:
+                pass
+            safe_name = f"{int(time.time())}_{os.path.basename(filename)}"
+            safe_path = os.path.join(safe_dir, safe_name)
+            try:
+                written = 0
+                with open(safe_path, 'wb') as out:
+                    for chunk in excel_file.chunks():
+                        out.write(chunk)
+                        written += len(chunk)
+                        if written > max_bytes:
+                            raise ValueError('upload_exceeds_limit')
+            except Exception as e:
+                try:
+                    if os.path.exists(safe_path):
+                        os.remove(safe_path)
+                except Exception:
+                    pass
+                if str(e) == 'upload_exceeds_limit':
+                    return Response({'success': False, 'error': 'File too large'}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+                return Response({'success': False, 'error': f'Failed to store upload: {e.__class__.__name__}'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Enqueue background task with absolute path (worker supports absolute path)
+            task = import_people_excel_task.delay(safe_path, update_existing=update_existing, dry_run=dry_run)
             job_id = task.id
             return Response({
                 'jobId': job_id,
@@ -1023,6 +1067,13 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = 12
 
         people = self.get_queryset()
+        # Prefetch active assignments to avoid N+1 when computing utilization
+        try:
+            people = people.prefetch_related(
+                Prefetch('assignments', queryset=Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id'))
+            )
+        except Exception:
+            pass
         # Optional department filter with include_children
         department_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'

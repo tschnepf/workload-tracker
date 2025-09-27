@@ -56,11 +56,15 @@ class AssignmentSerializer(serializers.ModelSerializer):
         if not isinstance(value, dict):
             raise serializers.ValidationError("Weekly hours must be a dictionary")
 
-        from datetime import datetime
+        from datetime import datetime, date
+        from django.conf import settings
+        from core.week_utils import sunday_of_week
+
+        normalized: dict[str, float] = {}
         for week_key, hours in value.items():
             # Validate week key format (should be YYYY-MM-DD)
             try:
-                datetime.strptime(week_key, '%Y-%m-%d')
+                dt = datetime.strptime(week_key, '%Y-%m-%d').date()
             except ValueError:
                 raise serializers.ValidationError(f"Invalid week date format: {week_key}. Use YYYY-MM-DD")
 
@@ -72,7 +76,14 @@ class AssignmentSerializer(serializers.ModelSerializer):
             except (ValueError, TypeError):
                 raise serializers.ValidationError(f"Invalid hours value for week {week_key}: {hours}")
 
-        return value
+            # Enforce Sunday-canonical keys; optionally coerce during transition window
+            sunday = sunday_of_week(dt)
+            key_out = sunday.strftime('%Y-%m-%d')
+            if key_out != week_key and not settings.FEATURES.get('WEEK_KEYS_TRANSITION_READ_BOTH', True):
+                raise serializers.ValidationError(f"Week key {week_key} must be a Sunday (canonical) date")
+            normalized[key_out] = normalized.get(key_out, 0.0) + hours_float
+
+        return normalized
     
     def validate(self, attrs):
         """Cross-field validation: allow overages; no blocking caps."""

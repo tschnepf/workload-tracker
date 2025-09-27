@@ -3,6 +3,7 @@ import type { paths } from './schema';
 import { getAccessToken, refreshAccessToken, waitForAuthReady } from '@/utils/auth';
 import { etagStore } from './etagStore';
 import { showToast } from '@/lib/toastBus';
+import { friendlyErrorMessage } from './errors';
 
 // Prefer relative '/api' so Vite proxy handles routing in dev. If VITE_API_URL
 // is set to an absolute URL, we still honor it.
@@ -20,46 +21,6 @@ export class ApiError extends Error {
 }
 
 // Shared error mapping to keep parity with legacy layer
-export function friendlyErrorMessage(status: number, data: any, fallback: string): string {
-  const detail = typeof data === 'object' && data ? (data.detail || data.message || data.error) : null;
-  const nonField = Array.isArray(data?.non_field_errors) ? data.non_field_errors[0] : null;
-  const firstFieldError = (() => {
-    if (data && typeof data === 'object') {
-      for (const [k, v] of Object.entries(data)) {
-        if (k === 'detail' || k === 'message' || k === 'non_field_errors') continue;
-        if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'string') return v[0] as string;
-      }
-    }
-    return null;
-  })();
-  switch (status) {
-    case 0:
-      return 'Network error - unable to reach the server.';
-    case 400:
-      return nonField || firstFieldError || detail || 'Please check the form for errors and try again.';
-    case 401:
-      return 'Your session has expired. Please sign in again.';
-    case 403:
-      return 'You do not have permission to perform this action.';
-    case 404:
-      return 'We could not find what you were looking for.';
-    case 409:
-      return 'A conflict occurred. Please refresh and try again.';
-    case 412:
-      return 'This record changed since you loaded it. Refresh and retry.';
-    case 413:
-      return 'The request is too large. Try narrowing your selection.';
-    case 429:
-      return 'Too many requests. Please slow down and try again soon.';
-    case 500:
-    case 502:
-    case 503:
-    case 504:
-      return 'Something went wrong on our side. Please try again.';
-    default:
-      return detail || fallback;
-  }
-}
 
 let refreshPromise: Promise<string | null> | null = null;
 
@@ -73,6 +34,20 @@ function ensureTrailingSlash(path: string): string {
   return p.endsWith('/') ? path : `${p}/`;
 }
 
+// Replace OpenAPI path template placeholders with concrete values
+function materializePath(path: string, opts?: any): string {
+  try {
+    const params = opts?.params?.path || {};
+    let out = String(path);
+    for (const [k, v] of Object.entries(params)) {
+      out = out.replace(`{${k}}`, String(v));
+    }
+    return out;
+  } catch {
+    return String(path);
+  }
+}
+
 // Create a typed OpenAPI client
 export const rawClient = createClient<paths>({ baseUrl: API_BASE_URL });
 
@@ -80,14 +55,14 @@ export const rawClient = createClient<paths>({ baseUrl: API_BASE_URL });
 export const apiClient = {
   async GET(path: any, opts?: any) {
     await waitForAuthReady();
-    const normalizedPath = ensureTrailingSlash(typeof path === 'string' ? path : String(path));
+    const keyPath = ensureTrailingSlash(materializePath(typeof path === 'string' ? path : String(path), opts));
     const headers = withAuth(opts?.headers);
-    const res = await rawClient.GET(normalizedPath as any, { ...opts, headers });
+    const res = await rawClient.GET(path as any, { ...opts, headers });
     if (res.error) return handleError(res);
     // Capture ETag for detail GETs (heuristic: has {id} or ends with '/{number}/')
     try {
       const etag = res.response?.headers?.get?.('etag');
-      if (etag) etagStore.set(normalizedPath, etag);
+      if (etag) etagStore.set(keyPath, etag);
     } catch {}
     return res;
   },
@@ -100,21 +75,21 @@ export const apiClient = {
 
 async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any, opts?: any) {
   await waitForAuthReady();
-  const normalizedPath = ensureTrailingSlash(typeof path === 'string' ? path : String(path));
+  const keyPath = ensureTrailingSlash(materializePath(typeof path === 'string' ? path : String(path), opts));
   let headers = withAuth(opts?.headers);
   // Inject If-Match for detail mutations when we have an ETag
   if ((method === 'PATCH' || method === 'PUT' || method === 'DELETE') && !headers['If-Match']) {
-    const etag = etagStore.get(normalizedPath);
+    const etag = etagStore.get(keyPath);
     if (etag) headers = { ...headers, 'If-Match': etag };
   }
   const req = { ...opts, headers };
 
   const call = async () => {
     switch (method) {
-      case 'POST': return rawClient.POST(normalizedPath as any, req);
-      case 'PUT': return rawClient.PUT(normalizedPath as any, req);
-      case 'PATCH': return rawClient.PATCH(normalizedPath as any, req);
-      case 'DELETE': return rawClient.DELETE(normalizedPath as any, req);
+      case 'POST': return rawClient.POST(path as any, req);
+      case 'PUT': return rawClient.PUT(path as any, req);
+      case 'PATCH': return rawClient.PATCH(path as any, req);
+      case 'DELETE': return rawClient.DELETE(path as any, req);
     }
   };
 
@@ -131,6 +106,25 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
       }
       // Retry once
       res = await call();
+    } else if (status === 412) {
+      // ETag mismatch: refresh ETag and retry once
+      try {
+        const getRes = await rawClient.GET(path as any, { ...opts, headers: withAuth(opts?.headers) });
+        const newEtag = getRes.response?.headers?.get?.('etag');
+        if (newEtag) etagStore.set(keyPath, newEtag);
+        // Rebuild headers with fresh If-Match
+        let retryHeaders = withAuth(opts?.headers);
+        const etag = etagStore.get(keyPath);
+        if (etag) retryHeaders = { ...retryHeaders, 'If-Match': etag };
+        res = await (async () => {
+          switch (method) {
+            case 'POST': return rawClient.POST(path as any, { ...req, headers: retryHeaders });
+            case 'PUT': return rawClient.PUT(path as any, { ...req, headers: retryHeaders });
+            case 'PATCH': return rawClient.PATCH(path as any, { ...req, headers: retryHeaders });
+            case 'DELETE': return rawClient.DELETE(path as any, { ...req, headers: retryHeaders });
+          }
+        })();
+      } catch {}
     }
   }
 
@@ -138,7 +132,7 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
   // Update stored ETag when server returns new one
   try {
     const etag = res.response?.headers?.get?.('etag');
-    if (etag) etagStore.set(normalizedPath, etag);
+    if (etag) etagStore.set(keyPath, etag);
   } catch {}
   return res;
 }

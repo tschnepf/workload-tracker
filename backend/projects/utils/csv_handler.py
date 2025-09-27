@@ -8,6 +8,8 @@ import json
 from django.http import HttpResponse
 from datetime import datetime
 from ..serializers import ProjectSerializer
+from django.db.models import Prefetch
+from assignments.models import Assignment
 
 
 def export_projects_to_csv(queryset, filename=None):
@@ -30,14 +32,25 @@ def export_projects_to_csv(queryset, filename=None):
     
     writer.writerow(headers)
     
+    # Optimize relationships: prefetch assignments and deliverables once
+    optimized_qs = queryset.prefetch_related(
+        Prefetch('assignments', queryset=Assignment.objects.select_related('person').only('person_id', 'notes', 'is_active', 'weekly_hours', 'role_on_project')),
+        'deliverables',
+    )
+
     # Serialize data using ProjectSerializer
-    serializer = ProjectSerializer(queryset, many=True)
+    serializer = ProjectSerializer(optimized_qs, many=True)
     serialized_data = serializer.data
-    
+
+    # Build a map of id -> project instance to avoid per-row .get() queries
+    projects_by_id = {p.id: p for p in optimized_qs}
+
     # Write data rows with additional computed fields
     for project_data in serialized_data:
-        # Get the actual project object for relationships
-        project = queryset.get(id=project_data['id'])
+        # Get the actual project object for relationships without extra queries
+        project = projects_by_id.get(project_data['id'])
+        if project is None:
+            continue
         
         # Compute additional fields
         assignments = project.assignments.all() if hasattr(project, 'assignments') else []

@@ -145,16 +145,16 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
   const parentDepartmentOptions = departments.filter(dept => dept.id !== department?.id);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <Card className="w-full max-w-lg bg-[#2d2d30] border-[#3e3e42] max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-[var(--surfaceOverlay)] flex items-center justify-center z-50">
+      <Card className="w-full max-w-lg bg-[var(--card)] border-[var(--border)] max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-[#cccccc]">
+            <h2 className="text-xl font-bold text-[var(--text)]">
               {isEditing ? 'Edit Department' : 'Add Department'}
             </h2>
             <button
               onClick={onCancel}
-              className="text-[#969696] hover:text-[#cccccc] text-xl"
+              className="text-[var(--muted)] hover:text-[var(--text)] text-xl"
             >
               ×
             </button>
@@ -168,7 +168,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
             )}
 
             <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-1">
+              <label className="block text-sm font-medium text-[var(--text)] mb-1">
                 Department Name *
               </label>
               <Input
@@ -184,13 +184,13 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-1">
+              <label className="block text-sm font-medium text-[var(--text)] mb-1">
                 Parent Department
               </label>
               <select
                 value={formData.parentDepartment || ''}
                 onChange={(e) => handleInputChange('parentDepartment', e.target.value ? parseInt(e.target.value) : null)}
-                className={`w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent min-h-[44px] ${
+                className={`w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px] ${
                   validationErrors.parentDepartment ? 'border-red-600' : ''
                 }`}
                 disabled={loading}
@@ -208,13 +208,13 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-1">
+              <label className="block text-sm font-medium text-[var(--text)] mb-1">
                 Manager
               </label>
               <select
                 value={formData.manager || ''}
                 onChange={(e) => handleInputChange('manager', e.target.value ? parseInt(e.target.value) : null)}
-                className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent min-h-[44px]"
+                className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
                 disabled={loading}
               >
                 <option value="">None Assigned</option>
@@ -227,7 +227,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-1">
+              <label className="block text-sm font-medium text-[var(--text)] mb-1">
                 Description
               </label>
               <textarea
@@ -235,7 +235,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
                 onChange={(e) => handleInputChange('description', e.target.value)}
                 placeholder="Brief description of the department's purpose..."
                 rows={3}
-                className="w-full px-3 py-2 bg-[#3e3e42] border border-[#3e3e42] rounded-md text-[#cccccc] focus:outline-none focus:ring-2 focus:ring-[#007acc] focus:border-transparent resize-none"
+                className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent resize-none"
                 disabled={loading}
               />
             </div>
@@ -246,10 +246,10 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
                 id="isActive"
                 checked={formData.isActive}
                 onChange={(e) => handleInputChange('isActive', e.target.checked)}
-                className="mr-2 w-4 h-4 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-2"
+                className="mr-2 w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
                 disabled={loading}
               />
-              <label htmlFor="isActive" className="text-sm text-[#cccccc]">
+              <label htmlFor="isActive" className="text-sm text-[var(--text)]">
                 Department is active
               </label>
             </div>

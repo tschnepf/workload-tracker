@@ -103,7 +103,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [mobileSidebarOpen]);
   return (
     <LayoutContext.Provider value={true}>
-    <div className="h-[100svh] md:h-screen overflow-hidden bg-[#1e1e1e] flex">
+    <div className="h-[100svh] md:h-screen overflow-hidden bg-[var(--bg)] flex">
       {/* Global top-edge progress indicator */}
       <TopProgress />
       {/* Blank overlay while navigation is pending (ensures obvious feedback) */}

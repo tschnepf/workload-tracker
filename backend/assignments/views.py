@@ -113,16 +113,64 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             # Fallback to basic ordering if DB backend lacks functions
             queryset = queryset.order_by('project__client', 'project__name')
 
+        # Compute validators for conditional GET on list
+        try:
+            aggr = queryset.aggregate(last_modified=Max('updated_at'))
+            last_modified = aggr.get('last_modified')
+        except Exception:
+            last_modified = None
+        etag = None
+        if last_modified:
+            try:
+                import hashlib
+                etag = hashlib.md5(last_modified.isoformat().encode()).hexdigest()
+            except Exception:
+                etag = None
+
+        # If-None-Match / If-Modified-Since handling
+        if etag:
+            inm = request.META.get('HTTP_IF_NONE_MATCH')
+            if inm and inm.strip('"') == etag:
+                resp = HttpResponseNotModified()
+                resp['ETag'] = f'"{etag}"'
+                return resp
+        if last_modified:
+            ims = request.META.get('HTTP_IF_MODIFIED_SINCE')
+            if ims:
+                try:
+                    from django.utils.http import parse_http_date
+                    if_modified_ts = parse_http_date(ims)
+                    if int(last_modified.timestamp()) <= if_modified_ts:
+                        resp = HttpResponseNotModified()
+                        if etag:
+                            resp['ETag'] = f'"{etag}"'
+                        resp['Last-Modified'] = http_date(last_modified.timestamp())
+                        return resp
+                except Exception:
+                    pass
+
         # Check if bulk loading is requested (Phase 2 optimization)
         if request.query_params.get('all') == 'true':
             serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
+            response = Response(serializer.data)
+            if etag:
+                response['ETag'] = f'"{etag}"'
+            if last_modified:
+                response['Last-Modified'] = http_date(last_modified.timestamp())
+                response['Cache-Control'] = 'private, max-age=30'
+            return response
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response({
+        response = Response({
             'results': serializer.data,
             'count': len(serializer.data)
         })
+        if etag:
+            response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+            response['Cache-Control'] = 'private, max-age=30'
+        return response
 
     @extend_schema(
         description=(

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { darkTheme } from '../../../theme/tokens';
-import { assignmentsApi } from '../../../services/api';
+import { apiClient, authHeaders } from '@/api/client';
 
 interface Props { onClose: () => void }
 
@@ -13,10 +13,8 @@ const BalanceWorkloadTool: React.FC<Props> = () => {
     const run = async () => {
       try {
         // Directly fetch suggestions without bulk warming
-        const base = (import.meta as any)?.env?.VITE_API_URL || '/api';
-        const resp = await fetch(`${base}/assignments/rebalance_suggestions/`);
-        const json = await resp.json();
-        setSuggestions(json);
+        const res = await apiClient.GET('/assignments/rebalance_suggestions/' as any, { headers: authHeaders() });
+        setSuggestions((res as any).data || []);
       } finally {
         setLoading(false);
       }

@@ -77,7 +77,8 @@ class Command(BaseCommand):
             queryset = queryset.filter(department__name__icontains=options['department'])
             
         if options['role']:
-            queryset = queryset.filter(role__icontains=options['role'])
+            # Role is a ForeignKey; filter by related name
+            queryset = queryset.filter(role__name__icontains=options['role'])
             
         if options['active_only']:
             queryset = queryset.filter(is_active=True)
