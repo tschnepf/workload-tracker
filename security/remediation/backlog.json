@@ -1,0 +1,469 @@
+[
+  {
+    "key": "SWAGGER-OPEN",
+    "title": "Gate Swagger UI in prod",
+    "owner": "backend",
+    "severity": "Medium",
+    "priority": "High",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "SWAGGER-OPEN", "path": "backend/config/urls.py", "line": 119},
+    "dependencies": ["Confirm desired access policy (IsAuthenticated vs IsAdminUser)", "Environment toggle for dev"],
+    "acceptance_criteria": [
+      "Anonymous GET /api/schema/swagger/ returns 401/403 in prod",
+      "Authenticated policy matches decision (user/admin)"
+    ],
+    "verification": [
+      "curl -i https://<host>/api/schema/swagger/ as anonymous and authenticated",
+      "Semgrep policy check for SERVE_PERMISSIONS in settings"
+    ]
+  },
+  {
+    "key": "OPENAPI-OPEN",
+    "title": "Gate OpenAPI schema in prod",
+    "owner": "backend",
+    "severity": "Medium",
+    "priority": "High",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "OPENAPI-OPEN", "path": "backend/config/urls.py", "line": 118},
+    "dependencies": ["Swagger UI gating decision"],
+    "acceptance_criteria": [
+      "Anonymous GET /api/schema/ returns 401/403 in prod"
+    ],
+    "verification": [
+      "curl -i https://<host>/api/schema/ as anonymous",
+      "Semgrep check for auth on schema route"
+    ]
+  },
+  {
+    "key": "CSP-UNSAFE-STYLE",
+    "title": "Strengthen CSP: remove unsafe-inline for styles",
+    "owner": "backend",
+    "severity": "Medium",
+    "priority": "High",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "CSP-UNSAFE-STYLE", "path": "backend/config/settings.py", "line": 493},
+    "dependencies": ["Nonce/hash implementation for styles", "Inventory inline styles"],
+    "acceptance_criteria": [
+      "CSP header has no 'unsafe-inline' in style-src in prod",
+      "App renders correctly with nonces/hashes"
+    ],
+    "verification": [
+      "Browser devtools: verify CSP header",
+      "CSP report logs show no persistent violations after rollout"
+    ]
+  },
+  {
+    "key": "EXPORT-FORMULA-CSV",
+    "title": "Escape formulas in CSV exports (People/Projects)",
+    "owner": "backend",
+    "severity": "Medium",
+    "priority": "High",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "EXPORT-FORMULA-CSV", "path": "backend/people/utils/csv_handler.py", "line": 47},
+    "dependencies": ["Define standard escaping util for CSV/XLSX"],
+    "acceptance_criteria": [
+      "Cells starting with =,+,-,@ are prefixed to render as text",
+      "Control chars stripped/encoded as needed"
+    ],
+    "verification": [
+      "Generate CSV with malicious leading characters; open in Excel/LibreOffice and confirm no formula execution"
+    ]
+  },
+  {
+    "key": "EXPORT-FORMULA-XLSX",
+    "title": "Escape formulas in XLSX exports (People/Projects)",
+    "owner": "backend",
+    "severity": "Medium",
+    "priority": "High",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "EXPORT-FORMULA-XLSX", "path": "backend/people/utils/excel_handler.py", "line": 63},
+    "dependencies": ["Define standard escaping util for CSV/XLSX"],
+    "acceptance_criteria": [
+      "Malicious leading characters escaped",
+      "Cell data type set to string where appropriate"
+    ],
+    "verification": [
+      "Open exported XLSX in Excel; confirm no formula evaluation"
+    ]
+  },
+  {
+    "key": "PROJECTS-IMPORT-LIMITS",
+    "title": "Add MIME/size limits + safe storage for Projects import",
+    "owner": "backend",
+    "severity": "Medium",
+    "priority": "High",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "PROJECTS-IMPORT-LIMITS", "path": "backend/projects/views.py", "line": 632},
+    "dependencies": ["Re-use People import validation patterns"],
+    "acceptance_criteria": [
+      "Reject non-Excel/CSV content-types",
+      "Enforce max bytes with 413 response",
+      "Persist uploads to private, non-web-served path"
+    ],
+    "verification": [
+      "Upload too-large file -> 413",
+      "Upload wrong MIME -> 400",
+      "Path stored under /backups/incoming/projects"
+    ]
+  },
+  {
+    "key": "LOG-REDACTION",
+    "title": "Add redaction helpers for sensitive fields in logs",
+    "owner": "backend",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-11-26",
+    "related": {"rule_id": "LOG-REDACTION", "path": "backend/config/logging_utils.py", "line": 9},
+    "dependencies": ["Define list of sensitive keys to mask"],
+    "acceptance_criteria": [
+      "Values of keys like password, token, authorization are masked when present in extra"
+    ],
+    "verification": [
+      "Unit test: logger emits masked values"
+    ]
+  },
+  {
+    "key": "NGINX-UPLOAD-SIZE",
+    "title": "Per-route client_max_body_size for backups upload",
+    "owner": "ops",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "NGINX-UPLOAD-SIZE", "path": "nginx/nginx.conf", "line": 31},
+    "dependencies": ["Confirm max expected backup size"],
+    "acceptance_criteria": [
+      "Location /api/backups/upload-restore/ overrides body size appropriately"
+    ],
+    "verification": [
+      "nginx -t passes; upload of configured size succeeds"
+    ]
+  },
+  {
+    "key": "AUTHZ-RBAC-OBJECT",
+    "title": "Confirm RBAC-only scope or add object-level checks",
+    "owner": "backend",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-12-26",
+    "related": {"rule_id": "AUTHZ-RBAC-OBJECT", "path": "backend/accounts/permissions.py", "line": 6},
+    "dependencies": ["Product decision on ownership constraints"],
+    "acceptance_criteria": [
+      "Decision recorded; if required, has_object_permission implemented on sensitive viewsets"
+    ],
+    "verification": [
+      "Unit/integration tests for unauthorized object edits"
+    ]
+  },
+  {
+    "key": "NGINX-PERMISSIONS-POLICY",
+    "title": "Add Permissions-Policy header (prod)",
+    "owner": "ops",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "NGINX-PERMISSIONS-POLICY", "path": "nginx/sites-available/workload-tracker.conf", "line": 1},
+    "dependencies": ["Select conservative policy values"],
+    "acceptance_criteria": [
+      "Permissions-Policy present with geolocation=(), microphone=(), camera=(), payment=()"
+    ],
+    "verification": [
+      "curl -I shows header in prod"
+    ]
+  },
+  {
+    "key": "NGINX-XXSS",
+    "title": "Remove deprecated X-XSS-Protection",
+    "owner": "ops",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "NGINX-XXSS", "path": "nginx/nginx.conf", "line": 60},
+    "dependencies": [],
+    "acceptance_criteria": ["Header not present in prod"],
+    "verification": ["curl -I shows no X-XSS-Protection"]
+  },
+  {
+    "key": "SLACK-URL-SCHEME",
+    "title": "Enforce https scheme/allowlist for Slack webhook",
+    "owner": "backend",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-11-26",
+    "related": {"rule_id": "SLACK-URL-SCHEME", "path": "backend/core/notifications.py", "line": 19},
+    "dependencies": [],
+    "acceptance_criteria": [
+      "Non-https SLACK_WEBHOOK_URL rejected",
+      "Optional: restrict host to Slack domains"
+    ],
+    "verification": [
+      "Unit test of URL parsing/validation"
+    ]
+  },
+  {
+    "key": "DJANGO-SAMESITE",
+    "title": "Set cookie SameSite explicitly (Lax) in prod",
+    "owner": "backend",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-11-26",
+    "related": {"rule_id": "DJANGO-SAMESITE", "path": "backend/config/settings.py", "line": 1},
+    "dependencies": [],
+    "acceptance_criteria": [
+      "SESSION_COOKIE_SAMESITE=Lax and CSRF_COOKIE_SAMESITE=Lax in prod",
+      "Set-Cookie shows SameSite=Lax"
+    ],
+    "verification": [
+      "Response headers in prod show SameSite=Lax"
+    ]
+  },
+  {
+    "key": "FRONT-REFRESH-LS",
+    "title": "Ensure cookie refresh mode in prod; avoid localStorage refresh",
+    "owner": "frontend",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-11-26",
+    "related": {"rule_id": "FRONT-REFRESH-LS", "path": "frontend/src/store/auth.ts", "line": 115},
+    "dependencies": ["Confirm backend cookie refresh flags in prod"],
+    "acceptance_criteria": [
+      "VITE_COOKIE_REFRESH_AUTH=true in prod",
+      "No refresh token stored in localStorage in prod builds"
+    ],
+    "verification": [
+      "Build config review; runtime check for storage usage"
+    ]
+  },
+  {
+    "key": "SUPPLY-NPM-RANGES",
+    "title": "Pin frontend deps; commit lockfile; enable Renovate",
+    "owner": "frontend",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-11-26",
+    "related": {"rule_id": "SUPPLY-NPM-RANGES", "path": "frontend/package.json", "line": 1},
+    "dependencies": ["Decide package manager (npm|pnpm|yarn)"],
+    "acceptance_criteria": [
+      "Exact versions in package.json",
+      "Lockfile committed",
+      "Renovate config present"
+    ],
+    "verification": [
+      "CI check fails on ranges/lockfile drift"
+    ]
+  },
+  {
+    "key": "CONTAINERS-ROFS-CAPS",
+    "title": "Harden containers: read_only rootfs, cap_drop",
+    "owner": "ops",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-12-26",
+    "related": {"rule_id": "CONTAINERS-ROFS-CAPS", "path": "docker-compose.prod.yml", "line": 1},
+    "dependencies": ["Identify required capabilities", "Define tmpfs mounts"],
+    "acceptance_criteria": [
+      "Services have read_only: true",
+      "cap_drop: [ALL] with minimal add"
+    ],
+    "verification": [
+      "docker inspect shows read-only and caps"
+    ]
+  },
+  {
+    "key": "DB-TLS",
+    "title": "Enable Postgres TLS in transit (where feasible)",
+    "owner": "ops",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-12-26",
+    "related": {"rule_id": "DB-TLS", "path": "docker-compose.prod.yml", "line": 1},
+    "dependencies": ["Certificates provisioning", "DB SSL config"],
+    "acceptance_criteria": [
+      "DB server presents TLS",
+      "App connects with sslmode=require"
+    ],
+    "verification": [
+      "psql reports SSL in use; app connection logs"
+    ]
+  },
+  {
+    "key": "XLSM-REJECT",
+    "title": "Reject macro-enabled Excel formats; prefer .xlsx",
+    "owner": "backend",
+    "severity": "Low",
+    "priority": "Medium",
+    "status": "planned",
+    "target_date": "2025-11-26",
+    "related": {"rule_id": "XLSM-REJECT", "path": "backend/people/views.py", "line": 980},
+    "dependencies": [],
+    "acceptance_criteria": [
+      ".xlsm/.xltm rejected with 400",
+      "Only .xlsx accepted"
+    ],
+    "verification": [
+      "Upload macro file -> 400"
+    ]
+  },
+  {
+    "key": "CSP-FONTS-PRECONNECT",
+    "title": "Align external fonts preconnect with CSP or self-host",
+    "owner": "frontend",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-11-26",
+    "related": {"rule_id": "CSP-FONTS-PRECONNECT", "path": "frontend/index.html", "line": 9},
+    "dependencies": ["Decide on self-host vs allowlist"],
+    "acceptance_criteria": [
+      "CSP font-src/style-src allow minimal origins or assets self-hosted"
+    ],
+    "verification": [
+      "CSP violation logs show clean state"
+    ]
+  },
+  {
+    "key": "PROJECTS-EXPORT-FORMULA",
+    "title": "Escape formulas in Projects XLSX export",
+    "owner": "backend",
+    "severity": "Medium",
+    "priority": "High",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "PROJECTS-EXPORT-FORMULA", "path": "backend/projects/utils/excel_handler.py", "line": 83},
+    "dependencies": ["Shared escaping util"],
+    "acceptance_criteria": [
+      "Leading =,+,-,@ escaped; control chars sanitized"
+    ],
+    "verification": [
+      "Manual open in Excel confirms no formula execution"
+    ]
+  },
+  {
+    "key": "SUBPROCESS-HARDENING",
+    "title": "Harden subprocess usage in backup/restore",
+    "owner": "backend",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-12-26",
+    "related": {"rule_id": "SUBPROCESS-HARDENING", "path": "backend/core/management/commands/restore_database.py", "line": 54},
+    "dependencies": [],
+    "acceptance_criteria": [
+      "Use shell=False, absolute paths, validated args; check return codes"
+    ],
+    "verification": [
+      "Unit tests simulate failure/return codes"
+    ]
+  },
+  {
+    "key": "DEV-PORT-EXPOSURE",
+    "title": "Document dev host port exposure; ensure prod uses prod compose",
+    "owner": "ops",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "DEV-PORT-EXPOSURE", "path": "docker-compose.yml", "line": 1},
+    "dependencies": [],
+    "acceptance_criteria": [
+      "PRODUCTION.md clarifies compose files and host port posture"
+    ],
+    "verification": [
+      "Docs review"
+    ]
+  },
+  {
+    "key": "REDIS-TLS",
+    "title": "Evaluate Redis TLS in transit (optional)",
+    "owner": "ops",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-12-26",
+    "related": {"rule_id": "REDIS-TLS", "path": "docker-compose.prod.yml", "line": 1},
+    "dependencies": ["TLS support in chosen Redis stack"],
+    "acceptance_criteria": [
+      "Decision recorded; enabled where feasible"
+    ],
+    "verification": ["Config review"]
+  },
+  {
+    "key": "JWT-IDLE-TIMEOUT",
+    "title": "Document/enforce session idle timeout policy for JWT",
+    "owner": "backend",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-12-26",
+    "related": {"rule_id": "JWT-IDLE-TIMEOUT", "path": "backend/config/settings.py", "line": 267},
+    "dependencies": ["Product decision on idle timeout"],
+    "acceptance_criteria": [
+      "ACCESS_TOKEN_LIFETIME documented; refresh rotation behavior clarified"
+    ],
+    "verification": ["Docs and config review"]
+  },
+  {
+    "key": "NGINX-UPLOAD-SIZE-IMPORTS",
+    "title": "Per-route body size for People/Projects imports",
+    "owner": "ops",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-11-26",
+    "related": {"rule_id": "NGINX-UPLOAD-SIZE-IMPORTS", "path": "nginx/nginx.conf", "line": 31},
+    "dependencies": ["Confirm expected max upload sizes"],
+    "acceptance_criteria": [
+      "Locations for /api/people/* and /api/projects/* import paths have appropriate client_max_body_size"
+    ],
+    "verification": ["nginx -t; upload tests"]
+  },
+  {
+    "key": "CI-PINNING-GUARDS",
+    "title": "CI guardrails for lockfile/pinning and findings schema",
+    "owner": "frontend",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "CI-PINNING-GUARDS", "path": ".github/workflows/security.yml", "line": 1},
+    "dependencies": [],
+    "acceptance_criteria": [
+      "CI fails on version ranges or missing lockfile",
+      "Ajv validation enforced for findings JSON"
+    ],
+    "verification": [
+      "PR with intentional drift fails CI"
+    ]
+  },
+  {
+    "key": "DOCS-COOKIE-MODE",
+    "title": "Document cookie refresh mode requirement for prod",
+    "owner": "backend",
+    "severity": "Low",
+    "priority": "Low",
+    "status": "planned",
+    "target_date": "2025-10-27",
+    "related": {"rule_id": "DOCS-COOKIE-MODE", "path": "PRODUCTION.md", "line": 1},
+    "dependencies": [],
+    "acceptance_criteria": [
+      "PRODUCTION.md updated with cookie mode instructions and env flags"
+    ],
+    "verification": ["Docs review"]
+  }
+]

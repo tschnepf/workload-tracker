@@ -1,0 +1,99 @@
+name: Security Scan
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies (for deploy checks)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Install security tooling
+        run: |
+          pip install pip-audit safety bandit semgrep
+          npm -g install ajv-cli
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh | bash -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | bash -s -- -b /usr/local/bin
+
+      - name: Install frontend dependencies (for npm audit metadata)
+        run: npm ci --prefix frontend
+
+      - name: Prepare artifacts dir
+        run: mkdir -p security/artifacts
+
+      - name: Run Gitleaks (secrets)
+        run: |
+          gitleaks detect --no-git --report-format json --report-path security/artifacts/gitleaks.json || true
+
+      - name: Run Bandit (Python)
+        run: bandit -r backend -x backend/**/migrations,backend/**/tests -f json -o security/artifacts/bandit.json
+
+      - name: Run pip-audit (Python)
+        run: pip-audit -r backend/requirements.txt -f json -o security/artifacts/pip-audit.json || true
+
+      - name: Run Safety (Python)
+        run: safety check -r backend/requirements.txt --json > security/artifacts/safety.json || true
+
+      - name: Run npm audit (prod only)
+        run: npm --prefix frontend audit --omit=dev --json > security/artifacts/npm-audit.json || true
+
+      - name: Run Semgrep (multi-pack)
+        run: |
+          semgrep --version
+          semgrep --error --json \
+            --config p/ci --config p/react --config p/ts --config p/python --config p/django --config p/security-audit --config p/secrets \
+            > security/artifacts/semgrep.json || true
+
+      - name: Run Trivy (config)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'config'
+          format: 'json'
+          output: 'security/artifacts/trivy-config.json'
+          hide-progress: true
+
+      - name: Generate SBOM (Syft CycloneDX JSON)
+        run: syft . -o cyclonedx-json > security/artifacts/sbom.cdx.json
+
+      - name: Django deploy checks
+        run: |
+          python backend/manage.py check --deploy > security/artifacts/django-check-deploy.txt || true
+
+      - name: Aggregate findings
+        run: python security/tools/aggregate_findings.py --artifacts security/artifacts --out security/security-findings.json
+
+      - name: Validate findings schema
+        run: npx ajv validate -s security/schema/security-findings.schema.json -d security/security-findings.json
+
+      - name: Enforce severity threshold (fail on High/Critical)
+        run: |
+          node -e "const f=require('./security/security-findings.json'); const bad=f.filter(x=>['High','Critical'].includes(x.severity)); if(bad.length){console.error('High/Critical findings:', bad.length); process.exit(1)}"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-artifacts
+          path: |
+            security/artifacts/**
+            security/security-findings.json
+

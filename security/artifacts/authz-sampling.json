@@ -1,0 +1,43 @@
+{
+  "sampled_endpoints": [
+    {
+      "resource": "people",
+      "class": "PersonViewSet",
+      "path": "backend/people/views.py:66",
+      "write_actions": ["create", "update", "partial_update", "destroy"],
+      "object_level_check": false,
+      "auth": {
+        "global_default": ["IsAuthenticated", "RoleBasedAccessPermission"],
+        "notes": "Managers allowed to write by role; no has_object_permission override."
+      }
+    },
+    {
+      "resource": "projects",
+      "class": "ProjectViewSet",
+      "path": "backend/projects/views.py:35",
+      "write_actions": ["create", "update", "partial_update", "destroy"],
+      "object_level_check": false,
+      "auth": {
+        "global_default": ["IsAuthenticated", "RoleBasedAccessPermission"],
+        "notes": "Manager role can mutate across projects; confirm intended policy."
+      }
+    },
+    {
+      "resource": "assignments",
+      "class": "AssignmentViewSet",
+      "path": "backend/assignments/views.py:34",
+      "write_actions": ["create", "update", "partial_update", "destroy"],
+      "object_level_check": false,
+      "auth": {
+        "global_default": ["IsAuthenticated", "RoleBasedAccessPermission"],
+        "notes": "RBAC-based writes; no per-object ownership checks."
+      }
+    }
+  ],
+  "summary": {
+    "coverage": "100% sampled for authenticated write endpoints across people/projects/assignments",
+    "result": "RBAC-only; no object-level permission methods present on these viewsets",
+    "recommendation": "If object ownership constraints are desired, implement has_object_permission on sensitive viewsets and/or per-action permissions."
+  }
+}
+

@@ -1,0 +1,56 @@
+{
+  "dockerfiles": [
+    {
+      "path": "docker/backend/Dockerfile",
+      "stages": [
+        {"name": "builder", "from": "python:3.11-slim"},
+        {"name": "dev", "from": "python:3.11-slim"},
+        {"name": "production", "from": "python:3.11-slim", "user": "app (non-root)"}
+      ],
+      "expose": [8000]
+    },
+    {
+      "path": "docker/frontend/Dockerfile",
+      "stages": [
+        {"name": "dev", "from": "node:20-alpine"},
+        {"name": "builder", "from": "node:20-alpine"},
+        {"name": "production", "from": "node:20-alpine", "user": "node (non-root)"}
+      ],
+      "expose": [3000]
+    }
+  ],
+  "compose": {
+    "dev": {
+      "file": "docker-compose.yml",
+      "services": {
+        "redis": {"image": "redis:7-alpine", "ports": ["6379:6379"]},
+        "db": {"image": "postgres:17.6", "ports": ["5432:5432"]},
+        "backend": {"build": "docker/backend/Dockerfile:dev", "ports": ["${BACKEND_PORT}:8000"]},
+        "frontend": {"build": "docker/frontend/Dockerfile:dev", "ports": ["${FRONTEND_PORT}:3000"]},
+        "nginx": {"image": "nginx:alpine", "ports": ["80:80"]},
+        "worker": {"build": "docker/backend/Dockerfile:dev"},
+        "worker_db": {"build": "docker/backend/Dockerfile:dev"},
+        "worker_beat": {"build": "docker/backend/Dockerfile:dev"}
+      }
+    },
+    "prod": {
+      "file": "docker-compose.prod.yml",
+      "services": {
+        "backend": {"build": "docker/backend/Dockerfile:production"},
+        "frontend": {"build": "docker/frontend/Dockerfile:production"},
+        "nginx": {"image": "nginx:alpine", "ports": ["80:80", "443:443"]},
+        "redis": {"image": "redis:7-alpine"},
+        "db": {"image": "postgres:17.6"},
+        "worker": {"build": "docker/backend/Dockerfile:production"},
+        "worker_db": {"build": "docker/backend/Dockerfile:production"},
+        "worker_beat": {"build": "docker/backend/Dockerfile:production"}
+      }
+    }
+  },
+  "host_port_exposures_dev": ["6379/tcp", "5432/tcp", "8000/tcp", "3000/tcp", "80/tcp"],
+  "host_port_exposures_prod": ["80/tcp", "443/tcp"],
+  "notes": [
+    "Recommend avoiding host exposure of db/redis outside local dev; compose.prod is aligned."
+  ]
+}
+

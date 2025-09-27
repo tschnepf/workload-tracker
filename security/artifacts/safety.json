@@ -1,0 +1,354 @@
+﻿
+
++===========================================================================================================================================================================================+
+
+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+
+
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
+
+
++===========================================================================================================================================================================================+
+
+
+{
+    "report_meta": {
+        "scan_target": "files",
+        "scanned": [
+            "backend/requirements.txt"
+        ],
+        "scanned_full_path": [
+            "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+        ],
+        "target_languages": [
+            "python"
+        ],
+        "policy_file": null,
+        "policy_file_source": "local",
+        "audit_and_monitor": false,
+        "api_key": false,
+        "account": "",
+        "local_database_path": null,
+        "safety_version": "3.6.2",
+        "timestamp": "2025-09-26 17:16:58",
+        "packages_found": 17,
+        "vulnerabilities_found": 0,
+        "vulnerabilities_ignored": 0,
+        "remediations_recommended": 0,
+        "telemetry": {
+            "safety_options": {
+                "files": {
+                    "-r": 1
+                },
+                "json": {
+                    "--json": 1
+                }
+            },
+            "safety_version": "3.6.2",
+            "safety_source": "cli",
+            "os_type": "Windows",
+            "os_release": "11",
+            "os_description": "Windows-11-10.0.26100-SP0",
+            "python_version": "3.13.7",
+            "safety_command": "check"
+        },
+        "git": {
+            "branch": "main",
+            "tag": "",
+            "commit": "9be35d90cf1b475c18420997b8c5c711900c1a5c",
+            "dirty": "True",
+            "origin": "https://github.com/tschnepf/workload-tracker"
+        },
+        "project": null,
+        "json_version": "1.1",
+        "remediations_attempted": 0,
+        "remediations_completed": 0,
+        "remediation_mode": "NON_INTERACTIVE"
+    },
+    "scanned_packages": {
+        "django": {
+            "name": "django",
+            "version": "5.2.6",
+            "requirements": [
+                {
+                    "raw": "Django==5.2.6",
+                    "extras": [],
+                    "marker": null,
+                    "name": "Django",
+                    "specifier": "==5.2.6",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "djangorestframework": {
+            "name": "djangorestframework",
+            "version": "3.16.1",
+            "requirements": [
+                {
+                    "raw": "djangorestframework==3.16.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "djangorestframework",
+                    "specifier": "==3.16.1",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "django-cors-headers": {
+            "name": "django-cors-headers",
+            "version": "4.8.0",
+            "requirements": [
+                {
+                    "raw": "django-cors-headers==4.8.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-cors-headers",
+                    "specifier": "==4.8.0",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "djangorestframework-simplejwt": {
+            "name": "djangorestframework-simplejwt",
+            "version": "5.5.1",
+            "requirements": [
+                {
+                    "raw": "djangorestframework-simplejwt==5.5.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "djangorestframework-simplejwt",
+                    "specifier": "==5.5.1",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "psycopg2-binary": {
+            "name": "psycopg2-binary",
+            "version": "2.9.10",
+            "requirements": [
+                {
+                    "raw": "psycopg2-binary==2.9.10",
+                    "extras": [],
+                    "marker": null,
+                    "name": "psycopg2-binary",
+                    "specifier": "==2.9.10",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "dj-database-url": {
+            "name": "dj-database-url",
+            "version": "3.0.1",
+            "requirements": [
+                {
+                    "raw": "dj-database-url==3.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "dj-database-url",
+                    "specifier": "==3.0.1",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "python-decouple": {
+            "name": "python-decouple",
+            "version": "3.8",
+            "requirements": [
+                {
+                    "raw": "python-decouple==3.8",
+                    "extras": [],
+                    "marker": null,
+                    "name": "python-decouple",
+                    "specifier": "==3.8",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "sentry-sdk": {
+            "name": "sentry-sdk",
+            "version": "2.38.0",
+            "requirements": [
+                {
+                    "raw": "sentry-sdk[django]==2.38.0",
+                    "extras": [
+                        "django"
+                    ],
+                    "marker": null,
+                    "name": "sentry-sdk",
+                    "specifier": "==2.38.0",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "django-silk": {
+            "name": "django-silk",
+            "version": "5.4.3",
+            "requirements": [
+                {
+                    "raw": "django-silk==5.4.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-silk",
+                    "specifier": "==5.4.3",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "django-axes": {
+            "name": "django-axes",
+            "version": "8.0.0",
+            "requirements": [
+                {
+                    "raw": "django-axes==8.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "django-axes",
+                    "specifier": "==8.0.0",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "openpyxl": {
+            "name": "openpyxl",
+            "version": "3.1.5",
+            "requirements": [
+                {
+                    "raw": "openpyxl==3.1.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "openpyxl",
+                    "specifier": "==3.1.5",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "redis": {
+            "name": "redis",
+            "version": "5.0.1",
+            "requirements": [
+                {
+                    "raw": "redis==5.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "redis",
+                    "specifier": "==5.0.1",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "gunicorn": {
+            "name": "gunicorn",
+            "version": "23.0.0",
+            "requirements": [
+                {
+                    "raw": "gunicorn==23.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "gunicorn",
+                    "specifier": "==23.0.0",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "gevent": {
+            "name": "gevent",
+            "version": "25.8.2",
+            "requirements": [
+                {
+                    "raw": "gevent==25.8.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "gevent",
+                    "specifier": "==25.8.2",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "celery": {
+            "name": "celery",
+            "version": "5.5.3",
+            "requirements": [
+                {
+                    "raw": "celery[redis]==5.5.3",
+                    "extras": [
+                        "redis"
+                    ],
+                    "marker": null,
+                    "name": "celery",
+                    "specifier": "==5.5.3",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "drf-spectacular": {
+            "name": "drf-spectacular",
+            "version": "0.28.0",
+            "requirements": [
+                {
+                    "raw": "drf-spectacular==0.28.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "drf-spectacular",
+                    "specifier": "==0.28.0",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        },
+        "boto3": {
+            "name": "boto3",
+            "version": "1.40.30",
+            "requirements": [
+                {
+                    "raw": "boto3==1.40.30",
+                    "extras": [],
+                    "marker": null,
+                    "name": "boto3",
+                    "specifier": "==1.40.30",
+                    "url": null,
+                    "found": "C:\\Users\\tim\\VScode\\workload-tracker\\backend\\requirements.txt"
+                }
+            ]
+        }
+    },
+    "affected_packages": {},
+    "announcements": [],
+    "vulnerabilities": [],
+    "ignored_vulnerabilities": [],
+    "remediations": {},
+    "remediations_results": {
+        "vulnerabilities_fixed": [],
+        "remediations_applied": {},
+        "remediations_skipped": {}
+    }
+}
+
+
++===========================================================================================================================================================================================+
+
+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+
+
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
+
+
++===========================================================================================================================================================================================+
+
+
