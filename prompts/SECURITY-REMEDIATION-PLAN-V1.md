@@ -11,7 +11,7 @@ Notes
    - Command: curl -I http://localhost/
    - Command: curl -I https://localhost/ (if HTTPS configured)
 
-## Phase 1 — Strengthen CSP (remove unsafe-inline for styles)
+## Phase 1 — Strengthen CSP (remove unsafe-inline for styles) **COMPLETED**
  - Impact: Requires rebuild (frontend + backend + nginx)
  - Editing rules: Use apply_patch for all file changes. Preserve formatting and existing line endings. Do not use shell writes (Set-Content/echo/sed) to modify code. Do not insert literal '\r\n' sequences; let the patch handle newlines. Avoid bulk regex replacements; submit minimal, contextual patches.
 - Best-practice: Apply strict, standards-based CSP (nonces/hashes), avoid temporary relaxations; externalize inline code where feasible; add tests and docs.
@@ -32,7 +32,8 @@ Notes
   - Command: curl -I http://localhost/
   - Command: python security/tools/aggregate_findings.py --artifacts security/artifacts --out security/security-findings.json && python security/tools/validate_findings.py
 
-## Phase 2 — Gate OpenAPI schema in prod
+## Phase 2 — Gate OpenAPI schema in prod **COMPLETED**
+
  - Impact: Restart only (backend)
  - Editing rules: Use apply_patch for all file changes. Preserve formatting and existing line endings. Do not use shell writes (Set-Content/echo/sed) to modify code. Do not insert literal '\r\n' sequences; let the patch handle newlines. Avoid bulk regex replacements; submit minimal, contextual patches.
 - Best-practice: Enforce least-privilege access via DRF permissions; avoid ad-hoc route checks or dev-only toggles leaking to prod.

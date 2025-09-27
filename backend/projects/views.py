@@ -649,7 +649,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         filename = upload.name
         fname_l = filename.lower()
         if not fname_l.endswith(('.xlsx', '.xls', '.csv')):
-            logger.warning('projects_import_unsupported_ext', extra={'filename': filename})
+            logger.warning('projects_import_unsupported_ext', extra={'upload_name': filename})
             return Response({'success': False, 'error': 'File must be Excel (.xlsx/.xls) or CSV (.csv) format'}, status=status.HTTP_400_BAD_REQUEST)
 
         ctype = getattr(upload, 'content_type', '') or ''
@@ -661,14 +661,14 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         }
         # If a content type is provided and it is not an allowed type, reject
         if ctype and ctype not in allowed_types:
-            logger.warning('projects_import_bad_ctype', extra={'filename': filename, 'content_type': ctype})
+            logger.warning('projects_import_bad_ctype', extra={'upload_name': filename, 'content_type': ctype})
             return Response({'success': False, 'error': f'Unsupported content type: {ctype}'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Enforce size limits (pre-flight)
         max_bytes = int(getattr(django_settings, 'PROJECTS_UPLOAD_MAX_BYTES', 10 * 1024 * 1024))
         fsize = getattr(upload, 'size', None)
         if isinstance(fsize, int) and fsize > max_bytes:
-            logger.warning('projects_import_too_large_prefetch', extra={'filename': filename, 'size': fsize, 'limit': max_bytes})
+            logger.warning('projects_import_too_large_prefetch', extra={'upload_name': filename, 'size': fsize, 'limit': max_bytes})
             return Response({'success': False, 'error': 'File too large'}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
 
         # Persist uploaded file to a private, non-web-served directory (under BACKUPS_DIR)
@@ -696,7 +696,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 pass
             if str(e) == 'upload_exceeds_limit':
-                logger.warning('projects_import_too_large_stream', extra={'filename': filename, 'limit': max_bytes})
+                logger.warning('projects_import_too_large_stream', extra={'upload_name': filename, 'limit': max_bytes})
                 return Response({'success': False, 'error': 'File too large'}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
             logger.warning('projects_import_store_failed', extra={'filename': filename, 'err': e.__class__.__name__})
             return Response({'success': False, 'error': 'Failed to store upload'}, status=status.HTTP_400_BAD_REQUEST)
@@ -707,7 +707,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 enforce_xlsx_limits(safe_path)
         except ValueError as ve:
             code = str(ve) or 'xlsx_limits_violation'
-            logger.warning('projects_import_xlsx_limits', extra={'filename': filename, 'code': code})
+            logger.warning('projects_import_xlsx_limits', extra={'upload_name': filename, 'code': code})
             try:
                 os.remove(safe_path)
             except Exception:
@@ -739,7 +739,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return Response(results, status=status.HTTP_200_OK)
             
         except Exception as e:
-            logger.warning('projects_import_failed', extra={'filename': filename, 'err': e.__class__.__name__})
+            logger.warning('projects_import_failed', extra={'upload_name': filename, 'err': e.__class__.__name__})
             return Response({'success': False, 'error': f'Import failed: {str(e)}', 'progress': 0, 'stage': 'error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['get'])
