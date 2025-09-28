@@ -141,6 +141,11 @@ AGGREGATE_CACHE_TTL=30
   - Obtain/refresh tokens; inspect `Set-Cookie` headers for refresh cookie flags.
   - Ensure no refresh token is stored in `localStorage` (frontend uses cookie flow).
 
+### JWT Idle/Access Token Policy
+- Recommendation: set access token lifetime to 15–30 minutes in production.
+- Configure via `JWT_ACCESS_MINUTES` environment variable (default is 60 minutes).
+- Refresh rotation/blacklist remain enabled by default; no user action required.
+
 ### Database/Redis TLS (Optional)
 - Postgres: enable TLS by setting `DB_SSLMODE` (e.g., `require`) and optional `DB_SSLROOTCERT` path. Ensure the database endpoint supports TLS.
 - Redis: use a `rediss://` URL or set `REDIS_TLS=true`. Optionally set `REDIS_SSL_CERT_REQS` to `required` (recommended) or `none` (staging/self-signed).
