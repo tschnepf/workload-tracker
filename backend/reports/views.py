@@ -36,9 +36,14 @@ class PreDeliverableCompletionView(APIView):
             except ValueError:
                 pass
 
-        total = qs.count()
-        completed = qs.filter(is_completed=True).count()
-        overdue = qs.filter(is_completed=False, generated_date__lt=_date.today()).count()
+        agg = qs.aggregate(
+            total=Count('id'),
+            completed=Count('id', filter=Q(is_completed=True)),
+            overdue=Count('id', filter=Q(is_completed=False, generated_date__lt=_date.today())),
+        )
+        total = int(agg.get('total') or 0)
+        completed = int(agg.get('completed') or 0)
+        overdue = int(agg.get('overdue') or 0)
 
         proj_rows = (
             qs.values('deliverable__project_id', 'deliverable__project__name')
