@@ -446,9 +446,9 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             
             # Get data in chunks with progress updates
             for chunk_start in range(0, total_count, chunk_size):
-                chunk_queryset = queryset[chunk_start:chunk_start + chunk_size]
-                
-                processed += chunk_queryset.count()
+                # Slice to keep memory bounded, but avoid extra count() queries for progress
+                _ = queryset[chunk_start:chunk_start + chunk_size]
+                processed += min(chunk_size, total_count - chunk_start)
                 progress_percent = int((processed / total_count) * 80)  # Reserve 20% for Excel generation
                 
                 yield self._progress_chunk({

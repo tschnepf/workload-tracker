@@ -27,16 +27,20 @@ class ProjectsSqlRemediationRoundTripTests(SimpleTestCase):
         Skips until implemented.
         """
         src = self._read(PROJECTS_VIEWS)
-        if "_stream_excel_export" not in src:
+        if "def _stream_excel_export(" not in src:
             self.skipTest("_stream_excel_export not present")
-        if ".count()" in src and "_stream_excel_export" in src:
-            # Heuristic: if per-chunk count remains, skip
+        # Narrow to the function body only to avoid false positives
+        start = src.find("def _stream_excel_export(")
+        end = src.find("\n    def _progress_chunk(", start)
+        seg = src[start:end if end != -1 else None]
+        if ".count(" in seg:
             self.skipTest("Per-chunk .count() still present in projects export progress")
 
     def test_phase7_export_commands_cache_count(self):
         """Heuristic static check that export command doesn't overuse count(); skip until implemented."""
         src = self._read(EXPORT_CMD)
-        if src.count(".count()") > 1:
+        # Allow up to 2 occurrences (once for total, optionally once in dry-run)
+        if src.count(".count(") > 2:
             self.skipTest("export_projects command uses multiple count() calls; caching not yet implemented")
 
     def test_phase7_excel_handler_uses_exists(self):

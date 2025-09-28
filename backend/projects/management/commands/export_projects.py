@@ -119,9 +119,10 @@ class Command(BaseCommand):
             
             # Build queryset with filters
             queryset = self._build_queryset(options)
+            total = queryset.count()
             
             # Validate options
-            self._validate_options(options, queryset)
+            self._validate_options(options, total)
             
             if options['dry_run']:
                 self._show_dry_run_preview(queryset, options)
@@ -131,11 +132,11 @@ class Command(BaseCommand):
             output_file = self._get_output_filename(options)
             
             # Export data
-            self._export_data(queryset, output_file, options)
+            self._export_data(queryset, total, output_file, options)
             
             if not options['quiet']:
                 self.stdout.write(
-                    self.style.SUCCESS(f'Successfully exported {queryset.count()} projects to {output_file}')
+                    self.style.SUCCESS(f'Successfully exported {total} projects to {output_file}')
                 )
         
         except Exception as e:
@@ -182,9 +183,9 @@ class Command(BaseCommand):
         
         return queryset.order_by('-created_at')
     
-    def _validate_options(self, options, queryset):
+    def _validate_options(self, options, total):
         """Validate command options."""
-        if queryset.count() == 0:
+        if total == 0:
             raise CommandError('No projects match the specified filters')
         
         # Warn about Excel-only features with CSV format
@@ -219,7 +220,7 @@ class Command(BaseCommand):
         else:
             return f'projects_export_{timestamp}.csv'
     
-    def _export_data(self, queryset, output_file, options):
+    def _export_data(self, queryset, total, output_file, options):
         """Export data using appropriate handler."""
         if options['format'] == 'excel':
             # Excel export with multi-sheet support
@@ -247,8 +248,9 @@ class Command(BaseCommand):
     def _show_dry_run_preview(self, queryset, options):
         """Show preview of what would be exported."""
         self.stdout.write(self.style.SUCCESS('DRY RUN - Export Preview:'))
+        total = queryset.count()
         self.stdout.write(f'  Format: {options["format"].upper()}')
-        self.stdout.write(f'  Projects to export: {queryset.count()}')
+        self.stdout.write(f'  Projects to export: {total}')
         
         if options['status']:
             self.stdout.write(f'  Status filter: {options["status"]}')
@@ -264,8 +266,8 @@ class Command(BaseCommand):
         for project in queryset[:5]:
             self.stdout.write(f'    - {project.name} ({project.status}) - {project.client}')
         
-        if queryset.count() > 5:
-            self.stdout.write(f'    ... and {queryset.count() - 5} more projects')
+        if total > 5:
+            self.stdout.write(f'    ... and {total - 5} more projects')
         
         # Show would-be filename
         output_file = self._get_output_filename(options)

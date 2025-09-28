@@ -34,7 +34,7 @@ def export_projects_to_excel(queryset, filename=None, is_template=False):
     
     workbook = openpyxl.Workbook()
     
-    if is_template or queryset.count() == 0:
+    if is_template or (not queryset.exists()):
         # Create template with example data
         _create_template_projects_sheet(workbook)
         _create_template_assignments_sheet(workbook)

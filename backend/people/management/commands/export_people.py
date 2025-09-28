@@ -58,12 +58,13 @@ class Command(BaseCommand):
         try:
             # Build queryset with filters
             queryset = self.build_queryset(options)
+            total = queryset.count()
             
             # Generate filename if not provided
             output_file = self.get_output_filename(options)
             
             # Export data
-            self.export_data(queryset, output_file, options['format'])
+            self.export_data(queryset, total, output_file, options['format'])
             
         except Exception as e:
             raise CommandError(f'Export failed: {str(e)}')
@@ -125,7 +126,7 @@ class Command(BaseCommand):
         
         return filename
 
-    def export_data(self, queryset, filename, format_type):
+    def export_data(self, queryset, total, filename, format_type):
         """Export data to file."""
         self.stdout.write(f'Exporting to {filename} in {format_type.upper()} format...')
         
@@ -143,7 +144,7 @@ class Command(BaseCommand):
         
         self.stdout.write(
             self.style.SUCCESS(
-                f'Successfully exported {queryset.count()} people to {filename} '
+                f'Successfully exported {total} people to {filename} '
                 f'({file_size_mb:.2f} MB)'
             )
         )
