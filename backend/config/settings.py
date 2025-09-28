@@ -1,4 +1,4 @@
-﻿"""
+"""
 Django settings for workload-tracker project.
 """
 
@@ -175,15 +175,15 @@ PROJECTS_UPLOAD_MAX_BYTES = int(os.getenv('PROJECTS_UPLOAD_MAX_BYTES', str(500 *
 # Initialize and populate FEATURES
 FEATURES = {}
 FEATURES.update({
-    'USE_PROJECT_OBJECTS': True,   # â—Ž. Chunk 5 Complete - Project objects implemented
-    'USE_DEPARTMENTS': True,       # â—Ž. Chunk 6 Active - Department filtering enabled
-    'USE_SKILLS': True,            # â—Ž. Chunk 6 Active - Skills tagging system enabled
+    'USE_PROJECT_OBJECTS': True,   # ◎. Chunk 5 Complete - Project objects implemented
+    'USE_DEPARTMENTS': True,       # ◎. Chunk 6 Active - Department filtering enabled
+    'USE_SKILLS': True,            # ◎. Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
 })
 
 # Security/auth flags via env
 FEATURES.update({
-    'COOKIE_REFRESH_AUTH': os.getenv('COOKIE_REFRESH_AUTH', 'false').lower() == 'true',
+    'COOKIE_REFRESH_AUTH': ((os.getenv('COOKIE_REFRESH_AUTH').lower() == 'true') if os.getenv('COOKIE_REFRESH_AUTH') is not None else (not DEBUG)),
     'LOGIN_PROTECTION': os.getenv('LOGIN_PROTECTION', 'false').lower() == 'true',
     'SHORT_TTL_AGGREGATES': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
     'AUTH_ENFORCED': os.getenv('AUTH_ENFORCED', 'true').lower() == 'true',
@@ -344,15 +344,15 @@ if _csrf_from_env:
 
 # Feature flags for progressive enhancement
 FEATURES = {
-    'USE_PROJECT_OBJECTS': True,   # âœ… Chunk 5 Complete - Project objects implemented
-    'USE_DEPARTMENTS': True,       # âœ… Chunk 6 Active - Department filtering enabled
-    'USE_SKILLS': True,            # âœ… Chunk 6 Active - Skills tagging system enabled
+    'USE_PROJECT_OBJECTS': True,   # ✅ Chunk 5 Complete - Project objects implemented
+    'USE_DEPARTMENTS': True,       # ✅ Chunk 6 Active - Department filtering enabled
+    'USE_SKILLS': True,            # ✅ Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
 }
 
 # Security/auth flags via env
 FEATURES.update({
-    'COOKIE_REFRESH_AUTH': os.getenv('COOKIE_REFRESH_AUTH', 'false').lower() == 'true',
+    'COOKIE_REFRESH_AUTH': ((os.getenv('COOKIE_REFRESH_AUTH').lower() == 'true') if os.getenv('COOKIE_REFRESH_AUTH') is not None else (not DEBUG)),
     'LOGIN_PROTECTION': os.getenv('LOGIN_PROTECTION', 'false').lower() == 'true',
     'SHORT_TTL_AGGREGATES': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
     'AUTH_ENFORCED': os.getenv('AUTH_ENFORCED', 'true').lower() == 'true',
@@ -430,6 +430,9 @@ if not DEBUG:
     # Secure cookies
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    # Explicit SameSite in production
+    SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
+    CSRF_COOKIE_SAMESITE = os.getenv('CSRF_COOKIE_SAMESITE', 'Lax')
     # Honor X-Forwarded-Host when behind proxy
     USE_X_FORWARDED_HOST = True
 

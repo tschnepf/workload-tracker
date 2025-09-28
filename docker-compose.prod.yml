@@ -20,6 +20,11 @@ services:
       - media_volume:/app/media
       - ./backups:/backups:rw
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
       interval: 30s
@@ -39,6 +44,11 @@ services:
     volumes:
       - frontend_build:/app/dist
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 30s
@@ -77,6 +87,11 @@ services:
         condition: service_healthy
     networks:
       - tracker-network
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
@@ -120,6 +135,11 @@ services:
       dockerfile: ../docker/backend/Dockerfile
       target: production
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     command: celery -A config worker -l info --concurrency=2
     environment:
       - DEBUG=false
@@ -148,6 +168,11 @@ services:
       dockerfile: ../docker/backend/Dockerfile
       target: production
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     command: celery -A config worker -l info --concurrency=1 -Q db_maintenance
     environment:
       - DEBUG=false
@@ -171,6 +196,11 @@ services:
       dockerfile: ../docker/backend/Dockerfile
       target: production
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     command: celery -A config beat -l info -s /var/run/celery/beat-schedule
     environment:
       - DEBUG=false
