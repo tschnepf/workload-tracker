@@ -75,6 +75,9 @@ class Command(BaseCommand):
 
     def check_database_bloat(self):
         """Check for database table and index bloat"""
+        if connection.vendor != 'postgresql':
+            self.stdout.write('PostgreSQL required for this option; skipping.')
+            return
         self.stdout.write('📊 Checking database bloat...')
         
         bloat_query = """
@@ -131,6 +134,9 @@ class Command(BaseCommand):
 
     def vacuum_analyze_database(self):
         """Run VACUUM ANALYZE on all tables"""
+        if connection.vendor != 'postgresql':
+            self.stdout.write('PostgreSQL required for this option; skipping.')
+            return
         self.stdout.write('🧹 Running VACUUM ANALYZE...')
         
         # Get all tables in public schema
@@ -287,15 +293,16 @@ class Command(BaseCommand):
             avg_used = sum(metrics['memory_used_mb']) / len(metrics['memory_used_mb'])
             self.stdout.write(f"Memory Used: {avg_used:.0f} MB avg")
         
-        # Database connection count
+        # Database connection count (PostgreSQL only)
         try:
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT count(*) FROM pg_stat_activity 
-                    WHERE state = 'active' AND pid != pg_backend_pid();
-                """)
-                active_connections = cursor.fetchone()[0]
-                self.stdout.write(f"Active DB Connections: {active_connections}")
+            if connection.vendor == 'postgresql':
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT count(*) FROM pg_stat_activity 
+                        WHERE state = 'active' AND pid != pg_backend_pid();
+                    """)
+                    active_connections = cursor.fetchone()[0]
+                    self.stdout.write(f"Active DB Connections: {active_connections}")
         except Exception:
             pass
 

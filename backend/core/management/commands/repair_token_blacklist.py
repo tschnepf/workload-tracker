@@ -24,6 +24,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if connection.vendor != 'postgresql':
+            self.stdout.write('PostgreSQL required for this command; skipping.')
+            return ""
         # Opt-in via env in production; default true in dev
         auto_fix = os.getenv("AUTO_FIX_JWT_BLACKLIST", "true").lower() == "true"
         if not auto_fix:
@@ -101,4 +104,3 @@ class Command(BaseCommand):
         call_command("migrate", "token_blacklist", verbosity=0)
         self.stdout.write(self.style.SUCCESS("token_blacklist schema repaired."))
         return ""
-
