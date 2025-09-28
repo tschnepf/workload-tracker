@@ -33,6 +33,13 @@ class Command(BaseCommand):
             self.stdout.write("AUTO_FIX_JWT_BLACKLIST is disabled; skipping.")
             return ""
 
+        import re as _re
+        schema_env = os.getenv("DB_SCHEMA", "public") or "public"
+        schema = schema_env.lower()
+        if not _re.match(r"^[a-z0-9_]+$", schema):
+            self.stdout.write("Invalid DB_SCHEMA; defaulting to 'public'.")
+            schema = "public"
+
         needs_repair = False
         with connection.cursor() as cursor:
             # Check if tables exist
@@ -40,18 +47,20 @@ class Command(BaseCommand):
                 """
                 SELECT EXISTS (
                     SELECT 1 FROM information_schema.tables
-                    WHERE table_name = 'token_blacklist_outstandingtoken'
+                    WHERE table_schema = %s AND table_name = 'token_blacklist_outstandingtoken'
                 )
-                """
+                """,
+                [schema],
             )
             has_outstanding = bool(cursor.fetchone()[0])
             cursor.execute(
                 """
                 SELECT EXISTS (
                     SELECT 1 FROM information_schema.tables
-                    WHERE table_name = 'token_blacklist_blacklistedtoken'
+                    WHERE table_schema = %s AND table_name = 'token_blacklist_blacklistedtoken'
                 )
-                """
+                """,
+                [schema],
             )
             has_blacklisted = bool(cursor.fetchone()[0])
 
@@ -59,8 +68,9 @@ class Command(BaseCommand):
                 cursor.execute(
                     """
                     SELECT column_name FROM information_schema.columns
-                    WHERE table_name = 'token_blacklist_outstandingtoken'
-                """
+                    WHERE table_schema = %s AND table_name = 'token_blacklist_outstandingtoken'
+                """,
+                    [schema],
                 )
                 cols = {r[0] for r in cursor.fetchall()}
                 if not EXPECTED_OUTSTANDING_COLS.issubset(cols):
@@ -70,8 +80,9 @@ class Command(BaseCommand):
                 cursor.execute(
                     """
                     SELECT column_name FROM information_schema.columns
-                    WHERE table_name = 'token_blacklist_blacklistedtoken'
-                """
+                    WHERE table_schema = %s AND table_name = 'token_blacklist_blacklistedtoken'
+                """,
+                    [schema],
                 )
                 cols = {r[0] for r in cursor.fetchall()}
                 if not EXPECTED_BLACKLISTED_COLS.issubset(cols):
