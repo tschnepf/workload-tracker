@@ -114,9 +114,20 @@ def _drop_and_recreate_public(env: dict):
     sql = """
     DROP SCHEMA IF EXISTS public CASCADE;
     CREATE SCHEMA public;
-    GRANT ALL ON SCHEMA public TO PUBLIC;
+    REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+    GRANT USAGE ON SCHEMA public TO PUBLIC;
     """
     subprocess.run(["psql", "-v", "ON_ERROR_STOP=1", "-c", sql], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # Optionally grant CREATE to an application role if provided
+    import re as _re
+    app_role = os.getenv("DB_APP_ROLE")
+    if app_role and _re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", app_role):
+        grant_sql = f'GRANT CREATE ON SCHEMA public TO "{app_role}";'
+        try:
+            subprocess.run(["psql", "-v", "ON_ERROR_STOP=1", "-c", grant_sql], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        except Exception:
+            # Non-fatal if role is missing or lacks privileges
+            pass
 
 
 class Command(BaseCommand):
