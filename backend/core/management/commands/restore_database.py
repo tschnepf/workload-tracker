@@ -82,14 +82,29 @@ def _current_migration_state(env: dict) -> dict:
 def _terminate_sessions(env: dict):
     dbname = env.get("PGDATABASE", "")
     sqls = [
-        # Prevent new connections from PUBLIC
-        f"REVOKE CONNECT ON DATABASE \"{dbname}\" FROM PUBLIC;",
+        # Prevent new connections from PUBLIC (use psql var for dbname)
+        "REVOKE CONNECT ON DATABASE :\"dbname\" FROM PUBLIC;",
         # Terminate other backends connected to this DB
         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid();",
     ]
     for sql in sqls:
         try:
-            subprocess.run(["psql", "-v", "ON_ERROR_STOP=1", "-c", sql], env=env, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                [
+                    "psql",
+                    "-X",
+                    "-v",
+                    "ON_ERROR_STOP=1",
+                    "-v",
+                    f"dbname={dbname}",
+                    "-c",
+                    sql,
+                ],
+                env=env,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         except Exception:
             # Ignore if lacking privilege
             pass

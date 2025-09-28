@@ -154,8 +154,9 @@ class Command(BaseCommand):
                 for table in tables:
                     self.stdout.write(f'  Processing {table}...', ending='')
                     start_time = time.time()
-                    
-                    cursor.execute(f'VACUUM ANALYZE "{table}";')
+                    # Safe identifier quoting for table name
+                    quoted = connection.ops.quote_name(table)
+                    cursor.execute(f'VACUUM ANALYZE {quoted};')
                     
                     duration = time.time() - start_time
                     self.stdout.write(self.style.SUCCESS(f' ✅ ({duration:.2f}s)'))
