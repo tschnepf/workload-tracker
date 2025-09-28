@@ -37,6 +37,21 @@ jobs:
       - name: Install frontend dependencies (for npm audit metadata)
         run: npm ci --prefix frontend
 
+      - name: Enforce pinned frontend dependencies
+        run: |
+          if grep -E '"[^"]+"\s*:\s*"\^' frontend/package.json; then
+            echo "ERROR: Unpinned semver ranges (^) found in frontend/package.json" >&2
+            exit 1
+          fi
+          if grep -E '"[^"]+"\s*:\s*"~' frontend/package.json; then
+            echo "ERROR: Unpinned semver ranges (~) found in frontend/package.json" >&2
+            exit 1
+          fi
+          if [ ! -f frontend/package-lock.json ]; then
+            echo "ERROR: Lockfile missing: frontend/package-lock.json" >&2
+            exit 1
+          fi
+
       - name: Prepare artifacts dir
         run: mkdir -p security/artifacts
 
@@ -96,4 +111,3 @@ jobs:
           path: |
             security/artifacts/**
             security/security-findings.json
-

@@ -72,6 +72,18 @@ ALLOWED_HOSTS=your.domain.com,your-alt-domain.com
 CORS_ALLOWED_ORIGINS=https://your.domain.com
 AUTH_ENFORCED=true
 
+# Cookie refresh (required in prod)
+COOKIE_REFRESH_AUTH=true
+
+# Optional: Database TLS (if database supports TLS)
+# DB_SSLMODE=require
+# DB_SSLROOTCERT=/path/to/rootCA.pem
+
+# Optional: Redis TLS
+# Use a TLS URL (rediss://...) or set REDIS_TLS=true and configure cert reqs
+# REDIS_TLS=true
+# REDIS_SSL_CERT_REQS=required   # or 'none' for self-signed in staging
+
 # Optional monitoring
 SENTRY_DSN=your-sentry-dsn
 
@@ -119,6 +131,20 @@ AGGREGATE_CACHE_TTL=30
 - Database connection limits
 - Static file access restrictions
 - Development tools disabled (Silk, debug mode)
+
+### Cookie Refresh Mode (Required)
+- Production must run in cookie refresh mode. Set both backend and frontend flags:
+  - Backend: `COOKIE_REFRESH_AUTH=true`
+  - Frontend build args: `VITE_COOKIE_REFRESH_AUTH="true"`
+- Expected cookie flags in production: `HttpOnly`, `Secure`, `SameSite=Lax`.
+- Verification:
+  - Obtain/refresh tokens; inspect `Set-Cookie` headers for refresh cookie flags.
+  - Ensure no refresh token is stored in `localStorage` (frontend uses cookie flow).
+
+### Database/Redis TLS (Optional)
+- Postgres: enable TLS by setting `DB_SSLMODE` (e.g., `require`) and optional `DB_SSLROOTCERT` path. Ensure the database endpoint supports TLS.
+- Redis: use a `rediss://` URL or set `REDIS_TLS=true`. Optionally set `REDIS_SSL_CERT_REQS` to `required` (recommended) or `none` (staging/self-signed).
+- Verify TLS in service logs and client connection metadata where applicable.
 
 ### File Import Safety (People/Projects)
 
@@ -246,6 +272,11 @@ Uncomment and configure the HTTPS server block in `nginx/sites-available/workloa
 - [ ] Resource limits appropriate for server
 - [ ] Security updates applied to base images
 - [ ] Log rotation configured on host system
+
+### Dev vs Prod Port Exposure
+- Development (`docker-compose.yml`) exposes Redis (6379) and Postgres (5432) on the host for convenience.
+- Production (`docker-compose.prod.yml`) runs services on the internal Docker network without exposing database/redis ports.
+- Ensure production deployments only expose Nginx ports to the host (80/443); keep DB/Redis internal or managed.
 
 ## Maintenance
 

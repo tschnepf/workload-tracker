@@ -104,6 +104,18 @@ DATABASES = {
         conn_max_age=int(os.getenv('DB_CONN_MAX_AGE', '60'))  # Phase 3: connection pooling
     )
 }
+# Optional: enable TLS for Postgres connections via env toggles
+try:
+    _db_sslmode = os.getenv('DB_SSLMODE')
+    _db_sslrootcert = os.getenv('DB_SSLROOTCERT')
+    if _db_sslmode or _db_sslrootcert:
+        DATABASES['default'].setdefault('OPTIONS', {})
+    if _db_sslmode:
+        DATABASES['default']['OPTIONS']['sslmode'] = _db_sslmode
+    if _db_sslrootcert:
+        DATABASES['default']['OPTIONS']['sslrootcert'] = _db_sslrootcert
+except Exception:
+    pass
 # Enable Django connection health checks (pings before reuse) where supported
 try:
     DATABASES['default']['CONN_HEALTH_CHECKS'] = os.getenv('DB_CONN_HEALTH_CHECKS', 'true').lower() == 'true'
@@ -299,6 +311,18 @@ if REDIS_URL:
             },
         }
     }
+    # Optional: enable TLS for Redis if using rediss:// or REDIS_TLS=true
+    try:
+        from urllib.parse import urlparse as _urlparse
+        _parsed = _urlparse(REDIS_URL)
+        _redis_tls = os.getenv('REDIS_TLS', '').lower() == 'true' or (_parsed.scheme or '').lower() == 'rediss'
+        if _redis_tls:
+            CACHES['default'].setdefault('OPTIONS', {})
+            # ssl_cert_reqs: 'required' (default) | 'none' for dev/self-signed
+            _reqs = os.getenv('REDIS_SSL_CERT_REQS', 'required')
+            CACHES['default']['OPTIONS']['ssl_cert_reqs'] = _reqs
+    except Exception:
+        pass
 else:
     CACHES = {
         'default': {
@@ -506,8 +530,8 @@ CSP_ENABLED = os.getenv('CSP_ENABLED', 'true').lower() == 'true'
 CSP_REPORT_ONLY = os.getenv('CSP_REPORT_ONLY', 'true' if DEBUG else 'false').lower() == 'true'
 CSP_POLICY = os.getenv(
     'CSP_POLICY',
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-    "font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
+    "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data:; "
+    "font-src 'self' https://fonts.gstatic.com data:; connect-src 'self'; frame-ancestors 'none'",
 )
 # Optional absolute/relative endpoint to receive violation reports
 CSP_REPORT_URI = os.getenv('CSP_REPORT_URI', '/csp-report/')

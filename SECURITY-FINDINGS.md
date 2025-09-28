@@ -10,6 +10,14 @@
 - Top assets at risk: account tokens, project/people/assignment data, backup archives.
 - Quick wins (low effort, high value): gate Swagger/OpenAPI; tighten CSP; add formula escaping; add nginx Permissions-Policy and remove X-XSS-Protection.
 
+## Remediation Status Updates (current)
+- Fixed: CSP unsafe-inline (backend/config/settings.py), OpenAPI/Swagger gating (backend/config/settings.py, backend/config/urls.py + tests), formula escaping in XLSX/CSV (people/projects), Slack webhook URL validation, structured log redaction, route-specific body size for backups, Permissions-Policy header, remove X-XSS-Protection, SameSite cookies (prod), macro-enabled Excel rejection, projects import MIME/size/private storage, subprocess hardening in restore, frontend dependency pinning + lockfile, container RO FS + caps.
+- Added: Per-route Nginx body size overrides for People/Projects imports (nginx/site configs).
+- Added: DB/Redis TLS toggles (env-driven) and documentation.
+- Added: CI guardrails to fail on semver ranges or missing lockfile; continued Ajv validation for findings JSON.
+- Added: PRODUCTION.md cookie refresh section; clarified dev vs prod port exposure posture.
+- Planned: DB TLS enablement (env toggles present; enable where feasible), Redis TLS enablement (optional), JWT idle-timeout documentation and policy.
+
 ## Threat Model & Inventory (Summary)
 - Stacks: Django/DRF (Python 3.11), React/Vite/TS (Node 20), Nginx reverse proxy, Celery, Redis, Postgres.
 - Trust Boundaries: Internet -> Nginx -> Backend API; Internet -> Nginx -> Frontend static; Backend/Workers -> Postgres/Redis (docker network only); Django Admin for staff.
