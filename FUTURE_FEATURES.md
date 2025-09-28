@@ -173,6 +173,37 @@ Acceptance Criteria
 - Admin/Manager behavior unchanged.
 - Tests cover permit/deny matrix; docs updated.
 
+## 🔐 Database TLS (Single‑Host: Defer + Staged Rollout)
+
+Context
+- Current deployment runs DB, backend, and frontend on the same machine and private Docker network. Over‑the‑wire exposure is minimal, so TLS is not strictly required for baseline security in this topology.
+- Prior bad experience with self‑signed certs causing outages (trust/permissions/restart issues).
+
+Decision
+- Defer DB TLS for now as an accepted risk in single‑host deployments. Plan a staged rollout to avoid surprises when/if we need it (multi‑host, remote admin, or compliance).
+
+Triggers to Revisit
+- Move to multi‑host or managed DB.
+- Compliance mandates “encryption in transit”.
+- Remote admin tools connect to DB from outside the host.
+
+Staged Rollout (Low‑Risk)
+1. Enable SSL on Postgres
+   - Place server.crt/server.key in data dir with correct ownership/permissions.
+   - Set `ssl = on` in postgresql.conf; restart Postgres; confirm it comes up clean.
+2. Verify on DB
+   - `psql -c "SHOW ssl;"` should return `on`.
+3. App side change
+   - Update `DATABASE_URL` to include `?sslmode=require` (encrypts without strict CA verification to avoid self‑signed trust errors).
+   - Verify backend starts and queries/migrations succeed.
+4. Rollback plan
+   - If errors occur, remove `sslmode=require` and set `ssl=off`; restart Postgres; restore previous state.
+
+Acceptance Criteria
+- Postgres runs with SSL=on; app connects successfully with `sslmode=require`.
+- No unexpected downtime during maintenance window; clear rollback path tested.
+- Documentation updated (PRODUCTION.md) with steps and validation.
+
 **Estimated Timeline**: 1-2 days
 **Trigger Point**: When any API dataset exceeds 1,000 records
 

@@ -20,6 +20,7 @@ from people.serializers import PersonSerializer
 from assignments.models import Assignment
 from assignments.serializers import AssignmentSerializer
 from core.utils.excel import write_headers, auto_fit_columns, create_excel_response
+from core.utils.excel_sanitize import sanitize_cell
 
 
 def export_projects_to_excel(queryset, filename=None, is_template=False):
@@ -171,17 +172,20 @@ def _create_projects_sheet(workbook, queryset):
     serializer = ProjectSerializer(queryset, many=True)
     serialized_data = serializer.data
     
-    # Write data rows
+    # Write data rows (sanitize strings and force text type to avoid Excel formulas)
     for row_idx, project_data in enumerate(serialized_data, start=2):
         for col_idx, header in enumerate(headers, start=1):
             # Use serializer data directly (camelCase already provided by serializer)
             value = project_data.get(header, '')
-            
+
             # Handle None values
             if value is None:
                 value = ''
-            
-            sheet.cell(row=row_idx, column=col_idx, value=value)
+
+            safe_value = sanitize_cell(value) if isinstance(value, str) else value
+            cell = sheet.cell(row=row_idx, column=col_idx, value=safe_value)
+            if isinstance(value, str):
+                cell.data_type = 's'
     
     auto_fit_columns(sheet)
 
@@ -225,7 +229,10 @@ def _create_assignments_sheet(workbook, queryset):
             ]
             
             for col_idx, value in enumerate(row_data, start=1):
-                assignments_sheet.cell(row=row_idx, column=col_idx, value=value)
+                safe_value = sanitize_cell(value) if isinstance(value, str) else value
+                cell = assignments_sheet.cell(row=row_idx, column=col_idx, value=safe_value)
+                if isinstance(value, str):
+                    cell.data_type = 's'
             
             row_idx += 1
     
@@ -264,7 +271,10 @@ def _create_deliverables_sheet(workbook, queryset):
             ]
             
             for col_idx, value in enumerate(row_data, start=1):
-                deliverables_sheet.cell(row=row_idx, column=col_idx, value=value)
+                safe_value = sanitize_cell(value) if isinstance(value, str) else value
+                cell = deliverables_sheet.cell(row=row_idx, column=col_idx, value=safe_value)
+                if isinstance(value, str):
+                    cell.data_type = 's'
             
             row_idx += 1
     

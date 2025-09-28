@@ -909,7 +909,11 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         # Validate file type (extension + basic MIME check)
         filename = excel_file.name
-        if not filename.lower().endswith(('.xlsx', '.xls')):
+        lower_name = filename.lower()
+        # Explicitly reject macro-enabled formats first for a clear error message
+        if lower_name.endswith(('.xlsm', '.xltm')):
+            return Response({'success': False, 'error': 'Macro-enabled Excel formats are not allowed (.xlsm/.xltm)'}, status=status.HTTP_400_BAD_REQUEST)
+        if not lower_name.endswith(('.xlsx', '.xls')):
             return Response({
                 'success': False,
                 'error': 'File must be Excel format (.xlsx or .xls)'
