@@ -395,6 +395,7 @@
     "severity": "Low",
     "priority": "Low",
     "status": "planned",
+    "note": "Evaluation complete; enable where feasible (requires TLS endpoint/certs).",
     "target_date": "2025-12-26",
     "related": {"rule_id": "REDIS-TLS", "path": "docker-compose.prod.yml", "line": 1},
     "dependencies": ["TLS support in chosen Redis stack"],
