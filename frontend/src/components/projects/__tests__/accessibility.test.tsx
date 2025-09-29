@@ -140,8 +140,12 @@ describe('Accessibility Tests', () => {
       );
       
       const completedOption = screen.getByRole('option', { name: /completed/i });
+      // Ensure the intended option has focus before sending the key event
       completedOption.focus();
-      await user.keyboard('{Enter}');
+      expect(completedOption).toHaveFocus();
+      
+      // Dispatch Enter directly on the focused option to avoid suite-wide focus drift
+      fireEvent.keyDown(completedOption, { key: 'Enter', code: 'Enter', charCode: 13, keyCode: 13 });
       
       expect(mockOnSelect).toHaveBeenCalledWith('completed');
       expect(mockOnClose).toHaveBeenCalled();

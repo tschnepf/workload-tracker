@@ -212,15 +212,16 @@ class ReadOnlyModeMiddleware:
             has_restore_lock = False
 
         if in_read_only or has_restore_lock:
-            # Allow-list essential endpoints during restore/maintenance
+            # Allow-list essential endpoints during restore/maintenance (safe methods only)
             allowed_prefixes = (
                 '/api/jobs/',
                 '/api/health/', '/api/readiness/',
                 '/health/', '/readiness/',
                 '/csp-report/',
             )
-            allowed = any(path.startswith(p) for p in allowed_prefixes)
-            if not allowed:
+            is_safe = method in ('GET', 'HEAD', 'OPTIONS')
+            allowed = is_safe and any(path.startswith(p) for p in allowed_prefixes)
+            if not allowed and method in ('POST', 'PUT', 'PATCH', 'DELETE'):
                 return JsonResponse({'detail': 'Read-only maintenance'}, status=503)
 
         return self.get_response(request)

@@ -81,9 +81,9 @@ class ProjectStatusEventManager {
       });
     }
 
-    // Notify global listeners
+    // Notify only truly global listeners
     this.listeners.forEach((listener, listenerId) => {
-      if (!listenerId.startsWith(`${projectId}-`)) {
+      if (listenerId.startsWith('all-')) {
         try {
           listener(event);
         } catch (error) {

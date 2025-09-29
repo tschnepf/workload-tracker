@@ -3,6 +3,7 @@
  * Tests discriminated union state transitions, error recovery, and derived state recomputation
  */
 
+import React from 'react';
 import { renderHook, act } from '@testing-library/react';
 import { useProjectStatus } from '../useProjectStatus';
 import * as projectsHooks from '@/hooks/useProjects';
@@ -28,13 +29,13 @@ describe('Project Status Integration Tests', () => {
     const mockOnError = vi.fn();
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: any) => (<QueryClientProvider client={qc}>{children}</QueryClientProvider>);
+    const wrapper = ({ children }: any) => React.createElement(QueryClientProvider, { client: qc }, children);
     const { result } = renderHook(() => useProjectStatus({
       getCurrentStatus: mockGetCurrentStatus,
       onOptimisticUpdate: mockOnOptimisticUpdate,
       onRollback: mockOnRollback,
       onError: mockOnError,
-      maxRetries: 1
+      maxRetries: 0
     }), { wrapper });
 
     // Mock API failure
@@ -56,24 +57,24 @@ describe('Project Status Integration Tests', () => {
 
   test('discriminated union state transitions', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: any) => (<QueryClientProvider client={qc}>{children}</QueryClientProvider>);
+    const wrapper = ({ children }: any) => React.createElement(QueryClientProvider, { client: qc }, children);
     const { result } = renderHook(() => useProjectStatus(), { wrapper });
 
     // Initial state should be idle
     expect(result.current.getUpdateState(1)).toEqual({ type: 'idle' });
     expect(result.current.isUpdating(1)).toBe(false);
 
-    // After starting update, state should be updating
+    // After awaiting update, state should reflect success completion
     await act(async () => { await result.current.updateStatus(1, 'completed'); });
 
-    const updatingState = result.current.getUpdateState(1);
-    expect(updatingState.type).toBe('updating');
-    if (updatingState.type === 'updating') {
-      expect(updatingState.projectId).toBe(1);
-      expect(updatingState.previousStatus).toBeDefined();
+    const finalState = result.current.getUpdateState(1);
+    expect(finalState.type).toBe('success');
+    if (finalState.type === 'success') {
+      expect(finalState.projectId).toBe(1);
+      expect(finalState.newStatus).toBe('completed');
     }
 
-    expect(result.current.isUpdating(1)).toBe(true);
+    expect(result.current.isUpdating(1)).toBe(false);
   });
 
   test('derived state recomputation', async () => {

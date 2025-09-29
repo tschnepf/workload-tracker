@@ -13,14 +13,23 @@ describe('StatusBadge Visual Regression Tests', () => {
   const allStatuses: ProjectStatus[] = ['active', 'active_ca', 'planning', 'on_hold', 'completed', 'cancelled'];
 
   test('display variant renders consistently', () => {
+    const expectedLabels: Record<ProjectStatus, string> = {
+      active: 'Active',
+      active_ca: 'Active CA',
+      planning: 'Planning',
+      on_hold: 'On Hold',
+      completed: 'Completed',
+      cancelled: 'Cancelled',
+    };
+
     allStatuses.forEach(status => {
       const { container } = render(
         <StatusBadge status={status} variant="display" />
       );
-      
+
       const badge = container.querySelector('span');
       expect(badge).toBeInTheDocument();
-      expect(badge).toHaveTextContent(status === 'active_ca' ? 'Active CA' : status.charAt(0).toUpperCase() + status.slice(1));
+      expect(badge).toHaveTextContent(expectedLabels[status]);
       
       // Test color consistency
       expect(badge).toHaveClass('text-xs', 'font-medium', 'inline-flex', 'items-center');
@@ -96,6 +105,7 @@ describe('StatusBadge Visual Regression Tests', () => {
       { input: 'on_hold', expected: 'On Hold' },
       { input: 'completed', expected: 'Completed' },
       { input: 'cancelled', expected: 'Cancelled' },
+      { input: 'not_a_status', expected: 'Not A Status' },
       { input: null, expected: 'Unknown' },
       { input: undefined, expected: 'Unknown' }
     ];

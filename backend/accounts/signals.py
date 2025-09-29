@@ -2,6 +2,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import mail_admins
+from django.db import IntegrityError, transaction
 from django.db.models.signals import post_save
 from .models import UserProfile
 
@@ -14,9 +15,29 @@ except Exception:  # pragma: no cover - defensive import
 
 
 def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        # Create the associated profile if it doesn't exist
-        UserProfile.objects.get_or_create(user=instance)
+    """Ensure a UserProfile exists for a newly created User.
+
+    - Idempotent: safe to call multiple times; only one profile is created.
+    - Race-safe: handles concurrent creation attempts with a conservative retry.
+    - Respects feature flag ENABLE_PROFILE_AUTO_CREATE (defaults to True).
+    """
+    if not getattr(settings, 'ENABLE_PROFILE_AUTO_CREATE', True):
+        return
+    if not created:
+        # Avoid re-entrant creation for updates or manual invocations
+        return
+
+    try:
+        with transaction.atomic():
+            UserProfile.objects.get_or_create(user=instance)
+    except IntegrityError:
+        # Another worker/process may have created it between the check and create
+        try:
+            UserProfile.objects.get(user=instance)
+        except UserProfile.DoesNotExist:
+            # One conservative retry under atomic transaction
+            with transaction.atomic():
+                UserProfile.objects.get_or_create(user=instance)
 
 
 def _handle_user_locked_out(sender=None, request=None, username=None, **kwargs):

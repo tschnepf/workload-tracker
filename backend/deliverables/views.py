@@ -10,7 +10,7 @@ from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
-from django.db.models import Count, Q, Max
+from django.db.models import Count, Q, Max, Subquery
 from django.utils.dateparse import parse_date
 from django.utils.http import http_date
 from datetime import datetime
@@ -335,6 +335,8 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_date = parse_date(start_str) if start_str else None
         end_date = parse_date(end_str) if end_str else None
 
+        # Build the main calendar queryset
+
         qs = (
             Deliverable.objects.all()
             .select_related('project')
@@ -383,6 +385,15 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'])
     def calendar_with_pre_items(self, request):
+        """Calendar view returning deliverables and pre-deliverable items.
+
+        Semantics:
+        - When mine_only=true, scope results to the union of:
+          (a) deliverables directly linked to the current user via DeliverableAssignment,
+          (b) deliverables on projects where the current user has an active project-level Assignment.
+        - Duplicates are eliminated via a distinct ID subquery strategy; counts use distinct=True.
+        - Optional filters: start, end (dates) and type_id (pre-deliverable type).
+        """
         start_str = request.query_params.get('start')
         end_str = request.query_params.get('end')
         mine_only = request.query_params.get('mine_only') in ('1', 'true', 'True')
@@ -390,21 +401,39 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_date = parse_date(start_str) if start_str else None
         end_date = parse_date(end_str) if end_str else None
 
-        qs = (
-            Deliverable.objects.all()
-            .select_related('project')
-            .annotate(
-                assignmentCount=Count('assignments', filter=Q(assignments__is_active=True))
-            )
-        )
-        if start_date:
-            qs = qs.filter(date__gte=start_date)
-        if end_date:
-            qs = qs.filter(date__lte=end_date)
-        if not start_date and not end_date:
-            qs = qs.filter(date__isnull=False)
+        # Compute allowed deliverable IDs (subquery) for mine_only scoping
+        allowed_ids_subq = None
+        allowed_ids_list: list[int] = []
+        if mine_only:
+            from assignments.models import Assignment as _ProjAssign
+            from deliverables.models import DeliverableAssignment as _DelAssign
+            _prof = getattr(request.user, 'profile', None)
+            _pid = getattr(_prof, 'person_id', None)
+            if _pid:
+                _project_ids_subq = _ProjAssign.objects.filter(
+                    is_active=True, person_id=_pid
+                ).values('project_id')
+                allowed_ids_subq = (
+                    Deliverable.objects.filter(
+                        Q(assignments__is_active=True, assignments__person_id=_pid)
+                        | Q(project_id__in=Subquery(_project_ids_subq))
+                    )
+                    .values('id')
+                    .distinct()
+                )
+                # Python fallback list for safety/portability
+                _direct = list(_DelAssign.objects.filter(is_active=True, person_id=_pid).values_list('deliverable_id', flat=True))
+                _proj_ids = list(_ProjAssign.objects.filter(is_active=True, person_id=_pid).values_list('project_id', flat=True))
+                _via_proj = list(Deliverable.objects.filter(project_id__in=_proj_ids).values_list('id', flat=True))
+                allowed_ids_list = sorted(set(_direct) | set(_via_proj))
+
+        
+
+        # Build deliverables queryset
+        base_qs = Deliverable.objects.all().select_related('project')
 
         # Apply person scoping to deliverables when mine_only is requested
+        allowed_deliverable_ids = None
         if mine_only:
             from accounts.models import UserProfile
             try:
@@ -413,12 +442,55 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except UserProfile.DoesNotExist:
                 pid = None
             if pid:
-                qs = qs.filter(
-                    Q(assignments__person_id=pid, assignments__is_active=True)
-                    | Q(project__assignment__person_id=pid, project__assignment__is_active=True)
-                ).distinct()
+                from deliverables.models import Deliverable as _Del
+                from deliverables.models import DeliverableAssignment as _DelAssign
+                from assignments.models import Assignment as _ProjAssign
+
+                # Explicit ID lists for determinism and portability
+                direct_ids = list(
+                    _DelAssign.objects.filter(is_active=True, person_id=pid)
+                    .values_list('deliverable_id', flat=True)
+                )
+                project_ids = list(
+                    _ProjAssign.objects.filter(is_active=True, person_id=pid)
+                    .values_list('project_id', flat=True)
+                )
+                via_project_ids = list(
+                    _Del.objects.filter(project_id__in=project_ids)
+                    .values_list('id', flat=True)
+                )
+
+                allowed_deliverable_ids = set(direct_ids) | set(via_project_ids)
             else:
-                qs = qs.none()
+                allowed_deliverable_ids = set()
+
+        # Start from base_qs or restrict by explicit ID allow‑list
+        if mine_only:
+            if allowed_ids_list:
+                scoped_qs = base_qs.filter(id__in=allowed_ids_list)
+            elif allowed_ids_subq is not None:
+                scoped_qs = base_qs.filter(id__in=Subquery(allowed_ids_subq))
+            else:
+                scoped_qs = base_qs.none()
+        else:
+            scoped_qs = base_qs
+
+        # Apply date filters on the already-scoped queryset
+        if start_date:
+            scoped_qs = scoped_qs.filter(date__gte=start_date)
+        if end_date:
+            scoped_qs = scoped_qs.filter(date__lte=end_date)
+        if not start_date and not end_date:
+            scoped_qs = scoped_qs.filter(date__isnull=False)
+
+        # Annotate after filtering; use distinct to avoid overcount when multiple links exist
+        qs = (
+            scoped_qs
+            .annotate(
+                assignmentCount=Count('assignments', filter=Q(assignments__is_active=True), distinct=True)
+            )
+            .distinct()
+        )
 
         items = [{
             'itemType': 'deliverable',
@@ -436,17 +508,10 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except ValueError:
                 pass
         if mine_only:
-            from accounts.models import UserProfile
-            try:
-                prof = UserProfile.objects.select_related('person').get(user=request.user)
-                pid = getattr(prof.person, 'id', None)
-            except UserProfile.DoesNotExist:
-                pid = None
-            if pid:
-                pre_qs = pre_qs.filter(
-                    Q(deliverable__assignments__person_id=pid, deliverable__assignments__is_active=True)
-                    | Q(deliverable__project__assignment__person_id=pid, deliverable__project__assignment__is_active=True)
-                ).distinct()
+            if allowed_ids_list:
+                pre_qs = pre_qs.filter(deliverable_id__in=allowed_ids_list)
+            elif allowed_ids_subq is not None:
+                pre_qs = pre_qs.filter(deliverable_id__in=Subquery(allowed_ids_subq))
             else:
                 pre_qs = pre_qs.none()
 
@@ -463,6 +528,12 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'isCompleted': pi.is_completed,
             'isOverdue': pi.is_overdue,
         } for pi in pre_qs]
+
+        try:
+            _ids = [it.get('id') for it in items]
+            _pre = [it.get('id') for it in pre_items]
+        except Exception:
+            pass
 
         return Response(items + pre_items)
 

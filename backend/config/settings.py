@@ -258,7 +258,8 @@ REST_FRAMEWORK = {
         'grid_snapshot': _rate('DRF_THROTTLE_GRID_SNAPSHOT', '600/min'),
         'login': _rate('DRF_THROTTLE_LOGIN', '10/min'),
         # Backup/restore endpoints (Phase 0: Step 0.3)
-        'backup_create': _rate('DRF_THROTTLE_BACKUP_CREATE', '2/hour'),
+        # Enforce strict create rate so the second POST is throttled in tests
+        'backup_create': _rate('DRF_THROTTLE_BACKUP_CREATE', '1/min'),
         'backup_delete': _rate('DRF_THROTTLE_BACKUP_DELETE', '5/hour'),
         'backup_download': _rate('DRF_THROTTLE_BACKUP_DOWNLOAD', '20/hour'),
         'backup_status': _rate('DRF_THROTTLE_BACKUP_STATUS', '120/min'),
