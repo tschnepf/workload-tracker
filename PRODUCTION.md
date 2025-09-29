@@ -47,7 +47,164 @@ make backup-db      # Create database backup
 
 # Manual operations
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py shell
+
+Controlled cutovers: set `RUN_MIGRATIONS_ON_START=false` on the backend, then `make up-prod` → `docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py migrate` → restore the flag to `true` on the next deploy.
 ```
+
+## Using External Nginx (Disable Built‑in Proxy)
+
+If you already run Nginx on the host (e.g., Unraid) and prefer to keep using it:
+
+- Do not enable the built‑in Nginx service (it is behind a compose profile):
+  - Omit `COMPOSE_PROFILES=proxy` when starting the stack.
+
+- Expose backend/frontend to host ports using the host‑expose overlay:
+  ```bash
+  # Choose host ports as needed (defaults shown)
+  set BACKEND_HOST_PORT=8000
+  set FRONTEND_HOST_PORT=3000
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.host-expose.yml up -d
+  ```
+
+- Configure your host Nginx to reverse proxy:
+  - Backend API: `proxy_pass http://127.0.0.1:8000;`
+  - Frontend app: `proxy_pass http://127.0.0.1:3000;`
+
+- Optional: If you do want to run the built‑in Nginx, enable the profile and optionally change host ports:
+  ```bash
+  set COMPOSE_PROFILES=proxy
+  set NGINX_HTTP_PORT=8080
+  set NGINX_HTTPS_PORT=8443
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d nginx
+  ```
+
+Notes
+- The built‑in Nginx is now under the `proxy` profile and will not start unless `COMPOSE_PROFILES=proxy` is set.
+- The overlay file `docker-compose.host-expose.yml` only adds host port bindings to backend/frontend and can be included or omitted per environment.
+
+### Host Nginx Examples
+
+Example A — Single domain with path routing (API under `/api`, frontend under `/`)
+
+```
+server {
+    listen 80;
+    server_name workload.example.com;
+
+    # Security headers (safe, non-conflicting)
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+    # Optional: set HSTS in HTTPS server only
+
+    # API: proxy to backend container
+    location /api/backups/upload-restore/ {
+        client_max_body_size 2g;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    # People/Projects import size overrides
+    location /api/people/import_excel/ {
+        client_max_body_size 100m;
+        proxy_pass http://127.0.0.1:8000;
+    }
+    location /api/projects/import_excel/ {
+        client_max_body_size 100m;
+        proxy_pass http://127.0.0.1:8000;
+    }
+
+    # All other API calls
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    # Frontend: proxy to static server on 3000
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+}
+```
+
+Example B — Split subdomains (api.example.com and app.example.com)
+
+```
+# API subdomain
+server {
+    listen 80;
+    server_name api.example.com;
+
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+}
+
+# Frontend subdomain
+server {
+    listen 80;
+    server_name app.example.com;
+
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+}
+```
+
+Tips
+- Add TLS (443) server blocks with certificates and set HSTS headers in HTTPS servers only.
+- If you need request rate limiting for auth endpoints, define a `limit_req_zone` in the global `http {}` and apply it to `location ~ ^/(api/)?(token|auth)/`.
+- Avoid setting a global `Content-Security-Policy` at the host unless you mirror the backend policy exactly; the backend already injects CSP with nonces for dynamic pages.
 
 ## Configuration
 
@@ -254,11 +411,18 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec nginx ls -l
 
 ## SSL/HTTPS Setup
 
-Uncomment and configure the HTTPS server block in `nginx/sites-available/workload-tracker.conf`:
+Enable HTTPS once certificates are available:
 
 1. Place SSL certificates in `nginx/ssl/`
-2. Update server configuration
-3. Rebuild and restart: `make build-prod && make up-prod`
+   - `nginx/ssl/fullchain.pem`
+   - `nginx/ssl/privkey.pem`
+2. Enable the HTTPS site config
+   - Rename `nginx/sites-available/workload-tracker-https.conf.disabled` to `nginx/sites-available/workload-tracker-https.conf`
+3. Restart only Nginx (proxy profile)
+   - `COMPOSE_PROFILES=proxy docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps nginx`
+4. Validate
+   - `curl -I https://<host>/` shows HSTS + CSP + Permissions-Policy
+   - `curl -I https://<host>/api/health/` returns 200
 
 ## Deployment Checklist
 

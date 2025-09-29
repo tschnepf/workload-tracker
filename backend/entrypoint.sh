@@ -10,8 +10,12 @@ echo "Database is ready."
 # Ensure Django settings module is available for any direct Python calls
 export DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings}
 
-echo "Running migrations..."
-python manage.py migrate --noinput
+if [ "${RUN_MIGRATIONS_ON_START:-true}" = "true" ] || [ "${RUN_MIGRATIONS_ON_START:-true}" = "1" ]; then
+  echo "Running migrations..."
+  python manage.py migrate --noinput
+else
+  echo "Skipping migrations (RUN_MIGRATIONS_ON_START=${RUN_MIGRATIONS_ON_START})"
+fi
 
 # Dev-safe repair for SimpleJWT blacklist tables when schema mismatches occur
 python manage.py repair_token_blacklist --yes || true

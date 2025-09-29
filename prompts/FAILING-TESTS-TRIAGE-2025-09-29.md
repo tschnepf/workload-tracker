@@ -103,5 +103,20 @@ This dated supplement records backend test failures observed during a broader sp
    - Decide policy for self‑edits. If blocked, tighten `RoleBasedAccessPermission.has_object_permission` for `people.person`; else update tests and document behavior.
 
 4) Restore Command Environment
-   - Make the test conditional on required tools (skip with reason) or provide a portable stub to validate the flow on Windows/CI.
+  - Make the test conditional on required tools (skip with reason) or provide a portable stub to validate the flow on Windows/CI.
 
+## Current Run (prod-like flags, 2025-09-29)
+- Flags: `SECURE_SSL_REDIRECT=false`, `ENABLE_PROFILE_AUTO_CREATE=false`, `--keepdb`
+- Command: `docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml exec -e SECURE_SSL_REDIRECT=false -e ENABLE_PROFILE_AUTO_CREATE=false backend python manage.py test -v 2 --keepdb`
+
+1) `core.tests.test_backup.BackupCommandTests.test_restore_from_custom_archive_succeeds`
+- Symptom: `CommandError: pg_restore failed` (non-zero exit status)
+- Likely UI/flow: Restore command path (ops tool), not end-user UI
+- Suspected area: external `pg_restore` tool environment/fixture; CI/dev image lacks expected binary or archive path
+- Repro: `docker compose ... exec backend python manage.py test core.tests.test_backup.BackupCommandTests.test_restore_from_custom_archive_succeeds -v 2`
+
+2) `people.tests.test_object_permissions.PeopleObjectPermissionTests.test_user_cannot_edit_own_person`
+- Symptom: expected 403/404 on self-edit; received 200
+- Likely UI/flow: People edit form/object-level permission
+- Suspected area: product decision — current policy allows self-edit; either change policy (object-level deny) or update test to reflect allowance
+- Repro: `docker compose ... exec backend python manage.py test people.tests.test_object_permissions.PeopleObjectPermissionTests.test_user_cannot_edit_own_person -v 2`

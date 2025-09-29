@@ -20,6 +20,43 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure .env.production.template exists
+        run: |
+          if [ ! -f .env.production.template ]; then
+            echo "ERROR: Missing .env.production.template" >&2
+            exit 1
+          fi
+
+      - name: Validate prod template defaults (DEBUG=false, non-dev SECRET_KEY)
+        run: |
+          if grep -E '^DEBUG=true' .env.production.template; then
+            echo "ERROR: DEBUG=true found in .env.production.template" >&2
+            exit 1
+          fi
+          if ! grep -E '^DEBUG=false' .env.production.template; then
+            echo "ERROR: DEBUG=false not set in .env.production.template" >&2
+            exit 1
+          fi
+          if ! grep -E '^SECRET_KEY=' .env.production.template; then
+            echo "ERROR: SECRET_KEY not present in .env.production.template" >&2
+            exit 1
+          fi
+          if grep -q 'SECRET_KEY=dev-secret-key-change-in-production' .env.production.template; then
+            echo "ERROR: dev SECRET_KEY used in .env.production.template" >&2
+            exit 1
+          fi
+
+      - name: Validate prod template flags (OPENAPI_PUBLIC=false, COOKIE_REFRESH_AUTH=true)
+        run: |
+          if ! grep -E '^OPENAPI_PUBLIC=false' .env.production.template; then
+            echo "ERROR: OPENAPI_PUBLIC must be false in .env.production.template" >&2
+            exit 1
+          fi
+          if ! grep -E '^COOKIE_REFRESH_AUTH=true' .env.production.template; then
+            echo "ERROR: COOKIE_REFRESH_AUTH must be true in .env.production.template" >&2
+            exit 1
+          fi
+
       - name: Ensure ALLOWED_HOSTS present in env example
         run: |
           if ! grep -q "^ALLOWED_HOSTS=" .env.example; then
@@ -30,3 +67,7 @@ jobs:
       - name: Show summary
         run: |
           echo "Prod config checks passed." 
+
+      - name: Check for pending migrations (dry-run)
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python manage.py makemigrations --check --dry-run

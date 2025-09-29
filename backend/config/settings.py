@@ -487,6 +487,8 @@ if FEATURES.get('LOGIN_PROTECTION'):
     AXES_ALERT_ADMINS = os.getenv('AXES_ALERT_ADMINS', 'false').lower() == 'true'
 
 # Common constants
+# Test/ops toggle: control auto-creation of UserProfile on user creation
+ENABLE_PROFILE_AUTO_CREATE = os.getenv('ENABLE_PROFILE_AUTO_CREATE', 'true').lower() == 'true'
 REFRESH_COOKIE_NAME = os.getenv('REFRESH_COOKIE_NAME', 'refresh_token')
 # Structured logging configuration
 LOGGING = {

@@ -1,0 +1,6 @@
+services:
+  db:
+    ports: []
+  redis:
+    ports: []
+

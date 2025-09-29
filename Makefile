@@ -123,13 +123,13 @@ clean:
 .PHONY: build-prod
 build-prod:
 	@echo "Building production images..."
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml build --no-cache
 	@echo "Production images built successfully"
 
 .PHONY: up-prod
 up-prod:
 	@echo "Starting production stack..."
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml up -d
 	@echo "Waiting for services to be ready..."
 	@sleep 15
 	@echo "Production stack started successfully"
@@ -140,17 +140,17 @@ up-prod:
 .PHONY: down-prod
 down-prod:
 	@echo "Stopping production stack..."
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml down
 
 .PHONY: logs-prod
 logs-prod:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml logs -f
 
 .PHONY: backup-db
 backup-db:
 	@echo "Creating database backup..."
 	@mkdir -p backups
-	@docker-compose exec -T db pg_dump -U postgres -d workload_tracker > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
+	@docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml exec -T db pg_dump -U postgres -d workload_tracker > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
 	@echo "Database backup created in backups/ directory"
 
 .PHONY: restore-latest

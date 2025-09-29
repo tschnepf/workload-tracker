@@ -1,0 +1,16 @@
+services:
+  # Expose backend and frontend to host ports when using an external
+  # reverse proxy (e.g., Unraid/nginx running on the host).
+  # Usage:
+  #   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.host-expose.yml up -d
+  # Then point your host nginx to http://127.0.0.1:${BACKEND_HOST_PORT} and/or http://127.0.0.1:${FRONTEND_HOST_PORT}
+
+  backend:
+    ports:
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+
+  frontend:
+    # Frontend serves static files with 'serve' on port 3000 in the container
+    ports:
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
+

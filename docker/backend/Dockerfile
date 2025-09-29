@@ -63,6 +63,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd \
     postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and writable dirs

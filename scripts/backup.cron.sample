@@ -1,0 +1,17 @@
+# Cron entries for Workload Tracker backups (UTC recommended)
+# Adjust the path to your repo root and environment as needed.
+
+# Daily at 02:00 UTC — keep last 7
+0 2 * * * cd /path/to/workload-tracker && bash scripts/backup.sh daily >> backups/cron.log 2>&1
+
+# Weekly on Sunday at 02:30 UTC — keep last 4
+30 2 * * 0 cd /path/to/workload-tracker && bash scripts/backup.sh weekly >> backups/cron.log 2>&1
+
+# Monthly on the 1st at 03:00 UTC — keep last 12
+0 3 1 * * cd /path/to/workload-tracker && bash scripts/backup.sh monthly >> backups/cron.log 2>&1
+
+# Notes:
+# - The script uses docker-compose.yml + docker-compose.prod.yml and runs the backup inside the backend container.
+# - Retention defaults can be overridden via env vars before the command:
+#   DAILY_KEEP=10 WEEKLY_KEEP=6 MONTHLY_KEEP=18 cd /path/to/workload-tracker && bash scripts/backup.sh daily
+# - Ensure your ./backups directory exists and is bind-mounted in docker-compose.prod.yml.
