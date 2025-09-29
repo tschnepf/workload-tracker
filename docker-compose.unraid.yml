@@ -1,0 +1,204 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:17.6
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data_v17:/var/lib/postgresql/data
+      - /mnt/user/appdata/workload-tracker/backups:/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: /mnt/user/appdata/workload-tracker/backend
+      dockerfile: /mnt/user/appdata/workload-tracker/docker/backend/Dockerfile
+      target: production
+    env_file:
+      - /mnt/user/appdata/workload-tracker/.env
+    environment:
+      - DEBUG=false
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - ASYNC_JOBS=true
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - BACKUPS_DIR=/backups
+      - COOKIE_REFRESH_AUTH=true
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
+      - RUN_MIGRATIONS_ON_START=${RUN_MIGRATIONS_ON_START:-true}
+      - SENTRY_DSN=${SENTRY_DSN}
+    volumes:
+      - /mnt/user/appdata/workload-tracker/backups:/backups:rw
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --worker-class gevent --worker-connections 1000 --max-requests 1000 --max-requests-jitter 50 --preload
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "X-Forwarded-Proto: https", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    ports:
+      - "8000:8000"  # Host Nginx (Unraid) proxies to this
+
+  worker:
+    build:
+      context: /mnt/user/appdata/workload-tracker/backend
+      dockerfile: /mnt/user/appdata/workload-tracker/docker/backend/Dockerfile
+      target: production
+    env_file:
+      - /mnt/user/appdata/workload-tracker/.env
+    environment:
+      - DEBUG=false
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - ASYNC_JOBS=true
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - BACKUPS_DIR=/backups
+      - COLLECT_STATIC=false
+    command: celery -A config worker -l info --concurrency=2
+    volumes:
+      - /mnt/user/appdata/workload-tracker/backups:/backups
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker_db:
+    build:
+      context: /mnt/user/appdata/workload-tracker/backend
+      dockerfile: /mnt/user/appdata/workload-tracker/docker/backend/Dockerfile
+      target: production
+    env_file:
+      - /mnt/user/appdata/workload-tracker/.env
+    environment:
+      - DEBUG=false
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - BACKUPS_DIR=/backups
+      - COLLECT_STATIC=false
+    command: celery -A config worker -l info --concurrency=1 -Q db_maintenance
+    volumes:
+      - /mnt/user/appdata/workload-tracker/backups:/backups
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker_beat:
+    build:
+      context: /mnt/user/appdata/workload-tracker/backend
+      dockerfile: /mnt/user/appdata/workload-tracker/docker/backend/Dockerfile
+      target: production
+    env_file:
+      - /mnt/user/appdata/workload-tracker/.env
+    environment:
+      - DEBUG=false
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - ASYNC_JOBS=true
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - BACKUPS_DIR=/backups
+      - COLLECT_STATIC=false
+      - CELERY_BEAT_SCHEDULE_FILE=/var/run/celery/beat-schedule
+    command: celery -A config beat -l info -s /var/run/celery/beat-schedule
+    volumes:
+      - /mnt/user/appdata/workload-tracker/backups:/backups
+      - beat_state:/var/run/celery
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: /mnt/user/appdata/workload-tracker/frontend
+      dockerfile: /mnt/user/appdata/workload-tracker/docker/frontend/Dockerfile
+      target: production
+      args:
+        VITE_API_URL: /api
+        VITE_OPENAPI_MIGRATION_ENABLED: "true"
+        VITE_COOKIE_REFRESH_AUTH: "true"
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: sh -c "cp -r /app/_built/* /app/dist/ 2>/dev/null || true; npx serve -s /app/dist -l 3000"
+    volumes:
+      - frontend_build:/app/dist
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    ports:
+      - "3000:3000"  # Host Nginx (Unraid) proxies to this
+
+volumes:
+  postgres_data_v17:
+  redis_data:
+  static_volume:
+  media_volume:
+  frontend_build:
+  beat_state:
+
