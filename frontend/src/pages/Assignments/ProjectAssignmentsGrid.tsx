@@ -71,7 +71,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   // Deliverable types per project/week for vertical bar rendering
   const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, { type: string; percentage?: number }[]>>>({});
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
-  const [weeksHorizon, setWeeksHorizon] = useState<number>(8);
+  const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());

@@ -417,7 +417,7 @@ const AssignmentGrid: React.FC = () => {
 
   // Weeks header: from grid snapshot when available (server weekKeys only)
   const [weeks, setWeeks] = useState<{ date: string; display: string; fullDisplay: string }[]>([]);
-  const [weeksHorizon, setWeeksHorizon] = useState<number>(12);
+  const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   const url = useGridUrlState();
 
   // Create dynamic grid template based on column widths
