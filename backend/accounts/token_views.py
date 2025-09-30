@@ -8,6 +8,10 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenVerifyView,
 )
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.exceptions import ParseError
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
@@ -58,23 +62,36 @@ class ThrottledTokenRefreshView(TokenRefreshView):
     throttle_scope = 'login'
 
     def post(self, request, *args, **kwargs):  # type: ignore[override]
-        # If cookie mode is enabled, supply the refresh token from cookie to the serializer
+        # Build serializer input, tolerating empty/invalid JSON bodies
+        try:
+            incoming = request.data
+        except ParseError:
+            incoming = {}
+
+        if not isinstance(incoming, dict):
+            try:
+                incoming = dict(incoming)
+            except Exception:
+                incoming = {}
+
         if settings.FEATURES.get('COOKIE_REFRESH_AUTH'):
             refresh_cookie = request.COOKIES.get(settings.REFRESH_COOKIE_NAME)
-            if refresh_cookie and not request.data.get('refresh'):
-                # Create a mutable copy then inject
-                request._full_data = None  # invalidate DRF cached data
-                data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
-                data['refresh'] = refresh_cookie
-                request._request.POST = data  # for Django request
-        response: Response = super().post(request, *args, **kwargs)
-        if response.status_code >= 400:
+            if refresh_cookie and not incoming.get('refresh'):
+                incoming = { 'refresh': refresh_cookie }
+
+        serializer = self.get_serializer(data=incoming)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:  # return consistent InvalidToken response
             logging.getLogger(__name__).warning(
-                "auth.refresh_failed status=%s ip=%s", response.status_code, request.META.get('REMOTE_ADDR')
+                "auth.refresh_failed token_error ip=%s", request.META.get('REMOTE_ADDR')
             )
-        if settings.FEATURES.get('COOKIE_REFRESH_AUTH') and isinstance(response.data, dict):
-            # If rotation returns a new refresh token, set cookie and hide from body
-            new_refresh = response.data.pop('refresh', None)
+            raise InvalidToken(e.args[0])
+
+        body = dict(serializer.validated_data)
+        response = Response(body, status=status.HTTP_200_OK)
+        if settings.FEATURES.get('COOKIE_REFRESH_AUTH') and isinstance(body, dict):
+            new_refresh = body.pop('refresh', None)
             if new_refresh:
                 _set_refresh_cookie(response, new_refresh)
         return response

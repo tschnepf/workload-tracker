@@ -112,7 +112,12 @@ function setState(next: Partial<AuthState>) {
 function readRefreshFromStorage(): string | null {
   try {
     if (typeof window === 'undefined') return null;
-    return window.localStorage.getItem(LS_REFRESH);
+    const v = window.localStorage.getItem(LS_REFRESH);
+    // Guard against earlier builds writing literal 'undefined'/'null'
+    if (!v) return null;
+    const trimmed = v.trim();
+    if (trimmed === '' || trimmed === 'undefined' || trimmed === 'null') return null;
+    return trimmed;
   } catch {
     return null;
   }
@@ -171,9 +176,15 @@ export async function login(usernameOrEmail: string, password: string): Promise<
     // Refresh is stored as httpOnly cookie by server
     setState({ refreshToken: null, accessToken: tok.access });
   } else {
-    const tok = await http<{ access: string; refresh: string }>(`/token/`, { method: 'POST', body });
-    writeRefreshToStorage(tok.refresh);
-    setState({ refreshToken: tok.refresh, accessToken: tok.access });
+    const tok = await http<{ access: string; refresh?: string }>(`/token/`, { method: 'POST', body });
+    // Some server configs hide refresh in cookie even if client built for localStorage. Be tolerant.
+    if (tok.refresh) {
+      writeRefreshToStorage(tok.refresh);
+      setState({ refreshToken: tok.refresh, accessToken: tok.access });
+    } else {
+      // No refresh in body; assume cookie mode on server
+      setState({ refreshToken: null, accessToken: tok.access });
+    }
   }
   await hydrateProfile();
 }
@@ -200,8 +211,17 @@ export async function refreshAccessToken(): Promise<string | null> {
       return null;
     }
   } else {
-    const refresh = readRefreshFromStorage();
-    if (!refresh) return null;
+    let refresh = readRefreshFromStorage();
+    if (!refresh) {
+      // Fallback: server may be running cookie mode. Try cookie-based refresh once.
+      try {
+        const data = await http<{ access: string }>(`/token/refresh/`, { method: 'POST', credentials: 'include' });
+        setState({ accessToken: data.access });
+        return data.access;
+      } catch {
+        return null;
+      }
+    }
     try {
       const body = JSON.stringify({ refresh });
       const data = await http<{ access: string; refresh?: string }>(`/token/refresh/`, { method: 'POST', body });
@@ -237,6 +257,18 @@ export async function loadFromStorage(): Promise<void> {
   if (refresh) {
     await refreshAccessToken();
     await hydrateProfile();
+    markAuthReady();
+    return;
+  }
+  // No local refresh token — try cookie-based refresh as a resilience measure
+  try {
+    const data = await http<{ access: string }>(`/token/refresh/`, { method: 'POST', credentials: 'include' });
+    setState({ accessToken: data.access });
+    await hydrateProfile();
+    setState({ hydrating: false });
+    return;
+  } catch {
+    // fall through
   }
   markAuthReady();
 }

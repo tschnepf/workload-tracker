@@ -7,20 +7,11 @@ import MyDeliverablesCard, { DeliverableItem } from '@/components/personal/MyDel
 import MyScheduleStrip from '@/components/personal/MyScheduleStrip';
 import PersonalCalendarWidget from '@/components/personal/PersonalCalendarWidget';
 import { apiClient, authHeaders } from '@/api/client';
-import Button from '@/components/ui/Button';
-import { useNavigate } from 'react-router';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useAuth } from '@/hooks/useAuth';
 
 const PersonalDashboard: React.FC = () => {
   const auth = useAuth();
-  const navigate = useNavigate();
-  const [horizonWeeks, setHorizonWeeks] = React.useState<number>(() => {
-    try {
-      const raw = localStorage.getItem('personalDashboard.horizonWeeks');
-      return raw ? Math.max(1, Math.min(12, parseInt(raw))) : 8;
-    } catch { return 8 }
-  });
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [summary, setSummary] = React.useState<Summary | null>(null);
@@ -66,21 +57,6 @@ const PersonalDashboard: React.FC = () => {
   }, [personId]);
 
   // Quick actions removed from My Work per request
-  const openAssignmentsMe = React.useCallback(() => navigate('/assignments'), [navigate]);
-  const openCalendarMine = React.useCallback(() => navigate('/deliverables/calendar'), [navigate]);
-  const bulkCompleteDueToday = React.useCallback(async () => {
-    try {
-      const today = new Date();
-      const d = today.toISOString().slice(0, 10);
-      const res = await apiClient.GET('/deliverables/pre_deliverable_items/' as any, { params: { query: { mine_only: 1, start: d, end: d } }, headers: authHeaders() });
-      const items: any[] = ((res as any).data || []).filter((it: any) => !it.isCompleted);
-      const ids = items.map(i => i.id);
-      if (ids.length === 0) return;
-      await apiClient.POST('/deliverables/pre_deliverable_items/bulk_complete/' as any, { body: { ids } as any, headers: authHeaders() });
-    } catch {
-      // silent failure; next reload will reflect state
-    }
-  }, []);
 
   if (!personId) {
     return (
@@ -106,31 +82,7 @@ const PersonalDashboard: React.FC = () => {
           <p className="text-[var(--muted)] mt-2">Your assignments, milestones, and schedule</p>
         </header>
 
-        {/* Preferences & Quick Actions */}
-        <section className="bg-[var(--card)] border border-[var(--border)] rounded p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 text-sm">
-              <label className="text-[var(--muted)]">Horizon Weeks:</label>
-              <input
-                type="number"
-                min={1}
-                max={12}
-                value={horizonWeeks}
-                onChange={(e) => {
-                  const v = Math.max(1, Math.min(12, parseInt(e.target.value || '8')));
-                  setHorizonWeeks(v);
-                  try { localStorage.setItem('personalDashboard.horizonWeeks', String(v)); } catch {}
-                }}
-                className="w-16 px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--focus)] focus:outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={openAssignmentsMe}>Open Assignments (me)</Button>
-              <Button size="sm" onClick={openCalendarMine}>Open Calendar (mine)</Button>
-              <Button size="sm" onClick={bulkCompleteDueToday}>Complete due‑today pre‑items</Button>
-            </div>
-          </div>
-        </section>
+        {/* Preferences & Quick Actions removed */}
 
         {/* Summary (full width) */}
         {summary && alerts ? (
