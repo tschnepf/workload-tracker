@@ -7,6 +7,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate, useNavigation } from 'react-router';
 import TooltipPortal from '@/components/ui/TooltipPortal';
 import { useAuth } from '@/hooks/useAuth';
+import { logout as performLogout } from '@/store/auth';
 import { getFlag } from '@/lib/flags';
 import { prefetchRoute, wasPrefetched } from '@/routes/prefetch';
 import { prefetchDataForRoute } from '@/routes/prefetchData';
@@ -516,4 +517,6 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
 };
 
 export default Sidebar;
+
+
 
