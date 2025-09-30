@@ -37,6 +37,10 @@ const SkillsDashboard: React.FC = () => {
   const [people, setPeople] = useState<Person[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [skillTags, setSkillTags] = useState<SkillTag[]>([]);
+  // Manage Skill Tags (add/remove)
+  const [newSkillName, setNewSkillName] = useState<string>("");
+  const [newSkillCategory, setNewSkillCategory] = useState<string>("");
+  const [savingSkill, setSavingSkill] = useState<boolean>(false);
   const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +242,36 @@ const SkillsDashboard: React.FC = () => {
 
   const skillsCoverage = calculateSkillsCoverage();
   const departmentSkills = calculateDepartmentSkills();
+  
+  async function handleAddSkillTag() {
+    const name = newSkillName.trim();
+    if (!name) return;
+    try {
+      setSavingSkill(true);
+      const created = await skillTagsApi.create({ name, category: newSkillCategory.trim() || undefined } as any);
+      setSkillTags(prev => {
+        const next = [...prev, created];
+        // keep list sorted by name to match API ordering
+        return next.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+      });
+      setNewSkillName("");
+      setNewSkillCategory("");
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create skill');
+    } finally {
+      setSavingSkill(false);
+    }
+  }
+
+  async function handleDeleteSkillTag(id: number) {
+    try {
+      if (!confirm('Delete this skill? This cannot be undone.')) return;
+      await skillTagsApi.delete(id);
+      setSkillTags(prev => prev.filter(s => s.id !== id));
+    } catch (e: any) {
+      setError(e?.message || 'Failed to delete skill');
+    }
+  }
   const stats = getCoverageStats();
 
   return (
@@ -274,6 +308,63 @@ const SkillsDashboard: React.FC = () => {
             </select>
           </div>
         </div>
+
+        {/* Manage Skill Tags */}
+        <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-xs text-[#969696] mb-1">New Skill Name</label>
+                <input
+                  type="text"
+                  value={newSkillName}
+                  onChange={(e) => setNewSkillName(e.target.value)}
+                  className="w-full px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                  placeholder="e.g., Revit Families"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-[#969696] mb-1">Category (optional)</label>
+                <input
+                  type="text"
+                  value={newSkillCategory}
+                  onChange={(e) => setNewSkillCategory(e.target.value)}
+                  className="w-full px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                  placeholder="e.g., BIM"
+                />
+              </div>
+              <div>
+                <Button onClick={handleAddSkillTag} disabled={!newSkillName.trim() || savingSkill}>
+                  {savingSkill ? 'Adding…' : 'Add Skill'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Existing skills list (compact) */}
+            <div className="max-h-40 overflow-auto border border-[#3e3e42] rounded">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-[#3e3e42]">
+                {skillTags.map(tag => (
+                  <div key={tag.id} className="flex items-center justify-between bg-[#2d2d30] px-3 py-1.5">
+                    <div className="text-sm text-[var(--text)] truncate">
+                      <span className="font-medium">{tag.name}</span>
+                      {tag.category ? <span className="text-[#969696] ml-2">({tag.category})</span> : null}
+                    </div>
+                    <button
+                      className="text-xs px-2 py-0.5 border border-[var(--border)] rounded text-[var(--muted)] hover:text-red-400 hover:border-red-500/50"
+                      onClick={() => tag.id && handleDeleteSkillTag(tag.id)}
+                      aria-label={`Delete skill ${tag.name}`}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+                {skillTags.length === 0 && (
+                  <div className="col-span-full text-center text-[#969696] py-2 bg-[#2d2d30]">No skills defined yet</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
 
         {/* View Mode Tabs */}
         <div className="flex gap-2">
