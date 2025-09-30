@@ -1209,21 +1209,24 @@ const ProjectsList: React.FC = () => {
               <div>
                 <label className="text-xs text-[var(--muted)] mb-1 block">Filter by Status:</label>
                 <div className="flex flex-wrap gap-1">
-                  {statusOptions.map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
-                      className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-                        statusFilter === status
-                          ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                          : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
-                      }`}
-                      aria-label={`Filter projects by ${formatFilterStatus(status).toLowerCase()}`}
-                      aria-pressed={statusFilter === status}
-                    >
-                      {formatFilterStatus(status)}
-                    </button>
-                  ))}
+                  {statusOptions.map((status) => {
+                    const isActive = selectedStatusFilters.has(status);
+                    return (
+                      <button
+                        key={status}
+                        onClick={() => toggleStatusFilter(status)}
+                        className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                          isActive
+                            ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                            : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
+                        }`}
+                        aria-label={`Filter projects by ${formatFilterStatus(status).toLowerCase()}`}
+                        aria-pressed={isActive}
+                      >
+                        {formatFilterStatus(status)}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
