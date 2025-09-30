@@ -14,7 +14,7 @@ type Props = {
   showCopyLink?: boolean;
 };
 
-export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = true }) => {
+export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = false }) => {
   const { state, setDepartment, clearDepartment, setIncludeChildren } = useDepartmentFilter();
 
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -291,21 +291,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
         )}
       </div>
 
-      {/* Include sub-departments */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <input
-          id="global-include-children"
-          type="checkbox"
-          checked={state.selectedDepartmentId != null && state.includeChildren}
-          onChange={(e) => setIncludeChildren(e.target.checked)}
-          aria-describedby={DESC_ID}
-          disabled={state.selectedDepartmentId == null}
-        />
-        <label htmlFor="global-include-children" style={{ color: 'var(--muted)' }}>Include sub-departments</label>
-      </div>
-      <span id={DESC_ID} style={{ position: 'absolute', left: -9999 }}>
-        When enabled, includes all child departments under the selected department in totals.
-      </span>
+      {/* Include sub-departments removed per request */}
 
       {/* Right-side actions */}
       {rightActions ? (
