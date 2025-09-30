@@ -201,6 +201,20 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } catch { return new Set<StatusFilter>(['active','active_ca']); }
   });
 
+  // Consistent human-friendly labels for filter buttons
+  const formatStatusLabel = (status: StatusFilter): string => {
+    switch (status) {
+      case 'active': return 'Active';
+      case 'active_ca': return 'Active CA';
+      case 'on_hold': return 'On-Hold';
+      case 'completed': return 'Completed';
+      case 'cancelled': return 'Cancelled';
+      case 'active_no_deliverables': return 'Active - No Deliverables';
+      case 'Show All': return 'Show All';
+      default: return String(status);
+    }
+  };
+
   const toggleStatusFilter = (status: StatusFilter) => {
     setSelectedStatusFilters(prev => {
       const next = new Set<StatusFilter>(prev);
@@ -875,10 +889,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
                         : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
                     }`}
                     aria-pressed={isActive}
-                    aria-label={`Filter: ${opt}`}
-                    title={opt === 'active_no_deliverables' ? 'Active - No Deliverables' : opt.replace('_',' ').toUpperCase()}
+                    aria-label={`Filter: ${formatStatusLabel(opt)}`}
+                    title={formatStatusLabel(opt)}
                   >
-                    {opt === 'active_no_deliverables' ? 'Active - No Deliverables' : opt.replace('_',' ')}
+                    {formatStatusLabel(opt)}
                   </button>
                 );
               })}
