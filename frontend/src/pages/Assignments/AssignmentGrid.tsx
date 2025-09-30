@@ -386,7 +386,7 @@ const AssignmentGrid: React.FC = () => {
   const formatFilterStatus = (status: StatusFilter) => {
     switch (status) {
       case 'active': return 'Active';
-      case 'active_ca': return 'Active AC';
+      case 'active_ca': return 'Active CA';
       case 'on_hold': return 'On-Hold';
       case 'completed': return 'Completed';
       case 'cancelled': return 'Cancelled';
