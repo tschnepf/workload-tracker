@@ -50,12 +50,16 @@ tmp_*.md
 .env
 .env.*
 !.env.example
+!unraid/.env.unraid.example
 
 # IDE / OS
 .DS_Store
 .idea/
 .vscode/
 Thumbs.db
+
+# Windows reserved-name collisions
+CON.txt
 
 # Docker
 **/.python_packages
