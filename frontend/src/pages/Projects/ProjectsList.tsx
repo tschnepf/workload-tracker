@@ -255,7 +255,8 @@ const ProjectsList: React.FC = () => {
   
   // Local UI state
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [statusFilter, setStatusFilter] = useState('Show All');
+  // Multi-select status filter; default to Active + Active CA
+  const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<string>>(new Set(['active','active_ca']));
   const [sortBy, setSortBy] = useState('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchTerm, setSearchTerm] = useState('');
@@ -427,6 +428,22 @@ const ProjectsList: React.FC = () => {
     if (status === 'active_ca') return 'Active CA';
     if (status === 'no_assignments') return 'No Assignments';
     return formatStatus(status);
+  };
+  const toggleStatusFilter = (status: string) => {
+    setSelectedStatusFilters(prev => {
+      const next = new Set(prev);
+      if (status === 'Show All') {
+        return new Set(['Show All']);
+      }
+      next.delete('Show All');
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      if (next.size === 0) return new Set(['Show All']);
+      return next;
+    });
   };
 
   const handleDelete = async (projectId: number) => {
@@ -1027,12 +1044,16 @@ const ProjectsList: React.FC = () => {
   const filteredProjects = useMemo(() => {
     const tStart = performance.now();
     // New optimized filtering using helper functions (Step 3.3)
+    const activeFilters = Array.from(selectedStatusFilters);
+    const useShowAll = activeFilters.length === 0 || activeFilters.includes('Show All');
     const next = projects.filter(project => {
-      const matchesStatus = optimizedFilterFunctions.matchesStatusFilter(
-        project,
-        statusFilter,
-        filterMetadata
-      );
+      const matchesStatus = useShowAll
+        ? true
+        : activeFilters.some(sf => optimizedFilterFunctions.matchesStatusFilter(
+            project,
+            sf,
+            filterMetadata
+          ));
 
       const matchesSearch = !searchTerm ||
         project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1047,11 +1068,11 @@ const ProjectsList: React.FC = () => {
     trackPerformanceEvent('projects.filter.compute', tEnd - tStart, 'ms', {
       projects: projects.length,
       result: next.length,
-      statusFilter,
+      statusFilter: activeFilters.join(','),
     });
 
     return next;
-  }, [projects, statusFilter, searchTerm, filterMetadata, optimizedFilterFunctions]);
+  }, [projects, selectedStatusFilters, searchTerm, filterMetadata, optimizedFilterFunctions]);
 
   // Memoized sorted projects
   const sortedProjects = useMemo(() => [...filteredProjects].sort((a, b) => {
@@ -1767,6 +1788,8 @@ function VirtualizedProjectsList({
     </div>
   );
 }
+
+
 
 
 
