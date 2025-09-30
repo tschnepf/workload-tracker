@@ -249,7 +249,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
     <div className={`bg-[var(--surface)] border-r border-[var(--border)] flex-shrink-0 ${widthClass} h-screen flex flex-col z-10`}>
 
       {/* Header */}
-      <div className="h-16 flex items-center border-b border-[var(--border)] relative flex-shrink-0">
+      <div className="h-16 flex items-center relative flex-shrink-0">
         <TooltipPortal title="Workload Tracker" description="Resource Management System">
           {/* Match nav icon alignment: center within px-3 gutter */}
           <div className="w-full h-full flex items-center">
