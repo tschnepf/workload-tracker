@@ -1,4 +1,4 @@
-/**
+ï»¿/**
  * Dashboard page - Team utilization overview
  * Chunk 4: Real dashboard with team metrics and VSCode dark theme
  */
@@ -10,7 +10,7 @@ import Card from '../components/ui/Card';
 import UpcomingPreDeliverablesWidget from '../components/dashboard/UpcomingPreDeliverablesWidget';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
 import SkillsFilter from '../components/skills/SkillsFilter';
-import { dashboardApi, departmentsApi, personSkillsApi } from '../services/api';
+import { dashboardApi, departmentsApi, personSkillsApi, projectsApi } from '../services/api';
 import { useAuth } from '@/hooks/useAuth';
 import { formatUtcToLocal } from '@/utils/dates';
 import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
@@ -32,7 +32,24 @@ const Dashboard: React.FC = () => {
   // Skills filtering state
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
-  const [heatWeeks, setHeatWeeks] = useState<number>(4);
+  const [heatWeeks, setHeatWeeks] = useState<number>(20);
+  const [projectCounts, setProjectCounts] = useState<Record<string, number>>({});
+  const [projectsTotal, setProjectsTotal] = useState<number>(0);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+
+  // Display helper to format project status labels nicely
+  const formatStatusLabel = (raw: string | undefined | null): string => {
+    const s = (raw || 'Unknown').toString();
+    const words = s.replace(/_/g, ' ').split(' ').filter(Boolean);
+    return words
+      .map((w) => {
+        const lower = w.toLowerCase();
+        if (lower === 'ca') return 'CA';
+        if (lower.length <= 2) return lower.toUpperCase();
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      })
+      .join(' ');
+  };
 
   // Load dashboard when weeks or global department changes
   useAuthenticatedEffect(() => {
@@ -48,10 +65,20 @@ const Dashboard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.accessToken]);
 
+  // Load project summary once authenticated
+  useAuthenticatedEffect(() => {
+    if (!auth.accessToken) return;
+    loadProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.accessToken]);
+
   const heatQuery = useCapacityHeatmap({ departmentId: deptState.selectedDepartmentId, includeChildren: deptState.includeChildren }, heatWeeks, !loading && !!auth.accessToken);
   const heatData = heatQuery.data ?? [];
   const heatLoading = heatQuery.isLoading;
   const heatFetching = heatQuery.isFetching;
+  const weekKeys = (heatData && heatData.length > 0) ? (heatData[0].weekKeys || []) : [];
+  const currentWeekKey = weekKeys[0];
+  const nextWeekKey = weekKeys[1];
   
   const loadDepartments = async () => {
     try {
@@ -68,6 +95,22 @@ const Dashboard: React.FC = () => {
       setPeopleSkills(response.results || []);
     } catch (err) {
       console.error('Error loading people skills:', err);
+    }
+  };
+
+  const loadProjects = async () => {
+    try {
+      setProjectsError(null);
+      const list = await projectsApi.listAll();
+      setProjectsTotal(list.length);
+      const counts: Record<string, number> = {};
+      for (const p of list) {
+        const key = (p.status || 'Unknown');
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      setProjectCounts(counts);
+    } catch (err: any) {
+      setProjectsError(err.message || 'Failed to load projects');
     }
   };
 
@@ -123,7 +166,7 @@ const Dashboard: React.FC = () => {
               <h3 className="text-lg font-semibold text-[var(--text)]">Team Utilization Heat Map</h3>
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-[var(--muted)]">Weeks:</span>
-                {[4, 8, 12].map((w) => (
+                {[4, 8, 12, 20].map((w) => (
                   <button
                     key={w}
                     onClick={() => setHeatWeeks(w)}
@@ -179,15 +222,15 @@ const Dashboard: React.FC = () => {
                   </table>
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-xs text-[var(--muted)]">
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0–70%</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70–85%</div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85–100%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0â€“70%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70â€“85%</div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85â€“100%</div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
-                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
+                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshingâ€¦</span>}
                 </div>
               </div>
             ) : (
-              <div className="text-[var(--muted)]">{heatLoading ? 'Loading…' : 'No data'}</div>
+              <div className="text-[var(--muted)]">{heatLoading ? 'Loadingâ€¦' : 'No data'}</div>
             )}
           </Card>
           )}
@@ -354,13 +397,166 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Team Overview */}
+          {/* Team Utilization Heat Map (compact) - moved up to left column */}
+          <Card className="lg:col-span-2 lg:row-span-2 bg-[var(--card)] border-[var(--border)]">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-[var(--text)]">Team Utilization Heat Map</h3>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-[var(--muted)]">Weeks:</span>
+                {[4, 8, 12, 20].map((w) => (
+                  <button
+                    key={w}
+                    onClick={() => setHeatWeeks(w)}
+                    className={`px-2 py-0.5 rounded ${heatWeeks === w ? 'bg-[var(--primary)] text-white' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'}`}
+                    aria-pressed={heatWeeks === w}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {heatData && heatData.length > 0 ? (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: 'auto', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '140px' }} />
+                    {heatData[0].weekKeys.map((wk) => (
+                      <col key={`col-top-${wk}`} style={{ width: 26 }} />
+                    ))}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th
+                        style={{ textAlign: 'left', padding: '4px 6px', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, fontSize: '12px' }}
+                      >
+                        Person
+                      </th>
+                      {heatData[0].weekKeys.map((wk) => (
+                        <th key={`head-top-${wk}`} style={{ textAlign: 'center', padding: '2px', whiteSpace: 'nowrap', fontWeight: 600, position: 'sticky', top: 0, background: 'var(--card)', fontSize: '12px' }}>
+                          {wk.slice(5)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {heatData.map((row) => (
+                      <tr key={`row-top-${row.id}`}>
+                        <td style={{ padding: '4px 6px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</td>
+                        {row.weekKeys.map((wk) => {
+                          const h = row.weekTotals[wk] || 0;
+                          const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
+                          let bg = '#10b981';
+                          if (pct > 100) bg = '#ef4444';
+                          else if (pct > 85) bg = '#f59e0b';
+                          else if (pct > 70) bg = '#3b82f6';
+                          return (
+                            <td key={`cell-top-${row.id}-${wk}`} title={`${wk} - ${Math.round(h)}h`} style={{ padding: 3, textAlign: 'center' }}>
+                              <div style={{ width: 20, height: 20, background: bg, opacity: 0.9, borderRadius: 3, border: '1px solid var(--border)', margin: '0 auto' }} />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="mt-2 flex items-center gap-3 text-[11px] text-[var(--muted)]">
+                  <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0-70%</div>
+                  <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70-85%</div>
+                  <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85-100%</div>
+                  <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
+                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing.</span>}
+                </div>
+              </div>
+            ) : (
+              <div className="text-[var(--muted)]">{heatLoading ? 'Loading.' : 'No data'}</div>
+            )}
+          </Card>
+
+          {/* Team Members (by department) - right of heatmap */}
+          <Card className="bg-[var(--card)] border-[var(--border)]">
+            <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Team Members</h3>
+            {heatData && heatData.length > 0 ? (
+              <div className="text-sm">
+                {(() => {
+                  const counts = new Map<string, number>();
+                  for (const row of heatData) {
+                    const dept = (row.department || 'Unassigned');
+                    counts.set(dept, (counts.get(dept) || 0) + 1);
+                  }
+                  const items = Array.from(counts.entries()).sort((a,b) => b[1]-a[1]);
+                  return (
+                    <div className="space-y-1">
+                      {items.map(([dept, count]) => (
+                        <div key={dept} className="flex justify-between">
+                          <span className="text-[var(--text)]">{dept}</span>
+                          <span className="text-[var(--muted)]">{count}</span>
+                        </div>
+                      ))}
+                      <div className="mt-3 border-t border-[var(--border)] pt-2 flex justify-between font-medium">
+                        <span className="text-[var(--text)]">Total</span>
+                        <span className="text-[var(--text)]">{heatData.length}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="text-[var(--muted)] text-sm">{heatLoading ? 'Loading.' : 'No data'}</div>
+            )}
+          </Card>
+
+          {/* Availability (stacked under Team Members) */}
+          <Card className="bg-[var(--card)] border-[var(--border)]">
+            <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Availability</h3>
+            {heatData && heatData.length > 0 && currentWeekKey ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr className="text-[var(--muted)]">
+                      <th className="text-left py-1 pr-2">Name</th>
+                      <th className="text-right py-1 px-2">Current Week</th>
+                      <th className="text-right py-1 pl-2">Next Week</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const rows = heatData.map((row:any) => {
+                        const wkCap = Number(row.weeklyCapacity || 0);
+                        const curH = Number(row.weekTotals?.[currentWeekKey] || 0);
+                        const nextH = nextWeekKey ? Number(row.weekTotals?.[nextWeekKey] || 0) : 0;
+                        const curAvail = Math.max(0, (typeof row.availableByWeek?.[currentWeekKey] === 'number') ? row.availableByWeek[currentWeekKey] : wkCap - curH);
+                        const nextAvail = nextWeekKey ? Math.max(0, (typeof row.availableByWeek?.[nextWeekKey] === 'number') ? row.availableByWeek[nextWeekKey] : wkCap - nextH) : 0;
+                        return { id: row.id, name: row.name, curAvail, nextAvail };
+                      })
+                      .filter(r => r.curAvail > 0 || r.nextAvail > 0)
+                      .sort((a,b) => b.curAvail - a.curAvail || b.nextAvail - a.nextAvail);
+                      const filtered = selectedSkills.length ? rows.filter(r => {
+                        return peopleSkills.some(ps => ps.person === r.id && ps.skillType === 'strength' && selectedSkills.some(s => (ps.skillTagName||'').toLowerCase().includes(s.toLowerCase())));
+                      }) : rows;
+                      return filtered.slice(0, 30).map(r => (
+                        <tr key={r.id} className="border-t border-[var(--border)]">
+                          <td className="py-1 pr-2 text-[var(--text)]">{r.name}</td>
+                          <td className="py-1 px-2 text-right text-emerald-400">{r.curAvail.toFixed(0)}h</td>
+                          <td className="py-1 pl-2 text-right text-emerald-400">{r.nextAvail.toFixed(0)}h</td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-[var(--muted)] text-sm">{heatLoading ? 'Loading.' : 'No data'}</div>
+            )}
+          </Card>
+          
+
+          {/* Team Overview (below heatmap) */}
           <Card className="lg:col-span-2 bg-[var(--card)] border-[var(--border)]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-[var(--text)]">Team Overview</h3>
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-[var(--muted)]">Heat:</span>
-                {[4, 8].map((w) => (
+                {[4, 8, 12, 20].map((w) => (
                   <button
                     key={w}
                     onClick={() => setHeatWeeks(w)}
@@ -372,13 +568,12 @@ const Dashboard: React.FC = () => {
                 ))}
               </div>
             </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+            <div className="space-y-3 max-h-[70vh] overflow-y-auto">
               {filterPeopleBySkills(data.team_overview).map(person => (
                 <div key={person.id} className="flex items-center justify-between p-3 bg-[var(--surface)]/50 rounded-lg">
                   <div className="flex-1">
                     <div className="font-medium text-[var(--text)]">{person.name}</div>
                     <div className="text-sm text-[var(--muted)]">{person.role} - {person.allocated_hours}h / {person.capacity}h</div>
-                    {/* Compact heatmap is shown in its own card below */}
                     {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (
                       <div className="text-xs text-amber-400 mt-1">
                         Peak: {person.peak_utilization_percent}%
@@ -405,35 +600,44 @@ const Dashboard: React.FC = () => {
             </div>
           </Card>
 
-          {/* Available People */}
+          {/* Project Summary (beside Team Overview) */}
           <Card className="bg-[var(--card)] border-[var(--border)]">
-            <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Available People</h3>
-            <div className="space-y-3">
-              {filterPeopleBySkills(data.available_people).length === 0 ? (
-                <div className="text-[var(--muted)] text-sm">
-                  {selectedSkills.length > 0 
-                    ? `No available people found with skills: ${selectedSkills.join(', ')}`
-                    : 'All team members are at capacity'}
-                </div>
-              ) : (
-                filterPeopleBySkills(data.available_people).map(person => (
-                  <div key={person.id} className="text-sm">
-                    <div className="text-[var(--text)] font-medium">{person.name}</div>
-                    <div className="text-emerald-400">{person.available_hours}h available</div>
-                  </div>
-                ))
-              )}
-            </div>
+            <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Project Summary</h3>
+            {projectsError ? (
+              <div className="text-red-400 text-sm">{projectsError}</div>
+            ) : (
+              <div className="text-sm">
+                {(() => {
+                  const items = Object.entries(projectCounts).sort((a,b) => b[1]-a[1]);
+                  if (!items.length) return <div className="text-[var(--muted)]">No data</div>;
+                  return (
+                    <div className="space-y-1">
+                      {items.map(([status, count]) => (
+                        <div key={status} className="flex justify-between">
+                          <span className="text-[var(--text)]">{formatStatusLabel(status)}</span>
+                          <span className="text-[var(--muted)]">{count}</span>
+                        </div>
+                      ))}
+                      <div className="mt-3 border-t border-[var(--border)] pt-2 flex justify-between font-medium">
+                        <span className="text-[var(--text)]">Total</span>
+                        <span className="text-[var(--text)]">{projectsTotal}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </Card>
         </div>
 
-        {/* Team Utilization Heat Map (compact) */}
+        {/* Team Utilization Heat Map (compact) [legacy block moved up] */}
+        {false && (
         <Card className="lg:col-span-2 bg-[var(--card)] border-[var(--border)]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-[var(--text)]">Team Utilization Heat Map</h3>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-[var(--muted)]">Weeks:</span>
-              {[4, 8, 12].map((w) => (
+              {[4, 8, 12, 20].map((w) => (
                 <button
                   key={w}
                   onClick={() => setHeatWeeks(w)}
@@ -522,13 +726,14 @@ const Dashboard: React.FC = () => {
                   <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[var(--surface)] text-[var(--muted)] text-[10px]">i</span>
                   Tooltips show available hours when provided
                 </span>
-                {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
+                {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshingâ€¦</span>}
               </div>
             </div>
           ) : (
-            <div className="text-[var(--muted)]">{heatLoading ? 'Loading…' : 'No data'}</div>
+            <div className="text-[var(--muted)]">{heatLoading ? 'Loadingâ€¦' : 'No data'}</div>
           )}
         </Card>
+        )}
 
         {/* Utilization Distribution */}
         <Card className="bg-[var(--card)] border-[var(--border)]">
