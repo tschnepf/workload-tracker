@@ -2,14 +2,18 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers
+from rest_framework import serializers, status
+from django.conf import settings
+import hashlib
 
 from .serializers import (
     PreDeliverableGlobalSettingsItemSerializer,
     PreDeliverableGlobalSettingsUpdateSerializer,
+    UtilizationSchemeSerializer,
 )
-from .models import PreDeliverableGlobalSettings
+from .models import PreDeliverableGlobalSettings, UtilizationScheme
 from deliverables.models import PreDeliverableType
+from accounts.models import AdminAuditLog  # type: ignore
 
 
 class PreDeliverableGlobalSettingsView(APIView):
@@ -60,3 +64,78 @@ class PreDeliverableGlobalSettingsView(APIView):
             obj.save(update_fields=['default_days_before', 'is_enabled_by_default', 'updated_at'])
         return self.get(request)
 
+
+class UtilizationSchemeView(APIView):
+    """Singleton endpoint for utilization scheme.
+
+    - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
+    - PUT: admin-only, requires If-Match ETag; increments version on success.
+    - When feature flag is disabled: GET returns defaults; PUT returns 403.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _current_etag(self, obj: UtilizationScheme) -> str:
+        payload = f"{obj.version}-{obj.updated_at.isoformat() if obj.updated_at else ''}"
+        return hashlib.md5(payload.encode()).hexdigest()
+
+    @extend_schema(responses=UtilizationSchemeSerializer)
+    def get(self, request):
+        obj = UtilizationScheme.get_active()
+        ser = UtilizationSchemeSerializer(obj)
+        etag = self._current_etag(obj)
+        inm = request.META.get('HTTP_IF_NONE_MATCH')
+        if inm and inm.strip('"') == etag:
+            from django.utils.http import http_date
+            resp = Response(status=status.HTTP_304_NOT_MODIFIED)
+            resp['ETag'] = f'"{etag}"'
+            resp['Last-Modified'] = http_date(obj.updated_at.timestamp())
+            return resp
+        resp = Response(ser.data)
+        from django.utils.http import http_date
+        resp['ETag'] = f'"{etag}"'
+        resp['Last-Modified'] = http_date(obj.updated_at.timestamp())
+        return resp
+
+    @extend_schema(request=UtilizationSchemeSerializer, responses=UtilizationSchemeSerializer)
+    def put(self, request):
+        if not settings.FEATURES.get('UTILIZATION_SCHEME_ENABLED', True):
+            return Response({'detail': 'Utilization scheme editing is disabled'}, status=status.HTTP_403_FORBIDDEN)
+        # Admin-only
+        for cls in self.permission_classes:
+            pass
+        if not request.user or not request.user.is_staff:
+            return Response({'detail': 'Admin required'}, status=status.HTTP_403_FORBIDDEN)
+
+        obj = UtilizationScheme.get_active()
+        # If-Match required
+        if_match = request.META.get('HTTP_IF_MATCH')
+        current = self._current_etag(obj)
+        if not if_match or if_match.strip('"') != current:
+            return Response({'detail': 'Precondition failed'}, status=status.HTTP_412_PRECONDITION_FAILED)
+
+        before = UtilizationSchemeSerializer(obj).data
+        ser = UtilizationSchemeSerializer(instance=obj, data=request.data, partial=False)
+        ser.is_valid(raise_exception=True)
+        # increment version and save
+        obj.version = (obj.version or 0) + 1
+        for k, v in ser.validated_data.items():
+            setattr(obj, k, v)
+        obj.save()
+        after = UtilizationSchemeSerializer(obj).data
+        # Audit log (non-blocking)
+        try:
+            AdminAuditLog.objects.create(
+                actor=request.user if request.user.is_authenticated else None,
+                action='utilization_scheme_update',
+                target_user=None,
+                detail={'before': before, 'after': after},
+            )
+        except Exception:
+            pass
+        # Return with new ETag
+        etag = self._current_etag(obj)
+        resp = Response(after)
+        from django.utils.http import http_date
+        resp['ETag'] = f'"{etag}"'
+        resp['Last-Modified'] = http_date(obj.updated_at.timestamp())
+        return resp

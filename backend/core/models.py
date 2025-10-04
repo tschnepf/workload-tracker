@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class PreDeliverableGlobalSettings(models.Model):
@@ -92,3 +93,83 @@ class NotificationLog(models.Model):
 
     class Meta:
         ordering = ['-sent_at']
+
+
+class UtilizationScheme(models.Model):
+    """Singleton model to hold utilization color mapping ranges.
+
+    Ranges are inclusive and contiguous starting from 1. Red is open-ended.
+    Zero handling is controlled via `zero_is_blank`.
+    """
+
+    MODE_ABSOLUTE = 'absolute_hours'
+    MODE_PERCENT = 'percent'
+    MODE_CHOICES = (
+        (MODE_ABSOLUTE, 'Absolute Hours'),
+        (MODE_PERCENT, 'Percent'),
+    )
+
+    # Singleton enforcement via unique key
+    key = models.CharField(max_length=20, default='default', unique=True)
+
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=MODE_ABSOLUTE)
+
+    blue_min = models.PositiveIntegerField(default=1)
+    blue_max = models.PositiveIntegerField(default=29)
+    green_min = models.PositiveIntegerField(default=30)
+    green_max = models.PositiveIntegerField(default=36)
+    orange_min = models.PositiveIntegerField(default=37)
+    orange_max = models.PositiveIntegerField(default=40)
+    red_min = models.PositiveIntegerField(default=41)
+
+    zero_is_blank = models.BooleanField(default=True)
+
+    version = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"UtilizationScheme({self.key}) v{self.version}"
+
+    def clean(self):  # pragma: no cover - validation covered by tests
+        # Monotonic bounds
+        if not (self.blue_min <= self.blue_max):
+            raise ValidationError('blue_min must be <= blue_max')
+        if not (self.green_min <= self.green_max):
+            raise ValidationError('green_min must be <= green_max')
+        if not (self.orange_min <= self.orange_max):
+            raise ValidationError('orange_min must be <= orange_max')
+
+        # Lower bounds must be >= 1
+        if self.blue_min < 1 or self.red_min < 1:
+            raise ValidationError('Lower bounds must be >= 1')
+
+        # Contiguity (no gaps/overlaps)
+        if self.green_min != self.blue_max + 1:
+            raise ValidationError('green_min must be blue_max + 1')
+        if self.orange_min != self.green_max + 1:
+            raise ValidationError('orange_min must be green_max + 1')
+        if self.red_min != self.orange_max + 1:
+            raise ValidationError('red_min must be orange_max + 1')
+
+    @classmethod
+    def get_active(cls):
+        """Return the singleton scheme, creating defaults if missing."""
+        obj, _ = cls.objects.get_or_create(
+            key='default',
+            defaults=dict(
+                mode=cls.MODE_ABSOLUTE,
+                blue_min=1,
+                blue_max=29,
+                green_min=30,
+                green_max=36,
+                orange_min=37,
+                orange_max=40,
+                red_min=41,
+                zero_is_blank=True,
+                version=1,
+            ),
+        )
+        return obj

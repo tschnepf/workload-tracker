@@ -5,6 +5,7 @@ NEVER write manual field mappings - always use these base classes.
 
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
+from .models import UtilizationScheme
 
 
 class PreDeliverableGlobalSettingsItemSerializer(serializers.Serializer):
@@ -63,3 +64,30 @@ class AutoMappedSerializer(serializers.ModelSerializer):
         
         field_class = field_mapping[field_def.field_type]
         return field_class(**field_kwargs)
+
+
+class UtilizationSchemeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UtilizationScheme
+        fields = [
+            'mode',
+            'blue_min', 'blue_max',
+            'green_min', 'green_max',
+            'orange_min', 'orange_max',
+            'red_min',
+            'zero_is_blank',
+            'version', 'updated_at',
+        ]
+        read_only_fields = ['version', 'updated_at']
+
+    def validate(self, attrs):
+        # Build a temp instance to run model.clean() rules
+        inst = (self.instance or UtilizationScheme())
+        for k, v in attrs.items():
+            setattr(inst, k, v)
+        # Reconstruct contiguous relations if partial
+        try:
+            inst.clean()
+        except Exception as e:
+            raise serializers.ValidationError({'detail': str(e)})
+        return attrs
