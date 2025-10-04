@@ -419,6 +419,41 @@ export const peopleApi = {
   },
 };
 
+// Core API — Utilization Scheme (Phase 2/3)
+export type UtilizationScheme = {
+  mode: 'absolute_hours' | 'percent';
+  blue_min: number;
+  blue_max: number;
+  green_min: number;
+  green_max: number;
+  orange_min: number;
+  orange_max: number;
+  red_min: number;
+  zero_is_blank: boolean;
+  version: number;
+  updated_at: string;
+};
+
+export const utilizationSchemeApi = {
+  get: async (): Promise<UtilizationScheme> => {
+    const res = await apiClient.GET('/core/utilization_scheme/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as UtilizationScheme;
+  },
+  update: async (payload: Omit<UtilizationScheme, 'version' | 'updated_at'>): Promise<UtilizationScheme> => {
+    // If-Match header is injected automatically by apiClient based on stored ETag from GET
+    const res = await apiClient.PUT('/core/utilization_scheme/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as UtilizationScheme;
+  },
+};
+
 // Projects API
 export const projectsApi = {
   // Get all projects with pagination support
