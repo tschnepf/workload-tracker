@@ -73,6 +73,10 @@ Template
 All above discovered: 2025-09-15 (Phase 2, Step 5 lint). Suggested fix for most warnings: include stable dependencies (functions via `useCallback`, memoized values via `useMemo`) or intentionally suppress with inline comments when behavior is verified.
 
 ### Other items seen during upgrades (non-blocking)
+- [ ] [KI-0204] Encoding artifacts block small patches in heatmap/strip components
+  - Details: Non-ASCII replacement characters in `TeamHeatmapCard.tsx` and `MyScheduleStrip.tsx` prevent precise text-hunk patches (e.g., titles with odd quotes/dashes). Color logic migration is partially applied elsewhere; these two should be migrated after running the existing `scan_fffd.js`/`fix_all_fffd.js` cleanup.
+  - Discovered: 2025-10-04 (Phase 4 follow-up)
+  - Suggested fix: Run the encoding cleanup scripts, then apply the util migration to replace percent thresholds with the shared `getUtilizationPill` and update title strings to use a normal en dash (–).
 - [ ] [KI-0203] Deliverables calendar union tests failing
   - Details: Deliverables calendar union test failures look like logic/fixture issues and will still need investigation even after the profile toggle.
   - Discovered: 2025-10-04 (Phase 0/Tests rerun)

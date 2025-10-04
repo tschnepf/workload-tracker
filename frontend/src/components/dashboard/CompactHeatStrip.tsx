@@ -1,5 +1,7 @@
 import React from 'react';
 import { darkTheme } from '../../theme/tokens';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
+import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
 
 type Props = {
   weekKeys: string[];
@@ -9,13 +11,11 @@ type Props = {
 };
 
 const CompactHeatStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals, size = 10 }) => {
+  const { data: schemeData } = useUtilizationScheme();
   const cells = weekKeys.map((wk) => {
     const h = weekTotals[wk] || 0;
-    const pct = weeklyCapacity ? (h / weeklyCapacity) * 100 : 0;
-    let bg = darkTheme.colors.utilization.available;
-    if (pct > 100) bg = darkTheme.colors.utilization.overallocated;
-    else if (pct > 85) bg = darkTheme.colors.utilization.high;
-    else if (pct > 70) bg = darkTheme.colors.utilization.optimal;
+    const pill = getUtilizationPill({ hours: h, capacity: weeklyCapacity || 0, scheme: schemeData || defaultUtilizationScheme, output: 'token' });
+    const bg = pill.tokens?.bg || darkTheme.colors.utilization.available;
 
     return (
       <div
@@ -43,4 +43,3 @@ const CompactHeatStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotal
 };
 
 export default CompactHeatStrip;
-

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Card from '../ui/Card';
 import { darkTheme } from '../../theme/tokens';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
+import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
 import { peopleApi } from '../../services/api';
 import { PersonCapacityHeatmapItem } from '../../types/models';
 
@@ -13,6 +15,7 @@ type Props = {
 const CapacityHeatmap: React.FC<Props> = ({ weeks = 12, department }) => {
   const [rows, setRows] = useState<PersonCapacityHeatmapItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const { data: schemeData } = useUtilizationScheme();
 
   useAuthenticatedEffect(() => {
     const run = async () => {
@@ -51,17 +54,14 @@ const CapacityHeatmap: React.FC<Props> = ({ weeks = 12, department }) => {
                   <td style={{ padding: darkTheme.spacing.xs }}>{row.name}</td>
                   {row.weekKeys.map((wk) => {
                     const h = row.weekTotals[wk] || 0;
-                    const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
-                    let bg = darkTheme.colors.semantic.success;
-                    if (pct > 100) bg = darkTheme.colors.semantic.error;
-                    else if (pct > 85) bg = darkTheme.colors.semantic.warning;
-                    else if (pct > 70) bg = darkTheme.colors.brand.primary;
+                    const pill = getUtilizationPill({ hours: h, capacity: row.weeklyCapacity || 0, scheme: schemeData || defaultUtilizationScheme, output: 'token' });
+                    const bg = (pill.tokens?.bg || darkTheme.colors.utilization.available) + '33';
                     return (
                       <td key={wk} title={`${h}h`} style={{
                         padding: darkTheme.spacing.xs,
                         textAlign: 'center',
                         color: darkTheme.colors.text.primary,
-                        background: bg + '33'
+                        background: bg
                       }}>
                         {Math.round(h)}
                       </td>

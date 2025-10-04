@@ -30,6 +30,8 @@ import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useUpdateProject } from '@/hooks/useProjects';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
+import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
 
 // Deliverable coloring (shared with calendar/project grid)
 const deliverableTypeColors: Record<string, string> = {
@@ -141,7 +143,7 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
       <div className="flex items-center py-1 pl-[60px] pr-2">
         <div className="min-w-0 flex-1">
           <div className="text-[var(--muted)] text-xs truncate" title={clientName}>
-            {clientName || '—'}
+            {clientName || ''}
           </div>
         </div>
       </div>
@@ -285,7 +287,7 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
   );
 });
 
-// Removed local Monday computation — weeks come from server snapshot only.
+// Removed local Monday computation - weeks come from server snapshot only.
 
 const AssignmentGrid: React.FC = () => {
   const queryClient = useQueryClient();
@@ -1471,40 +1473,7 @@ const AssignmentGrid: React.FC = () => {
     }
   };
 
-  // Get utilization badge styling
-  const getUtilizationBadgeStyle = (hours: number, capacity: number) => {
-    if (hours === 0) return 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--borderSubtle)]';
-    const percentage = (hours / capacity) * 100;
-    // Light-mode friendly by default; override for dark with `dark:` variants
-    if (percentage <= 70) {
-      return [
-        'border',
-        // Light
-        'bg-emerald-100 text-emerald-700 border-emerald-300',
-        // Dark
-        'dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30',
-      ].join(' ');
-    }
-    if (percentage <= 85) {
-      return [
-        'border',
-        'bg-blue-100 text-blue-700 border-blue-300',
-        'dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30',
-      ].join(' ');
-    }
-    if (percentage <= 100) {
-      return [
-        'border',
-        'bg-amber-100 text-amber-700 border-amber-300',
-        'dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30',
-      ].join(' ');
-    }
-    return [
-      'border',
-      'bg-red-100 text-red-700 border-red-300',
-      'dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30',
-    ].join(' ');
-  };
+  const { data: schemeData } = useUtilizationScheme();
 
   if (loading) {
     return (
@@ -1569,12 +1538,12 @@ const AssignmentGrid: React.FC = () => {
             </div>
               <div className="flex items-center gap-4">
                 <div className="text-xs text-[var(--muted)]">
-                  {people.length} people • {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
+                  {people.length} people â€¢ {people.reduce((total, p) => total + p.assignments.length, 0)} assignments
                 </div>
                 {asyncJobId && (
                   <div className="flex items-center gap-2 text-xs text-[var(--text)]">
                     <span className="inline-block w-3 h-3 border-2 border-[var(--muted)] border-t-transparent rounded-full animate-spin" />
-                    <span>Generating snapshot… {asyncProgress}%</span>
+                    <span>Generating snapshot... {asyncProgress}%</span>
                     {asyncMessage && <span className="text-[var(--muted)]">({asyncMessage})</span>}
                   </div>
                 )}
@@ -1602,7 +1571,7 @@ const AssignmentGrid: React.FC = () => {
                       }}
                       disabled={loadingAssignments.size > 0}
                     >
-                      {loadingAssignments.size > 0 ? 'Expanding…' : 'Expand All'}
+                      {loadingAssignments.size > 0 ? 'Expanding...' : 'Expand All'}
                     </button>
                     <button
                       className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
@@ -1619,7 +1588,7 @@ const AssignmentGrid: React.FC = () => {
                       onClick={refreshAllAssignments}
                       disabled={loading || loadingAssignments.size > 0}
                     >
-                      {loadingAssignments.size > 0 ? 'Refreshing…' : 'Refresh All'}
+                      {loadingAssignments.size > 0 ? 'Refreshing...' : 'Refresh All'}
                     </button>
                   </>
                 )}
@@ -1723,7 +1692,7 @@ const AssignmentGrid: React.FC = () => {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="font-medium text-[var(--text)] text-sm truncate">{person.name}</div>
-                          <div className="text-xs text-[var(--muted)]">{person.role} • {person.weeklyCapacity}h/wk</div>
+                          <div className="text-xs text-[var(--muted)]">{person.role} â€¢ {person.weeklyCapacity}h/wk</div>
                         </div>
                       </button>
                     </div>
@@ -1760,11 +1729,12 @@ const AssignmentGrid: React.FC = () => {
                     {/* Person's Weekly Totals */}
                     {weeks.map((week) => {
                       const totalHours = getPersonTotalHours(person, week.date);
-                      
+                      const pill = getUtilizationPill({ hours: totalHours, capacity: person.weeklyCapacity!, scheme: schemeData || defaultUtilizationScheme, output: 'classes' });
+                      const aria = totalHours > 0 ? `${totalHours} hours` : '0 hours';
                       return (
                         <div key={week.date} className="flex items-center justify-center px-1">
-                          <div className={`px-2 py-1 rounded-full text-xs font-medium min-w-[40px] text-center ${getUtilizationBadgeStyle(totalHours, person.weeklyCapacity!)}`}>
-                            {totalHours > 0 ? `${totalHours}h` : '—'}
+                          <div className={`inline-flex items-center justify-center h-6 px-2 leading-none rounded-full text-xs font-medium min-w-[40px] text-center ${pill.classes}`} aria-label={aria}>
+                            {pill.label}
                           </div>
                         </div>
                       );
@@ -1775,12 +1745,12 @@ const AssignmentGrid: React.FC = () => {
                   {person.isExpanded && loadingAssignments.has(person.id!) && (
                     <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
                       <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
-                        <div className="text-[var(--muted)] text-xs">Loading assignments…</div>
+                        <div className="text-[var(--muted)] text-xs">Loading assignments...</div>
                       </div>
                       <div></div>
                       {weeks.map((week) => (
                         <div key={week.date} className="flex items-center justify-center">
-                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs">—</div>
+                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs"></div>
                         </div>
                       ))}
                     </div>
@@ -1878,7 +1848,7 @@ const AssignmentGrid: React.FC = () => {
                               >
                                 <div className="font-medium">{project.name}</div>
                                 <div className="text-[var(--muted)]">
-                                  {[project.client, project.projectNumber].filter(Boolean).join(' • ')}
+                                  {[project.client, project.projectNumber].filter(Boolean).join(' â€¢ ')}
                                 </div>
                               </button>
                             ))}
@@ -1910,7 +1880,7 @@ const AssignmentGrid: React.FC = () => {
                       </div>
                       {weeks.map((week) => (
                         <div key={week.date} className="flex items-center justify-center">
-                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs">—</div>
+                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs"></div>
                         </div>
                       ))}
                     </div>
@@ -1927,7 +1897,7 @@ const AssignmentGrid: React.FC = () => {
                       <div></div>
                       {weeks.map((week) => (
                         <div key={week.date} className="flex items-center justify-center">
-                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs">—</div>
+                          <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs"></div>
                         </div>
                       ))}
                     </div>
