@@ -73,6 +73,10 @@ Template
 All above discovered: 2025-09-15 (Phase 2, Step 5 lint). Suggested fix for most warnings: include stable dependencies (functions via `useCallback`, memoized values via `useMemo`) or intentionally suppress with inline comments when behavior is verified.
 
 ### Other items seen during upgrades (non-blocking)
+- [ ] [KI-0203] Deliverables calendar union tests failing
+  - Details: Deliverables calendar union test failures look like logic/fixture issues and will still need investigation even after the profile toggle.
+  - Discovered: 2025-10-04 (Phase 0/Tests rerun)
+  - Suggested fix: Review test fixtures and union logic for duplicates and inclusion of project-assignment linked deliverables; add targeted unit coverage around the union query.
 - [ ] [KI-0200] Frontend unit tests — Several Vitest tests failing post React 19 (text expectations and `act(...)` warnings)
   - Details: Tests expect legacy formatting (e.g., `On_hold` vs `On Hold`) and have overlapping/implicit act usage
   - Discovered: 2025-09-15 (Phase 2, Step 4 tests)
