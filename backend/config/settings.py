@@ -191,6 +191,8 @@ FEATURES.update({
     'USE_DEPARTMENTS': True,       # ◎. Chunk 6 Active - Department filtering enabled
     'USE_SKILLS': True,            # ◎. Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
+    'UTILIZATION_SCHEME_ENABLED': True,  # Enable utilization scheme (hour-range color mapping)
+    'UTILIZATION_SCHEME_ENABLED': True,  # Enable utilization scheme (hour-range color mapping)
 })
 
 # Security/auth flags via env
@@ -539,5 +541,3 @@ CSP_POLICY = os.getenv(
 )
 # Optional absolute/relative endpoint to receive violation reports
 CSP_REPORT_URI = os.getenv('CSP_REPORT_URI', '/csp-report/')
-
-
