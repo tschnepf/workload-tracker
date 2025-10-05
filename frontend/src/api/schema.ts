@@ -152,9 +152,35 @@ export interface paths {
   "/api/backups/upload-restore/": {
     post: operations["backups_upload_restore_create"];
   };
+  "/api/capabilities/": {
+    /**
+     * @description Advertise backend feature capabilities (requires authentication).
+     *
+     * Returns booleans and simple settings for aggregate endpoints, async jobs, and cache TTL hints.
+     */
+    get: operations["capabilities_retrieve"];
+  };
   "/api/core/pre-deliverable-global-settings/": {
     get: operations["core_pre_deliverable_global_settings_list"];
     put: operations["core_pre_deliverable_global_settings_update"];
+  };
+  "/api/core/utilization_scheme/": {
+    /**
+     * @description Singleton endpoint for utilization scheme.
+     *
+     * - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
+     * - PUT: admin-only, requires If-Match ETag; increments version on success.
+     * - When feature flag is disabled: GET returns defaults; PUT returns 403.
+     */
+    get: operations["core_utilization_scheme_retrieve"];
+    /**
+     * @description Singleton endpoint for utilization scheme.
+     *
+     * - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
+     * - PUT: admin-only, requires If-Match ETag; increments version on success.
+     * - When feature flag is disabled: GET returns defaults; PUT returns 403.
+     */
+    put: operations["core_utilization_scheme_update"];
   };
   "/api/dashboard/": {
     /** @description Team dashboard with utilization metrics and overview */
@@ -249,8 +275,14 @@ export interface paths {
   };
   "/api/deliverables/calendar_with_pre_items/": {
     /**
-     * @description CRUD operations for deliverables
-     * Supports filtering by project and manual reordering
+     * @description Calendar view returning deliverables and pre-deliverable items.
+     *
+     * Semantics:
+     * - When mine_only=true, scope results to the union of:
+     *   (a) deliverables directly linked to the current user via DeliverableAssignment,
+     *   (b) deliverables on projects where the current user has an active project-level Assignment.
+     * - Duplicates are eliminated via a distinct ID subquery strategy; counts use distinct=True.
+     * - Optional filters: start, end (dates) and type_id (pre-deliverable type).
      */
     get: operations["deliverables_calendar_with_pre_items_retrieve"];
   };
@@ -956,6 +988,12 @@ export interface components {
     LinkPersonRequestRequest: {
       person_id?: number | null;
     };
+    /**
+     * @description * `absolute_hours` - Absolute Hours
+     * * `percent` - Percent
+     * @enum {string}
+     */
+    ModeEnum: "absolute_hours" | "percent";
     NotificationPreferences: {
       emailPreDeliverableReminders: boolean;
       reminderDaysBefore: number;
@@ -1709,6 +1747,31 @@ export interface components {
       high: number;
       overallocated: number;
     };
+    UtilizationScheme: {
+      mode?: components["schemas"]["ModeEnum"];
+      blue_min?: number;
+      blue_max?: number;
+      green_min?: number;
+      green_max?: number;
+      orange_min?: number;
+      orange_max?: number;
+      red_min?: number;
+      zero_is_blank?: boolean;
+      version: number;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    UtilizationSchemeRequest: {
+      mode?: components["schemas"]["ModeEnum"];
+      blue_min?: number;
+      blue_max?: number;
+      green_min?: number;
+      green_max?: number;
+      orange_min?: number;
+      orange_max?: number;
+      red_min?: number;
+      zero_is_blank?: boolean;
+    };
     /** @description Serializer for workload forecast items returned by workload_forecast action. */
     WorkloadForecastItem: {
       weekStart: string;
@@ -2260,6 +2323,19 @@ export interface operations {
       };
     };
   };
+  /**
+   * @description Advertise backend feature capabilities (requires authentication).
+   *
+   * Returns booleans and simple settings for aggregate endpoints, async jobs, and cache TTL hints.
+   */
+  capabilities_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
   core_pre_deliverable_global_settings_list: {
     responses: {
       200: {
@@ -2281,6 +2357,45 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["PreDeliverableGlobalSettingsItem"][];
+        };
+      };
+    };
+  };
+  /**
+   * @description Singleton endpoint for utilization scheme.
+   *
+   * - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
+   * - PUT: admin-only, requires If-Match ETag; increments version on success.
+   * - When feature flag is disabled: GET returns defaults; PUT returns 403.
+   */
+  core_utilization_scheme_retrieve: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["UtilizationScheme"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Singleton endpoint for utilization scheme.
+   *
+   * - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
+   * - PUT: admin-only, requires If-Match ETag; increments version on success.
+   * - When feature flag is disabled: GET returns defaults; PUT returns 403.
+   */
+  core_utilization_scheme_update: {
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["UtilizationSchemeRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["UtilizationSchemeRequest"];
+        "multipart/form-data": components["schemas"]["UtilizationSchemeRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["UtilizationScheme"];
         };
       };
     };
@@ -2651,8 +2766,14 @@ export interface operations {
     };
   };
   /**
-   * @description CRUD operations for deliverables
-   * Supports filtering by project and manual reordering
+   * @description Calendar view returning deliverables and pre-deliverable items.
+   *
+   * Semantics:
+   * - When mine_only=true, scope results to the union of:
+   *   (a) deliverables directly linked to the current user via DeliverableAssignment,
+   *   (b) deliverables on projects where the current user has an active project-level Assignment.
+   * - Duplicates are eliminated via a distinct ID subquery strategy; counts use distinct=True.
+   * - Optional filters: start, end (dates) and type_id (pre-deliverable type).
    */
   deliverables_calendar_with_pre_items_retrieve: {
     parameters: {

@@ -8,6 +8,8 @@ from django.conf import settings
 from people.models import Person
 from assignments.models import Assignment
 from drf_spectacular.utils import extend_schema, OpenApiParameter
+import logging
+from core.models import UtilizationScheme
 from .serializers import DashboardResponseSerializer
 
 
@@ -73,6 +75,25 @@ class DashboardView(APIView):
         peak_utilization = 0
         peak_person_name = None
         
+        # Helper: get active scheme with a short in-process cache to avoid hot-path DB hits
+        def get_scheme_cached():
+            try:
+                cache_key_scheme = 'utilization_scheme:active'
+                sch = cache.get(cache_key_scheme)
+                if sch is None:
+                    sch = UtilizationScheme.get_active()
+                    # Cache for 60s
+                    try:
+                        cache.set(cache_key_scheme, sch, 60)
+                    except Exception:
+                        pass
+                return sch
+            except Exception:
+                return UtilizationScheme.get_active()
+
+        use_scheme = bool(settings.FEATURES.get('UTILIZATION_SCHEME_ENABLED', True))
+        scheme = get_scheme_cached() if use_scheme else None
+
         for person in active_people:
             # Use multi-week utilization calculation
             utilization_data = person.get_utilization_over_weeks(weeks)
@@ -85,21 +106,56 @@ class DashboardView(APIView):
                 peak_utilization = peak_percent
                 peak_person_name = person.name
             
-            # Categorize utilization
-            if percent < 70:
-                utilization_ranges['underutilized'] += 1
-                available_people.append({
-                    'id': person.id,
-                    'name': person.name,
-                    'available_hours': utilization_data['available_hours'],
-                    'utilization_percent': percent
-                })
-            elif percent <= 85:
-                utilization_ranges['optimal'] += 1
-            elif percent <= 100:
-                utilization_ranges['high'] += 1
+            # Categorize utilization using UtilizationScheme when enabled
+            if scheme and scheme.mode == UtilizationScheme.MODE_ABSOLUTE:
+                hours = utilization_data.get('allocated_hours') or 0
+                # Guardrails: clamp negatives and warn
+                if hours < 0:
+                    try:
+                        logging.getLogger('monitoring').warning('negative_allocated_hours_clamped', extra={'person_id': person.id, 'hours': hours})
+                    except Exception:
+                        pass
+                    hours = 0
+                # Zero hours: treat as underutilized for distribution purposes
+                if hours >= (scheme.red_min or 41):
+                    utilization_ranges['overallocated'] += 1
+                elif hours >= scheme.orange_min and hours <= scheme.orange_max:
+                    utilization_ranges['high'] += 1
+                elif hours >= scheme.green_min and hours <= scheme.green_max:
+                    utilization_ranges['optimal'] += 1
+                elif hours >= scheme.blue_min and hours <= scheme.blue_max:
+                    utilization_ranges['underutilized'] += 1
+                else:
+                    # Outside configured bounds; clamp into nearest bucket
+                    if hours <= 0 or hours < scheme.blue_min:
+                        utilization_ranges['underutilized'] += 1
+                    else:
+                        utilization_ranges['overallocated'] += 1
+
+                # Available people list mirrors underutilized bucket
+                if (hours <= 0) or (hours < scheme.green_min):
+                    available_people.append({
+                        'id': person.id,
+                        'name': person.name,
+                        'available_hours': utilization_data['available_hours'],
+                        'utilization_percent': percent,
+                    })
             else:
-                utilization_ranges['overallocated'] += 1
+                # Percent-mode (or feature disabled) fallback to thresholds 70/85/100
+                if percent < 70:
+                    utilization_ranges['underutilized'] += 1
+                    available_people.append({
+                        'id': person.id,
+                        'name': person.name,
+                        'available_hours': utilization_data['available_hours'],
+                        'utilization_percent': percent
+                    })
+                elif percent <= 85:
+                    utilization_ranges['optimal'] += 1
+                elif percent <= 100:
+                    utilization_ranges['high'] += 1
+                else:
+                    utilization_ranges['overallocated'] += 1
             
             # Add to team overview
             team_overview.append({

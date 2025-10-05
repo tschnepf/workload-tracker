@@ -1910,24 +1910,42 @@ const AssignmentGrid: React.FC = () => {
 
         {/* Status Bar */}
         <div className="flex justify-between items-center text-xs text-[var(--muted)] px-1">
-          <div className="flex gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              <span>Available (=70%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-              <span>Busy (71-85%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-              <span>Full (86-100%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-red-500"></div>
-              <span>Overallocated (&gt;100%)</span>
-            </div>
-          </div>
+          {(() => {
+            const s = (schemeData ?? defaultUtilizationScheme);
+            const labels = s.mode === 'absolute_hours'
+              ? {
+                  blue: `${s.blue_min}-${s.blue_max}h`,
+                  green: `${s.green_min}-${s.green_max}h`,
+                  orange: `${s.orange_min}-${s.orange_max}h`,
+                  red: `${s.red_min}h+`,
+                }
+              : {
+                  blue: '<=70%',
+                  green: '70-85%',
+                  orange: '85-100%',
+                  red: '>100%',
+                } as const;
+            return (
+              <div className="flex gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  <span>Available ({labels.blue})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                  <span>Optimal ({labels.green})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                  <span>Full ({labels.orange})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                  <span>Overallocated ({labels.red})</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

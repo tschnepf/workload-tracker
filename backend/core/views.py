@@ -81,7 +81,6 @@ class UtilizationSchemeView(APIView):
     @extend_schema(responses=UtilizationSchemeSerializer)
     def get(self, request):
         obj = UtilizationScheme.get_active()
-        ser = UtilizationSchemeSerializer(obj)
         etag = self._current_etag(obj)
         inm = request.META.get('HTTP_IF_NONE_MATCH')
         if inm and inm.strip('"') == etag:
@@ -90,7 +89,23 @@ class UtilizationSchemeView(APIView):
             resp['ETag'] = f'"{etag}"'
             resp['Last-Modified'] = http_date(obj.updated_at.timestamp())
             return resp
-        resp = Response(ser.data)
+
+        # When feature flag is disabled, serve defaults (read-only) per rollout spec
+        if not settings.FEATURES.get('UTILIZATION_SCHEME_ENABLED', True):
+            data = {
+                'mode': UtilizationScheme.MODE_ABSOLUTE,
+                'blue_min': 1, 'blue_max': 29,
+                'green_min': 30, 'green_max': 36,
+                'orange_min': 37, 'orange_max': 40,
+                'red_min': 41,
+                'zero_is_blank': True,
+                'version': obj.version,
+                'updated_at': obj.updated_at,
+            }
+        else:
+            data = UtilizationSchemeSerializer(obj).data
+
+        resp = Response(data)
         from django.utils.http import http_date
         resp['ETag'] = f'"{etag}"'
         resp['Last-Modified'] = http_date(obj.updated_at.timestamp())

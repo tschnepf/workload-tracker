@@ -9,6 +9,7 @@ import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
 import UpcomingPreDeliverablesWidget from '../components/dashboard/UpcomingPreDeliverablesWidget';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
+import { utilizationLevelToClasses } from '@/util/utilization';
 import SkillsFilter from '../components/skills/SkillsFilter';
 import { dashboardApi, departmentsApi, personSkillsApi, projectsApi } from '../services/api';
 import { useAuth } from '@/hooks/useAuth';
@@ -583,17 +584,16 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <UtilizationBadge percentage={person.utilization_percent} />
-                    {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (
-                      <div className={`text-xs px-2 py-1 rounded border ${
-                        person.is_peak_overallocated 
-                          ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                          : person.peak_utilization_percent > 85
-                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                          : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                      }`}>
-                        Peak: {person.peak_utilization_percent}%
-                      </div>
-                    )}
+                    {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (() => {
+                      const pct = person.peak_utilization_percent || 0;
+                      const level = pct <= 70 ? 'blue' : pct <= 85 ? 'green' : pct <= 100 ? 'orange' : 'red';
+                      const classes = utilizationLevelToClasses(level as any);
+                      return (
+                        <div className={`text-xs px-2 py-1 rounded border ${classes}`}>
+                          Peak: {pct}%
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
@@ -784,6 +784,5 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
-
 
 

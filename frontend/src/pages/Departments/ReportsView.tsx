@@ -140,12 +140,7 @@ const ReportsView: React.FC = () => {
     }
   };
 
-  const getUtilizationColor = (percentage: number): string => {
-    if (percentage < 70) return 'text-emerald-400';
-    if (percentage <= 85) return 'text-blue-400';
-    if (percentage <= 100) return 'text-amber-400';
-    return 'text-red-400';
-  };
+  // Peak utilization display now uses the unified UtilizationBadge for consistency
 
   const getDepartmentHealthScore = (report: DepartmentReport): { score: number; status: string } => {
     const { metrics } = report;
@@ -304,9 +299,7 @@ const ReportsView: React.FC = () => {
                           <UtilizationBadge percentage={report.metrics.avgUtilization} />
                         </td>
                         <td className="py-3">
-                          <span className={getUtilizationColor(report.metrics.peakUtilization)}>
-                            {report.metrics.peakUtilization.toFixed(1)}%
-                          </span>
+                          <UtilizationBadge percentage={report.metrics.peakUtilization} />
                         </td>
                         <td className="py-3 text-[#cccccc]">
                           {report.metrics.totalAssignments}
@@ -428,5 +421,3 @@ const ReportsView: React.FC = () => {
 };
 
 export default ReportsView;
-
-

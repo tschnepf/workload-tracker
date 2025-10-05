@@ -192,7 +192,6 @@ FEATURES.update({
     'USE_SKILLS': True,            # ◎. Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
     'UTILIZATION_SCHEME_ENABLED': True,  # Enable utilization scheme (hour-range color mapping)
-    'UTILIZATION_SCHEME_ENABLED': True,  # Enable utilization scheme (hour-range color mapping)
 })
 
 # Security/auth flags via env

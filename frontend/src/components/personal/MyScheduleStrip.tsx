@@ -1,5 +1,7 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
+import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 
 type Props = {
   weekKeys: string[];
@@ -9,6 +11,8 @@ type Props = {
 };
 
 const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals, className }) => {
+  const { data: schemeData } = useUtilizationScheme();
+  const scheme = schemeData || defaultUtilizationScheme;
   return (
     <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
       <div className="p-4">
@@ -19,11 +23,8 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
         <div className="flex gap-2 items-center" aria-label="Next weeks utilization">
           {weekKeys.map((wk) => {
             const hours = weekTotals[wk] || 0;
-            const pct = weeklyCapacity ? (hours / weeklyCapacity) * 100 : 0;
-            let bg = '#10b981';
-            if (pct > 100) bg = '#ef4444';
-            else if (pct > 85) bg = '#f59e0b';
-            else if (pct > 70) bg = '#3b82f6';
+            const pill = getUtilizationPill({ hours, capacity: weeklyCapacity || 0, scheme, output: 'token' });
+            const bg = pill.tokens?.bg || '#10b981';
             return (
               <div key={wk} title={`${wk} · ${Math.round(hours)}h`} style={{ width: 16, height: 16, background: bg, opacity: 0.75, borderRadius: 3, border: '1px solid #64748b' }} />
             );
@@ -35,4 +36,3 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
 };
 
 export default MyScheduleStrip;
-

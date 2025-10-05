@@ -18,6 +18,8 @@ import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
+import { defaultUtilizationScheme } from '@/util/utilization';
 
 // Project Assignments Grid (scaffold)
 // Prescriptive: lean, best-practice; no client-side week calculations.
@@ -63,6 +65,19 @@ const ProjectAssignmentsGrid: React.FC = () => {
       return (p?.status as any) || 'active';
     }
   });
+  const { data: schemeData } = useUtilizationScheme();
+  const legendLabels = React.useMemo(() => {
+    const s = schemeData ?? defaultUtilizationScheme;
+    if (s.mode === 'absolute_hours') {
+      return {
+        green: `${s.green_min}-${s.green_max}h`,
+        blue: `${s.blue_min}-${s.blue_max}h`,
+        orange: `${s.orange_min}-${s.orange_max}h`,
+        red: `${s.red_min}h+`,
+      } as const;
+    }
+    return { green: '70-85%', blue: '≤70%', orange: '85-100%', red: '>100%' } as const;
+  }, [schemeData]);
 
   const [hoursByProject, setHoursByProject] = useState<Record<number, Record<string, number>>>({});
   const [loadingTotals, setLoadingTotals] = useState<Set<number>>(new Set());
@@ -1302,26 +1317,29 @@ const ProjectAssignmentsGrid: React.FC = () => {
           )}
 
           {/* Status Bar (Utilization Legend) */}
+          {false && (
           <div className="flex justify-between items-center text-xs text-[var(--muted)] px-1 mt-2">
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                <span>{`Available (${legendLabels.green})`}</span>
                 <span>Available (â‰¤70%)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                <span>Busy (71-85%)</span>
+                <span>{`Busy (${legendLabels.blue})`}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                <span>Full (86-100%)</span>
+                <span>{`Full (${legendLabels.orange})`}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                <span>Overallocated (&gt;100%)</span>
+                <span>{`Overallocated (${legendLabels.red})`}</span>
               </div>
             </div>
           </div>
+          )}
 
           {/* Selection live region for a11y */}
           <div aria-live="polite" className="sr-only">{selection.selectionSummary}</div>
@@ -1332,6 +1350,3 @@ const ProjectAssignmentsGrid: React.FC = () => {
 };
 
 export default ProjectAssignmentsGrid;
-
-
-

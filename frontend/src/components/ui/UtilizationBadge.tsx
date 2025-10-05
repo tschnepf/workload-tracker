@@ -1,46 +1,38 @@
 /**
- * UtilizationBadge component - Dark mode color-coded utilization display
- * Chunk 3: Uses semantic color scheme from design system
+ * UtilizationBadge component — percent-based badge routed through unified classes
+ * Backwards-compatible: keeps percent thresholds (<=70, <=85, <=100, >100)
+ * and maps to theme-aligned classes via utilization util.
  */
 
 import React from 'react';
+import { utilizationLevelToClasses } from '@/util/utilization';
 
 interface UtilizationBadgeProps {
   percentage: number;
   className?: string;
 }
 
-const UtilizationBadge: React.FC<UtilizationBadgeProps> = ({ 
-  percentage, 
-  className = '' 
-}) => {
-  // Dark mode utilization color scheme - matches design system
-  const getUtilizationStyle = (percent: number) => {
-    if (percent < 70) {
-      return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'; // Available
-    }
-    if (percent <= 85) {
-      return 'bg-blue-500/20 text-blue-400 border-blue-500/30'; // Optimal
-    }
-    if (percent <= 100) {
-      return 'bg-amber-500/20 text-amber-400 border-amber-500/30'; // High
-    }
-    return 'bg-red-500/20 text-red-400 border-red-500/30'; // Overallocated
-  };
+const UtilizationBadge: React.FC<UtilizationBadgeProps> = ({ percentage, className = '' }) => {
+  // Percent classification consistent with fallback policy (70/85/100)
+  const level = (percentage <= 70)
+    ? 'blue'
+    : (percentage <= 85)
+      ? 'green'
+      : (percentage <= 100)
+        ? 'orange'
+        : 'red';
+  const classes = utilizationLevelToClasses(level as any);
 
-  const getUtilizationLabel = (percent: number) => {
-    if (percent < 70) return 'Available';
-    if (percent <= 85) return 'Optimal';
-    if (percent <= 100) return 'High';
-    return 'Overallocated';
-  };
-
-  const baseStyles = 'px-2 py-1 rounded border text-xs font-medium transition-colors';
-  const utilizationStyle = getUtilizationStyle(percentage);
-  const label = getUtilizationLabel(percentage);
+  const label = percentage < 70
+    ? 'Available'
+    : percentage <= 85
+      ? 'Optimal'
+      : percentage <= 100
+        ? 'High'
+        : 'Overallocated';
 
   return (
-    <span className={`${baseStyles} ${utilizationStyle} ${className}`}>
+    <span className={`px-2 py-1 rounded border text-xs font-medium transition-colors ${classes} ${className}`}>
       {percentage}% {label}
     </span>
   );

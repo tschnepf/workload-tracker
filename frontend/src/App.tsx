@@ -12,7 +12,7 @@ import Loader from '@/components/ui/Loader';
 // Routing & auth wrappers are configured in route objects (main.tsx)
 
 // Suspense fallback uses unified Loader
-const PageLoader: React.FC = () => <Loader full message="Loading…" />;
+const PageLoader: React.FC = () => <Loader full message="Loading..." />;
 
 // Error boundary for lazy-loaded components
 class LazyLoadErrorBoundary extends React.Component<

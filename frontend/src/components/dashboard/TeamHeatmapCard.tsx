@@ -1,6 +1,8 @@
 import React from 'react';
 import Card from '../ui/Card';
 import { darkTheme } from '../../theme/tokens';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
+import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
 import { PersonCapacityHeatmapItem } from '../../types/models';
 
 type Props = {
@@ -18,6 +20,7 @@ const cellBg = (pct: number) => {
 
 const TeamHeatmapCard: React.FC<Props> = ({ data, weeks, onWeeksChange }) => {
   const weekKeys = data[0]?.weekKeys || [];
+  const { data: schemeData } = useUtilizationScheme();
 
   return (
     <Card className="lg:col-span-2 bg-[#2d2d30] border-[#3e3e42]">
@@ -59,8 +62,8 @@ const TeamHeatmapCard: React.FC<Props> = ({ data, weeks, onWeeksChange }) => {
                 <td style={{ padding: darkTheme.spacing.xs, color: darkTheme.colors.text.primary }}>{row.name}</td>
                 {weekKeys.map((wk: string) => {
                   const h = row.weekTotals[wk] || 0;
-                  const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
-                  const bg = cellBg(pct);
+                  const pill = getUtilizationPill({ hours: h, capacity: row.weeklyCapacity || 0, scheme: schemeData || defaultUtilizationScheme, output: 'token' });
+                  const bg = pill.tokens?.bg || darkTheme.colors.utilization.available;
                   return (
                     <td key={wk} title={`${wk} — ${Math.round(h)}h`} style={{ padding: 2 }}>
                       <div style={{
@@ -81,16 +84,28 @@ const TeamHeatmapCard: React.FC<Props> = ({ data, weeks, onWeeksChange }) => {
         </table>
       </div>
 
-      {/* Legend */}
-      <div className="mt-3 flex items-center gap-4 text-xs text-[#969696]">
-        <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.available, display: 'inline-block', borderRadius: 2 }}></span> 0–70%</div>
-        <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.optimal, display: 'inline-block', borderRadius: 2 }}></span> 70–85%</div>
-        <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.high, display: 'inline-block', borderRadius: 2 }}></span> 85–100%</div>
-        <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.overallocated, display: 'inline-block', borderRadius: 2 }}></span> 100%+</div>
-      </div>
+      {/* Legend (hours when scheme is absolute; percent otherwise) */}
+      {(() => {
+        const s = schemeData || defaultUtilizationScheme;
+        const labels = s.mode === 'absolute_hours'
+          ? [
+              `${s.blue_min}-${s.blue_max}h`,
+              `${s.green_min}-${s.green_max}h`,
+              `${s.orange_min}-${s.orange_max}h`,
+              `${s.red_min}h+`,
+            ]
+          : ['0-70%', '70-85%', '85-100%', '100%+'];
+        return (
+          <div className="mt-3 flex items-center gap-4 text-xs text-[#969696]">
+            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.available, display: 'inline-block', borderRadius: 2 }}></span> {labels[0]}</div>
+            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.optimal, display: 'inline-block', borderRadius: 2 }}></span> {labels[1]}</div>
+            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.high, display: 'inline-block', borderRadius: 2 }}></span> {labels[2]}</div>
+            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.overallocated, display: 'inline-block', borderRadius: 2 }}></span> {labels[3]}</div>
+          </div>
+        );
+      })()}
     </Card>
   );
 };
 
 export default TeamHeatmapCard;
-

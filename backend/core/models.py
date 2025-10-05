@@ -112,7 +112,7 @@ class UtilizationScheme(models.Model):
     # Singleton enforcement via unique key
     key = models.CharField(max_length=20, default='default', unique=True)
 
-    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=MODE_ABSOLUTE)
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=MODE_ABSOLUTE, db_column='scheme_mode')
 
     blue_min = models.PositiveIntegerField(default=1)
     blue_max = models.PositiveIntegerField(default=29)

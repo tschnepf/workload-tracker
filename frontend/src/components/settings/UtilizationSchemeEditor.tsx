@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import Button from '@/components/ui/Button';
+import { getUtilizationPill } from '@/util/utilization';
 
 type Props = {
   readOnly?: boolean;
@@ -94,6 +95,36 @@ export const UtilizationSchemeEditor: React.FC<Props> = ({ readOnly }) => {
         </div>
       </div>
 
+      {/* Live preview of pills using current form values */}
+      {(() => {
+        const s = {
+          mode: form.mode,
+          blue_min: form.blue_min, blue_max: form.blue_max,
+          green_min: form.green_min, green_max: form.green_max,
+          orange_min: form.orange_min, orange_max: form.orange_max,
+          red_min: form.red_min,
+          zero_is_blank: form.zero_is_blank,
+        } as const;
+        const fixedShell = 'inline-flex items-center justify-center h-6 px-2 min-w-[40px] rounded-full text-xs font-medium text-center';
+        const samples = [0, 15, 30, 36, 37, 40, 41];
+        return (
+          <div className="mt-4">
+            <div className="text-sm text-[var(--text)] font-medium mb-2">Preview</div>
+            <div className="flex items-center gap-2">
+              {samples.map((h) => {
+                const pill = getUtilizationPill({ hours: h, capacity: 40, scheme: s, output: 'classes' });
+                const aria = h === 0 ? '0 hours' : `${h} hours`;
+                return (
+                  <div key={h} className={`${fixedShell} ${pill.classes}`} aria-label={aria} title={`${h}h`}>
+                    {pill.label}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {!valid.ok && (
         <div className="mt-3 text-xs text-red-400">{valid.message}</div>
       )}
@@ -147,4 +178,3 @@ function validate(f: Editable): { ok: boolean; message?: string } {
 }
 
 export default UtilizationSchemeEditor;
-
