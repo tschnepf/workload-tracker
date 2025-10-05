@@ -8,6 +8,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
+import { resolveUtilizationLevel, defaultUtilizationScheme } from '@/util/utilization';
 import { dashboardApi, departmentsApi, peopleApi, personSkillsApi } from '@/services/api';
 import { DashboardData, Department, Person, PersonSkill } from '@/types/models';
 
@@ -31,6 +32,23 @@ interface DepartmentReport {
     skillGaps: string[];
   };
 }
+
+// Helper: map percent → scheme level → text color classes
+const getUtilizationColor = (percentage: number): string => {
+  const level = resolveUtilizationLevel({ percent: Number(percentage) || 0, scheme: defaultUtilizationScheme });
+  switch (level) {
+    case 'blue':
+      return 'text-blue-400';
+    case 'green':
+      return 'text-emerald-400';
+    case 'orange':
+      return 'text-amber-400';
+    case 'red':
+      return 'text-red-400';
+    default:
+      return 'text-blue-400';
+  }
+};
 
 const ReportsView: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);

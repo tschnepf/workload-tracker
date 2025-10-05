@@ -1710,20 +1710,6 @@ const AssignmentGrid: React.FC = () => {
                       >
                         +
                       </button>
-                      <button
-                        className={`w-7 h-7 rounded transition-colors text-center text-sm font-medium leading-none ${loadingAssignments.has(person.id!) ? 'bg-[var(--surface)] text-[var(--muted)] cursor-wait' : 'bg-transparent text-[var(--text)] hover:text-white hover:bg-[var(--surface)]'}`}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Refresh assignments"
-                        onClick={() => refreshPersonAssignments(person.id!)}
-                        disabled={loadingAssignments.has(person.id!)}
-                        aria-busy={loadingAssignments.has(person.id!)}
-                      >
-                        {loadingAssignments.has(person.id!) ? (
-                          <span className="inline-block w-3 h-3 border-2 border-[var(--muted)] border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <span aria-hidden>?</span>
-                        )}
-                      </button>
                     </div>
 
                     {/* Person's Weekly Totals */}
