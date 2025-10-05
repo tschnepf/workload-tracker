@@ -373,6 +373,18 @@ const AssignmentGrid: React.FC = () => {
       }
     } catch {}
   }, []);
+  // Production width correction: ensure sensible minimums once
+  useEffect(() => {
+    try {
+      const fix = localStorage.getItem('assignGrid:widthsFix_v2025_10');
+      if (!fix) {
+        setClientColumnWidth(w => (w < 180 ? 210 : w));
+        setProjectColumnWidth(w => (w < 260 ? 300 : w));
+        localStorage.setItem('assignGrid:widthsFix_v2025_10', '1');
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     try { localStorage.setItem('assignGrid:clientColumnWidth', String(clientColumnWidth)); } catch {}
   }, [clientColumnWidth]);

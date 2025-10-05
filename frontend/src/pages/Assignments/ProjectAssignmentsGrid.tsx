@@ -133,6 +133,18 @@ const ProjectAssignmentsGrid: React.FC = () => {
     // run once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Production width correction: ensure sensible minimums once
+  useEffect(() => {
+    try {
+      const fix = localStorage.getItem('projGrid:widthsFix_v2025_10');
+      if (!fix) {
+        setClientColumnWidth(w => (w < 180 ? 210 : w));
+        setProjectColumnWidth(w => (w < 260 ? 300 : w));
+        localStorage.setItem('projGrid:widthsFix_v2025_10', '1');
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Adjustments requested: revert Project column to original default, further shrink Client by 0.6x (once)
   useEffect(() => {
     try {
