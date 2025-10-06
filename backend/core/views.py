@@ -10,10 +10,12 @@ from .serializers import (
     PreDeliverableGlobalSettingsItemSerializer,
     PreDeliverableGlobalSettingsUpdateSerializer,
     UtilizationSchemeSerializer,
+    ProjectRoleSerializer,
 )
-from .models import PreDeliverableGlobalSettings, UtilizationScheme
+from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
+from assignments.models import Assignment  # type: ignore
 
 
 class PreDeliverableGlobalSettingsView(APIView):
@@ -154,3 +156,42 @@ class UtilizationSchemeView(APIView):
         resp['ETag'] = f'"{etag}"'
         resp['Last-Modified'] = http_date(obj.updated_at.timestamp())
         return resp
+
+
+class ProjectRoleView(APIView):
+    """List/add project roles for suggestions/settings.
+
+    - GET: returns union of catalog roles and distinct existing assignment roles.
+    - POST: admin-only; adds a role to the catalog.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Union: catalog + existing assignments
+        names = set()
+        try:
+            for pr in ProjectRole.objects.all():
+                if pr.name: names.add(pr.name.strip())
+        except Exception:
+            pass
+        try:
+            qs = Assignment.objects.exclude(role_on_project__isnull=True).exclude(role_on_project__exact='')
+            for r in qs.values_list('role_on_project', flat=True).distinct():
+                if r: names.add(str(r).strip())
+        except Exception:
+            pass
+        out = sorted(names, key=lambda s: s.lower())
+        return Response({'roles': out})
+
+    def post(self, request):
+        if not request.user or not request.user.is_staff:
+            return Response({'detail': 'Admin required'}, status=status.HTTP_403_FORBIDDEN)
+        name = (request.data or {}).get('name')
+        if not name or not isinstance(name, str) or not name.strip():
+            return Response({'detail': 'name is required'}, status=400)
+        try:
+            obj, created = ProjectRole.objects.get_or_create(name_key=name.strip().lower(), defaults={'name': name.strip()})
+            ser = ProjectRoleSerializer(obj)
+            return Response(ser.data, status=201 if created else 200)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=400)

@@ -561,6 +561,26 @@ export const projectsApi = {
 
 };
 
+// Project Roles API (catalog + union with existing)
+export const projectRolesApi = {
+  list: async (): Promise<string[]> => {
+    const res = await apiClient.GET('/core/project_roles/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    const roles = (res.data as any).roles as string[];
+    return Array.isArray(roles) ? roles : [];
+  },
+  add: async (name: string): Promise<void> => {
+    const res = await apiClient.POST('/core/project_roles/' as any, { body: { name } as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+  },
+};
+
 // Departments API
 export const departmentsApi = {
   // Get all departments with pagination support

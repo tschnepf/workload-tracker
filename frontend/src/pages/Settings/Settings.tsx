@@ -19,6 +19,7 @@ import BackupManagement from '@/components/settings/BackupManagement';
 import RestoreManagement from '@/components/settings/RestoreManagement';
 import BackupOverview from '@/components/settings/BackupOverview';
 import UtilizationSchemeEditor from '@/components/settings/UtilizationSchemeEditor';
+import ProjectRolesSection from '@/components/settings/ProjectRolesSection';
 
 const Settings: React.FC = () => {
   const auth = useAuth();
@@ -186,6 +187,9 @@ const Settings: React.FC = () => {
           <div className="mt-6">
             <UtilizationSchemeEditor readOnly={!auth.user?.is_staff} />
           </div>
+
+          {/* Project Roles Catalog */}
+          <ProjectRolesSection />
 
           {/* Admin: Create New User */}
           {auth.user?.is_staff && (
@@ -391,6 +395,5 @@ const Settings: React.FC = () => {
 };
 
 export default Settings;
-
 
 

@@ -5,7 +5,7 @@ NEVER write manual field mappings - always use these base classes.
 
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
-from .models import UtilizationScheme
+from .models import UtilizationScheme, ProjectRole
 
 
 class PreDeliverableGlobalSettingsItemSerializer(serializers.Serializer):
@@ -91,3 +91,9 @@ class UtilizationSchemeSerializer(serializers.ModelSerializer):
         except Exception as e:
             raise serializers.ValidationError({'detail': str(e)})
         return attrs
+
+
+class ProjectRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectRole
+        fields = ['id', 'name', 'created_at', 'updated_at']
