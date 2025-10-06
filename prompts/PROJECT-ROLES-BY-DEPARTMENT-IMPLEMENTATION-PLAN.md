@@ -23,6 +23,22 @@ Editing Rules
 - Do not insert literal `\r\n` sequences; let the patch handle newlines.
 - Avoid bulk regex replacements; submit minimal, contextual patches.
 - After edits, run the frontend type check/build to validate.
+ - Only use best-practice programming; do not introduce shortcuts or band-aid fixes just to satisfy tests.
+ - Never remove code or functionality solely to make tests pass.
+
+Execution Discipline
+
+- Work strictly one phase at a time. Begin with Phase 0 and proceed sequentially; do not start a new phase until the current one is fully complete and validated.
+- For each phase, perform this checklist before moving on:
+  - Rebuild/restart containers as needed and capture commands used, for example:
+    - `docker compose build backend frontend`
+    - `docker compose up -d backend frontend` or `docker compose restart backend frontend`
+  - Run backend tests inside the container and confirm green, for example:
+    - `docker compose exec backend pytest -q` (or `python manage.py test` if pytest is not configured)
+  - Run frontend type check/build (and unit tests when applicable):
+    - `cd frontend && npm ci && npm run build`
+    - `cd frontend && npm run test` (unit tests), optional `npm run e2e` when enabled
+  - If any tests fail, fix within the scope of the current phase without shortcuts; re-run until passing before proceeding.
 
 Phases and Prescriptive Steps
 
