@@ -192,6 +192,8 @@ FEATURES.update({
     'USE_SKILLS': True,            # ◎. Chunk 6 Active - Skills tagging system enabled
     'USE_DELIVERABLES': True,      # Deliverables feature enabled
     'UTILIZATION_SCHEME_ENABLED': True,  # Enable utilization scheme (hour-range color mapping)
+    # Project Roles by Department: default OFF, enable via env
+    'PROJECT_ROLES_BY_DEPARTMENT': os.getenv('PROJECT_ROLES_BY_DEPARTMENT', 'false').lower() == 'true',
 })
 
 # Security/auth flags via env
@@ -267,6 +269,9 @@ REST_FRAMEWORK = {
         # New granular scopes for restore and upload+restore
         'backup_restore': _rate('DRF_THROTTLE_BACKUP_RESTORE', _rate('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
         'backup_upload_restore': _rate('DRF_THROTTLE_BACKUP_UPLOAD_RESTORE', _rate('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
+        # Department ↔ Project Role mapping endpoints (feature-phase)
+        'department_roles_map': _rate('DRF_THROTTLE_DEPT_ROLES_MAP', '600/min'),
+        'department_roles_mutate': _rate('DRF_THROTTLE_DEPT_ROLES_MUTATE', '60/min'),
     }
 }
 
