@@ -20,9 +20,12 @@ import RestoreManagement from '@/components/settings/RestoreManagement';
 import BackupOverview from '@/components/settings/BackupOverview';
 import UtilizationSchemeEditor from '@/components/settings/UtilizationSchemeEditor';
 import ProjectRolesSection from '@/components/settings/ProjectRolesSection';
+import DepartmentProjectRolesSection from '@/components/settings/DepartmentProjectRolesSection';
+import { useCapabilities } from '@/hooks/useCapabilities';
 
 const Settings: React.FC = () => {
   const auth = useAuth();
+  const caps = useCapabilities();
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +193,14 @@ const Settings: React.FC = () => {
 
           {/* Project Roles Catalog */}
           <ProjectRolesSection />
+
+          {/* Department Project Roles (Admin + capability-gated) */}
+          {auth.user?.is_staff && (
+            <DepartmentProjectRolesSection
+              enabled={!!((caps.data as any)?.projectRolesByDepartment)}
+              isAdmin={!!auth.user?.is_staff}
+            />
+          )}
 
           {/* Admin: Create New User */}
           {auth.user?.is_staff && (
@@ -395,5 +406,4 @@ const Settings: React.FC = () => {
 };
 
 export default Settings;
-
 
