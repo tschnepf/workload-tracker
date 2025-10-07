@@ -579,6 +579,19 @@ export const projectRolesApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
   },
+  remove: async (name: string): Promise<{ removedFromAssignments: number; catalogDeleted: boolean }> => {
+    const res = await apiClient.DELETE('/core/project_roles/' as any, { params: { query: { name } }, headers: authHeaders() });
+    if (res.error) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, (res as any).data, `HTTP ${status}`), status);
+    }
+    // Response shape: { detail, removedFromAssignments, catalogDeleted }
+    const data = (res.data || {}) as any;
+    return {
+      removedFromAssignments: Number(data.removedFromAssignments || 0),
+      catalogDeleted: Boolean(data.catalogDeleted),
+    };
+  },
 };
 
 // Department ↔ Project Roles API

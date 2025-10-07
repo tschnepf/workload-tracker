@@ -5,6 +5,7 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from django.conf import settings
 import hashlib
+from django.db import transaction
 
 from .serializers import (
     PreDeliverableGlobalSettingsItemSerializer,
@@ -214,6 +215,66 @@ class ProjectRoleView(APIView):
             return Response(ser.data, status=201 if created else 200)
         except Exception as e:
             return Response({'detail': str(e)}, status=400)
+
+    @extend_schema(
+        request=inline_serializer(name='ProjectRoleDeleteReq', fields={'name': serializers.CharField(required=False)}),
+        responses=inline_serializer(name='ProjectRoleDeleteResp', fields={
+            'detail': serializers.CharField(),
+            'removedFromAssignments': serializers.IntegerField(),
+            'catalogDeleted': serializers.BooleanField(),
+        })
+    )
+    def delete(self, request):
+        """Remove a project role from the catalog and clear assignments using it.
+
+        Behavior:
+        - Admin only.
+        - Accepts role name via query param (?name=...) or JSON body { name }.
+        - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
+        - If a catalog ProjectRole exists for that normalized name, it is deleted.
+        - DepartmentProjectRole mappings cascade-delete via FK on ProjectRole.
+        """
+        if not request.user or not request.user.is_staff:
+            return Response({'detail': 'Admin required'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Accept name from query (?name=) or body { name }
+        name = request.query_params.get('name')
+        if not name:
+            body = request.data or {}
+            name = body.get('name') if isinstance(body, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            return Response({'detail': 'name is required'}, status=400)
+
+        norm = ' '.join(name.strip().split())
+        key = norm.lower()
+
+        from assignments.models import Assignment  # local import to avoid cycles in schema generation
+
+        with transaction.atomic():
+            # Clear from assignments (case-insensitive comparison)
+            removed_count = Assignment.objects.filter(role_on_project__iexact=norm).update(role_on_project=None)
+
+            # Delete from catalog if present (cascades to DepartmentProjectRole)
+            from .models import ProjectRole
+            pr = ProjectRole.objects.filter(name_key=key).first()
+            catalog_deleted = False
+            if pr:
+                pr.delete()
+                catalog_deleted = True
+
+        # Best-effort audit log
+        try:
+            from accounts.models import AdminAuditLog  # type: ignore
+            AdminAuditLog.objects.create(
+                actor=request.user if request.user and request.user.is_authenticated else None,
+                action='project_roles_remove',
+                target_user=None,
+                detail={'name': norm, 'removedFromAssignments': removed_count, 'catalogDeleted': catalog_deleted},
+            )
+        except Exception:
+            pass
+
+        return Response({'detail': 'deleted', 'removedFromAssignments': removed_count, 'catalogDeleted': catalog_deleted})
 
 
 from rest_framework.throttling import ScopedRateThrottle

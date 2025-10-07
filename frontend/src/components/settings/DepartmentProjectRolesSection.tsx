@@ -71,18 +71,20 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
         ) : roles.length === 0 ? (
           <div className="text-[var(--muted)] text-sm">No roles configured for this department.</div>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-md bg-[var(--surface)]">
             {roles.map(r => (
-              <span key={r.id} className="inline-flex items-center gap-2 px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] bg-[var(--surface)] text-xs">
-                {r.name}
+              <div key={r.id} className="flex items-center justify-between px-3 py-2">
+                <div className="text-sm text-[var(--text)] truncate" title={r.name}>{r.name}</div>
                 {canMutate && (
                   <button
                     aria-label={`Remove ${r.name}`}
                     title="Remove role from department"
-                    className="text-red-400 hover:text-red-300"
+                    className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
                     disabled={isRemoving}
                     onClick={async () => {
                       if (!selectedDeptId) return;
+                      const ok = window.confirm(`Remove \"${r.name}\" from this department?`);
+                      if (!ok) return;
                       try {
                         await removeAsync({ departmentId: selectedDeptId, roleId: r.id });
                         showToast('Removed role from department', 'success');
@@ -92,7 +94,7 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
                     ×
                   </button>
                 )}
-              </span>
+              </div>
             ))}
           </div>
         )}
@@ -140,4 +142,3 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
 };
 
 export default DepartmentProjectRolesSection;
-

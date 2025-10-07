@@ -1,8 +1,9 @@
 import React from 'react';
 import { useProjectRoles } from '@/hooks/useProjectRoles';
+import { showToast } from '@/lib/toastBus';
 
 const ProjectRolesSection: React.FC = () => {
-  const { roles, isLoading, error, add, isAdding, refresh } = useProjectRoles();
+  const { roles, isLoading, error, add, isAdding, refresh, remove, isRemoving } = useProjectRoles();
   const [value, setValue] = React.useState('');
 
   const submit = async () => {
@@ -17,7 +18,7 @@ const ProjectRolesSection: React.FC = () => {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold text-[var(--text)]">Project Roles</h2>
         <button
-          onClick={refresh}
+          onClick={() => { void refresh(); }}
           className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
         >Refresh</button>
       </div>
@@ -46,9 +47,28 @@ const ProjectRolesSection: React.FC = () => {
       ) : roles.length === 0 ? (
         <div className="text-[var(--muted)] text-sm">No roles yet. Add your first role above.</div>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-md bg-[var(--surface)]">
           {roles.map((r) => (
-            <span key={r} className="px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] bg-[var(--surface)] text-xs">{r}</span>
+            <div key={r} className="flex items-center justify-between px-3 py-2">
+              <div className="text-sm text-[var(--text)] truncate" title={r}>{r}</div>
+              <div className="flex items-center gap-2">
+                <button
+                  className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                  disabled={isRemoving}
+                  onClick={async () => {
+                    // Optional confirm; prevents accidental mass cleanup
+                    const ok = window.confirm(`Remove project role "${r}"? This clears it from all assignments using it.`);
+                    if (!ok) return;
+                    try {
+                      await remove(r);
+                      showToast('Project role removed', 'success');
+                    } catch (e: any) {
+                      showToast(e?.message || 'Failed to remove project role', 'error');
+                    }
+                  }}
+                >Remove</button>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -57,4 +77,3 @@ const ProjectRolesSection: React.FC = () => {
 };
 
 export default ProjectRolesSection;
-
