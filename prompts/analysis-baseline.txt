@@ -1,0 +1,25 @@
+Baseline Commit: d5c207c0d988002a1190789aa5826fd5762478c9
+Timestamp: 2025-10-07T16:24:17.7540793-07:00
+Top 10 TS/TSX files by size:
+ - frontend\src\api\schema.ts (137453 bytes)
+ - frontend\src\pages\Assignments\AssignmentGrid.tsx (93376 bytes)
+ - frontend\src\pages\Assignments\ProjectAssignmentsGrid.tsx (83989 bytes)
+ - frontend\src\pages\Projects\ProjectsList.tsx (78688 bytes)
+ - frontend\src\pages\People\PeopleList.tsx (71626 bytes)
+ - frontend\src\services\api.ts (57813 bytes)
+ - frontend\src\pages\Assignments\AssignmentForm.tsx (41418 bytes)
+ - frontend\src\components\mockup\AssignmentGridMockup.tsx (39198 bytes)
+ - frontend\src\pages\Dashboard.tsx (38447 bytes)
+ - frontend\src\pages\Skills\SkillsDashboard.tsx (23745 bytes)
+Note: Frontend build succeeded; tests had failures in prior run.
+ 
+Frozen Contracts (Refactor Safety Gates)
+- React Query keys used in Assignments grid:
+  - ['capacityHeatmap'] (invalidateQueries)
+  - ['workloadForecast'] (invalidateQueries)
+  - ['deptProjectRoles', 'map', <ids[]>] (via useDeptProjectRolesMap)
+  - ['deptProjectRoles', 'list', <id>] (via useDeptProjectRoles)
+- Event bus topic and signature:
+  - subscribeGridRefresh(listener: (payload: { touchedWeekKeys?: string[]; reason?: string }) => void): () => void
+- Public exports to remain stable:
+  - frontend/src/pages/Assignments/AssignmentGrid.tsx: default export AssignmentGrid
