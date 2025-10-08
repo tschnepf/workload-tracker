@@ -48,6 +48,11 @@ export default [
       'react-hooks/exhaustive-deps': 'warn',
       // Keep cycles as a soft warning during refactors
       'import/no-cycle': 'warn',
+      // Light guardrails (non-blocking during refactor)
+      'max-lines': ['warn', { max: 400, skipBlankLines: true, skipComments: true }],
+      'max-lines-per-function': ['warn', { max: 200, skipBlankLines: true, skipComments: true, IIFEs: true }],
+      'complexity': ['warn', { max: 10 }],
+      'max-depth': ['warn', 3],
     },
   },
 ];

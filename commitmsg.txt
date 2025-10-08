@@ -1,7 +1,0 @@
-﻿chore(refactor-plan): baseline, utils+tests, ESLint resolver
-
-- Add prompts/analysis-baseline.txt with frozen contracts and top file sizes
-- Add frontend/src/util/deliverables.ts and frontend/src/util/skills.ts
-- Add unit tests for deliverables and skills utils
-- ESLint: add eslint-plugin-import and TS import resolver; warn on import/no-cycle
-- Update prompts/NEEDS-REFACTOR.md with Phase 0 and guardrails
