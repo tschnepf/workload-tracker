@@ -33,6 +33,76 @@ import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
 
+// In-file extracted hook: grid column widths (assignGrid keys)
+function useGridColumnWidthsAssign() {
+  const [clientColumnWidth, setClientColumnWidth] = useState(210);
+  const [projectColumnWidth, setProjectColumnWidth] = useState(300);
+  const [isResizing, setIsResizing] = useState<'client' | 'project' | null>(null);
+  const [resizeStartX, setResizeStartX] = useState(0);
+  const [resizeStartWidth, setResizeStartWidth] = useState(0);
+
+  // Load persisted widths
+  useEffect(() => {
+    try {
+      const cw = localStorage.getItem('assignGrid:clientColumnWidth');
+      const pw = localStorage.getItem('assignGrid:projectColumnWidth');
+      if (cw) {
+        const n = parseInt(cw, 10); if (!Number.isNaN(n)) setClientColumnWidth(Math.max(80, n));
+      }
+      if (pw) {
+        const n = parseInt(pw, 10); if (!Number.isNaN(n)) setProjectColumnWidth(Math.max(80, n));
+      }
+    } catch {}
+  }, []);
+
+  // One-time width correction guard
+  useEffect(() => {
+    try {
+      const fix = localStorage.getItem('assignGrid:widthsFix_v2025_10');
+      if (!fix) {
+        setClientColumnWidth(w => (w < 180 ? 210 : w));
+        setProjectColumnWidth(w => (w < 260 ? 300 : w));
+        localStorage.setItem('assignGrid:widthsFix_v2025_10', '1');
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist on change
+  useEffect(() => {
+    try { localStorage.setItem('assignGrid:clientColumnWidth', String(clientColumnWidth)); } catch {}
+  }, [clientColumnWidth]);
+  useEffect(() => {
+    try { localStorage.setItem('assignGrid:projectColumnWidth', String(projectColumnWidth)); } catch {}
+  }, [projectColumnWidth]);
+
+  return {
+    clientColumnWidth,
+    setClientColumnWidth,
+    projectColumnWidth,
+    setProjectColumnWidth,
+    isResizing,
+    setIsResizing,
+    resizeStartX,
+    setResizeStartX,
+    resizeStartWidth,
+    setResizeStartWidth,
+  } as const;
+}
+
+// In-file extracted presentational button (no behavior change)
+const RemoveAssignmentButton: React.FC<{ onClick: () => void; title?: string }> = ({ onClick, title = 'Remove assignment' }) => (
+  <button
+    onClick={onClick}
+    className="w-4 h-4 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded transition-colors"
+    title={title}
+  >
+    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  </button>
+);
+
 // Deliverable coloring (shared with calendar/project grid)
 const deliverableTypeColors: Record<string, string> = {
   bulletin: '#3b82f6',
@@ -190,15 +260,7 @@ const AssignmentRow = React.memo<AssignmentRowProps>(({
 
       {/* Remove Assignment Button */}
       <div className="flex items-center justify-center">
-        <button 
-          onClick={() => onRemoveAssignment(assignment.id)}
-          className="w-4 h-4 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded transition-colors"
-          title="Remove assignment"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <RemoveAssignmentButton onClick={() => onRemoveAssignment(assignment.id!)} />
       </div>
 
       {/* Week cells */}
@@ -352,45 +414,19 @@ const AssignmentGrid: React.FC = () => {
   const [asyncMessage, setAsyncMessage] = useState<string | undefined>(undefined);
   const caps = useCapabilities();
 
-  // Column width state for adjustable virtual columns
-  // Default widths sized to prevent most client/project name cutoff
-  const [clientColumnWidth, setClientColumnWidth] = useState(210); // 1.5x wider for longer client names
-  const [projectColumnWidth, setProjectColumnWidth] = useState(300); // 1.5x wider for longer project names
-  const [isResizing, setIsResizing] = useState<'client' | 'project' | null>(null);
-  const [resizeStartX, setResizeStartX] = useState(0);
-  const [resizeStartWidth, setResizeStartWidth] = useState(0);
-
-  // Persist column widths (shared with project grid)
-  useEffect(() => {
-    try {
-      const cw = localStorage.getItem('assignGrid:clientColumnWidth');
-      const pw = localStorage.getItem('assignGrid:projectColumnWidth');
-      if (cw) {
-        const n = parseInt(cw, 10); if (!Number.isNaN(n)) setClientColumnWidth(Math.max(80, n));
-      }
-      if (pw) {
-        const n = parseInt(pw, 10); if (!Number.isNaN(n)) setProjectColumnWidth(Math.max(80, n));
-      }
-    } catch {}
-  }, []);
-  // Production width correction: ensure sensible minimums once
-  useEffect(() => {
-    try {
-      const fix = localStorage.getItem('assignGrid:widthsFix_v2025_10');
-      if (!fix) {
-        setClientColumnWidth(w => (w < 180 ? 210 : w));
-        setProjectColumnWidth(w => (w < 260 ? 300 : w));
-        localStorage.setItem('assignGrid:widthsFix_v2025_10', '1');
-      }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem('assignGrid:clientColumnWidth', String(clientColumnWidth)); } catch {}
-  }, [clientColumnWidth]);
-  useEffect(() => {
-    try { localStorage.setItem('assignGrid:projectColumnWidth', String(projectColumnWidth)); } catch {}
-  }, [projectColumnWidth]);
+  // Column width state (extracted hook, assignGrid keys)
+  const {
+    clientColumnWidth,
+    setClientColumnWidth,
+    projectColumnWidth,
+    setProjectColumnWidth,
+    isResizing,
+    setIsResizing,
+    resizeStartX,
+    setResizeStartX,
+    resizeStartWidth,
+    setResizeStartWidth,
+  } = useGridColumnWidthsAssign();
 
   // New multi-select project status filters (aggregate selection)
   const statusFilterOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'Show All'] as const;
