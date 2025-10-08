@@ -3,17 +3,24 @@
 
 import tsParser from '@typescript-eslint/parser';
 import reactHooks from 'eslint-plugin-react-hooks';
+import importPlugin from 'eslint-plugin-import';
 
 export default [
   {
     files: ['**/*.{ts,tsx,js,jsx}'],
     ignores: ['node_modules/**', 'dist/**', 'build/**'],
-    plugins: { 'react-hooks': reactHooks },
+    plugins: { 'react-hooks': reactHooks, import: importPlugin },
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 'latest',
       sourceType: 'module',
       parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    settings: {
+      // Ensure ESLint resolves TS path aliases like '@/*'
+      'import/resolver': {
+        typescript: { project: 'frontend/tsconfig.json' },
+      },
     },
     rules: {
       // Naming discipline: avoid ad-hoc key mapping helpers; use serializers + typed models instead.
@@ -39,6 +46,8 @@ export default [
       // Ensure hooks usage is validated; align with CRA defaults
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      // Keep cycles as a soft warning during refactors
+      'import/no-cycle': 'warn',
     },
   },
 ];
