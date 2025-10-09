@@ -31,8 +31,9 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
     return () => { mounted = false; };
   }, []);
 
-  const { data: roles = [], refetch, isLoading: rolesLoading } = useProjectRoles(selectedDeptId ?? undefined, { includeInactive: true });
-  const { create, remove } = useProjectRoleMutations();
+  const [showInactive, setShowInactive] = React.useState<boolean>(false);
+  const { data: roles = [], refetch, isLoading: rolesLoading } = useProjectRoles(selectedDeptId ?? undefined, { includeInactive: showInactive });
+  const { create, remove, update } = useProjectRoleMutations();
   const canMutate =  !!isAdmin; 
 
   return (
@@ -51,6 +52,10 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
         <select className="min-w-[220px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[36px] focus:border-[var(--primary)]" value={selectedDeptId ?? ''} onChange={(e) => setSelectedDeptId(e.target.value ? Number(e.target.value) : null)}>
           {departments.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
         </select>
+        <label className="ml-2 flex items-center gap-2 text-sm text-[var(--muted)]">
+          <input type="checkbox" checked={showInactive} onChange={e => setShowInactive((e.target as HTMLInputElement).checked)} />
+          Show inactive
+        </label>
       </div>
 
       <div className="mb-4">
@@ -64,22 +69,45 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
               <div key={r.id} className="flex items-center justify-between px-3 py-2">
                 <div className={`text-sm truncate ${r.is_active ? 'text-[var(--text)]' : 'text-[var(--muted)]'}`} title={r.name}>{r.name}</div>
                 {canMutate && (
-                  <button
-                    aria-label={`Remove ${r.name}`}
-                    title="Remove role from department"
-                    className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-                    onClick={async () => {
-                      if (!selectedDeptId) return;
-                      const ok = window.confirm(`Remove \"${r.name}\" from this department?`);
-                      if (!ok) return;
-                      try {
-                        await remove.mutateAsync({ id: r.id });
-                        showToast('Removed role from department', 'success');
-                      } catch {}
-                    }}
-                  >
-                    Remove
-                  </button>
+                  r.is_active ? (
+                    <button
+                      aria-label={`Deactivate ${r.name}`}
+                      title="Deactivate role (hide from selectors)"
+                      className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                      onClick={async () => {
+                        if (!selectedDeptId) return;
+                        const ok = window.confirm(`Deactivate \"${r.name}\"? It will be hidden from selectors.`);
+                        if (!ok) return;
+                        try {
+                          await remove.mutateAsync({ id: r.id });
+                          if (!showInactive) {
+                            // If not showing inactive, it will disappear on next render automatically
+                          }
+                          showToast('Role deactivated', 'success');
+                        } catch (e: any) {
+                          showToast(e?.message || 'Failed to deactivate role', 'error');
+                        }
+                      }}
+                    >
+                      Deactivate
+                    </button>
+                  ) : (
+                    <button
+                      aria-label={`Activate ${r.name}`}
+                      title="Activate role (show in selectors)"
+                      className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                      onClick={async () => {
+                        try {
+                          await update.mutateAsync({ id: r.id, isActive: true });
+                          showToast('Role activated', 'success');
+                        } catch (e: any) {
+                          showToast(e?.message || 'Failed to activate role', 'error');
+                        }
+                      }}
+                    >
+                      Activate
+                    </button>
+                  )
                 )}
               </div>
             ))}
