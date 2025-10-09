@@ -7,6 +7,8 @@ router = DefaultRouter()
 router.register(r'', ProjectViewSet)
 
 urlpatterns = [
-    path('', include(router.urls)),
+    # Register role endpoints before router URLs so specific subpaths
+    # like 'project-roles/' are not shadowed by the project detail route.
     path('', include('projects.urls_roles')),
+    path('', include(router.urls)),
 ]

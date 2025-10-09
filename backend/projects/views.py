@@ -38,6 +38,9 @@ class ProjectAvailabilityThrottle(ScopedRateThrottle):
 
 
 class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
+    # Ensure project detail routes only match numeric IDs so that
+    # semantic subpaths like 'project-roles/' do not get captured as PKs.
+    lookup_value_regex = r'\d+'
     queryset = Project.objects.filter(is_active=True)
     serializer_class = ProjectSerializer
     # Use global default permissions (IsAuthenticated)
