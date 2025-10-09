@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
@@ -9,7 +9,15 @@ import pkg from './package.json'
 const SHOULD_UPLOAD_SOURCEMAPS = process.env.SENTRY_UPLOAD === 'true';
 const RELEASE = process.env.VITE_APP_VERSION || (pkg as any).version || 'dev';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  // Preferred order for backend target in dev:
+  // 1) VITE_PROXY_TARGET (explicit override)
+  // 2) HOST_IP from root .env (common in this repo)
+  // 3) Docker service DNS name (backend)
+  const DEV_PROXY_TARGET = env.VITE_PROXY_TARGET || (env.HOST_IP ? `http://${env.HOST_IP}:8000` : 'http://backend:8000')
+
+  return {
   plugins: [
     react(),
     // Bundle analyzer - only in build mode
@@ -47,9 +55,7 @@ export default defineConfig({
     // Dev proxy to backend to avoid cross-origin and host port issues on Windows
     proxy: {
       '/api': {
-        // Allow overriding backend target when not running inside Docker
-        // e.g. set VITE_PROXY_TARGET=http://localhost:8000 or http://10.20.30.40:8000
-        target: process.env.VITE_PROXY_TARGET || 'http://backend:8000',
+        target: DEV_PROXY_TARGET,
         changeOrigin: true,
         secure: false,
       },
@@ -124,4 +130,5 @@ export default defineConfig({
       '@tanstack/react-query',
     ],
   },
+  }
 })
