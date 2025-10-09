@@ -25,10 +25,10 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
   const [openRole, setOpenRole] = React.useState<boolean>(false);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
   return (
-    <div className="flex items-center py-1 pr-2">
+    <div className="flex items-start pt-1 pb-0 pr-2">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <div className="text-[var(--text)] text-xs truncate flex-1" title={projectName}>
+        <div className="flex items-start gap-2">
+          <div className="text-[var(--text)] text-xs truncate flex-1 leading-5" title={projectName}>
             {projectName}
           </div>
           <div className="relative flex-shrink-0">
@@ -58,7 +58,7 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
             })()}
           </div>
         </div>
-        <div className="mt-1 text-[var(--muted)] text-[11px]">
+        <div className="mt-1 text-[var(--muted)] text-[11px] leading-4">
           <button
             type="button"
             className="underline decoration-dotted underline-offset-2"
