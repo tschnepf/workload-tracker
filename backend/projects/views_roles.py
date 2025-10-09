@@ -116,7 +116,14 @@ class ProjectRoleDetailView(APIView):
         obj = ProjectRole.objects.filter(id=rid).first()
         if not obj:
             return Response({'detail': 'not found'}, status=404)
-        # Soft-delete: set inactive
-        obj.is_active = False
-        obj.save(update_fields=['is_active', 'updated_at'])
-        return Response({'detail': 'deleted'})
+        # Hard-delete: attempt permanent delete; respect PROTECT on FK usage
+        try:
+            obj.delete()
+        except Exception as e:
+            from django.db.models.deletion import ProtectedError
+            if isinstance(e, ProtectedError):
+                # Role is referenced; return 409 conflict
+                return Response({'detail': 'protected'}, status=409)
+            raise
+        # No content on success
+        return Response(status=204)
