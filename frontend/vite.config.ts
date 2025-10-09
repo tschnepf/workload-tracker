@@ -1,4 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
+import fs from 'fs'
+import path from 'path'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
@@ -11,11 +13,21 @@ const RELEASE = process.env.VITE_APP_VERSION || (pkg as any).version || 'dev';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  // Try to read HOST_IP from repo root .env as a fallback when running outside Docker
+  let hostFromParentEnv: string | undefined
+  try {
+    const parentEnvPath = path.resolve(__dirname, '../.env')
+    if (fs.existsSync(parentEnvPath)) {
+      const content = fs.readFileSync(parentEnvPath, 'utf-8')
+      const m = content.match(/^HOST_IP\s*=\s*([^\r\n#]+)/m)
+      if (m && m[1]) hostFromParentEnv = m[1].trim()
+    }
+  } catch {}
   // Preferred order for backend target in dev:
   // 1) VITE_PROXY_TARGET (explicit override)
   // 2) HOST_IP from root .env (common in this repo)
   // 3) Docker service DNS name (backend)
-  const DEV_PROXY_TARGET = env.VITE_PROXY_TARGET || (env.HOST_IP ? `http://${env.HOST_IP}:8000` : 'http://backend:8000')
+  const DEV_PROXY_TARGET = env.VITE_PROXY_TARGET || (env.HOST_IP ? `http://${env.HOST_IP}:8000` : (hostFromParentEnv ? `http://${hostFromParentEnv}:8000` : 'http://backend:8000'))
 
   return {
   plugins: [

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { departmentsApi } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
 import { useProjectRoles, useProjectRoleMutations } from '@/roles/hooks/useProjectRoles';
@@ -33,7 +33,7 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
 
   const { data: roles = [], refetch, isLoading: rolesLoading } = useProjectRoles(selectedDeptId ?? undefined, { includeInactive: true });
   const { create, remove } = useProjectRoleMutations();
-  const canMutate = isAdmin && enabled;
+  const canMutate =  !!isAdmin; 
 
   return (
     <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mt-6">
