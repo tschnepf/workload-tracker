@@ -18,8 +18,11 @@ class AssignmentSerializer(serializers.ModelSerializer):
     projectDisplayName = serializers.CharField(source='project_display', read_only=True)
     personName = serializers.CharField(source='person.name', read_only=True)
     personWeeklyCapacity = serializers.IntegerField(source='person.weekly_capacity', read_only=True)
+    personDepartmentId = serializers.IntegerField(source='person.department_id', read_only=True)
     personSkills = PersonSkillSummarySerializer(source='person.skills', many=True, read_only=True)
-    roleOnProject = serializers.CharField(source='role_on_project', max_length=100, required=False, allow_blank=True)
+    # Department-scoped Project Role fields (FK-based)
+    roleOnProjectId = serializers.IntegerField(source='role_on_project_ref_id', required=False, allow_null=True)
+    roleName = serializers.CharField(source='role_on_project_ref.name', read_only=True, allow_null=True)
     
     # Calculated fields removed for performance - not used on projects page
     
@@ -33,11 +36,13 @@ class AssignmentSerializer(serializers.ModelSerializer):
             'person', 
             'personName', 
             'personWeeklyCapacity',
+            'personDepartmentId',
             'personSkills',
             'projectName', 
             'project',
             'projectDisplayName',
-            'roleOnProject',
+            'roleOnProjectId',
+            'roleName',
             'weeklyHours',
             'allocationPercentage',  # Legacy
             'createdAt', 
@@ -86,15 +91,36 @@ class AssignmentSerializer(serializers.ModelSerializer):
         return normalized
     
     def validate(self, attrs):
-        """Cross-field validation: allow overages; no blocking caps."""
+        """Cross-field validation.
+
+        - Ensure department is set from person if missing.
+        - If a role FK is provided, enforce department match at the application level.
+        """
+        person = self.instance.person if getattr(self, 'instance', None) else attrs.get('person')
+        dept = attrs.get('department')
+        if dept is None and person is not None:
+            # Default department from person
+            try:
+                attrs['department'] = person.department
+            except Exception:
+                pass
+        role = attrs.get('role_on_project_ref')
+        if role is not None:
+            # Determine effective department
+            effective_dept = attrs.get('department') or (getattr(self.instance, 'department', None) if getattr(self, 'instance', None) else None) or (getattr(person, 'department', None) if person else None)
+            if effective_dept is None or role.department_id != getattr(effective_dept, 'id', effective_dept):
+                raise serializers.ValidationError({'roleOnProjectId': 'role_department_mismatch'})
         return attrs
     
     def create(self, validated_data):
-        """Create assignment with weekly hours"""
-        # If no weekly_hours provided, initialize with empty dict
+        """Create assignment with weekly hours and enforce department default."""
         if 'weekly_hours' not in validated_data:
             validated_data['weekly_hours'] = {}
-        
+        if not validated_data.get('department') and validated_data.get('person'):
+            try:
+                validated_data['department'] = validated_data['person'].department
+            except Exception:
+                pass
         return super().create(validated_data)
     
     def to_representation(self, instance):

@@ -1,7 +1,7 @@
 import React from 'react';
 import { departmentsApi } from '@/services/api';
-import { useDeptProjectRoles, useDeptProjectRolesMutations } from '@/hooks/useDeptProjectRoles';
 import { showToast } from '@/lib/toastBus';
+import { useProjectRoles, useProjectRoleMutations } from '@/roles/hooks/useProjectRoles';
 
 type Dept = { id?: number; name: string };
 
@@ -29,69 +29,56 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
       }
     })();
     return () => { mounted = false; };
-  }, []); // load once
+  }, []);
 
-  const { data: roles = [], refetch, isLoading: rolesLoading } = useDeptProjectRoles(selectedDeptId ?? undefined);
-  const { addAsync, removeAsync, isAdding, isRemoving } = useDeptProjectRolesMutations();
-
+  const { data: roles = [], refetch, isLoading: rolesLoading } = useProjectRoles(selectedDeptId ?? undefined, { includeInactive: true });
+  const { create, remove } = useProjectRoleMutations();
   const canMutate = isAdmin && enabled;
 
   return (
     <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mt-6">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold text-[var(--text)]">Department Project Roles</h2>
-        <button
-          onClick={() => { void refetch(); }}
-          className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-        >Refresh</button>
+        <button onClick={() => { void refetch(); }} className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]">Refresh</button>
       </div>
 
       {!enabled && (
-        <div className="mb-4 text-[var(--muted)] text-sm">
-          Feature is disabled by backend. Ask an admin to enable PROJECT_ROLES_BY_DEPARTMENT.
-        </div>
+        <div className="mb-4 text-[var(--muted)] text-sm">Feature is disabled by backend. Ask an admin to enable PROJECT_ROLES_BY_DEPARTMENT.</div>
       )}
 
       <div className="flex items-center gap-3 mb-4">
         <label className="text-sm text-[var(--muted)]">Department</label>
-        <select
-          className="min-w-[220px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[36px] focus:border-[var(--primary)]"
-          value={selectedDeptId ?? ''}
-          onChange={(e) => setSelectedDeptId(e.target.value ? Number(e.target.value) : null)}
-        >
-          {departments.map(d => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
+        <select className="min-w-[220px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[36px] focus:border-[var(--primary)]" value={selectedDeptId ?? ''} onChange={(e) => setSelectedDeptId(e.target.value ? Number(e.target.value) : null)}>
+          {departments.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
         </select>
       </div>
 
       <div className="mb-4">
         {rolesLoading ? (
-          <div className="text-[var(--muted)] text-sm">Loading roles…</div>
+          <div className="text-[var(--muted)] text-sm">Loading roles...</div>
         ) : roles.length === 0 ? (
           <div className="text-[var(--muted)] text-sm">No roles configured for this department.</div>
         ) : (
           <div className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-md bg-[var(--surface)]">
             {roles.map(r => (
               <div key={r.id} className="flex items-center justify-between px-3 py-2">
-                <div className="text-sm text-[var(--text)] truncate" title={r.name}>{r.name}</div>
+                <div className={`text-sm truncate ${r.is_active ? 'text-[var(--text)]' : 'text-[var(--muted)]'}`} title={r.name}>{r.name}</div>
                 {canMutate && (
                   <button
                     aria-label={`Remove ${r.name}`}
                     title="Remove role from department"
                     className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-                    disabled={isRemoving}
                     onClick={async () => {
                       if (!selectedDeptId) return;
                       const ok = window.confirm(`Remove \"${r.name}\" from this department?`);
                       if (!ok) return;
                       try {
-                        await removeAsync({ departmentId: selectedDeptId, roleId: r.id });
+                        await remove.mutateAsync({ id: r.id });
                         showToast('Removed role from department', 'success');
                       } catch {}
                     }}
                   >
-                    ×
+                    Remove
                   </button>
                 )}
               </div>
@@ -113,7 +100,7 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
               const v = newRole.trim();
               if (!v) return;
               try {
-                await addAsync({ departmentId: selectedDeptId, name: v });
+                await create.mutateAsync({ departmentId: selectedDeptId, name: v });
                 setNewRole('');
                 showToast('Role added to department', 'success');
               } catch {}
@@ -123,22 +110,23 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
           className="flex-1 px-3 py-2 rounded bg-[var(--card)] border border-[var(--border)] text-[var(--text)] focus:border-[var(--primary)] outline-none"
         />
         <button
-          disabled={!canMutate || !newRole.trim() || !selectedDeptId || isAdding}
+          disabled={!canMutate || !newRole.trim() || !selectedDeptId || create.isPending}
           onClick={async () => {
             if (!canMutate || !selectedDeptId) return;
             const v = newRole.trim();
             if (!v) return;
             try {
-              await addAsync({ departmentId: selectedDeptId, name: v });
+              await create.mutateAsync({ departmentId: selectedDeptId, name: v });
               setNewRole('');
               showToast('Role added to department', 'success');
             } catch {}
           }}
-          className={`px-3 py-2 rounded text-sm border ${isAdding ? 'text-[var(--muted)] bg-[var(--surface)] border-[var(--border)]' : 'text-white bg-[var(--primary)] border-[var(--primary)] hover:bg-[var(--primaryHover)]'}`}
-        >{isAdding ? 'Adding…' : 'Add'}</button>
+          className={`px-3 py-2 rounded text-sm border ${create.isPending ? 'text-[var(--muted)] bg-[var(--surface)] border-[var(--border)]' : 'text-white bg-[var(--primary)] border-[var(--primary)] hover:bg-[var(--primaryHover)]'}`}
+        >{create.isPending ? 'Adding...' : 'Add'}</button>
       </div>
     </div>
   );
 };
 
 export default DepartmentProjectRolesSection;
+

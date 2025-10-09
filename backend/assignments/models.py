@@ -27,6 +27,10 @@ class Assignment(models.Model):
     allocation_percentage = models.IntegerField(default=0, help_text="Legacy percentage field")
     
     # === OPTIONAL DETAILS (Add usage per chunk) ===
+    # New: department denormalization for constraints and scoping
+    department = models.ForeignKey('departments.Department', on_delete=models.SET_NULL, blank=True, null=True, related_name='assignments')
+    # New FK to departmental ProjectRole; keep legacy string for migration window only
+    role_on_project_ref = models.ForeignKey('projects.ProjectRole', on_delete=models.PROTECT, blank=True, null=True, related_name='assignments')
     role_on_project = models.CharField(max_length=100, blank=True, null=True)
     start_date = models.DateField(blank=True, null=True)
     end_date = models.DateField(blank=True, null=True)

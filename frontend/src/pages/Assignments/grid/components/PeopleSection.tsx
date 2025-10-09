@@ -37,6 +37,7 @@ export interface PeopleSectionProps {
   statusDropdown: any;
   projectStatus: any;
   onStatusChange: (projectId: number, s: Project['status']) => void;
+  onAssignmentRoleChange?: (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => void;
   renderAddAction: (person: PersonWithAssignmentsMinimal) => React.ReactNode;
   renderAddRow: (person: PersonWithAssignmentsMinimal) => React.ReactNode;
   showAddRow: (person: PersonWithAssignmentsMinimal) => boolean;
@@ -72,4 +73,3 @@ const PeopleSection: React.FC<PeopleSectionProps> = (props) => {
 };
 
 export default PeopleSection;
-

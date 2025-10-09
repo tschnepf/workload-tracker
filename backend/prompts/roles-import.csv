@@ -1,0 +1,13 @@
+department_id,role_name,sort_order
+3,Engineer,0
+3,Senior Engineer,1
+4,Project Manager,0
+4,Coordinator,1
+3,Electrical Lead,10
+3,Electrical Support,11
+3,Team Member,12
+3,Electrical,20
+4,Mechanical Lead,10
+4,Mechanical Support,11
+4,Team Member,12
+4,Mechanical,20

@@ -1,0 +1,41 @@
+Project Roles by Department - Migration Report
+Generated at: 2025-10-09T16:21:42.174697+00:00
+
+Summary
+- Total ProjectRole rows: 12
+- Assignments with legacy role string: 161
+- Assignments mapped to FK (role_on_project_ref): 161
+- Assignments still unmatched: 0
+
+Per-Department Breakdown
+(role counts, mapped, unmatched)
+- 3: Electrical -> roles=6, mapped=87, unmatched=0
+- 5: Fire -> roles=0, mapped=0, unmatched=0
+- 7: ICT -> roles=0, mapped=0, unmatched=0
+- 4: Mechanical -> roles=6, mapped=74, unmatched=0
+- 6: Plumbing -> roles=0, mapped=0, unmatched=0
+
+Active Roles by Department (sorted)
+Department 3 - Electrical
+  - [5] Engineer
+  - [6] Senior Engineer
+  - [9] Electrical Lead
+  - [10] Electrical Support
+  - [11] Team Member
+  - [15] Electrical
+Department 5 - Fire
+  (none)
+Department 7 - ICT
+  (none)
+Department 4 - Mechanical
+  - [7] Project Manager
+  - [8] Coordinator
+  - [12] Mechanical Lead
+  - [13] Mechanical Support
+  - [14] Team Member
+  - [16] Mechanical
+Department 6 - Plumbing
+  (none)
+
+Unmatched Legacy Role Strings (grouped, top 200)
+(none)

@@ -97,6 +97,11 @@ def capabilities_view(request):
         },
         'personalDashboard': True,
     }
+    # Advertise department-scoped project roles capability to gate UIs if desired
+    try:
+        caps['projectRolesByDepartment'] = bool(settings.FEATURES.get('PROJECT_ROLES_BY_DEPARTMENT', False))
+    except Exception:
+        caps['projectRolesByDepartment'] = False
     return Response(caps)
 
 urlpatterns = [
@@ -144,5 +149,4 @@ urlpatterns = [
 # Add Silk profiling URLs in development/debug mode
 if settings.SILK_ENABLED:
     urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
-
 

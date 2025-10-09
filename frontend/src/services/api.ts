@@ -561,38 +561,7 @@ export const projectsApi = {
 
 };
 
-// Project Roles API (catalog + union with existing)
-export const projectRolesApi = {
-  list: async (): Promise<string[]> => {
-    const res = await apiClient.GET('/core/project_roles/' as any, { headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-    const roles = (res.data as any).roles as string[];
-    return Array.isArray(roles) ? roles : [];
-  },
-  add: async (name: string): Promise<void> => {
-    const res = await apiClient.POST('/core/project_roles/' as any, { body: { name } as any, headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-  },
-  remove: async (name: string): Promise<{ removedFromAssignments: number; catalogDeleted: boolean }> => {
-    const res = await apiClient.DELETE('/core/project_roles/' as any, { params: { query: { name } }, headers: authHeaders() });
-    if (res.error) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, (res as any).data, `HTTP ${status}`), status);
-    }
-    // Response shape: { detail, removedFromAssignments, catalogDeleted }
-    const data = (res.data || {}) as any;
-    return {
-      removedFromAssignments: Number(data.removedFromAssignments || 0),
-      catalogDeleted: Boolean(data.catalogDeleted),
-    };
-  },
-};
+// (Removed legacy ProjectRoles catalog API) Use /api/projects/project-roles/ via roles/api.ts
 
 // Department ↔ Project Roles API
 export type DeptProjectRole = { id: number; name: string };
@@ -1325,5 +1294,4 @@ export const authApi = {
     return;
   },
 };
-
 

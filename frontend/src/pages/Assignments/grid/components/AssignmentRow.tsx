@@ -30,6 +30,8 @@ export interface AssignmentRowProps {
   getDeliverablesForProjectWeek: (projectId: number, weekStart: string) => Deliverable[];
   personId: number;
   gridTemplate: string;
+  onAssignmentRoleChange?: (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => void;
+  personDepartmentId?: number | null;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
@@ -54,7 +56,9 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
   onCellMouseEnter,
   getDeliverablesForProjectWeek,
   personId,
-  gridTemplate
+  gridTemplate,
+  onAssignmentRoleChange,
+  personDepartmentId,
 }) => {
   const isSelected = (week: string) => {
     const inMulti = selectedCells.some(cell =>
@@ -92,6 +96,10 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
         assignmentId={assignment.id!}
         projectId={assignment.project}
         projectName={projectName}
+        roleOnProjectId={assignment.roleOnProjectId as any}
+        roleName={assignment.roleName as any}
+        personDepartmentId={personDepartmentId ?? null}
+        onRoleChange={(roleId, roleName) => onAssignmentRoleChange?.(personId, assignment.id!, roleId, roleName)}
         getProjectStatus={getProjectStatus}
         statusDropdown={statusDropdown}
         projectStatus={projectStatus}
@@ -125,4 +133,3 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
 });
 
 export default AssignmentRow;
-

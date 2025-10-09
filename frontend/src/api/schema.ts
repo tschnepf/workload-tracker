@@ -160,9 +160,46 @@ export interface paths {
      */
     get: operations["capabilities_retrieve"];
   };
+  "/api/core/department_project_roles/": {
+    get: operations["core_department_project_roles_retrieve"];
+    post: operations["core_department_project_roles_create"];
+  };
+  "/api/core/department_project_roles/{department}/{role_id}/": {
+    delete: operations["core_department_project_roles_destroy"];
+  };
+  "/api/core/department_project_roles/map/": {
+    get: operations["core_department_project_roles_map_retrieve"];
+  };
   "/api/core/pre-deliverable-global-settings/": {
     get: operations["core_pre_deliverable_global_settings_list"];
     put: operations["core_pre_deliverable_global_settings_update"];
+  };
+  "/api/core/project_roles/": {
+    /**
+     * @description List/add project roles for suggestions/settings.
+     *
+     * - GET: returns union of catalog roles and distinct existing assignment roles.
+     * - POST: admin-only; adds a role to the catalog.
+     */
+    get: operations["core_project_roles_retrieve"];
+    /**
+     * @description List/add project roles for suggestions/settings.
+     *
+     * - GET: returns union of catalog roles and distinct existing assignment roles.
+     * - POST: admin-only; adds a role to the catalog.
+     */
+    post: operations["core_project_roles_create"];
+    /**
+     * @description Remove a project role from the catalog and clear assignments using it.
+     *
+     * Behavior:
+     * - Admin only.
+     * - Accepts role name via query param (?name=...) or JSON body { name }.
+     * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
+     * - If a catalog ProjectRole exists for that normalized name, it is deleted.
+     * - DepartmentProjectRole mappings cascade-delete via FK on ProjectRole.
+     */
+    delete: operations["core_project_roles_destroy"];
   };
   "/api/core/utilization_scheme/": {
     /**
@@ -615,6 +652,14 @@ export interface paths {
     /** @description Import projects from Excel with progress tracking */
     post: operations["projects_import_excel_create"];
   };
+  "/api/projects/project-roles/": {
+    get: operations["projects_project_roles_list"];
+    post: operations["projects_project_roles_create"];
+  };
+  "/api/projects/project-roles/{id}/": {
+    delete: operations["projects_project_roles_destroy"];
+    patch: operations["projects_project_roles_partial_update"];
+  };
   "/api/reports/pre-deliverable-completion/": {
     get: operations["reports_pre_deliverable_completion_retrieve"];
   };
@@ -770,11 +815,13 @@ export interface components {
       person: number;
       personName: string;
       personWeeklyCapacity: number;
+      personDepartmentId: number;
       personSkills: readonly components["schemas"]["PersonSkillSummary"][];
       projectName?: string;
       project?: number | null;
       projectDisplayName: string;
-      roleOnProject?: string;
+      roleOnProjectId?: number | null;
+      roleName: string | null;
       weeklyHours: unknown;
       allocationPercentage: number;
       /** Format: date-time */
@@ -793,7 +840,7 @@ export interface components {
       person: number;
       projectName?: string;
       project?: number | null;
-      roleOnProject?: string;
+      roleOnProjectId?: number | null;
       weeklyHours: unknown;
     };
     AvailablePerson: {
@@ -963,6 +1010,14 @@ export interface components {
       manager?: number | null;
       description?: string;
       isActive: boolean;
+    };
+    DeptProjectRoleCreateRequest: {
+      department: number;
+      name: string;
+    };
+    DeptProjectRoleCreateResponse: {
+      id: number;
+      name: string;
     };
     GlobalSettingsUpdateRequest: {
       settings: components["schemas"]["PreDeliverableGlobalSettingsUpdateRequest"][];
@@ -1234,7 +1289,7 @@ export interface components {
       person?: number;
       projectName?: string;
       project?: number | null;
-      roleOnProject?: string;
+      roleOnProjectId?: number | null;
       weeklyHours?: unknown;
     };
     PatchedBulkUpdateHoursRequestRequest: {
@@ -1317,6 +1372,11 @@ export interface components {
       estimatedHours?: number | null;
       /** @default true */
       isActive?: boolean;
+    };
+    PatchedProjectRoleUpdateRequest: {
+      name?: string;
+      isActive?: boolean;
+      sortOrder?: number;
     };
     /** @description Role serializer with camelCase field transformation */
     PatchedRoleRequest: {
@@ -1568,6 +1628,18 @@ export interface components {
       estimatedHours?: number | null;
       /** @default true */
       isActive?: boolean;
+    };
+    ProjectRoleCreateRequest: {
+      department: number;
+      name: string;
+      sortOrder?: number | null;
+    };
+    ProjectRoleItem: {
+      id: number;
+      name: string;
+      is_active?: boolean;
+      sort_order?: number;
+      department_id: number;
     };
     ProjectSnapshotMetrics: {
       projectsCount: number;
@@ -2336,6 +2408,52 @@ export interface operations {
       };
     };
   };
+  core_department_project_roles_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  core_department_project_roles_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeptProjectRoleCreateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeptProjectRoleCreateRequest"];
+        "multipart/form-data": components["schemas"]["DeptProjectRoleCreateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeptProjectRoleCreateResponse"];
+        };
+      };
+    };
+  };
+  core_department_project_roles_destroy: {
+    parameters: {
+      path: {
+        department: number;
+        role_id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  core_department_project_roles_map_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
   core_pre_deliverable_global_settings_list: {
     responses: {
       200: {
@@ -2358,6 +2476,52 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["PreDeliverableGlobalSettingsItem"][];
         };
+      };
+    };
+  };
+  /**
+   * @description List/add project roles for suggestions/settings.
+   *
+   * - GET: returns union of catalog roles and distinct existing assignment roles.
+   * - POST: admin-only; adds a role to the catalog.
+   */
+  core_project_roles_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  /**
+   * @description List/add project roles for suggestions/settings.
+   *
+   * - GET: returns union of catalog roles and distinct existing assignment roles.
+   * - POST: admin-only; adds a role to the catalog.
+   */
+  core_project_roles_create: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  /**
+   * @description Remove a project role from the catalog and clear assignments using it.
+   *
+   * Behavior:
+   * - Admin only.
+   * - Accepts role name via query param (?name=...) or JSON body { name }.
+   * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
+   * - If a catalog ProjectRole exists for that normalized name, it is deleted.
+   * - DepartmentProjectRole mappings cascade-delete via FK on ProjectRole.
+   */
+  core_project_roles_destroy: {
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
       };
     };
   };
@@ -3873,6 +4037,65 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["Project"];
+        };
+      };
+    };
+  };
+  projects_project_roles_list: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRoleItem"][];
+        };
+      };
+    };
+  };
+  projects_project_roles_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectRoleCreateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleCreateRequest"];
+        "multipart/form-data": components["schemas"]["ProjectRoleCreateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRoleItem"];
+        };
+      };
+    };
+  };
+  projects_project_roles_destroy: {
+    parameters: {
+      path: {
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  projects_project_roles_partial_update: {
+    parameters: {
+      path: {
+        id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PatchedProjectRoleUpdateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRoleUpdateRequest"];
+        "multipart/form-data": components["schemas"]["PatchedProjectRoleUpdateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRoleItem"];
         };
       };
     };

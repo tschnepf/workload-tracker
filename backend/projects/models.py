@@ -77,3 +77,42 @@ class ProjectPreDeliverableSettings(models.Model):
                 'type_name': setting.pre_deliverable_type.name,
             }
         return settings
+
+
+class ProjectRole(models.Model):
+    """Department-scoped project role catalog.
+
+    Roles are unique per department by a normalized name key. Use
+    `is_active` to soft-hide roles while preserving historical references.
+    `sort_order` controls display ordering in UIs.
+    """
+
+    name = models.CharField(max_length=100)
+    normalized_name = models.CharField(max_length=120)
+    department = models.ForeignKey('departments.Department', on_delete=models.CASCADE, related_name='department_project_roles')
+    is_active = models.BooleanField(default=True)
+    sort_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            # Enforce uniqueness per department on normalized name
+            models.UniqueConstraint(fields=['department', 'normalized_name'], name='uniq_projectrole_dept_normname'),
+            # Allow composite FK from Assignment (role_on_project_id, department_id)
+            models.UniqueConstraint(fields=['id', 'department'], name='uniq_projectrole_id_department'),
+        ]
+        indexes = [
+            models.Index(fields=['department', 'is_active', 'sort_order'], name='idx_pr_dept_act_sort'),
+            models.Index(fields=['normalized_name'], name='idx_projectrole_normname'),
+        ]
+        ordering = ['department_id', 'sort_order', 'name']
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.name} (dept {self.department_id})"
+
+    def save(self, *args, **kwargs):  # pragma: no cover
+        # Normalize: trim, collapse whitespace, lowercase
+        norm = ' '.join((self.name or '').strip().split()).lower()
+        self.normalized_name = norm
+        super().save(*args, **kwargs)

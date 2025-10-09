@@ -49,7 +49,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     """
     queryset = (
         Assignment.objects.filter(is_active=True)
-        .select_related('person', 'person__department', 'project')
+        .select_related('person', 'person__department', 'project', 'department', 'role_on_project_ref')
         .order_by('-created_at')
     )
     serializer_class = AssignmentSerializer

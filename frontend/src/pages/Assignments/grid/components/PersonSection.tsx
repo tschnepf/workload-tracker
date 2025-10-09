@@ -37,6 +37,7 @@ export interface PersonSectionProps {
   statusDropdown: ReturnType<typeof useDropdownManager<string>>;
   projectStatus: ReturnType<typeof useProjectStatus>;
   onStatusChange: (projectId: number, s: Project['status']) => void;
+  onAssignmentRoleChange?: (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => void;
   assignments?: Assignment[]; // optional filtered assignments; falls back to person.assignments
   renderAddAction?: React.ReactNode;
   showAddRow?: boolean;
@@ -68,6 +69,7 @@ const PersonSection: React.FC<PersonSectionProps> = ({
   statusDropdown,
   projectStatus,
   onStatusChange,
+  onAssignmentRoleChange,
   assignments,
   renderAddAction,
   showAddRow,
@@ -132,6 +134,8 @@ const PersonSection: React.FC<PersonSectionProps> = ({
           getDeliverablesForProjectWeek={getDeliverablesForProjectWeek}
           personId={person.id!}
           gridTemplate={gridTemplate}
+          onAssignmentRoleChange={onAssignmentRoleChange}
+          personDepartmentId={person.department as any}
         />
       ))}
 

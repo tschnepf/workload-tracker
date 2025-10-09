@@ -34,6 +34,7 @@ import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization
 import PersonGroupHeaderComp from '@/pages/Assignments/grid/components/PersonGroupHeader';
 import AssignmentRowComp from '@/pages/Assignments/grid/components/AssignmentRow';
 import PeopleSection from '@/pages/Assignments/grid/components/PeopleSection';
+import { updateAssignmentRoleAction } from '@/pages/Assignments/grid/useAssignmentRoleUpdate';
 import WeekHeaderComp from '@/pages/Assignments/grid/components/WeekHeader';
 import AddAssignmentRow from '@/pages/Assignments/grid/components/AddAssignmentRow';
 import { useProjectAssignmentAdd } from '@/pages/Assignments/grid/useProjectAssignmentAdd';
@@ -118,6 +119,20 @@ const AssignmentGrid: React.FC = () => {
   // async job state provided by useAssignmentsSnapshot
   // New multi-select project status filters (aggregate selection)
   const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter, matchesStatusFilters } = useProjectStatusFilters(deliverables);
+
+  const handleAssignmentRoleChange = async (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => {
+    await updateAssignmentRoleAction({
+      assignmentsApi,
+      setPeople: setPeople as any,
+      setAssignmentsData: setAssignmentsData as any,
+      people: people as any,
+      personId,
+      assignmentId,
+      roleId,
+      roleName,
+      showToast,
+    });
+  };
 
   const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   // Weeks header: from grid snapshot when available (server weekKeys only)
@@ -800,6 +815,7 @@ const AssignmentGrid: React.FC = () => {
                 statusDropdown={statusDropdown}
                 projectStatus={projectStatus}
                 onStatusChange={handleStatusChange}
+                onAssignmentRoleChange={handleAssignmentRoleChange}
                 renderAddAction={(person) => (
                   <button
                     className="w-7 h-7 rounded text-white hover:text-[var(--muted)] hover:bg-[var(--surface)] transition-colors text-center text-sm font-medium leading-none font-mono"

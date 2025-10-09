@@ -20,6 +20,8 @@ import { useCapabilities } from '@/hooks/useCapabilities';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme } from '@/util/utilization';
+import RoleDropdown from '@/roles/components/RoleDropdown';
+import { listProjectRoles, type ProjectRole } from '@/roles/api';
 
 // Project Assignments Grid (scaffold)
 // Prescriptive: lean, best-practice; no client-side week calculations.
@@ -90,6 +92,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
+  // Role dropdown state
+  const [openRoleFor, setOpenRoleFor] = useState<number | null>(null);
+  const [rolesByDept, setRolesByDept] = useState<Record<number, ProjectRole[]>>({});
   // Reload trigger for Refresh All
   const [reloadCounter, setReloadCounter] = useState<number>(0);
   const [pendingRefresh, setPendingRefresh] = useState<boolean>(false);
@@ -1200,7 +1205,58 @@ const ProjectAssignmentsGrid: React.FC = () => {
                           <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={asn.personName || String(asn.person)}>
                             {asn.personName || `Person #${asn.person}`}
                           </div>
-                          <div className="pr-2 py-2 text-[var(--muted)] text-xs truncate"></div>
+                          <div className="pr-2 py-2 text-[var(--muted)] text-xs truncate relative">
+                            {(() => {
+                              const deptId = (asn as any).personDepartmentId as number | null | undefined;
+                              const label = (asn as any).roleName as string | null | undefined;
+                              const currentId = (asn as any).roleOnProjectId as number | null | undefined;
+                              return (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={!deptId}
+                                    className={`underline decoration-dotted underline-offset-2 ${deptId ? '' : 'text-[var(--muted)] cursor-not-allowed'}`}
+                                    onClick={async () => {
+                                      if (!deptId) return;
+                                      setOpenRoleFor(openRoleFor === asn.id ? null : (asn.id || null));
+                                      if (!rolesByDept[deptId]) {
+                                        try {
+                                          const roles = await listProjectRoles(deptId);
+                                          setRolesByDept(prev => ({ ...prev, [deptId]: roles }));
+                                        } catch {}
+                                      }
+                                    }}
+                                  >
+                                    {label || 'Set role'}
+                                  </button>
+                                  {openRoleFor === asn.id && deptId && (
+                                    <div className="absolute mt-1">
+                                      <RoleDropdown
+                                        roles={rolesByDept[deptId] || []}
+                                        currentId={currentId ?? null}
+                                        onSelect={async (roleId, roleName) => {
+                                          if (!asn.id || !p.id) return;
+                                          // optimistic update
+                                          setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: x.assignments.map(a => a.id === asn.id ? { ...a, roleOnProjectId: roleId, roleName } : a) } : x));
+                                          try {
+                                            await assignmentsApi.update(asn.id, { roleOnProjectId: roleId });
+                                            showToast('Role updated', 'success');
+                                          } catch (e:any) {
+                                            // revert
+                                            setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: x.assignments.map(a => a.id === asn.id ? { ...a, roleOnProjectId: currentId ?? null, roleName: label ?? null } : a) } : x));
+                                            showToast(e?.message || 'Failed to update role', 'error');
+                                          } finally {
+                                            setOpenRoleFor(null);
+                                          }
+                                        }}
+                                        onClose={() => setOpenRoleFor(null)}
+                                      />
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
                           <div className="py-2 flex items-center justify-center">
                             <button
                               className="w-5 h-5 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded"
