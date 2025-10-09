@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import type { Project } from '@/types/models';
 import StatusBadge from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
