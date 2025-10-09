@@ -9,14 +9,10 @@ import { friendlyErrorMessage } from './errors';
 // is set to an absolute URL, we still honor it. When running the dev server on
 // host (port 3000) without a working proxy, fall back to http://<host>:8000/api.
 const CFG_BASE = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
-const isBrowser = typeof window !== 'undefined' && !!window.location;
-const isDevPort = isBrowser && window.location.port === '3000';
-const hostBase = isBrowser ? `http://${window.location.hostname}:8000` : '';
-// If CFG_BASE is a relative path (e.g., '/api') and we are on dev port 3000,
-// prefer calling backend directly on :8000 to avoid relying on a proxy.
-const API_BASE_URL = CFG_BASE
-  ? (CFG_BASE.startsWith('/') && isDevPort ? `${hostBase}${CFG_BASE}` : CFG_BASE)
-  : (isDevPort ? `${hostBase}/api` : '/api');
+// Correct behavior:
+// - If CFG_BASE is an absolute URL (http/https), honor it.
+// - Otherwise, use relative '/api' so the dev proxy (vite.config.ts) forwards to backend.
+const API_BASE_URL = (CFG_BASE && /^(https?:)?\/\//i.test(CFG_BASE)) ? CFG_BASE : '/api';
 
 export class ApiError extends Error {
   constructor(
