@@ -47,7 +47,9 @@ export default defineConfig({
     // Dev proxy to backend to avoid cross-origin and host port issues on Windows
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        // Allow overriding backend target when not running inside Docker
+        // e.g. set VITE_PROXY_TARGET=http://localhost:8000 or http://10.20.30.40:8000
+        target: process.env.VITE_PROXY_TARGET || 'http://backend:8000',
         changeOrigin: true,
         secure: false,
       },
