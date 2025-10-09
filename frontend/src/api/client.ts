@@ -6,8 +6,13 @@ import { showToast } from '@/lib/toastBus';
 import { friendlyErrorMessage } from './errors';
 
 // Prefer relative '/api' so Vite proxy handles routing in dev. If VITE_API_URL
-// is set to an absolute URL, we still honor it.
-const API_BASE_URL = (import.meta as any)?.env?.VITE_API_URL || '/api';
+// is set to an absolute URL, we still honor it. When running the dev server on
+// host (port 3000) without a working proxy, fall back to http://<host>:8000/api.
+const API_BASE_URL =
+  (import.meta as any)?.env?.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location && window.location.port === '3000'
+    ? `http://${window.location.hostname}:8000/api`
+    : '/api');
 
 export class ApiError extends Error {
   constructor(
