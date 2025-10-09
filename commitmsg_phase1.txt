@@ -1,6 +1,0 @@
-﻿refactor(assignments-grid, phase 1 step 2): in-file extractions
-
-- add useGridColumnWidthsAssign() hook (preserve assignGrid:* keys, width fix flag)
-- extract RemoveAssignmentButton presentational component and use in AssignmentRow
-- no behavior changes; preserved dropdown keying and hook order
-- build verified

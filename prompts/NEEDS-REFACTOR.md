@@ -30,6 +30,90 @@ frontend/src/pages/Assignments/AssignmentGrid.tsx:1 — 1962 lines
 - Guards: keep `subscribeGridRefresh` topic and react-query keys unchanged; do not alter StatusBadge/Dropdown public APIs; preserve localStorage keys for column widths; preserve dropdown keying format `${assignment.id}:${assignment.project}`; keep hook call order identical (no new conditional hooks).
 - Validation: build + unit/smoke; confirm identical hook order.
 
+
+- Step 4.1 (component): PersonSection
+  - Path: `frontend/src/pages/Assignments/grid/components/PersonSection.tsx`
+  - Scope: A single person’s block including PersonGroupHeader, Add‑Assignment UI, Assignments map, Empty state
+  - Props (explicit):
+    - `person`, `weeks`, `gridTemplate`, `loadingAssignments`
+    - Handlers: `togglePersonExpanded(personId)`, `addAssignment(personId, project)`, `removeAssignment(assignmentId, personId)`
+    - Selection: `onCellSelect`, `onCellMouseDown`, `onCellMouseEnter`, `selectedCell`, `selectedCells`
+    - Editing: `onEditStart`, `onEditSave`, `onEditCancel`
+    - Status controls: `getProjectStatus`, `statusDropdown`, `projectStatus`, `onStatusChange`
+    - Deliverables: `getDeliverablesForProjectWeek`
+  - Guards: presentational only; do not call data hooks here.
+  - Validation: build + smoke for expand/collapse, add/remove, selection.
+
+- Step 4.2 (component): AddAssignmentRow
+  - Path: `frontend/src/pages/Assignments/grid/components/AddAssignmentRow.tsx`
+  - Scope: project search input, dropdown, save/cancel buttons, row layout across weeks
+  - Props: `personId`, `weeks`, `gridTemplate`, state/handlers from `useProjectAssignmentAdd`
+  - Validation: keyboard + mouse flows for search/select/save/cancel.
+
+- Step 4.3 (component): StatusBar
+  - Path: `frontend/src/pages/Assignments/grid/components/StatusBar.tsx`
+  - Scope: Utilization legend + selection summary pill
+  - Props: `labels: { blue; green; orange; red }`, `selectionSummary?: string`
+  - Validation: consistent layout, no visual regressions.
+
+- Step 4.4 (component): EmptyStateRow
+  - Path: `frontend/src/pages/Assignments/grid/components/EmptyStateRow.tsx`
+  - Props: `weeks`, `gridTemplate`
+  - Validation: correct column structure when no assignments.
+
+- Step 4.5 (hook): useProjectAssignmentAdd
+  - Path: `frontend/src/pages/Assignments/grid/useProjectAssignmentAdd.ts`
+  - Moves: add‑assignment state/handlers (project search, dropdown nav, select/save/cancel)
+  - Inputs: `people`, `setPeople`, `assignmentsApi`, `projectsApi` (passed/injected), `showToast`
+  - Returns: `{ state, actions }` for AddAssignmentRow + container
+  - Guards: preserve API payloads, toasts, and behavior.
+
+- Step 4.6 (hook): useAssignmentsSnapshot
+  - Path: `frontend/src/pages/Assignments/grid/useAssignmentsSnapshot.ts`
+  - Moves: `loadData()` + async snapshot polling (job id/progress/message), `weeks` via `toWeekHeader`, `isSnapshotMode`, `subscribeGridRefresh`
+  - Returns: `{ weeks, isSnapshotMode, loadData, asyncJob, setPeople, setAssignmentsData, setProjectsData, setDeliverables, setHoursByPerson }`
+  - Guards: React Query key usage and event bus signatures unchanged.
+
+- Step 4.7 (hook): useGridKeyboardNavigation
+  - Path: `frontend/src/pages/Assignments/grid/useGridKeyboardNavigation.ts`
+  - Moves: window keydown logic (Enter/Tab/Arrows) using `useCellSelection` + `editingCell`
+  - Inputs: `{ selectedCell, editingCell, isAddingAssignment, weeks, csSelect, setEditingCell, setEditingValue }`
+  - Guards: maintain focus/selection semantics and timing.
+
+- Step 4.8 (hook): useDeliverablesIndex
+  - Path: `frontend/src/pages/Assignments/grid/useDeliverablesIndex.ts`
+  - Moves: `getDeliverablesForProjectWeek` using an indexed Map built from `deliverables`
+  - Returns: `(projectId, weekStart) => Deliverable[]`
+  - Guards: classification/colors still from `@/util/deliverables`.
+
+- Step 4.9 (hook): useProjectStatusFilters
+  - Path: `frontend/src/pages/Assignments/grid/useProjectStatusFilters.ts`
+  - Moves: `selectedStatusFilters` state, `formatFilterStatus`, `toggleStatusFilter`, `matchesStatusFilters`
+  - Consumers: HeaderBar, rowOrder builder for `useCellSelection`
+  - Guards: preserve labels and “Active ‑ No Deliverables” semantics.
+
+- Step 4.10 (utils): assignmentActions
+  - Path: `frontend/src/pages/Assignments/grid/assignmentActions.ts`
+  - Moves: `updateAssignmentHours`, `updateMultipleCells`, `removeAssignment`
+  - Guards: keep React Query invalidations identical (`['capacityHeatmap']`, `['workloadForecast']`).
+
+- Step 4.11 (container, optional): PeopleSection
+  - Path: `frontend/src/pages/Assignments/grid/components/PeopleSection.tsx`
+  - Scope: iterates people and renders `PersonSection` items; AssignmentGrid becomes a thin composer of hooks + top layout.
+
+Guards (4.x)
+
+- Do Not Change — React Query keys, event bus topics, dropdown keying (`assignmentId:projectId`), localStorage width keys.
+- Presentational components must not call data hooks directly.
+- Move incrementally, one item at a time; verify after each step.
+
+Validation (after each 4.x step)
+
+- Build: `npm --prefix frontend run build`
+- Tests: `npm --prefix frontend run test:run`
+- Soft Lint: `npm --prefix frontend run lint:soft`
+
+
 Phase 2
 frontend/src/pages/Projects/ProjectsList.tsx:1 — 1820 lines
 
