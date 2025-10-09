@@ -27,11 +27,13 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
   return (
     <div className="flex items-start pt-0.5 pb-0 pr-2">
       <div className="min-w-0 flex-1">
-        <div className="flex items-start gap-2">
-          <div className="text-[var(--text)] text-xs truncate flex-1 leading-5" title={projectName}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gridTemplateRows: 'auto auto', columnGap: '0.5rem' }}>
+          {/* Project name (row 1, col 1) */}
+          <div className="text-[var(--text)] text-xs truncate leading-5" title={projectName} style={{ gridColumn: 1, gridRow: 1 }}>
             {projectName}
           </div>
-          <div className="relative flex-shrink-0">
+          {/* Status (row 1-2, col 2) */}
+          <div className="relative" style={{ gridColumn: 2, gridRow: '1 / span 2' }}>
             {(() => {
               const dropdownKey = `${assignmentId}:${projectId ?? ''}`;
               return (
@@ -57,26 +59,27 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
               );
             })()}
           </div>
-        </div>
-        <div className="mt-0.5 text-[var(--muted)] text-[11px] leading-4">
-          <button
-            type="button"
-            className="hover:text-[var(--text)]"
-            onClick={() => setOpenRole(v => !v)}
-            title="Edit role on project"
-          >
-            {roleName || 'Set role'}
-          </button>
-          {openRole && (
-            <div className="relative mt-1">
-              <RoleDropdown
-                roles={roles}
-                currentId={roleOnProjectId ?? null}
-                onSelect={(id, name) => onRoleChange?.(id, name)}
-                onClose={() => setOpenRole(false)}
-              />
-            </div>
-          )}
+          {/* Role (row 2, col 1) */}
+          <div className="mt-0.5 text-[var(--muted)] text-[11px] leading-4" style={{ gridColumn: 1, gridRow: 2 }}>
+            <button
+              type="button"
+              className="hover:text-[var(--text)]"
+              onClick={() => setOpenRole(v => !v)}
+              title="Edit role on project"
+            >
+              {roleName || 'Set role'}
+            </button>
+            {openRole && (
+              <div className="relative mt-1">
+                <RoleDropdown
+                  roles={roles}
+                  currentId={roleOnProjectId ?? null}
+                  onSelect={(id, name) => onRoleChange?.(id, name)}
+                  onClose={() => setOpenRole(false)}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
