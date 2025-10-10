@@ -217,6 +217,23 @@ class SetUserRoleRequestSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=[('admin','admin'), ('manager','manager'), ('user','user')])
 
 
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    newPassword = serializers.CharField()
+
+
+class InviteUserRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    username = serializers.CharField(required=False, allow_blank=True)
+    personId = serializers.IntegerField(allow_null=True, required=False)
+    role = serializers.ChoiceField(choices=[('admin','admin'), ('manager','manager'), ('user','user')], required=False)
+
+
 class NotificationPreferencesSerializer(serializers.Serializer):
     emailPreDeliverableReminders = serializers.BooleanField()
     reminderDaysBefore = serializers.IntegerField(min_value=0)

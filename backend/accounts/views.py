@@ -18,6 +18,9 @@ from .serializers import (
     SetPasswordRequestSerializer,
     UserListItemSerializer,
     SetUserRoleRequestSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
+    InviteUserRequestSerializer,
     NotificationPreferencesSerializer,
 )
 from people.models import Person
@@ -25,6 +28,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
 from core.models import NotificationPreference
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import default_token_generator
+from django.conf import settings as django_settings
 
 
 class HotEndpointThrottle(ScopedRateThrottle):
@@ -467,3 +474,175 @@ class AdminAuditLogsView(APIView):
         qs = AdminAuditLog.objects.select_related('actor', 'target_user').all()[:limit]
         ser = AdminAuditLogSerializer(qs, many=True)
         return Response(ser.data)
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = []  # Allow anonymous requests
+    throttle_classes = [UserRateThrottle]
+
+    @extend_schema(request=PasswordResetRequestSerializer, responses={204: None})
+    def post(self, request):
+        """Request a password reset by email. Always returns 204.
+
+        If a user with the email exists, sends a reset link with uid/token.
+        """
+        ser = PasswordResetRequestSerializer(data=request.data)
+        if not ser.is_valid():
+            # avoid user enumeration; return 204 regardless
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        email = (ser.validated_data['email'] or '').strip().lower()
+        User = get_user_model()
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        base = getattr(django_settings, 'APP_BASE_URL', 'http://localhost:3000').rstrip('/')
+        link = f"{base}/reset-password?uid={uidb64}&token={token}"
+        subject = 'Password reset requested'
+        body = (
+            f"A password reset was requested for your account.\n\n"
+            f"If you made this request, open the link below to set a new password:\n{link}\n\n"
+            f"If you did not request this, you can ignore this email."
+        )
+        try:
+            from django.core.mail import send_mail
+            send_mail(subject, body, getattr(django_settings, 'DEFAULT_FROM_EMAIL', None), [email])
+        except Exception:
+            # Do not leak errors to client; rely on logs/Sentry
+            pass
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = []  # Anonymous; guarded by token
+    throttle_classes = [UserRateThrottle, HotEndpointThrottle]
+
+    @extend_schema(request=PasswordResetConfirmSerializer, responses={204: None})
+    def post(self, request):
+        """Confirm password reset with uid/token and set a new password."""
+        ser = PasswordResetConfirmSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        uid = ser.validated_data['uid']
+        token = ser.validated_data['token']
+        new_password = ser.validated_data['newPassword']
+        User = get_user_model()
+        try:
+            uid_int = int(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=uid_int)
+        except Exception:
+            return Response({"detail": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST)
+        if not default_token_generator.check_token(user, token):
+            return Response({"detail": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_password(new_password, user=user)
+        except Exception as e:
+            return Response({"detail": "Invalid password.", "errors": [str(x) for x in (e.error_list if hasattr(e, 'error_list') else [e])]}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        try:
+            AdminAuditLog.objects.create(actor=None, action='password_reset', target_user=user, detail={})
+        except Exception:
+            pass
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class InviteUserView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    throttle_classes = [UserRateThrottle, HotEndpointThrottle]
+
+    @extend_schema(request=InviteUserRequestSerializer, responses={204: None})
+    def post(self, request):
+        """Invite a user by email.
+
+        - If the user exists, sends a password set/reset link.
+        - If not, creates an account with an unusable password and sends the link.
+        - Optionally assigns role and links to a Person.
+        """
+        data = InviteUserRequestSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        email = data.validated_data['email'].strip()
+        username = (data.validated_data.get('username') or '').strip()
+        person_id = data.validated_data.get('personId')
+        role = (data.validated_data.get('role') or 'user').strip().lower()
+
+        User = get_user_model()
+        created = False
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            # Derive username if not provided
+            if not username:
+                username = email.split('@')[0]
+            # Ensure uniqueness
+            base = username
+            n = 1
+            while User.objects.filter(username=username).exists():
+                n += 1
+                username = f"{base}{n}"
+            user = User.objects.create_user(username=username, email=email)
+            user.set_unusable_password()
+            # Assign role flags/groups
+            from django.contrib.auth.models import Group
+            if role == 'admin':
+                user.is_staff = True
+                user.save(update_fields=["password", "is_staff"])
+                try:
+                    admin_group = Group.objects.get(name='Admin')
+                    user.groups.add(admin_group)
+                except Group.DoesNotExist:
+                    pass
+            elif role == 'manager':
+                user.is_staff = False
+                user.save(update_fields=["password", "is_staff"])
+                try:
+                    mgr_group = Group.objects.get(name='Manager')
+                    user.groups.add(mgr_group)
+                except Group.DoesNotExist:
+                    pass
+            else:
+                user.is_staff = False
+                user.save(update_fields=["password", "is_staff"])
+                try:
+                    user_group = Group.objects.get(name='User')
+                    user.groups.add(user_group)
+                except Group.DoesNotExist:
+                    pass
+            # Ensure profile exists and optionally link Person
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            if person_id not in (None, ""):
+                try:
+                    with transaction.atomic():
+                        person = get_object_or_404(Person, pk=person_id)
+                        existing = UserProfile.objects.select_for_update().filter(person_id=person.id).exclude(user_id=user.id)
+                        if existing.exists():
+                            return Response({"detail": "This person is already linked to another user."}, status=status.HTTP_409_CONFLICT)
+                        profile.person = person
+                        profile.save(update_fields=["person", "updated_at"])
+                except IntegrityError:
+                    return Response({"detail": "Unable to link. This person may already be linked."}, status=status.HTTP_409_CONFLICT)
+            try:
+                AdminAuditLog.objects.create(actor=request.user, action='invite_user', target_user=user, detail={'role': role, 'personId': person_id})
+            except Exception:
+                pass
+            created = True
+
+        # Send password set link (same as reset)
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        base = getattr(django_settings, 'APP_BASE_URL', 'http://localhost:3000').rstrip('/')
+        link = f"{base}/set-password?uid={uidb64}&token={token}"
+        subject = 'You are invited to Workload Tracker'
+        body = (
+            f"You've been invited to Workload Tracker.\n\n"
+            f"To complete setup, choose your password using the link below:\n{link}\n\n"
+            f"If you did not expect this invitation, you can ignore this message."
+        )
+        try:
+            from django.core.mail import send_mail
+            send_mail(subject, body, getattr(django_settings, 'DEFAULT_FROM_EMAIL', None), [email])
+        except Exception:
+            pass
+        return Response(status=status.HTTP_204_NO_CONTENT)

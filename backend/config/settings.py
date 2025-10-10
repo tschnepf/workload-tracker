@@ -546,6 +546,9 @@ CSP_POLICY = os.getenv(
 # Optional absolute/relative endpoint to receive violation reports
 CSP_REPORT_URI = os.getenv('CSP_REPORT_URI', '/csp-report/')
 
+# Public app base URL for building links in emails (password reset, invites)
+APP_BASE_URL = os.getenv('APP_BASE_URL', 'http://localhost:3000')
+
 # Email configuration (SMTP or console)
 # Defaults to console backend in DEBUG unless explicitly overridden.
 _default_email_backend = 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'

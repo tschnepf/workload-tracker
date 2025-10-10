@@ -12,6 +12,9 @@ urlpatterns = [
     path('users/', views.ListUsersView.as_view(), name='auth_users'),
     path('users/<int:user_id>/', views.DeleteUserView.as_view(), name='auth_delete_user'),
     path('users/<int:user_id>/role/', views.UpdateUserRoleView.as_view(), name='auth_update_user_role'),
+    path('password_reset/', views.PasswordResetRequestView.as_view(), name='auth_password_reset'),
+    path('password_reset_confirm/', views.PasswordResetConfirmView.as_view(), name='auth_password_reset_confirm'),
+    path('invite/', views.InviteUserView.as_view(), name='auth_invite_user'),
     path('admin_audit/', views.AdminAuditLogsView.as_view(), name='auth_admin_audit'),
     path('notification-preferences/', views.NotificationPreferencesView.as_view(), name='notification_preferences'),
 ]
