@@ -659,11 +659,62 @@ class InviteUserView(APIView):
             f"To complete setup, choose your password using the link below:\n{link}\n\n"
             f"If you did not expect this invitation, you can ignore this message."
         )
+        brand_url = f"{base}/brand/SMC-TRIANGLE.png"
+        html = f"""
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>You're invited to Workload Tracker</title>
+  </head>
+  <body style=\"margin:0;padding:0;background:#0f172a;color:#e5e7eb;font-family:Segoe UI, Helvetica, Arial, sans-serif;\">
+    <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#0f172a;padding:24px 0;\">
+      <tr>
+        <td align=\"center\">
+          <table role=\"presentation\" width=\"560\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;\">
+            <tr>
+              <td align=\"center\" style=\"padding-bottom:12px;\">
+                <img src=\"{brand_url}\" alt=\"Brand\" width=\"48\" height=\"48\" style=\"display:block;border:0;\" />
+              </td>
+            </tr>
+            <tr>
+              <td align=\"center\" style=\"font-size:18px;font-weight:600;color:#e5e7eb;padding-bottom:4px;\">Welcome to Workload Tracker</td>
+            </tr>
+            <tr>
+              <td align=\"center\" style=\"font-size:14px;color:#9ca3af;padding-bottom:20px;\">You're almost there — choose a password to activate your account.</td>
+            </tr>
+            <tr>
+              <td align=\"center\" style=\"padding:8px 0 24px 0;\">
+                <a href=\"{link}\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;\">Create Account</a>
+              </td>
+            </tr>
+            <tr>
+              <td style=\"font-size:12px;color:#9ca3af;line-height:18px;\">
+                If the button doesn't work, copy and paste this link into your browser:<br/>
+                <a href=\"{link}\" style=\"color:#93c5fd;text-decoration:underline;word-break:break-all;\">{link}</a>
+              </td>
+            </tr>
+          </table>
+          <div style=\"color:#6b7280;font-size:12px;margin-top:12px;\">If you did not expect this invitation, you can ignore this message.</div>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>
+        """
         try:
-            from django.core.mail import send_mail
-            send_mail(subject, body, getattr(django_settings, 'DEFAULT_FROM_EMAIL', None), [email])
+            from django.core.mail import EmailMultiAlternatives
+            from_email = getattr(django_settings, 'DEFAULT_FROM_EMAIL', None)
+            msg = EmailMultiAlternatives(subject, body, from_email, [email])
+            msg.attach_alternative(html, 'text/html')
+            msg.send(fail_silently=True)
         except Exception:
-            pass
+            try:
+                from django.core.mail import send_mail
+                send_mail(subject, body, getattr(django_settings, 'DEFAULT_FROM_EMAIL', None), [email])
+            except Exception:
+                pass
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
