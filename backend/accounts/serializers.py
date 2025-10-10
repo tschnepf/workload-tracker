@@ -234,6 +234,10 @@ class InviteUserRequestSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=[('admin','admin'), ('manager','manager'), ('user','user')], required=False)
 
 
+class AdminLinkUserPersonRequestSerializer(serializers.Serializer):
+    personId = serializers.IntegerField(allow_null=True, required=False)
+
+
 class NotificationPreferencesSerializer(serializers.Serializer):
     emailPreDeliverableReminders = serializers.BooleanField()
     reminderDaysBefore = serializers.IntegerField(min_value=0)

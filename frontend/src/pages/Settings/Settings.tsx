@@ -299,16 +299,31 @@ const Settings: React.FC = () => {
                       <option value="admin">Admin</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Link to Person (optional)</label>
+                    <select
+                      className="w-full bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[44px] focus:border-[var(--primary)]"
+                      value={newUserPersonId}
+                      onChange={(e) => setNewUserPersonId(e.target.value === '' ? '' : Number(e.target.value))}
+                    >
+                      <option value="">— None —</option>
+                      {peopleOptions.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="flex items-end">
                     <Button
                       disabled={inviteBusy || !inviteEmail.trim()}
                       onClick={async () => {
                         setInviteBusy(true);
                         try {
-                          await authApi.inviteUser({ email: inviteEmail.trim(), role: inviteRole });
+                          const pid = newUserPersonId === '' ? null : Number(newUserPersonId);
+                          await authApi.inviteUser({ email: inviteEmail.trim(), role: inviteRole, personId: pid });
                           showToast('Invite sent (if the email is valid).', 'success');
                           setInviteEmail('');
                           setInviteRole('user');
+                          setNewUserPersonId('');
                         } catch (err: any) {
                           showToast(err?.data?.detail || err?.message || 'Failed to send invite', 'error');
                         } finally {
@@ -373,7 +388,29 @@ const Settings: React.FC = () => {
                           </select>
                         </div>
                         <div className="mt-2 text-sm text-[var(--muted)]">
-                          Linked Person: <span className="text-[var(--text)]">{u.person ? u.person.name : 'None'}</span>
+                          <label className="block text-sm text-[var(--muted)] mb-1">Linked Person</label>
+                          <select
+                            className="w-full bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[36px] focus:border-[var(--primary)]"
+                            value={(u.person && u.person.id) || ''}
+                            onChange={async (e) => {
+                              const val = e.target.value;
+                              const pid = val === '' ? null : Number(val);
+                              try {
+                                const updated = await authApi.setUserPerson(u.id, pid);
+                                setUsers(prev => prev.map(x => x.id === u.id ? { ...x, person: updated.person || null } : x));
+                                showToast('Linked person updated', 'success');
+                              } catch (err: any) {
+                                showToast(err?.data?.detail || err?.message || 'Failed to link person', 'error');
+                                // reset display
+                                (e.target as HTMLSelectElement).value = (u.person && u.person.id) || '' as any;
+                              }
+                            }}
+                          >
+                            <option value="">— None —</option>
+                            {peopleOptions.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
                         </div>
                         <div className="mt-3 flex items-center gap-4">
                           <button
@@ -464,7 +501,30 @@ const Settings: React.FC = () => {
                                 <option value="admin">Admin</option>
                               </select>
                             </td>
-                            <td className="py-2 pr-4">{u.person ? u.person.name : '—'}</td>
+                            <td className="py-2 pr-4">
+                              <select
+                                className="text-sm px-2 py-1 rounded bg-[var(--card)] text-[var(--text)] border border-[var(--border)] min-h-[36px]"
+                                value={(u.person && u.person.id) || ''}
+                                onChange={async (e) => {
+                                  const val = e.target.value;
+                                  const pid = val === '' ? null : Number(val);
+                                  try {
+                                    const updated = await authApi.setUserPerson(u.id, pid);
+                                    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, person: updated.person || null } : x));
+                                    showToast('Linked person updated', 'success');
+                                  } catch (err: any) {
+                                    showToast(err?.data?.detail || err?.message || 'Failed to link person', 'error');
+                                    (e.target as HTMLSelectElement).value = (u.person && u.person.id) || '' as any;
+                                  }
+                                }}
+                                aria-label={`Change linked person for ${u.username}`}
+                              >
+                                <option value="">— None —</option>
+                                {peopleOptions.map(p => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                              </select>
+                            </td>
                             <td className="py-2 pr-4 space-x-4">
                               <button
                                 className={`text-blue-300 hover:text-blue-200 hover:bg-[var(--surfaceHover)] rounded px-2 py-1 ${u.email ? '' : 'opacity-50 cursor-default'}`}

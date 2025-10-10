@@ -1340,6 +1340,15 @@ export const authApi = {
     }
     return;
   },
+  // Link/unlink a user to a person (admin only)
+  setUserPerson: async (userId: number, personId: number | null) => {
+    const res = await apiClient.POST('/auth/users/{id}/link_person/' as any, { params: { path: { id: userId } }, body: { personId } as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
   // Admin audit logs (admin only)
   listAdminAudit: async (limit = 50) => {
     const res = await apiClient.GET(`/auth/admin_audit/?limit=${encodeURIComponent(String(limit))}` as any, { headers: authHeaders() });

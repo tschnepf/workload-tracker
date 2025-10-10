@@ -21,6 +21,7 @@ from .serializers import (
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
     InviteUserRequestSerializer,
+    AdminLinkUserPersonRequestSerializer,
     NotificationPreferencesSerializer,
 )
 from people.models import Person
@@ -664,3 +665,71 @@ class InviteUserView(APIView):
         except Exception:
             pass
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LinkUserPersonAdminView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    throttle_classes = [UserRateThrottle]
+
+    @extend_schema(
+        parameters=[OpenApiParameter(name='user_id', type=int, location=OpenApiParameter.PATH)],
+        request=AdminLinkUserPersonRequestSerializer,
+        responses=UserListItemSerializer,
+    )
+    def post(self, request, user_id: int):
+        """Link or unlink a target user to a Person (admin only)."""
+        User = get_user_model()
+        target = get_object_or_404(User, pk=user_id)
+        ser = AdminLinkUserPersonRequestSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        person_id = ser.validated_data.get('personId')
+
+        profile, _ = UserProfile.objects.get_or_create(user=target)
+
+        if person_id in (None, ""):
+            if profile.person_id is not None:
+                profile.person = None
+                profile.save(update_fields=["person", "updated_at"])
+        else:
+            try:
+                with transaction.atomic():
+                    person = get_object_or_404(Person, pk=person_id)
+                    existing = UserProfile.objects.select_for_update().filter(person_id=person.id).exclude(user_id=target.id)
+                    if existing.exists():
+                        return Response({"detail": "This person is already linked to another user."}, status=status.HTTP_409_CONFLICT)
+                    profile.person = person
+                    profile.save(update_fields=["person", "updated_at"])
+            except IntegrityError:
+                return Response({"detail": "Unable to link. This person may already be linked."}, status=status.HTTP_409_CONFLICT)
+
+        try:
+            AdminAuditLog.objects.create(actor=request.user, action='link_user_person', target_user=target, detail={'personId': person_id})
+        except Exception:
+            pass
+
+        # Return updated summary
+        try:
+            group_names = set(target.groups.values_list('name', flat=True))
+        except Exception:
+            group_names = set()
+        if target.is_staff or target.is_superuser:
+            role = 'admin'
+        elif 'Manager' in group_names:
+            role = 'manager'
+        else:
+            role = 'user'
+
+        person = None
+        if getattr(profile, 'person', None):
+            person = { 'id': profile.person.id, 'name': profile.person.name }
+
+        return Response({
+            'id': target.id,
+            'username': target.username,
+            'email': target.email,
+            'is_staff': target.is_staff,
+            'is_superuser': target.is_superuser,
+            'groups': sorted(list(group_names)),
+            'role': role,
+            'person': person,
+        })
