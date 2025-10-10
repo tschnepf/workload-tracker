@@ -726,6 +726,16 @@ export const assignmentsApi = {
   byPerson: (personId: number) => 
     fetchApi<Assignment[]>(`/assignments/by_person/?person_id=${personId}`),
 
+  // Get single assignment (detail) to seed ETag for optimistic concurrency
+  get: async (id: number): Promise<Assignment> => {
+    const res = await apiClient.GET('/assignments/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as Assignment;
+  },
+
   // Create assignment
   create: async (data: Omit<Assignment, 'id' | 'createdAt' | 'updatedAt' | 'personName'>) => {
     const res = await apiClient.POST('/assignments/' as any, { body: data as any, headers: authHeaders() });
@@ -1294,4 +1304,3 @@ export const authApi = {
     return;
   },
 };
-
