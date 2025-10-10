@@ -682,7 +682,7 @@ class InviteUserView(APIView):
               <td align=\"center\" style=\"font-size:18px;font-weight:600;color:#e5e7eb;padding-bottom:4px;\">Welcome to Workload Tracker</td>
             </tr>
             <tr>
-              <td align=\"center\" style=\"font-size:14px;color:#9ca3af;padding-bottom:20px;\">You're almost there — choose a password to activate your account.</td>
+              <td align=\"center\" style=\"font-size:14px;color:#9ca3af;padding-bottom:20px;\">You've been invited to Workload Tracker, click the button below to create your account</td>
             </tr>
             <tr>
               <td align=\"center\" style=\"padding:8px 0 24px 0;\">
