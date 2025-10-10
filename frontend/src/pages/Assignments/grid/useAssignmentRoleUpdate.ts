@@ -1,4 +1,4 @@
-import type { Assignment } from '@/types/models';
+﻿import type { Assignment } from '@/types/models';
 
 export async function updateAssignmentRoleAction(params: {
   assignmentsApi: any;
@@ -34,4 +34,5 @@ export async function updateAssignmentRoleAction(params: {
     showToast('Failed to update role: ' + (err?.message || 'Unknown error'), 'error');
   }
 }
+
 
