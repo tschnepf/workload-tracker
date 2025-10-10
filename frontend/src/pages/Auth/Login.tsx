@@ -61,6 +61,9 @@ const Login: React.FC = () => {
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
+          <div className="text-right mt-2">
+            <a href="/reset-password" className="text-sm text-blue-300 hover:text-blue-200">Forgot password?</a>
+          </div>
         </form>
       </div>
     </div>
