@@ -1312,4 +1312,32 @@ export const authApi = {
     }
     return res.data as any;
   },
+  // Request password reset (anonymous)
+  requestPasswordReset: async (email: string) => {
+    // Do not send auth headers intentionally
+    const res = await apiClient.POST('/auth/password_reset/' as any, { body: { email } as any });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
+  // Confirm password reset with token
+  confirmPasswordReset: async (uid: string, token: string, newPassword: string) => {
+    const res = await apiClient.POST('/auth/password_reset_confirm/' as any, { body: { uid, token, newPassword } as any });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
+  // Invite a user (admin only)
+  inviteUser: async (data: { email: string; username?: string; personId?: number | null; role?: 'admin'|'manager'|'user' }) => {
+    const res = await apiClient.POST('/auth/invite/' as any, { body: data as any, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
 };
