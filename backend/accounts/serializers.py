@@ -213,6 +213,10 @@ class UserListItemSerializer(serializers.Serializer):
     person = UserListPersonSerializer(allow_null=True, required=False)
 
 
+class SetUserRoleRequestSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=[('admin','admin'), ('manager','manager'), ('user','user')])
+
+
 class NotificationPreferencesSerializer(serializers.Serializer):
     emailPreDeliverableReminders = serializers.BooleanField()
     reminderDaysBefore = serializers.IntegerField(min_value=0)

@@ -17,11 +17,13 @@ from .serializers import (
     CreateUserRequestSerializer,
     SetPasswordRequestSerializer,
     UserListItemSerializer,
+    SetUserRoleRequestSerializer,
     NotificationPreferencesSerializer,
 )
 from people.models import Person
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
 from core.models import NotificationPreference
 
 
@@ -320,6 +322,113 @@ class DeleteUserView(APIView):
             pass
         target.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UpdateUserRoleView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    throttle_classes = [UserRateThrottle, HotEndpointThrottle]
+
+    @extend_schema(
+        parameters=[OpenApiParameter(name='user_id', type=int, location=OpenApiParameter.PATH)],
+        request=SetUserRoleRequestSerializer,
+        responses=UserListItemSerializer,
+    )
+    def post(self, request, user_id: int):
+        """Set role for a target user (admin only).
+
+        Accepts one of: {'role': 'admin' | 'manager' | 'user'}
+        """
+        User = get_user_model()
+        target = get_object_or_404(User, pk=user_id)
+
+        # Disallow changing your own role to prevent accidental lock-out
+        if target.id == request.user.id:
+            return Response({"detail": "You cannot change your own role."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ser = SetUserRoleRequestSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        role = ser.validated_data['role']
+
+        # Prevent demoting the last admin (no remaining is_staff or superuser)
+        if role != 'admin':
+            # Count other admins excluding the target
+            remaining_admins = User.objects.filter(Q(is_staff=True) | Q(is_superuser=True)).exclude(pk=target.id).count()
+            # If target is currently an admin and would be demoted, ensure others remain
+            if (target.is_staff or target.is_superuser) and remaining_admins == 0:
+                return Response({"detail": "At least one admin must remain. Demote another user first or promote someone else to admin."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update flags and groups atomically-ish
+        from django.contrib.auth.models import Group
+        try:
+            # Remove from known role groups if they exist
+            for gname in ('Admin', 'Manager', 'User'):
+                try:
+                    g = Group.objects.get(name=gname)
+                    target.groups.remove(g)
+                except Group.DoesNotExist:
+                    pass
+
+            if role == 'admin':
+                target.is_staff = True
+                target.save(update_fields=["is_staff"])
+                try:
+                    g = Group.objects.get(name='Admin')
+                    target.groups.add(g)
+                except Group.DoesNotExist:
+                    pass
+            elif role == 'manager':
+                target.is_staff = False
+                target.save(update_fields=["is_staff"])
+                try:
+                    g = Group.objects.get(name='Manager')
+                    target.groups.add(g)
+                except Group.DoesNotExist:
+                    pass
+            else:
+                target.is_staff = False
+                target.save(update_fields=["is_staff"])
+                try:
+                    g = Group.objects.get(name='User')
+                    target.groups.add(g)
+                except Group.DoesNotExist:
+                    pass
+        finally:
+            try:
+                AdminAuditLog.objects.create(
+                    actor=request.user,
+                    action='set_role',
+                    target_user=target,
+                    detail={'role': role},
+                )
+            except Exception:
+                pass
+
+        # Build response consistent with ListUsersView
+        try:
+            group_names = set(target.groups.values_list('name', flat=True))
+        except Exception:
+            group_names = set()
+        derived_role = 'admin' if (target.is_staff or target.is_superuser) else ('manager' if 'Manager' in group_names else 'user')
+
+        person = None
+        try:
+            prof = getattr(target, 'profile', None)
+            if prof and getattr(prof, 'person', None):
+                person = {'id': prof.person.id, 'name': prof.person.name}
+        except Exception:
+            person = None
+
+        data = {
+            'id': target.id,
+            'username': target.username,
+            'email': target.email,
+            'is_staff': target.is_staff,
+            'is_superuser': target.is_superuser,
+            'groups': sorted(list(group_names)),
+            'role': derived_role,
+            'person': person,
+        }
+        return Response(data)
 
 
 class NotificationPreferencesView(APIView):

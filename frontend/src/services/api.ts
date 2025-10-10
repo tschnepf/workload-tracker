@@ -1303,4 +1303,13 @@ export const authApi = {
     }
     return;
   },
+  // Set user role (admin only)
+  setUserRole: async (userId: number, role: 'admin' | 'manager' | 'user') => {
+    const res = await apiClient.POST('/auth/users/{id}/role/' as any, { params: { path: { id: userId } }, body: { role } as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
 };

@@ -11,6 +11,7 @@ urlpatterns = [
     path('set_password/', views.SetPasswordView.as_view(), name='auth_set_password'),
     path('users/', views.ListUsersView.as_view(), name='auth_users'),
     path('users/<int:user_id>/', views.DeleteUserView.as_view(), name='auth_delete_user'),
+    path('users/<int:user_id>/role/', views.UpdateUserRoleView.as_view(), name='auth_update_user_role'),
     path('admin_audit/', views.AdminAuditLogsView.as_view(), name='auth_admin_audit'),
     path('notification-preferences/', views.NotificationPreferencesView.as_view(), name='notification_preferences'),
 ]

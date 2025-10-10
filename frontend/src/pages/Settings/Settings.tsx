@@ -39,7 +39,7 @@ const Settings: React.FC = () => {
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [newUserRole, setNewUserRole] = useState<'admin' | 'manager' | 'user'>('user');
   // Users list (admin)
-  const [users, setUsers] = useState<Array<{ id: number; username: string; email: string; role: 'admin'|'manager'|'user'; person: { id: number; name: string } | null }>>([]);
+  const [users, setUsers] = useState<Array<{ id: number; username: string; email: string; role: 'admin'|'manager'|'user'; person: { id: number; name: string } | null; is_staff?: boolean; is_superuser?: boolean }>>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersMsg, setUsersMsg] = useState<string | null>(null);
   
@@ -283,12 +283,43 @@ const Settings: React.FC = () => {
                             <div className="text-[var(--text)] font-medium text-base">{u.username}</div>
                             <div className="text-[var(--muted)] text-sm">{u.email || 'No email'}</div>
                           </div>
-                          <span className="text-xs px-2 py-1 rounded bg-[var(--card)] text-[var(--text)] border border-[var(--border)] capitalize">{u.role}</span>
+                          <select
+                            className="text-xs px-2 py-1 rounded bg-[var(--card)] text-[var(--text)] border border-[var(--border)] capitalize min-h-[32px]"
+                            value={u.role}
+                            disabled={u.id === auth.user?.id}
+                            onChange={async (e) => {
+                              const nextRole = e.target.value as 'admin'|'manager'|'user';
+                              if (nextRole === u.role) return;
+                              if (u.id === auth.user?.id) return; // safeguard: cannot change own role
+                              // Client-side guard: prevent removing the last admin
+                              const adminCount = users.filter(x => x.role === 'admin' || x.is_staff || x.is_superuser).length;
+                              if (u.role === 'admin' && nextRole !== 'admin' && adminCount <= 1) {
+                                setUsersMsg('At least one admin must remain. Promote another user first.');
+                                // Reset select to current value
+                                (e.target as HTMLSelectElement).value = u.role;
+                                return;
+                              }
+                              setUsersMsg(null);
+                              try {
+                                await authApi.setUserRole(u.id, nextRole);
+                                setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: nextRole, is_staff: nextRole === 'admin' } : x));
+                              } catch (err: any) {
+                                setUsersMsg(err?.data?.detail || err?.message || 'Failed to update role');
+                                // Reset select on failure
+                                (e.target as HTMLSelectElement).value = u.role;
+                              }
+                            }}
+                            aria-label={`Change role for ${u.username}`}
+                          >
+                            <option value="user">User</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                          </select>
                         </div>
                         <div className="mt-2 text-sm text-[var(--muted)]">
                           Linked Person: <span className="text-[var(--text)]">{u.person ? u.person.name : 'None'}</span>
                         </div>
-                        <div className="mt-3">
+                        <div className="mt-3 flex items-center gap-4">
                           <button
                             className="inline-flex items-center justify-center min-h-[44px] px-4 py-2 rounded-md text-sm text-red-400 hover:text-red-300 hover:bg-[var(--cardHover)] disabled:opacity-50"
                             disabled={u.id === auth.user?.id}
@@ -330,9 +361,40 @@ const Settings: React.FC = () => {
                           <tr key={u.id} className="border-t border-[var(--border)]">
                             <td className="py-2 pr-4">{u.username}</td>
                             <td className="py-2 pr-4">{u.email}</td>
-                            <td className="py-2 pr-4 capitalize">{u.role}</td>
-                            <td className="py-2 pr-4">{u.person ? u.person.name : '—'}</td>
                             <td className="py-2 pr-4">
+                              <select
+                                className="text-sm px-2 py-1 rounded bg-[var(--card)] text-[var(--text)] border border-[var(--border)] capitalize min-h-[36px]"
+                                value={u.role}
+                                disabled={u.id === auth.user?.id}
+                                onChange={async (e) => {
+                                  const nextRole = e.target.value as 'admin'|'manager'|'user';
+                                  if (nextRole === u.role) return;
+                                  if (u.id === auth.user?.id) return; // cannot change own role
+                                  const adminCount = users.filter(x => x.role === 'admin' || x.is_staff || x.is_superuser).length;
+                                  if (u.role === 'admin' && nextRole !== 'admin' && adminCount <= 1) {
+                                    setUsersMsg('At least one admin must remain. Promote another user first.');
+                                    (e.target as HTMLSelectElement).value = u.role;
+                                    return;
+                                  }
+                                  setUsersMsg(null);
+                                  try {
+                                    await authApi.setUserRole(u.id, nextRole);
+                                    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: nextRole, is_staff: nextRole === 'admin' } : x));
+                                  } catch (err: any) {
+                                    setUsersMsg(err?.data?.detail || err?.message || 'Failed to update role');
+                                    (e.target as HTMLSelectElement).value = u.role;
+                                  }
+                                }}
+                                aria-label={`Change role for ${u.username}`}
+                              >
+                                <option value="user">User</option>
+                                <option value="manager">Manager</option>
+                                <option value="admin">Admin</option>
+                              </select>
+                            </td>
+                            <td className="py-2 pr-4">{u.person ? u.person.name : '—'}</td>
+                            <td className="py-2 pr-4 space-x-4">
+                              
                               <button
                                 className="text-red-400 hover:text-red-300 disabled:opacity-50"
                                 disabled={u.id === auth.user?.id}

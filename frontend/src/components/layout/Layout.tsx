@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigation } from 'react-router';
+import { useLocation, useNavigation, useNavigate } from 'react-router';
 import { LayoutContext } from './LayoutContext';
 import Sidebar from './Sidebar';
 import { GlobalDepartmentFilter } from '@/components/filters/GlobalDepartmentFilter';
@@ -13,6 +13,9 @@ import TopProgress from '@/components/ui/TopProgress';
 import GlobalNavPending from '@/components/ui/GlobalNavPending';
 import { setPendingPath } from '@/lib/navFeedback';
 import { useNavTiming } from '@/utils/useNavTiming';
+import Button from '@/components/ui/Button';
+import { useAuth } from '@/hooks/useAuth';
+import { logout as performLogout } from '@/store/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,10 +24,12 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const nav = useNavigation();
+  const navigate = useNavigate();
   useNavTiming();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const auth = useAuth();
   useEffect(() => {
     function onKeydown(e: KeyboardEvent) {
       // Don't hijack when typing in inputs/textareas/contenteditable
@@ -126,25 +131,42 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             justifyContent: 'space-between',
             gap: 12,
             padding: '8px 12px',
-            borderBottom: "1px solid var(--border)",
-            backgroundColor: "var(--surface)",
+            borderBottom: '1px solid var(--border)',
+            backgroundColor: 'var(--surface)',
           }}
         >
-          {/* Mobile: hamburger to toggle sidebar */}
-          <button
-            type="button"
-            aria-label="Open navigation"
-            className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md text-[var(--text)] hover:text-white hover:bg-[var(--surfaceHover)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
-            onClick={() => setMobileSidebarOpen(true)}
-            ref={hamburgerRef}
-          >
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-          <GlobalDepartmentFilter />
+          <div className="flex items-center gap-3">
+            {/* Mobile: hamburger to toggle sidebar */}
+            <button
+              type="button"
+              aria-label="Open navigation"
+              className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md text-[var(--text)] hover:text-white hover:bg-[var(--surfaceHover)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+              onClick={() => setMobileSidebarOpen(true)}
+              ref={hamburgerRef}
+            >
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <GlobalDepartmentFilter />
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!!auth?.accessToken && (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Log out"
+                onClick={async () => {
+                  try { await performLogout(); } finally { navigate('/login', { replace: true }); }
+                }}
+              >
+                Log out
+              </Button>
+            )}
+          </div>
         </div>
         <main id="main-content" tabIndex={-1} aria-busy={nav.state !== 'idle'} className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
           {children}
