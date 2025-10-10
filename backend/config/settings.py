@@ -547,6 +547,8 @@ CSP_POLICY = os.getenv(
 CSP_REPORT_URI = os.getenv('CSP_REPORT_URI', '/csp-report/')
 
 # Public app base URL for building links in emails (password reset, invites)
+# Prefer EMAIL_DOMAIN (domain or full URL) when provided, else fallback to APP_BASE_URL.
+EMAIL_DOMAIN = os.getenv('EMAIL_DOMAIN', '')
 APP_BASE_URL = os.getenv('APP_BASE_URL', 'http://localhost:3000')
 
 # Email configuration (SMTP or console)

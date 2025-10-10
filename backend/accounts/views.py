@@ -499,7 +499,17 @@ class PasswordResetRequestView(APIView):
 
         uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        base = getattr(django_settings, 'APP_BASE_URL', 'http://localhost:3000').rstrip('/')
+
+        def _public_base_url() -> str:
+            dom = (getattr(django_settings, 'EMAIL_DOMAIN', '') or '').strip()
+            if dom:
+                if dom.startswith('http://') or dom.startswith('https://'):
+                    return dom.rstrip('/')
+                scheme = 'https' if (not django_settings.DEBUG and getattr(django_settings, 'SECURE_SSL_REDIRECT', False)) else 'http'
+                return f"{scheme}://{dom}".rstrip('/')
+            return str(getattr(django_settings, 'APP_BASE_URL', 'http://localhost:3000')).rstrip('/')
+
+        base = _public_base_url()
         link = f"{base}/reset-password?uid={uidb64}&token={token}"
         subject = 'Password reset requested'
         body = (
@@ -632,7 +642,15 @@ class InviteUserView(APIView):
         # Send password set link (same as reset)
         uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        base = getattr(django_settings, 'APP_BASE_URL', 'http://localhost:3000').rstrip('/')
+        def _public_base_url() -> str:
+            dom = (getattr(django_settings, 'EMAIL_DOMAIN', '') or '').strip()
+            if dom:
+                if dom.startswith('http://') or dom.startswith('https://'):
+                    return dom.rstrip('/')
+                scheme = 'https' if (not django_settings.DEBUG and getattr(django_settings, 'SECURE_SSL_REDIRECT', False)) else 'http'
+                return f"{scheme}://{dom}".rstrip('/')
+            return str(getattr(django_settings, 'APP_BASE_URL', 'http://localhost:3000')).rstrip('/')
+        base = _public_base_url()
         link = f"{base}/set-password?uid={uidb64}&token={token}"
         subject = 'You are invited to Workload Tracker'
         body = (
