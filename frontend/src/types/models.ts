@@ -55,6 +55,10 @@ export interface Assignment {
   weeklyHours: { [weekKey: string]: number }; // Weekly hours allocation
   allocationPercentage?: number; // Legacy field
   availableWeeks?: string[]; // Read-only list of available weeks
+  // New FK-based fields for project role (department-scoped)
+  roleOnProjectId?: number | null;
+  roleName?: string | null;
+  // Legacy string (to be removed after full migration)
   roleOnProject?: string;
   startDate?: string;
   endDate?: string;
