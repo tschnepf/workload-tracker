@@ -8,6 +8,8 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenVerifyView,
 )
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework.response import Response
 from rest_framework import status
@@ -39,9 +41,38 @@ def _clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(settings.REFRESH_COOKIE_NAME, path='/api/token/')
 
 
+class UsernameOrEmailTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Allow login with either username or email.
+
+    If the incoming 'username' field looks like an email or uniquely matches a
+    user email (case-insensitive), rewrite it to that user's username before
+    delegating to the base serializer.
+    """
+    def validate(self, attrs):  # type: ignore[override]
+        raw = attrs.get('username') or ''
+        if isinstance(raw, str) and raw:
+            User = get_user_model()
+            try:
+                # Prefer exact case-insensitive email match when unique
+                qs = User.objects.filter(email__iexact=raw)
+                if qs.count() == 1:
+                    user = qs.first()
+                    if user is not None:
+                        attrs['username'] = getattr(user, User.USERNAME_FIELD)
+                elif '@' in raw:
+                    # If it looks like an email but multiple results (rare) or none,
+                    # leave as-is and let authentication fail normally.
+                    pass
+            except Exception:
+                # On any DB error, fall through to default behavior
+                pass
+        return super().validate(attrs)
+
+
 class ThrottledTokenObtainPairView(TokenObtainPairView):
     permission_classes = [AllowAny]
     throttle_scope = 'login'
+    serializer_class = UsernameOrEmailTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):  # type: ignore[override]
         response: Response = super().post(request, *args, **kwargs)
