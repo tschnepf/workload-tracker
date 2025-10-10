@@ -43,7 +43,14 @@ const SetPassword: React.FC = () => {
           <div className="bg-red-100 text-red-800 px-3 py-2 rounded mb-3">Invalid or missing token.</div>
         ) : null}
         {msg && <div className="bg-green-100 text-green-800 px-3 py-2 rounded mb-3">{msg}</div>}
-        {error && <div className="bg-red-100 text-red-800 px-3 py-2 rounded mb-3">{error}</div>}
+        {error && (
+          <div className="bg-red-100 text-red-800 px-3 py-2 rounded mb-3">
+            {error}
+            <div className="mt-2">
+              <a href="/reset-password" className="text-blue-700 underline">Request a new reset link</a>
+            </div>
+          </div>
+        )}
         <form onSubmit={onSubmit} className="space-y-4">
           <Input
             label="New Password"
@@ -80,4 +87,3 @@ const SetPassword: React.FC = () => {
 };
 
 export default SetPassword;
-

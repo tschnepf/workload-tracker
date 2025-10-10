@@ -19,6 +19,7 @@ import BackupManagement from '@/components/settings/BackupManagement';
 import RestoreManagement from '@/components/settings/RestoreManagement';
 import BackupOverview from '@/components/settings/BackupOverview';
 import UtilizationSchemeEditor from '@/components/settings/UtilizationSchemeEditor';
+import { showToast } from '@/lib/toastBus';
 import DepartmentProjectRolesSection from '@/components/settings/DepartmentProjectRolesSection';
 import { useCapabilities } from '@/hooks/useCapabilities';
 
@@ -46,7 +47,9 @@ const Settings: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin'|'manager'|'user'>('user');
   const [inviteBusy, setInviteBusy] = useState(false);
-  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
+  // Admin audit logs
+  const [audit, setAudit] = useState<Array<{ id: number; action: string; created_at: string; detail: any; actor?: { username?: string }; targetUser?: { username?: string } }>>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
   
   // Role management state
   const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -76,6 +79,19 @@ const Settings: React.FC = () => {
         // ignore; shown only for admins
       } finally {
         setUsersLoading(false);
+      }
+    })();
+    // Load recent admin audit (invites/resets)
+    (async () => {
+      if (!auth.user?.is_staff) return;
+      try {
+        setAuditLoading(true);
+        const logs = await authApi.listAdminAudit(100);
+        setAudit(logs || []);
+      } catch (e) {
+        // quiet fail
+      } finally {
+        setAuditLoading(false);
       }
     })();
   }, [auth.accessToken, auth.user?.is_staff]);
@@ -287,15 +303,14 @@ const Settings: React.FC = () => {
                     <Button
                       disabled={inviteBusy || !inviteEmail.trim()}
                       onClick={async () => {
-                        setInviteMsg(null);
                         setInviteBusy(true);
                         try {
                           await authApi.inviteUser({ email: inviteEmail.trim(), role: inviteRole });
-                          setInviteMsg('Invite sent (if the email is valid).');
+                          showToast('Invite sent (if the email is valid).', 'success');
                           setInviteEmail('');
                           setInviteRole('user');
                         } catch (err: any) {
-                          setInviteMsg(err?.data?.detail || err?.message || 'Failed to send invite');
+                          showToast(err?.data?.detail || err?.message || 'Failed to send invite', 'error');
                         } finally {
                           setInviteBusy(false);
                         }
@@ -305,7 +320,7 @@ const Settings: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-                {inviteMsg && <div className="text-sm text-[var(--text)] mt-2">{inviteMsg}</div>}
+                {/* Using toast for invite status */}
               </div>
               {usersLoading ? (
                 <div className="text-[var(--text)]">Loading users…</div>
@@ -369,9 +384,9 @@ const Settings: React.FC = () => {
                               setUsersMsg(null);
                               try {
                                 await authApi.inviteUser({ email: u.email, username: u.username, role: u.role });
-                                setUsersMsg('Invite sent.');
+                                showToast('Invite sent.', 'success');
                               } catch (err: any) {
-                                setUsersMsg(err?.data?.detail || err?.message || 'Failed to send invite');
+                                showToast(err?.data?.detail || err?.message || 'Failed to send invite', 'error');
                               }
                             }}
                           >
@@ -457,11 +472,11 @@ const Settings: React.FC = () => {
                                 onClick={async () => {
                                   if (!u.email) return;
                                   setUsersMsg(null);
-                                  try {
+                              try {
                                     await authApi.inviteUser({ email: u.email, username: u.username, role: u.role });
-                                    setUsersMsg('Invite sent.');
+                                    showToast('Invite sent.', 'success');
                                   } catch (err: any) {
-                                    setUsersMsg(err?.data?.detail || err?.message || 'Failed to send invite');
+                                    showToast(err?.data?.detail || err?.message || 'Failed to send invite', 'error');
                                   }
                                 }}
                               >
@@ -509,6 +524,66 @@ const Settings: React.FC = () => {
                 <BackupManagement />
                 <RestoreManagement />
               </div>
+            </div>
+          )}
+
+          {/* Admin-only: Audit Log */}
+          {auth.user?.is_staff && (
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-[var(--text)]">Admin Audit Log</h2>
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      setAuditLoading(true);
+                      const logs = await authApi.listAdminAudit(100);
+                      setAudit(logs || []);
+                      showToast('Audit log refreshed', 'info');
+                    } catch (e: any) {
+                      showToast(e?.message || 'Failed to refresh audit log', 'error');
+                    } finally {
+                      setAuditLoading(false);
+                    }
+                  }}
+                >
+                  Refresh
+                </Button>
+              </div>
+              {auditLoading ? (
+                <div className="text-[var(--text)]">Loading…</div>
+              ) : audit.length === 0 ? (
+                <div className="text-[var(--muted)]">No recent events.</div>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="min-w-full text-sm text-left">
+                    <thead className="text-[var(--muted)]">
+                      <tr>
+                        <th className="py-2 pr-4">Time</th>
+                        <th className="py-2 pr-4">Actor</th>
+                        <th className="py-2 pr-4">Action</th>
+                        <th className="py-2 pr-4">Target</th>
+                        <th className="py-2 pr-4">Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[var(--text)]">
+                      {audit.map((log) => (
+                        <tr key={log.id} className="border-t border-[var(--border)]">
+                          <td className="py-2 pr-4 whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
+                          <td className="py-2 pr-4">{log.actor?.username || '—'}</td>
+                          <td className="py-2 pr-4">{log.action}</td>
+                          <td className="py-2 pr-4">{log.targetUser?.username || '—'}</td>
+                          <td className="py-2 pr-4">
+                            <code className="text-xs">
+                              {(() => { try { return JSON.stringify(log.detail || {}, null, 0); } catch { return String(log.detail || ''); } })()}
+                            </code>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>

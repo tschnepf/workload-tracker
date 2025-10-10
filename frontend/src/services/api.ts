@@ -1340,4 +1340,13 @@ export const authApi = {
     }
     return;
   },
+  // Admin audit logs (admin only)
+  listAdminAudit: async (limit = 50) => {
+    const res = await apiClient.GET(`/auth/admin_audit/?limit=${encodeURIComponent(String(limit))}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as Array<{ id: number; action: string; created_at: string; detail: any; actor?: { username?: string }; targetUser?: { username?: string } }>;
+  },
 };
