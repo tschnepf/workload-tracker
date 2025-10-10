@@ -545,3 +545,19 @@ CSP_POLICY = os.getenv(
 )
 # Optional absolute/relative endpoint to receive violation reports
 CSP_REPORT_URI = os.getenv('CSP_REPORT_URI', '/csp-report/')
+
+# Email configuration (SMTP or console)
+# Defaults to console backend in DEBUG unless explicitly overridden.
+_default_email_backend = 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', _default_email_backend)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'false').lower() == 'true'
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+
+_from_default = f"Workload Tracker <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else 'Workload Tracker <no-reply@example.com>'
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', _from_default)
+SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL.split('<')[-1].strip('>') if '<' in DEFAULT_FROM_EMAIL else DEFAULT_FROM_EMAIL)
