@@ -42,6 +42,11 @@ const Settings: React.FC = () => {
   const [users, setUsers] = useState<Array<{ id: number; username: string; email: string; role: 'admin'|'manager'|'user'; person: { id: number; name: string } | null; is_staff?: boolean; is_superuser?: boolean }>>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersMsg, setUsersMsg] = useState<string | null>(null);
+  // Invite user (admin)
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin'|'manager'|'user'>('user');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   
   // Role management state
   const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -266,6 +271,42 @@ const Settings: React.FC = () => {
           {auth.user?.is_staff && (
             <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mt-6">
               <h2 className="text-xl font-semibold text-[var(--text)] mb-4">Users</h2>
+              {/* Invite User */}
+              <div className="mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Input label="Invite Email" type="email" value={inviteEmail} onChange={e => setInviteEmail((e.target as HTMLInputElement).value)} />
+                  <div>
+                    <label className="block text-sm text-[var(--muted)] mb-1">Role</label>
+                    <select className="w-full bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[44px] focus:border-[var(--primary)]" value={inviteRole} onChange={e => setInviteRole(e.target.value as any)}>
+                      <option value="user">User</option>
+                      <option value="manager">Manager</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      disabled={inviteBusy || !inviteEmail.trim()}
+                      onClick={async () => {
+                        setInviteMsg(null);
+                        setInviteBusy(true);
+                        try {
+                          await authApi.inviteUser({ email: inviteEmail.trim(), role: inviteRole });
+                          setInviteMsg('Invite sent (if the email is valid).');
+                          setInviteEmail('');
+                          setInviteRole('user');
+                        } catch (err: any) {
+                          setInviteMsg(err?.data?.detail || err?.message || 'Failed to send invite');
+                        } finally {
+                          setInviteBusy(false);
+                        }
+                      }}
+                    >
+                      {inviteBusy ? 'Sending…' : 'Send Invite'}
+                    </Button>
+                  </div>
+                </div>
+                {inviteMsg && <div className="text-sm text-[var(--text)] mt-2">{inviteMsg}</div>}
+              </div>
               {usersLoading ? (
                 <div className="text-[var(--text)]">Loading users…</div>
               ) : (

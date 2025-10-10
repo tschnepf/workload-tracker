@@ -38,6 +38,8 @@ const Settings = React.lazy(() => import('./pages/Settings/Settings'))
 const MilestoneCalendar = React.lazy(() => import('./pages/Deliverables/Calendar'))
 const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'))
 const Login = React.lazy(() => import('./pages/Auth/Login'))
+const ResetPassword = React.lazy(() => import('./pages/Auth/ResetPassword'))
+const SetPassword = React.lazy(() => import('./pages/Auth/SetPassword'))
 const Profile = React.lazy(() => import('./pages/Profile/Profile'))
 const ComingSoon = React.lazy(() => import('./pages/ComingSoon/ComingSoon'))
 const PersonalDashboard = React.lazy(() => import('./pages/Personal/PersonalDashboard'))
@@ -52,6 +54,8 @@ const router = createBrowserRouter([
     children: [
       // Public
       { path: 'login', element: <Login /> },
+      { path: 'reset-password', element: <ResetPassword /> },
+      { path: 'set-password', element: <SetPassword /> },
       // Redirect root to dashboard (protected)
       { index: true, element: <RequireAuth><Navigate to="/my-work" replace /></RequireAuth> },
 
@@ -102,5 +106,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <RootApp />
   </React.StrictMode>,
 )
-
 
