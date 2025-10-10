@@ -25,7 +25,7 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
   const [openRole, setOpenRole] = React.useState<boolean>(false);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
   return (
-    <div className="flex items-start pt-0.5 pb-0 pr-2">
+    <div className="flex items-start pt-0.5 pb-1 pr-2">
       <div className="min-w-0 flex-1">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gridTemplateRows: 'auto auto', columnGap: '0.5rem' }}>
           {/* Project name (row 1, col 1) */}
@@ -60,7 +60,7 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
             })()}
           </div>
           {/* Role (row 2, col 1) */}
-          <div className="mt-0.5 text-[var(--muted)] text-[11px] leading-4" style={{ gridColumn: 1, gridRow: 2 }}>
+          <div className="mt-0.5 mb-1 text-[var(--muted)] text-[11px] leading-4" style={{ gridColumn: 1, gridRow: 2 }}>
             <button
               type="button"
               className="hover:text-[var(--text)]"
