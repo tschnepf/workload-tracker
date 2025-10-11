@@ -215,6 +215,7 @@ const ProjectsList: React.FC = () => {
     warnings: editWarnings,
     setEditData,
     getCurrentWeekHours: getCurrentWeekHoursFromHook,
+    getCurrentWeekKey,
     handleEditAssignment,
     handleRoleSearch,
     handleRoleSelect,
@@ -269,6 +270,7 @@ const ProjectsList: React.FC = () => {
   };
 
   const getCurrentWeekHours = (assignment: Assignment): number => getCurrentWeekHoursFromHook(assignment);
+  const currentWeekKey = useMemo(() => getCurrentWeekKey(), [getCurrentWeekKey]);
 
   const handleDeleteAssignment = useCallback(async (assignmentId: number) => {
     if (!confirm('Are you sure you want to remove this assignment?')) return;
@@ -396,6 +398,7 @@ const ProjectsList: React.FC = () => {
               onRoleSelect={(role) => handleRoleSelect(role)}
               onHoursChange={(h) => setEditData((prev) => ({ ...prev, currentWeekHours: h }))}
               getCurrentWeekHours={getCurrentWeekHours}
+              currentWeekKey={currentWeekKey}
               onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
                 try {
                   await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });

@@ -25,6 +25,7 @@ interface Props {
   getCurrentWeekHours: (a: Assignment) => number;
   onChangeAssignmentRole?: (assignmentId: number, roleId: number | null, roleName: string | null) => void;
   getPersonDepartmentId?: (personId: number) => number | null;
+  currentWeekKey?: string;
 
   showAddAssignment: boolean;
   onAddAssignment: () => void;
@@ -76,6 +77,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   getCurrentWeekHours,
   onChangeAssignmentRole,
   getPersonDepartmentId,
+  currentWeekKey,
   showAddAssignment,
   onAddAssignment,
   onSaveAssignment,
@@ -180,6 +182,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   getCurrentWeekHours={getCurrentWeekHours}
                   onChangeAssignmentRole={onChangeAssignmentRole}
                   personDepartmentId={getPersonDepartmentId ? getPersonDepartmentId(assignment.person) : undefined}
+                  currentWeekKey={currentWeekKey}
                 />
               </div>
             ))

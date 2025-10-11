@@ -22,6 +22,7 @@ export interface AssignmentRowProps {
   getCurrentWeekHours: (assignment: Assignment) => number;
   onChangeAssignmentRole?: (assignmentId: number, roleId: number | null, roleName: string | null) => void;
   personDepartmentId?: number | null;
+  currentWeekKey?: string;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = ({
@@ -39,6 +40,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   getCurrentWeekHours,
   onChangeAssignmentRole,
   personDepartmentId,
+  currentWeekKey,
 }) => {
   const [openRole, setOpenRole] = React.useState(false);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
@@ -142,7 +144,9 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
               </div>
             )}
           </div>
-          <div className="text-[var(--muted)]">{getCurrentWeekHours(assignment)}h</div>
+          <div className="text-[var(--muted)]" title={`Hours allocated for week of ${currentWeekKey ?? ''}`}>
+            This week {getCurrentWeekHours(assignment)}h
+          </div>
         </div>
       </div>
       <div className="flex gap-1">

@@ -128,6 +128,7 @@ export function useAssignmentInlineEdit({
     warnings,
     setEditData,
     getCurrentWeekHours,
+    getCurrentWeekKey,
     handleEditAssignment,
     handleRoleSearch,
     handleRoleSelect,
@@ -135,4 +136,3 @@ export function useAssignmentInlineEdit({
     handleCancelEdit,
   } as const;
 }
-
