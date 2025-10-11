@@ -23,6 +23,7 @@ export interface AssignmentRowProps {
   onChangeAssignmentRole?: (assignmentId: number, roleId: number | null, roleName: string | null) => void;
   personDepartmentId?: number | null;
   currentWeekKey?: string;
+  onUpdateWeekHours?: (assignmentId: number, weekKey: string, hours: number) => Promise<void> | void;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = ({
@@ -41,9 +42,12 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   onChangeAssignmentRole,
   personDepartmentId,
   currentWeekKey,
+  onUpdateWeekHours,
 }) => {
   const [openRole, setOpenRole] = React.useState(false);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
+  const [editingWeekKey, setEditingWeekKey] = React.useState<string | null>(null);
+  const [editingValue, setEditingValue] = React.useState<string>("");
   if (isEditing) {
     return (
       <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]">
@@ -148,15 +152,49 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
           </div>
           <div className="col-span-2">
             <div className="flex gap-2">
-              {weekKeys.map((wk) => (
-                <span
-                  key={wk}
-                  className="px-2 py-0.5 rounded-full text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                  title={`Week of ${wk}`}
-                >
-                  {(assignment.weeklyHours?.[wk] || 0)}h
-                </span>
-              ))}
+              {weekKeys.map((wk) => {
+                const val = assignment.weeklyHours?.[wk] || 0;
+                const isEditing = editingWeekKey === wk;
+                return (
+                  <div key={wk} className={`px-2 py-0.5 rounded-full text-xs border ${isEditing ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'}`} title={`Week of ${wk}`}>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        min={0}
+                        max={80}
+                        step={0.5}
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === 'Enter') {
+                            const n = parseFloat(editingValue);
+                            if (!Number.isNaN(n)) await onUpdateWeekHours?.(assignment.id!, wk, n);
+                            setEditingWeekKey(null);
+                          } else if (e.key === 'Escape') {
+                            setEditingWeekKey(null);
+                          }
+                        }}
+                        onBlur={async () => {
+                          const n = parseFloat(editingValue);
+                          if (!Number.isNaN(n)) await onUpdateWeekHours?.(assignment.id!, wk, n);
+                          setEditingWeekKey(null);
+                        }}
+                        className="w-14 px-1 py-0.5 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-emerald-300 hover:text-emerald-200"
+                        onClick={() => { setEditingWeekKey(wk); setEditingValue(String(val)); }}
+                        title={`Click to edit hours for week of ${wk}`}
+                      >
+                        {val}h
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

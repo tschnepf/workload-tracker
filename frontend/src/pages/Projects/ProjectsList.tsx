@@ -408,6 +408,19 @@ const ProjectsList: React.FC = () => {
                   console.error('Failed to update role on project', e);
                 }
               }}
+              onUpdateWeekHours={async (assignmentId, weekKey, hours) => {
+                try {
+                  const asn = assignments.find(a => a.id === assignmentId);
+                  if (!asn) return;
+                  const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
+                  updatedWeeklyHours[weekKey] = hours;
+                  await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+                  if (selectedProject?.id) await reloadAssignments(selectedProject.id);
+                  await invalidateFilterMeta();
+                } catch (e) {
+                  console.error('Failed to update hours', e);
+                }
+              }}
               getPersonDepartmentId={(personId) => {
                 const p = people.find(pp => pp.id === personId);
                 return (p?.department ?? null) as any;
