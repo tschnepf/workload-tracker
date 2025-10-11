@@ -46,15 +46,11 @@ const ProjectsList: React.FC = () => {
   const { people, peopleVersion } = usePeople();
   const deleteProjectMutation = useDeleteProject();
   const updateProjectMutation = useUpdateProject();
-  
+
   // Local UI state
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
-  
-  // Assignments + available roles
-  const { assignments, availableRoles, reload: reloadAssignments } = useProjectAssignments({ projectId: selectedProject?.id, people });
-  
+
   // Optimized filter metadata (assignment counts + hasFutureDeliverables)
   const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata();
   // Derived filters/sort/search via hook
@@ -70,12 +66,18 @@ const ProjectsList: React.FC = () => {
     filteredProjects,
     sortedProjects,
   } = useProjectFilters(projects, filterMetadata);
-  const { selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects);
+
+  // Selection (single source of truth)
+  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects);
+
+  // Assignments + available roles
+  const { assignments, availableRoles, reload: reloadAssignments } = useProjectAssignments({ projectId: selectedProject?.id, people });
+
   const [showAddAssignment, setShowAddAssignment] = useState(false);
-  
+
   // Pre-computed skills mapping for performance
   const [personSkillsMap, setPersonSkillsMap] = useState<Map<number, string[]>>(new Map());
-  
+
   // New assignment role search
   const { roleSearchResults: roleSearchResultsNew, setRoleSearchResults: setRoleSearchResultsNew, handleNewAssignmentRoleSearch, handleNewAssignmentRoleSelect } = useRoleSearch(
     availableRoles,
@@ -435,4 +437,6 @@ const ProjectsList: React.FC = () => {
 export default ProjectsList;
 
 // VirtualizedProjectsList moved to list/components/ProjectsTable
+
+
 
