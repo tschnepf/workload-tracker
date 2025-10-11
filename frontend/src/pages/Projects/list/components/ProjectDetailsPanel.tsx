@@ -153,20 +153,6 @@ const ProjectDetailsPanel: React.FC<Props> = ({
       <div className="p-4 border-b border-[var(--border)]">
         <div className="flex items-center justify-between mb-2">
           <div className="text-[var(--muted)] text-xs">Team Members only</div>
-          <label className="inline-flex items-center gap-2 text-xs text-[var(--muted)]">
-            <input
-              type="checkbox"
-              checked={candidatesOnly}
-              onChange={(e) => setCandidatesOnly(e.target.checked)}
-            />
-            <span
-              className="ml-1 inline-flex items-center justify-center w-3 h-3 rounded-full bg-[var(--card)] text-[var(--muted)] cursor-help"
-              title="Show only Team Members already staffing this project (people in departments already assigned here). Turn off to include everyone in the selected department scope."
-              aria-label="Help: Team Members only filter"
-            >
-              ?
-            </span>
-          </label>
           <button
             onClick={onAddAssignment}
             className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors"
