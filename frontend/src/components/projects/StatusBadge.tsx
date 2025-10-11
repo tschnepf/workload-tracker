@@ -7,9 +7,10 @@ import {
   editableStatusOptions,
   type ProjectStatus 
 } from './status.utils';
+import { statusOptions } from './status.constants';
 
 // Re-export utilities for backward compatibility
-export { getStatusColor, formatStatus, editableStatusOptions };
+export { getStatusColor, formatStatus, editableStatusOptions, statusOptions };
 export type { ProjectStatus };
 
 export interface StatusBadgeProps {

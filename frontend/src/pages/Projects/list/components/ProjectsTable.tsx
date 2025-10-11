@@ -1,0 +1,117 @@
+import React, { useMemo } from 'react';
+import type { Project } from '@/types/models';
+import StatusBadge, { formatStatus } from '@/components/projects/StatusBadge';
+import { getFlag } from '@/lib/flags';
+import { useVirtualRows } from '../hooks/useVirtualRows';
+
+interface Props {
+  projects: Project[];
+  selectedProjectId: number | null;
+  onSelect: (p: Project, index: number) => void;
+  sortBy: string;
+  sortDirection: 'asc' | 'desc';
+  onSort: (column: string) => void;
+  loading?: boolean;
+}
+
+const ProjectsTable: React.FC<Props> = ({
+  projects,
+  selectedProjectId,
+  onSelect,
+  sortBy,
+  sortDirection,
+  onSort,
+  loading,
+}) => {
+  const enableVirtual = getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
+  const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: 44, overscan: 6, enableVirtual });
+
+  const header = (
+    <div className="grid grid-cols-8 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
+      <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('client')}>
+        CLIENT<SortIcon column="client" sortBy={sortBy} sortDirection={sortDirection} />
+      </div>
+      <div className="col-span-3 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('name')}>
+        PROJECT<SortIcon column="name" sortBy={sortBy} sortDirection={sortDirection} />
+      </div>
+      <div className="col-span-1 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('type')}>
+        TYPE<SortIcon column="type" sortBy={sortBy} sortDirection={sortDirection} />
+      </div>
+      <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('status')}>
+        STATUS<SortIcon column="status" sortBy={sortBy} sortDirection={sortDirection} />
+      </div>
+    </div>
+  );
+
+  const nonVirtualBody = (
+    <div className="overflow-y-auto h-full">
+      {projects.map((project, index) => (
+        <div
+          key={project.id}
+          onClick={() => onSelect(project, index)}
+          className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+            selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
+          }`}
+          tabIndex={0}
+        >
+          <div className="col-span-2 text-[var(--muted)] text-xs">{project.client || 'No Client'}</div>
+          <div className="col-span-3">
+            <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
+            <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
+          </div>
+          <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
+          <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const virtualBody = (
+    <div ref={parentRef} className="overflow-y-auto h-full relative">
+      <div style={{ height: totalSize, position: 'relative' }}>
+        {items.map((v) => {
+          const project = projects[v.index];
+          if (!project) return null;
+          return (
+            <div
+              key={project.id}
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
+              onClick={() => onSelect(project, v.index)}
+              className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+                selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
+              }`}
+              tabIndex={0}
+            >
+              <div className="col-span-2 text-[var(--muted)] text-xs">{project.client || 'No Client'}</div>
+              <div className="col-span-3">
+                <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
+                <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
+              </div>
+              <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
+              <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex-1 overflow-hidden">
+      {header}
+      {loading ? (
+        <div className="p-3">
+          {/* consumer provides skeletons; keep minimal here */}
+        </div>
+      ) : enableVirtual ? virtualBody : nonVirtualBody}
+    </div>
+  );
+};
+
+const SortIcon: React.FC<{ column: string; sortBy: string; sortDirection: 'asc' | 'desc' }> = ({ column, sortBy, sortDirection }) => {
+  if (sortBy !== column) return null;
+  return <span className="ml-1 text-[var(--primary)]">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
+};
+
+export default ProjectsTable;
+

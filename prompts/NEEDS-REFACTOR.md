@@ -126,6 +126,54 @@ frontend/src/pages/Projects/ProjectsList.tsx:1 — 1820 lines
 - Guards: preserve routes/Links, toast messages, and mutation invalidation; keep scroll virtualization contract and row keys identical; preserve `Suspense` boundaries and lazy imports (do not relocate `DeliverablesSection`).
 - Validation: build + smoke; ensure tab/focus behavior in inline editor remains.
 
+  Additional refactor prompts (Phase 2 follow‑ups)
+
+  - Step 2.3 (hooks — data/ops consolidation)
+    - useProjectAssignments
+      - Path: `frontend/src/pages/Projects/list/hooks/useProjectAssignments.ts`
+      - Moves: load assignments for selected project; derive `availableRoles` from assignments + people; expose `reload(projectId)`
+      - Inputs: `projectId: number | undefined`, `people: Person[]`
+      - Outputs: `{ assignments: Assignment[]; availableRoles: string[]; reload(projectId: number): Promise<void> }`
+      - Guards: keep `assignmentsApi` calls and invalidation behavior unchanged
+    - useProjectAvailability
+      - Path: `frontend/src/pages/Projects/list/hooks/useProjectAvailability.ts`
+      - Moves: availability effect and mapping from `projectsApi.getAvailability`
+      - Inputs: `{ projectId, departmentId, includeChildren, candidatesOnly }`
+      - Outputs: `{ availabilityMap: Record<number, { availableHours; utilizationPercent; totalHours; capacity }> }`
+      - Guards: preserve Monday anchor computation and request params
+    - usePersonSearch (add‑assignment)
+      - Path: `frontend/src/pages/Projects/list/hooks/usePersonSearch.ts`
+      - Moves: person search text updates, async search, keydown navigation, ARIA live announcements
+      - Inputs: `{ people, availabilityMap, deptState, candidatesOnly, caps }`
+      - Outputs: `{ results, selectedIndex, setSelectedIndex, srAnnouncement, onChange, onFocus, onKeyDown, onSelect }`
+      - Guards: keep current result shape and a11y announcements
+    - useProjectAssignmentAdd
+      - Path: `frontend/src/pages/Projects/list/hooks/useProjectAssignmentAdd.ts`
+      - Moves: `newAssignment` state, conflict checks (`warnings`), create/cancel flows
+      - Inputs: `{ projectId, invalidateFilterMeta, reloadAssignments, checkAssignmentConflicts }`
+      - Outputs: `{ state, setState, save, cancel, warnings, setWarnings }`
+      - Guards: preserve payload shape, dates, and warnings contract
+    - useProjectStatusMutation
+      - Path: `frontend/src/pages/Projects/list/hooks/useProjectStatusMutation.ts`
+      - Moves: optimistic status update + mutation + invalidation + toast
+      - Inputs: `{ selectedProject, updateProjectMutation, invalidateFilterMeta }`
+      - Outputs: `{ onChangeStatus(newStatus: string): Promise<void> }`
+      - Guards: keep toast strings and error recovery
+
+  - Step 3.4 (types/constants)
+    - Types: move `AddAssignmentState` to `frontend/src/pages/Projects/list/types.ts` and import in `ProjectDetailsPanel`
+    - Status constants: move `statusOptions` (if local) to `frontend/src/components/projects/status.constants.ts` and re‑export from `StatusBadge` for stability
+
+  - Step 3.5 (minor components)
+    - `WarningsBanner.tsx` and `ErrorBanner.tsx` under `frontend/src/pages/Projects/list/components/`
+    - Props: `warnings: string[]` and `{ message: string }` respectively; presentational only
+    - Guards: no data hooks; used by container for readability
+
+  - Validation (after each extraction)
+    - Build + smoke Projects page: filters, sorting, selection, status change, inline edit, add assignment, deliverables
+    - Confirm virtualization row keys and overscan unchanged
+    - Ensure Suspense boundary for `DeliverablesSection` remains in the container
+
 Phase 3
 frontend/src/pages/People/PeopleList.tsx:1 — 1529 lines
 
