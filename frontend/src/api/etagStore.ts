@@ -20,7 +20,7 @@ const store = new Map<string, string>();
 export const etagStore = {
   get: (key: string): string | undefined => store.get(normalizeKey(key)),
   set: (key: string, etag: string): void => {
-    store.set(normalizeKey(key), etag.replace(/^"|"$/g, ''));
+    store.set(normalizeKey(key), etag);
   },
   delete: (key: string): void => {
     store.delete(normalizeKey(key));
@@ -30,4 +30,3 @@ export const etagStore = {
   },
   normalize: normalizeKey,
 };
-

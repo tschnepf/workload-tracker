@@ -145,8 +145,8 @@ async function doFetch<T>(endpoint: string, options: RequestInit, isRetry = fals
     const etag = response.headers.get('etag');
     if (etag) {
       try {
-        // Store raw value without quotes for matching convenience
-        etagStore.set(endpoint, etag.replace(/^"|"$/g, ''));
+        // Preserve ETag exactly as returned (including quotes) for correct If-Match semantics
+        etagStore.set(endpoint, etag);
       } catch {}
     }
   }
