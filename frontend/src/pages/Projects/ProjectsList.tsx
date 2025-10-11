@@ -415,12 +415,12 @@ const ProjectsList: React.FC = () => {
                   const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
                   updatedWeeklyHours[weekKey] = hours;
                   await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
-                  if (selectedProject?.id) await reloadAssignments(selectedProject.id);
-                  await invalidateFilterMeta();
                 } catch (e) {
                   console.error('Failed to update hours', e);
                 }
               }}
+              reloadAssignments={reloadAssignments}
+              invalidateFilterMeta={invalidateFilterMeta}
               getPersonDepartmentId={(personId) => {
                 const p = people.find(pp => pp.id === personId);
                 return (p?.department ?? null) as any;

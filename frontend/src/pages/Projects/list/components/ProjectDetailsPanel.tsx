@@ -4,6 +4,7 @@ import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from
 import AssignmentRow from './AssignmentRow';
 import type { AddAssignmentState } from '@/pages/Projects/list/types';
 import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
+import { applyHoursToCellsOptimistic } from '@/assignments/updateHoursOptimistic';
 
 interface Props {
   project: Project;
@@ -28,6 +29,8 @@ interface Props {
   getPersonDepartmentId?: (personId: number) => number | null;
   currentWeekKey?: string;
   onUpdateWeekHours?: (assignmentId: number, weekKey: string, hours: number) => Promise<void> | void;
+  reloadAssignments: (projectId: number) => Promise<void>;
+  invalidateFilterMeta: () => Promise<void>;
 
   showAddAssignment: boolean;
   onAddAssignment: () => void;
@@ -81,6 +84,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   getPersonDepartmentId,
   currentWeekKey,
   onUpdateWeekHours,
+  reloadAssignments,
+  invalidateFilterMeta,
   showAddAssignment,
   onAddAssignment,
   onSaveAssignment,
@@ -126,22 +131,31 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     if (!editingCell) return;
     const value = parseFloat(editingValue);
     if (Number.isNaN(value)) { setEditingCell(null); return; }
-    const cells = selection.selectedCells.length > 0 ? selection.selectedCells : [{ rowKey: String(editingCell.assignmentId), weekKey: editingCell.week }];
-    // Consolidate updates per assignment
-    const perAssignment = new Map<number, Record<string, number>>();
-    for (const c of cells) {
-      const aid = Number(c.rowKey);
-      const wk = c.weekKey;
-      const asn = assignments.find(a => a.id === aid);
-      if (!asn) continue;
-      const next = { ...(asn.weeklyHours || {}) } as Record<string, number>;
-      next[wk] = value;
-      perAssignment.set(aid, next);
-    }
+    const cells = selection.selectedCells.length > 0
+      ? selection.selectedCells.map(c => ({ assignmentId: Number(c.rowKey), weekKey: c.weekKey }))
+      : [{ assignmentId: editingCell.assignmentId, weekKey: editingCell.week }];
+
+    // Local optimistic snapshot maps for current visible assignments
+    const baseMaps = new Map<number, Record<string, number>>();
+    assignments.forEach(a => baseMaps.set(a.id!, { ...(a.weeklyHours || {}) }));
+    const getMap = (assignmentId: number) => baseMaps.get(assignmentId) || {};
+    const applyLocally = (updates: Map<number, Record<string, number>>) => {
+      updates.forEach((map, aid) => baseMaps.set(aid, { ...map }));
+      setEditingValue(prev => prev);
+    };
+    const revertLocally = (prev: Map<number, Record<string, number>>) => {
+      prev.forEach((map, aid) => baseMaps.set(aid, { ...map }));
+      setEditingValue(prev => prev);
+    };
+    const afterSuccess = async () => {
+      try {
+        await reloadAssignments(project.id!);
+        await invalidateFilterMeta();
+      } catch {}
+    };
+
     try {
-      for (const [aid, map] of perAssignment.entries()) {
-        await onUpdateWeekHours?.(aid, Object.keys(map)[0], map[Object.keys(map)[0]]);
-      }
+      await applyHoursToCellsOptimistic({ cells, value, getMap, applyLocally, revertLocally, afterSuccess });
     } finally {
       setEditingCell(null);
       selection.clearSelection();
