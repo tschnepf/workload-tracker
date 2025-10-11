@@ -37,6 +37,7 @@ export interface AssignmentRowProps {
   editingValue?: string;
   onEditValueChangeCell?: (v: string) => void;
   getDeliverablesForProjectWeek?: (projectId: number | undefined, weekStart: string) => Deliverable[];
+  optimisticHours?: Map<number, Record<string, number>>;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = ({
@@ -68,6 +69,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   editingValue,
   onEditValueChangeCell,
   getDeliverablesForProjectWeek,
+  optimisticHours,
 }) => {
   const [openRole, setOpenRole] = React.useState(false);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
@@ -182,7 +184,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                   weekKey={wk}
                   isSelected={Boolean(isCellSelected?.(assignment.id!, wk))}
                   isEditing={Boolean(isEditingCell?.(assignment.id!, wk))}
-                  currentHours={assignment.weeklyHours?.[wk] || 0}
+                  currentHours={(optimisticHours?.get(assignment.id!)?.[wk] ?? assignment.weeklyHours?.[wk] ?? 0) as number}
                   onSelect={(isShift) => onCellSelect?.(assignment.id!, wk, isShift)}
                   onMouseDown={() => onCellMouseDown?.(assignment.id!, wk)}
                   onMouseEnter={() => onCellMouseEnter?.(assignment.id!, wk)}

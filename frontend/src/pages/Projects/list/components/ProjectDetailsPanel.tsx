@@ -121,6 +121,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const selection = useCellSelection(weekKeys, rowOrder);
   const [editingCell, setEditingCell] = React.useState<{ personId: number; assignmentId: number; week: string } | null>(null);
   const [editingValue, setEditingValue] = React.useState<string>('');
+  const [optimisticHours, setOptimisticHours] = React.useState<Map<number, Record<string, number>>>(new Map());
 
   const isCellSelected = (assignmentId: number, weekKey: string) => selection.isCellSelected(String(assignmentId), weekKey);
   const isEditingCell = (assignmentId: number, weekKey: string) => editingCell?.assignmentId === assignmentId && editingCell?.week === weekKey;
@@ -146,17 +147,23 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     assignments.forEach(a => baseMaps.set(a.id!, { ...(a.weeklyHours || {}) }));
     const getMap = (assignmentId: number) => baseMaps.get(assignmentId) || {};
     const applyLocally = (updates: Map<number, Record<string, number>>) => {
-      updates.forEach((map, aid) => baseMaps.set(aid, { ...map }));
-      setEditingValue(prev => prev);
+      // merge into optimistic state used by rows for display
+      setOptimisticHours(prev => {
+        const next = new Map(prev);
+        updates.forEach((map, aid) => {
+          next.set(aid, { ...map });
+        });
+        return next;
+      });
     };
     const revertLocally = (prev: Map<number, Record<string, number>>) => {
-      prev.forEach((map, aid) => baseMaps.set(aid, { ...map }));
-      setEditingValue(prev => prev);
+      setOptimisticHours(new Map(prev));
     };
     const afterSuccess = async () => {
       try {
         await reloadAssignments(project.id!);
         await invalidateFilterMeta();
+        setOptimisticHours(new Map());
       } catch {}
     };
 
@@ -286,6 +293,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   onEditCancelCell={onEditCancelCell}
                   editingValue={editingValue}
                   onEditValueChangeCell={onEditValueChangeCell}
+                  optimisticHours={optimisticHours}
                 />
               </div>
             ))
