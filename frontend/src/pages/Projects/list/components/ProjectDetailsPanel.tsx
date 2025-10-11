@@ -4,6 +4,8 @@ import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from
 import AssignmentRow from './AssignmentRow';
 import type { AddAssignmentState } from '@/pages/Projects/list/types';
 import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
+import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeyboardNavigation';
+import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import { applyHoursToCellsOptimistic } from '@/assignments/updateHoursOptimistic';
 
 interface Props {
@@ -117,7 +119,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   // Selection model reused from Assignments grid
   const rowOrder = React.useMemo(() => assignments.map(a => String(a.id)), [assignments]);
   const selection = useCellSelection(weekKeys, rowOrder);
-  const [editingCell, setEditingCell] = React.useState<{ assignmentId: number; week: string } | null>(null);
+  const [editingCell, setEditingCell] = React.useState<{ personId: number; assignmentId: number; week: string } | null>(null);
   const [editingValue, setEditingValue] = React.useState<string>('');
 
   const isCellSelected = (assignmentId: number, weekKey: string) => selection.isCellSelected(String(assignmentId), weekKey);
@@ -125,7 +127,11 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const onCellMouseDown = (assignmentId: number, weekKey: string) => selection.onCellMouseDown(String(assignmentId), weekKey);
   const onCellMouseEnter = (assignmentId: number, weekKey: string) => selection.onCellMouseEnter(String(assignmentId), weekKey);
   const onCellSelect = (assignmentId: number, weekKey: string, isShift: boolean) => selection.onCellSelect(String(assignmentId), weekKey, isShift);
-  const onEditStartCell = (assignmentId: number, weekKey: string, currentValue: string) => { setEditingCell({ assignmentId, week: weekKey }); setEditingValue(currentValue); };
+  const onEditStartCell = (assignmentId: number, weekKey: string, currentValue: string) => {
+    const a = assignments.find(x => x.id === assignmentId);
+    setEditingCell({ personId: a?.person || 0, assignmentId, week: weekKey });
+    setEditingValue(currentValue);
+  };
   const onEditCancelCell = () => { setEditingCell(null); };
   const onEditSaveCell = async () => {
     if (!editingCell) return;
@@ -162,6 +168,26 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     }
   };
   const onEditValueChangeCell = (v: string) => setEditingValue(v);
+
+  // Keyboard typing to start edit + arrow/tab nav similar to grid
+  const weeksHeader = React.useMemo(() => toWeekHeader(weekKeys), [weekKeys]);
+  const selectedCellForKb = React.useMemo(() => {
+    const sc = selection.selectedCell;
+    if (!sc) return null as any;
+    const aid = Number(sc.rowKey);
+    const a = assignments.find(x => x.id === aid);
+    return a ? { personId: a.person, assignmentId: aid, week: sc.weekKey } : null;
+  }, [selection.selectedCell, assignments]);
+  useGridKeyboardNavigation({
+    selectedCell: selectedCellForKb,
+    editingCell,
+    isAddingAssignment: false,
+    weeks: weeksHeader,
+    csSelect: (rowKey, wk, isShift) => selection.onCellSelect(rowKey, wk, isShift),
+    setEditingCell: ({ personId, assignmentId, week }) => setEditingCell({ personId, assignmentId, week }),
+    setEditingValue: (val) => setEditingValue(val),
+    findAssignment: (personId, assignmentId) => assignments.some(a => a.id === assignmentId && a.person === personId),
+  });
 
   return (
     <>
