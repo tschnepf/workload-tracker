@@ -108,13 +108,32 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   availabilityMap,
   deliverablesSlot,
 }) => {
-  // Build week keys (current + next 3 Mondays)
+  // Build week keys from assignment data to avoid TZ drift and mismatches.
+  // Prefer the next 4 assignment week keys >= baseline; fallback to local Monday +3.
   const weekKeys = React.useMemo(() => {
-    if (!currentWeekKey) return [] as string[];
-    const base = new Date(currentWeekKey + 'T00:00:00');
-    const addDays = (d: number) => { const dt = new Date(base); dt.setDate(dt.getDate() + d); return dt.toISOString().split('T')[0]; };
-    return [0, 7, 14, 21].map(addDays);
-  }, [currentWeekKey]);
+    const all = new Set<string>();
+    try {
+      for (const a of assignments) {
+        const wh = (a.weeklyHours || {}) as Record<string, number>;
+        Object.keys(wh).forEach(k => { if (k && k.length === 10) all.add(k); });
+      }
+    } catch {}
+    const sorted = Array.from(all).sort();
+    if (sorted.length === 0) {
+      const base = currentWeekKey ? new Date(currentWeekKey.replace(/-/g, '/') + ' 00:00:00') : new Date();
+      const monday = new Date(base);
+      const dow = monday.getDay();
+      monday.setDate(monday.getDate() - ((dow + 6) % 7));
+      const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
+      const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      return [0,7,14,21].map(off => { const d = new Date(monday); d.setDate(d.getDate()+off); return fmt(d); });
+    }
+    const baseline = currentWeekKey || sorted[0];
+    const next = sorted.filter(k => k >= baseline).slice(0, 4);
+    if (next.length >= 4) return next;
+    const backfill = sorted.slice(Math.max(0, sorted.length - (4 - next.length)));
+    return [...next, ...backfill].slice(0,4);
+  }, [assignments, currentWeekKey]);
 
   // Selection model reused from Assignments grid
   const rowOrder = React.useMemo(() => assignments.map(a => String(a.id)), [assignments]);
