@@ -3,6 +3,7 @@ import type { Project, Assignment, Person } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import AssignmentRow from './AssignmentRow';
 import type { AddAssignmentState } from '@/pages/Projects/list/types';
+import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
 
 interface Props {
   project: Project;
@@ -100,6 +101,54 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   availabilityMap,
   deliverablesSlot,
 }) => {
+  // Build week keys (current + next 3 Mondays)
+  const weekKeys = React.useMemo(() => {
+    if (!currentWeekKey) return [] as string[];
+    const base = new Date(currentWeekKey + 'T00:00:00');
+    const addDays = (d: number) => { const dt = new Date(base); dt.setDate(dt.getDate() + d); return dt.toISOString().split('T')[0]; };
+    return [0, 7, 14, 21].map(addDays);
+  }, [currentWeekKey]);
+
+  // Selection model reused from Assignments grid
+  const rowOrder = React.useMemo(() => assignments.map(a => String(a.id)), [assignments]);
+  const selection = useCellSelection(weekKeys, rowOrder);
+  const [editingCell, setEditingCell] = React.useState<{ assignmentId: number; week: string } | null>(null);
+  const [editingValue, setEditingValue] = React.useState<string>('');
+
+  const isCellSelected = (assignmentId: number, weekKey: string) => selection.isCellSelected(String(assignmentId), weekKey);
+  const isEditingCell = (assignmentId: number, weekKey: string) => editingCell?.assignmentId === assignmentId && editingCell?.week === weekKey;
+  const onCellMouseDown = (assignmentId: number, weekKey: string) => selection.onCellMouseDown(String(assignmentId), weekKey);
+  const onCellMouseEnter = (assignmentId: number, weekKey: string) => selection.onCellMouseEnter(String(assignmentId), weekKey);
+  const onCellSelect = (assignmentId: number, weekKey: string, isShift: boolean) => selection.onCellSelect(String(assignmentId), weekKey, isShift);
+  const onEditStartCell = (assignmentId: number, weekKey: string, currentValue: string) => { setEditingCell({ assignmentId, week: weekKey }); setEditingValue(currentValue); };
+  const onEditCancelCell = () => { setEditingCell(null); };
+  const onEditSaveCell = async () => {
+    if (!editingCell) return;
+    const value = parseFloat(editingValue);
+    if (Number.isNaN(value)) { setEditingCell(null); return; }
+    const cells = selection.selectedCells.length > 0 ? selection.selectedCells : [{ rowKey: String(editingCell.assignmentId), weekKey: editingCell.week }];
+    // Consolidate updates per assignment
+    const perAssignment = new Map<number, Record<string, number>>();
+    for (const c of cells) {
+      const aid = Number(c.rowKey);
+      const wk = c.weekKey;
+      const asn = assignments.find(a => a.id === aid);
+      if (!asn) continue;
+      const next = { ...(asn.weeklyHours || {}) } as Record<string, number>;
+      next[wk] = value;
+      perAssignment.set(aid, next);
+    }
+    try {
+      for (const [aid, map] of perAssignment.entries()) {
+        await onUpdateWeekHours?.(aid, Object.keys(map)[0], map[Object.keys(map)[0]]);
+      }
+    } finally {
+      setEditingCell(null);
+      selection.clearSelection();
+    }
+  };
+  const onEditValueChangeCell = (v: string) => setEditingValue(v);
+
   return (
     <>
       <div className="p-4 border-b border-[var(--border)]">
@@ -186,6 +235,17 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   personDepartmentId={getPersonDepartmentId ? getPersonDepartmentId(assignment.person) : undefined}
                   currentWeekKey={currentWeekKey}
                   onUpdateWeekHours={onUpdateWeekHours}
+                  weekKeys={weekKeys}
+                  isCellSelected={isCellSelected}
+                  isEditingCell={isEditingCell}
+                  onCellSelect={onCellSelect}
+                  onCellMouseDown={onCellMouseDown}
+                  onCellMouseEnter={onCellMouseEnter}
+                  onEditStartCell={onEditStartCell}
+                  onEditSaveCell={onEditSaveCell}
+                  onEditCancelCell={onEditCancelCell}
+                  editingValue={editingValue}
+                  onEditValueChangeCell={onEditValueChangeCell}
                 />
               </div>
             ))

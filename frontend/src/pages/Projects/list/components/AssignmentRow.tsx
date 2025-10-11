@@ -1,7 +1,8 @@
 import React from 'react';
-import type { Assignment } from '@/types/models';
+import type { Assignment, Deliverable } from '@/types/models';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
+import WeekCell from '@/pages/Assignments/grid/components/WeekCell';
 
 export interface AssignmentRowProps {
   assignment: Assignment;
@@ -24,6 +25,18 @@ export interface AssignmentRowProps {
   personDepartmentId?: number | null;
   currentWeekKey?: string;
   onUpdateWeekHours?: (assignmentId: number, weekKey: string, hours: number) => Promise<void> | void;
+  weekKeys?: string[];
+  isCellSelected?: (assignmentId: number, weekKey: string) => boolean;
+  isEditingCell?: (assignmentId: number, weekKey: string) => boolean;
+  onCellSelect?: (assignmentId: number, weekKey: string, isShift: boolean) => void;
+  onCellMouseDown?: (assignmentId: number, weekKey: string) => void;
+  onCellMouseEnter?: (assignmentId: number, weekKey: string) => void;
+  onEditStartCell?: (assignmentId: number, weekKey: string, currentValue: string) => void;
+  onEditSaveCell?: () => void;
+  onEditCancelCell?: () => void;
+  editingValue?: string;
+  onEditValueChangeCell?: (v: string) => void;
+  getDeliverablesForProjectWeek?: (projectId: number | undefined, weekStart: string) => Deliverable[];
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = ({
@@ -43,11 +56,22 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   personDepartmentId,
   currentWeekKey,
   onUpdateWeekHours,
+  weekKeys,
+  isCellSelected,
+  isEditingCell,
+  onCellSelect,
+  onCellMouseDown,
+  onCellMouseEnter,
+  onEditStartCell,
+  onEditSaveCell,
+  onEditCancelCell,
+  editingValue,
+  onEditValueChangeCell,
+  getDeliverablesForProjectWeek,
 }) => {
   const [openRole, setOpenRole] = React.useState(false);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
-  const [editingWeekKey, setEditingWeekKey] = React.useState<string | null>(null);
-  const [editingValue, setEditingValue] = React.useState<string>("");
+  // selection/editing handled by parent using WeekCell helpers
   if (isEditing) {
     return (
       <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]">
@@ -112,7 +136,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   }
 
   // Derive next 4 Monday week keys from provided currentWeekKey
-  const weekKeys = React.useMemo(() => {
+  const computedWeekKeys = React.useMemo(() => {
     if (!currentWeekKey) return [] as string[];
     const base = new Date(currentWeekKey + 'T00:00:00');
     const addDays = (d: number) => {
@@ -151,50 +175,25 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
             </div>
           </div>
           <div className="col-span-2">
-            <div className="flex gap-2">
-              {weekKeys.map((wk) => {
-                const val = assignment.weeklyHours?.[wk] || 0;
-                const isEditing = editingWeekKey === wk;
-                return (
-                  <div key={wk} className={`px-2 py-0.5 rounded-full text-xs border ${isEditing ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'}`} title={`Week of ${wk}`}>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        min={0}
-                        max={80}
-                        step={0.5}
-                        value={editingValue}
-                        onChange={(e) => setEditingValue(e.target.value)}
-                        onKeyDown={async (e) => {
-                          if (e.key === 'Enter') {
-                            const n = parseFloat(editingValue);
-                            if (!Number.isNaN(n)) await onUpdateWeekHours?.(assignment.id!, wk, n);
-                            setEditingWeekKey(null);
-                          } else if (e.key === 'Escape') {
-                            setEditingWeekKey(null);
-                          }
-                        }}
-                        onBlur={async () => {
-                          const n = parseFloat(editingValue);
-                          if (!Number.isNaN(n)) await onUpdateWeekHours?.(assignment.id!, wk, n);
-                          setEditingWeekKey(null);
-                        }}
-                        className="w-14 px-1 py-0.5 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-emerald-300 hover:text-emerald-200"
-                        onClick={() => { setEditingWeekKey(wk); setEditingValue(String(val)); }}
-                        title={`Click to edit hours for week of ${wk}`}
-                      >
-                        {val}h
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-4 bg-[var(--surface)]">
+              {(weekKeys || computedWeekKeys).map((wk) => (
+                <WeekCell
+                  key={wk}
+                  weekKey={wk}
+                  isSelected={Boolean(isCellSelected?.(assignment.id!, wk))}
+                  isEditing={Boolean(isEditingCell?.(assignment.id!, wk))}
+                  currentHours={assignment.weeklyHours?.[wk] || 0}
+                  onSelect={(isShift) => onCellSelect?.(assignment.id!, wk, isShift)}
+                  onMouseDown={() => onCellMouseDown?.(assignment.id!, wk)}
+                  onMouseEnter={() => onCellMouseEnter?.(assignment.id!, wk)}
+                  onEditStart={() => onEditStartCell?.(assignment.id!, wk, String(assignment.weeklyHours?.[wk] || 0))}
+                  onEditSave={() => onEditSaveCell?.()}
+                  onEditCancel={() => onEditCancelCell?.()}
+                  editingValue={editingValue || ''}
+                  onEditValueChange={(v) => onEditValueChangeCell?.(v)}
+                  deliverablesForWeek={getDeliverablesForProjectWeek?.(assignment.project, wk) || []}
+                />
+              ))}
             </div>
           </div>
         </div>
