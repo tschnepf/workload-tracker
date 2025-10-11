@@ -396,6 +396,19 @@ const ProjectsList: React.FC = () => {
               onRoleSelect={(role) => handleRoleSelect(role)}
               onHoursChange={(h) => setEditData((prev) => ({ ...prev, currentWeekHours: h }))}
               getCurrentWeekHours={getCurrentWeekHours}
+              onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
+                try {
+                  await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+                  if (selectedProject?.id) await reloadAssignments(selectedProject.id);
+                  await invalidateFilterMeta();
+                } catch (e) {
+                  console.error('Failed to update role on project', e);
+                }
+              }}
+              getPersonDepartmentId={(personId) => {
+                const p = people.find(pp => pp.id === personId);
+                return (p?.department ?? null) as any;
+              }}
               showAddAssignment={showAddAssignment}
               onAddAssignment={handleAddAssignment}
               onSaveAssignment={handleSaveAssignment}

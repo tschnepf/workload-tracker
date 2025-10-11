@@ -1,5 +1,7 @@
 import React from 'react';
 import type { Assignment } from '@/types/models';
+import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
+import RoleDropdown from '@/roles/components/RoleDropdown';
 
 export interface AssignmentRowProps {
   assignment: Assignment;
@@ -18,6 +20,8 @@ export interface AssignmentRowProps {
   onRoleSelect: (role: string) => void;
   onHoursChange: (hours: number) => void;
   getCurrentWeekHours: (assignment: Assignment) => number;
+  onChangeAssignmentRole?: (assignmentId: number, roleId: number | null, roleName: string | null) => void;
+  personDepartmentId?: number | null;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = ({
@@ -33,7 +37,11 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   onRoleSelect,
   onHoursChange,
   getCurrentWeekHours,
+  onChangeAssignmentRole,
+  personDepartmentId,
 }) => {
+  const [openRole, setOpenRole] = React.useState(false);
+  const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
   if (isEditing) {
     return (
       <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]">
@@ -114,7 +122,26 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
               )}
             </div>
           </div>
-          <div className="text-[var(--muted)]">{assignment.roleOnProject || 'Team Member'}</div>
+          <div className="text-[var(--muted)]">
+            <button
+              type="button"
+              className="hover:text-[var(--text)]"
+              onClick={() => setOpenRole(v => !v)}
+              title="Edit role on project"
+            >
+              {assignment.roleName || assignment.roleOnProject || 'Set role'}
+            </button>
+            {openRole && (
+              <div className="relative mt-1">
+                <RoleDropdown
+                  roles={roles as any}
+                  currentId={(assignment as any).roleOnProjectId ?? null}
+                  onSelect={(id, name) => onChangeAssignmentRole?.(assignment.id!, id, name)}
+                  onClose={() => setOpenRole(false)}
+                />
+              </div>
+            )}
+          </div>
           <div className="text-[var(--muted)]">{getCurrentWeekHours(assignment)}h</div>
         </div>
       </div>
@@ -137,4 +164,3 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
 };
 
 export default React.memo(AssignmentRow);
-
