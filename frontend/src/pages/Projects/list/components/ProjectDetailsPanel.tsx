@@ -129,10 +129,20 @@ const ProjectDetailsPanel: React.FC<Props> = ({
       return [0,7,14,21].map(off => { const d = new Date(monday); d.setDate(d.getDate()+off); return fmt(d); });
     }
     const baseline = currentWeekKey || sorted[0];
-    const next = sorted.filter(k => k >= baseline).slice(0, 4);
-    if (next.length >= 4) return next;
-    const backfill = sorted.slice(Math.max(0, sorted.length - (4 - next.length)));
-    return [...next, ...backfill].slice(0,4);
+    const future = sorted.filter(k => k >= baseline);
+    const out: string[] = [];
+    for (let i = 0; i < future.length && out.length < 4; i++) out.push(future[i]);
+    if (out.length < 4) {
+      const back: string[] = [];
+      for (let i = sorted.length - 1; i >= 0 && out.length + back.length < 4; i--) {
+        const k = sorted[i];
+        if (k < baseline) back.push(k);
+      }
+      back.reverse();
+      out.push(...back);
+    }
+    // Ensure uniqueness and cap to 4
+    return Array.from(new Set(out)).slice(0, 4);
   }, [assignments, currentWeekKey]);
 
   // Selection model reused from Assignments grid
@@ -278,6 +288,17 @@ const ProjectDetailsPanel: React.FC<Props> = ({
           >
             + Add Assignment
           </button>
+        </div>
+        {/* Week headers aligned with the four cells per row */}
+        <div className="grid grid-cols-3 gap-4 items-center mb-2">
+          <div />
+          <div className="col-span-2">
+            <div className="grid text-[11px] text-[var(--muted)]" style={{ gridTemplateColumns: 'repeat(4, 64px)' }}>
+              {toWeekHeader(weekKeys).map(h => (
+                <div key={h.date} className="text-center truncate" title={h.fullDisplay}>{h.display}</div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="space-y-2">

@@ -177,10 +177,10 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
             </div>
           </div>
           <div className="col-span-2">
-            <div className="grid grid-cols-4 bg-[var(--surface)]">
+            <div className="grid bg-[var(--surface)]" style={{ gridTemplateColumns: 'repeat(4, 64px)' }}>
               {(weekKeys || computedWeekKeys).map((wk) => (
                 <WeekCell
-                  key={wk}
+                  key={`${wk}-${assignment.id}`}
                   weekKey={wk}
                   isSelected={Boolean(isCellSelected?.(assignment.id!, wk))}
                   isEditing={Boolean(isEditingCell?.(assignment.id!, wk))}
