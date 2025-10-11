@@ -179,7 +179,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                           if (!Number.isNaN(n)) await onUpdateWeekHours?.(assignment.id!, wk, n);
                           setEditingWeekKey(null);
                         }}
-                        className="w-14 px-1 py-0.5 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+                        className="w-14 px-1 py-0.5 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                         autoFocus
                       />
                     ) : (
