@@ -107,45 +107,57 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
     );
   }
 
+  // Derive next 4 Monday week keys from provided currentWeekKey
+  const weekKeys = React.useMemo(() => {
+    if (!currentWeekKey) return [] as string[];
+    const base = new Date(currentWeekKey + 'T00:00:00');
+    const addDays = (d: number) => {
+      const dt = new Date(base);
+      dt.setDate(dt.getDate() + d);
+      return dt.toISOString().split('T')[0];
+    };
+    return [0, 7, 14, 21].map(addDays);
+  }, [currentWeekKey]);
+
   return (
     <div className="flex justify-between items-center p-2 bg-[var(--cardHover)] rounded">
       <div className="flex-1">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 items-center">
           <div>
-            <div className="text-[var(--text)]">{assignment.personName || 'Unknown'}</div>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {assignment.personSkills?.filter((s) => s.skillType === 'strength').slice(0, 3).map((skill, i) => (
-                <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  {skill.skillTagName}
-                </span>
-              ))}
-              {assignment.personSkills?.filter((s) => s.skillType === 'strength').length === 0 && (
-                <span className="text-[var(--muted)] text-xs">No skills listed</span>
+            <div className="text-[var(--text)] font-medium leading-tight">{assignment.personName || 'Unknown'}</div>
+            <div className="mt-0.5 text-[var(--muted)] text-xs">
+              <button
+                type="button"
+                className="hover:text-[var(--text)]"
+                onClick={() => setOpenRole(v => !v)}
+                title="Edit role on project"
+              >
+                {assignment.roleName || assignment.roleOnProject || 'Set role'}
+              </button>
+              {openRole && (
+                <div className="relative mt-1">
+                  <RoleDropdown
+                    roles={roles as any}
+                    currentId={(assignment as any).roleOnProjectId ?? null}
+                    onSelect={(id, name) => onChangeAssignmentRole?.(assignment.id!, id, name)}
+                    onClose={() => setOpenRole(false)}
+                  />
+                </div>
               )}
             </div>
           </div>
-          <div className="text-[var(--muted)]">
-            <button
-              type="button"
-              className="hover:text-[var(--text)]"
-              onClick={() => setOpenRole(v => !v)}
-              title="Edit role on project"
-            >
-              {assignment.roleName || assignment.roleOnProject || 'Set role'}
-            </button>
-            {openRole && (
-              <div className="relative mt-1">
-                <RoleDropdown
-                  roles={roles as any}
-                  currentId={(assignment as any).roleOnProjectId ?? null}
-                  onSelect={(id, name) => onChangeAssignmentRole?.(assignment.id!, id, name)}
-                  onClose={() => setOpenRole(false)}
-                />
-              </div>
-            )}
-          </div>
-          <div className="text-[var(--muted)]" title={`Hours allocated for week of ${currentWeekKey ?? ''}`}>
-            This week {getCurrentWeekHours(assignment)}h
+          <div className="col-span-2">
+            <div className="flex gap-2">
+              {weekKeys.map((wk) => (
+                <span
+                  key={wk}
+                  className="px-2 py-0.5 rounded-full text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                  title={`Week of ${wk}`}
+                >
+                  {(assignment.weeklyHours?.[wk] || 0)}h
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
