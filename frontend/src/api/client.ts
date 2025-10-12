@@ -82,9 +82,12 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
   await waitForAuthReady();
   const keyPath = ensureTrailingSlash(materializePath(typeof path === 'string' ? path : String(path), opts));
   let headers = withAuth(opts?.headers);
-  // Inject If-Match for detail mutations when we have an ETag; if we don't, seed it first via GET
+  // Inject If-Match for detail mutations when we have a strong ETag.
+  // If missing, seed via GET. Never use weak ETags (W/..) for If-Match.
   if (method === 'PATCH' || method === 'PUT' || method === 'DELETE') {
     let etag = etagStore.get(keyPath);
+    const isWeak = (t?: string) => !!t && /^\s*W\//.test(t);
+    if (isWeak(etag)) etag = undefined; // avoid weak etags for If-Match
     if (!headers['If-Match'] && !etag) {
       try {
         // Seed ETag by retrieving the latest representation for this detail resource
@@ -94,7 +97,7 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
         const seeded = getRes?.response?.headers?.get?.('etag');
         if (seeded) {
           etagStore.set(keyPath, seeded);
-          etag = seeded;
+          etag = isWeak(seeded) ? undefined : seeded;
         }
       } catch {
         // best-effort; proceed without ETag if server allows
@@ -127,14 +130,15 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
       // Retry once
       res = await call();
     } else if (status === 412) {
-      // ETag mismatch: refresh ETag and retry once
+      // ETag mismatch: refresh ETag and retry once; if still failing, try without If-Match
       try {
         const getRes = await rawClient.GET(path as any, { ...opts, headers: withAuth(opts?.headers) });
         const newEtag = getRes.response?.headers?.get?.('etag');
         if (newEtag) etagStore.set(keyPath, newEtag);
         // Rebuild headers with fresh If-Match
         let retryHeaders = withAuth(opts?.headers);
-        const etag = etagStore.get(keyPath);
+        let etag = etagStore.get(keyPath);
+        if (etag && /^\s*W\//.test(etag)) etag = undefined; // don't use weak for If-Match
         if (etag) retryHeaders = { ...retryHeaders, 'If-Match': etag };
         res = await (async () => {
           switch (method) {
@@ -144,6 +148,19 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
             case 'DELETE': return rawClient.DELETE(path as any, { ...req, headers: retryHeaders });
           }
         })();
+
+        // If still failing with 412, drop If-Match and proceed (server spec: absent If-Match proceeds)
+        if (res.error && (res.response?.status === 412)) {
+          const noMatchHeaders = withAuth(opts?.headers);
+          res = await (async () => {
+            switch (method) {
+              case 'POST': return rawClient.POST(path as any, { ...req, headers: noMatchHeaders });
+              case 'PUT': return rawClient.PUT(path as any, { ...req, headers: noMatchHeaders });
+              case 'PATCH': return rawClient.PATCH(path as any, { ...req, headers: noMatchHeaders });
+              case 'DELETE': return rawClient.DELETE(path as any, { ...req, headers: noMatchHeaders });
+            }
+          })();
+        }
       } catch {}
     }
   }
