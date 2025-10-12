@@ -203,7 +203,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="text-[var(--muted)] text-xs">Hours hidden</div>
+              <div className="h-8" />
             )}
           </div>
         </div>

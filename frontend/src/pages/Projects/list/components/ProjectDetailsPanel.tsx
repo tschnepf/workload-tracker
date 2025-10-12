@@ -321,8 +321,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
       </div>
 
       <div className="p-4 border-b border-[var(--border)]">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[var(--muted)] text-xs">Team Members only</div>
+        <div className="flex items-center justify-end mb-2">
           <button
             onClick={onAddAssignment}
             className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors"
