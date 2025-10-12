@@ -28,20 +28,13 @@ export async function applyHoursToCellsOptimistic(params: {
   applyLocally(updates);
 
   try {
-    if (updates.size > 1) {
-      const payload = Array.from(updates.entries()).map(([assignmentId, weeklyHours]) => ({ assignmentId, weeklyHours }));
-      const res = await assignmentsApi.bulkUpdateHours(payload);
-      // Persist returned ETags per assignment to avoid stale 412s on subsequent writes
-      try {
-        for (const r of (res?.results || [])) {
-          if (r?.assignmentId && r?.etag) {
-            etagStore.set(`/assignments/${r.assignmentId}/`, r.etag);
-          }
-        }
-      } catch {}
-    } else {
-      const [only] = Array.from(updates.entries());
-      await assignmentsApi.update(only[0], { weeklyHours: only[1] });
+    // Use read-modify-write per assignment to guarantee absolute values (not additive),
+    // and to base on the latest server state to avoid stale merges.
+    const entries = Array.from(updates.entries());
+    for (const [assignmentId, desiredMap] of entries) {
+      const current = await assignmentsApi.get(assignmentId);
+      const merged = { ...(current?.weeklyHours || {}), ...(desiredMap || {}) } as Record<string, number>;
+      await assignmentsApi.update(assignmentId, { weeklyHours: merged });
     }
     await (afterSuccess?.());
   } catch (e) {
