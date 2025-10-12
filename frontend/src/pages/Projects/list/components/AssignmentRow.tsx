@@ -146,7 +146,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
       dt.setDate(dt.getDate() + d);
       return dt.toISOString().split('T')[0];
     };
-    return [0, 7, 14, 21].map(addDays);
+    return [0, 7, 14, 21, 28, 35].map(addDays);
   }, [currentWeekKey]);
 
   return (
@@ -177,7 +177,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
             </div>
           </div>
           <div className="col-span-2">
-            <div className="grid bg-[var(--surface)]" style={{ gridTemplateColumns: 'repeat(4, 64px)' }}>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(6, 64px)' }}>
               {(weekKeys || computedWeekKeys).map((wk) => (
                 <WeekCell
                   key={`${wk}-${assignment.id}`}
@@ -202,16 +202,10 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
       </div>
       <div className="flex gap-1">
         <button
-          onClick={onEdit}
-          className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[var(--text)] hover:bg-[var(--cardHover)] hover:border-[var(--border)] transition-colors"
-        >
-          Edit
-        </button>
-        <button
           onClick={onDelete}
           className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-red-400 hover:bg-red-500/20 hover:border-red-500/30 transition-colors"
         >
-          Delete
+          Remove Assignment
         </button>
       </div>
     </div>

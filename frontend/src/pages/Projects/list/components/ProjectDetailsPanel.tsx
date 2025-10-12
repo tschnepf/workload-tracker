@@ -1,6 +1,9 @@
 import React from 'react';
+import { Link } from 'react-router';
 import type { Project, Assignment, Person } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
+import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
+import RoleDropdown from '@/roles/components/RoleDropdown';
 import AssignmentRow from './AssignmentRow';
 import type { AddAssignmentState } from '@/pages/Projects/list/types';
 import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
@@ -13,6 +16,7 @@ interface Props {
   statusDropdownOpen: boolean;
   setStatusDropdownOpen: (v: boolean) => void;
   onStatusChange: (status: string) => void;
+  onDeleteProject?: (id: number) => Promise<void> | void;
 
   assignments: Assignment[];
   editingAssignmentId: number | null;
@@ -107,7 +111,19 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   setCandidatesOnly,
   availabilityMap,
   deliverablesSlot,
+  onDeleteProject,
 }) => {
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [openAddRole, setOpenAddRole] = React.useState(false);
+
+  // Determine department for selected person to fetch appropriate role options
+  const selectedDeptId = React.useMemo(() => {
+    if (!addAssignmentState?.selectedPerson) return null as number | null;
+    return getPersonDepartmentId ? getPersonDepartmentId(addAssignmentState.selectedPerson.id) : null;
+  }, [addAssignmentState?.selectedPerson, getPersonDepartmentId]);
+
+  const { data: addRoles = [] } = useProjectRoles(selectedDeptId ?? undefined);
   // Build week keys from assignment data to avoid TZ drift and mismatches.
   // Prefer the next 4 assignment week keys >= baseline; fallback to local Monday +3.
   const weekKeys = React.useMemo(() => {
@@ -126,15 +142,15 @@ const ProjectDetailsPanel: React.FC<Props> = ({
       monday.setDate(monday.getDate() - ((dow + 6) % 7));
       const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
       const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      return [0,7,14,21].map(off => { const d = new Date(monday); d.setDate(d.getDate()+off); return fmt(d); });
+      return [0,7,14,21,28,35].map(off => { const d = new Date(monday); d.setDate(d.getDate()+off); return fmt(d); });
     }
     const baseline = currentWeekKey || sorted[0];
     const future = sorted.filter(k => k >= baseline);
     const out: string[] = [];
-    for (let i = 0; i < future.length && out.length < 4; i++) out.push(future[i]);
-    if (out.length < 4) {
+    for (let i = 0; i < future.length && out.length < 6; i++) out.push(future[i]);
+    if (out.length < 6) {
       const back: string[] = [];
-      for (let i = sorted.length - 1; i >= 0 && out.length + back.length < 4; i--) {
+      for (let i = sorted.length - 1; i >= 0 && out.length + back.length < 6; i--) {
         const k = sorted[i];
         if (k < baseline) back.push(k);
       }
@@ -142,7 +158,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
       out.push(...back);
     }
     // Ensure uniqueness and cap to 4
-    return Array.from(new Set(out)).slice(0, 4);
+    return Array.from(new Set(out)).slice(0, 6);
   }, [assignments, currentWeekKey]);
 
   // Selection model reused from Assignments grid
@@ -227,7 +243,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
 
   return (
     <>
-      <div className="p-4 border-b border-[var(--border)]">
+      <div className="px-2 py-4 border-b border-[var(--border)]">
         <div className="flex justify-between items-start mb-3">
           <div>
             <h2 className="text-xl font-bold text-[var(--text)] mb-2">{project.name}</h2>
@@ -274,7 +290,56 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* actions in parent if needed */}
+            <Link to={`/projects/${project.id}/edit`}>
+              <button
+                className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors"
+                aria-label="Edit Project"
+              >
+                Edit
+              </button>
+            </Link>
+            {onDeleteProject && (
+              confirmingDelete ? (
+                <>
+                  <button
+                    disabled={isDeleting}
+                    onClick={async () => {
+                      // Second confirmation to avoid accidental deletion
+                      const ok = window.confirm('This will permanently delete the project and its data. Are you sure?');
+                      if (!ok) return;
+                      try {
+                        setIsDeleting(true);
+                        await onDeleteProject(project.id!);
+                      } finally {
+                        setIsDeleting(false);
+                        setConfirmingDelete(false);
+                      }
+                    }}
+                    className="px-2 py-0.5 text-xs rounded border bg-red-600/20 border-red-500/50 text-red-300 hover:bg-red-600/30 transition-colors disabled:opacity-50"
+                    aria-label="Confirm Delete Project"
+                    title="Permanently delete this project"
+                  >
+                    {isDeleting ? 'Deleting…' : 'Confirm Delete'}
+                  </button>
+                  <button
+                    disabled={isDeleting}
+                    onClick={() => setConfirmingDelete(false)}
+                    className="px-2 py-0.5 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setConfirmingDelete(true)}
+                  className="px-2 py-0.5 text-xs rounded border bg-transparent border-red-500/50 text-red-300 hover:bg-red-600/20 transition-colors"
+                  aria-label="Delete Project"
+                  title="Delete this project"
+                >
+                  Delete
+                </button>
+              )
+            )}
           </div>
         </div>
       </div>
@@ -289,15 +354,33 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             + Add Assignment
           </button>
         </div>
-        {/* Week headers aligned with the four cells per row */}
-        <div className="grid grid-cols-3 gap-4 items-center mb-2">
-          <div />
-          <div className="col-span-2">
-            <div className="grid text-[11px] text-[var(--muted)]" style={{ gridTemplateColumns: 'repeat(4, 64px)' }}>
-              {toWeekHeader(weekKeys).map(h => (
-                <div key={h.date} className="text-center truncate" title={h.fullDisplay}>{h.display}</div>
-              ))}
+        {/* Week headers aligned with the hour grid columns (mirror row layout) */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex-1">
+            <div className="grid grid-cols-3 gap-4 items-center">
+              <div />
+              <div className="col-span-2">
+                <div className="grid text-[11px] text-[var(--muted)]" style={{ gridTemplateColumns: 'repeat(6, 64px)' }}>
+                  {toWeekHeader(weekKeys).map(h => (
+                    <div
+                      key={h.date}
+                      className="text-center truncate border-l border-[var(--border)] h-8 flex items-center justify-center"
+                      title={h.fullDisplay}
+                    >
+                      {h.display}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
+          </div>
+          {/* Reserve exact space using an invisible copy of the row action button */}
+          <div className="shrink-0">
+            <button
+              className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-red-400 transition-colors invisible pointer-events-none"
+            >
+              Remove Assignment
+            </button>
           </div>
         </div>
 
@@ -415,25 +498,23 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   )}
                 </div>
                 <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Role on project..."
-                    value={addAssignmentState.roleSearch}
-                    onChange={(e) => onRoleSearchNew(e.target.value)}
-                    className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                  />
-                  {roleSearchResultsNew.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
-                      {roleSearchResultsNew.map((role) => (
-                        <button
-                          key={role}
-                          onClick={() => onRoleSelectNew(role)}
-                          className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0"
-                        >
-                          {role}
-                        </button>
-                      ))}
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpenAddRole((v) => !v)}
+                    className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-left text-[var(--text)] hover:bg-[var(--cardHover)]"
+                    aria-haspopup="listbox"
+                    aria-expanded={openAddRole}
+                  >
+                    {addAssignmentState.roleOnProject || 'Set role'}
+                  </button>
+                  {openAddRole && (
+                    <RoleDropdown
+                      roles={addRoles as any}
+                      currentId={null}
+                      onSelect={(_id, name) => { onRoleSelectNew(name || ''); }}
+                      onClose={() => setOpenAddRole(false)}
+                      labelledById={undefined}
+                    />
                   )}
                 </div>
                 <div className="flex gap-1">

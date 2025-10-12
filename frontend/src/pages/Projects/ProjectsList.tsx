@@ -294,6 +294,20 @@ const ProjectsList: React.FC = () => {
 
   const handleSort = onSort;
 
+  // Delete the selected project (two-step confirm is handled in panel)
+  const handleDeleteProject = useCallback(async (id: number) => {
+    try {
+      await deleteProjectMutation.mutateAsync(id);
+      // Clear current selection; effect will select first available project when data refreshes
+      setSelectedProject(null);
+      setSelectedIndex(-1);
+      setStatusDropdownOpen(false);
+    } catch (e) {
+      console.error('Failed to delete project', e);
+      setError('Failed to delete project');
+    }
+  }, [deleteProjectMutation, setSelectedProject, setSelectedIndex]);
+
   // Page ready timing
   const [pageStart] = useState(() => performance.now());
   useEffect(() => {
@@ -385,6 +399,7 @@ const ProjectsList: React.FC = () => {
               statusDropdownOpen={statusDropdownOpen}
               setStatusDropdownOpen={setStatusDropdownOpen}
               onStatusChange={handleStatusChange}
+              onDeleteProject={handleDeleteProject}
               assignments={assignments}
               editingAssignmentId={editingAssignment}
               editData={editData}
