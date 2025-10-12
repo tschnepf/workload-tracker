@@ -38,6 +38,7 @@ export interface AssignmentRowProps {
   onEditValueChangeCell?: (v: string) => void;
   getDeliverablesForProjectWeek?: (projectId: number | undefined, weekStart: string) => Deliverable[];
   optimisticHours?: Map<number, Record<string, number>>;
+  showHours?: boolean;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = ({
@@ -70,6 +71,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   onEditValueChangeCell,
   getDeliverablesForProjectWeek,
   optimisticHours,
+  showHours,
 }) => {
   const [openRole, setOpenRole] = React.useState(false);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
@@ -149,6 +151,8 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
     return [0, 7, 14, 21, 28, 35].map(addDays);
   }, [currentWeekKey]);
 
+  const showHoursGrid = showHours !== false; // default to true unless explicitly false
+
   return (
     <div className="flex justify-between items-center p-2 bg-[var(--cardHover)] rounded">
       <div className="flex-1">
@@ -177,26 +181,30 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
             </div>
           </div>
           <div className="col-span-2">
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(6, 64px)' }}>
-              {(weekKeys || computedWeekKeys).map((wk) => (
-                <WeekCell
-                  key={`${wk}-${assignment.id}`}
-                  weekKey={wk}
-                  isSelected={Boolean(isCellSelected?.(assignment.id!, wk))}
-                  isEditing={Boolean(isEditingCell?.(assignment.id!, wk))}
-                  currentHours={(optimisticHours?.get(assignment.id!)?.[wk] ?? assignment.weeklyHours?.[wk] ?? 0) as number}
-                  onSelect={(isShift) => onCellSelect?.(assignment.id!, wk, isShift)}
-                  onMouseDown={() => onCellMouseDown?.(assignment.id!, wk)}
-                  onMouseEnter={() => onCellMouseEnter?.(assignment.id!, wk)}
-                  onEditStart={() => onEditStartCell?.(assignment.id!, wk, String(assignment.weeklyHours?.[wk] || 0))}
-                  onEditSave={() => onEditSaveCell?.()}
-                  onEditCancel={() => onEditCancelCell?.()}
-                  editingValue={editingValue || ''}
-                  onEditValueChange={(v) => onEditValueChangeCell?.(v)}
-                  deliverablesForWeek={getDeliverablesForProjectWeek?.(assignment.project, wk) || []}
-                />
-              ))}
-            </div>
+            {showHoursGrid ? (
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(6, 64px)' }}>
+                {(weekKeys || computedWeekKeys).map((wk) => (
+                  <WeekCell
+                    key={`${wk}-${assignment.id}`}
+                    weekKey={wk}
+                    isSelected={Boolean(isCellSelected?.(assignment.id!, wk))}
+                    isEditing={Boolean(isEditingCell?.(assignment.id!, wk))}
+                    currentHours={(optimisticHours?.get(assignment.id!)?.[wk] ?? assignment.weeklyHours?.[wk] ?? 0) as number}
+                    onSelect={(isShift) => onCellSelect?.(assignment.id!, wk, isShift)}
+                    onMouseDown={() => onCellMouseDown?.(assignment.id!, wk)}
+                    onMouseEnter={() => onCellMouseEnter?.(assignment.id!, wk)}
+                    onEditStart={() => onEditStartCell?.(assignment.id!, wk, String(assignment.weeklyHours?.[wk] || 0))}
+                    onEditSave={() => onEditSaveCell?.()}
+                    onEditCancel={() => onEditCancelCell?.()}
+                    editingValue={editingValue || ''}
+                    onEditValueChange={(v) => onEditValueChangeCell?.(v)}
+                    deliverablesForWeek={getDeliverablesForProjectWeek?.(assignment.project, wk) || []}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-[var(--muted)] text-xs">Hours hidden</div>
+            )}
           </div>
         </div>
       </div>

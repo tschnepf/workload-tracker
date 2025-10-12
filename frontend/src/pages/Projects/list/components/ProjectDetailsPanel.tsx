@@ -330,35 +330,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             + Add Assignment
           </button>
         </div>
-        {/* Week headers aligned with the hour grid columns (mirror row layout) */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex-1">
-            <div className="grid grid-cols-3 gap-4 items-center">
-              <div />
-              <div className="col-span-2">
-                <div className="grid text-[11px] text-[var(--muted)]" style={{ gridTemplateColumns: 'repeat(6, 64px)' }}>
-                  {toWeekHeader(weekKeys).map(h => (
-                    <div
-                      key={h.date}
-                      className="text-center truncate border-l border-[var(--border)] h-8 flex items-center justify-center"
-                      title={h.fullDisplay}
-                    >
-                      {h.display}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* Reserve exact space using an invisible copy of the row action button */}
-          <div className="shrink-0">
-            <button
-              className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-red-400 transition-colors invisible pointer-events-none"
-            >
-              Remove Assignment
-            </button>
-          </div>
-        </div>
+        {/* Hours are temporarily hidden on Project Details page */}
 
         <div className="space-y-2">
           {assignments.length > 0 ? (
@@ -369,6 +341,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   isEditing={editingAssignmentId === assignment.id}
                   editData={editData}
                   roleSearchResults={roleSearchResults}
+                  showHours={false}
                   onEdit={() => onEditAssignment(assignment)}
                   onDelete={() => assignment.id && onDeleteAssignment(assignment.id)}
                   onSave={() => assignment.id && onSaveEdit(assignment.id)}
