@@ -6,7 +6,7 @@ import { trackPerformanceEvent } from '@/utils/monitoring';
 
 export function useProjectFilters(projects: Project[], filterMetadata: ProjectFilterMetadataResponse | null) {
   const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<string>>(new Set(['active', 'active_ca']));
-  const [sortBy, setSortBy] = useState('name');
+  const [sortBy, setSortBy] = useState('client');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -136,4 +136,3 @@ export function useProjectFilters(projects: Project[], filterMetadata: ProjectFi
     sortedProjects,
   } as const;
 }
-
