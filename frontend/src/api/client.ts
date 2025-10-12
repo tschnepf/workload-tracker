@@ -82,10 +82,25 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
   await waitForAuthReady();
   const keyPath = ensureTrailingSlash(materializePath(typeof path === 'string' ? path : String(path), opts));
   let headers = withAuth(opts?.headers);
-  // Inject If-Match for detail mutations when we have an ETag
-  if ((method === 'PATCH' || method === 'PUT' || method === 'DELETE') && !headers['If-Match']) {
-    const etag = etagStore.get(keyPath);
-    if (etag) headers = { ...headers, 'If-Match': etag };
+  // Inject If-Match for detail mutations when we have an ETag; if we don't, seed it first via GET
+  if (method === 'PATCH' || method === 'PUT' || method === 'DELETE') {
+    let etag = etagStore.get(keyPath);
+    if (!headers['If-Match'] && !etag) {
+      try {
+        // Seed ETag by retrieving the latest representation for this detail resource
+        const getOpts: any = { ...opts, headers: withAuth(opts?.headers) };
+        delete getOpts.body; // ensure no body on GET
+        const getRes = await rawClient.GET(path as any, getOpts);
+        const seeded = getRes?.response?.headers?.get?.('etag');
+        if (seeded) {
+          etagStore.set(keyPath, seeded);
+          etag = seeded;
+        }
+      } catch {
+        // best-effort; proceed without ETag if server allows
+      }
+    }
+    if (!headers['If-Match'] && etag) headers = { ...headers, 'If-Match': etag };
   }
   const req = { ...opts, headers };
 
