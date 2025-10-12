@@ -1,4 +1,5 @@
 import { assignmentsApi } from '@/services/api';
+import { etagStore } from '@/api/etagStore';
 
 export type Cell = { assignmentId: number; weekKey: string };
 
@@ -29,7 +30,15 @@ export async function applyHoursToCellsOptimistic(params: {
   try {
     if (updates.size > 1) {
       const payload = Array.from(updates.entries()).map(([assignmentId, weeklyHours]) => ({ assignmentId, weeklyHours }));
-      await assignmentsApi.bulkUpdateHours(payload);
+      const res = await assignmentsApi.bulkUpdateHours(payload);
+      // Persist returned ETags per assignment to avoid stale 412s on subsequent writes
+      try {
+        for (const r of (res?.results || [])) {
+          if (r?.assignmentId && r?.etag) {
+            etagStore.set(`/assignments/${r.assignmentId}/`, r.etag);
+          }
+        }
+      } catch {}
     } else {
       const [only] = Array.from(updates.entries());
       await assignmentsApi.update(only[0], { weeklyHours: only[1] });
@@ -41,4 +50,3 @@ export async function applyHoursToCellsOptimistic(params: {
     throw e;
   }
 }
-

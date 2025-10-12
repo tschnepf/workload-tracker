@@ -127,39 +127,15 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   // Build week keys from assignment data to avoid TZ drift and mismatches.
   // Prefer the next 4 assignment week keys >= baseline; fallback to local Monday +3.
   const weekKeys = React.useMemo(() => {
-    const all = new Set<string>();
-    try {
-      for (const a of assignments) {
-        const wh = (a.weeklyHours || {}) as Record<string, number>;
-        Object.keys(wh).forEach(k => { if (k && k.length === 10) all.add(k); });
-      }
-    } catch {}
-    const sorted = Array.from(all).sort();
-    if (sorted.length === 0) {
-      const base = currentWeekKey ? new Date(currentWeekKey.replace(/-/g, '/') + ' 00:00:00') : new Date();
-      const monday = new Date(base);
-      const dow = monday.getDay();
-      monday.setDate(monday.getDate() - ((dow + 6) % 7));
-      const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
-      const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      return [0,7,14,21,28,35].map(off => { const d = new Date(monday); d.setDate(d.getDate()+off); return fmt(d); });
-    }
-    const baseline = currentWeekKey || sorted[0];
-    const future = sorted.filter(k => k >= baseline);
-    const out: string[] = [];
-    for (let i = 0; i < future.length && out.length < 6; i++) out.push(future[i]);
-    if (out.length < 6) {
-      const back: string[] = [];
-      for (let i = sorted.length - 1; i >= 0 && out.length + back.length < 6; i--) {
-        const k = sorted[i];
-        if (k < baseline) back.push(k);
-      }
-      back.reverse();
-      out.push(...back);
-    }
-    // Ensure uniqueness and cap to 4
-    return Array.from(new Set(out)).slice(0, 6);
-  }, [assignments, currentWeekKey]);
+    // Always render a consistent 6-week window anchored to the current week (Monday)
+    const base = currentWeekKey ? new Date(currentWeekKey.replace(/-/g, '/') + ' 00:00:00') : new Date();
+    const monday = new Date(base);
+    const dow = monday.getDay();
+    monday.setDate(monday.getDate() - ((dow + 6) % 7));
+    const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    return [0, 7, 14, 21, 28, 35].map(off => { const d = new Date(monday); d.setDate(d.getDate() + off); return fmt(d); });
+  }, [currentWeekKey]);
 
   // Selection model reused from Assignments grid
   const rowOrder = React.useMemo(() => assignments.map(a => String(a.id)), [assignments]);

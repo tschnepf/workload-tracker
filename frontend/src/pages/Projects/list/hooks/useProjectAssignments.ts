@@ -12,9 +12,33 @@ export function useProjectAssignments({ projectId, people }: UseProjectAssignmen
   const [assignments, setAssignments] = useState<Assignment[]>([]);
 
   const reload = useCallback(async (pid: number) => {
-    const response = await assignmentsApi.list({ project: pid });
-    const projectAssignments = response.results || [];
-    setAssignments(projectAssignments);
+    // Fetch all pages to avoid partial lists and unstable ordering
+    let page = 1;
+    const all: Assignment[] = [];
+    // Defensive upper bound to avoid accidental infinite loops
+    for (let i = 0; i < 100; i++) {
+      const resp = await assignmentsApi.list({ project: pid, page, page_size: 200 });
+      const items = (resp?.results || []) as Assignment[];
+      all.push(...items);
+      const next = resp?.next;
+      if (!next) break;
+      try {
+        const url = new URL(next);
+        const nextPage = url.searchParams.get('page');
+        page = nextPage ? Number(nextPage) : page + 1;
+      } catch {
+        page = page + 1;
+      }
+    }
+    // Stable order by person name, then id
+    all.sort((a, b) => {
+      const an = (a as any).personName || '';
+      const bn = (b as any).personName || '';
+      if (an.toLowerCase() < bn.toLowerCase()) return -1;
+      if (an.toLowerCase() > bn.toLowerCase()) return 1;
+      return (a.id || 0) - (b.id || 0);
+    });
+    setAssignments(all);
   }, []);
 
   // Load when selection changes (preserves original behavior via authenticated effect)
@@ -42,4 +66,3 @@ export function useProjectAssignments({ projectId, people }: UseProjectAssignmen
 
   return { assignments, availableRoles, reload } as const;
 }
-

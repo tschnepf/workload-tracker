@@ -673,7 +673,8 @@ export const assignmentsApi = {
     if (params?.department != null) queryParams.set('department', String(params.department));
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`);
+    // Avoid any intermediate caching layers returning stale data after writes
+    return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`, { headers: { 'Cache-Control': 'no-cache' } });
   },
 
   // Start async grid snapshot job (returns jobId)
