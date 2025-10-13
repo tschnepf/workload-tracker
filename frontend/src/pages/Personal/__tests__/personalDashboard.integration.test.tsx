@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithProviders } from '@/test-utils';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 
 vi.mock('@/hooks/useAuth', () => ({
@@ -27,10 +28,7 @@ describe('PersonalDashboard integration', () => {
   it('renders empty-state when user is not linked to a Person', async () => {
     const { useAuth } = await import('@/hooks/useAuth');
     (useAuth as any).mockReturnValue({ person: null, accessToken: 'tok' });
-    const router = createMemoryRouter([
-      { path: '/', element: <PersonalDashboard /> },
-    ], { initialEntries: ['/'] });
-    render(<RouterProvider router={router} />);
+    renderWithProviders(<div />, { routes: [{ path: '/', element: <PersonalDashboard /> }], route: '/' });
     expect(await screen.findByText(/Your account is not linked/i)).toBeTruthy();
   });
 
@@ -49,10 +47,7 @@ describe('PersonalDashboard integration', () => {
       },
     });
 
-    const router = createMemoryRouter([
-      { path: '/', element: <PersonalDashboard /> },
-    ], { initialEntries: ['/'] });
-    render(<RouterProvider router={router} />);
+    renderWithProviders(<div />, { routes: [{ path: '/', element: <PersonalDashboard /> }], route: '/' });
     expect(await screen.findByText('My Summary')).toBeTruthy();
     expect(await screen.findByText('My Projects')).toBeTruthy();
     expect(await screen.findByText('My Deliverables')).toBeTruthy();

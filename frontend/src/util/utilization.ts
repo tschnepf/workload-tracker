@@ -28,9 +28,10 @@ export function resolveUtilizationLevel(args: {
 }): UtilizationLevel {
   const { hours, capacity, percent, scheme } = args;
   const h = Number.isFinite(hours as number) ? Math.max(0, Number(hours)) : 0;
-  if (h === 0) return 'empty';
 
+  // Absolute hours mode uses hour buckets including explicit 'empty' when h === 0
   if (scheme.mode === 'absolute_hours') {
+    if (h === 0) return 'empty';
     return classifyHours(h, scheme);
   }
 
@@ -131,4 +132,3 @@ export function getUtilizationPill(args: {
   }
   return { level, tokens: utilizationLevelToTokens(level), label };
 }
-
