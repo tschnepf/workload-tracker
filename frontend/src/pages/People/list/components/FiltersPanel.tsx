@@ -92,8 +92,12 @@ export default function FiltersPanel(props: FiltersPanelProps) {
                         setDepartmentFilter(prev => prev.filter(d => d !== deptId));
                       }}
                       className="hover:text-[var(--primary)] hover:bg-[var(--surfaceHover)] rounded-full w-3 h-3 flex items-center justify-center"
+                      aria-label={`Remove ${displayName}`}
+                      title={`Remove ${displayName}`}
                     >
-                      A-
+                      <svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                      </svg>
                     </button>
                   </span>
                 );
@@ -167,15 +171,19 @@ export default function FiltersPanel(props: FiltersPanelProps) {
                   className="inline-flex items-center gap-1 px-2 py-0.5 bg-[var(--surfaceHover)] text-[var(--text)] rounded text-xs border border-[var(--primary)]"
                 >
                   {location}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setLocationFilter(prev => prev.filter(l => l !== location));
-                    }}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocationFilter(prev => prev.filter(l => l !== location));
+                      }}
                     className="hover:text-[var(--primary)] hover:bg-[var(--surfaceHover)] rounded-full w-3 h-3 flex items-center justify-center"
-                  >
-                    A-
-                  </button>
+                    aria-label={`Remove ${location}`}
+                    title={`Remove ${location}`}
+                    >
+                      <svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                      </svg>
+                    </button>
                 </span>
               ))}
               <button

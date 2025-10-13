@@ -326,6 +326,25 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         response['Cache-Control'] = 'no-cache'
         return response
 
+    def destroy(self, request, *args, **kwargs):
+        """Delete a person by primary key.
+
+        Note: bypass get_queryset() filtering so deletes work even if the record
+        is inactive or excluded from the default list queryset.
+        Still enforces object-level permissions before deletion.
+        """
+        pk = kwargs.get('pk')
+        try:
+            obj = Person.objects.get(pk=pk)
+        except Person.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Enforce permissions for this object
+        self.check_object_permissions(request, obj)
+
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def _progress_chunk(self, progress_data):
         """Format progress data as JSON chunk"""
         return json.dumps({

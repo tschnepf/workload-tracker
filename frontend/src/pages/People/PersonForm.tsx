@@ -8,7 +8,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
 import { Person, Department, Role } from '@/types/models';
 import { peopleApi, departmentsApi, rolesApi } from '@/services/api';
-import { useUpdatePerson } from '@/hooks/usePeople';
+import { useUpdatePerson, useCreatePerson } from '@/hooks/usePeople';
 import Toast from '@/components/ui/Toast';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
@@ -43,6 +43,7 @@ const PersonForm: React.FC = () => {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const updatePersonMutation = useUpdatePerson();
+  const createPersonMutation = useCreatePerson();
 
   useAuthenticatedEffect(() => {
     loadDepartments(); // Phase 2: Always load departments
@@ -146,11 +147,11 @@ const PersonForm: React.FC = () => {
         if (import.meta.env.DEV) console.log(`[DEBUG] Updating person ${id} with PATCH request`);
         await updatePersonMutation.mutateAsync({ id: parseInt(id), data: apiData });
         setToast({ message: 'Person updated', type: 'success' });
-      } else {
+        if (import.meta.env.DEV) console.log('dY"? [DEBUG] Creating new person with mutation')
         if (import.meta.env.DEV) console.log('🔍 [DEBUG] Creating new person with POST request');
-        const result = await peopleApi.create(apiData);
+        const result = await createPersonMutation.mutateAsync(apiData as any);
         setToast({ message: 'Person created', type: 'success' });
-        if (import.meta.env.DEV) console.log('🔍 [DEBUG] Create API response:', result);
+        if (import.meta.env.DEV) console.log('dY"? [DEBUG] Create mutation response:', result);
       }
 
       if (import.meta.env.DEV) console.log('🔍 [DEBUG] API call successful, navigating to /people');
@@ -350,6 +351,8 @@ const PersonForm: React.FC = () => {
 };
 
 export default PersonForm;
+
+
 
 
 

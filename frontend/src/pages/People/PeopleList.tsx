@@ -18,6 +18,7 @@ import FiltersPanel from '@/pages/People/list/components/FiltersPanel';
 import BulkActionsBar from '@/pages/People/list/components/BulkActionsBar';
 import PeopleListPane from '@/pages/People/list/components/PeopleListPane';
 import { useBulkActions } from '@/pages/People/list/hooks/useBulkActions';
+import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { usePeopleQueryPagination } from '@/pages/People/list/hooks/usePeopleQueryPagination';
 import { usePersonSelection } from '@/pages/People/list/hooks/usePersonSelection';
 
@@ -25,7 +26,7 @@ const PeopleList: React.FC = () => {
   const { people, loading: listLoading, error: listError, fetchNextPage, hasNextPage } = usePeopleQueryPagination();
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
   const [roles, setRoles] = useState<Role[]>([]); // Phase 1: Role management
-  const { selectedPerson, selectedIndex, onRowClick, setSelectedPerson, setSelectedIndex } = usePersonSelection(people);
+  const { selectedPerson, selectedIndex, onRowClick, setSelectedPerson, setSelectedIndex, selectByIndex } = usePersonSelection(people);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]); // Multi-select department filter
   const [locationFilter, setLocationFilter] = useState<string[]>([]); // Multi-select location filter
@@ -36,6 +37,8 @@ const PeopleList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Centralized toasts via toast bus
   const updatePersonMutation = useUpdatePerson();
+  // Global department filter (top bar)
+  const { state: deptState } = useDepartmentFilter();
   
   // Bulk actions state
   const { bulkMode, setBulkMode, selectedPeopleIds, setSelectedPeopleIds, bulkDepartment, setBulkDepartment } = useBulkActions();
@@ -73,6 +76,16 @@ const PeopleList: React.FC = () => {
   };
 
   // Right-panel effects moved into PersonDetailsContainer
+
+  // Mirror global department selection into local People list filter
+  useEffect(() => {
+    const id = deptState.selectedDepartmentId;
+    if (id == null) {
+      setDepartmentFilter([]);
+    } else {
+      setDepartmentFilter([String(id)]);
+    }
+  }, [deptState.selectedDepartmentId]);
 
   const handleColumnSort = (column: 'name' | 'location' | 'department' | 'weeklyCapacity' | 'role') => {
     if (sortBy === column) {
@@ -292,6 +305,22 @@ const PeopleList: React.FC = () => {
             selectedPersonId={selectedPerson?.id ?? null}
             selectedPeopleIds={selectedPeopleIds}
             onRowClick={onRowClick}
+            onArrowKey={(dir) => {
+              if (!filteredAndSortedPeople.length) return;
+              if (selectedIndex < 0) {
+                onRowClick(filteredAndSortedPeople[0], 0);
+                return;
+              }
+              const delta = dir === 'down' ? 1 : -1;
+              const nextIndex = Math.max(0, Math.min(
+                filteredAndSortedPeople.length - 1,
+                selectedIndex + delta
+              ));
+              if (nextIndex !== selectedIndex) {
+                const nextPerson = filteredAndSortedPeople[nextIndex];
+                onRowClick(nextPerson, nextIndex);
+              }
+            }}
             onToggleSelect={(id, checked) => {
               const next = new Set(selectedPeopleIds);
               if (checked) next.add(id); else next.delete(id);
@@ -344,6 +373,7 @@ const PeopleList: React.FC = () => {
 };
 
 export default PeopleList;
+
 
 
 

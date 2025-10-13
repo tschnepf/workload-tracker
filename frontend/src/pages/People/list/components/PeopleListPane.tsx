@@ -11,6 +11,7 @@ export interface PeopleListPaneProps {
   selectedPeopleIds: Set<number>;
   onRowClick: (person: Person, index: number) => void;
   onToggleSelect: (id: number, checked: boolean) => void;
+  onArrowKey?: (dir: 'up' | 'down') => void;
   sortBy: Column;
   sortDirection: 'asc' | 'desc';
   onColumnSort: (c: Column) => void;
@@ -26,6 +27,7 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
     selectedPeopleIds,
     onRowClick,
     onToggleSelect,
+    onArrowKey,
     sortBy,
     sortDirection,
     onColumnSort,
@@ -44,8 +46,20 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
     </button>
   );
 
+  const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
+    if (e.key === 'ArrowDown') {
+      onArrowKey?.('down');
+      e.preventDefault();
+      e.stopPropagation();
+    } else if (e.key === 'ArrowUp') {
+      onArrowKey?.('up');
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
   return (
-    <div className="flex-1 overflow-hidden">
+    <div className="flex-1 overflow-hidden" onKeyDown={handleKeyDown}>
       <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
         {bulkMode && <div className="col-span-1">SELECT</div>}
         <div className={bulkMode ? 'col-span-3' : 'col-span-3'}>
