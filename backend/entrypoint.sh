@@ -1,14 +1,32 @@
 #!/bin/sh
 set -e
 
-echo "Waiting for database..."
-until nc -z -w 3 db 5432; do
-  sleep 1
+echo "Waiting for database readiness (pg_isready)..."
+# Allow overrides via env, default to compose service defaults
+DB_HOST=${POSTGRES_HOST:-db}
+DB_PORT=${POSTGRES_PORT:-5432}
+DB_USER=${POSTGRES_USER:-postgres}
+
+# Prefer pg_isready (accurate readiness) with a simple retry loop
+RETRIES=${DB_WAIT_RETRIES:-60}
+SLEEP=${DB_WAIT_SLEEP_SECS:-1}
+until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" >/dev/null 2>&1; do
+  RETRIES=$((RETRIES-1))
+  if [ "$RETRIES" -le 0 ]; then
+    echo "Database not ready after wait; will proceed and let app handle retries."
+    break
+  fi
+  sleep "$SLEEP"
 done
-echo "Database is ready."
+echo "Database check complete."
 
 # Ensure Django settings module is available for any direct Python calls
 export DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings}
+
+IS_CELERY=0
+case "$1" in
+  celery|*celery*) IS_CELERY=1 ;;
+esac
 
 if [ "${RUN_MIGRATIONS_ON_START:-true}" = "true" ] || [ "${RUN_MIGRATIONS_ON_START:-true}" = "1" ]; then
   echo "Running migrations..."
@@ -18,13 +36,11 @@ else
 fi
 
 # Dev-safe repair for SimpleJWT blacklist tables when schema mismatches occur
-python manage.py repair_token_blacklist --yes || true
-
-# Skip collectstatic automatically for celery processes (workers/beat)
-IS_CELERY=0
-case "$1" in
-  celery|*celery*) IS_CELERY=1 ;;
-esac
+if [ "$IS_CELERY" -eq 0 ]; then
+  python manage.py repair_token_blacklist --yes || echo "repair_token_blacklist failed or skipped; continuing"
+else
+  echo "Skipping repair_token_blacklist for Celery processes"
+fi
 
 if [ "${COLLECT_STATIC:-true}" = "true" ] && [ "$IS_CELERY" -eq 0 ]; then
   echo "Collecting static files..."

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 from django.db import connection, transaction
+from django.db import connections
+from django.db.utils import OperationalError
+from django.conf import settings
+import time
 from django.core.management import call_command
 import os
 
@@ -23,9 +27,32 @@ class Command(BaseCommand):
             help="Run without prompting (intended for containers/CI).",
         )
 
+    def _is_postgres_engine(self) -> bool:
+        try:
+            engine = settings.DATABASES.get('default', {}).get('ENGINE', '')
+        except Exception:
+            engine = ''
+        return 'postgresql' in engine
+
+    def _wait_for_db(self, timeout: int = None, interval: float = None) -> bool:
+        timeout = int(os.getenv('DB_WAIT_TIMEOUT_SECS', str(timeout or 60)))
+        interval = float(os.getenv('DB_WAIT_SLEEP_SECS', str(interval or 1)))
+        start = time.time()
+        while True:
+            try:
+                connections['default'].ensure_connection()
+                return True
+            except OperationalError:
+                if time.time() - start >= timeout:
+                    return False
+                time.sleep(interval)
+
     def handle(self, *args, **options):
-        if connection.vendor != 'postgresql':
-            self.stdout.write('PostgreSQL required for this command; skipping.')
+        if not self._is_postgres_engine():
+            self.stdout.write('PostgreSQL engine not detected; skipping token_blacklist repair.')
+            return ""
+        if not self._wait_for_db():
+            self.stdout.write(self.style.WARNING('Database unreachable after wait; skipping token_blacklist repair.'))
             return ""
         # Opt-in via env in production; default true in dev
         auto_fix = os.getenv("AUTO_FIX_JWT_BLACKLIST", "true").lower() == "true"
@@ -107,8 +134,9 @@ class Command(BaseCommand):
         self.stdout.write("Repairing token_blacklist schema (dropping and re-migrating)...")
         with transaction.atomic():
             with connection.cursor() as cursor:
-                cursor.execute("DROP TABLE IF EXISTS token_blacklist_blacklistedtoken CASCADE;")
-                cursor.execute("DROP TABLE IF EXISTS token_blacklist_outstandingtoken CASCADE;")
+                # Safe to interpolate because schema is regex-validated to [a-z0-9_]+
+                cursor.execute(f"DROP TABLE IF EXISTS {schema}.token_blacklist_blacklistedtoken CASCADE;")
+                cursor.execute(f"DROP TABLE IF EXISTS {schema}.token_blacklist_outstandingtoken CASCADE;")
 
         # Reset just this app and re-apply migrations
         call_command("migrate", "token_blacklist", "zero", fake=True, verbosity=0)
