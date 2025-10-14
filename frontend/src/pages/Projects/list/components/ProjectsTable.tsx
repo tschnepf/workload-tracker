@@ -25,6 +25,7 @@ const ProjectsTable: React.FC<Props> = ({
 }) => {
   const enableVirtual = getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
   const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: 44, overscan: 6, enableVirtual });
+  const groupClients = sortBy === 'client';
 
   const header = (
     <div className="grid grid-cols-8 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
@@ -45,24 +46,39 @@ const ProjectsTable: React.FC<Props> = ({
 
   const nonVirtualBody = (
     <div className="overflow-y-auto h-full">
-      {projects.map((project, index) => (
-        <div
-          key={project.id}
-          onClick={() => onSelect(project, index)}
-          className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
-            selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
-          }`}
-          tabIndex={0}
-        >
-          <div className="col-span-2 text-[var(--muted)] text-xs">{project.client || 'No Client'}</div>
-          <div className="col-span-3">
-            <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
-            <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
+      {projects.map((project, index) => {
+        const prev = index > 0 ? projects[index - 1] : null;
+        const next = index < projects.length - 1 ? projects[index + 1] : null;
+        const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
+        const sameClientAsNext = groupClients && next && (next.client || '') === (project.client || '');
+        const isGroupStart = groupClients && !sameClientAsPrev && index !== 0;
+        const showRowBottomDivider = !groupClients || sameClientAsNext; // hide at end of client group
+        const dividerBorder = selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]';
+        return (
+          <div
+            key={project.id}
+            onClick={() => onSelect(project, index)}
+            className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+              selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
+            } ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
+            tabIndex={0}
+          >
+            <div className="col-span-2 text-[var(--muted)] text-xs">
+              {sameClientAsPrev ? '' : (project.client || 'No Client')}
+            </div>
+            <div className="col-span-3">
+              <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
+              <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
+            </div>
+            <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
+            <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+            {/* Row divider shifted to exclude client column */}
+            {showRowBottomDivider && (
+              <div className={`col-start-3 col-end-9 h-0 border-b ${dividerBorder} pointer-events-none`} />
+            )}
           </div>
-          <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
-          <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -72,23 +88,28 @@ const ProjectsTable: React.FC<Props> = ({
         {items.map((v) => {
           const project = projects[v.index];
           if (!project) return null;
+          const prev = v.index > 0 ? projects[v.index - 1] : null;
+          const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
           return (
             <div
               key={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => onSelect(project, v.index)}
-              className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
-                selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
-              }`}
+              className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+                selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
+              } ${groupClients && v.index !== 0 && (!prev || (prev.client || '') !== (project.client || '')) ? 'border-t border-[var(--border)]' : ''}`}
               tabIndex={0}
             >
-              <div className="col-span-2 text-[var(--muted)] text-xs">{project.client || 'No Client'}</div>
+              <div className="col-span-2 text-[var(--muted)] text-xs">{sameClientAsPrev ? '' : (project.client || 'No Client')}</div>
               <div className="col-span-3">
                 <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
                 <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
               </div>
               <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
               <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+              {(!groupClients || (projects[v.index + 1] && (projects[v.index + 1].client || '') === (project.client || ''))) && (
+                <div className={`col-start-3 col-end-9 h-0 border-b ${selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]'} pointer-events-none`} />
+              )}
             </div>
           );
         })}
@@ -114,4 +135,3 @@ const SortIcon: React.FC<{ column: string; sortBy: string; sortDirection: 'asc' 
 };
 
 export default ProjectsTable;
-
