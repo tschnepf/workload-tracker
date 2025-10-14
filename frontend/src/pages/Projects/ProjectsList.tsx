@@ -31,6 +31,7 @@ import { useProjectAvailability } from '@/pages/Projects/list/hooks/useProjectAv
 import { usePersonSearch } from '@/pages/Projects/list/hooks/usePersonSearch';
 import { useProjectAssignmentAdd } from '@/pages/Projects/list/hooks/useProjectAssignmentAdd';
 import { useProjectStatusMutation } from '@/pages/Projects/list/hooks/useProjectStatusMutation';
+import { useNextDeliverables } from '@/pages/Projects/list/hooks/useNextDeliverables';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -67,8 +68,33 @@ const ProjectsList: React.FC = () => {
     sortedProjects,
   } = useProjectFilters(projects, filterMetadata);
 
+  // Next Deliverables map for list column + sorting
+  const { nextMap: nextDeliverablesMap } = useNextDeliverables(projects);
+
+  // Recompute filters with custom sort getter when needed (stable ID mapping)
+  const {
+    selectedStatusFilters: selectedStatusFilters2,
+    sortBy: sortBy2,
+    sortDirection: sortDirection2,
+    searchTerm: searchTerm2,
+    setSearchTerm: setSearchTerm2,
+    toggleStatusFilter: toggleStatusFilter2,
+    onSort: onSort2,
+    formatFilterStatus: formatFilterStatus2,
+    filteredProjects: filteredProjects2,
+    sortedProjects: sortedProjects2,
+  } = useProjectFilters(projects, filterMetadata, {
+    customSortGetters: {
+      nextDue: (p) => {
+        const d = p.id != null ? nextDeliverablesMap.get(p.id) : null;
+        return d?.date || null;
+      },
+    },
+  });
+
   // Selection (single source of truth)
-  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects);
+  // Use the enhanced sortedProjects2 for selection and table
+  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects2);
 
   // Assignments + available roles
   const { assignments, availableRoles, reload: reloadAssignments } = useProjectAssignments({ projectId: selectedProject?.id, people });
@@ -292,7 +318,7 @@ const ProjectsList: React.FC = () => {
     setError,
   });
 
-  const handleSort = onSort;
+  // Sorting handled via onSort2 in enhanced filters (next deliverable support)
 
   // Delete the selected project (two-step confirm is handled in panel)
   const handleDeleteProject = useCallback(async (id: number) => {
@@ -358,11 +384,11 @@ const ProjectsList: React.FC = () => {
             </div>
             <FiltersBar
               statusOptions={statusOptions}
-              selectedStatusFilters={selectedStatusFilters}
-              onToggleStatus={toggleStatusFilter}
-              searchTerm={searchTerm}
-              onSearchTerm={setSearchTerm}
-              formatFilterStatus={formatFilterStatus}
+              selectedStatusFilters={selectedStatusFilters2}
+              onToggleStatus={toggleStatusFilter2}
+              searchTerm={searchTerm2}
+              onSearchTerm={setSearchTerm2}
+              formatFilterStatus={formatFilterStatus2}
               filterMetaLoading={filterMetaLoading}
               filterMetaError={filterMetaError}
               onRetryFilterMeta={() => refetchFilterMeta()}
@@ -377,13 +403,14 @@ const ProjectsList: React.FC = () => {
 
           {/* Projects Table */}
           <ProjectsTable
-            projects={sortedProjects}
+            projects={sortedProjects2}
             selectedProjectId={selectedProject?.id ?? null}
             onSelect={handleProjectClick}
-            sortBy={sortBy}
-            sortDirection={sortDirection}
-            onSort={onSort}
+            sortBy={sortBy2}
+            sortDirection={sortDirection2}
+            onSort={onSort2}
             loading={loading}
+            nextDeliverables={nextDeliverablesMap}
           />
         </div>
 

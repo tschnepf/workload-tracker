@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import type { Project } from '@/types/models';
+import type { Project, Deliverable } from '@/types/models';
 import StatusBadge, { formatStatus } from '@/components/projects/StatusBadge';
 import { getFlag } from '@/lib/flags';
 import { useVirtualRows } from '../hooks/useVirtualRows';
@@ -12,6 +12,7 @@ interface Props {
   sortDirection: 'asc' | 'desc';
   onSort: (column: string) => void;
   loading?: boolean;
+  nextDeliverables?: Map<number, Deliverable | null>;
 }
 
 const ProjectsTable: React.FC<Props> = ({
@@ -22,13 +23,14 @@ const ProjectsTable: React.FC<Props> = ({
   sortDirection,
   onSort,
   loading,
+  nextDeliverables,
 }) => {
   const enableVirtual = getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
   const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: 44, overscan: 6, enableVirtual });
   const groupClients = sortBy === 'client';
 
   const header = (
-    <div className="grid grid-cols-8 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
+    <div className="grid grid-cols-11 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('client')}>
         CLIENT<SortIcon column="client" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
@@ -40,6 +42,9 @@ const ProjectsTable: React.FC<Props> = ({
       </div>
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('status')}>
         STATUS<SortIcon column="status" sortBy={sortBy} sortDirection={sortDirection} />
+      </div>
+      <div className="col-span-3 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('nextDue')}>
+        NEXT DELIVERABLE<SortIcon column="nextDue" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
     </div>
   );
@@ -54,11 +59,16 @@ const ProjectsTable: React.FC<Props> = ({
         const isGroupStart = groupClients && !sameClientAsPrev && index !== 0;
         const showRowBottomDivider = !groupClients || sameClientAsNext; // hide at end of client group
         const dividerBorder = selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]';
+        const nextDeliverable = (project.id != null && typeof project.id === 'number' && nextDeliverables)
+          ? nextDeliverables.get(project.id)
+          : null;
+        const nextTop = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
+        const nextBottom = nextDeliverable?.date ? new Date(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         return (
           <div
             key={project.id}
             onClick={() => onSelect(project, index)}
-            className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+            className={`grid grid-cols-11 gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
               selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
             } ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
             tabIndex={0}
@@ -72,9 +82,19 @@ const ProjectsTable: React.FC<Props> = ({
             </div>
             <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
             <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+            <div className="col-span-3">
+              {nextDeliverable ? (
+                <>
+                  <div className="text-[var(--text)] font-medium leading-tight">{nextTop || '—'}</div>
+                  <div className="text-[var(--muted)] text-xs leading-tight">{nextBottom || ''}</div>
+                </>
+              ) : (
+                <div className="text-[var(--muted)] text-xs">—</div>
+              )}
+            </div>
             {/* Row divider shifted to exclude client column */}
             {showRowBottomDivider && (
-              <div className={`col-start-3 col-end-9 h-0 border-b ${dividerBorder} pointer-events-none`} />
+              <div className={`col-start-3 col-end-12 h-0 border-b ${dividerBorder} pointer-events-none`} />
             )}
           </div>
         );
@@ -90,12 +110,17 @@ const ProjectsTable: React.FC<Props> = ({
           if (!project) return null;
           const prev = v.index > 0 ? projects[v.index - 1] : null;
           const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
+          const nextDeliverable = (project.id != null && typeof project.id === 'number' && nextDeliverables)
+            ? nextDeliverables.get(project.id)
+            : null;
+          const nextTop = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
+          const nextBottom = nextDeliverable?.date ? new Date(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
           return (
             <div
               key={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => onSelect(project, v.index)}
-              className={`grid grid-cols-8 gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+              className={`grid grid-cols-11 gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
                 selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
               } ${groupClients && v.index !== 0 && (!prev || (prev.client || '') !== (project.client || '')) ? 'border-t border-[var(--border)]' : ''}`}
               tabIndex={0}
@@ -107,8 +132,18 @@ const ProjectsTable: React.FC<Props> = ({
               </div>
               <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
               <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+              <div className="col-span-3">
+                {nextDeliverable ? (
+                  <>
+                    <div className="text-[var(--text)] font-medium leading-tight">{nextTop || '—'}</div>
+                    <div className="text-[var(--muted)] text-xs leading-tight">{nextBottom || ''}</div>
+                  </>
+                ) : (
+                  <div className="text-[var(--muted)] text-xs">—</div>
+                )}
+              </div>
               {(!groupClients || (projects[v.index + 1] && (projects[v.index + 1].client || '') === (project.client || ''))) && (
-                <div className={`col-start-3 col-end-9 h-0 border-b ${selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]'} pointer-events-none`} />
+                <div className={`col-start-3 col-end-12 h-0 border-b ${selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]'} pointer-events-none`} />
               )}
             </div>
           );

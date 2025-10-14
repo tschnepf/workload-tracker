@@ -4,7 +4,11 @@ import type { ProjectFilterMetadataResponse } from '@/types/models';
 import { formatStatus } from '@/components/projects/StatusBadge';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 
-export function useProjectFilters(projects: Project[], filterMetadata: ProjectFilterMetadataResponse | null) {
+export function useProjectFilters(
+  projects: Project[],
+  filterMetadata: ProjectFilterMetadataResponse | null,
+  options?: { customSortGetters?: Record<string, (p: Project) => string | number | Date | null | undefined> }
+) {
   const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<string>>(new Set(['active', 'active_ca']));
   const [sortBy, setSortBy] = useState('client');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -83,33 +87,44 @@ export function useProjectFilters(projects: Project[], filterMetadata: ProjectFi
   }, [projects, selectedStatusFilters, searchTerm, filterMetadata]);
 
   const sortedProjects = useMemo(() => {
+    const getter = options?.customSortGetters?.[sortBy];
+    const normalize = (v: any): string => {
+      if (v == null || v === '') return sortDirection === 'asc' ? '\uffff' : '';
+      if (v instanceof Date) return v.toISOString();
+      return v.toString().toLowerCase();
+    };
     return [...filteredProjects].sort((a, b) => {
       let aValue: any, bValue: any;
-      switch (sortBy) {
-        case 'client':
-          aValue = a.client || '';
-          bValue = b.client || '';
-          break;
-        case 'name':
-          aValue = a.name || '';
-          bValue = b.name || '';
-          break;
-        case 'type':
-          aValue = a.status || '';
-          bValue = b.status || '';
-          break;
-        case 'status':
-          aValue = a.status || '';
-          bValue = b.status || '';
-          break;
-        default:
-          aValue = a.name || '';
-          bValue = b.name || '';
+      if (getter) {
+        aValue = getter(a);
+        bValue = getter(b);
+      } else {
+        switch (sortBy) {
+          case 'client':
+            aValue = a.client || '';
+            bValue = b.client || '';
+            break;
+          case 'name':
+            aValue = a.name || '';
+            bValue = b.name || '';
+            break;
+          case 'type':
+            aValue = a.status || '';
+            bValue = b.status || '';
+            break;
+          case 'status':
+            aValue = a.status || '';
+            bValue = b.status || '';
+            break;
+          default:
+            aValue = a.name || '';
+            bValue = b.name || '';
+        }
       }
-      const result = aValue.toString().localeCompare(bValue.toString());
+      const result = normalize(aValue).localeCompare(normalize(bValue));
       return sortDirection === 'asc' ? result : -result;
     });
-  }, [filteredProjects, sortBy, sortDirection]);
+  }, [filteredProjects, sortBy, sortDirection, options?.customSortGetters]);
 
   const onSort = (column: string) => {
     if (sortBy === column) {
