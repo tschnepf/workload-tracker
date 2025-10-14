@@ -31,7 +31,8 @@ const PersonForm: React.FC = () => {
   const [formData, setFormData] = useState<PersonFormData>({
     name: '',
     weeklyCapacity: 36, // Default from master guide
-    role: '1', // Default role ID (Engineer) - converts properly to number
+    // Require explicit role selection to avoid invalid IDs across environments
+    role: '',
     department: null, // Phase 2: No department initially
     location: '', // Location can be empty initially
   });
@@ -142,11 +143,18 @@ const PersonForm: React.FC = () => {
         ...formData,
         role: roleId
       };
+      if (!isEditing || !id) {
+        if (import.meta.env.DEV) console.log('dY"? [DEBUG] Creating new person with POST request');
+        const result = await createPersonMutation.mutateAsync(apiData as any);
+        setToast({ message: 'Person created', type: 'success' });
+        if (import.meta.env.DEV) console.log('dY"? [DEBUG] Create mutation response:', result);
+      }
 
       if (isEditing && id) {
         if (import.meta.env.DEV) console.log(`[DEBUG] Updating person ${id} with PATCH request`);
         await updatePersonMutation.mutateAsync({ id: parseInt(id), data: apiData });
         setToast({ message: 'Person updated', type: 'success' });
+        return;
         if (import.meta.env.DEV) console.log('dY"? [DEBUG] Creating new person with mutation')
         if (import.meta.env.DEV) console.log('🔍 [DEBUG] Creating new person with POST request');
         const result = await createPersonMutation.mutateAsync(apiData as any);
