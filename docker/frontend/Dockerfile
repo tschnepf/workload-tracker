@@ -60,4 +60,5 @@ RUN npm install --omit=dev serve@14.2.5
 # Run as non-root user 'node'
 USER node
 EXPOSE 3000
-CMD ["sh", "-lc", "cp -r /app/_built/* /app/dist/ 2>/dev/null || true; npx serve -s /app/dist -l 3000"]
+# Serve prebuilt static assets directly from the read-only path
+CMD ["npx", "serve", "-s", "/app/_built", "-l", "3000"]
