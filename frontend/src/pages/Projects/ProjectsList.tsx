@@ -482,6 +482,10 @@ const ProjectsList: React.FC = () => {
                 const p = people.find(pp => pp.id === personId);
                 return (p?.department ?? null) as any;
               }}
+              getPersonDepartmentName={(personId) => {
+                const p = people.find(pp => pp.id === personId);
+                return p?.departmentName ?? null;
+              }}
               showAddAssignment={showAddAssignment}
               onAddAssignment={handleAddAssignment}
               onSaveAssignment={handleSaveAssignment}

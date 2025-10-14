@@ -33,6 +33,7 @@ interface Props {
   getCurrentWeekHours: (a: Assignment) => number;
   onChangeAssignmentRole?: (assignmentId: number, roleId: number | null, roleName: string | null) => void;
   getPersonDepartmentId?: (personId: number) => number | null;
+  getPersonDepartmentName?: (personId: number) => string | null;
   currentWeekKey?: string;
   onUpdateWeekHours?: (assignmentId: number, weekKey: string, hours: number) => Promise<void> | void;
   reloadAssignments: (projectId: number) => Promise<void>;
@@ -88,6 +89,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   getCurrentWeekHours,
   onChangeAssignmentRole,
   getPersonDepartmentId,
+  getPersonDepartmentName,
   currentWeekKey,
   onUpdateWeekHours,
   reloadAssignments,
@@ -333,9 +335,20 @@ const ProjectDetailsPanel: React.FC<Props> = ({
 
         <div className="space-y-2">
           {assignments.length > 0 ? (
-            assignments.map((assignment) => (
-              <div key={assignment.id}>
-                <AssignmentRow
+            (() => {
+              const groups = new Map<string, Assignment[]>();
+              for (const a of assignments) {
+                const name = (getPersonDepartmentName ? getPersonDepartmentName(a.person) : null) || 'Unassigned';
+                if (!groups.has(name)) groups.set(name, []);
+                groups.get(name)!.push(a);
+              }
+              const entries = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+              return entries.map(([deptName, items]) => (
+                <div key={deptName} className="mb-4">
+                  <div className="text-xl font-bold text-[var(--muted)] border-t border-[var(--border)] pt-3 mb-2">{deptName}</div>
+                  {items.map((assignment) => (
+                    <div key={assignment.id}>
+                      <AssignmentRow
                   assignment={assignment}
                   isEditing={editingAssignmentId === assignment.id}
                   editData={editData}
@@ -366,8 +379,11 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   onEditValueChangeCell={onEditValueChangeCell}
                   optimisticHours={optimisticHours}
                 />
-              </div>
-            ))
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()
           ) : !showAddAssignment ? (
             <div className="text-center py-8">
               <div className="text-[var(--muted)] text-sm">No assignments yet</div>
