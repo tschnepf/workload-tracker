@@ -108,14 +108,15 @@ export function useProjectFilters(
             aValue = a.name || '';
             bValue = b.name || '';
             break;
-          case 'type':
-            aValue = a.status || '';
-            bValue = b.status || '';
-            break;
-          case 'status':
-            aValue = a.status || '';
-            bValue = b.status || '';
-            break;
+        case 'number':
+        case 'projectNumber':
+          aValue = a.projectNumber || '';
+          bValue = b.projectNumber || '';
+          break;
+        case 'status':
+          aValue = a.status || '';
+          bValue = b.status || '';
+          break;
           default:
             aValue = a.name || '';
             bValue = b.name || '';

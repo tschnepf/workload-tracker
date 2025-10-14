@@ -37,8 +37,8 @@ const ProjectsTable: React.FC<Props> = ({
       <div className="col-span-3 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('name')}>
         PROJECT<SortIcon column="name" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
-      <div className="col-span-1 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('type')}>
-        TYPE<SortIcon column="type" sortBy={sortBy} sortDirection={sortDirection} />
+      <div className="col-span-1 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('number')}>
+        NUMBER<SortIcon column="number" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('status')}>
         STATUS<SortIcon column="status" sortBy={sortBy} sortDirection={sortDirection} />
@@ -78,9 +78,8 @@ const ProjectsTable: React.FC<Props> = ({
             </div>
             <div className="col-span-3">
               <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
-              <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
             </div>
-            <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
+            <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
             <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
             <div className="col-span-3">
               {nextDeliverable ? (
@@ -128,9 +127,8 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="col-span-2 text-[var(--muted)] text-xs">{sameClientAsPrev ? '' : (project.client || 'No Client')}</div>
               <div className="col-span-3">
                 <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
-                <div className="text-[var(--muted)] text-xs leading-tight">{project.projectNumber || 'No Number'}</div>
               </div>
-              <div className="col-span-1 text-[var(--muted)] text-xs">{formatStatus(project.status || '')}</div>
+              <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
               <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
               <div className="col-span-3">
                 {nextDeliverable ? (
