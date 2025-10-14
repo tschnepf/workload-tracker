@@ -318,6 +318,20 @@ const ProjectsList: React.FC = () => {
     setError,
   });
 
+  // Table-level status update for any project row
+  const handleTableStatusChange = useCallback(async (projectId: number, newStatus: string) => {
+    try {
+      await updateProjectMutation.mutateAsync({ id: projectId, data: { status: newStatus } });
+      if (selectedProject?.id === projectId) {
+        setSelectedProject({ ...(selectedProject as any), status: newStatus } as any);
+      }
+      await invalidateFilterMeta();
+    } catch (e) {
+      console.error('Failed to update project status from table', e);
+      setError('Failed to update project status');
+    }
+  }, [updateProjectMutation, selectedProject, setSelectedProject, invalidateFilterMeta]);
+
   // Sorting handled via onSort2 in enhanced filters (next deliverable support)
 
   // Delete the selected project (two-step confirm is handled in panel)
@@ -411,6 +425,7 @@ const ProjectsList: React.FC = () => {
             onSort={onSort2}
             loading={loading}
             nextDeliverables={nextDeliverablesMap}
+            onChangeStatus={handleTableStatusChange}
           />
         </div>
 

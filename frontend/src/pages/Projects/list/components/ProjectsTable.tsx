@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { Project, Deliverable } from '@/types/models';
-import StatusBadge, { formatStatus } from '@/components/projects/StatusBadge';
+import StatusBadge, { formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import { getFlag } from '@/lib/flags';
 import { useVirtualRows } from '../hooks/useVirtualRows';
 
@@ -13,6 +13,7 @@ interface Props {
   onSort: (column: string) => void;
   loading?: boolean;
   nextDeliverables?: Map<number, Deliverable | null>;
+  onChangeStatus?: (projectId: number, newStatus: string) => void;
 }
 
 const ProjectsTable: React.FC<Props> = ({
@@ -24,10 +25,22 @@ const ProjectsTable: React.FC<Props> = ({
   onSort,
   loading,
   nextDeliverables,
+  onChangeStatus,
 }) => {
   const enableVirtual = getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
   const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: 44, overscan: 6, enableVirtual });
   const groupClients = sortBy === 'client';
+  const [openStatusFor, setOpenStatusFor] = useState<number | null>(null);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Element;
+      if (target.closest('.status-dropdown-container')) return;
+      if (openStatusFor != null) setOpenStatusFor(null);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [openStatusFor]);
 
   const header = (
     <div className="grid grid-cols-11 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
@@ -80,7 +93,26 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
             </div>
             <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
-            <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+            <div className="col-span-2 relative status-dropdown-container" onClick={(e) => e.stopPropagation()}>
+              <StatusBadge status={project.status || ''} variant="editable" onClick={() => setOpenStatusFor(openStatusFor === project.id ? null : (project.id as number))} />
+              {openStatusFor === project.id && (
+                <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[140px]">
+                  {editableStatusOptions.map((status) => (
+                    <button
+                      key={status}
+                      onClick={(e) => { e.stopPropagation(); onChangeStatus?.(project.id!, status); setOpenStatusFor(null); }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--cardHover)] transition-colors first:rounded-t last:rounded-b ${
+                        project.status === status ? 'bg-[var(--surfaceOverlay)]' : ''
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <StatusBadge status={status} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="col-span-3">
               {nextDeliverable ? (
                 <>
@@ -129,7 +161,26 @@ const ProjectsTable: React.FC<Props> = ({
                 <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
               </div>
               <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
-              <div className="col-span-2"><StatusBadge status={project.status || ''} /></div>
+              <div className="col-span-2 relative status-dropdown-container" onClick={(e) => e.stopPropagation()}>
+                <StatusBadge status={project.status || ''} variant="editable" onClick={() => setOpenStatusFor(openStatusFor === project.id ? null : (project.id as number))} />
+                {openStatusFor === project.id && (
+                  <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[140px]">
+                    {editableStatusOptions.map((status) => (
+                      <button
+                        key={status}
+                        onClick={(e) => { e.stopPropagation(); onChangeStatus?.(project.id!, status); setOpenStatusFor(null); }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--cardHover)] transition-colors first:rounded-t last:rounded-b ${
+                          project.status === status ? 'bg-[var(--surfaceOverlay)]' : ''
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <StatusBadge status={status} />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="col-span-3">
                 {nextDeliverable ? (
                   <>
