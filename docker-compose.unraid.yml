@@ -12,7 +12,8 @@ services:
       - /mnt/user/appdata/workload-tracker/backups:/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      # Explicitly check a real database; libpq otherwise defaults to DB==USER
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5

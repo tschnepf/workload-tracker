@@ -6,11 +6,12 @@ echo "Waiting for database readiness (pg_isready)..."
 DB_HOST=${POSTGRES_HOST:-db}
 DB_PORT=${POSTGRES_PORT:-5432}
 DB_USER=${POSTGRES_USER:-postgres}
+DB_NAME=${POSTGRES_DB:-postgres}
 
 # Prefer pg_isready (accurate readiness) with a simple retry loop
 RETRIES=${DB_WAIT_RETRIES:-60}
 SLEEP=${DB_WAIT_SLEEP_SECS:-1}
-until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" >/dev/null 2>&1; do
+until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; do
   RETRIES=$((RETRIES-1))
   if [ "$RETRIES" -le 0 ]; then
     echo "Database not ready after wait; will proceed and let app handle retries."
