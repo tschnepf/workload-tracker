@@ -333,7 +333,9 @@ const ProjectDetailsPanel: React.FC<Props> = ({
         </div>
         {/* Hours are temporarily hidden on Project Details page */}
 
-        <div className="space-y-2">
+        {/* Wrap assignments area with same gray used by Deliverables rows */}
+        <div className="bg-[var(--card)] rounded p-2">
+          <div className="space-y-2">
           {assignments.length > 0 ? (
             (() => {
               const groups = new Map<string, Assignment[]>();
@@ -345,7 +347,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               const entries = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
               return entries.map(([deptName, items]) => (
                 <div key={deptName} className="mb-4">
-                  <div className="text-xl font-bold text-[var(--muted)] border-t border-[var(--border)] pt-3 mb-2">{deptName}</div>
+                  <div className="text-xl font-bold text-[var(--muted)] pt-3 mb-2">{deptName}</div>
                   {items.map((assignment) => (
                     <div key={assignment.id}>
                       <AssignmentRow
@@ -390,9 +392,10 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               <div className="text-[var(--muted)] text-xs mt-1">Click "Add Assignment" to get started</div>
             </div>
           ) : null}
+          </div>
 
           {showAddAssignment && (
-            <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]">
+            <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)] mt-2">
               <div className="grid grid-cols-3 gap-4 mb-3">
                 <div className="text-[var(--muted)] text-xs uppercase font-medium">PERSON</div>
                 <div className="text-[var(--muted)] text-xs uppercase font-medium">ROLE</div>

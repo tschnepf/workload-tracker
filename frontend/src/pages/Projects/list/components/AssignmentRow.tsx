@@ -154,7 +154,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   const showHoursGrid = showHours !== false; // default to true unless explicitly false
 
   return (
-    <div className="flex justify-between items-center p-2 bg-[var(--cardHover)] rounded">
+    <div className="flex justify-between items-center p-2 bg-[var(--card)] rounded">
       <div className="flex-1">
         <div className="grid grid-cols-3 gap-4 items-center">
           <div>
