@@ -21,6 +21,10 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# Always allow localhost/127.0.0.1 for internal healthchecks and container self-probes
+for _h in ('localhost', '127.0.0.1'):
+    if _h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_h)
 
 # Get HOST_IP for network access configuration
 HOST_IP = os.getenv('HOST_IP')
