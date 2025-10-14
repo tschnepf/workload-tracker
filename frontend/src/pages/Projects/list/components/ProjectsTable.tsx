@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Project, Deliverable } from '@/types/models';
-import StatusBadge, { formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
+import StatusBadge, { formatStatus, editableStatusOptions, getStatusColor } from '@/components/projects/StatusBadge';
 import { getFlag } from '@/lib/flags';
 import { useVirtualRows } from '../hooks/useVirtualRows';
 
@@ -94,7 +94,16 @@ const ProjectsTable: React.FC<Props> = ({
             </div>
             <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
             <div className="col-span-2 relative status-dropdown-container" onClick={(e) => e.stopPropagation()}>
-              <StatusBadge status={project.status || ''} variant="editable" onClick={() => setOpenStatusFor(openStatusFor === project.id ? null : (project.id as number))} />
+              <button
+                type="button"
+                className={`${getStatusColor(project.status || '')} hover:bg-[var(--surfaceHover)] px-1 py-0.5 rounded text-xs transition-colors cursor-pointer flex items-center gap-1`}
+                onClick={() => setOpenStatusFor(openStatusFor === project.id ? null : (project.id as number))}
+              >
+                {formatStatus(project.status || '')}
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6,9 12,15 18,9" />
+                </svg>
+              </button>
               {openStatusFor === project.id && (
                 <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[140px]">
                   {editableStatusOptions.map((status) => (
@@ -162,7 +171,16 @@ const ProjectsTable: React.FC<Props> = ({
               </div>
               <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
               <div className="col-span-2 relative status-dropdown-container" onClick={(e) => e.stopPropagation()}>
-                <StatusBadge status={project.status || ''} variant="editable" onClick={() => setOpenStatusFor(openStatusFor === project.id ? null : (project.id as number))} />
+                <button
+                  type="button"
+                  className={`${getStatusColor(project.status || '')} hover:bg-[var(--surfaceHover)] px-1 py-0.5 rounded text-xs transition-colors cursor-pointer flex items-center gap-1`}
+                  onClick={() => setOpenStatusFor(openStatusFor === project.id ? null : (project.id as number))}
+                >
+                  {formatStatus(project.status || '')}
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="6,9 12,15 18,9" />
+                  </svg>
+                </button>
                 {openStatusFor === project.id && (
                   <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[140px]">
                     {editableStatusOptions.map((status) => (
