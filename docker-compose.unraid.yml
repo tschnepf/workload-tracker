@@ -174,9 +174,9 @@ services:
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
       - BACKUPS_DIR=/backups
       - COLLECT_STATIC=false
-      - CELERY_BEAT_SCHEDULE_FILE=/tmp/celery/beat-schedule
-    # Use tmpfs for the beat schedule file to avoid permission issues on read-only FS
-    command: sh -lc "mkdir -p /tmp/celery && celery -A config beat -l info -s /tmp/celery/beat-schedule"
+      # Optional: explicit schedule path (defaults to /tmp/celerybeat-schedule)
+      # - CELERY_BEAT_SCHEDULE_FILE=/tmp/celerybeat-schedule
+    command: ["celery", "-A", "config", "beat", "-l", "INFO"]
     volumes:
       - /mnt/user/appdata/workload-tracker/backups:/backups
     read_only: true

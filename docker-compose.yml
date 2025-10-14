@@ -176,7 +176,7 @@ services:
       target: dev
     container_name: workload-tracker-beat
     restart: unless-stopped
-    command: celery -A config beat -l info -s /var/run/celery/beat-schedule
+    command: ["celery", "-A", "config", "beat", "-l", "INFO"]
     env_file:
       - .env
     environment:
@@ -186,12 +186,12 @@ services:
       - DJANGO_SETTINGS_MODULE=config.settings
       - BACKUPS_DIR=/backups
       - COLLECT_STATIC=false
-      - CELERY_BEAT_SCHEDULE_FILE=/var/run/celery/beat-schedule
+      # Optional: explicit schedule file (defaults to /tmp/celerybeat-schedule)
+      # - CELERY_BEAT_SCHEDULE_FILE=/tmp/celerybeat-schedule
       - RUN_MIGRATIONS_ON_START=false
     volumes:
       - ./backend:/app:ro
       - ./backups:/backups:rw
-      - beat_state:/var/run/celery
     depends_on:
       redis:
         condition: service_healthy
@@ -228,7 +228,6 @@ volumes:
   postgres_data_v17:
   static_volume:
   media_volume:
-  beat_state:
 
 networks:
   tracker-network:
