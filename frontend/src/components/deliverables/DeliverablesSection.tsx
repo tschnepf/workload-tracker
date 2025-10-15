@@ -418,17 +418,17 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
       <DragHandle />
 
       {/* Content Grid */}
-      <div className="grid grid-cols-4 gap-4 flex-1">
+      <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
         <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
           {deliverable.percentage !== null ? `${deliverable.percentage}%` : '-'}
         </div>
-        <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'} truncate`}>
+        <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'} truncate min-w-0`}>
           {deliverable.description || '-'}
         </div>
         <div className="text-[var(--muted)] whitespace-nowrap">
           {deliverable.date ? formatDateNoYear(deliverable.date) : '-'}
         </div>
-        <div className="text-[var(--muted)] truncate">
+        <div className="text-[var(--muted)] truncate min-w-0">
           {deliverable.notes || '-'}
         </div>
       </div>
@@ -473,10 +473,10 @@ const AddDeliverableForm: React.FC<AddDeliverableFormProps> = ({ onSave, onCance
   };
 
   return (
-    <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)] mt-2">
+    <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)] mt-2 overflow-hidden">
       <div className="flex items-start gap-2">
         <div className="w-4 shrink-0"></div>
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-3 max-w-full">
           <div>
             <label className="block text-[var(--muted)] text-xs mb-1">Percentage</label>
             <input

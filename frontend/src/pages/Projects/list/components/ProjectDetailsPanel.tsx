@@ -347,14 +347,14 @@ const ProjectDetailsPanel: React.FC<Props> = ({
         {/* Responsive cards grid: Deliverables + Departments */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {/* Deliverables Card */}
-          <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 self-start">
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 self-start min-w-0 overflow-hidden">
             {deliverablesSlot}
           </div>
 
           {/* Department cards */}
           {departmentEntries.length > 0 ? (
             departmentEntries.map(([deptName, items]) => (
-              <div key={deptName} className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm overflow-hidden">
+              <div key={deptName} className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm overflow-hidden min-w-0">
                 <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between">
                   <div className="text-base font-semibold text-[var(--text)]">{deptName}</div>
                 </div>
