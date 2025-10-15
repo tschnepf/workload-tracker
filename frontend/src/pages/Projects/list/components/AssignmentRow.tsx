@@ -153,16 +153,61 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
 
   const showHoursGrid = showHours !== false; // default to true unless explicitly false
 
+  // Compact card-style row (no hours) vs. grid with hours
+  if (!showHoursGrid) {
+    return (
+      <div className="flex justify-between items-center p-2 bg-[var(--card)] rounded">
+        <div className="min-w-0 pr-2">
+          <div className="text-[var(--text)] font-medium leading-tight truncate">
+            {assignment.personName || 'Unknown'}
+          </div>
+          <div className="mt-0.5 text-[var(--muted)] text-xs truncate">
+            <button
+              type="button"
+              className="hover:text-[var(--text)] truncate"
+              onClick={() => setOpenRole(v => !v)}
+              title="Edit role on project"
+            >
+              {assignment.roleName || assignment.roleOnProject || 'Set role'}
+            </button>
+            {openRole && (
+              <div className="relative mt-1">
+                <RoleDropdown
+                  roles={roles as any}
+                  currentId={(assignment as any).roleOnProjectId ?? null}
+                  onSelect={(id, name) => onChangeAssignmentRole?.(assignment.id!, id, name)}
+                  onClose={() => setOpenRole(false)}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center">
+          <button
+            onClick={onDelete}
+            aria-label="Remove assignment"
+            title="Remove assignment"
+            className="p-1 rounded text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex justify-between items-center p-2 bg-[var(--card)] rounded">
       <div className="flex-1">
         <div className="grid grid-cols-3 gap-4 items-center">
-          <div>
-            <div className="text-[var(--text)] font-medium leading-tight">{assignment.personName || 'Unknown'}</div>
-            <div className="mt-0.5 text-[var(--muted)] text-xs">
+          <div className="min-w-0">
+            <div className="text-[var(--text)] font-medium leading-tight truncate">{assignment.personName || 'Unknown'}</div>
+            <div className="mt-0.5 text-[var(--muted)] text-xs truncate">
               <button
                 type="button"
-                className="hover:text-[var(--text)]"
+                className="hover:text-[var(--text)] truncate"
                 onClick={() => setOpenRole(v => !v)}
                 title="Edit role on project"
               >
@@ -181,39 +226,39 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
             </div>
           </div>
           <div className="col-span-2">
-            {showHoursGrid ? (
-              <div className="grid" style={{ gridTemplateColumns: 'repeat(6, 64px)' }}>
-                {(weekKeys || computedWeekKeys).map((wk) => (
-                  <WeekCell
-                    key={`${wk}-${assignment.id}`}
-                    weekKey={wk}
-                    isSelected={Boolean(isCellSelected?.(assignment.id!, wk))}
-                    isEditing={Boolean(isEditingCell?.(assignment.id!, wk))}
-                    currentHours={(optimisticHours?.get(assignment.id!)?.[wk] ?? assignment.weeklyHours?.[wk] ?? 0) as number}
-                    onSelect={(isShift) => onCellSelect?.(assignment.id!, wk, isShift)}
-                    onMouseDown={() => onCellMouseDown?.(assignment.id!, wk)}
-                    onMouseEnter={() => onCellMouseEnter?.(assignment.id!, wk)}
-                    onEditStart={() => onEditStartCell?.(assignment.id!, wk, String(assignment.weeklyHours?.[wk] || 0))}
-                    onEditSave={() => onEditSaveCell?.()}
-                    onEditCancel={() => onEditCancelCell?.()}
-                    editingValue={editingValue || ''}
-                    onEditValueChange={(v) => onEditValueChangeCell?.(v)}
-                    deliverablesForWeek={getDeliverablesForProjectWeek?.(assignment.project, wk) || []}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="h-8" />
-            )}
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(6, 64px)' }}>
+              {(weekKeys || computedWeekKeys).map((wk) => (
+                <WeekCell
+                  key={`${wk}-${assignment.id}`}
+                  weekKey={wk}
+                  isSelected={Boolean(isCellSelected?.(assignment.id!, wk))}
+                  isEditing={Boolean(isEditingCell?.(assignment.id!, wk))}
+                  currentHours={(optimisticHours?.get(assignment.id!)?.[wk] ?? assignment.weeklyHours?.[wk] ?? 0) as number}
+                  onSelect={(isShift) => onCellSelect?.(assignment.id!, wk, isShift)}
+                  onMouseDown={() => onCellMouseDown?.(assignment.id!, wk)}
+                  onMouseEnter={() => onCellMouseEnter?.(assignment.id!, wk)}
+                  onEditStart={() => onEditStartCell?.(assignment.id!, wk, String(assignment.weeklyHours?.[wk] || 0))}
+                  onEditSave={() => onEditSaveCell?.()}
+                  onEditCancel={() => onEditCancelCell?.()}
+                  editingValue={editingValue || ''}
+                  onEditValueChange={(v) => onEditValueChangeCell?.(v)}
+                  deliverablesForWeek={getDeliverablesForProjectWeek?.(assignment.project, wk) || []}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
-      <div className="flex gap-1">
+      <div className="flex items-center">
         <button
           onClick={onDelete}
-          className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-red-400 hover:bg-red-500/20 hover:border-red-500/30 transition-colors"
+          aria-label="Remove assignment"
+          title="Remove assignment"
+          className="p-1 rounded text-red-400 hover:bg-red-500/20 transition-colors"
         >
-          Remove Assignment
+          <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 4l8 8M12 4l-8 8" />
+          </svg>
         </button>
       </div>
     </div>

@@ -7,7 +7,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
-import { formatUtcToLocal } from '@/utils/dates';
 import { Project, Deliverable } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
 import { emitGridRefresh } from '@/lib/gridRefreshBus';
@@ -15,11 +14,22 @@ import { showToast } from '@/lib/toastBus';
 import { useQueryClient } from '@tanstack/react-query';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 
+// Compact date formatter without year for single-line rows (e.g., "Oct 15")
+const formatDateNoYear = (dateStr: string) => {
+  try {
+    const d = new Date(dateStr.length <= 10 ? `${dateStr}T00:00:00` : dateStr);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+};
+
 interface DeliverablesSectionProps {
   project: Project;
+  variant?: 'default' | 'embedded';
 }
 
-const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) => {
+const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, variant = 'default' }) => {
   const queryClient = useQueryClient();
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -156,8 +166,12 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project }) =>
     setDragOverIndex(null);
   };
 
+  
+
+  const containerClass = variant === 'embedded' ? '' : 'border-t border-[var(--border)] pt-4';
+
   return (
-    <div className="border-t border-[var(--border)] pt-4">
+    <div className={containerClass}>
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-base font-semibold text-[var(--text)]">Deliverables</h3>
         <button
@@ -408,13 +422,13 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
         <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
           {deliverable.percentage !== null ? `${deliverable.percentage}%` : '-'}
         </div>
-        <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
+        <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'} truncate`}>
           {deliverable.description || '-'}
         </div>
-        <div className="text-[var(--muted)]">
-          {deliverable.date ? formatUtcToLocal(deliverable.date) : '-'}
+        <div className="text-[var(--muted)] whitespace-nowrap">
+          {deliverable.date ? formatDateNoYear(deliverable.date) : '-'}
         </div>
-        <div className="text-[var(--muted)]">
+        <div className="text-[var(--muted)] truncate">
           {deliverable.notes || '-'}
         </div>
       </div>

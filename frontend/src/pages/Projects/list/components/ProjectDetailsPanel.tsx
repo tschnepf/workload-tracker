@@ -219,6 +219,17 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     findAssignment: (personId, assignmentId) => assignments.some(a => a.id === assignmentId && a.person === personId),
   });
 
+  // Pre-group assignments by department to simplify JSX
+  const departmentEntries = React.useMemo(() => {
+    const groups = new Map<string, Assignment[]>();
+    for (const a of assignments) {
+      const name = (getPersonDepartmentName ? getPersonDepartmentName(a.person) : null) || 'Unassigned';
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name)!.push(a);
+    }
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [assignments, getPersonDepartmentName]);
+
   return (
     <>
       <div className="px-2 py-4 border-b border-[var(--border)]">
@@ -322,7 +333,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="p-4 border-b border-[var(--border)]">
+      <div className="p-4">
         <div className="flex items-center justify-end mb-2">
           <button
             onClick={onAddAssignment}
@@ -333,66 +344,68 @@ const ProjectDetailsPanel: React.FC<Props> = ({
         </div>
         {/* Hours are temporarily hidden on Project Details page */}
 
-        {/* Wrap assignments area with same gray used by Deliverables rows */}
-        <div className="bg-[var(--card)] rounded p-2">
-          <div className="space-y-2">
-          {assignments.length > 0 ? (
-            (() => {
-              const groups = new Map<string, Assignment[]>();
-              for (const a of assignments) {
-                const name = (getPersonDepartmentName ? getPersonDepartmentName(a.person) : null) || 'Unassigned';
-                if (!groups.has(name)) groups.set(name, []);
-                groups.get(name)!.push(a);
-              }
-              const entries = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-              return entries.map(([deptName, items]) => (
-                <div key={deptName} className="mb-4">
-                  <div className="text-xl font-bold text-[var(--muted)] pt-3 mb-2">{deptName}</div>
+        {/* Responsive cards grid: Deliverables + Departments */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {/* Deliverables Card */}
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 self-start">
+            {deliverablesSlot}
+          </div>
+
+          {/* Department cards */}
+          {departmentEntries.length > 0 ? (
+            departmentEntries.map(([deptName, items]) => (
+              <div key={deptName} className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm overflow-hidden">
+                <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between">
+                  <div className="text-base font-semibold text-[var(--text)]">{deptName}</div>
+                </div>
+                <div className="p-2 space-y-2">
                   {items.map((assignment) => (
                     <div key={assignment.id}>
                       <AssignmentRow
-                  assignment={assignment}
-                  isEditing={editingAssignmentId === assignment.id}
-                  editData={editData}
-                  roleSearchResults={roleSearchResults}
-                  showHours={false}
-                  onEdit={() => onEditAssignment(assignment)}
-                  onDelete={() => assignment.id && onDeleteAssignment(assignment.id)}
-                  onSave={() => assignment.id && onSaveEdit(assignment.id)}
-                  onCancel={onCancelEdit}
-                  onRoleSearch={onRoleSearch}
-                  onRoleSelect={onRoleSelect}
-                  onHoursChange={onHoursChange}
-                  getCurrentWeekHours={getCurrentWeekHours}
-                  onChangeAssignmentRole={onChangeAssignmentRole}
-                  personDepartmentId={getPersonDepartmentId ? getPersonDepartmentId(assignment.person) : undefined}
-                  currentWeekKey={currentWeekKey}
-                  onUpdateWeekHours={onUpdateWeekHours}
-                  weekKeys={weekKeys}
-                  isCellSelected={isCellSelected}
-                  isEditingCell={isEditingCell}
-                  onCellSelect={onCellSelect}
-                  onCellMouseDown={onCellMouseDown}
-                  onCellMouseEnter={onCellMouseEnter}
-                  onEditStartCell={onEditStartCell}
-                  onEditSaveCell={onEditSaveCell}
-                  onEditCancelCell={onEditCancelCell}
-                  editingValue={editingValue}
-                  onEditValueChangeCell={onEditValueChangeCell}
-                  optimisticHours={optimisticHours}
-                />
+                        assignment={assignment}
+                        isEditing={editingAssignmentId === assignment.id}
+                        editData={editData}
+                        roleSearchResults={roleSearchResults}
+                        showHours={false}
+                        onEdit={() => onEditAssignment(assignment)}
+                        onDelete={() => assignment.id && onDeleteAssignment(assignment.id)}
+                        onSave={() => assignment.id && onSaveEdit(assignment.id)}
+                        onCancel={onCancelEdit}
+                        onRoleSearch={onRoleSearch}
+                        onRoleSelect={onRoleSelect}
+                        onHoursChange={onHoursChange}
+                        getCurrentWeekHours={getCurrentWeekHours}
+                        onChangeAssignmentRole={onChangeAssignmentRole}
+                        personDepartmentId={getPersonDepartmentId ? getPersonDepartmentId(assignment.person) : undefined}
+                        currentWeekKey={currentWeekKey}
+                        onUpdateWeekHours={onUpdateWeekHours}
+                        weekKeys={weekKeys}
+                        isCellSelected={isCellSelected}
+                        isEditingCell={isEditingCell}
+                        onCellSelect={onCellSelect}
+                        onCellMouseDown={onCellMouseDown}
+                        onCellMouseEnter={onCellMouseEnter}
+                        onEditStartCell={onEditStartCell}
+                        onEditSaveCell={onEditSaveCell}
+                        onEditCancelCell={onEditCancelCell}
+                        editingValue={editingValue}
+                        onEditValueChangeCell={onEditValueChangeCell}
+                        optimisticHours={optimisticHours}
+                      />
                     </div>
                   ))}
                 </div>
-              ));
-            })()
+              </div>
+            ))
           ) : !showAddAssignment ? (
-            <div className="text-center py-8">
-              <div className="text-[var(--muted)] text-sm">No assignments yet</div>
-              <div className="text-[var(--muted)] text-xs mt-1">Click "Add Assignment" to get started</div>
+            <div className="md:col-span-2 xl:col-span-2">
+              <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-3 text-center">
+                <div className="text-[var(--muted)] text-sm">No assignments yet</div>
+                <div className="text-[var(--muted)] text-xs mt-1">Click "Add Assignment" to get started</div>
+              </div>
             </div>
           ) : null}
-          </div>
+        </div>
 
           {showAddAssignment && (
             <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)] mt-2">
@@ -503,9 +516,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             </div>
           )}
         </div>
-      </div>
-
-      <div className="p-4">{deliverablesSlot}</div>
+      
     </>
   );
 };

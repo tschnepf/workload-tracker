@@ -506,7 +506,7 @@ const ProjectsList: React.FC = () => {
               availabilityMap={availabilityMap}
               deliverablesSlot={
                 <Suspense fallback={<DeliverablesSectionLoaderComp />}>
-                  <DeliverablesSection project={selectedProject} />
+                  <DeliverablesSection project={selectedProject} variant="embedded" />
                 </Suspense>
               }
             />
