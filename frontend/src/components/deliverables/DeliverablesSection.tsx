@@ -473,69 +473,70 @@ const AddDeliverableForm: React.FC<AddDeliverableFormProps> = ({ onSave, onCance
   };
 
   return (
-    <div className="p-2 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)] mt-2">
-      <div className="grid grid-cols-6 gap-2 items-center text-xs mb-2">
-        <div className="text-[var(--muted)] font-medium w-4"></div> {/* Drag handle space */}
-        <div className="text-[var(--muted)] font-medium">%</div>
-        <div className="text-[var(--muted)] font-medium">DESCRIPTION</div>
-        <div className="text-[var(--muted)] font-medium">DATE</div>
-        <div className="text-[var(--muted)] font-medium">NOTES</div>
-        <div className="text-[var(--muted)] font-medium">ACTIONS</div>
-      </div>
-      
-      <div className="grid grid-cols-6 gap-2 items-center">
-        {/* Empty space for drag handle alignment */}
-        <div className="w-4"></div>
-
-        <input
-          type="number"
-          min="0"
-          max="100"
-          value={formData.percentage || ''}
-          onChange={(e) => setFormData({
-            ...formData,
-            percentage: e.target.value ? Number(e.target.value) : null
-          })}
-          placeholder="% (optional)"
-          className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
-        />
-        
-        <input
-          type="text"
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          placeholder="Description (optional)"
-          className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
-        />
-        
-        <input
-          type="date"
-          value={formData.date || ''}
-          onChange={(e) => setFormData({ ...formData, date: e.target.value || null })}
-          className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
-        />
-        
-        <input
-          type="text"
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          placeholder="Notes (optional)"
-          className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
-        />
-        
-        <div className="flex gap-1">
-          <button
-            onClick={handleSave}
-            className="px-1 py-0.5 bg-[var(--primary)] text-white text-xs rounded hover:bg-[var(--primaryHover)] transition-colors"
-          >
-            Add
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-1 py-0.5 bg-transparent border border-[var(--border)] text-[var(--muted)] text-xs rounded hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
-          >
-            Cancel
-          </button>
+    <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)] mt-2">
+      <div className="flex items-start gap-2">
+        <div className="w-4 shrink-0"></div>
+        <div className="flex-1 space-y-3">
+          <div>
+            <label className="block text-[var(--muted)] text-xs mb-1">Percentage</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={formData.percentage || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                percentage: e.target.value ? Number(e.target.value) : null
+              })}
+              placeholder="% (optional)"
+              className="w-28 px-2 py-1 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-sm [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+            />
+          </div>
+          <div>
+            <label className="block text-[var(--muted)] text-xs mb-1">Description</label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="What is being delivered?"
+              className="w-full px-2 py-1 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[var(--muted)] text-xs mb-1">Date</label>
+              <input
+                type="date"
+                value={formData.date || ''}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value || null })}
+                className="w-full px-2 py-1 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-[var(--muted)] text-xs mb-1">Notes</label>
+              <input
+                type="text"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Notes (optional)"
+                className="w-full px-2 py-1 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleSave}
+              className="px-2 py-1 bg-[var(--primary)] text-white text-xs rounded hover:bg-[var(--primaryHover)] transition-colors"
+            >
+              Add
+            </button>
+            <button
+              onClick={onCancel}
+              className="px-2 py-1 bg-transparent border border-[var(--border)] text-[var(--muted)] text-xs rounded hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     </div>
