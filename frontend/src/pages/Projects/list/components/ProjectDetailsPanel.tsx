@@ -317,7 +317,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
         {/* Hours are temporarily hidden on Project Details page */}
 
         {/* Responsive layout: 2 columns where left = Deliverables (2fr) and right = stacked department cards (1fr) */}
-        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] xl:grid-cols-[2fr_1fr] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
           {/* Left column: Deliverables */}
           <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 self-start min-w-0 overflow-hidden">
             {deliverablesSlot}
