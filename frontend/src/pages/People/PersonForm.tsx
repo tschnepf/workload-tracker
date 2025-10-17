@@ -144,10 +144,10 @@ const PersonForm: React.FC = () => {
         role: roleId
       };
       if (!isEditing || !id) {
-        
-        
-        
-        
+        if (import.meta.env.DEV) console.log('dY"? [DEBUG] Creating new person with POST request');
+        const result = await createPersonMutation.mutateAsync(apiData as any);
+        setToast({ message: 'Person created', type: 'success' });
+        if (import.meta.env.DEV) console.log('dY"? [DEBUG] Create mutation response:', result);
       }
 
       if (isEditing && id) {
