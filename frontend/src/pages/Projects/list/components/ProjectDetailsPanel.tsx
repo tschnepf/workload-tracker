@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router';
 import type { Project, Assignment, Person } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
+import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import AssignmentRow from './AssignmentRow';
@@ -21,14 +22,11 @@ interface Props {
   assignments: Assignment[];
   editingAssignmentId: number | null;
   editData: { roleOnProject: string; currentWeekHours: number; roleSearch: string };
-  roleSearchResults: string[];
   warnings: string[];
   onEditAssignment: (a: Assignment) => void;
   onDeleteAssignment: (assignmentId: number) => void;
   onSaveEdit: (assignmentId: number) => void;
   onCancelEdit: () => void;
-  onRoleSearch: (term: string) => void;
-  onRoleSelect: (role: string) => void;
   onHoursChange: (hours: number) => void;
   getCurrentWeekHours: (a: Assignment) => number;
   onChangeAssignmentRole?: (assignmentId: number, roleId: number | null, roleName: string | null) => void;
@@ -58,9 +56,7 @@ interface Props {
   }>;
   selectedPersonIndex: number;
   onPersonSelect: (p: Person) => void;
-  roleSearchResultsNew: string[];
-  onRoleSearchNew: (term: string) => void;
-  onRoleSelectNew: (role: string) => void;
+  onRoleSelectNew: (roleId: number | null, roleName: string | null) => void;
 
   candidatesOnly: boolean;
   setCandidatesOnly: (v: boolean) => void;
@@ -77,14 +73,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   assignments,
   editingAssignmentId,
   editData,
-  roleSearchResults,
+  
   warnings,
   onEditAssignment,
   onDeleteAssignment,
   onSaveEdit,
   onCancelEdit,
-  onRoleSearch,
-  onRoleSelect,
   onHoursChange,
   getCurrentWeekHours,
   onChangeAssignmentRole,
@@ -106,8 +100,6 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   personSearchResults,
   selectedPersonIndex,
   onPersonSelect,
-  roleSearchResultsNew,
-  onRoleSearchNew,
   onRoleSelectNew,
   candidatesOnly,
   setCandidatesOnly,
@@ -243,33 +235,13 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               </div>
               <div>
                 <div className="text-[var(--muted)] text-xs">Status:</div>
-                <div className="relative status-dropdown-container">
-                  <button
-                    onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-                    className={`${getStatusColor(project.status || '')} hover:bg-[var(--surfaceHover)] px-2 py-1 rounded text-sm transition-colors cursor-pointer flex items-center gap-1`}
-                  >
-                    {formatStatus(project.status || '')}
-                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="6,9 12,15 18,9" />
-                    </svg>
-                  </button>
-                  {statusDropdownOpen && (
-                    <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[120px]">
-                      {editableStatusOptions.map((status) => (
-                        <button
-                          key={status}
-                          onClick={() => onStatusChange(status)}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--cardHover)] transition-colors first:rounded-t last:rounded-b ${
-                            project.status === status ? 'bg-[var(--surfaceOverlay)]' : ''
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            <StatusBadge status={status} />
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                <div>
+                  <ProjectStatusDropdown
+                    status={project.status || ''}
+                    isOpen={statusDropdownOpen}
+                    setOpen={setStatusDropdownOpen}
+                    onChange={(s) => onStatusChange(s)}
+                  />
                 </div>
               </div>
               <div>
@@ -344,67 +316,64 @@ const ProjectDetailsPanel: React.FC<Props> = ({
         </div>
         {/* Hours are temporarily hidden on Project Details page */}
 
-        {/* Responsive cards grid: Deliverables + Departments */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {/* Deliverables Card */}
+        {/* Responsive layout: 2 columns where left = Deliverables (2fr) and right = stacked department cards (1fr) */}
+        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] xl:grid-cols-[2fr_1fr] gap-4">
+          {/* Left column: Deliverables */}
           <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 self-start min-w-0 overflow-hidden">
             {deliverablesSlot}
           </div>
 
-          {/* Department cards */}
-          {departmentEntries.length > 0 ? (
-            departmentEntries.map(([deptName, items]) => (
-              <div key={deptName} className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm overflow-hidden min-w-0">
-                <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between">
-                  <div className="text-base font-semibold text-[var(--text)]">{deptName}</div>
+          {/* Right column: stack department cards vertically */}
+          <div className="flex flex-col gap-4 min-w-0">
+            {departmentEntries.length > 0 ? (
+              departmentEntries.map(([deptName, items]) => (
+                <div key={deptName} className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm overflow-hidden min-w-0">
+                  <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between">
+                    <div className="text-base font-semibold text-[var(--text)]">{deptName}</div>
+                  </div>
+                  <div className="p-2 space-y-2">
+                    {items.map((assignment) => (
+                      <div key={assignment.id}>
+                        <AssignmentRow
+                          assignment={assignment}
+                          isEditing={editingAssignmentId === assignment.id}
+                          editData={editData}
+                          showHours={false}
+                          onEdit={() => onEditAssignment(assignment)}
+                          onDelete={() => assignment.id && onDeleteAssignment(assignment.id)}
+                          onSave={() => assignment.id && onSaveEdit(assignment.id)}
+                          onCancel={onCancelEdit}
+                          onHoursChange={onHoursChange}
+                          getCurrentWeekHours={getCurrentWeekHours}
+                          onChangeAssignmentRole={onChangeAssignmentRole}
+                          personDepartmentId={getPersonDepartmentId ? getPersonDepartmentId(assignment.person) : undefined}
+                          currentWeekKey={currentWeekKey}
+                          onUpdateWeekHours={onUpdateWeekHours}
+                          weekKeys={weekKeys}
+                          isCellSelected={isCellSelected}
+                          isEditingCell={isEditingCell}
+                          onCellSelect={onCellSelect}
+                          onCellMouseDown={onCellMouseDown}
+                          onCellMouseEnter={onCellMouseEnter}
+                          onEditStartCell={onEditStartCell}
+                          onEditSaveCell={onEditSaveCell}
+                          onEditCancelCell={onEditCancelCell}
+                          editingValue={editingValue}
+                          onEditValueChangeCell={onEditValueChangeCell}
+                          optimisticHours={optimisticHours}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="p-2 space-y-2">
-                  {items.map((assignment) => (
-                    <div key={assignment.id}>
-                      <AssignmentRow
-                        assignment={assignment}
-                        isEditing={editingAssignmentId === assignment.id}
-                        editData={editData}
-                        roleSearchResults={roleSearchResults}
-                        showHours={false}
-                        onEdit={() => onEditAssignment(assignment)}
-                        onDelete={() => assignment.id && onDeleteAssignment(assignment.id)}
-                        onSave={() => assignment.id && onSaveEdit(assignment.id)}
-                        onCancel={onCancelEdit}
-                        onRoleSearch={onRoleSearch}
-                        onRoleSelect={onRoleSelect}
-                        onHoursChange={onHoursChange}
-                        getCurrentWeekHours={getCurrentWeekHours}
-                        onChangeAssignmentRole={onChangeAssignmentRole}
-                        personDepartmentId={getPersonDepartmentId ? getPersonDepartmentId(assignment.person) : undefined}
-                        currentWeekKey={currentWeekKey}
-                        onUpdateWeekHours={onUpdateWeekHours}
-                        weekKeys={weekKeys}
-                        isCellSelected={isCellSelected}
-                        isEditingCell={isEditingCell}
-                        onCellSelect={onCellSelect}
-                        onCellMouseDown={onCellMouseDown}
-                        onCellMouseEnter={onCellMouseEnter}
-                        onEditStartCell={onEditStartCell}
-                        onEditSaveCell={onEditSaveCell}
-                        onEditCancelCell={onEditCancelCell}
-                        editingValue={editingValue}
-                        onEditValueChangeCell={onEditValueChangeCell}
-                        optimisticHours={optimisticHours}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
-          ) : !showAddAssignment ? (
-            <div className="md:col-span-2 xl:col-span-2">
+              ))
+            ) : !showAddAssignment ? (
               <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-3 text-center">
                 <div className="text-[var(--muted)] text-sm">No assignments yet</div>
                 <div className="text-[var(--muted)] text-xs mt-1">Click "Add Assignment" to get started</div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
 
           {showAddAssignment && (
@@ -450,7 +419,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                           <div className="flex items-center justify-between">
                             <div className="font-medium">{person.name}</div>
                             {person.hasSkillMatch && (
-                              <span className="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">dYZ_ Skill Match</span>
+                              <span className="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">Skill Match</span>
                             )}
                           </div>
                           <div className="flex justify-between items-center">
@@ -491,7 +460,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                     <RoleDropdown
                       roles={addRoles as any}
                       currentId={null}
-                      onSelect={(_id, name) => { onRoleSelectNew(name || ''); }}
+                      onSelect={(id, name) => { onRoleSelectNew(id, name); }}
                       onClose={() => setOpenAddRole(false)}
                       labelledById={undefined}
                     />
