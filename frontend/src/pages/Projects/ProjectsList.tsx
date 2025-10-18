@@ -25,7 +25,6 @@ import ErrorBanner from '@/pages/Projects/list/components/ErrorBanner';
 import { useProjectFilters } from '@/pages/Projects/list/hooks/useProjectFilters';
 import { useProjectSelection } from '@/pages/Projects/list/hooks/useProjectSelection';
 import { useAssignmentInlineEdit } from '@/pages/Projects/list/hooks/useAssignmentInlineEdit';
-import { useRoleSearch } from '@/pages/Projects/list/hooks/useRoleSearch';
 import { useProjectAssignments } from '@/pages/Projects/list/hooks/useProjectAssignments';
 import { useProjectAvailability } from '@/pages/Projects/list/hooks/useProjectAvailability';
 import { usePersonSearch } from '@/pages/Projects/list/hooks/usePersonSearch';
@@ -55,6 +54,12 @@ const ProjectsList: React.FC = () => {
   // Optimized filter metadata (assignment counts + hasFutureDeliverables)
   const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata();
   // Derived filters/sort/search via hook
+  
+
+  // Next Deliverables map for list column + sorting
+  const { nextMap: nextDeliverablesMap } = useNextDeliverables(projects);
+
+  // Recompute filters with custom sort getter when needed (stable ID mapping)
   const {
     selectedStatusFilters,
     sortBy,
@@ -66,23 +71,6 @@ const ProjectsList: React.FC = () => {
     formatFilterStatus,
     filteredProjects,
     sortedProjects,
-  } = useProjectFilters(projects, filterMetadata);
-
-  // Next Deliverables map for list column + sorting
-  const { nextMap: nextDeliverablesMap } = useNextDeliverables(projects);
-
-  // Recompute filters with custom sort getter when needed (stable ID mapping)
-  const {
-    selectedStatusFilters: selectedStatusFilters2,
-    sortBy: sortBy2,
-    sortDirection: sortDirection2,
-    searchTerm: searchTerm2,
-    setSearchTerm: setSearchTerm2,
-    toggleStatusFilter: toggleStatusFilter2,
-    onSort: onSort2,
-    formatFilterStatus: formatFilterStatus2,
-    filteredProjects: filteredProjects2,
-    sortedProjects: sortedProjects2,
   } = useProjectFilters(projects, filterMetadata, {
     customSortGetters: {
       nextDue: (p) => {
@@ -93,8 +81,8 @@ const ProjectsList: React.FC = () => {
   });
 
   // Selection (single source of truth)
-  // Use the enhanced sortedProjects2 for selection and table
-  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects2);
+  // Use the enhanced sortedProjects for selection and table
+  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects);
 
   // Assignments + available roles
   const { assignments, availableRoles, reload: reloadAssignments } = useProjectAssignments({ projectId: selectedProject?.id, people });
@@ -104,11 +92,7 @@ const ProjectsList: React.FC = () => {
   // Pre-computed skills mapping for performance
   const [personSkillsMap, setPersonSkillsMap] = useState<Map<number, string[]>>(new Map());
 
-  // New assignment role search
-  const { roleSearchResults: roleSearchResultsNew, setRoleSearchResults: setRoleSearchResultsNew, handleNewAssignmentRoleSearch, handleNewAssignmentRoleSelect } = useRoleSearch(
-    availableRoles,
-    (person: Person | null) => getSkillBasedRoleSuggestions(person)
-  );
+  // Role search removed: add-assignment uses department-scoped dropdown only.
   // Toggle to restrict availability to candidate departments
   const [candidatesOnly, setCandidatesOnly] = useState<boolean>(true);
 
@@ -237,14 +221,11 @@ const ProjectsList: React.FC = () => {
   const {
     editingAssignment,
     editData,
-    roleSearchResults,
     warnings: editWarnings,
     setEditData,
     getCurrentWeekHours: getCurrentWeekHoursFromHook,
     getCurrentWeekKey,
     handleEditAssignment,
-    handleRoleSearch,
-    handleRoleSelect,
     handleSaveEdit,
     handleCancelEdit,
   } = useAssignmentInlineEdit({
@@ -267,6 +248,7 @@ const ProjectsList: React.FC = () => {
     setNewAssignment({
       personSearch: '',
       selectedPerson: null,
+      roleOnProjectId: null,
       roleOnProject: '',
       roleSearch: '',
       weeklyHours: {}
@@ -288,11 +270,12 @@ const ProjectsList: React.FC = () => {
     setNewAssignment({
       personSearch: '',
       selectedPerson: null,
+      roleOnProjectId: null,
       roleOnProject: '',
       roleSearch: '',
       weeklyHours: {}
     });
-    setRoleSearchResultsNew([]);
+    // no role search state to clear
   };
 
   const getCurrentWeekHours = (assignment: Assignment): number => getCurrentWeekHoursFromHook(assignment);
@@ -323,7 +306,7 @@ const ProjectsList: React.FC = () => {
     try {
       await updateProjectMutation.mutateAsync({ id: projectId, data: { status: newStatus } });
       if (selectedProject?.id === projectId) {
-        setSelectedProject({ ...(selectedProject as any), status: newStatus } as any);
+        setSelectedProject({ ...selectedProject, status: newStatus } as Project);
       }
       await invalidateFilterMeta();
     } catch (e) {
@@ -398,11 +381,11 @@ const ProjectsList: React.FC = () => {
             </div>
             <FiltersBar
               statusOptions={statusOptions}
-              selectedStatusFilters={selectedStatusFilters2}
-              onToggleStatus={toggleStatusFilter2}
-              searchTerm={searchTerm2}
-              onSearchTerm={setSearchTerm2}
-              formatFilterStatus={formatFilterStatus2}
+              selectedStatusFilters={selectedStatusFilters}
+              onToggleStatus={toggleStatusFilter}
+              searchTerm={searchTerm}
+              onSearchTerm={setSearchTerm}
+              formatFilterStatus={formatFilterStatus}
               filterMetaLoading={filterMetaLoading}
               filterMetaError={filterMetaError}
               onRetryFilterMeta={() => refetchFilterMeta()}
@@ -417,12 +400,12 @@ const ProjectsList: React.FC = () => {
 
           {/* Projects Table */}
           <ProjectsTable
-            projects={sortedProjects2}
+            projects={sortedProjects}
             selectedProjectId={selectedProject?.id ?? null}
             onSelect={handleProjectClick}
-            sortBy={sortBy2}
-            sortDirection={sortDirection2}
-            onSort={onSort2}
+            sortBy={sortBy}
+            sortDirection={sortDirection}
+            onSort={onSort}
             loading={loading}
             nextDeliverables={nextDeliverablesMap}
             onChangeStatus={handleTableStatusChange}
@@ -445,14 +428,11 @@ const ProjectsList: React.FC = () => {
               assignments={assignments}
               editingAssignmentId={editingAssignment}
               editData={editData}
-              roleSearchResults={roleSearchResults}
               warnings={warnings}
               onEditAssignment={handleEditAssignment}
               onDeleteAssignment={handleDeleteAssignment}
               onSaveEdit={handleSaveEdit}
               onCancelEdit={handleCancelEdit}
-              onRoleSearch={(term) => handleRoleSearch(term)}
-              onRoleSelect={(role) => handleRoleSelect(role)}
               onHoursChange={(h) => setEditData((prev) => ({ ...prev, currentWeekHours: h }))}
               getCurrentWeekHours={getCurrentWeekHours}
               currentWeekKey={currentWeekKey}
@@ -498,9 +478,10 @@ const ProjectsList: React.FC = () => {
               personSearchResults={personSearchResults as any}
               selectedPersonIndex={selectedPersonIndex}
               onPersonSelect={handlePersonSelect}
-              roleSearchResultsNew={roleSearchResultsNew}
-              onRoleSearchNew={(term) => handleNewAssignmentRoleSearch(term, newAssignment.selectedPerson, (role) => setNewAssignment(prev => ({ ...prev, roleSearch: role, roleOnProject: role })))}
-              onRoleSelectNew={(role) => handleNewAssignmentRoleSelect(role, (r) => setNewAssignment(prev => ({ ...prev, roleSearch: r, roleOnProject: r })))}
+              onRoleSelectNew={(roleId, roleName) => {
+                const name = roleName || '';
+                setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
+              }}
               candidatesOnly={candidatesOnly}
               setCandidatesOnly={setCandidatesOnly}
               availabilityMap={availabilityMap}
@@ -527,6 +508,3 @@ const ProjectsList: React.FC = () => {
 export default ProjectsList;
 
 // VirtualizedProjectsList moved to list/components/ProjectsTable
-
-
-

@@ -1,0 +1,2289 @@
+{
+  "generatedAt": "2025-10-16T20:30:27.845Z",
+  "root": "C:\\Users\\tim\\VScode\\workload-tracker",
+  "totalFilesWithIssues": 178,
+  "countsByIssue": {
+    "CRLF_EOL": 106,
+    "SINGLE_LINE": 8,
+    "TRAILING_WS": 73,
+    "SMART_QUOTES": 8,
+    "BOM_FEFF": 15,
+    "REPLACEMENT_CHAR_FFFD": 1,
+    "LINE_TOO_LONG": 1
+  },
+  "files": [
+    {
+      "path": ".markdownlint.json",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 26
+    },
+    {
+      "path": "backend/accounts/migrations/__init__.py",
+      "issues": [
+        {
+          "type": "SINGLE_LINE",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 0
+    },
+    {
+      "path": "backend/assignments/migrations/0003_retrofit_weekly_hours.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 5
+        }
+      ],
+      "maxLen": 97
+    },
+    {
+      "path": "backend/assignments/models.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 144
+    },
+    {
+      "path": "backend/assignments/serializers.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 15
+        }
+      ],
+      "maxLen": 206
+    },
+    {
+      "path": "backend/assignments/tests/__init__.py",
+      "issues": [
+        {
+          "type": "SINGLE_LINE",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 42
+    },
+    {
+      "path": "backend/assignments/urls.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 49
+    },
+    {
+      "path": "backend/assignments/views.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 19
+        }
+      ],
+      "maxLen": 168
+    },
+    {
+      "path": "backend/config/settings.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 147
+    },
+    {
+      "path": "backend/config/wsgi.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 67
+    },
+    {
+      "path": "backend/core/apps.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 57
+    },
+    {
+      "path": "backend/core/fields.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 128
+    },
+    {
+      "path": "backend/core/generators.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 79
+    },
+    {
+      "path": "backend/core/management/commands/generate_types.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 118
+    },
+    {
+      "path": "backend/core/serializers.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 8
+        }
+      ],
+      "maxLen": 87
+    },
+    {
+      "path": "backend/core/tests/__init__.py",
+      "issues": [
+        {
+          "type": "SINGLE_LINE",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 0
+    },
+    {
+      "path": "backend/core/validation.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 137
+    },
+    {
+      "path": "backend/dashboard/views.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 16
+        }
+      ],
+      "maxLen": 147
+    },
+    {
+      "path": "backend/deliverables/apps.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 56
+    },
+    {
+      "path": "backend/deliverables/models.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 15
+        }
+      ],
+      "maxLen": 125
+    },
+    {
+      "path": "backend/deliverables/serializers.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 7
+        }
+      ],
+      "maxLen": 122
+    },
+    {
+      "path": "backend/deliverables/tests/__init__.py",
+      "issues": [
+        {
+          "type": "SINGLE_LINE",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 42
+    },
+    {
+      "path": "backend/deliverables/views.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 236
+    },
+    {
+      "path": "backend/departments/models.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 135
+    },
+    {
+      "path": "backend/departments/serializers.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 79
+    },
+    {
+      "path": "backend/departments/urls.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 49
+    },
+    {
+      "path": "backend/departments/views.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 2
+        }
+      ],
+      "maxLen": 78
+    },
+    {
+      "path": "backend/manage.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 74
+    },
+    {
+      "path": "backend/migrate_projects.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 113
+    },
+    {
+      "path": "backend/monitoring/management/commands/monitor_performance.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 72
+        }
+      ],
+      "maxLen": 130
+    },
+    {
+      "path": "backend/monitoring/tests.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 35
+        }
+      ],
+      "maxLen": 131
+    },
+    {
+      "path": "backend/openapi.json",
+      "issues": [
+        {
+          "type": "SMART_QUOTES",
+          "severity": "low"
+        }
+      ],
+      "maxLen": 154
+    },
+    {
+      "path": "backend/people/admin.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 21
+        }
+      ],
+      "maxLen": 121
+    },
+    {
+      "path": "backend/people/apps.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 56
+    },
+    {
+      "path": "backend/people/forms.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 99
+    },
+    {
+      "path": "backend/people/management/commands/export_people.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 90
+    },
+    {
+      "path": "backend/people/management/commands/import_people.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 94
+    },
+    {
+      "path": "backend/people/migrations/0003_auto_20250830_2343.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 7
+        }
+      ],
+      "maxLen": 90
+    },
+    {
+      "path": "backend/people/models.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 36
+        }
+      ],
+      "maxLen": 168
+    },
+    {
+      "path": "backend/people/serializers.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 5
+        }
+      ],
+      "maxLen": 148
+    },
+    {
+      "path": "backend/people/templates/admin/import_people.html",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 145
+    },
+    {
+      "path": "backend/people/templates/admin/people/person/change_list.html",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 74
+    },
+    {
+      "path": "backend/people/templates/admin/people/person/delete_confirmation.html",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 183
+    },
+    {
+      "path": "backend/people/tests/__init__.py",
+      "issues": [
+        {
+          "type": "SINGLE_LINE",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 42
+    },
+    {
+      "path": "backend/people/urls.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 49
+    },
+    {
+      "path": "backend/people/utils/csv_handler.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 149
+    },
+    {
+      "path": "backend/people/utils/excel_handler.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 45
+        }
+      ],
+      "maxLen": 165
+    },
+    {
+      "path": "backend/people/views.py",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 46
+        },
+        {
+          "type": "SMART_QUOTES",
+          "severity": "low"
+        }
+      ],
+      "maxLen": 154
+    },
+    {
+      "path": "backend/personal/views.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 137
+    },
+    {
+      "path": "backend/projects/forms.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 124
+    },
+    {
+      "path": "backend/projects/management/commands/export_projects.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 127
+    },
+    {
+      "path": "backend/projects/management/commands/import_projects.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 114
+    },
+    {
+      "path": "backend/projects/models.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 127
+    },
+    {
+      "path": "backend/projects/serializers.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 3
+        }
+      ],
+      "maxLen": 117
+    },
+    {
+      "path": "backend/projects/templates/admin/projects/project/change_list.html",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 52
+    },
+    {
+      "path": "backend/projects/templates/admin/projects/project/delete_confirmation.html",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 212
+    },
+    {
+      "path": "backend/projects/templates/admin/projects/project/import_projects.html",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 118
+    },
+    {
+      "path": "backend/projects/urls.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 73
+    },
+    {
+      "path": "backend/projects/utils/csv_handler.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 161
+    },
+    {
+      "path": "backend/projects/utils/excel_handler.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 237
+    },
+    {
+      "path": "backend/projects/views.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 34
+        }
+      ],
+      "maxLen": 165
+    },
+    {
+      "path": "backend/roles/admin.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 2
+        }
+      ],
+      "maxLen": 84
+    },
+    {
+      "path": "backend/roles/migrations/0002_auto_20250830_2331.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 2
+        }
+      ],
+      "maxLen": 113
+    },
+    {
+      "path": "backend/roles/models.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 9
+        }
+      ],
+      "maxLen": 96
+    },
+    {
+      "path": "backend/roles/serializers.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 5
+        }
+      ],
+      "maxLen": 88
+    },
+    {
+      "path": "backend/roles/views.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 10
+        }
+      ],
+      "maxLen": 132
+    },
+    {
+      "path": "backend/skills/models.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 5
+        }
+      ],
+      "maxLen": 99
+    },
+    {
+      "path": "backend/skills/serializers.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 97
+    },
+    {
+      "path": "backend/skills/urls.py",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 84
+    },
+    {
+      "path": "backend/skills/views.py",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 6
+        }
+      ],
+      "maxLen": 103
+    },
+    {
+      "path": "docker-compose.yml",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 79
+    },
+    {
+      "path": "frontend/index.html",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 3
+        }
+      ],
+      "maxLen": 79
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 236
+    },
+    {
+      "path": "frontend/package.json",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 127
+    },
+    {
+      "path": "frontend/postcss.config.js",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 22
+    },
+    {
+      "path": "frontend/src/api/client.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 111
+    },
+    {
+      "path": "frontend/src/api/schema.src.json",
+      "issues": [
+        {
+          "type": "SMART_QUOTES",
+          "severity": "low"
+        }
+      ],
+      "maxLen": 444
+    },
+    {
+      "path": "frontend/src/api/schema.ts",
+      "issues": [
+        {
+          "type": "SMART_QUOTES",
+          "severity": "low"
+        }
+      ],
+      "maxLen": 153
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 2
+        }
+      ],
+      "maxLen": 86
+    },
+    {
+      "path": "frontend/src/components/auth/RequireAuth.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 87
+    },
+    {
+      "path": "frontend/src/components/dashboard/CapacityHeatmap.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 166
+    },
+    {
+      "path": "frontend/src/components/deliverables/DeliverablesSection.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 8
+        }
+      ],
+      "maxLen": 244
+    },
+    {
+      "path": "frontend/src/components/departments/DepartmentHierarchy.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 3
+        }
+      ],
+      "maxLen": 119
+    },
+    {
+      "path": "frontend/src/components/ErrorBoundary.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 13
+        }
+      ],
+      "maxLen": 116
+    },
+    {
+      "path": "frontend/src/components/filters/GlobalDepartmentFilter.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 126
+    },
+    {
+      "path": "frontend/src/components/layout/Navigation.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 97
+    },
+    {
+      "path": "frontend/src/components/layout/Sidebar.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 53
+        }
+      ],
+      "maxLen": 756
+    },
+    {
+      "path": "frontend/src/components/mockup/AssignmentGridMockup.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 323
+    },
+    {
+      "path": "frontend/src/components/mockup/ProjectsListMockup.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 214
+    },
+    {
+      "path": "frontend/src/components/mockup/SidebarNavigationMockup.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 27
+        }
+      ],
+      "maxLen": 758
+    },
+    {
+      "path": "frontend/src/components/PageErrorBoundary.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 5
+        }
+      ],
+      "maxLen": 118
+    },
+    {
+      "path": "frontend/src/components/personal/MyProjectsCard.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 241
+    },
+    {
+      "path": "frontend/src/components/projects/status.utils.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 8
+        }
+      ],
+      "maxLen": 96
+    },
+    {
+      "path": "frontend/src/components/projects/StatusBadge.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 12
+        }
+      ],
+      "maxLen": 184
+    },
+    {
+      "path": "frontend/src/components/projects/StatusDropdown.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 6
+        }
+      ],
+      "maxLen": 183
+    },
+    {
+      "path": "frontend/src/components/projects/useDropdownManager.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 91
+    },
+    {
+      "path": "frontend/src/components/projects/useProjectStatus.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 6
+        }
+      ],
+      "maxLen": 134
+    },
+    {
+      "path": "frontend/src/components/projects/useProjectStatusSubscription.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 10
+        }
+      ],
+      "maxLen": 136
+    },
+    {
+      "path": "frontend/src/components/projects/__tests__/accessibility.test.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 42
+        }
+      ],
+      "maxLen": 101
+    },
+    {
+      "path": "frontend/src/components/projects/__tests__/performance.test.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 44
+        }
+      ],
+      "maxLen": 245
+    },
+    {
+      "path": "frontend/src/components/projects/__tests__/projectStatus.integration.test.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 6
+        }
+      ],
+      "maxLen": 110
+    },
+    {
+      "path": "frontend/src/components/projects/__tests__/statusBadge.visual.test.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 18
+        }
+      ],
+      "maxLen": 112
+    },
+    {
+      "path": "frontend/src/components/quick-actions/tools/BalanceWorkloadTool.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 122
+    },
+    {
+      "path": "frontend/src/components/quick-actions/tools/CapacityReportTool.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 132
+    },
+    {
+      "path": "frontend/src/components/quick-actions/tools/FindAvailableTool.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 220
+    },
+    {
+      "path": "frontend/src/components/quick-actions/tools/MilestoneReviewTool.tsx",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "SMART_QUOTES",
+          "severity": "low"
+        }
+      ],
+      "maxLen": 140
+    },
+    {
+      "path": "frontend/src/components/settings/DepartmentProjectRolesSection.tsx",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 282
+    },
+    {
+      "path": "frontend/src/components/skills/SkillsAutocomplete.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 165
+    },
+    {
+      "path": "frontend/src/components/skills/SkillsFilter.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 166
+    },
+    {
+      "path": "frontend/src/components/ui/Button.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 323
+    },
+    {
+      "path": "frontend/src/components/ui/Card.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 86
+    },
+    {
+      "path": "frontend/src/components/ui/Input.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 91
+    },
+    {
+      "path": "frontend/src/components/ui/Loader.tsx",
+      "issues": [
+        {
+          "type": "REPLACEMENT_CHAR_FFFD",
+          "severity": "critical"
+        }
+      ],
+      "maxLen": 139
+    },
+    {
+      "path": "frontend/src/components/ui/Toast.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 165
+    },
+    {
+      "path": "frontend/src/dev/testDualFilterScenarios.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 48
+        }
+      ],
+      "maxLen": 128
+    },
+    {
+      "path": "frontend/src/hooks/useAuthenticatedEffect.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 59
+    },
+    {
+      "path": "frontend/src/hooks/useCapacityHeatmap.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 104
+    },
+    {
+      "path": "frontend/src/hooks/useDebounce.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 4
+        }
+      ],
+      "maxLen": 80
+    },
+    {
+      "path": "frontend/src/hooks/usePeople.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 100
+    },
+    {
+      "path": "frontend/src/hooks/useProjects.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 101
+    },
+    {
+      "path": "frontend/src/index.css",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 117
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 129
+    },
+    {
+      "path": "frontend/src/pages/Assignments/AssignmentForm.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 230
+    },
+    {
+      "path": "frontend/src/pages/Assignments/AssignmentGrid.tsx",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 2
+        }
+      ],
+      "maxLen": 271
+    },
+    {
+      "path": "frontend/src/pages/Assignments/AssignmentList.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 168
+    },
+    {
+      "path": "frontend/src/pages/Assignments/grid/components/PersonSection.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 135
+    },
+    {
+      "path": "frontend/src/pages/Assignments/grid/components/ProjectCell.tsx",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 222
+    },
+    {
+      "path": "frontend/src/pages/Assignments/grid/useAssignmentRoleUpdate.ts",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 144
+    },
+    {
+      "path": "frontend/src/pages/Assignments/index.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 77
+    },
+    {
+      "path": "frontend/src/pages/Assignments/ProjectAssignmentsGrid.tsx",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        }
+      ],
+      "maxLen": 332
+    },
+    {
+      "path": "frontend/src/pages/Auth/Login.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 131
+    },
+    {
+      "path": "frontend/src/pages/Auth/ResetPassword.tsx",
+      "issues": [
+        {
+          "type": "SMART_QUOTES",
+          "severity": "low"
+        }
+      ],
+      "maxLen": 102
+    },
+    {
+      "path": "frontend/src/pages/ComingSoon/ComingSoon.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "SMART_QUOTES",
+          "severity": "low"
+        }
+      ],
+      "maxLen": 131
+    },
+    {
+      "path": "frontend/src/pages/Dashboard.tsx",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 11
+        }
+      ],
+      "maxLen": 291
+    },
+    {
+      "path": "frontend/src/pages/Deliverables/Calendar.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 256
+    },
+    {
+      "path": "frontend/src/pages/Departments/DepartmentForm.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 223
+    },
+    {
+      "path": "frontend/src/pages/Departments/DepartmentsList.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 5
+        }
+      ],
+      "maxLen": 140
+    },
+    {
+      "path": "frontend/src/pages/Departments/HierarchyView.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 122
+    },
+    {
+      "path": "frontend/src/pages/Departments/index.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 66
+    },
+    {
+      "path": "frontend/src/pages/Departments/ManagerDashboard.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 2
+        }
+      ],
+      "maxLen": 184
+    },
+    {
+      "path": "frontend/src/pages/Departments/ReportsView.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 24
+        }
+      ],
+      "maxLen": 164
+    },
+    {
+      "path": "frontend/src/pages/People/PeopleList.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 19
+        }
+      ],
+      "maxLen": 207
+    },
+    {
+      "path": "frontend/src/pages/People/PersonForm.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 12
+        }
+      ],
+      "maxLen": 218
+    },
+    {
+      "path": "frontend/src/pages/Performance/PerformanceDashboard.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 13
+        }
+      ],
+      "maxLen": 172
+    },
+    {
+      "path": "frontend/src/pages/Profile/Profile.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 156
+    },
+    {
+      "path": "frontend/src/pages/Projects/index.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 54
+    },
+    {
+      "path": "frontend/src/pages/Projects/list/components/ProjectDetailsPanel.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 216
+    },
+    {
+      "path": "frontend/src/pages/Projects/ProjectForm.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 242
+    },
+    {
+      "path": "frontend/src/pages/Projects/ProjectsList.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 197
+    },
+    {
+      "path": "frontend/src/pages/Reports/TeamForecast.tsx",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 183
+    },
+    {
+      "path": "frontend/src/pages/Settings/components/RoleDeleteConfirm.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 7
+        }
+      ],
+      "maxLen": 147
+    },
+    {
+      "path": "frontend/src/pages/Settings/components/RoleForm.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 220
+    },
+    {
+      "path": "frontend/src/pages/Settings/components/RoleList.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 17
+        }
+      ],
+      "maxLen": 176
+    },
+    {
+      "path": "frontend/src/pages/Settings/Settings.tsx",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 2
+        }
+      ],
+      "maxLen": 246
+    },
+    {
+      "path": "frontend/src/pages/Skills/index.tsx",
+      "issues": [
+        {
+          "type": "SINGLE_LINE",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 63
+    },
+    {
+      "path": "frontend/src/pages/Skills/SkillsDashboard.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 206
+    },
+    {
+      "path": "frontend/src/services/api.ts",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 12
+        }
+      ],
+      "maxLen": 380
+    },
+    {
+      "path": "frontend/src/store/auth.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 200
+    },
+    {
+      "path": "frontend/src/test/setup.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 1
+        }
+      ],
+      "maxLen": 55
+    },
+    {
+      "path": "frontend/src/theme/tokens.ts",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 11
+        }
+      ],
+      "maxLen": 78
+    },
+    {
+      "path": "frontend/src/types/models.ts",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        }
+      ],
+      "maxLen": 91
+    },
+    {
+      "path": "frontend/src/utils/apiBase.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 81
+    },
+    {
+      "path": "frontend/src/utils/auth.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 78
+    },
+    {
+      "path": "frontend/src/utils/monitoring.tsx",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 20
+        }
+      ],
+      "maxLen": 165
+    },
+    {
+      "path": "frontend/src/vite-env.d.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 60
+    },
+    {
+      "path": "frontend/tailwind.config.js",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 59
+    },
+    {
+      "path": "frontend/tsconfig.node.json",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 41
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 179
+    },
+    {
+      "path": "lighthouserc.js",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 10
+        }
+      ],
+      "maxLen": 112
+    },
+    {
+      "path": "scripts/scan-file-health.mjs",
+      "issues": [
+        {
+          "type": "SMART_QUOTES",
+          "severity": "low"
+        }
+      ],
+      "maxLen": 101
+    },
+    {
+      "path": "security/artifacts/bandit.json",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 376
+    },
+    {
+      "path": "security/artifacts/pip-audit.json",
+      "issues": [
+        {
+          "type": "SINGLE_LINE",
+          "severity": "high"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 3188
+    },
+    {
+      "path": "security/artifacts/safety.json",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 190
+    },
+    {
+      "path": "security/artifacts/semgrep.json",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        },
+        {
+          "type": "SINGLE_LINE",
+          "severity": "high"
+        },
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        },
+        {
+          "type": "LINE_TOO_LONG",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 36237
+    },
+    {
+      "path": "security/remediation/backlog.json",
+      "issues": [
+        {
+          "type": "BOM_FEFF",
+          "severity": "critical"
+        }
+      ],
+      "maxLen": 127
+    },
+    {
+      "path": "security/security-findings.json",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "medium"
+        }
+      ],
+      "maxLen": 378
+    },
+    {
+      "path": "test-api-update.html",
+      "issues": [
+        {
+          "type": "TRAILING_WS",
+          "severity": "low",
+          "count": 10
+        }
+      ],
+      "maxLen": 140
+    },
+    {
+      "path": "test-syntax.tsx",
+      "issues": [
+        {
+          "type": "CRLF_EOL",
+          "severity": "high"
+        }
+      ],
+      "maxLen": 25
+    }
+  ],
+  "emptyFiles": [
+    "backend/assignments/admin.py",
+    "backend/assignments/migrations/__init__.py",
+    "backend/assignments/__init__.py",
+    "backend/core/management/commands/__init__.py",
+    "backend/core/management/__init__.py",
+    "backend/core/migrations/__init__.py",
+    "backend/core/__init__.py",
+    "backend/dashboard/migrations/__init__.py",
+    "backend/dashboard/__init__.py",
+    "backend/deliverables/migrations/__init__.py",
+    "backend/deliverables/__init__.py",
+    "backend/departments/admin.py",
+    "backend/departments/migrations/__init__.py",
+    "backend/departments/__init__.py",
+    "backend/monitoring/management/commands/__init__.py",
+    "backend/monitoring/management/__init__.py",
+    "backend/monitoring/__init__.py",
+    "backend/people/management/commands/__init__.py",
+    "backend/people/management/__init__.py",
+    "backend/people/migrations/__init__.py",
+    "backend/people/utils/__init__.py",
+    "backend/people/__init__.py",
+    "backend/projects/management/commands/__init__.py",
+    "backend/projects/management/__init__.py",
+    "backend/projects/migrations/__init__.py",
+    "backend/projects/utils/__init__.py",
+    "backend/projects/__init__.py",
+    "backend/roles/migrations/__init__.py",
+    "backend/roles/__init__.py",
+    "backend/skills/migrations/__init__.py",
+    "backend/skills/__init__.py"
+  ],
+  "longLineThreshold": 150,
+  "filesOver150": [
+    {
+      "path": "backend/assignments/serializers.py",
+      "maxLen": 206
+    },
+    {
+      "path": "backend/assignments/views.py",
+      "maxLen": 168
+    },
+    {
+      "path": "backend/deliverables/views.py",
+      "maxLen": 236
+    },
+    {
+      "path": "backend/openapi.json",
+      "maxLen": 154
+    },
+    {
+      "path": "backend/people/models.py",
+      "maxLen": 168
+    },
+    {
+      "path": "backend/people/templates/admin/people/person/delete_confirmation.html",
+      "maxLen": 183
+    },
+    {
+      "path": "backend/people/utils/excel_handler.py",
+      "maxLen": 165
+    },
+    {
+      "path": "backend/people/views.py",
+      "maxLen": 154
+    },
+    {
+      "path": "backend/projects/templates/admin/projects/project/delete_confirmation.html",
+      "maxLen": 212
+    },
+    {
+      "path": "backend/projects/utils/csv_handler.py",
+      "maxLen": 161
+    },
+    {
+      "path": "backend/projects/utils/excel_handler.py",
+      "maxLen": 237
+    },
+    {
+      "path": "backend/projects/views.py",
+      "maxLen": 165
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "maxLen": 236
+    },
+    {
+      "path": "frontend/src/api/schema.src.json",
+      "maxLen": 444
+    },
+    {
+      "path": "frontend/src/api/schema.ts",
+      "maxLen": 153
+    },
+    {
+      "path": "frontend/src/components/dashboard/CapacityHeatmap.tsx",
+      "maxLen": 166
+    },
+    {
+      "path": "frontend/src/components/deliverables/DeliverablesSection.tsx",
+      "maxLen": 244
+    },
+    {
+      "path": "frontend/src/components/layout/Sidebar.tsx",
+      "maxLen": 756
+    },
+    {
+      "path": "frontend/src/components/mockup/AssignmentGridMockup.tsx",
+      "maxLen": 323
+    },
+    {
+      "path": "frontend/src/components/mockup/ProjectsListMockup.tsx",
+      "maxLen": 214
+    },
+    {
+      "path": "frontend/src/components/mockup/SidebarNavigationMockup.tsx",
+      "maxLen": 758
+    },
+    {
+      "path": "frontend/src/components/personal/MyProjectsCard.tsx",
+      "maxLen": 241
+    },
+    {
+      "path": "frontend/src/components/projects/StatusBadge.tsx",
+      "maxLen": 184
+    },
+    {
+      "path": "frontend/src/components/projects/StatusDropdown.tsx",
+      "maxLen": 183
+    },
+    {
+      "path": "frontend/src/components/projects/__tests__/performance.test.tsx",
+      "maxLen": 245
+    },
+    {
+      "path": "frontend/src/components/quick-actions/tools/FindAvailableTool.tsx",
+      "maxLen": 220
+    },
+    {
+      "path": "frontend/src/components/settings/DepartmentProjectRolesSection.tsx",
+      "maxLen": 282
+    },
+    {
+      "path": "frontend/src/components/skills/SkillsAutocomplete.tsx",
+      "maxLen": 165
+    },
+    {
+      "path": "frontend/src/components/skills/SkillsFilter.tsx",
+      "maxLen": 166
+    },
+    {
+      "path": "frontend/src/components/ui/Button.tsx",
+      "maxLen": 323
+    },
+    {
+      "path": "frontend/src/components/ui/Toast.tsx",
+      "maxLen": 165
+    },
+    {
+      "path": "frontend/src/pages/Assignments/AssignmentForm.tsx",
+      "maxLen": 230
+    },
+    {
+      "path": "frontend/src/pages/Assignments/AssignmentGrid.tsx",
+      "maxLen": 271
+    },
+    {
+      "path": "frontend/src/pages/Assignments/AssignmentList.tsx",
+      "maxLen": 168
+    },
+    {
+      "path": "frontend/src/pages/Assignments/grid/components/ProjectCell.tsx",
+      "maxLen": 222
+    },
+    {
+      "path": "frontend/src/pages/Assignments/ProjectAssignmentsGrid.tsx",
+      "maxLen": 332
+    },
+    {
+      "path": "frontend/src/pages/Dashboard.tsx",
+      "maxLen": 291
+    },
+    {
+      "path": "frontend/src/pages/Deliverables/Calendar.tsx",
+      "maxLen": 256
+    },
+    {
+      "path": "frontend/src/pages/Departments/DepartmentForm.tsx",
+      "maxLen": 223
+    },
+    {
+      "path": "frontend/src/pages/Departments/ManagerDashboard.tsx",
+      "maxLen": 184
+    },
+    {
+      "path": "frontend/src/pages/Departments/ReportsView.tsx",
+      "maxLen": 164
+    },
+    {
+      "path": "frontend/src/pages/People/PeopleList.tsx",
+      "maxLen": 207
+    },
+    {
+      "path": "frontend/src/pages/People/PersonForm.tsx",
+      "maxLen": 218
+    },
+    {
+      "path": "frontend/src/pages/Performance/PerformanceDashboard.tsx",
+      "maxLen": 172
+    },
+    {
+      "path": "frontend/src/pages/Profile/Profile.tsx",
+      "maxLen": 156
+    },
+    {
+      "path": "frontend/src/pages/Projects/list/components/ProjectDetailsPanel.tsx",
+      "maxLen": 216
+    },
+    {
+      "path": "frontend/src/pages/Projects/ProjectForm.tsx",
+      "maxLen": 242
+    },
+    {
+      "path": "frontend/src/pages/Projects/ProjectsList.tsx",
+      "maxLen": 197
+    },
+    {
+      "path": "frontend/src/pages/Reports/TeamForecast.tsx",
+      "maxLen": 183
+    },
+    {
+      "path": "frontend/src/pages/Settings/components/RoleForm.tsx",
+      "maxLen": 220
+    },
+    {
+      "path": "frontend/src/pages/Settings/components/RoleList.tsx",
+      "maxLen": 176
+    },
+    {
+      "path": "frontend/src/pages/Settings/Settings.tsx",
+      "maxLen": 246
+    },
+    {
+      "path": "frontend/src/pages/Skills/SkillsDashboard.tsx",
+      "maxLen": 206
+    },
+    {
+      "path": "frontend/src/services/api.ts",
+      "maxLen": 380
+    },
+    {
+      "path": "frontend/src/store/auth.ts",
+      "maxLen": 200
+    },
+    {
+      "path": "frontend/src/utils/monitoring.tsx",
+      "maxLen": 165
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "maxLen": 179
+    },
+    {
+      "path": "security/artifacts/bandit.json",
+      "maxLen": 376
+    },
+    {
+      "path": "security/artifacts/pip-audit.json",
+      "maxLen": 3188
+    },
+    {
+      "path": "security/artifacts/safety.json",
+      "maxLen": 190
+    },
+    {
+      "path": "security/artifacts/semgrep.json",
+      "maxLen": 36237
+    },
+    {
+      "path": "security/security-findings.json",
+      "maxLen": 378
+    }
+  ]
+}

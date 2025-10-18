@@ -56,10 +56,10 @@ export function useProjectAssignments({ projectId, people }: UseProjectAssignmen
   const availableRoles = useMemo(() => {
     const roles = new Set<string>();
     assignments.forEach((a) => {
-      if (a.roleOnProject) roles.add(a.roleOnProject);
+      if (a.roleName) roles.add(a.roleName);
     });
     people.forEach((p) => {
-      if (p.role) roles.add(String(p.role));
+      if (p.roleName) roles.add(p.roleName);
     });
     return Array.from(roles).sort();
   }, [assignments, people]);

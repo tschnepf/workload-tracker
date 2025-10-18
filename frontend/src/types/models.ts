@@ -58,8 +58,6 @@ export interface Assignment {
   // New FK-based fields for project role (department-scoped)
   roleOnProjectId?: number | null;
   roleName?: string | null;
-  // Legacy string (to be removed after full migration)
-  roleOnProject?: string;
   startDate?: string;
   endDate?: string;
   notes?: string;

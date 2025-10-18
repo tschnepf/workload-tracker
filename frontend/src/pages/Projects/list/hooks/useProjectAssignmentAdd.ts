@@ -12,6 +12,7 @@ interface Params {
 const initialState: AddAssignmentState = {
   personSearch: '',
   selectedPerson: null,
+  roleOnProjectId: null,
   roleOnProject: '',
   roleSearch: '',
   weeklyHours: {},
@@ -45,7 +46,8 @@ export function useProjectAssignmentAdd({ projectId, invalidateFilterMeta, reloa
     const payload = {
       person: state.selectedPerson.id,
       project: projectId,
-      roleOnProject: state.roleOnProject || 'Team Member',
+      // Use FK only; legacy string is not sent
+      roleOnProjectId: state.roleOnProjectId ?? null,
       weeklyHours: state.weeklyHours,
       startDate: new Date().toISOString().split('T')[0],
     } as any;

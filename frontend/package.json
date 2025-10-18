@@ -17,7 +17,10 @@
                     "e2e:ui":  "playwright test --ui",
                     "e2e:codegen":  "playwright codegen",
                     "openapi:types":  "openapi-typescript ../backend/openapi.json -o src/api/schema.ts",
-                    "openapi:regen":  "npm run openapi:types"
+                    "openapi:regen":  "npm run openapi:types",
+                    "check:health": "node scripts/check-file-health.mjs",
+                    "check:health:projects": "node scripts/check-file-health-projects.mjs",
+                    "prepare": "husky install"
                 },
     "overrides":  {
                       "esbuild":  "0.25.9"
@@ -60,6 +63,23 @@
                             "msw":  "2.4.9",
                             "vitest":  "3.2.4",
                             "@playwright/test":  "1.47.2",
-                            "eslint-import-resolver-typescript":  "3.6.1"
+                            "eslint-import-resolver-typescript":  "3.6.1",
+                            "husky": "9.1.7",
+                            "lint-staged": "15.2.10",
+                            "prettier": "3.3.3",
+                            "eslint-config-prettier": "9.1.0"
                         }
+  ,
+  "lint-staged": {
+    "src/pages/Projects/**/*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix",
+      "npm run -s check:health:projects"
+    ],
+    "src/components/projects/ProjectStatusDropdown.tsx": [
+      "prettier --write",
+      "eslint --fix",
+      "npm run -s check:health:projects"
+    ]
+  }
 }

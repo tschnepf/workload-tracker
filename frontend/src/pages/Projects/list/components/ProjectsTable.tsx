@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { Project, Deliverable } from '@/types/models';
-import StatusBadge, { formatStatus, editableStatusOptions, getStatusColor } from '@/components/projects/StatusBadge';
+import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
 import { getFlag } from '@/lib/flags';
 import { useVirtualRows } from '../hooks/useVirtualRows';
 
@@ -70,12 +70,13 @@ const ProjectsTable: React.FC<Props> = ({
         const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
         const sameClientAsNext = groupClients && next && (next.client || '') === (project.client || '');
         const isGroupStart = groupClients && !sameClientAsPrev && index !== 0;
-        const showRowBottomDivider = !groupClients || sameClientAsNext; // hide at end of client group
+        const showRowBottomDivider = !groupClients || sameClientAsNext;
         const dividerBorder = selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]';
         const nextDeliverable = (project.id != null && typeof project.id === 'number' && nextDeliverables)
           ? nextDeliverables.get(project.id)
           : null;
-        const nextTop = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
+        const nextTopRaw = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
+        const nextTop = nextTopRaw || '-';
         const nextBottom = nextDeliverable?.date ? new Date(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         return (
           <div
@@ -93,46 +94,24 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
             </div>
             <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
-            <div className="col-span-2 relative status-dropdown-container" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                className={`${getStatusColor(project.status || '')} hover:bg-[var(--surfaceHover)] px-1 py-0.5 rounded text-xs transition-colors cursor-pointer flex items-center gap-1`}
-                onClick={() => setOpenStatusFor(openStatusFor === project.id ? null : (project.id as number))}
-              >
-                {formatStatus(project.status || '')}
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="6,9 12,15 18,9" />
-                </svg>
-              </button>
-              {openStatusFor === project.id && (
-                <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[140px]">
-                  {editableStatusOptions.map((status) => (
-                    <button
-                      key={status}
-                      onClick={(e) => { e.stopPropagation(); onChangeStatus?.(project.id!, status); setOpenStatusFor(null); }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--cardHover)] transition-colors first:rounded-t last:rounded-b ${
-                        project.status === status ? 'bg-[var(--surfaceOverlay)]' : ''
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <StatusBadge status={status} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+              <ProjectStatusDropdown
+                status={project.status || ''}
+                onChange={(s) => onChangeStatus?.(project.id!, s)}
+                isOpen={openStatusFor === project.id}
+                setOpen={(v) => setOpenStatusFor(v ? (project.id as number) : null)}
+              />
             </div>
             <div className="col-span-3">
               {nextDeliverable ? (
                 <>
-                  <div className="text-[var(--text)] font-medium leading-tight">{nextTop || '—'}</div>
+                  <div className="text-[var(--text)] font-medium leading-tight">{nextTop}</div>
                   <div className="text-[var(--muted)] text-xs leading-tight">{nextBottom || ''}</div>
                 </>
               ) : (
-                <div className="text-[var(--muted)] text-xs">—</div>
+                <div className="text-[var(--muted)] text-xs">-</div>
               )}
             </div>
-            {/* Row divider shifted to exclude client column */}
             {showRowBottomDivider && (
               <div className={`col-start-3 col-end-12 h-0 border-b ${dividerBorder} pointer-events-none`} />
             )}
@@ -153,7 +132,8 @@ const ProjectsTable: React.FC<Props> = ({
           const nextDeliverable = (project.id != null && typeof project.id === 'number' && nextDeliverables)
             ? nextDeliverables.get(project.id)
             : null;
-          const nextTop = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
+          const nextTopRaw = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
+          const nextTop = nextTopRaw || '-';
           const nextBottom = nextDeliverable?.date ? new Date(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
           return (
             <div
@@ -170,43 +150,22 @@ const ProjectsTable: React.FC<Props> = ({
                 <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
               </div>
               <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
-              <div className="col-span-2 relative status-dropdown-container" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  className={`${getStatusColor(project.status || '')} hover:bg-[var(--surfaceHover)] px-1 py-0.5 rounded text-xs transition-colors cursor-pointer flex items-center gap-1`}
-                  onClick={() => setOpenStatusFor(openStatusFor === project.id ? null : (project.id as number))}
-                >
-                  {formatStatus(project.status || '')}
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="6,9 12,15 18,9" />
-                  </svg>
-                </button>
-                {openStatusFor === project.id && (
-                  <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[140px]">
-                    {editableStatusOptions.map((status) => (
-                      <button
-                        key={status}
-                        onClick={(e) => { e.stopPropagation(); onChangeStatus?.(project.id!, status); setOpenStatusFor(null); }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--cardHover)] transition-colors first:rounded-t last:rounded-b ${
-                          project.status === status ? 'bg-[var(--surfaceOverlay)]' : ''
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <StatusBadge status={status} />
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+                <ProjectStatusDropdown
+                  status={project.status || ''}
+                  onChange={(s) => onChangeStatus?.(project.id!, s)}
+                  isOpen={openStatusFor === project.id}
+                  setOpen={(v) => setOpenStatusFor(v ? (project.id as number) : null)}
+                />
               </div>
               <div className="col-span-3">
                 {nextDeliverable ? (
                   <>
-                    <div className="text-[var(--text)] font-medium leading-tight">{nextTop || '—'}</div>
+                    <div className="text-[var(--text)] font-medium leading-tight">{nextTop}</div>
                     <div className="text-[var(--muted)] text-xs leading-tight">{nextBottom || ''}</div>
                   </>
                 ) : (
-                  <div className="text-[var(--muted)] text-xs">—</div>
+                  <div className="text-[var(--muted)] text-xs">-</div>
                 )}
               </div>
               {(!groupClients || (projects[v.index + 1] && (projects[v.index + 1].client || '') === (project.client || ''))) && (
@@ -233,7 +192,8 @@ const ProjectsTable: React.FC<Props> = ({
 
 const SortIcon: React.FC<{ column: string; sortBy: string; sortDirection: 'asc' | 'desc' }> = ({ column, sortBy, sortDirection }) => {
   if (sortBy !== column) return null;
-  return <span className="ml-1 text-[var(--primary)]">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
+  return <span className="ml-1 text-[var(--primary)]">{sortDirection === 'asc' ? '^' : 'v'}</span>;
 };
 
 export default ProjectsTable;
+

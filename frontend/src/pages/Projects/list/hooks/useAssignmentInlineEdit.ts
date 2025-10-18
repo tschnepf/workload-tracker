@@ -3,7 +3,7 @@ import type { Assignment, Person } from '@/types/models';
 import { assignmentsApi } from '@/services/api';
 
 interface EditData {
-  roleOnProject: string;
+  roleOnProject: string; // kept for UI state only (label), not persisted
   currentWeekHours: number;
   roleSearch: string;
 }
@@ -58,7 +58,7 @@ export function useAssignmentInlineEdit({
   const handleEditAssignment = useCallback((assignment: Assignment) => {
     setEditingAssignment(assignment.id!);
     const currentWeekHours = getCurrentWeekHours(assignment);
-    const existingRole = assignment.roleOnProject || '';
+    const existingRole = assignment.roleName || '';
     setEditData({ roleOnProject: existingRole, currentWeekHours, roleSearch: existingRole });
     setRoleSearchResults([]);
   }, []);
@@ -100,8 +100,8 @@ export function useAssignmentInlineEdit({
       }
 
       const updatedWeeklyHours = { ...assignment.weeklyHours, [key]: editData.currentWeekHours };
-      const roleToSave = editData.roleOnProject?.trim() || 'Team Member';
-      await assignmentsApi.update(assignmentId, { roleOnProject: roleToSave, weeklyHours: updatedWeeklyHours });
+      // Save hours only. Role changes are handled immediately via RoleDropdown using roleOnProjectId.
+      await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
       if (selectedProjectId) {
         await reloadAssignments(selectedProjectId);
       }

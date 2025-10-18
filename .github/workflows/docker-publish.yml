@@ -6,13 +6,103 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: docker.io
-  BACKEND_IMAGE: ${{ secrets.DOCKER_REPO_BACKEND || 'your-username/workload-tracker-backend' }}
-  FRONTEND_IMAGE: ${{ secrets.DOCKER_REPO_FRONTEND || 'your-username/workload-tracker-frontend' }}
+  BACKEND_IMAGE: ${{ secrets.DOCKER_REPO_BACKEND }}
+  FRONTEND_IMAGE: ${{ secrets.DOCKER_REPO_FRONTEND }}
 
 jobs:
+  backend-check:
+    name: Backend Checks (Django)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Django system check
+        working-directory: backend
+        run: |
+          python manage.py check
+      - name: Run backend tests
+        working-directory: backend
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+        run: |
+          python manage.py test --noinput
+
+  frontend-check:
+    name: Frontend TypeScript + Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+      - name: TypeScript check (capture diagnostics)
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee ts-errors.txt
+      - name: Upload TS diagnostics (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-errors
+          path: frontend/ts-errors.txt
+      - name: Build
+        working-directory: frontend
+        run: npm run -s build
+
+  contract-check:
+    name: Contract Check (OpenAPI or Adapter)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+      - name: Regenerate OpenAPI types
+        working-directory: frontend
+        run: npm run -s openapi:types
+      - name: Fail on OpenAPI drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- frontend/src/api/schema.ts; then
+            echo "OpenAPI types drift detected. Update adapters/usages or sync backend spec." >&2
+            exit 1
+          fi
+
   build-and-push:
+    needs: [backend-check, frontend-check, contract-check]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,6 +121,15 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Verify required Docker secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${{ env.BACKEND_IMAGE }}"; : "${{ env.FRONTEND_IMAGE }}"
+          if [ -z "${{ env.BACKEND_IMAGE }}" ] || [ -z "${{ env.FRONTEND_IMAGE }}" ]; then
+            echo "Required secrets DOCKER_REPO_BACKEND/DOCKER_REPO_FRONTEND not set." >&2
+            exit 1
+          fi
 
       - name: Extract metadata (backend)
         id: meta-backend
@@ -49,7 +148,7 @@ jobs:
           context: ./backend
           file: ./docker/backend/Dockerfile
           target: production
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
           cache-from: type=gha
@@ -72,9 +171,8 @@ jobs:
           context: ./frontend
           file: ./docker/frontend/Dockerfile
           target: production
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-

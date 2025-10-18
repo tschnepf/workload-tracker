@@ -27,6 +27,9 @@ export default [
       },
     },
     rules: {
+      // Encoding/whitespace safety
+      'no-irregular-whitespace': 'error',
+      'unicode-bom': ['error', 'never'],
       // Naming discipline: avoid ad-hoc key mapping helpers; use serializers + typed models instead.
       'no-restricted-imports': ['warn', {
         paths: [

@@ -1,0 +1,408 @@
+# File Health Fix Queue
+
+Generated: 2025-10-16T20:30:27.845Z
+
+Items are grouped by severity (critical -> low).
+
+
+## Critical
+
+- [ ] [`backend/people/views.py`](../backend/people/views.py) - BOM_FEFF, TRAILING_WS, SMART_QUOTES
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+  - SMART_QUOTES: Replace curly quotes with ASCII in code/UI strings; allow in Markdown.
+- [ ] [`frontend/src/components/quick-actions/tools/MilestoneReviewTool.tsx`](../frontend/src/components/quick-actions/tools/MilestoneReviewTool.tsx) - BOM_FEFF, CRLF_EOL, SMART_QUOTES
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - SMART_QUOTES: Replace curly quotes with ASCII in code/UI strings; allow in Markdown.
+- [ ] [`frontend/src/components/settings/DepartmentProjectRolesSection.tsx`](../frontend/src/components/settings/DepartmentProjectRolesSection.tsx) - BOM_FEFF, CRLF_EOL
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/ui/Loader.tsx`](../frontend/src/components/ui/Loader.tsx) - REPLACEMENT_CHAR_FFFD
+  - REPLACEMENT_CHAR_FFFD: Replace replacement chars with correct text; fix source encoding.
+- [ ] [`frontend/src/pages/Assignments/AssignmentGrid.tsx`](../frontend/src/pages/Assignments/AssignmentGrid.tsx) - BOM_FEFF, CRLF_EOL, TRAILING_WS
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Assignments/grid/components/ProjectCell.tsx`](../frontend/src/pages/Assignments/grid/components/ProjectCell.tsx) - BOM_FEFF, CRLF_EOL
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Assignments/grid/useAssignmentRoleUpdate.ts`](../frontend/src/pages/Assignments/grid/useAssignmentRoleUpdate.ts) - BOM_FEFF, CRLF_EOL
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Assignments/ProjectAssignmentsGrid.tsx`](../frontend/src/pages/Assignments/ProjectAssignmentsGrid.tsx) - BOM_FEFF
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+- [ ] [`frontend/src/pages/Dashboard.tsx`](../frontend/src/pages/Dashboard.tsx) - BOM_FEFF, TRAILING_WS
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Reports/TeamForecast.tsx`](../frontend/src/pages/Reports/TeamForecast.tsx) - BOM_FEFF, CRLF_EOL
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/services/api.ts`](../frontend/src/services/api.ts) - BOM_FEFF, TRAILING_WS
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/types/models.ts`](../frontend/src/types/models.ts) - BOM_FEFF
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+- [ ] [`frontend/src/utils/monitoring.tsx`](../frontend/src/utils/monitoring.tsx) - BOM_FEFF, TRAILING_WS
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`security/artifacts/safety.json`](../security/artifacts/safety.json) - BOM_FEFF, CRLF_EOL
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`security/artifacts/semgrep.json`](../security/artifacts/semgrep.json) - BOM_FEFF, SINGLE_LINE, CRLF_EOL, LINE_TOO_LONG
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+  - SINGLE_LINE: Ensure LF line endings and add a final newline; format if governed.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - LINE_TOO_LONG: Split overly long lines where safe; otherwise defer to maintainers.
+- [ ] [`security/remediation/backlog.json`](../security/remediation/backlog.json) - BOM_FEFF
+  - BOM_FEFF: Re-encode to UTF-8 without BOM; remove BOM characters.
+
+## High
+
+- [ ] [`backend/accounts/migrations/__init__.py`](../backend/accounts/migrations/__init__.py) - SINGLE_LINE
+  - SINGLE_LINE: Ensure LF line endings and add a final newline; format if governed.
+- [ ] [`backend/assignments/tests/__init__.py`](../backend/assignments/tests/__init__.py) - SINGLE_LINE
+  - SINGLE_LINE: Ensure LF line endings and add a final newline; format if governed.
+- [ ] [`backend/core/tests/__init__.py`](../backend/core/tests/__init__.py) - SINGLE_LINE
+  - SINGLE_LINE: Ensure LF line endings and add a final newline; format if governed.
+- [ ] [`backend/deliverables/tests/__init__.py`](../backend/deliverables/tests/__init__.py) - SINGLE_LINE
+  - SINGLE_LINE: Ensure LF line endings and add a final newline; format if governed.
+- [ ] [`backend/people/tests/__init__.py`](../backend/people/tests/__init__.py) - SINGLE_LINE
+  - SINGLE_LINE: Ensure LF line endings and add a final newline; format if governed.
+- [ ] [`frontend/postcss.config.js`](../frontend/postcss.config.js) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/api/client.ts`](../frontend/src/api/client.ts) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/App.tsx`](../frontend/src/App.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/auth/RequireAuth.tsx`](../frontend/src/components/auth/RequireAuth.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/dashboard/CapacityHeatmap.tsx`](../frontend/src/components/dashboard/CapacityHeatmap.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/deliverables/DeliverablesSection.tsx`](../frontend/src/components/deliverables/DeliverablesSection.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/departments/DepartmentHierarchy.tsx`](../frontend/src/components/departments/DepartmentHierarchy.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/filters/GlobalDepartmentFilter.tsx`](../frontend/src/components/filters/GlobalDepartmentFilter.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/layout/Navigation.tsx`](../frontend/src/components/layout/Navigation.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/layout/Sidebar.tsx`](../frontend/src/components/layout/Sidebar.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/mockup/AssignmentGridMockup.tsx`](../frontend/src/components/mockup/AssignmentGridMockup.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/mockup/ProjectsListMockup.tsx`](../frontend/src/components/mockup/ProjectsListMockup.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/mockup/SidebarNavigationMockup.tsx`](../frontend/src/components/mockup/SidebarNavigationMockup.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/personal/MyProjectsCard.tsx`](../frontend/src/components/personal/MyProjectsCard.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/projects/__tests__/performance.test.tsx`](../frontend/src/components/projects/__tests__/performance.test.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/__tests__/projectStatus.integration.test.ts`](../frontend/src/components/projects/__tests__/projectStatus.integration.test.ts) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/quick-actions/tools/BalanceWorkloadTool.tsx`](../frontend/src/components/quick-actions/tools/BalanceWorkloadTool.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/quick-actions/tools/CapacityReportTool.tsx`](../frontend/src/components/quick-actions/tools/CapacityReportTool.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/quick-actions/tools/FindAvailableTool.tsx`](../frontend/src/components/quick-actions/tools/FindAvailableTool.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/skills/SkillsAutocomplete.tsx`](../frontend/src/components/skills/SkillsAutocomplete.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/skills/SkillsFilter.tsx`](../frontend/src/components/skills/SkillsFilter.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/ui/Button.tsx`](../frontend/src/components/ui/Button.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/ui/Card.tsx`](../frontend/src/components/ui/Card.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/ui/Input.tsx`](../frontend/src/components/ui/Input.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/components/ui/Toast.tsx`](../frontend/src/components/ui/Toast.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/hooks/useAuthenticatedEffect.ts`](../frontend/src/hooks/useAuthenticatedEffect.ts) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/hooks/useCapacityHeatmap.ts`](../frontend/src/hooks/useCapacityHeatmap.ts) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Assignments/AssignmentForm.tsx`](../frontend/src/pages/Assignments/AssignmentForm.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Assignments/AssignmentList.tsx`](../frontend/src/pages/Assignments/AssignmentList.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Assignments/grid/components/PersonSection.tsx`](../frontend/src/pages/Assignments/grid/components/PersonSection.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Assignments/index.tsx`](../frontend/src/pages/Assignments/index.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Auth/Login.tsx`](../frontend/src/pages/Auth/Login.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/ComingSoon/ComingSoon.tsx`](../frontend/src/pages/ComingSoon/ComingSoon.tsx) - CRLF_EOL, SMART_QUOTES
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - SMART_QUOTES: Replace curly quotes with ASCII in code/UI strings; allow in Markdown.
+- [ ] [`frontend/src/pages/Deliverables/Calendar.tsx`](../frontend/src/pages/Deliverables/Calendar.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Departments/DepartmentForm.tsx`](../frontend/src/pages/Departments/DepartmentForm.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Departments/DepartmentsList.tsx`](../frontend/src/pages/Departments/DepartmentsList.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Departments/HierarchyView.tsx`](../frontend/src/pages/Departments/HierarchyView.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Departments/index.tsx`](../frontend/src/pages/Departments/index.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Departments/ManagerDashboard.tsx`](../frontend/src/pages/Departments/ManagerDashboard.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/People/PeopleList.tsx`](../frontend/src/pages/People/PeopleList.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/People/PersonForm.tsx`](../frontend/src/pages/People/PersonForm.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Profile/Profile.tsx`](../frontend/src/pages/Profile/Profile.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Projects/index.tsx`](../frontend/src/pages/Projects/index.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Projects/ProjectForm.tsx`](../frontend/src/pages/Projects/ProjectForm.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Settings/components/RoleForm.tsx`](../frontend/src/pages/Settings/components/RoleForm.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/pages/Skills/index.tsx`](../frontend/src/pages/Skills/index.tsx) - SINGLE_LINE
+  - SINGLE_LINE: Ensure LF line endings and add a final newline; format if governed.
+- [ ] [`frontend/src/pages/Skills/SkillsDashboard.tsx`](../frontend/src/pages/Skills/SkillsDashboard.tsx) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/store/auth.ts`](../frontend/src/store/auth.ts) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/utils/apiBase.ts`](../frontend/src/utils/apiBase.ts) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/utils/auth.ts`](../frontend/src/utils/auth.ts) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/vite-env.d.ts`](../frontend/src/vite-env.d.ts) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/tailwind.config.js`](../frontend/tailwind.config.js) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/vite.config.ts`](../frontend/vite.config.ts) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`security/artifacts/pip-audit.json`](../security/artifacts/pip-audit.json) - SINGLE_LINE, CRLF_EOL
+  - SINGLE_LINE: Ensure LF line endings and add a final newline; format if governed.
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`test-syntax.tsx`](../test-syntax.tsx) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+
+## Medium
+
+- [ ] [`.markdownlint.json`](../.markdownlint.json) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/assignments/models.py`](../backend/assignments/models.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/assignments/urls.py`](../backend/assignments/urls.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/config/wsgi.py`](../backend/config/wsgi.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/core/apps.py`](../backend/core/apps.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/core/fields.py`](../backend/core/fields.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/core/generators.py`](../backend/core/generators.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/core/management/commands/generate_types.py`](../backend/core/management/commands/generate_types.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/core/validation.py`](../backend/core/validation.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/deliverables/views.py`](../backend/deliverables/views.py) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/departments/models.py`](../backend/departments/models.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/departments/serializers.py`](../backend/departments/serializers.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/departments/urls.py`](../backend/departments/urls.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/manage.py`](../backend/manage.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/migrate_projects.py`](../backend/migrate_projects.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/apps.py`](../backend/people/apps.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/forms.py`](../backend/people/forms.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/management/commands/export_people.py`](../backend/people/management/commands/export_people.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/management/commands/import_people.py`](../backend/people/management/commands/import_people.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/templates/admin/import_people.html`](../backend/people/templates/admin/import_people.html) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/templates/admin/people/person/change_list.html`](../backend/people/templates/admin/people/person/change_list.html) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/templates/admin/people/person/delete_confirmation.html`](../backend/people/templates/admin/people/person/delete_confirmation.html) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/urls.py`](../backend/people/urls.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/people/utils/csv_handler.py`](../backend/people/utils/csv_handler.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/personal/views.py`](../backend/personal/views.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/forms.py`](../backend/projects/forms.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/management/commands/export_projects.py`](../backend/projects/management/commands/export_projects.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/management/commands/import_projects.py`](../backend/projects/management/commands/import_projects.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/models.py`](../backend/projects/models.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/templates/admin/projects/project/change_list.html`](../backend/projects/templates/admin/projects/project/change_list.html) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/templates/admin/projects/project/delete_confirmation.html`](../backend/projects/templates/admin/projects/project/delete_confirmation.html) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/templates/admin/projects/project/import_projects.html`](../backend/projects/templates/admin/projects/project/import_projects.html) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/urls.py`](../backend/projects/urls.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/utils/csv_handler.py`](../backend/projects/utils/csv_handler.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/projects/utils/excel_handler.py`](../backend/projects/utils/excel_handler.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/skills/serializers.py`](../backend/skills/serializers.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`backend/skills/urls.py`](../backend/skills/urls.py) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`docker-compose.yml`](../docker-compose.yml) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/package-lock.json`](../frontend/package-lock.json) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/package.json`](../frontend/package.json) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`frontend/src/index.css`](../frontend/src/index.css) - CRLF_EOL, TRAILING_WS
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/tsconfig.node.json`](../frontend/tsconfig.node.json) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`security/artifacts/bandit.json`](../security/artifacts/bandit.json) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+- [ ] [`security/security-findings.json`](../security/security-findings.json) - CRLF_EOL
+  - CRLF_EOL: Normalize to LF (consistent with .gitattributes).
+
+## Low
+
+- [ ] [`backend/assignments/migrations/0003_retrofit_weekly_hours.py`](../backend/assignments/migrations/0003_retrofit_weekly_hours.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/assignments/serializers.py`](../backend/assignments/serializers.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/assignments/views.py`](../backend/assignments/views.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/config/settings.py`](../backend/config/settings.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/core/serializers.py`](../backend/core/serializers.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/dashboard/views.py`](../backend/dashboard/views.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/deliverables/apps.py`](../backend/deliverables/apps.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/deliverables/models.py`](../backend/deliverables/models.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/deliverables/serializers.py`](../backend/deliverables/serializers.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/departments/views.py`](../backend/departments/views.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/monitoring/management/commands/monitor_performance.py`](../backend/monitoring/management/commands/monitor_performance.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/monitoring/tests.py`](../backend/monitoring/tests.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/openapi.json`](../backend/openapi.json) - SMART_QUOTES
+  - SMART_QUOTES: Replace curly quotes with ASCII in code/UI strings; allow in Markdown.
+- [ ] [`backend/people/admin.py`](../backend/people/admin.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/people/migrations/0003_auto_20250830_2343.py`](../backend/people/migrations/0003_auto_20250830_2343.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/people/models.py`](../backend/people/models.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/people/serializers.py`](../backend/people/serializers.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/people/utils/excel_handler.py`](../backend/people/utils/excel_handler.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/projects/serializers.py`](../backend/projects/serializers.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/projects/views.py`](../backend/projects/views.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/roles/admin.py`](../backend/roles/admin.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/roles/migrations/0002_auto_20250830_2331.py`](../backend/roles/migrations/0002_auto_20250830_2331.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/roles/models.py`](../backend/roles/models.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/roles/serializers.py`](../backend/roles/serializers.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/roles/views.py`](../backend/roles/views.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/skills/models.py`](../backend/skills/models.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`backend/skills/views.py`](../backend/skills/views.py) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/index.html`](../frontend/index.html) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/api/schema.src.json`](../frontend/src/api/schema.src.json) - SMART_QUOTES
+  - SMART_QUOTES: Replace curly quotes with ASCII in code/UI strings; allow in Markdown.
+- [ ] [`frontend/src/api/schema.ts`](../frontend/src/api/schema.ts) - SMART_QUOTES
+  - SMART_QUOTES: Replace curly quotes with ASCII in code/UI strings; allow in Markdown.
+- [ ] [`frontend/src/components/ErrorBoundary.tsx`](../frontend/src/components/ErrorBoundary.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/PageErrorBoundary.tsx`](../frontend/src/components/PageErrorBoundary.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/__tests__/accessibility.test.tsx`](../frontend/src/components/projects/__tests__/accessibility.test.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/__tests__/statusBadge.visual.test.tsx`](../frontend/src/components/projects/__tests__/statusBadge.visual.test.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/status.utils.ts`](../frontend/src/components/projects/status.utils.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/StatusBadge.tsx`](../frontend/src/components/projects/StatusBadge.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/StatusDropdown.tsx`](../frontend/src/components/projects/StatusDropdown.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/useDropdownManager.ts`](../frontend/src/components/projects/useDropdownManager.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/useProjectStatus.ts`](../frontend/src/components/projects/useProjectStatus.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/components/projects/useProjectStatusSubscription.ts`](../frontend/src/components/projects/useProjectStatusSubscription.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/dev/testDualFilterScenarios.ts`](../frontend/src/dev/testDualFilterScenarios.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/hooks/useDebounce.ts`](../frontend/src/hooks/useDebounce.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/hooks/usePeople.ts`](../frontend/src/hooks/usePeople.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/hooks/useProjects.ts`](../frontend/src/hooks/useProjects.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/main.tsx`](../frontend/src/main.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Auth/ResetPassword.tsx`](../frontend/src/pages/Auth/ResetPassword.tsx) - SMART_QUOTES
+  - SMART_QUOTES: Replace curly quotes with ASCII in code/UI strings; allow in Markdown.
+- [ ] [`frontend/src/pages/Departments/ReportsView.tsx`](../frontend/src/pages/Departments/ReportsView.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Performance/PerformanceDashboard.tsx`](../frontend/src/pages/Performance/PerformanceDashboard.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Projects/list/components/ProjectDetailsPanel.tsx`](../frontend/src/pages/Projects/list/components/ProjectDetailsPanel.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Projects/ProjectsList.tsx`](../frontend/src/pages/Projects/ProjectsList.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Settings/components/RoleDeleteConfirm.tsx`](../frontend/src/pages/Settings/components/RoleDeleteConfirm.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Settings/components/RoleList.tsx`](../frontend/src/pages/Settings/components/RoleList.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/pages/Settings/Settings.tsx`](../frontend/src/pages/Settings/Settings.tsx) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/test/setup.ts`](../frontend/src/test/setup.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`frontend/src/theme/tokens.ts`](../frontend/src/theme/tokens.ts) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`lighthouserc.js`](../lighthouserc.js) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).
+- [ ] [`scripts/scan-file-health.mjs`](../scripts/scan-file-health.mjs) - SMART_QUOTES
+  - SMART_QUOTES: Replace curly quotes with ASCII in code/UI strings; allow in Markdown.
+- [ ] [`test-api-update.html`](../test-api-update.html) - TRAILING_WS
+  - TRAILING_WS: Remove trailing whitespace (formatter or minimal edit).

@@ -74,7 +74,7 @@ const FiltersBar: React.FC<Props> = ({
                 </button>
               </div>
             ) : (
-              <span>Loading filter metadata…</span>
+              <span>Loading filter metadata...</span>
             )}
           </div>
         </div>
@@ -84,3 +84,4 @@ const FiltersBar: React.FC<Props> = ({
 };
 
 export default FiltersBar;
+

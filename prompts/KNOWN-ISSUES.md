@@ -73,6 +73,10 @@ Template
 All above discovered: 2025-09-15 (Phase 2, Step 5 lint). Suggested fix for most warnings: include stable dependencies (functions via `useCallback`, memoized values via `useMemo`) or intentionally suppress with inline comments when behavior is verified.
 
 ### Other items seen during upgrades (non-blocking)
+- [ ] [KI-0205] npm deprecation warnings during install/build (glob@7, rimraf<4, inflight@1)
+  - Details: Deprecations originate from transitive dev tooling; they do not affect the built frontend bundle and are safe short-term.
+  - Discovered: 2025-10-16 (Docker rebuild logs)
+  - Suggested fix: Prefer upgrading upstream tooling (vite, plugins, eslint, etc.) rather than forcing overrides; avoid major overrides that dependents don’t support. Ensure production images omit devDependencies so deprecated dev-only packages are not included at runtime.
 - [ ] [KI-0204] Encoding artifacts block small patches in heatmap/strip components
   - Details: Non-ASCII replacement characters in `TeamHeatmapCard.tsx` and `MyScheduleStrip.tsx` prevent precise text-hunk patches (e.g., titles with odd quotes/dashes). Color logic migration is partially applied elsewhere; these two should be migrated after running the existing `scan_fffd.js`/`fix_all_fffd.js` cleanup.
   - Discovered: 2025-10-04 (Phase 4 follow-up)

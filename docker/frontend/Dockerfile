@@ -18,6 +18,8 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
+# Prevent git hooks from running during CI/container installs
+ENV HUSKY=0
 RUN npm ci
 COPY . .
 # Allow passing Vite flags at build time

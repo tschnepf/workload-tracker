@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Project } from '@/types/models';
 import type { ProjectFilterMetadataResponse } from '@/types/models';
 import { formatStatus } from '@/components/projects/StatusBadge';
@@ -51,7 +51,7 @@ export function useProjectFilters(
     return meta ? !meta.hasFutureDeliverables : false;
   };
 
-  const matchesStatusFilter = (project: Project, statusFilter: string, metadata: ProjectFilterMetadataResponse | null): boolean => {
+  const matchesStatusFilter = useCallback((project: Project, statusFilter: string, metadata: ProjectFilterMetadataResponse | null): boolean => {
     if (!project) return false;
     if (statusFilter === 'Show All') return true;
     if (statusFilter === 'active_no_deliverables') {
@@ -61,7 +61,7 @@ export function useProjectFilters(
       return hasNoAssignments(project.id, metadata);
     }
     return project.status === statusFilter;
-  };
+  }, [filterMetadata]);
 
   const filteredProjects = useMemo(() => {
     const tStart = performance.now();
@@ -84,7 +84,7 @@ export function useProjectFilters(
       statusFilter: activeFilters.join(','),
     });
     return next;
-  }, [projects, selectedStatusFilters, searchTerm, filterMetadata]);
+  }, [projects, selectedStatusFilters, searchTerm, filterMetadata, matchesStatusFilter]);
 
   const sortedProjects = useMemo(() => {
     const getter = options?.customSortGetters?.[sortBy];

@@ -498,7 +498,7 @@ const AddDeliverableForm: React.FC<AddDeliverableFormProps> = ({ onSave, onCance
               type="text"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="What is being delivered?"
+              placeholder="SD, DD, IFP, etc"
               className="w-full px-2 py-1 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-sm"
             />
           </div>

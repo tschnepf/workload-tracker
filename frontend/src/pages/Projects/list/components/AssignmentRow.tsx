@@ -12,13 +12,10 @@ export interface AssignmentRowProps {
     currentWeekHours: number;
     roleSearch: string;
   };
-  roleSearchResults: string[];
   onEdit: () => void;
   onDelete: () => void;
   onSave: () => void;
   onCancel: () => void;
-  onRoleSearch: (value: string) => void;
-  onRoleSelect: (role: string) => void;
   onHoursChange: (hours: number) => void;
   getCurrentWeekHours: (assignment: Assignment) => number;
   onChangeAssignmentRole?: (assignmentId: number, roleId: number | null, roleName: string | null) => void;
@@ -45,13 +42,10 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   assignment,
   isEditing,
   editData,
-  roleSearchResults,
   onEdit,
   onDelete,
   onSave,
   onCancel,
-  onRoleSearch,
-  onRoleSelect,
   onHoursChange,
   getCurrentWeekHours,
   onChangeAssignmentRole,
@@ -83,26 +77,23 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
           <div className="text-[var(--text)]">{assignment.personName || 'Unknown'}</div>
 
           <div className="relative">
-            <input
-              type="text"
-              placeholder="Role on project..."
-              value={editData.roleSearch}
-              onChange={(e) => onRoleSearch(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-              autoFocus
-            />
-
-            {roleSearchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
-                {roleSearchResults.map((role) => (
-                  <button
-                    key={role}
-                    onClick={() => onRoleSelect(role)}
-                    className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0"
-                  >
-                    {role}
-                  </button>
-                ))}
+            <button
+              type="button"
+              className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-left text-[var(--text)] hover:bg-[var(--cardHover)]"
+              onClick={() => setOpenRole(v => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={openRole}
+            >
+              {assignment.roleName || 'Set role'}
+            </button>
+            {openRole && (
+              <div className="absolute mt-1 z-50">
+                <RoleDropdown
+                  roles={roles as any}
+                  currentId={(assignment as any).roleOnProjectId ?? null}
+                  onSelect={(id, name) => onChangeAssignmentRole?.(assignment.id!, id, name)}
+                  onClose={() => setOpenRole(false)}
+                />
               </div>
             )}
           </div>
@@ -168,7 +159,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
               onClick={() => setOpenRole(v => !v)}
               title="Edit role on project"
             >
-              {assignment.roleName || assignment.roleOnProject || 'Set role'}
+              {assignment.roleName || 'Set role'}
             </button>
             {openRole && (
               <div className="relative mt-1">
@@ -211,7 +202,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                 onClick={() => setOpenRole(v => !v)}
                 title="Edit role on project"
               >
-                {assignment.roleName || assignment.roleOnProject || 'Set role'}
+                {assignment.roleName || 'Set role'}
               </button>
               {openRole && (
                 <div className="relative mt-1">

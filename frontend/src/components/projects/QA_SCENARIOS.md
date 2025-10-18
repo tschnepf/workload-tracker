@@ -56,3 +56,4 @@
 - Performance tests may show some React warnings (expected in test environment)  
 - QueryClient provider needed for full integration tests
 - Memoization thresholds may need adjustment based on actual usage
+- During installs/builds you may see npm deprecation warnings for transitive dev tools (e.g., glob@7, rimraf@<4, inflight@1). These do not affect the built bundle and are safe short‑term; they will be resolved by upgrading upstream tooling. Production images should omit devDependencies to avoid including these packages at runtime.

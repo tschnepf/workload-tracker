@@ -25,7 +25,7 @@ const PersonSearchResult: React.FC<PersonSearchResultProps> = ({ person, isSelec
     <div className="flex items-center justify-between">
       <div className="font-medium">{person.name}</div>
       {person.hasSkillMatch && (
-        <span className="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">dYZ_ Skill Match</span>
+        <span className="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">Skill Match</span>
       )}
     </div>
     <div className="flex justify-between items-center">

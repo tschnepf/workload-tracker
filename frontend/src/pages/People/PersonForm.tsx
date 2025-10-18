@@ -155,11 +155,6 @@ const PersonForm: React.FC = () => {
         await updatePersonMutation.mutateAsync({ id: parseInt(id), data: apiData });
         setToast({ message: 'Person updated', type: 'success' });
         return;
-        
-        if (import.meta.env.DEV) console.log('🔍 [DEBUG] Creating new person with POST request');
-        const result = await createPersonMutation.mutateAsync(apiData as any);
-        setToast({ message: 'Person created', type: 'success' });
-        if (import.meta.env.DEV) console.log('dY"? [DEBUG] Create mutation response:', result);
       }
 
       if (import.meta.env.DEV) console.log('🔍 [DEBUG] API call successful, navigating to /people');
