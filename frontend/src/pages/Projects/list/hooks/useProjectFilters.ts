@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Project } from '@/types/models';
 import type { ProjectFilterMetadataResponse } from '@/types/models';
-import { formatStatus } from '@/components/projects/StatusBadge';
+import { formatStatus, statusOptions } from '@/components/projects/StatusBadge';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 
 export function useProjectFilters(
@@ -9,7 +9,26 @@ export function useProjectFilters(
   filterMetadata: ProjectFilterMetadataResponse | null,
   options?: { customSortGetters?: Record<string, (p: Project) => string | number | Date | null | undefined> }
 ) {
-  const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<string>>(new Set(['active', 'active_ca']));
+  // Persisted status filters (default to Active + Active CA)
+  const STORAGE_KEY = 'projects.selectedStatusFilters.v1';
+  const loadSelectedStatusFilters = (): Set<string> => {
+    try {
+      if (typeof window === 'undefined') return new Set(['active', 'active_ca']);
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return new Set(['active', 'active_ca']);
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return new Set(['active', 'active_ca']);
+      const allowed = new Set<string>(statusOptions as unknown as string[]);
+      const cleaned = parsed
+        .map((s) => (typeof s === 'string' ? s : ''))
+        .filter((s) => s && allowed.has(s));
+      if (cleaned.includes('Show All')) return new Set(['Show All']);
+      return cleaned.length > 0 ? new Set(cleaned) : new Set(['active', 'active_ca']);
+    } catch {
+      return new Set(['active', 'active_ca']);
+    }
+  };
+  const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<string>>(loadSelectedStatusFilters);
   const [sortBy, setSortBy] = useState('client');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,6 +57,17 @@ export function useProjectFilters(
       return next;
     });
   };
+
+  // Persist status filters to localStorage
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const arr = Array.from(selectedStatusFilters);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    } catch {
+      // ignore storage errors
+    }
+  }, [selectedStatusFilters]);
 
   const hasNoAssignments = (projectId: number | undefined, metadata: ProjectFilterMetadataResponse | null): boolean => {
     if (!projectId) return false;
