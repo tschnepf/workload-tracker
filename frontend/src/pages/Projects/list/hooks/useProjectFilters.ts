@@ -88,8 +88,15 @@ export function useProjectFilters(
 
   const sortedProjects = useMemo(() => {
     const getter = options?.customSortGetters?.[sortBy];
+    // Normalize with direction-awareness for primary key
     const normalize = (v: any): string => {
       if (v == null || v === '') return sortDirection === 'asc' ? '\uffff' : '';
+      if (v instanceof Date) return v.toISOString();
+      return v.toString().toLowerCase();
+    };
+    // Normalize specifically for secondary keys that should always be ascending
+    const normalizeAsc = (v: any): string => {
+      if (v == null || v === '') return '\uffff';
       if (v instanceof Date) return v.toISOString();
       return v.toString().toLowerCase();
     };
@@ -108,22 +115,33 @@ export function useProjectFilters(
             aValue = a.name || '';
             bValue = b.name || '';
             break;
-        case 'number':
-        case 'projectNumber':
-          aValue = a.projectNumber || '';
-          bValue = b.projectNumber || '';
-          break;
-        case 'status':
-          aValue = a.status || '';
-          bValue = b.status || '';
-          break;
+          case 'number':
+          case 'projectNumber':
+            aValue = a.projectNumber || '';
+            bValue = b.projectNumber || '';
+            break;
+          case 'status':
+            aValue = a.status || '';
+            bValue = b.status || '';
+            break;
           default:
             aValue = a.name || '';
             bValue = b.name || '';
         }
       }
-      const result = normalize(aValue).localeCompare(normalize(bValue));
-      return sortDirection === 'asc' ? result : -result;
+
+      // Primary comparison
+      let primary = normalize(aValue).localeCompare(normalize(bValue));
+      primary = sortDirection === 'asc' ? primary : -primary;
+
+      // When sorting by client, apply a stable secondary alphabetical sort by project name
+      if (primary === 0 && sortBy === 'client') {
+        const aName = normalizeAsc(a.name || '');
+        const bName = normalizeAsc(b.name || '');
+        return aName.localeCompare(bName);
+      }
+
+      return primary;
     });
   }, [filteredProjects, sortBy, sortDirection, options?.customSortGetters]);
 
