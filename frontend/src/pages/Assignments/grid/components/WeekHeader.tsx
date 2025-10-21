@@ -13,7 +13,12 @@ export interface WeekHeaderProps {
 
 const WeekHeader: React.FC<WeekHeaderProps> = ({ top, minWidth, gridTemplate, weeks, onStartResize, scrollRef, onScroll }) => {
   return (
-    <div ref={scrollRef} onScroll={onScroll} className="sticky bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto" style={{ top }}>
+    <div
+      ref={scrollRef}
+      onScroll={onScroll}
+      className="sticky left-0 right-0 bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto"
+      style={{ top, marginTop: 0 }}
+    >
       <div style={{ minWidth }}>
         <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
           <div className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group">

@@ -3,7 +3,7 @@
  * Replaces the form-based AssignmentForm with a modern grid view
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
@@ -170,6 +170,13 @@ const AssignmentGrid: React.FC = () => {
   const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
   const { setLeft, setRight, clearLeft, clearRight } = useTopBarSlots();
   const { setMainPadding } = useLayoutDensity();
+  // Ensure the grid header hugs the top/side edges when compact mode is on
+  // by switching the Layout "density" to compact (removes main padding).
+  useLayoutEffect(() => {
+    if (compact) setMainPadding('compact');
+    return () => setMainPadding('default');
+    // Only depends on compact flag and setter
+  }, [compact, setMainPadding]);
   // topBarHeader is defined later after handlers
   // Selection state via useCellSelection
   const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);

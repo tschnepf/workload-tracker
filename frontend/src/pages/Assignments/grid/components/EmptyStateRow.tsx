@@ -23,4 +23,3 @@ const EmptyStateRow: React.FC<EmptyStateRowProps> = ({ weeks, gridTemplate }) =>
 };
 
 export default EmptyStateRow;
-

@@ -246,9 +246,11 @@ const TopBarInner: React.FC<{
 const MainWithDensity: React.FC<{ children: React.ReactNode; ariaBusy: boolean }>
   = ({ children, ariaBusy }) => {
   const { density } = useLayoutDensity();
-  const paddingClass = density === 'compact' ? 'py-2' : 'py-8';
+  // In compact mode we want the content (week header) to snap directly under the top bar
+  const verticalPadding = density === 'compact' ? 'py-0' : 'py-0';
+  const horizontalPadding = density === 'compact' ? 'px-0' : 'px-0';
   return (
-    <main id="main-content" tabIndex={-1} aria-busy={ariaBusy} className={`flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 ${paddingClass}`}>
+    <main id="main-content" tabIndex={-1} aria-busy={ariaBusy} className={`flex-1 min-h-0 overflow-y-auto ${horizontalPadding} ${verticalPadding}`}>
       {children}
     </main>
   );

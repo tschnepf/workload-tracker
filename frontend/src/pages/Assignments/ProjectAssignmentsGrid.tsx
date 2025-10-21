@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { useLocation } from 'react-router';
 import Layout from '@/components/layout/Layout';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
@@ -86,7 +86,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         red: `${s.red_min}h+`,
       } as const;
     }
-    return { green: '70-85%', blue: '≤70%', orange: '85-100%', red: '>100%' } as const;
+    return { green: '70-85%', blue: '=70%', orange: '85-100%', red: '>100%' } as const;
   }, [schemeData]);
 
   const [hoursByProject, setHoursByProject] = useState<Record<number, Record<string, number>>>({});
@@ -182,6 +182,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
   const { setLeft, setRight, clearLeft, clearRight } = useTopBarSlots();
   const { setMainPadding } = useLayoutDensity();
+  // Snap the sticky week header directly under the app top bar and
+  // flush with the sidebar by removing main padding in compact mode.
+  useLayoutEffect(() => {
+    if (compact) setMainPadding('compact');
+    return () => setMainPadding('default');
+  }, [compact, setMainPadding]);
 
   // Measure sticky header height (legacy); compact mode snaps under top bar
   const headerRef = useRef<HTMLDivElement | null>(null);
@@ -978,7 +984,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         )}
 
         {/* Sticky week header aligned to measured header height */}
-        <div ref={headerScrollRef} className="sticky bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto px-6" style={{ top: compact ? 0 : headerHeight }}>
+        <div ref={headerScrollRef} className="sticky left-0 right-0 bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto" style={{ top: compact ? 0 : headerHeight }}>
           <div style={{ minWidth: totalMinWidth }}>
             <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
               <div
@@ -1246,7 +1252,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       )}
                       {/* Render rows */}
                       {!loadingAssignments.has(p.id!) && p.assignments.map(asn => (
-                        <div key={asn.id} className="grid gap-px p-1 bg-[var(--surface)] hover:bg-[var(--cardHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
+                        <div key={asn.id} className="grid gap-px py-1 bg-[var(--surface)] hover:bg-[var(--cardHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
                           <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={asn.personName || String(asn.person)}>
                             {asn.personName || `Person #${asn.person}`}
                           </div>
@@ -1410,7 +1416,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       ))}
                       {/* Empty state */}
                       {!loadingAssignments.has(p.id!) && p.assignments.length === 0 && (
-                        <div className="grid gap-px p-1 bg-[var(--surface)]" style={{ gridTemplateColumns: gridTemplate }}>
+                        <div className="grid gap-px py-1 bg-[var(--surface)]" style={{ gridTemplateColumns: gridTemplate }}>
                           <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
                             <div className="text-[var(--muted)] text-xs italic">No assignments</div>
                           </div>
@@ -1463,3 +1469,5 @@ const ProjectAssignmentsGrid: React.FC = () => {
 };
 
 export default ProjectAssignmentsGrid;
+
+
