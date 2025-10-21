@@ -148,7 +148,21 @@ export function useUpdatePerson() {
       }
     },
     onSuccess: (updatedPerson, variables) => {
-      queryClient.setQueryData(['people', variables.id], updatedPerson);
+      // Merge server response with requested changes to preserve derived fields (e.g., roleName)
+      const merged = { ...(updatedPerson as Person), ...(variables?.data || {}) } as Person;
+      queryClient.setQueryData(['people', variables.id], merged);
+      // Also update in paginated list cache if present
+      const prevPages = queryClient.getQueryData<any>(['people']);
+      if (prevPages && Array.isArray(prevPages.pages)) {
+        const nextPages = {
+          ...prevPages,
+          pages: prevPages.pages.map((page: any) => ({
+            ...page,
+            results: (page?.results || []).map((p: Person) => (p.id === variables.id ? { ...p, ...merged } : p))
+          }))
+        };
+        queryClient.setQueryData(['people'], nextPages);
+      }
     },
     onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({ queryKey: ['people'] });

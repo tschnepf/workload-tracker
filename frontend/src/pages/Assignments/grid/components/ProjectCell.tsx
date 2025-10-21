@@ -23,6 +23,7 @@ export interface ProjectCellProps {
 
 const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, projectName, roleOnProjectId, roleName, personDepartmentId, onRoleChange, getProjectStatus, statusDropdown, projectStatus, onStatusChange }) => {
   const [openRole, setOpenRole] = React.useState<boolean>(false);
+  const roleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
   return (
     <div className="flex items-start pt-0.5 pb-1 pr-2">
@@ -66,6 +67,7 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
               className="hover:text-[var(--text)]"
               onClick={() => setOpenRole(v => !v)}
               title="Edit role on project"
+              ref={roleBtnRef}
             >
               {roleName || 'Set role'}
             </button>
@@ -76,6 +78,7 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
                   currentId={roleOnProjectId ?? null}
                   onSelect={(id, name) => onRoleChange?.(id, name)}
                   onClose={() => setOpenRole(false)}
+                  anchorRef={roleBtnRef}
                 />
               </div>
             )}

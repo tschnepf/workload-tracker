@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import type { ProjectRole } from '@/roles/api';
 
 interface Props {
@@ -8,9 +9,11 @@ interface Props {
   onClose: () => void;
   ariaLabel?: string;
   labelledById?: string;
+  // Optional anchor to render via portal above any overflow/stacking contexts
+  anchorRef?: React.RefObject<HTMLElement>;
 }
 
-const RoleDropdown: React.FC<Props> = ({ roles, currentId, onSelect, onClose, ariaLabel = 'Role options', labelledById }) => {
+const RoleDropdown: React.FC<Props> = ({ roles, currentId, onSelect, onClose, ariaLabel = 'Role options', labelledById, anchorRef }) => {
   const listRef = React.useRef<HTMLUListElement | null>(null);
   const [activeIndex, setActiveIndex] = React.useState<number>(() => {
     const idx = roles.findIndex(r => r.id === (currentId ?? undefined));
@@ -61,7 +64,25 @@ const RoleDropdown: React.FC<Props> = ({ roles, currentId, onSelect, onClose, ar
 
   const activeId = `role-option-${activeIndex}`;
 
-  return (
+  // If an anchor is provided, render in a portal positioned to the anchor to avoid clipping by overflow-hidden parents
+  const [pos, setPos] = React.useState<{ left: number; top: number; width: number }>({ left: 0, top: 0, width: 200 });
+  React.useLayoutEffect(() => {
+    function measure() {
+      const el = anchorRef?.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPos({ left: r.left, top: r.bottom + 4, width: Math.max(200, r.width) });
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [anchorRef?.current]);
+
+  const dropdown = (
     <ul
       ref={listRef}
       role="listbox"
@@ -69,8 +90,10 @@ const RoleDropdown: React.FC<Props> = ({ roles, currentId, onSelect, onClose, ar
       aria-activedescendant={activeId}
       aria-labelledby={labelledById}
       aria-label={labelledById ? undefined : ariaLabel}
-      className="absolute z-50 mt-1 min-w-[200px] max-h-60 overflow-auto bg-[var(--card)] border border-[var(--border)] rounded shadow-lg"
+      className={`${anchorRef ? 'z-50' : 'absolute z-50 mt-1'} min-w-[200px] max-h-60 overflow-auto bg-[var(--card)] border border-[var(--border)] rounded shadow-lg`}
+      style={anchorRef ? { position: 'fixed', left: pos.left, top: pos.top, width: pos.width } : undefined}
       onKeyDown={handleKeyDown}
+      data-portal={anchorRef ? 'true' : undefined}
     >
       {items.map((item, idx) => {
         const selected = (currentId == null && idx === 0) || (item.id != null && item.id === currentId);
@@ -90,6 +113,12 @@ const RoleDropdown: React.FC<Props> = ({ roles, currentId, onSelect, onClose, ar
       })}
     </ul>
   );
+
+  if (anchorRef && typeof document !== 'undefined') {
+    return createPortal(dropdown, document.body);
+  }
+
+  return dropdown;
 };
 
 export default RoleDropdown;

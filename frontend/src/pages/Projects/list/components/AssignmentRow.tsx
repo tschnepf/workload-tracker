@@ -68,6 +68,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   showHours,
 }) => {
   const [openRole, setOpenRole] = React.useState(false);
+  const roleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
   // selection/editing handled by parent using WeekCell helpers
   if (isEditing) {
@@ -83,6 +84,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
               onClick={() => setOpenRole(v => !v)}
               aria-haspopup="listbox"
               aria-expanded={openRole}
+              ref={roleBtnRef}
             >
               {assignment.roleName || 'Set role'}
             </button>
@@ -93,6 +95,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                   currentId={(assignment as any).roleOnProjectId ?? null}
                   onSelect={(id, name) => onChangeAssignmentRole?.(assignment.id!, id, name)}
                   onClose={() => setOpenRole(false)}
+                  anchorRef={roleBtnRef}
                 />
               </div>
             )}
@@ -158,6 +161,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
               className="hover:text-[var(--text)] truncate"
               onClick={() => setOpenRole(v => !v)}
               title="Edit role on project"
+              ref={roleBtnRef}
             >
               {assignment.roleName || 'Set role'}
             </button>
@@ -168,6 +172,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                   currentId={(assignment as any).roleOnProjectId ?? null}
                   onSelect={(id, name) => onChangeAssignmentRole?.(assignment.id!, id, name)}
                   onClose={() => setOpenRole(false)}
+                  anchorRef={roleBtnRef}
                 />
               </div>
             )}
@@ -201,6 +206,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                 className="hover:text-[var(--text)] truncate"
                 onClick={() => setOpenRole(v => !v)}
                 title="Edit role on project"
+                ref={roleBtnRef}
               >
                 {assignment.roleName || 'Set role'}
               </button>
@@ -211,6 +217,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                     currentId={(assignment as any).roleOnProjectId ?? null}
                     onSelect={(id, name) => onChangeAssignmentRole?.(assignment.id!, id, name)}
                     onClose={() => setOpenRole(false)}
+                    anchorRef={roleBtnRef}
                   />
                 </div>
               )}

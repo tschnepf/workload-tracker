@@ -208,7 +208,19 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
     onFieldChange('role', role.id);
     onFieldChange('roleName', role.name);
     setShowRoleAutocomplete(false);
-    onSaveField('role', role.id);
+    // Persist role with both id and name for optimistic UI; backend ignores roleName
+    if (person?.id) {
+      try {
+        setIsUpdatingPerson(true);
+        updatePersonMutation.mutate({ id: person.id, data: { role: role.id, roleName: role.name } as any });
+        showToast('Saved changes', 'success');
+      } catch (err: any) {
+        setError(err?.message || 'Failed to update');
+        showToast('Failed to update', 'error');
+      } finally {
+        setIsUpdatingPerson(false);
+      }
+    }
   };
 
   if (!person) return null;

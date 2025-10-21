@@ -18,6 +18,21 @@ export function usePersonSelection(people: Person[], options: UsePersonSelection
     }
   }, [autoSelectFirst, people, selectedPerson]);
 
+  // Keep selected person in sync when the backing list updates
+  // This ensures detail panel reflects optimistic updates and refetches.
+  useEffect(() => {
+    if (!selectedPerson) return;
+    const idx = people.findIndex(p => p.id === selectedPerson.id);
+    if (idx !== -1) {
+      const personFromList = people[idx];
+      // Replace reference if list has a newer object (shallow identity change)
+      if (personFromList !== selectedPerson) {
+        setSelectedPerson(personFromList);
+        setSelectedIndex(idx);
+      }
+    }
+  }, [people]);
+
   const selectByIndex = (index: number) => {
     if (index < 0 || index >= people.length) return;
     setSelectedPerson(people[index]);
@@ -40,4 +55,3 @@ export function usePersonSelection(people: Person[], options: UsePersonSelection
 }
 
 export type UsePersonSelectionReturn = ReturnType<typeof usePersonSelection>;
-

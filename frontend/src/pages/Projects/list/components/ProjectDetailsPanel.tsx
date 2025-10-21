@@ -111,6 +111,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [openAddRole, setOpenAddRole] = React.useState(false);
+  const addRoleBtnRef = React.useRef<HTMLButtonElement | null>(null);
 
   // Determine department for selected person to fetch appropriate role options
   const selectedDeptId = React.useMemo(() => {
@@ -454,6 +455,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                     className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-left text-[var(--text)] hover:bg-[var(--cardHover)]"
                     aria-haspopup="listbox"
                     aria-expanded={openAddRole}
+                    ref={addRoleBtnRef}
                   >
                     {addAssignmentState.roleOnProject || 'Set role'}
                   </button>
@@ -464,6 +466,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                       onSelect={(id, name) => { onRoleSelectNew(id, name); }}
                       onClose={() => setOpenAddRole(false)}
                       labelledById={undefined}
+                      anchorRef={addRoleBtnRef}
                     />
                   )}
                 </div>

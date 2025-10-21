@@ -102,6 +102,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
   // Role dropdown state
   const [openRoleFor, setOpenRoleFor] = useState<number | null>(null);
+  const roleAnchorRef = useRef<HTMLElement | null>(null);
   const [rolesByDept, setRolesByDept] = useState<Record<number, ProjectRole[]>>({});
   // Reload trigger for Refresh All
   const [reloadCounter, setReloadCounter] = useState<number>(0);
@@ -1267,8 +1268,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                     type="button"
                                     disabled={!deptId}
                                     className={`underline decoration-dotted underline-offset-2 ${deptId ? '' : 'text-[var(--muted)] cursor-not-allowed'}`}
-                                    onClick={async () => {
+                                    onClick={async (e) => {
                                       if (!deptId) return;
+                                      roleAnchorRef.current = e.currentTarget as HTMLElement;
                                       setOpenRoleFor(openRoleFor === asn.id ? null : (asn.id || null));
                                       if (!rolesByDept[deptId]) {
                                         try {
@@ -1301,6 +1303,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                           }
                                         }}
                                         onClose={() => setOpenRoleFor(null)}
+                                        anchorRef={roleAnchorRef as any}
                                       />
                                     </div>
                                   )}
