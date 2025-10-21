@@ -22,6 +22,14 @@ import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme } from '@/util/utilization';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import { listProjectRoles, type ProjectRole } from '@/roles/api';
+import { getFlag } from '@/lib/flags';
+import { useTopBarSlots } from '@/components/layout/TopBarSlots';
+import { useLayoutDensity } from '@/components/layout/useLayoutDensity';
+import WeeksSelector from '@/components/compact/WeeksSelector';
+import StatusFilterChips from '@/components/compact/StatusFilterChips';
+import HeaderActions from '@/components/compact/HeaderActions';
+import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
+import TopBarPortal from '@/components/layout/TopBarPortal';
 
 // Project Assignments Grid (scaffold)
 // Prescriptive: lean, best-practice; no client-side week calculations.
@@ -171,12 +179,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try { localStorage.setItem('assignGrid:projectColumnWidth', String(projectColumnWidth)); } catch {}
   }, [projectColumnWidth]);
 
-  // Measure sticky header height so the week header can offset correctly
+  const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
+  const { setLeft, setRight, clearLeft, clearRight } = useTopBarSlots();
+  const { setMainPadding } = useLayoutDensity();
+
+  // Measure sticky header height (legacy); compact mode snaps under top bar
   const headerRef = useRef<HTMLDivElement | null>(null);
   const [headerHeight, setHeaderHeight] = useState<number>(88);
   const headerScrollRef = useRef<HTMLDivElement | null>(null);
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
+    if (compact) return;
     function measure() {
       if (headerRef.current) {
         setHeaderHeight(headerRef.current.getBoundingClientRect().height);
@@ -190,7 +203,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       window.removeEventListener('resize', measure);
       if (ro && headerRef.current) ro.unobserve(headerRef.current);
     };
-  }, []);
+  }, [compact]);
 
   // Sync horizontal scroll between sticky week header and grid body
   useEffect(() => {
@@ -260,6 +273,35 @@ const ProjectAssignmentsGrid: React.FC = () => {
       return next;
     });
   };
+
+  // Compact header slot injection (after filter state is defined)
+  const topBarHeader = (
+    <div className="flex items-center gap-4 min-w-0">
+      <div className="min-w-0">
+        <div className="text-lg font-semibold text-[var(--text)] leading-tight">Project Assignments</div>
+        <div className="text-[var(--muted)] text-xs">Manage team workload allocation across {weeks.length} weeks</div>
+      </div>
+      <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+      <HeaderActions
+        onExpandAll={async () => { try { setProjects(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
+        onCollapseAll={() => setProjects(prev => prev.map(p => ({...p,isExpanded:false})))}
+        onRefreshAll={() => refreshAllAssignments()}
+        disabled={loading || loadingAssignments.size > 0}
+      />
+      <StatusFilterChips
+        options={statusFilterOptions}
+        selected={selectedStatusFilters as unknown as Set<string>}
+        format={(s) => formatStatusLabel(s as any)}
+        onToggle={(s) => toggleStatusFilter(s as any)}
+      />
+      <a
+        href={buildAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
+        className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+      >
+        People View
+      </a>
+    </div>
+  );
 
   // Helper: refresh totals for project from server
   const refreshTotalsForProject = async (projectId: number) => {
@@ -801,8 +843,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [location.search]);
   return (
     <Layout>
+      {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Sticky Header */}
+        {!compact && (
         <div ref={headerRef} className="sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] z-30 px-6 py-4">
           {/* Top row: title + subtitle (left), snapshot chip (right) */}
           <div className="flex items-start justify-between gap-6">
@@ -931,9 +975,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Sticky week header aligned to measured header height */}
-        <div ref={headerScrollRef} className="sticky bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto px-6" style={{ top: headerHeight }}>
+        <div ref={headerScrollRef} className="sticky bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto px-6" style={{ top: compact ? 0 : headerHeight }}>
           <div style={{ minWidth: totalMinWidth }}>
             <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
               <div

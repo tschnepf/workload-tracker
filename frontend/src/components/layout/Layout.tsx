@@ -16,6 +16,8 @@ import { useNavTiming } from '@/utils/useNavTiming';
 import Button from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
 import { logout as performLogout } from '@/store/auth';
+import { TopBarSlotsProvider, useTopBarSlotValues } from '@/components/layout/TopBarSlots';
+import { LayoutDensityProvider, useLayoutDensity } from '@/components/layout/useLayoutDensity';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -108,6 +110,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [mobileSidebarOpen]);
   return (
     <LayoutContext.Provider value={true}>
+    <LayoutDensityProvider>
     <div className="h-[100svh] md:h-screen overflow-hidden bg-[var(--bg)] flex">
       {/* Global top-edge progress indicator */}
       <TopProgress />
@@ -123,54 +126,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Header actions bar */}
-        <div
-          className="flex-shrink-0"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            padding: '8px 12px',
-            borderBottom: '1px solid var(--border)',
-            backgroundColor: 'var(--surface)',
-          }}
-        >
-          <div className="flex items-center gap-3">
-            {/* Mobile: hamburger to toggle sidebar */}
-            <button
-              type="button"
-              aria-label="Open navigation"
-              className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md text-[var(--text)] hover:text-white hover:bg-[var(--surfaceHover)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
-              onClick={() => setMobileSidebarOpen(true)}
-              ref={hamburgerRef}
-            >
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            </button>
-            <GlobalDepartmentFilter />
-          </div>
-
-          <div className="flex items-center gap-2">
-            {!!auth?.accessToken && (
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Log out"
-                onClick={async () => {
-                  try { await performLogout(); } finally { navigate('/login', { replace: true }); }
-                }}
-              >
-                Log out
-              </Button>
-            )}
-          </div>
-        </div>
-        <main id="main-content" tabIndex={-1} aria-busy={nav.state !== 'idle'} className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </main>
+        <TopBarSlotsProvider>
+          <TopBarInner
+            authPresent={!!auth?.accessToken}
+            onLogout={async () => { try { await performLogout(); } finally { navigate('/login', { replace: true }); } }}
+            onOpenSidebar={() => setMobileSidebarOpen(true)}
+            hamburgerRef={hamburgerRef}
+          />
+          <MainWithDensity ariaBusy={nav.state !== 'idle'}>
+            {children}
+          </MainWithDensity>
+        </TopBarSlotsProvider>
       </div>
 
       {/* Mobile off-canvas sidebar */}
@@ -209,8 +175,81 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       )}
     </div>
+    </LayoutDensityProvider>
     </LayoutContext.Provider>
   );
 };
 
 export default Layout;
+
+// Separate top bar to read slot content and keep Layout readable
+const TopBarInner: React.FC<{
+  authPresent: boolean;
+  onLogout: () => Promise<void> | void;
+  onOpenSidebar: () => void;
+  hamburgerRef: React.RefObject<HTMLButtonElement>;
+}> = ({ authPresent, onLogout, onOpenSidebar, hamburgerRef }) => {
+  const { left, right } = useTopBarSlotValues();
+  return (
+    <div
+      id="app-topbar"
+      className="flex-shrink-0"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '8px 12px',
+        borderBottom: '1px solid var(--border)',
+        backgroundColor: 'var(--surface)',
+        zIndex: 30,
+        position: 'sticky',
+        top: 0,
+      }}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          aria-label="Open navigation"
+          className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md text-[var(--text)] hover:text-white hover:bg-[var(--surfaceHover)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+          onClick={onOpenSidebar}
+          ref={hamburgerRef}
+        >
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <GlobalDepartmentFilter />
+        {/* Explicit portal mount points for page headers */}
+        <div id="topbar-left-mount" className="min-w-0" />
+        <div id="topbar-right-mount" className="min-w-0" />
+        {left ? <div className="min-w-0">{left}</div> : null}
+      </div>
+      <div className="flex items-center gap-2 min-w-0">
+        {authPresent && (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Log out"
+            onClick={onLogout}
+          >
+            Log out
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const MainWithDensity: React.FC<{ children: React.ReactNode; ariaBusy: boolean }>
+  = ({ children, ariaBusy }) => {
+  const { density } = useLayoutDensity();
+  const paddingClass = density === 'compact' ? 'py-2' : 'py-8';
+  return (
+    <main id="main-content" tabIndex={-1} aria-busy={ariaBusy} className={`flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 ${paddingClass}`}>
+      {children}
+    </main>
+  );
+};

@@ -50,6 +50,14 @@ import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeybo
 import { useDeliverablesIndex } from '@/pages/Assignments/grid/useDeliverablesIndex';
 import { useScrollSync } from '@/pages/Assignments/grid/useScrollSync';
 import { useProjectStatusFilters } from '@/pages/Assignments/grid/useProjectStatusFilters';
+import { getFlag } from '@/lib/flags';
+import { useTopBarSlots } from '@/components/layout/TopBarSlots';
+import { useLayoutDensity } from '@/components/layout/useLayoutDensity';
+import WeeksSelector from '@/components/compact/WeeksSelector';
+import StatusFilterChips from '@/components/compact/StatusFilterChips';
+import HeaderActions from '@/components/compact/HeaderActions';
+import { buildProjectAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
+import TopBarPortal from '@/components/layout/TopBarPortal';
 
 // Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
 
@@ -158,6 +166,11 @@ const AssignmentGrid: React.FC = () => {
     setLoading,
   });
   const { weeks, isSnapshotMode, loadData, asyncJob } = snapshot;
+  // Compact header feature: inject controls into global top bar
+  const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
+  const { setLeft, setRight, clearLeft, clearRight } = useTopBarSlots();
+  const { setMainPadding } = useLayoutDensity();
+  // topBarHeader is defined later after handlers
   // Selection state via useCellSelection
   const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
   const rowKeyFor = (personId: number, assignmentId: number) => `${personId}:${assignmentId}`;
@@ -722,10 +735,38 @@ const AssignmentGrid: React.FC = () => {
   };
 
   const { data: schemeData } = useUtilizationScheme();
+  const topBarHeader = (
+    <div className="flex items-center gap-4 min-w-0">
+      <div className="min-w-0">
+        <div className="text-lg font-semibold text-[var(--text)] leading-tight">Assignments</div>
+        <div className="text-[var(--muted)] text-xs">Manage team workload allocation across {weeks.length} weeks</div>
+      </div>
+      <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+      <HeaderActions
+        onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
+        onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
+        onRefreshAll={refreshAllAssignments}
+        disabled={loading || (loadingAssignments.size > 0)}
+      />
+      <StatusFilterChips
+        options={statusFilterOptions as unknown as readonly string[]}
+        selected={selectedStatusFilters as unknown as Set<string>}
+        format={formatFilterStatus as any}
+        onToggle={(s) => toggleStatusFilter(s as any)}
+      />
+      <a
+        href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
+        className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+      >
+        Project View
+      </a>
+    </div>
+  );
 
   if (loading) {
     return (
       <Layout>
+        {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
         <AssignmentsSkeleton />
       </Layout>
     );
@@ -743,9 +784,11 @@ const AssignmentGrid: React.FC = () => {
 
   return (
     <Layout>
+      {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Sticky Header Section */}
+        {!compact && (
         <HeaderBarComp
           headerRef={headerRef}
           title="Assignment Grid"
@@ -768,11 +811,11 @@ const AssignmentGrid: React.FC = () => {
           selectedStatusFilters={selectedStatusFilters as unknown as Set<string>}
           formatFilterStatus={(status) => formatFilterStatus(status as any)}
           toggleStatusFilter={(status) => toggleStatusFilter(status as any)}
-        />
+        />)}
 
         {/* Sticky Week Header - positioned directly below measured header */}
         <WeekHeaderComp
-          top={headerHeight}
+          top={compact ? 0 : headerHeight}
           minWidth={totalMinWidth}
           gridTemplate={gridTemplate}
           weeks={weeks}

@@ -7,6 +7,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
 import { Project } from '@/types/models';
 import { projectsApi } from '@/services/api';
+import { useCreateProject } from '@/hooks/useProjects';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -17,6 +18,7 @@ const ProjectForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
+  const createProject = useCreateProject();
 
   const [formData, setFormData] = useState<Partial<Project>>({
     name: '',
@@ -107,7 +109,7 @@ const ProjectForm: React.FC = () => {
       if (isEditing && id) {
         await projectsApi.update(parseInt(id), projectData);
       } else {
-        await projectsApi.create(projectData as Omit<Project, 'id' | 'createdAt' | 'updatedAt'>);
+        await createProject.mutateAsync(projectData as Omit<Project, 'id' | 'createdAt' | 'updatedAt'>);
       }
 
       navigate('/projects');

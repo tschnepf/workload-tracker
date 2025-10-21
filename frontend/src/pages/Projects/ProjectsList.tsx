@@ -30,6 +30,7 @@ import { useProjectAvailability } from '@/pages/Projects/list/hooks/useProjectAv
 import { usePersonSearch } from '@/pages/Projects/list/hooks/usePersonSearch';
 import { useProjectAssignmentAdd } from '@/pages/Projects/list/hooks/useProjectAssignmentAdd';
 import { useProjectStatusMutation } from '@/pages/Projects/list/hooks/useProjectStatusMutation';
+import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 import { useNextDeliverables } from '@/pages/Projects/list/hooks/useNextDeliverables';
 
 // Lazy load DeliverablesSection for better initial page performance
@@ -294,26 +295,28 @@ const ProjectsList: React.FC = () => {
 
   const { onChangeStatus: handleStatusChange } = useProjectStatusMutation({
     selectedProject,
-    updateProjectMutation,
-    invalidateFilterMeta,
+    // unified hook handles mutation/invalidation internally
+    // updateProjectMutation, // no longer needed here
+    // invalidateFilterMeta,  // handled in unified hook
     setSelectedProject,
     setStatusDropdownOpen,
     setError,
-  });
+  } as any);
+
+  const { updateStatus } = useUpdateProjectStatus();
 
   // Table-level status update for any project row
   const handleTableStatusChange = useCallback(async (projectId: number, newStatus: string) => {
     try {
-      await updateProjectMutation.mutateAsync({ id: projectId, data: { status: newStatus } });
+      await updateStatus(projectId, newStatus);
       if (selectedProject?.id === projectId) {
         setSelectedProject({ ...selectedProject, status: newStatus } as Project);
       }
-      await invalidateFilterMeta();
     } catch (e) {
       console.error('Failed to update project status from table', e);
       setError('Failed to update project status');
     }
-  }, [updateProjectMutation, selectedProject, setSelectedProject, invalidateFilterMeta]);
+  }, [updateStatus, selectedProject, setSelectedProject]);
 
   // Sorting handled via onSort2 in enhanced filters (next deliverable support)
 

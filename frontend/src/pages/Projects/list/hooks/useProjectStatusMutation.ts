@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Project } from '@/types/models';
-import { showToast } from '@/lib/toastBus';
+import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 
 interface Params {
   selectedProject: Project | null;
@@ -11,25 +11,23 @@ interface Params {
   setError: (msg: string | null) => void;
 }
 
-export function useProjectStatusMutation({ selectedProject, updateProjectMutation, invalidateFilterMeta, setSelectedProject, setStatusDropdownOpen, setError }: Params) {
+export function useProjectStatusMutation({ selectedProject, setSelectedProject, setStatusDropdownOpen, setError }: Params) {
+  const { updateStatus } = useUpdateProjectStatus();
+
   const onChangeStatus = useCallback(async (newStatus: string) => {
     if (!selectedProject?.id) return;
+    const prev = selectedProject;
     try {
-      const prev = selectedProject;
-      const optimistic = { ...prev, status: newStatus } as Project;
-      setSelectedProject(optimistic);
+      // Optimistic local details panel update
+      setSelectedProject({ ...prev, status: newStatus } as Project);
       setStatusDropdownOpen(false);
-      await updateProjectMutation.mutateAsync({ id: prev.id!, data: { status: newStatus } });
-      await invalidateFilterMeta();
-      showToast('Project status updated', 'success');
+      await updateStatus(prev.id!, newStatus);
     } catch (err) {
-      // revert and surface error
-      setSelectedProject(selectedProject);
+      // Revert and surface error in panel state; toast handled in hook
+      setSelectedProject(prev);
       setError('Failed to update project status');
-      showToast('Failed to update project status', 'error');
     }
-  }, [selectedProject, updateProjectMutation, invalidateFilterMeta, setSelectedProject, setStatusDropdownOpen, setError]);
+  }, [selectedProject, setSelectedProject, setStatusDropdownOpen, setError, updateStatus]);
 
   return { onChangeStatus } as const;
 }
-
