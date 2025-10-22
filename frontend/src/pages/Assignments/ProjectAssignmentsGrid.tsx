@@ -1235,7 +1235,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                   setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
                                 }
                               }}
-                              placeholder="Search people by nameâ€¦"
+                              placeholder="Search people by name..."
                               className="w-full h-7 bg-[var(--card)] border border-[var(--border)] rounded px-2 text-[var(--text)] text-xs"
                             />
                             {/* Dropdown */}
@@ -1286,7 +1286,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                           <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={asn.personName || String(asn.person)}>
                             {asn.personName || `Person #${asn.person}`}
                           </div>
-                          <div className="pr-2 py-2 text-[var(--muted)] text-xs truncate relative">
+                          <div className="pl-8 pr-2 py-2 text-[var(--muted)] text-xs truncate relative">
                             {(() => {
                               const deptId = (asn as any).personDepartmentId as number | null | undefined;
                               const label = (asn as any).roleName as string | null | undefined;

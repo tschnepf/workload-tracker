@@ -150,7 +150,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   // Compact card-style row (no hours) vs. grid with hours
   if (!showHoursGrid) {
     return (
-      <div className="flex justify-between items-center p-2 bg-[var(--card)] rounded">
+      <div className="flex justify-between items-center p-2 pl-8 bg-[var(--card)] rounded">
         <div className="min-w-0 pr-2">
           <div className="text-[var(--text)] font-medium leading-tight truncate">
             {assignment.personName || 'Unknown'}
@@ -195,7 +195,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   }
 
   return (
-    <div className="flex justify-between items-center p-2 bg-[var(--card)] rounded">
+    <div className="flex justify-between items-center p-2 pl-8 bg-[var(--card)] rounded">
       <div className="flex-1">
         <div className="grid grid-cols-3 gap-4 items-center">
           <div className="min-w-0">

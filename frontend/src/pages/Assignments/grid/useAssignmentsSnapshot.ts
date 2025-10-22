@@ -118,11 +118,40 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
       args.setHoursByPerson(hb);
 
       // Deliverables + projects for UI
-      const [deliverablesPage, projectsPage] = await Promise.all([
-        args.deliverablesApi.list(undefined, { page: 1, page_size: pageSize }),
+      const [deliverablesData, projectsPage] = await Promise.all([
+        (async () => {
+          // Prefer calendar API scoped to visible window; fallback to listAll
+          try {
+            const wk = (snapshot.weekKeys || []) as string[];
+            if (wk.length > 0) {
+              const start = wk[0];
+              const endDate = new Date(wk[wk.length - 1].replace(/-/g, '/'));
+              endDate.setDate(endDate.getDate() + 6); // include full last week
+              const end = endDate.toISOString().slice(0, 10);
+              const items = await args.deliverablesApi.calendar(start, end);
+              // Coerce to Deliverable-like objects expected by downstream indexer
+              const mapped = (items || []).map((it: any) => ({
+                id: it.id,
+                project: it.project,
+                date: it.date,
+                description: it.description,
+                percentage: it.percentage,
+                notes: (it as any).notes,
+              }));
+              return mapped;
+            }
+          } catch {}
+          try {
+            return await args.deliverablesApi.listAll();
+          } catch {
+            // Last resort: grab large first page
+            const page = await args.deliverablesApi.list(undefined, { page: 1, page_size: 1000 });
+            return page.results || [];
+          }
+        })(),
         args.projectsApi.list({ page: 1, page_size: pageSize })
       ]);
-      args.setDeliverables(deliverablesPage.results || []);
+      args.setDeliverables(deliverablesData || []);
       args.setProjectsData(projectsPage.results || []);
       setIsSnapshotMode(true);
 
@@ -157,4 +186,3 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
 }
 
 export type UseAssignmentsSnapshotReturn = ReturnType<typeof useAssignmentsSnapshot>;
-
