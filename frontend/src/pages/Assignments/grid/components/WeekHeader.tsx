@@ -9,9 +9,11 @@ export interface WeekHeaderProps {
   onStartResize: (column: 'client' | 'project', e: React.MouseEvent) => void;
   scrollRef?: React.Ref<HTMLDivElement>;
   onScroll?: React.UIEventHandler<HTMLDivElement>;
+  onClientClick?: () => void;
+  onWeeksClick?: () => void;
 }
 
-const WeekHeader: React.FC<WeekHeaderProps> = ({ top, minWidth, gridTemplate, weeks, onStartResize, scrollRef, onScroll }) => {
+const WeekHeader: React.FC<WeekHeaderProps> = ({ top, minWidth, gridTemplate, weeks, onStartResize, scrollRef, onScroll, onClientClick, onWeeksClick }) => {
   return (
     <div
       ref={scrollRef}
@@ -21,7 +23,12 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({ top, minWidth, gridTemplate, we
     >
       <div style={{ minWidth }}>
         <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
-          <div className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group">
+          <div
+            className={`font-medium text-[var(--text)] text-sm px-2 py-1 relative group ${onClientClick ? 'cursor-pointer hover:text-[var(--text)]' : ''}`}
+            onClick={onClientClick}
+            role={onClientClick ? 'button' : undefined}
+            aria-label={onClientClick ? 'Sort by client' : undefined}
+          >
             Client
             <div
               className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--surfaceHover)] transition-colors"
@@ -41,7 +48,14 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({ top, minWidth, gridTemplate, we
 
           <div className="text-center text-xs text-[var(--muted)] px-1">+/-</div>
           {weeks.map((week, index) => (
-            <div key={week.date} className="text-center px-1">
+            <div
+              key={week.date}
+              className={`text-center px-1 ${onWeeksClick ? 'cursor-pointer select-none hover:text-[var(--text)]' : ''}`}
+              onClick={onWeeksClick}
+              role={onWeeksClick ? 'columnheader' : undefined}
+              aria-label={onWeeksClick ? `Week starting ${week.display}` : undefined}
+              title={onWeeksClick ? 'Sort by next deliverable date' : undefined}
+            >
               <div className="text-xs font-medium text-[var(--text)]">{week.display}</div>
               <div className="text-[10px] text-[var(--muted)]">W{index + 1}</div>
             </div>

@@ -232,6 +232,27 @@ const AssignmentGrid: React.FC = () => {
   const url = useGridUrlState();
   const { headerRef: headerScrollRef, bodyRef: bodyScrollRef, onHeaderScroll, onBodyScroll } = useScrollSync();
 
+  // Per-person assignment sort mode (default client->project; alt by next deliverable date)
+  const [personSortMode, setPersonSortMode] = useState<'client_project' | 'deliverable'>('client_project');
+
+  // Precompute next upcoming deliverable date per project for sorting
+  const nextDeliverableByProject = useMemo(() => {
+    const map = new Map<number, string>();
+    try {
+      const now = new Date(); now.setHours(0,0,0,0);
+      for (const d of (deliverables || [])) {
+        const pid = (d as any).project as number | undefined; const ds = (d as any).date as string | undefined;
+        if (!pid || !ds) continue; const dt = new Date(ds.replace(/-/g,'/')); dt.setHours(0,0,0,0);
+        if (dt < now) continue;
+        const prev = map.get(pid);
+        if (!prev || new Date(ds.replace(/-/g,'/')).getTime() < new Date(prev.replace(/-/g,'/')).getTime()) {
+          map.set(pid, ds);
+        }
+      }
+    } catch {}
+    return map;
+  }, [deliverables]);
+
   // Column width state (extracted hook, assignGrid keys)
   const {
     clientColumnWidth,
@@ -644,8 +665,38 @@ const AssignmentGrid: React.FC = () => {
         return matchesStatusFilters(project as Project);
       });
 
-      // Sorting is now handled by the backend API (client, then project name).
-      return filteredAssignments;
+      // Sort within person based on active mode
+      const list = [...filteredAssignments];
+      if (personSortMode === 'deliverable') {
+        list.sort((a, b) => {
+          const ad = a?.project ? nextDeliverableByProject.get(a.project) : undefined;
+          const bd = b?.project ? nextDeliverableByProject.get(b.project) : undefined;
+          if (ad && bd) return ad.localeCompare(bd);
+          if (ad && !bd) return -1;
+          if (!ad && bd) return 1;
+          // fallback deterministic by client->project
+          const ap = a?.project ? projectsById.get(a.project) : undefined;
+          const bp = b?.project ? projectsById.get(b.project) : undefined;
+          const ac = (ap?.client || '').toString().trim().toLowerCase();
+          const bc = (bp?.client || '').toString().trim().toLowerCase();
+          if (ac !== bc) return ac.localeCompare(bc);
+          const an = (ap?.name || '').toString().trim().toLowerCase();
+          const bn = (bp?.name || '').toString().trim().toLowerCase();
+          return an.localeCompare(bn);
+        });
+      } else {
+        list.sort((a, b) => {
+          const ap = a?.project ? projectsById.get(a.project) : undefined;
+          const bp = b?.project ? projectsById.get(b.project) : undefined;
+          const ac = (ap?.client || '').toString().trim().toLowerCase();
+          const bc = (bp?.client || '').toString().trim().toLowerCase();
+          if (ac !== bc) return ac.localeCompare(bc);
+          const an = (ap?.name || '').toString().trim().toLowerCase();
+          const bn = (bp?.name || '').toString().trim().toLowerCase();
+          return an.localeCompare(bn);
+        });
+      }
+      return list;
     } catch (error) {
       console.error('Error filtering/sorting assignments:', error);
       return assignments || []; // Safe fallback - show all on error
@@ -829,6 +880,8 @@ const AssignmentGrid: React.FC = () => {
           onStartResize={startColumnResize}
           scrollRef={headerScrollRef}
           onScroll={onHeaderScroll}
+          onClientClick={() => setPersonSortMode('client_project')}
+          onWeeksClick={() => setPersonSortMode('deliverable')}
         />
 
         
