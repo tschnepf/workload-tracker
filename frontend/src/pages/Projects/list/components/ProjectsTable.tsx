@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Project, Deliverable } from '@/types/models';
-import StatusBadge from '@/components/projects/StatusBadge';
+import StatusBadge, { getStatusColor, formatStatus } from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
@@ -110,12 +110,18 @@ const ProjectsTable: React.FC<Props> = ({
             <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
             <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
               <div className="relative" data-dropdown>
-                <StatusBadge
-                  status={(project.status as any) || 'active'}
-                  variant="editable"
+                <button
+                  type="button"
+                  className={`${getStatusColor(project.status || '')} whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)]`}
                   onClick={() => project.id && statusDropdown.toggle(String(project.id))}
-                  isUpdating={project.id ? projectStatus.isUpdating(project.id) : false}
-                />
+                  aria-haspopup="listbox"
+                  aria-expanded={statusDropdown.isOpen(String(project.id))}
+                >
+                  {formatStatus(project.status || '')}
+                  <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
                 {project.id && (
                   <StatusDropdown
                     currentStatus={(project.status as any) || 'active'}
@@ -186,12 +192,18 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
               <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
                 <div className="relative" data-dropdown>
-                  <StatusBadge
-                    status={(project.status as any) || 'active'}
-                    variant="editable"
+                  <button
+                    type="button"
+                    className={`${getStatusColor(project.status || '')} whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)]`}
                     onClick={() => project.id && statusDropdown.toggle(String(project.id))}
-                    isUpdating={project.id ? projectStatus.isUpdating(project.id) : false}
-                  />
+                    aria-haspopup="listbox"
+                    aria-expanded={statusDropdown.isOpen(String(project.id))}
+                  >
+                    {formatStatus(project.status || '')}
+                    <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                   {project.id && (
                     <StatusDropdown
                       currentStatus={(project.status as any) || 'active'}
