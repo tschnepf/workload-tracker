@@ -724,7 +724,7 @@ const AssignmentGrid: React.FC = () => {
 
   // Update assignment hours
   const updateAssignmentHours = async (personId: number, assignmentId: number, week: string, hours: number) => {
-    await updateAssignmentHoursAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, people, personId, assignmentId, week, hours, showToast });
+    await updateAssignmentHoursAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, personId, assignmentId, week, hours, showToast });
   };
 
   // Helper function to check if a cell is in the selected cells array

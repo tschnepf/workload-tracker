@@ -20,8 +20,15 @@ export function useDeliverableBars(deliverablesForWeek: Deliverable[] | undefine
       }
     };
     (deliverablesForWeek || []).forEach(d => {
-      const type = classifyDeliverableType((d as any).description);
-      const pct = (d as any).percentage == null ? undefined : Number((d as any).percentage);
+      const title = (d as any).description ?? (d as any).title ?? '';
+      const type = classifyDeliverableType(title);
+      let pct: number | undefined = undefined;
+      const pctVal = (d as any).percentage;
+      if (pctVal != null && !Number.isNaN(Number(pctVal))) pct = Number(pctVal);
+      else {
+        const m = String(title).match(/(\d{1,3})\s*%/);
+        if (m) { const n = parseInt(m[1], 10); if (!Number.isNaN(n) && n >= 0 && n <= 100) pct = n; }
+      }
       add(type, pct);
     });
     return out;
@@ -33,11 +40,17 @@ export function useDeliverableBars(deliverablesForWeek: Deliverable[] | undefine
     if (!deliverablesForWeek || deliverablesForWeek.length === 0) return undefined as string | undefined;
     return deliverablesForWeek
       .map(d => {
-        const pct = (d as any).percentage ?? '';
-        const pctStr = pct !== '' ? `${pct}% ` : '';
-        const desc = (d as any).description || '';
+        const title = (d as any).description ?? (d as any).title ?? '';
+        const pctVal = (d as any).percentage;
+        let pct: number | undefined = undefined;
+        if (pctVal != null && !Number.isNaN(Number(pctVal))) pct = Number(pctVal);
+        else {
+          const m = String(title).match(/(\d{1,3})\s*%/);
+          if (m) { const n = parseInt(m[1], 10); if (!Number.isNaN(n) && n >= 0 && n <= 100) pct = n; }
+        }
+        const pctStr = pct != null ? `${pct}% ` : '';
         const notes = (d as any).notes ? ` - ${(d as any).notes}` : '';
-        return `${pctStr}${desc}${notes}`.trim();
+        return `${pctStr}${title}${notes}`.trim();
       })
       .filter(Boolean)
       .join('\n');
@@ -49,4 +62,3 @@ export function useDeliverableBars(deliverablesForWeek: Deliverable[] | undefine
 }
 
 export type UseDeliverableBarsReturn = ReturnType<typeof useDeliverableBars>;
-

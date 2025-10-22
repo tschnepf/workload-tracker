@@ -27,6 +27,8 @@ export async function updateAssignmentHoursAction(params: {
   queryClient: QueryClient;
   setPeople: React.Dispatch<React.SetStateAction<any[]>>;
   setAssignmentsData: React.Dispatch<React.SetStateAction<Assignment[]>>;
+  setHoursByPerson: React.Dispatch<React.SetStateAction<Record<number, Record<string, number>>>>;
+  hoursByPerson: Record<number, Record<string, number>>;
   people: any[];
   personId: number;
   assignmentId: number;
@@ -34,7 +36,7 @@ export async function updateAssignmentHoursAction(params: {
   hours: number;
   showToast: (msg: string, type?: 'info'|'success'|'warning'|'error') => void;
 }) {
-  const { assignmentsApi, queryClient, setPeople, setAssignmentsData, people, personId, assignmentId, week, hours, showToast } = params;
+  const { assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, personId, assignmentId, week, hours, showToast } = params;
   const person = people.find(p => p.id === personId);
   const assignment = person?.assignments.find((a: any) => a.id === assignmentId);
   if (!assignment) return;
@@ -42,6 +44,19 @@ export async function updateAssignmentHoursAction(params: {
   const updatedWeeklyHours = { ...prevWeeklyHours, [week]: hours };
   setPeople(prev => prev.map((p: any) => p.id === personId ? { ...p, assignments: p.assignments.map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a) } : p));
   setAssignmentsData(prev => prev.map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a));
+
+  // Optimistically update hoursByPerson so pills refresh immediately
+  try {
+    const total = (person?.assignments || []).reduce((sum: number, a: any) => {
+      const wh = (a.id === assignmentId) ? updatedWeeklyHours : (a.weeklyHours || {});
+      const v = parseFloat((wh?.[week] as any)?.toString?.() || '0') || 0;
+      return sum + v;
+    }, 0);
+    const nextMap: Record<number, Record<string, number>> = { ...hoursByPerson };
+    nextMap[personId] = { ...(nextMap[personId] || {}) };
+    nextMap[personId][week] = total;
+    setHoursByPerson(nextMap);
+  } catch {}
   try {
     await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
     queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
@@ -49,6 +64,18 @@ export async function updateAssignmentHoursAction(params: {
   } catch (err: any) {
     setPeople(prev => prev.map((p: any) => p.id === personId ? { ...p, assignments: p.assignments.map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a) } : p));
     setAssignmentsData(prev => prev.map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
+    // Revert the optimistic pill update
+    try {
+      const total = (person?.assignments || []).reduce((sum: number, a: any) => {
+        const wh = (a.id === assignmentId) ? prevWeeklyHours : (a.weeklyHours || {});
+        const v = parseFloat((wh?.[week] as any)?.toString?.() || '0') || 0;
+        return sum + v;
+      }, 0);
+      const nextMap: Record<number, Record<string, number>> = { ...hoursByPerson };
+      nextMap[personId] = { ...(nextMap[personId] || {}) };
+      nextMap[personId][week] = total;
+      setHoursByPerson(nextMap);
+    } catch {}
     console.error('Failed to update assignment hours:', err);
     showToast('Failed to update hours: ' + (err?.message || 'Unknown error'), 'error');
   }
@@ -153,4 +180,3 @@ export async function updateMultipleCellsAction(params: {
     showToast(`Failed to update ${failed.length} assignment(s). Changes were reverted for those.`, 'error');
   }
 }
-

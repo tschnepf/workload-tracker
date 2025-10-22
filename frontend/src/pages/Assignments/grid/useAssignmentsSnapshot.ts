@@ -130,14 +130,20 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
               const end = endDate.toISOString().slice(0, 10);
               const items = await args.deliverablesApi.calendar(start, end);
               // Coerce to Deliverable-like objects expected by downstream indexer
-              const mapped = (items || []).map((it: any) => ({
-                id: it.id,
-                project: it.project,
-                date: it.date,
-                description: it.description,
-                percentage: it.percentage,
-                notes: (it as any).notes,
-              }));
+              const mapped = (items || []).map((it: any) => {
+                const title = (it as any).title ?? '';
+                // Extract percentage from title if not provided by API
+                let pct: number | undefined = undefined;
+                const m = String(title).match(/(\d{1,3})\s*%/);
+                if (m) { const n = parseInt(m[1], 10); if (!Number.isNaN(n) && n >= 0 && n <= 100) pct = n; }
+                return {
+                  id: it.id,
+                  project: it.project,
+                  date: it.date,
+                  description: title,
+                  percentage: (it as any).percentage ?? pct,
+                };
+              });
               return mapped;
             }
           } catch {}
