@@ -28,6 +28,7 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({ top, minWidth, gridTemplate, we
             onClick={onClientClick}
             role={onClientClick ? 'button' : undefined}
             aria-label={onClientClick ? 'Sort by client' : undefined}
+            title={onClientClick ? 'Sort by Client' : undefined}
           >
             Client
             <div
