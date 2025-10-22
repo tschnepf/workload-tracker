@@ -9,7 +9,8 @@ import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
 import UpcomingPreDeliverablesWidget from '../components/dashboard/UpcomingPreDeliverablesWidget';
 import UtilizationBadge from '../components/ui/UtilizationBadge';
-import { utilizationLevelToClasses } from '@/util/utilization';
+import { utilizationLevelToClasses, getUtilizationPill, defaultUtilizationScheme, utilizationLevelToTokens } from '@/util/utilization';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import SkillsFilter from '../components/skills/SkillsFilter';
 import { dashboardApi, departmentsApi, personSkillsApi, projectsApi } from '../services/api';
 import { useAuth } from '@/hooks/useAuth';
@@ -80,6 +81,7 @@ const Dashboard: React.FC = () => {
   const weekKeys = (heatData && heatData.length > 0) ? (heatData[0].weekKeys || []) : [];
   const currentWeekKey = weekKeys[0];
   const nextWeekKey = weekKeys[1];
+  const { data: utilScheme } = useUtilizationScheme();
   
   const loadDepartments = async () => {
     try {
@@ -445,11 +447,8 @@ const Dashboard: React.FC = () => {
                         <td style={{ padding: '4px 6px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</td>
                         {row.weekKeys.map((wk) => {
                           const h = row.weekTotals[wk] || 0;
-                          const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
-                          let bg = '#10b981';
-                          if (pct > 100) bg = '#ef4444';
-                          else if (pct > 85) bg = '#f59e0b';
-                          else if (pct > 70) bg = '#3b82f6';
+                          const pill = getUtilizationPill({ hours: h, capacity: row.weeklyCapacity || 0, scheme: utilScheme || defaultUtilizationScheme, output: 'token' });
+                          const bg = pill.tokens?.bg || '#10b981';
                           return (
                             <td key={`cell-top-${row.id}-${wk}`} title={`${wk} - ${Math.round(h)}h`} style={{ padding: 3, textAlign: 'center' }}>
                               <div style={{ width: 20, height: 20, background: bg, opacity: 0.9, borderRadius: 3, border: '1px solid var(--border)', margin: '0 auto' }} />
@@ -461,11 +460,30 @@ const Dashboard: React.FC = () => {
                   </tbody>
                 </table>
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-[var(--muted)]">
-                  <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0-70%</div>
-                  <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70-85%</div>
-                  <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85-100%</div>
-                  <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
-                  {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing.</span>}
+                  {(() => {
+                    const s = utilScheme || defaultUtilizationScheme;
+                    const labels = s.mode === 'absolute_hours'
+                      ? [
+                          `${s.blue_min}-${s.blue_max}h`,
+                          `${s.green_min}-${s.green_max}h`,
+                          `${s.orange_min}-${s.orange_max}h`,
+                          `${s.red_min}h+`,
+                        ]
+                      : ['0-70%', '70-85%', '85-100%', '100%+'];
+                    const blue = utilizationLevelToTokens('blue').bg;
+                    const green = utilizationLevelToTokens('green').bg;
+                    const orange = utilizationLevelToTokens('orange').bg;
+                    const red = utilizationLevelToTokens('red').bg;
+                    return (
+                      <>
+                        <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: blue }}></span> {labels[0]}</div>
+                        <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: green }}></span> {labels[1]}</div>
+                        <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: orange }}></span> {labels[2]}</div>
+                        <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: red }}></span> {labels[3]}</div>
+                        {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing.</span>}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             ) : (
@@ -784,5 +802,4 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
-
 

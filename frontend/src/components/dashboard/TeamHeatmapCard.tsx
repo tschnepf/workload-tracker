@@ -2,20 +2,13 @@ import React from 'react';
 import Card from '../ui/Card';
 import { darkTheme } from '../../theme/tokens';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
-import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
+import { getUtilizationPill, defaultUtilizationScheme, utilizationLevelToTokens } from '@/util/utilization';
 import { PersonCapacityHeatmapItem } from '../../types/models';
 
 type Props = {
   data: PersonCapacityHeatmapItem[];
   weeks: number;
   onWeeksChange: (w: number) => void;
-};
-
-const cellBg = (pct: number) => {
-  if (pct > 100) return darkTheme.colors.utilization.overallocated;
-  if (pct > 85) return darkTheme.colors.utilization.high;
-  if (pct > 70) return darkTheme.colors.utilization.optimal;
-  return darkTheme.colors.utilization.available;
 };
 
 const TeamHeatmapCard: React.FC<Props> = ({ data, weeks, onWeeksChange }) => {
@@ -65,7 +58,7 @@ const TeamHeatmapCard: React.FC<Props> = ({ data, weeks, onWeeksChange }) => {
                   const pill = getUtilizationPill({ hours: h, capacity: row.weeklyCapacity || 0, scheme: schemeData || defaultUtilizationScheme, output: 'token' });
                   const bg = pill.tokens?.bg || darkTheme.colors.utilization.available;
                   return (
-                    <td key={wk} title={`${wk} — ${Math.round(h)}h`} style={{ padding: 2 }}>
+                    <td key={wk} title={`${wk}: ${Math.round(h)}h`} style={{ padding: 2 }}>
                       <div style={{
                         width: 16,
                         height: 16,
@@ -95,12 +88,16 @@ const TeamHeatmapCard: React.FC<Props> = ({ data, weeks, onWeeksChange }) => {
               `${s.red_min}h+`,
             ]
           : ['0-70%', '70-85%', '85-100%', '100%+'];
+        const blue = utilizationLevelToTokens('blue').bg;
+        const green = utilizationLevelToTokens('green').bg;
+        const orange = utilizationLevelToTokens('orange').bg;
+        const red = utilizationLevelToTokens('red').bg;
         return (
           <div className="mt-3 flex items-center gap-4 text-xs text-[#969696]">
-            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.available, display: 'inline-block', borderRadius: 2 }}></span> {labels[0]}</div>
-            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.optimal, display: 'inline-block', borderRadius: 2 }}></span> {labels[1]}</div>
-            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.high, display: 'inline-block', borderRadius: 2 }}></span> {labels[2]}</div>
-            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: darkTheme.colors.utilization.overallocated, display: 'inline-block', borderRadius: 2 }}></span> {labels[3]}</div>
+            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: blue, display: 'inline-block', borderRadius: 2 }}></span> {labels[0]}</div>
+            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: green, display: 'inline-block', borderRadius: 2 }}></span> {labels[1]}</div>
+            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: orange, display: 'inline-block', borderRadius: 2 }}></span> {labels[2]}</div>
+            <div className="flex items-center gap-2"><span style={{ width: 12, height: 12, background: red, display: 'inline-block', borderRadius: 2 }}></span> {labels[3]}</div>
           </div>
         );
       })()}
@@ -109,3 +106,4 @@ const TeamHeatmapCard: React.FC<Props> = ({ data, weeks, onWeeksChange }) => {
 };
 
 export default TeamHeatmapCard;
+
