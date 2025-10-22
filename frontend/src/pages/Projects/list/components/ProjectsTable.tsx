@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import type { Project, Deliverable } from '@/types/models';
-import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
+import StatusBadge from '@/components/projects/StatusBadge';
+import StatusDropdown from '@/components/projects/StatusDropdown';
+import { useDropdownManager } from '@/components/projects/useDropdownManager';
+import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { getFlag } from '@/lib/flags';
 import { useVirtualRows } from '../hooks/useVirtualRows';
 
@@ -28,6 +31,16 @@ const ProjectsTable: React.FC<Props> = ({
   onChangeStatus,
 }) => {
   const enableVirtual = getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
+  const statusDropdown = useDropdownManager<string>();
+  const projectStatus = useProjectStatus({
+    onSuccess: (pid, newStatus) => {
+      onChangeStatus?.(pid, newStatus);
+    },
+    getCurrentStatus: (pid) => {
+      const p = projects.find(x => x.id === pid);
+      return (p?.status as any) || 'active';
+    }
+  });
   const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: 44, overscan: 6, enableVirtual });
   const groupClients = sortBy === 'client';
   const [openStatusFor, setOpenStatusFor] = useState<number | null>(null);
@@ -95,12 +108,31 @@ const ProjectsTable: React.FC<Props> = ({
             </div>
             <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
             <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
-              <ProjectStatusDropdown
-                status={project.status || ''}
-                onChange={(s) => onChangeStatus?.(project.id!, s)}
-                isOpen={openStatusFor === project.id}
-                setOpen={(v) => setOpenStatusFor(v ? (project.id as number) : null)}
-              />
+              <div className="relative" data-dropdown>
+                <StatusBadge
+                  status={(project.status as any) || 'active'}
+                  variant="editable"
+                  onClick={() => project.id && statusDropdown.toggle(String(project.id))}
+                  isUpdating={project.id ? projectStatus.isUpdating(project.id) : false}
+                />
+                {project.id && (
+                  <StatusDropdown
+                    currentStatus={(project.status as any) || 'active'}
+                    isOpen={statusDropdown.isOpen(String(project.id))}
+                    onSelect={async (newStatus) => {
+                      if (!project.id) return;
+                      try {
+                        await projectStatus.updateStatus(project.id, newStatus);
+                        statusDropdown.close();
+                      } catch {}
+                    }}
+                    onClose={statusDropdown.close}
+                    projectId={project.id}
+                    disabled={projectStatus.isUpdating(project.id)}
+                    closeOnSelect={false}
+                  />
+                )}
+              </div>
             </div>
             <div className="col-span-3">
               {nextDeliverable ? (
@@ -151,12 +183,31 @@ const ProjectsTable: React.FC<Props> = ({
               </div>
               <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
               <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
-                <ProjectStatusDropdown
-                  status={project.status || ''}
-                  onChange={(s) => onChangeStatus?.(project.id!, s)}
-                  isOpen={openStatusFor === project.id}
-                  setOpen={(v) => setOpenStatusFor(v ? (project.id as number) : null)}
-                />
+                <div className="relative" data-dropdown>
+                  <StatusBadge
+                    status={(project.status as any) || 'active'}
+                    variant="editable"
+                    onClick={() => project.id && statusDropdown.toggle(String(project.id))}
+                    isUpdating={project.id ? projectStatus.isUpdating(project.id) : false}
+                  />
+                  {project.id && (
+                    <StatusDropdown
+                      currentStatus={(project.status as any) || 'active'}
+                      isOpen={statusDropdown.isOpen(String(project.id))}
+                      onSelect={async (newStatus) => {
+                        if (!project.id) return;
+                        try {
+                          await projectStatus.updateStatus(project.id, newStatus);
+                          statusDropdown.close();
+                        } catch {}
+                      }}
+                      onClose={statusDropdown.close}
+                      projectId={project.id}
+                      disabled={projectStatus.isUpdating(project.id)}
+                      closeOnSelect={false}
+                    />
+                  )}
+                </div>
               </div>
               <div className="col-span-3">
                 {nextDeliverable ? (
@@ -196,4 +247,3 @@ const SortIcon: React.FC<{ column: string; sortBy: string; sortDirection: 'asc' 
 };
 
 export default ProjectsTable;
-
