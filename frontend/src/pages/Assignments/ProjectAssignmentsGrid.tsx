@@ -110,7 +110,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const isSnapshotMode = true;
   // Column widths + resizing (parity with person grid)
   const [clientColumnWidth, setClientColumnWidth] = useState(210);
-  const [projectColumnWidth, setProjectColumnWidth] = useState(300);
+  const [projectColumnWidth, setProjectColumnWidth] = useState(340);
   const [isResizing, setIsResizing] = useState<null | 'client' | 'project'>(null);
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
@@ -159,12 +159,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Adjustments requested: revert Project column to original default, further shrink Client by 0.6x (once)
+  // Adjustments requested: width migrations
   useEffect(() => {
     try {
       const mig2 = localStorage.getItem('projGrid:widthsFix_projectReset_client06');
       if (!mig2) {
-        // Revert project width to default 300px
+        // Revert project width to default 300px (legacy migration)
         setProjectColumnWidth(300);
         // Reduce client width by an additional 0.6x
         setClientColumnWidth(w => Math.max(80, Math.round(w * 0.6)));
@@ -172,6 +172,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Increase project column default to 340px to avoid status button wrapping (one-time)
+  useEffect(() => {
+    try {
+      const mig3 = localStorage.getItem('projGrid:widthsFix_increase_project_340');
+      if (!mig3) {
+        setProjectColumnWidth(w => (w < 340 ? 340 : w));
+        localStorage.setItem('projGrid:widthsFix_increase_project_340', '1');
+      }
+    } catch {}
   }, []);
   useEffect(() => {
     try { localStorage.setItem('assignGrid:clientColumnWidth', String(clientColumnWidth)); } catch {}

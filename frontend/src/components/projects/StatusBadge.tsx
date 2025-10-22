@@ -34,7 +34,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 }) => {
   const sizeClass = size === 'md' ? 'text-base' : size === 'sm' ? 'text-sm' : 'text-xs';
   const weightClass = weight === 'bold' ? 'font-bold' : 'font-medium';
-  const baseClasses = `px-2 py-0.5 rounded ${sizeClass} ${weightClass} inline-flex items-center gap-1`;
+  const baseClasses = `px-2 py-0.5 rounded ${sizeClass} ${weightClass} inline-flex items-center gap-1 whitespace-nowrap`;
   const colorClasses = getStatusColor(status);
   
   // Enhanced styling for different variants
@@ -87,3 +87,4 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 };
 
 export default StatusBadge;
+
