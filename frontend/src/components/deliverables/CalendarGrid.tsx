@@ -103,11 +103,11 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
                   >
                     {isToday(d) && (
                       <div
-                        className="absolute inset-0 rounded-sm pointer-events-none"
-                        style={{ background: 'var(--surfaceOverlay)', boxShadow: '0 0 0 1px var(--border)' }}
+                        className="absolute inset-0 rounded-sm pointer-events-none z-20"
+                        style={{ background: 'var(--surfaceOverlay)', border: '1px solid var(--border)', boxSizing: 'border-box' }}
                       />
                     )}
-                    <div className="relative z-10 text-xs text-[#94a3b8] mb-1 flex items-center gap-1">
+                    <div className="relative z-30 text-xs text-[#94a3b8] mb-1 flex items-center gap-1">
                       {(() => {
                         const monthAbbr = d.toLocaleString(undefined, { month: 'short' });
                         const text = `${monthAbbr} ${d.getDate()}`;
@@ -116,7 +116,7 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
                         );
                       })()}
                     </div>
-                    <div className="relative z-10 space-y-1">
+                    <div className="relative z-30 space-y-1">
                       {dayItems.map((ev) => {
                         const isPre = (ev as any).itemType === 'pre_deliverable';
                         const type = isPre ? 'pre_deliverable' : classify(ev);
