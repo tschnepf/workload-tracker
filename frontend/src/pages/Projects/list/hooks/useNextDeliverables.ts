@@ -7,7 +7,18 @@ export interface NextDeliverablesResult {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  refreshOne: (projectId: number) => Promise<void>;
 }
+
+// Parse server YYYY-MM-DD as local midnight to avoid TZ off-by-one
+const parseLocal = (dateStr: string) => {
+  try {
+    const s = (dateStr || '').slice(0, 10);
+    return new Date(`${s}T00:00:00`);
+  } catch {
+    return new Date(NaN);
+  }
+};
 
 function pickNextUpcoming(deliverables: Deliverable[] | undefined): Deliverable | null {
   if (!deliverables || deliverables.length === 0) return null;
@@ -16,7 +27,7 @@ function pickNextUpcoming(deliverables: Deliverable[] | undefined): Deliverable 
   today.setHours(0, 0, 0, 0);
   const candidates = deliverables
     .filter(d => !d.isCompleted && d.date)
-    .map(d => ({ d, when: new Date(d.date as string) }))
+    .map(d => ({ d, when: parseLocal(d.date as string) }))
     .filter(x => !isNaN(x.when.getTime()) && x.when >= today)
     .sort((a, b) => a.when.getTime() - b.when.getTime());
   return candidates.length > 0 ? candidates[0].d : null;
@@ -58,8 +69,21 @@ export function useNextDeliverables(projects: Project[] | null | undefined): Nex
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey]);
 
-  return { nextMap, loading, error, refresh: load } as const;
+  // Targeted refresh for a single project (after add/edit/delete)
+  const refreshOne = async (projectId: number) => {
+    if (!projectId) return;
+    try {
+      const list = await deliverablesApi.listAll(projectId);
+      const next = pickNextUpcoming(list);
+      setNextMap(prev => {
+        const m = new Map(prev);
+        m.set(projectId, next);
+        return m;
+      });
+    } catch {/* ignore individual errors */}
+  };
+
+  return { nextMap, loading, error, refresh: load, refreshOne } as const;
 }
 
 export type UseNextDeliverablesReturn = ReturnType<typeof useNextDeliverables>;
-

@@ -90,7 +90,8 @@ const ProjectsTable: React.FC<Props> = ({
           : null;
         const nextTopRaw = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
         const nextTop = nextTopRaw || '-';
-        const nextBottom = nextDeliverable?.date ? new Date(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const parseLocal = (s: string) => new Date((s || '').slice(0,10) + 'T00:00:00');
+        const nextBottom = nextDeliverable?.date ? parseLocal(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         return (
           <div
             key={project.id}
@@ -166,7 +167,8 @@ const ProjectsTable: React.FC<Props> = ({
             : null;
           const nextTopRaw = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
           const nextTop = nextTopRaw || '-';
-          const nextBottom = nextDeliverable?.date ? new Date(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+          const parseLocal = (s: string) => new Date((s || '').slice(0,10) + 'T00:00:00');
+          const nextBottom = nextDeliverable?.date ? parseLocal(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
           return (
             <div
               key={project.id}

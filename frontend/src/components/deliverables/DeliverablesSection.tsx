@@ -27,9 +27,10 @@ const formatDateNoYear = (dateStr: string) => {
 interface DeliverablesSectionProps {
   project: Project;
   variant?: 'default' | 'embedded';
+  onDeliverablesChanged?: () => void;
 }
 
-const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, variant = 'default' }) => {
+const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, variant = 'default', onDeliverablesChanged }) => {
   const queryClient = useQueryClient();
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -76,6 +77,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       await loadDeliverables();
       // Invalidate project filter metadata (future deliverables flags)
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
+      try { onDeliverablesChanged?.(); } catch {}
       setShowAddForm(false);
     } catch (err: any) {
       setError('Failed to create deliverable');
@@ -98,6 +100,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       } catch {}
       await loadDeliverables();
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
+      try { onDeliverablesChanged?.(); } catch {}
       setEditingId(null);
     } catch (err: any) {
       setError('Failed to update deliverable');
@@ -113,6 +116,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       await deliverablesApi.delete(id);
       await loadDeliverables();
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
+      try { onDeliverablesChanged?.(); } catch {}
     } catch (err: any) {
       setError('Failed to delete deliverable');
     }

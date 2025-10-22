@@ -58,7 +58,7 @@ const ProjectsList: React.FC = () => {
   
 
   // Next Deliverables map for list column + sorting
-  const { nextMap: nextDeliverablesMap } = useNextDeliverables(projects);
+  const { nextMap: nextDeliverablesMap, refreshOne: refreshNextFor } = useNextDeliverables(projects);
 
   // Recompute filters with custom sort getter when needed (stable ID mapping)
   const {
@@ -490,7 +490,13 @@ const ProjectsList: React.FC = () => {
               availabilityMap={availabilityMap}
               deliverablesSlot={
                 <Suspense fallback={<DeliverablesSectionLoaderComp />}>
-                  <DeliverablesSection project={selectedProject} variant="embedded" />
+                  <DeliverablesSection
+                    project={selectedProject}
+                    variant="embedded"
+                    onDeliverablesChanged={() => {
+                      try { if (selectedProject?.id) refreshNextFor(selectedProject.id); } catch {}
+                    }}
+                  />
                 </Suspense>
               }
             />
