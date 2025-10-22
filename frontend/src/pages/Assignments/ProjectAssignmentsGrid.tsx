@@ -10,7 +10,7 @@ import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
 import type { Project, Assignment, Person } from '@/types/models';
 import { showToast } from '@/lib/toastBus';
 import { useAbortManager } from '@/utils/useAbortManager';
-import { assignmentsApi, peopleApi, deliverablesApi } from '@/services/api';
+import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
 import StatusBadge from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
@@ -400,22 +400,41 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const snap = await getProjectGridSnapshot({ weeks: weeksHorizon, department: dept, include_children: inc, status_in: statusIn, has_future_deliverables: hasFutureParam });
         if (!mounted) return;
         setWeeks(toWeekHeader(snap.weekKeys || []));
-        // Normalize projects and apply default sort: client name, then project name
-        const proj: ProjectWithAssignments[] = (snap.projects || [])
-          .map(p => ({ id: p.id, name: p.name, client: p.client ?? undefined, status: p.status ?? undefined, assignments: [], isExpanded: false }))
-          .sort((a, b) => {
-            const ac = (a.client || '').toString().trim().toLowerCase();
-            const bc = (b.client || '').toString().trim().toLowerCase();
-            if (ac !== bc) {
-              // Place empty client names last
-              if (!ac && bc) return 1;
-              if (ac && !bc) return -1;
-              return ac.localeCompare(bc);
-            }
-            const an = (a.name || '').toString().trim().toLowerCase();
-            const bn = (b.name || '').toString().trim().toLowerCase();
-            return an.localeCompare(bn);
-          });
+        // Normalize projects from snapshot
+        const fromSnapshot: ProjectWithAssignments[] = (snap.projects || [])
+          .map(p => ({ id: p.id, name: p.name, client: p.client ?? undefined, status: p.status ?? undefined, assignments: [], isExpanded: false }));
+
+        // Augment with projects that match filters even if they currently have no assignments in the snapshot
+        // When status filter is only "active_no_deliverables" we rely solely on the snapshot (needs server data)
+        let augmented: ProjectWithAssignments[] = fromSnapshot;
+        try {
+          const onlyNoDelivs = (!hasShowAll && hasNoDelivs && statuses.length === 1);
+          if (!onlyNoDelivs) {
+            const allProjects = await projectsApi.listAll();
+            const allowAllStatuses = hasShowAll || statuses.length === 0;
+            const allowed = new Set((statuses || []).filter(s => s !== 'active_no_deliverables' && s !== 'Show All').map(s => s.toLowerCase()));
+            const seen = new Set(fromSnapshot.map(p => p.id));
+            const extras = (allProjects || [])
+              .filter(p => !seen.has(p.id!))
+              .filter(p => allowAllStatuses ? true : allowed.has((p.status || '').toLowerCase()))
+              .map(p => ({ id: p.id!, name: p.name, client: (p as any).client ?? undefined, status: (p.status as any) ?? undefined, assignments: [], isExpanded: false }));
+            augmented = [...fromSnapshot, ...extras];
+          }
+        } catch {}
+
+        // Default sort: client name, then project name
+        const proj: ProjectWithAssignments[] = augmented.sort((a, b) => {
+          const ac = (a.client || '').toString().trim().toLowerCase();
+          const bc = (b.client || '').toString().trim().toLowerCase();
+          if (ac !== bc) {
+            if (!ac && bc) return 1;
+            if (ac && !bc) return -1;
+            return ac.localeCompare(bc);
+          }
+          const an = (a.name || '').toString().trim().toLowerCase();
+          const bn = (b.name || '').toString().trim().toLowerCase();
+          return an.localeCompare(bn);
+        });
         setProjects(proj);
         // Coerce hours map keys to numbers
         const hb: Record<number, Record<string, number>> = {};
