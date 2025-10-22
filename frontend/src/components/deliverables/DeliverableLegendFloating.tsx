@@ -29,7 +29,7 @@ const DeliverableLegendFloating: React.FC<Props> = ({ top }) => {
 
   return (
     <div className="hidden xl:block fixed right-4 z-30" style={{ top }}>
-      <Card className="relative bg-[var(--card)] border-[var(--border)] shadow-lg min-w-[200px]">
+      <Card className="relative p-0 bg-[var(--card)] border-[var(--border)] shadow-lg min-w-[180px]">
         <div className="px-2 py-0.5 border-b border-[var(--border)] flex items-center gap-2">
           <button
             onClick={toggle}
