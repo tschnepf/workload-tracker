@@ -30,7 +30,7 @@ const DeliverableLegendFloating: React.FC<Props> = ({ top }) => {
   return (
     <div className="hidden xl:block fixed right-4 z-30" style={{ top }}>
       <Card className="relative bg-[var(--card)] border-[var(--border)] shadow-lg min-w-[200px]">
-        <div className="px-2 py-1 border-b border-[var(--border)] flex items-center gap-2">
+        <div className="px-2 py-0.5 border-b border-[var(--border)] flex items-center gap-2">
           <button
             onClick={toggle}
             aria-label={collapsed ? 'Expand legend' : 'Collapse legend'}
@@ -43,7 +43,7 @@ const DeliverableLegendFloating: React.FC<Props> = ({ top }) => {
           <div className="text-[var(--text)] text-sm font-semibold leading-none">Deliverable Types</div>
         </div>
         {!collapsed && (
-          <div className="p-3 text-xs space-y-2">
+          <div className="p-2 text-xs space-y-1">
             {rows.map(([label, key]) => (
               <div key={key} className="flex items-center gap-2 text-[var(--text)]">
                 <span className="inline-block w-3 h-3 rounded" style={{ background: (typeColors as any)[key] }} />
