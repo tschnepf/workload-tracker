@@ -3,6 +3,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
 import { Project, Person, Assignment } from '@/types/models';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePeople } from '@/hooks/usePeople';
 import { assignmentsApi } from '@/services/api';
 import { useCapabilities } from '@/hooks/useCapabilities';
@@ -44,6 +45,7 @@ const DeliverablesSection = React.lazy(() => import('@/components/deliverables/D
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
   const { projects, loading, error: projectsError } = useProjects();
+  const queryClient = useQueryClient();
   const { people, peopleVersion } = usePeople();
   const deleteProjectMutation = useDeleteProject();
   const updateProjectMutation = useUpdateProject();
@@ -307,16 +309,37 @@ const ProjectsList: React.FC = () => {
 
   // Table-level status update for any project row
   const handleTableStatusChange = useCallback(async (projectId: number, newStatus: string) => {
+    // Immediate optimistic update for the list cache so the row reflects the change
     try {
-      await updateStatus(projectId, newStatus);
+      // Optimistically update infinite pages cache
+      const prevPages: any = queryClient.getQueryData(['projects']);
+      if (prevPages && Array.isArray(prevPages.pages)) {
+        const nextPages = {
+          ...prevPages,
+          pages: prevPages.pages.map((page: any) => ({
+            ...page,
+            results: (page?.results || []).map((p: Project) => (p.id === projectId ? { ...p, status: newStatus } : p))
+          }))
+        };
+        queryClient.setQueryData(['projects'], nextPages);
+      }
+      // Optimistically update detail cache for the project
+      const prevDetail = queryClient.getQueryData<Project>(['projects', projectId]);
+      if (prevDetail) {
+        queryClient.setQueryData(['projects', projectId], { ...prevDetail, status: newStatus });
+      }
+      // Keep right panel selection in sync if it's the same project
       if (selectedProject?.id === projectId) {
         setSelectedProject({ ...selectedProject, status: newStatus } as Project);
       }
+
+      // Persist to backend + normalized caches via shared hook
+      await updateStatus(projectId, newStatus);
     } catch (e) {
       console.error('Failed to update project status from table', e);
       setError('Failed to update project status');
     }
-  }, [updateStatus, selectedProject, setSelectedProject]);
+  }, [queryClient, updateStatus, selectedProject, setSelectedProject]);
 
   // Sorting handled via onSort2 in enhanced filters (next deliverable support)
 
