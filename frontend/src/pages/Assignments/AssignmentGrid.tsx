@@ -58,6 +58,7 @@ import StatusFilterChips from '@/components/compact/StatusFilterChips';
 import HeaderActions from '@/components/compact/HeaderActions';
 import { buildProjectAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
+import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
 
 // Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
 
@@ -883,6 +884,9 @@ const AssignmentGrid: React.FC = () => {
           onClientClick={() => setPersonSortMode('client_project')}
           onWeeksClick={() => setPersonSortMode('deliverable')}
         />
+
+        {/* Floating deliverables legend (wide screens only) */}
+        <DeliverableLegendFloating top={(compact ? 0 : headerHeight) + 8} />
 
         
 
