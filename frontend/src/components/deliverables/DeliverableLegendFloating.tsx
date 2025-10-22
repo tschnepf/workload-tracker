@@ -30,16 +30,16 @@ const DeliverableLegendFloating: React.FC<Props> = ({ top }) => {
   return (
     <div className="hidden xl:block fixed right-4 z-30" style={{ top }}>
       <Card className="relative bg-[var(--card)] border-[var(--border)] shadow-lg min-w-[200px]">
-        <button
-          onClick={toggle}
-          aria-label={collapsed ? 'Expand legend' : 'Collapse legend'}
-          aria-expanded={!collapsed}
-          title={collapsed ? 'Show legend' : 'Hide legend'}
-          className="absolute left-2 top-1 w-5 h-5 rounded text-[var(--text)] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surfaceHover)] flex items-center justify-center text-xs"
-        >
-          {collapsed ? '+' : '−'}
-        </button>
-        <div className="px-3 py-1 pl-7 border-b border-[var(--border)]">
+        <div className="px-2 py-1 border-b border-[var(--border)] flex items-center gap-2">
+          <button
+            onClick={toggle}
+            aria-label={collapsed ? 'Expand legend' : 'Collapse legend'}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Show legend' : 'Hide legend'}
+            className="w-5 h-5 rounded text-[var(--text)] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surfaceHover)] flex items-center justify-center text-xs"
+          >
+            {collapsed ? '+' : '−'}
+          </button>
           <div className="text-[var(--text)] text-sm font-semibold leading-none">Deliverable Types</div>
         </div>
         {!collapsed && (
