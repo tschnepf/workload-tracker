@@ -41,15 +41,45 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
 
   const isToday = (d: Date) => fmtDate(d) === fmtDate(new Date());
 
+  // Ensure all day cells share the height of the tallest cell across the entire grid
+  const cellRefs = React.useRef<Array<HTMLDivElement | null>>([]);
+  const [uniformMinHeight, setUniformMinHeight] = React.useState<number | null>(null);
+
+  // Measure tallest cell whenever inputs that can affect sizes change
+  React.useLayoutEffect(() => {
+    const els = cellRefs.current.filter((el): el is HTMLDivElement => !!el);
+    if (els.length === 0) return;
+    // Reset any previous min-heights before measuring to get natural sizes
+    els.forEach((el) => { el.style.minHeight = '0px'; });
+    // Allow layout to flush
+    let max = 0;
+    for (const el of els) {
+      const h = el.getBoundingClientRect().height;
+      if (h > max) max = h;
+    }
+    setUniformMinHeight(Math.ceil(max));
+  }, [items, weeksCount, anchor, showPre]);
+
+  // Re-measure on window resize (container width changes can reflow text)
+  React.useEffect(() => {
+    const onResize = () => {
+      const els = cellRefs.current.filter((el): el is HTMLDivElement => !!el);
+      if (els.length === 0) return;
+      els.forEach((el) => { el.style.minHeight = '0px'; });
+      let max = 0;
+      for (const el of els) {
+        const h = el.getBoundingClientRect().height;
+        if (h > max) max = h;
+      }
+      setUniformMinHeight(Math.ceil(max));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   return (
     <div className={className}>
       <div className="min-w-[600px] border border-[#3e3e42] rounded">
-        {/* Header row: Sun..Sat */}
-        <div className="grid grid-cols-7 text-xs text-[#94a3b8] bg-[var(--shade3)]">
-          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-            <div key={d} className="px-2 py-2 border-r border-[#3e3e42] last:border-r-0">{d}</div>
-          ))}
-        </div>
         {/* Weeks */}
         <div>
           {weeks.map((row, i) => (
@@ -65,11 +95,28 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
                 const monthBg = `var(--shade${shadeIdx})`;
                 const dayItems = (dateMap.get(key) || []).sort((a, b) => (('projectName' in a ? a.projectName||'' : '')).localeCompare(('projectName' in b ? b.projectName||'' : '')));
                 return (
-                  <div key={j} className="border-r border-[var(--border)] last:border-r-0 p-2 align-top" style={{ position: 'relative', background: monthBg }}>
-                    <div className="text-xs text-[#94a3b8] mb-1 flex items-center gap-1">
-                      <span className={`inline-block px-1 rounded ${isToday(d) ? 'bg-[var(--primary)] text-white' : ''}`}>{d.getDate()}</span>
+                  <div
+                    key={j}
+                    ref={(el) => { cellRefs.current[i * 7 + j] = el; }}
+                    className="border-r border-[var(--border)] last:border-r-0 p-2 align-top"
+                    style={{ position: 'relative', background: monthBg, minHeight: uniformMinHeight ?? undefined }}
+                  >
+                    {isToday(d) && (
+                      <div
+                        className="absolute inset-0 rounded-sm pointer-events-none"
+                        style={{ background: 'var(--surfaceOverlay)', boxShadow: '0 0 0 1px var(--border)' }}
+                      />
+                    )}
+                    <div className="relative z-10 text-xs text-[#94a3b8] mb-1 flex items-center gap-1">
+                      {(() => {
+                        const monthAbbr = d.toLocaleString(undefined, { month: 'short' });
+                        const text = `${monthAbbr} ${d.getDate()}`;
+                        return (
+                          <span className={`inline-block px-1 rounded ${isToday(d) ? 'bg-[var(--primary)] text-white' : ''}`}>{text}</span>
+                        );
+                      })()}
                     </div>
-                    <div className="space-y-1">
+                    <div className="relative z-10 space-y-1">
                       {dayItems.map((ev) => {
                         const isPre = (ev as any).itemType === 'pre_deliverable';
                         const type = isPre ? 'pre_deliverable' : classify(ev);
