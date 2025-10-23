@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
 import { Person, Department, Role } from '@/types/models';
-import { departmentsApi, rolesApi, assignmentsApi } from '@/services/api';
+import { departmentsApi, rolesApi } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
 import { showToast } from '@/lib/toastBus';
 import Layout from '@/components/layout/Layout';
@@ -35,7 +35,6 @@ const PeopleList: React.FC = () => {
   const [sortBy, setSortBy] = useState<'name' | 'location' | 'department' | 'weeklyCapacity' | 'role'>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [error, setError] = useState<string | null>(null);
-  const [assignmentCounts, setAssignmentCounts] = useState<Record<number, number>>({});
   // Centralized toasts via toast bus
   const updatePersonMutation = useUpdatePerson();
   // Global department filter (top bar)
@@ -75,28 +74,6 @@ const PeopleList: React.FC = () => {
       console.error('Error loading roles:', err);
     }
   };
-
-  // Compute assignment counts per person (simple total)
-  useAuthenticatedEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-        const inc = deptState.includeChildren ? 1 : 0;
-        const assignments = await assignmentsApi.list({ department: dept, include_children: inc } as any);
-        const counts: Record<number, number> = {};
-        (assignments || []).forEach((a: any) => {
-          const personId = a?.person as number | undefined;
-          if (!personId) return;
-          counts[personId] = (counts[personId] || 0) + 1;
-        });
-        if (active) setAssignmentCounts(counts);
-      } catch (e) {
-        // ignore
-      }
-    })();
-    return () => { active = false; };
-  }, [deptState.selectedDepartmentId, deptState.includeChildren]);
 
   // Right-panel effects moved into PersonDetailsContainer
 
@@ -354,7 +331,6 @@ const PeopleList: React.FC = () => {
             onColumnSort={handleColumnSort}
             hasMore={!!hasNextPage}
             onLoadMore={() => fetchNextPage()}
-            assignmentCounts={assignmentCounts}
           />
           
           <BulkActionsBar
