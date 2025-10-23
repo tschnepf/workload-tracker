@@ -79,7 +79,7 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
         <div className={bulkMode ? 'col-span-2' : 'col-span-3'}>
           <SortableHeader column="role">ROLE</SortableHeader>
         </div>
-        <div className="col-span-1 text-right pr-1">ASSIGN</div>
+        <div className="col-span-1 text-right pr-1">QTY ASSIGNED</div>
       </div>
 
       <PeopleListTable

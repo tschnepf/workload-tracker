@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
 import { Person, Department, Role } from '@/types/models';
-import { departmentsApi, rolesApi, assignmentsApi, projectsApi } from '@/services/api';
+import { departmentsApi, rolesApi, assignmentsApi } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
 import { showToast } from '@/lib/toastBus';
 import Layout from '@/components/layout/Layout';
@@ -76,25 +76,18 @@ const PeopleList: React.FC = () => {
     }
   };
 
-  // Compute assignment counts for active projects per person
+  // Compute assignment counts per person (simple total)
   useAuthenticatedEffect(() => {
     let active = true;
     (async () => {
       try {
         const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
         const inc = deptState.includeChildren ? 1 : 0;
-        const [assignments, projects] = await Promise.all([
-          assignmentsApi.list({ department: dept, include_children: inc } as any),
-          projectsApi.listAll(),
-        ]);
-        const activeStatuses = new Set(['active','active_ca']);
-        const activeProjectIds = new Set<number>((projects || []).filter(p => activeStatuses.has((p.status || '').toLowerCase())).map(p => p.id!).filter(Boolean));
+        const assignments = await assignmentsApi.list({ department: dept, include_children: inc } as any);
         const counts: Record<number, number> = {};
         (assignments || []).forEach((a: any) => {
-          const pid = a?.project as number | undefined;
           const personId = a?.person as number | undefined;
-          if (!pid || !personId) return;
-          if (!activeProjectIds.has(pid)) return;
+          if (!personId) return;
           counts[personId] = (counts[personId] || 0) + 1;
         });
         if (active) setAssignmentCounts(counts);
