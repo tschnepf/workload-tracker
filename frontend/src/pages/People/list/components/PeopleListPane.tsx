@@ -17,6 +17,7 @@ export interface PeopleListPaneProps {
   onColumnSort: (c: Column) => void;
   hasMore: boolean;
   onLoadMore: () => void;
+  assignmentCounts?: Record<number, number>;
 }
 
 export default function PeopleListPane(props: PeopleListPaneProps) {
@@ -33,6 +34,7 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
     onColumnSort,
     hasMore,
     onLoadMore,
+    assignmentCounts,
   } = props;
 
   const SortableHeader = ({ column, children, className = '' }: { column: Column; children: React.ReactNode; className?: string }) => (
@@ -60,7 +62,7 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
 
   return (
     <div className="flex-1 overflow-hidden" onKeyDown={handleKeyDown}>
-      <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
+      <div className="grid grid-cols-13 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
         {bulkMode && <div className="col-span-1">SELECT</div>}
         <div className={bulkMode ? 'col-span-3' : 'col-span-3'}>
           <SortableHeader column="name">NAME</SortableHeader>
@@ -77,6 +79,7 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
         <div className={bulkMode ? 'col-span-2' : 'col-span-3'}>
           <SortableHeader column="role">ROLE</SortableHeader>
         </div>
+        <div className="col-span-1 text-right pr-1">QTY ACTIVE</div>
       </div>
 
       <PeopleListTable
@@ -86,6 +89,7 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
         selectedPeopleIds={selectedPeopleIds}
         onRowClick={onRowClick}
         onToggleSelect={onToggleSelect}
+        assignmentCounts={assignmentCounts}
       />
 
       {hasMore && (
