@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
-import { deliverablesApi } from '../../services/api';
+import { assignmentsApi, deliverablesApi, deliverableAssignmentsApi, peopleApi } from '../../services/api';
 import { DeliverableCalendarItem } from '../../types/models';
 import { resolveApiBase } from '@/utils/apiBase';
 import { getAccessToken } from '@/utils/auth';
@@ -28,6 +28,15 @@ const MilestoneCalendarPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showPre, setShowPre] = useState<boolean>(true);
+
+  // Person filter state
+  const [personQuery, setPersonQuery] = useState<string>('');
+  const [personResults, setPersonResults] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedPersonIndex, setSelectedPersonIndex] = useState<number>(-1);
+  const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string } | null>(null);
+  const [allowedDeliverableIds, setAllowedDeliverableIds] = useState<Set<number> | null>(null);
+  const [allowedProjectIds, setAllowedProjectIds] = useState<Set<number> | null>(null);
+  const [filterLoading, setFilterLoading] = useState<boolean>(false);
 
   useAuthenticatedEffect(() => {
     let active = true;
@@ -61,16 +70,57 @@ const MilestoneCalendarPage: React.FC = () => {
     return () => { active = false; };
   }, [start, end]);
 
+  // When a person is selected, fetch their deliverable links and project assignments once
+  useAuthenticatedEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (!selectedPerson) { setAllowedDeliverableIds(null); setAllowedProjectIds(null); return; }
+        setFilterLoading(true);
+        const [links, projects] = await Promise.all([
+          (async () => { try { return await deliverableAssignmentsApi.byPerson(selectedPerson.id); } catch { return [] as any[]; } })(),
+          (async () => { try { return await assignmentsApi.byPerson(selectedPerson.id); } catch { return [] as any[]; } })(),
+        ]);
+        if (!active) return;
+        const dset = new Set<number>((links as any[]).map((l: any) => l.deliverable).filter((n: any) => Number.isFinite(n)));
+        const pset = new Set<number>((projects as any[]).map((a: any) => a.project).filter((n: any) => Number.isFinite(n)));
+        setAllowedDeliverableIds(dset);
+        setAllowedProjectIds(pset);
+      } finally {
+        if (active) setFilterLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [selectedPerson]);
+
+  const filteredItems = useMemo(() => {
+    if (!selectedPerson) return items;
+    const dset = allowedDeliverableIds; const pset = allowedProjectIds;
+    if (!dset && !pset) return [];
+    return items.filter((it) => {
+      if (it.itemType === 'pre_deliverable') {
+        const parentId = (it as any).parentDeliverableId as number | undefined;
+        const projId = (it as any).project as number | undefined;
+        return (parentId != null && dset?.has(parentId)) || (projId != null && pset?.has(projId));
+      }
+      // deliverable item
+      const delivId = (it as any).id as number | undefined;
+      const projId = (it as any).project as number | undefined;
+      return (delivId != null && dset?.has(delivId)) || (projId != null && pset?.has(projId));
+    });
+  }, [items, selectedPerson, allowedDeliverableIds, allowedProjectIds]);
+
   const dateMap = useMemo(() => {
     const m = new Map<string, CalendarItemUnion[]>();
-    for (const it of items) {
+    const src = filteredItems;
+    for (const it of src) {
       if (!it.date) continue;
       if (!m.has(it.date)) m.set(it.date, []);
       if (it.itemType === 'pre_deliverable' && !showPre) continue;
       m.get(it.date)!.push(it);
     }
     return m;
-  }, [items, showPre]);
+  }, [filteredItems, showPre]);
 
   const weeks: Date[][] = useMemo(() => {
     const rows: Date[][] = [];
@@ -113,6 +163,68 @@ const MilestoneCalendarPage: React.FC = () => {
             <p className="text-[#969696] mt-1">Weeks start on Sunday; current week at top</p>
           </div>
           <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 mr-2">
+              <label className="text-sm text-[var(--muted)] whitespace-nowrap">Person Filter</label>
+              <div className="relative">
+                {selectedPerson ? (
+                  <div className="flex items-center gap-2 border rounded px-2 py-1 text-sm bg-[var(--card)] border-[var(--border)] text-[var(--text)]">
+                    <span>{selectedPerson.name}</span>
+                    <button
+                      className="text-[var(--muted)] hover:text-[var(--text)]"
+                      onClick={() => { setSelectedPerson(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1); }}
+                      title="Clear person filter"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      className="w-56 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-sm px-2 py-1"
+                      placeholder="Type a name…"
+                      value={personQuery}
+                      onChange={async (e) => {
+                        const q = e.currentTarget.value;
+                        setPersonQuery(q);
+                        if (!q || q.trim().length === 0) { setPersonResults([]); setSelectedPersonIndex(-1); return; }
+                        try {
+                          const res = await peopleApi.autocomplete(q, 20);
+                          setPersonResults(res || []);
+                          setSelectedPersonIndex((res && res.length > 0) ? 0 : -1);
+                        } catch {}
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedPersonIndex(i => Math.min(i + 1, personResults.length - 1)); }
+                        else if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedPersonIndex(i => Math.max(i - 1, 0)); }
+                        else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const sel = selectedPersonIndex >= 0 ? personResults[selectedPersonIndex] : null;
+                          if (sel) { setSelectedPerson(sel); setPersonResults([]); }
+                        }
+                      }}
+                    />
+                    {personResults && personResults.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-56 max-h-64 overflow-auto border border-[var(--border)] bg-[var(--card)] rounded shadow">
+                        {personResults.map((p, idx) => (
+                          <div
+                            key={p.id}
+                            className={`px-2 py-1 text-sm cursor-pointer ${idx === selectedPersonIndex ? 'bg-[var(--cardHover)] text-[var(--text)]' : 'text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'}`}
+                            onMouseEnter={() => setSelectedPersonIndex(idx)}
+                            onMouseDown={(e) => { e.preventDefault(); setSelectedPerson(p); setPersonResults([]); }}
+                          >
+                            {p.name}
+                          </div>
+                        ))}
+                        {filterLoading && (
+                          <div className="px-2 py-1 text-xs text-[var(--muted)]">Loading…</div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
             <button onClick={goPrev} className="px-3 py-1.5 text-sm rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]">&lt; Prev Week</button>
             <button onClick={goNext} className="px-3 py-1.5 text-sm rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]">Next Week &gt;</button>
             <div className="flex items-center gap-2 ml-2">
@@ -148,7 +260,7 @@ const MilestoneCalendarPage: React.FC = () => {
               <div className="p-4 text-red-400">{error}</div>
             ) : (
               <div className="overflow-x-auto">
-                <CalendarGrid items={items} anchor={anchor} weeksCount={weeksCount} showPre={showPre} />
+                <CalendarGrid items={filteredItems} anchor={anchor} weeksCount={weeksCount} showPre={showPre} />
               </div>
             )}
           </Card>
