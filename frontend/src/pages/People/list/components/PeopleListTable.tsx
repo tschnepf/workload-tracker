@@ -9,7 +9,6 @@ type Props = {
   selectedPeopleIds: Set<number>;
   onRowClick: (person: Person, index: number) => void;
   onToggleSelect: (personId: number, checked: boolean) => void;
-  assignmentCounts?: Record<number, number>;
 };
 
 const PeopleListTable: React.FC<Props> = ({
@@ -19,7 +18,6 @@ const PeopleListTable: React.FC<Props> = ({
   selectedPeopleIds,
   onRowClick,
   onToggleSelect,
-  assignmentCounts,
 }) => {
   const listParentRef = useRef<HTMLDivElement | null>(null);
   const enableVirtual = items.length > 200;
@@ -55,7 +53,7 @@ const PeopleListTable: React.FC<Props> = ({
                 key={person.id ?? index}
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
                 onClick={bulkMode ? undefined : () => onRowClick(person, index)}
-                className={`grid grid-cols-13 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
+                className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
                   bulkMode
                     ? 'hover:bg-[var(--surfaceHover)]'
                     : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : ''}`
@@ -77,7 +75,6 @@ const PeopleListTable: React.FC<Props> = ({
                 <div className="col-span-2 text-[var(--muted)] text-xs">{person.location || 'Not specified'}</div>
                 <div className="col-span-2 text-[var(--muted)] text-xs">{person.weeklyCapacity || 36}h/week</div>
                 <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[var(--muted)] text-xs`}>{person.roleName || 'Not specified'}</div>
-                <div className="col-span-1 text-[var(--muted)] text-xs text-right pr-1">{assignmentCounts?.[person.id!] ?? 0}</div>
               </div>
             );
           })}
@@ -91,7 +88,7 @@ const PeopleListTable: React.FC<Props> = ({
           <div
             key={person.id}
             onClick={bulkMode ? undefined : () => onRowClick(person, index)}
-            className={`grid grid-cols-13 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
+            className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
               bulkMode
                 ? 'hover:bg-[var(--surfaceHover)]'
                 : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : ''}`
@@ -113,7 +110,6 @@ const PeopleListTable: React.FC<Props> = ({
             <div className="col-span-2 text-[var(--muted)] text-xs">{person.location || 'Not specified'}</div>
             <div className="col-span-2 text-[var(--muted)] text-xs">{person.weeklyCapacity || 36}h/week</div>
             <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[var(--muted)] text-xs`}>{person.roleName || 'Not specified'}</div>
-            <div className="col-span-1 text-[var(--muted)] text-xs text-right pr-1">{assignmentCounts?.[person.id!] ?? 0}</div>
           </div>
         ))}
         {/* Buffer rows to prevent last person from being cut off */}
@@ -134,3 +130,4 @@ const PeopleListTable: React.FC<Props> = ({
 };
 
 export default PeopleListTable;
+
