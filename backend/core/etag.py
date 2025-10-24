@@ -66,7 +66,13 @@ class ETagConditionalMixin:
         if pc is not None:
             return pc
         response: Response = super().update(request, *args, **kwargs)  # type: ignore
-        self._attach_etag_headers(response, self.get_object())
+        try:
+            # Avoid a second get_object() which may 404 if queryset filters changed
+            instance.refresh_from_db()
+            self._attach_etag_headers(response, instance)
+        except Exception:
+            # Best-effort header attachment only; never fail the response here
+            pass
         return response
 
     def partial_update(self, request, *args, **kwargs):  # type: ignore[override]
@@ -75,7 +81,11 @@ class ETagConditionalMixin:
         if pc is not None:
             return pc
         response: Response = super().partial_update(request, *args, **kwargs)  # type: ignore
-        self._attach_etag_headers(response, self.get_object())
+        try:
+            instance.refresh_from_db()
+            self._attach_etag_headers(response, instance)
+        except Exception:
+            pass
         return response
 
     def destroy(self, request, *args, **kwargs):  # type: ignore[override]
@@ -84,4 +94,3 @@ class ETagConditionalMixin:
         if pc is not None:
             return pc
         return super().destroy(request, *args, **kwargs)  # type: ignore
-

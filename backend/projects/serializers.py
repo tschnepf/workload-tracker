@@ -33,7 +33,20 @@ class ProjectSerializer(serializers.ModelSerializer):
         if value is None:
             return None
         value = (value or '').strip()
-        return value or None
+        cleaned = value or None
+
+        # Proactive uniqueness check to avoid DB IntegrityError (500)
+        # when updating an existing Project. This returns a 400 with a
+        # clear message instead.
+        if cleaned:
+            qs = Project.objects.all()
+            # Exclude current instance on update
+            instance = getattr(self, 'instance', None)
+            if instance is not None and getattr(instance, 'pk', None) is not None:
+                qs = qs.exclude(pk=instance.pk)
+            if qs.filter(project_number=cleaned).exists():
+                raise serializers.ValidationError('Project number must be unique')
+        return cleaned
 
     def validate_client(self, value):
         # Trim client; default to 'Internal' if blank
