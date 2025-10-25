@@ -452,12 +452,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
 
         {/* Responsive layout: 2 columns where left = Deliverables (2fr) and right = stacked department cards (1fr) */}
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-          {/* Left column: Deliverables */}
-          <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 self-start min-w-0 overflow-hidden">
-            {deliverablesSlot}
-            <div className="mt-4">
-              <ProjectPreDeliverableSettings projectId={project.id || null} />
+          {/* Left column: Deliverables + Pre-Deliverables (separate cards) */}
+          <div className="flex flex-col gap-4 self-start min-w-0">
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 overflow-hidden">
+              {deliverablesSlot}
             </div>
+            <ProjectPreDeliverableSettings projectId={project.id || null} />
           </div>
 
           {/* Right column: stack department cards vertically */}
