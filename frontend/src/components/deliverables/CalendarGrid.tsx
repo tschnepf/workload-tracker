@@ -25,7 +25,7 @@ const DeliverablePill: React.FC<PillProps> = ({ ev, pid, dim, onHover, onClear, 
       onBlur={onClear}
       onMouseLeave={onClear}
       onKeyDown={(e) => onKey(pid, e)}
-      className={`text-xs text-white rounded px-2 py-1 truncate ${dim ? 'opacity-5 transition-opacity duration-150' : ''}`}
+      className={`text-xs text-white rounded px-2 py-1 truncate ${dim ? 'opacity-5 transition-opacity duration-300' : ''}`}
       style={{ background: color }}
     >
       {label}
@@ -67,7 +67,7 @@ const PreDeliverableGroupCard: React.FC<PreGroupProps> = ({ arr, dayKey, pid, di
       onBlur={onClear}
       onMouseLeave={onClear}
       onKeyDown={(e) => onKey(pid, e)}
-      className={`text-xs text-white rounded px-2 py-1 border ${dim ? 'opacity-5 transition-opacity duration-150' : ''}`}
+      className={`text-xs text-white rounded px-2 py-1 border ${dim ? 'opacity-5 transition-opacity duration-300' : ''}`}
       style={{ background: color, border: '1px solid var(--borderOverlay)' }}
     >
       {many ? (
@@ -139,12 +139,18 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
     for (const it of items || []) {
       const dt = (it as any).date as string | null;
       if (!dt) continue;
-      if ((it as any).itemType === 'pre_deliverable' && !showPre) continue;
+      const isPre = (it as any).itemType === 'pre_deliverable';
+      if (isPre) {
+        // When pre items are hidden, still show the hovered project's pre‑deliverables temporarily
+        const pid = Number.isFinite((it as any).project) ? Number((it as any).project) : null;
+        const allowed = showPre || (hoveredProjectId !== null && pid !== null && pid === hoveredProjectId);
+        if (!allowed) continue;
+      }
       if (!m.has(dt)) m.set(dt, []);
       m.get(dt)!.push(it);
     }
     return m;
-  }, [items, showPre]);
+  }, [items, showPre, hoveredProjectId]);
 
   const isToday = (d: Date) => fmtDate(d) === fmtDate(new Date());
 
@@ -159,7 +165,12 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
     // Reset any previous min-heights before measuring to get natural sizes
     els.forEach((el) => { el.style.minHeight = '0px'; });
     // Allow layout to flush
-    let max = 0;
+    // Establish a sensible baseline so rows can comfortably fit ~5 simple deliverable pills
+    const BASELINE_CARDS = 10;      // target number of deliverable pills (increase to reduce jumpiness)
+    const CARD_EST_PX = 24;         // approximate height of one pill (text-xs + py-1)
+    const GAP_PX = 4;               // space-y-1 gap between items
+    const BASELINE_MIN_PX = BASELINE_CARDS * CARD_EST_PX + (BASELINE_CARDS - 1) * GAP_PX; // ~272px
+    let max = BASELINE_MIN_PX;
     for (const el of els) {
       const h = el.getBoundingClientRect().height;
       if (h > max) max = h;
