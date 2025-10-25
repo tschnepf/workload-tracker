@@ -288,3 +288,73 @@ def send_daily_digest(self):
             ok = False
         NotificationLog.objects.create(user=pref.user, pre_deliverable_item=None, notification_type='digest', sent_at=_date.today(), email_subject=subject, success=ok)
     return {'sent': sent}
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=2, retry_kwargs={"max_retries": 1}, soft_time_limit=600)
+def backfill_pre_deliverables_async(self, project_id: int | None = None, start: str | None = None, end: str | None = None, regenerate: bool = False) -> dict:
+    """Background backfill of PreDeliverableItem records.
+
+    Args:
+      project_id: optional project scope
+      start: optional YYYY-MM-DD lower bound for Deliverable.date
+      end: optional YYYY-MM-DD upper bound for Deliverable.date
+      regenerate: when true, delete existing and recreate; else only create missing
+
+    Returns summary dict with counts.
+    """
+    from django.utils.dateparse import parse_date
+    from deliverables.models import Deliverable
+    from deliverables.services import PreDeliverableService
+
+    start_d = parse_date(start) if start else None
+    end_d = parse_date(end) if end else None
+
+    qs = Deliverable.objects.exclude(date__isnull=True)
+    if project_id is not None:
+        try:
+            qs = qs.filter(project_id=int(project_id))
+        except Exception:
+            pass
+    if start_d:
+        qs = qs.filter(date__gte=start_d)
+    if end_d:
+        qs = qs.filter(date__lte=end_d)
+
+    total = max(1, qs.count())
+    created = 0
+    deleted = 0
+    preserved = 0
+    processed = 0
+
+    for d in qs.iterator():
+        try:
+            if regenerate:
+                summary = PreDeliverableService.regenerate_pre_deliverables(d)
+                created += int(summary.created)
+                deleted += int(summary.deleted)
+                preserved += int(summary.preserved_completed)
+            else:
+                created += len(PreDeliverableService.generate_pre_deliverables(d))
+        except Exception as e:
+            # Continue; surface error via state message
+            try:
+                self.update_state(state='PROGRESS', meta={'progress': int(processed * 100 / total), 'message': f'Error on {getattr(d, "id", "?")}: {e}'})
+            except Exception:
+                pass
+        processed += 1
+        if processed % 50 == 0 or processed == total:
+            try:
+                self.update_state(state='PROGRESS', meta={'progress': int(processed * 100 / total), 'message': f'Processed {processed}/{total}'})
+            except Exception:
+                pass
+
+    return {
+        'processed': processed,
+        'created': created,
+        'deleted': deleted,
+        'preservedCompleted': preserved,
+        'projectId': project_id,
+        'start': start,
+        'end': end,
+        'regenerate': bool(regenerate),
+    }

@@ -33,6 +33,11 @@ from datetime import timedelta, date as _date
 from core.week_utils import sunday_of_week
 from .models import PreDeliverableItem
 from .services import PreDeliverableService
+from rest_framework.permissions import IsAdminUser
+try:
+    from core.tasks import backfill_pre_deliverables_async  # type: ignore
+except Exception:
+    backfill_pre_deliverables_async = None  # type: ignore
 
 
 class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
@@ -814,4 +819,82 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 failed.append(i)
         return Response({'success': True, 'updatedCount': ok, 'failed': failed})
+
+    @extend_schema(
+        request=inline_serializer(
+            name='PreItemsBackfillRequest',
+            fields={
+                'projectId': serializers.IntegerField(required=False),
+                'start': serializers.DateField(required=False),
+                'end': serializers.DateField(required=False),
+                'regenerate': serializers.BooleanField(required=False),
+            },
+        ),
+        responses=inline_serializer(
+            name='PreItemsBackfillResponse',
+            fields={
+                'enqueued': serializers.BooleanField(),
+                'jobId': serializers.CharField(required=False),
+                'statusUrl': serializers.CharField(required=False),
+                'result': serializers.DictField(required=False),
+            },
+        ),
+    )
+    @action(detail=False, methods=['post'], url_path='backfill', permission_classes=[permissions.IsAuthenticated, IsAdminUser])
+    def backfill(self, request):
+        """Staff-only: backfill or regenerate pre-items for a project/date window.
+
+        If ASYNC_JOBS is enabled and Celery task is available, enqueues background job and
+        returns 202 with job metadata. Otherwise, runs synchronously and returns a summary.
+        """
+        params = request.data or {}
+        project_id = params.get('projectId')
+        start = params.get('start')
+        end = params.get('end')
+        regenerate = bool(params.get('regenerate'))
+
+        # Async path
+        if settings.FEATURES.get('ASYNC_JOBS') and backfill_pre_deliverables_async is not None:
+            try:
+                task = backfill_pre_deliverables_async.delay(project_id, str(start) if start else None, str(end) if end else None, regenerate)
+                job_id = task.id
+                return Response({
+                    'enqueued': True,
+                    'jobId': job_id,
+                    'statusUrl': request.build_absolute_uri(f"/api/jobs/{job_id}/"),
+                }, status=status.HTTP_202_ACCEPTED)
+            except Exception:
+                pass
+
+        # Sync path fallback
+        from django.utils.dateparse import parse_date
+        qs = PreDeliverableItem.objects.none()  # for typing
+        from .models import Deliverable as _Deliverable
+        dqs = _Deliverable.objects.exclude(date__isnull=True)
+        if project_id:
+            try:
+                dqs = dqs.filter(project_id=int(project_id))
+            except Exception:
+                pass
+        if start:
+            d1 = parse_date(str(start))
+            if d1:
+                dqs = dqs.filter(date__gte=d1)
+        if end:
+            d2 = parse_date(str(end))
+            if d2:
+                dqs = dqs.filter(date__lte=d2)
+        total = dqs.count()
+        created = 0
+        deleted = 0
+        preserved = 0
+        for d in dqs.iterator():
+            if regenerate:
+                s = PreDeliverableService.regenerate_pre_deliverables(d)
+                created += int(s.created)
+                deleted += int(s.deleted)
+                preserved += int(s.preserved_completed)
+            else:
+                created += len(PreDeliverableService.generate_pre_deliverables(d))
+        return Response({'enqueued': False, 'result': {'processed': total, 'created': created, 'deleted': deleted, 'preservedCompleted': preserved}})
 
