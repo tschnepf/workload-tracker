@@ -25,7 +25,7 @@ const DeliverablePill: React.FC<PillProps> = ({ ev, pid, dim, onHover, onClear, 
       onBlur={onClear}
       onMouseLeave={onClear}
       onKeyDown={(e) => onKey(pid, e)}
-      className={`text-xs text-white rounded px-2 py-1 truncate ${dim ? 'opacity-40 transition-opacity duration-150' : ''}`}
+      className={`text-xs text-white rounded px-2 py-1 truncate ${dim ? 'opacity-5 transition-opacity duration-150' : ''}`}
       style={{ background: color }}
     >
       {label}
@@ -67,7 +67,7 @@ const PreDeliverableGroupCard: React.FC<PreGroupProps> = ({ arr, dayKey, pid, di
       onBlur={onClear}
       onMouseLeave={onClear}
       onKeyDown={(e) => onKey(pid, e)}
-      className={`text-xs text-white rounded px-2 py-1 border ${dim ? 'opacity-40 transition-opacity duration-150' : ''}`}
+      className={`text-xs text-white rounded px-2 py-1 border ${dim ? 'opacity-5 transition-opacity duration-150' : ''}`}
       style={{ background: color, border: '1px solid var(--borderOverlay)' }}
     >
       {many ? (
