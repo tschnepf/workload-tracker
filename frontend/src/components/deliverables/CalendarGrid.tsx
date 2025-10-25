@@ -117,22 +117,77 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
                       })()}
                     </div>
                     <div className="relative z-10 space-y-1">
-                      {dayItems.map((ev) => {
-                        const isPre = (ev as any).itemType === 'pre_deliverable';
-                        const type = isPre ? 'pre_deliverable' : classify(ev);
-                        const color = typeColors[type] || typeColors.milestone;
-                        const label = isPre ? buildPreLabel(ev) : buildEventLabel(ev);
-                        return (
-                          <div
-                            key={`${ev.id}-${(ev as any).date}`}
-                            title={label}
-                            className={`text-xs text-white rounded px-2 py-1 truncate ${isPre ? 'border' : ''}`}
-                            style={{ background: color, border: isPre ? '1px solid var(--borderOverlay)' : undefined }}
-                          >
-                            {label}
-                          </div>
-                        );
-                      })}
+                      {(() => {
+                        // Render deliverables individually; group pre‑deliverables by project
+                        const deliverables = dayItems.filter((it) => (it as any).itemType !== 'pre_deliverable');
+                        const preItems = dayItems.filter((it) => (it as any).itemType === 'pre_deliverable');
+
+                        // 1) Regular deliverables (one pill each)
+                        const deliverableNodes = deliverables.map((ev: any) => {
+                          const color = typeColors[classify(ev)] || typeColors.milestone;
+                          const label = buildEventLabel(ev);
+                          return (
+                            <div
+                              key={`deliv-${ev.id}-${ev.date}`}
+                              title={label}
+                              className="text-xs text-white rounded px-2 py-1 truncate"
+                              style={{ background: color }}
+                            >
+                              {label}
+                            </div>
+                          );
+                        });
+
+                        // 2) Group pre‑deliverables by project
+                        const preByProject = new Map<number | string, any[]>();
+                        for (const it of preItems) {
+                          const pid = (it as any).project ?? `p:${(it as any).projectName ?? ''}`;
+                          if (!preByProject.has(pid)) preByProject.set(pid, []);
+                          preByProject.get(pid)!.push(it);
+                        }
+
+                        const preGroupNodes = Array.from(preByProject.values())
+                          .sort((a, b) => ((a[0]?.projectName || '') as string).localeCompare((b[0]?.projectName || '') as string))
+                          .map((arr) => {
+                            const first = arr[0] as any;
+                            const projectName = (first.projectName || '').trim();
+                            const projectClient = (first.projectClient || '').trim();
+                            const color = typeColors['pre_deliverable'];
+                            const many = arr.length > 1;
+                            const header = [projectClient, projectName].filter(Boolean).join(' ').trim() || projectName || 'Project';
+                            const bulletItems = arr.map((it: any) => (it.preDeliverableType || it.title || '').trim()).filter(Boolean);
+                            const titleAttr = many
+                              ? `${header}\n- ${bulletItems.join('\n- ')}`
+                              : `${projectClient ? projectClient + ' ' : ''}${projectName} ${bulletItems[0] || ''}`.trim();
+                            const keyBase = `pregrp-${first.project ?? projectName}-${first?.date || key}`;
+                            return (
+                              <div
+                                key={keyBase}
+                                title={titleAttr}
+                                className="text-xs text-white rounded px-2 py-1 border"
+                                style={{ background: color, border: '1px solid var(--borderOverlay)' }}
+                              >
+                                {many ? (
+                                  <div>
+                                    <div className="font-medium truncate">{header}</div>
+                                    <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+                                      {bulletItems.map((t: string, i: number) => (
+                                        <li key={`${keyBase}-${i}`} className="leading-tight">
+                                          {t}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : (
+                                  <div className="truncate">{titleAttr}</div>
+                                )}
+                              </div>
+                            );
+                          });
+
+                        // Combine, keeping original look tidy
+                        return [...deliverableNodes, ...preGroupNodes];
+                      })()}
                     </div>
                   </div>
                 );
