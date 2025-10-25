@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router';
 import type { Project, Assignment, Person } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
@@ -112,6 +111,11 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [openAddRole, setOpenAddRole] = React.useState(false);
   const addRoleBtnRef = React.useRef<HTMLButtonElement | null>(null);
+  const auth = useAuth();
+  const canEdit = !!auth?.accessToken; // general fields editable for signed-in users
+  const { commit } = useInlineProjectUpdate(project.id!);
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+  const clearFieldError = (k: string) => setFieldErrors(prev => { if (!prev[k]) return prev; const n = { ...prev }; delete n[k]; return n; });
 
   // Determine department for selected person to fetch appropriate role options
   const selectedDeptId = React.useMemo(() => {
@@ -229,11 +233,32 @@ const ProjectDetailsPanel: React.FC<Props> = ({
       <div className="px-2 py-4 border-b border-[var(--border)]">
         <div className="flex justify-between items-start mb-3">
           <div>
-            <h2 className="text-xl font-bold text-[var(--text)] mb-2">{project.name}</h2>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <h2 className="text-xl font-bold text-[var(--text)] mb-2">
+              <InlineText
+                value={project.name}
+                onCommit={async (v) => { await commit('name', (v ?? '').toString()) .catch((e:any)=>{ setFieldErrors(prev=>({...prev,name:e?.message||'Failed to update name'})); throw e }) ; clearFieldError('name'); }}
+                onStartEdit={() => clearFieldError('name')}
+                onDraftChange={() => clearFieldError('name')}
+                ariaLabel="Edit project name"
+                disabled={!canEdit}
+              />
+            </h2>
+            {fieldErrors.name && (<div className="text-red-400 text-xs mt-1">{fieldErrors.name}</div>)}
+            <div className="grid grid-cols-2 gap-4 text-sm mt-1">
               <div>
                 <div className="text-[var(--muted)] text-xs">Client:</div>
-                <div className="text-[var(--text)]">{project.client || 'No Client'}</div>
+                <div className="text-[var(--text)]">
+                  <InlineText
+                    value={project.client || ''}
+                    onCommit={async (v) => { await commit('client', (v ?? '').toString()); clearFieldError('client'); }}
+                    onStartEdit={() => clearFieldError('client')}
+                    onDraftChange={() => clearFieldError('client')}
+                    placeholder="No Client"
+                    ariaLabel="Edit client"
+                    disabled={!canEdit}
+                  />
+                </div>
+                {fieldErrors.client && (<div className="text-red-400 text-xs mt-1">{fieldErrors.client}</div>)}
               </div>
               <div>
                 <div className="text-[var(--muted)] text-xs">Status:</div>
@@ -248,19 +273,73 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               </div>
               <div>
                 <div className="text-[var(--muted)] text-xs">Project Number:</div>
-                <div className="text-[var(--text)]">{project.projectNumber || 'No Number'}</div>
+                <div className="text-[var(--text)]">
+                  <InlineText
+                    value={project.projectNumber || ''}
+                    onCommit={async (v) => { try { await commit('projectNumber', (v ?? '').toString()); clearFieldError('projectNumber'); } catch (e:any) { setFieldErrors(prev=>({...prev,projectNumber:'Project Number must be unique'})); throw e; } }}
+                    onStartEdit={() => clearFieldError('projectNumber')}
+                    onDraftChange={() => clearFieldError('projectNumber')}
+                    placeholder="No Number"
+                    ariaLabel="Edit project number"
+                    disabled={!canEdit}
+                  />
+                </div>
+                {fieldErrors.projectNumber && (<div className="text-red-400 text-xs mt-1">{fieldErrors.projectNumber}</div>)}
+              </div>
+            </div>
+            {/* Description */}
+            <div className="mt-3">
+              <div className="text-[var(--muted)] text-xs mb-1">Description:</div>
+              <InlineTextarea
+                value={project.description || ''}
+                onCommit={async (v) => { await commit('description', (v ?? '').toString()); clearFieldError('description'); }}
+                onStartEdit={() => clearFieldError('description')}
+                onDraftChange={() => clearFieldError('description')}
+                placeholder="Add a short description"
+                ariaLabel="Edit project description"
+                disabled={!canEdit}
+                rows={3}
+                className="text-[var(--text)]"
+              />
+              {fieldErrors.description && (<div className="text-red-400 text-xs mt-1">{fieldErrors.description}</div>)}
+            </div>
+            {/* Start Date & Estimated Hours */}
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <div className="text-[var(--muted)] text-xs mb-1">Start Date:</div>
+                <InlineDate
+                  value={project.startDate || null}
+                  onCommit={async (v) => { await commit('startDate', v); clearFieldError('startDate'); }}
+                  onStartEdit={() => clearFieldError('startDate')}
+                  onDraftChange={() => clearFieldError('startDate')}
+                  placeholder="—"
+                  ariaLabel="Edit start date"
+                  disabled={!canEdit}
+                />
+                {fieldErrors.startDate && (<div className="text-red-400 text-xs mt-1">{fieldErrors.startDate}</div>)}
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-xs mb-1">Estimated Hours:</div>
+                <InlineText
+                  value={typeof project.estimatedHours === 'number' ? String(project.estimatedHours) : ''}
+                  onCommit={async (v) => {
+                    const n = (v ?? '').toString().trim()
+                    const parsed = n === '' ? undefined : Math.max(0, Math.floor(Number(n)))
+                    if (n !== '' && Number.isNaN(parsed)) return
+                    await commit('estimatedHours', parsed as any)
+                    clearFieldError('estimatedHours')
+                  }}
+                  onStartEdit={() => clearFieldError('estimatedHours')}
+                  onDraftChange={() => clearFieldError('estimatedHours')}
+                  placeholder="—"
+                  ariaLabel="Edit estimated hours"
+                  disabled={!canEdit}
+                />
+                {fieldErrors.estimatedHours && (<div className="text-red-400 text-xs mt-1">{fieldErrors.estimatedHours}</div>)}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link to={`/projects/${project.id}/edit`}>
-              <button
-                className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors"
-                aria-label="Edit Project"
-              >
-                Edit
-              </button>
-            </Link>
             {onDeleteProject && (
               confirmingDelete ? (
                 <>
@@ -323,6 +402,9 @@ const ProjectDetailsPanel: React.FC<Props> = ({
           {/* Left column: Deliverables */}
           <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 self-start min-w-0 overflow-hidden">
             {deliverablesSlot}
+            <div className="mt-4">
+              <ProjectPreDeliverableSettings projectId={project.id || null} />
+            </div>
           </div>
 
           {/* Right column: stack department cards vertically */}
@@ -495,3 +577,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
 };
 
 export default ProjectDetailsPanel;
+import { InlineText, InlineTextarea, InlineDate } from '@/components/ui/InlineEdit';
+import { useInlineProjectUpdate } from '@/hooks/useInlineProjectUpdate';
+import { useAuth } from '@/hooks/useAuth';
+import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';

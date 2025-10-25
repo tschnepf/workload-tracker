@@ -58,6 +58,10 @@ export function useProjectFilters(
     });
   };
 
+  const forceShowAll = () => {
+    setSelectedStatusFilters(new Set(['Show All']))
+  }
+
   // Persist status filters to localStorage
   useEffect(() => {
     try {
@@ -193,6 +197,7 @@ export function useProjectFilters(
     // setters
     setSearchTerm,
     toggleStatusFilter,
+    forceShowAll,
     onSort,
     formatFilterStatus,
     // derived

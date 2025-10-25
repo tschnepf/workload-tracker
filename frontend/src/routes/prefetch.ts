@@ -34,8 +34,12 @@ function importerFor(path: string): (() => Promise<any>) | null {
   if (p.startsWith('/assignments') || p.startsWith('/project-assignments')) return () => import('@/pages/Assignments');
   if (p.startsWith('/departments')) return () => import('@/pages/Departments');
   if (p === '/projects') return () => import('@/pages/Projects');
-  if (p.startsWith('/projects/') && (p.endsWith('/new') || p.endsWith('/edit') || /\/\d+\/(edit|update)$/.test(p))) {
+  if (p.startsWith('/projects/') && p.endsWith('/new')) {
     return () => import('@/pages/Projects/ProjectForm');
+  }
+  if (p.startsWith('/projects/') && (/\/\d+\/(edit|update)$/.test(p) || p.endsWith('/edit'))) {
+    // Legacy edit paths now redirect to Projects with deep-link selection
+    return () => import('@/pages/Projects');
   }
   if (p.startsWith('/skills')) return () => import('@/pages/Skills');
   if (p.startsWith('/performance')) return () => import('@/pages/Performance/PerformanceDashboard');

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Project, Person, Assignment } from '@/types/models';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { useQueryClient } from '@tanstack/react-query';
@@ -70,6 +70,7 @@ const ProjectsList: React.FC = () => {
     searchTerm,
     setSearchTerm,
     toggleStatusFilter,
+    forceShowAll,
     onSort,
     formatFilterStatus,
     filteredProjects,
@@ -115,6 +116,33 @@ const ProjectsList: React.FC = () => {
       setError(null);
     }
   }, [projectsError]);
+
+  // Close status dropdown when the selected project changes to avoid stale menu interactions
+  useEffect(() => {
+    setStatusDropdownOpen(false);
+  }, [selectedProject?.id]);
+
+  // Deep-link selection: /projects?projectId=123
+  const location = useLocation();
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current) return;
+    const sp = new URLSearchParams(location.search || '');
+    const idStr = sp.get('projectId');
+    if (!idStr) return;
+    deepLinkHandled.current = true;
+    const pid = Number(idStr);
+    if (!Number.isFinite(pid)) return;
+    const inAll = (projects || []).find(p => p.id === pid) || null;
+    if (!inAll) {
+      setError('Project not found');
+      return;
+    }
+    // Ensure it is visible: clear search + show all once
+    setSearchTerm('');
+    forceShowAll();
+    setSelectedProject(inAll);
+  }, [location.search, projects, setSelectedProject, setSearchTerm, forceShowAll]);
 
   // Pre-compute person skills map for performance
   const precomputePersonSkills = useCallback(() => {

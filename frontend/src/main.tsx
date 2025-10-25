@@ -3,7 +3,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
 import { initializePerformanceMonitoring } from './utils/monitoring'
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router'
+import { createBrowserRouter, RouterProvider, Navigate, useParams } from 'react-router'
 import App from './App'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { getFlag } from '@/lib/flags'
@@ -76,7 +76,7 @@ const router = createBrowserRouter([
       { path: 'assignments/:id/edit', element: <RequireAuth><AssignmentForm /></RequireAuth> },
       { path: 'projects', element: <RequireAuth><Projects /></RequireAuth> },
       { path: 'projects/new', element: <RequireAuth><ProjectForm /></RequireAuth> },
-      { path: 'projects/:id/edit', element: <RequireAuth><ProjectForm /></RequireAuth> },
+      { path: 'projects/:id/edit', element: <RequireAuth><LegacyProjectEditRedirect /></RequireAuth> },
       { path: 'skills', element: <RequireAuth><SkillsDashboard /></RequireAuth> },
       { path: 'performance', element: <RequireAuth><PerformanceDashboard /></RequireAuth> },
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
@@ -107,3 +107,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
+function LegacyProjectEditRedirect() {
+  const { id } = useParams<{ id: string }>()
+  const target = `/projects?projectId=${encodeURIComponent(id || '')}`
+  return <Navigate to={target} replace />
+}

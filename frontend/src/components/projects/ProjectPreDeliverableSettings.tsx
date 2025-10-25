@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { projectSettingsApi, type ProjectTypeSetting } from '@/services/projectsSettings';
+import { useAuth } from '@/hooks/useAuth';
 
 type Props = { projectId: number | null };
 
@@ -11,23 +12,25 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const auth = useAuth();
+  const canSave = !!auth?.user?.is_staff;
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!projectId) return;
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await projectSettingsApi.get(projectId);
-        setSettings(data.settings || []);
-        setDirty(false);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load pre-deliverable settings');
-      } finally {
-        setLoading(false);
-      }
-    })();
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await projectSettingsApi.get(projectId);
+      setSettings(data.settings || []);
+      setDirty(false);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load pre-deliverable settings');
+    } finally {
+      setLoading(false);
+    }
   }, [projectId]);
+
+  useEffect(() => { load(); }, [load]);
 
   const updateRow = (idx: number, patch: Partial<ProjectTypeSetting>) => {
     const next = [...settings];
@@ -61,7 +64,14 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
           <div className="text-[#cccccc] font-semibold">Pre-Deliverable Settings</div>
           <div className="text-[#969696] text-sm">Override global defaults for this project</div>
         </div>
-        <Button disabled={!dirty || saving || loading} onClick={save}>{saving ? 'Saving…' : 'Save'}</Button>
+        <div className="flex items-center gap-2">
+          {error && (
+            <Button variant="ghost" onClick={load} disabled={loading || saving}>Retry</Button>
+          )}
+          <Button disabled={!dirty || saving || loading || !canSave} title={!canSave ? 'Only admins may update project pre-deliverable settings' : undefined} onClick={save}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
       </div>
       {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
       {loading ? (
@@ -110,4 +120,3 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
 };
 
 export default ProjectPreDeliverableSettings;
-
