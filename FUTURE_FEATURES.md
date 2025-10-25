@@ -478,3 +478,12 @@ Sources: `prompts/R2-REBUILD-004-MANAGER-FEATURES.md`, `prompts/R2-REBUILD-002-B
   - Configure Celery Beat entries to schedule reminder and digest tasks
   - Gate schedules behind env flags and document configuration
 
+---
+
+## UI Polish — Calendar Hover Highlight
+
+- Add project-scoped hover highlight to Deliverables Calendar.
+  - Hovering a deliverable or a grouped pre‑deliverable card dims other projects (opacity only) and keeps the target project at full intensity.
+  - Keyboard: focusing a card highlights the project; Esc clears. No hover on touch/mobile.
+  - No layout changes; only class toggles to avoid reflow. State resets on week/navigation changes.
+

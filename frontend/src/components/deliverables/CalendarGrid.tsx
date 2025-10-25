@@ -10,6 +10,26 @@ type Props = {
 };
 
 const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, className }) => {
+  // Project-scoped hover highlight state
+  const [hoveredProjectId, setHoveredProjectId] = React.useState<number | null>(null);
+
+  // Clear highlight on data/view changes to avoid a stuck dim state
+  React.useEffect(() => { setHoveredProjectId(null); }, [items, anchor, showPre]);
+
+  const handleKeyDown = (projectId: number | null, e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (projectId == null) return;
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setHoveredProjectId(projectId); }
+    if (e.key === 'Escape') { setHoveredProjectId(null); }
+  };
+
+  const isDimmed = (projectId: number | null): boolean => (
+    hoveredProjectId !== null && projectId !== hoveredProjectId
+  );
+
+  const getDeliverableProjectId = (ev: any): number | null => {
+    const pid = ev?.project;
+    return Number.isFinite(pid) ? Number(pid) : null;
+  };
   const weeks: Date[][] = React.useMemo(() => {
     const out: Date[][] = [];
     const baseSunday = startOfWeekSunday(anchor);
@@ -78,7 +98,7 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
   }, []);
 
   return (
-    <div className={className}>
+    <div className={className} onMouseLeave={() => setHoveredProjectId(null)}>
       <div className="min-w-[600px] border border-[#3e3e42] rounded">
         {/* Weeks */}
         <div>
@@ -126,11 +146,19 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
                         const deliverableNodes = deliverables.map((ev: any) => {
                           const color = typeColors[classify(ev)] || typeColors.milestone;
                           const label = buildEventLabel(ev);
+                          const pid = getDeliverableProjectId(ev);
+                          const dim = isDimmed(pid);
                           return (
                             <div
                               key={`deliv-${ev.id}-${ev.date}`}
                               title={label}
-                              className="text-xs text-white rounded px-2 py-1 truncate"
+                              role="button"
+                              tabIndex={0}
+                              onMouseEnter={() => { if (pid != null) setHoveredProjectId(pid); }}
+                              onFocus={() => { if (pid != null) setHoveredProjectId(pid); }}
+                              onBlur={() => setHoveredProjectId(null)}
+                              onKeyDown={(e) => handleKeyDown(pid, e)}
+                              className={`text-xs text-white rounded px-2 py-1 truncate ${dim ? 'opacity-1 transition-opacity duration-150' : ''}`}
                               style={{ background: color }}
                             >
                               {label}
@@ -160,11 +188,19 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
                               ? `${header}\n- ${bulletItems.join('\n- ')}`
                               : `${projectClient ? projectClient + ' ' : ''}${projectName} ${bulletItems[0] || ''}`.trim();
                             const keyBase = `pregrp-${first.project ?? projectName}-${first?.date || key}`;
+                            const pid = Number.isFinite((first as any).project) ? Number((first as any).project) : null;
+                            const dim = isDimmed(pid);
                             return (
                               <div
                                 key={keyBase}
                                 title={titleAttr}
-                                className="text-xs text-white rounded px-2 py-1 border"
+                                role="button"
+                                tabIndex={0}
+                                onMouseEnter={() => { if (pid != null) setHoveredProjectId(pid); }}
+                                onFocus={() => { if (pid != null) setHoveredProjectId(pid); }}
+                                onBlur={() => setHoveredProjectId(null)}
+                                onKeyDown={(e) => handleKeyDown(pid, e)}
+                                className={`text-xs text-white rounded px-2 py-1 border ${dim ? 'opacity-40 transition-opacity duration-150' : ''}`}
                                 style={{ background: color, border: '1px solid var(--borderOverlay)' }}
                               >
                                 {many ? (
