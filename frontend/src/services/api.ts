@@ -901,6 +901,21 @@ export const deliverablesApi = {
     }
     return res.data as unknown as DeliverableStaffingSummaryItem[];
   },
+
+  // Staff-only: trigger pre-deliverables backfill
+  backfillPreItems: async (opts: { projectId?: number; start?: string; end?: string; regenerate?: boolean }) => {
+    const body: any = {};
+    if (opts?.projectId != null) body.projectId = opts.projectId;
+    if (opts?.start) body.start = opts.start;
+    if (opts?.end) body.end = opts.end;
+    if (opts?.regenerate != null) body.regenerate = !!opts.regenerate;
+    const res = await apiClient.POST('/deliverables/pre_deliverable_items/backfill/' as any, { body, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, res.error, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as { enqueued: boolean; jobId?: string; statusUrl?: string; result?: any };
+  },
 };
 
 // Dashboard API
