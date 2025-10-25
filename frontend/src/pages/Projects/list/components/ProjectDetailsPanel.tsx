@@ -117,6 +117,21 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const clearFieldError = (k: string) => setFieldErrors(prev => { if (!prev[k]) return prev; const n = { ...prev }; delete n[k]; return n; });
 
+  // Client suggestions state
+  const [clientOptions, setClientOptions] = React.useState<string[] | null>(null);
+  const [filteredClients, setFilteredClients] = React.useState<string[]>([]);
+  const [clientOpen, setClientOpen] = React.useState(false);
+  const clientBoxRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Element;
+      if (clientBoxRef.current && !clientBoxRef.current.contains(target)) setClientOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
   // Determine department for selected person to fetch appropriate role options
   const selectedDeptId = React.useMemo(() => {
     if (!addAssignmentState?.selectedPerson) return null as number | null;
@@ -247,16 +262,50 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             <div className="grid grid-cols-2 gap-4 text-sm mt-1" style={{ gridTemplateColumns: 'minmax(320px,1fr) 1fr' }}>
               <div>
                 <div className="text-[var(--muted)] text-xs">Client:</div>
-                <div className="text-[var(--text)]">
+                <div className="text-[var(--text)] relative" ref={clientBoxRef}>
                   <InlineText
                     value={project.client || ''}
-                    onCommit={async (v) => { await commit('client', (v ?? '').toString()); clearFieldError('client'); }}
-                    onStartEdit={() => clearFieldError('client')}
-                    onDraftChange={() => clearFieldError('client')}
+                    onCommit={async (v) => { await commit('client', (v ?? '').toString()); setClientOpen(false); clearFieldError('client'); }}
+                    onStartEdit={async () => {
+                      clearFieldError('client');
+                      try {
+                        if (!clientOptions) {
+                          const list = await projectsApi.getClients();
+                          setClientOptions(list);
+                          setFilteredClients(list);
+                        } else {
+                          setFilteredClients(clientOptions);
+                        }
+                        setClientOpen(true);
+                      } catch {}
+                    }}
+                    onDraftChange={(val) => {
+                      clearFieldError('client');
+                      const s = (val ?? '').toString().toLowerCase();
+                      const base = clientOptions || [];
+                      const next = s ? base.filter(c => c.toLowerCase().includes(s)) : base;
+                      setFilteredClients(next);
+                      setClientOpen(true);
+                    }}
                     placeholder="No Client"
                     ariaLabel="Edit client"
                     disabled={!canEdit}
                   />
+                  {clientOpen && filteredClients.length > 0 && (
+                    <div className="absolute z-50 mt-1 left-0 right-0 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg max-h-48 overflow-auto">
+                      {filteredClients.slice(0, 30).map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] text-[var(--text)]"
+                          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onClick={async () => { await commit('client', name); setClientOpen(false); }}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {fieldErrors.client && (<div className="text-red-400 text-xs mt-1">{fieldErrors.client}</div>)}
               </div>
@@ -581,3 +630,4 @@ import { InlineText, InlineTextarea, InlineDate } from '@/components/ui/InlineEd
 import { useInlineProjectUpdate } from '@/hooks/useInlineProjectUpdate';
 import { useAuth } from '@/hooks/useAuth';
 import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';
+import { projectsApi } from '@/services/api';
