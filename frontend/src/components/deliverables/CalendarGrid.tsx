@@ -1,6 +1,93 @@
 import React from 'react';
 import { fmtDate, typeColors, classify, buildEventLabel, buildPreLabel, startOfWeekSunday } from './calendar.utils';
 
+// Presentational pill for a single deliverable
+type PillProps = {
+  ev: any;
+  pid: number | null;
+  dim: boolean;
+  onHover: (pid: number) => void;
+  onClear: () => void;
+  onKey: (pid: number | null, e: React.KeyboardEvent<HTMLDivElement>) => void;
+};
+
+const DeliverablePill: React.FC<PillProps> = ({ ev, pid, dim, onHover, onClear, onKey }) => {
+  const color = typeColors[classify(ev)] || typeColors.milestone;
+  const label = buildEventLabel(ev);
+  return (
+    <div
+      key={`deliverable-${ev.id}-${ev.date}`}
+      title={label}
+      role="button"
+      tabIndex={0}
+      onMouseEnter={() => { if (pid != null) onHover(pid); }}
+      onFocus={() => { if (pid != null) onHover(pid); }}
+      onBlur={onClear}
+      onMouseLeave={onClear}
+      onKeyDown={(e) => onKey(pid, e)}
+      className={`text-xs text-white rounded px-2 py-1 truncate ${dim ? 'opacity-40 transition-opacity duration-150' : ''}`}
+      style={{ background: color }}
+    >
+      {label}
+    </div>
+  );
+};
+
+// Presentational card for a grouped pre-deliverable block (single or multi)
+type PreGroupProps = {
+  arr: any[];        // items in the group (same project)
+  dayKey: string;    // YYYY-MM-DD of the day cell
+  pid: number | null;
+  dim: boolean;
+  onHover: (pid: number) => void;
+  onClear: () => void;
+  onKey: (pid: number | null, e: React.KeyboardEvent<HTMLDivElement>) => void;
+};
+
+const PreDeliverableGroupCard: React.FC<PreGroupProps> = ({ arr, dayKey, pid, dim, onHover, onClear, onKey }) => {
+  const first = arr[0] as any;
+  const projectName = (first.projectName || '').trim();
+  const projectClient = (first.projectClient || '').trim();
+  const color = typeColors['pre_deliverable'];
+  const many = arr.length > 1;
+  const header = [projectClient, projectName].filter(Boolean).join(' ').trim() || projectName || 'Project';
+  const bulletItems = arr.map((it: any) => (it.preDeliverableType || it.title || '').trim()).filter(Boolean);
+  const titleAttr = many
+    ? `${header}\n- ${bulletItems.join('\n- ')}`
+    : `${projectClient ? projectClient + ' ' : ''}${projectName} ${bulletItems[0] || ''}`.trim();
+  const keyBase = `pre-group-${first.project ?? projectName}-${first?.date || dayKey}`;
+  return (
+    <div
+      key={keyBase}
+      title={titleAttr}
+      role="button"
+      tabIndex={0}
+      onMouseEnter={() => { if (pid != null) onHover(pid); }}
+      onFocus={() => { if (pid != null) onHover(pid); }}
+      onBlur={onClear}
+      onMouseLeave={onClear}
+      onKeyDown={(e) => onKey(pid, e)}
+      className={`text-xs text-white rounded px-2 py-1 border ${dim ? 'opacity-40 transition-opacity duration-150' : ''}`}
+      style={{ background: color, border: '1px solid var(--borderOverlay)' }}
+    >
+      {many ? (
+        <div>
+          <div className="font-medium truncate">{header}</div>
+          <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+            {bulletItems.map((t: string, i: number) => (
+              <li key={`${keyBase}-${i}`} className="leading-tight">
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="truncate">{titleAttr}</div>
+      )}
+    </div>
+  );
+};
+
 type Props = {
   items: any[];
   anchor: Date;
@@ -137,93 +224,50 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
                       })()}
                     </div>
                     <div className="relative z-10 space-y-1">
-                      {(() => {
-                        // Render deliverables individually; group pre‑deliverables by project
-                        const deliverables = dayItems.filter((it) => (it as any).itemType !== 'pre_deliverable');
-                        const preItems = dayItems.filter((it) => (it as any).itemType === 'pre_deliverable');
+					{(() => {
+						const deliverables = dayItems.filter((it) => (it as any).itemType  !==  'pre_deliverable');
+						const preItems = dayItems.filter((it) => (it as any).itemType === 'pre_deliverable');
 
-                        // 1) Regular deliverables (one pill each)
-                        const deliverableNodes = deliverables.map((ev: any) => {
-                          const color = typeColors[classify(ev)] || typeColors.milestone;
-                          const label = buildEventLabel(ev);
-                          const pid = getDeliverableProjectId(ev);
-                          const dim = isDimmed(pid);
-                          return (
-                            <div
-                              key={`deliv-${ev.id}-${ev.date}`}
-                              title={label}
-                              role="button"
-                              tabIndex={0}
-                              onMouseEnter={() => { if (pid != null) setHoveredProjectId(pid); }}
-                              onFocus={() => { if (pid != null) setHoveredProjectId(pid); }}
-                              onBlur={() => setHoveredProjectId(null)}
-                              onKeyDown={(e) => handleKeyDown(pid, e)}
-                              className={`text-xs text-white rounded px-2 py-1 truncate ${dim ? 'opacity-1 transition-opacity duration-150' : ''}`}
-                              style={{ background: color }}
-                            >
-                              {label}
-                            </div>
-                          );
-                        });
+						const deliverableNodes = deliverables.map((ev: any) => (
+						  <DeliverablePill
+							key={`deliverable-${ev.id}-${ev.date}`}
+							ev={ev}
+							pid={getDeliverableProjectId(ev)}
+							dim={isDimmed(getDeliverableProjectId(ev))}
+							onHover={(pid) => setHoveredProjectId(pid)}
+							onClear={() => setHoveredProjectId(null)}
+							onKey={(pid, e) => handleKeyDown(pid, e)}
+						  />
+						));
 
-                        // 2) Group pre‑deliverables by project
-                        const preByProject = new Map<number | string, any[]>();
-                        for (const it of preItems) {
-                          const pid = (it as any).project ?? `p:${(it as any).projectName ?? ''}`;
-                          if (!preByProject.has(pid)) preByProject.set(pid, []);
-                          preByProject.get(pid)!.push(it);
-                        }
+						const preByProject = new Map<number | string, any[]>();
+						for (const it of preItems) {
+						  const pid = (it as any).project ?? `p:${(it as any).projectName ?? ''}`;
+						  if (!preByProject.has(pid)) preByProject.set(pid, []);
+						  preByProject.get(pid)!.push(it);
+						}
 
-                        const preGroupNodes = Array.from(preByProject.values())
-                          .sort((a, b) => ((a[0]?.projectName || '') as string).localeCompare((b[0]?.projectName || '') as string))
-                          .map((arr) => {
-                            const first = arr[0] as any;
-                            const projectName = (first.projectName || '').trim();
-                            const projectClient = (first.projectClient || '').trim();
-                            const color = typeColors['pre_deliverable'];
-                            const many = arr.length > 1;
-                            const header = [projectClient, projectName].filter(Boolean).join(' ').trim() || projectName || 'Project';
-                            const bulletItems = arr.map((it: any) => (it.preDeliverableType || it.title || '').trim()).filter(Boolean);
-                            const titleAttr = many
-                              ? `${header}\n- ${bulletItems.join('\n- ')}`
-                              : `${projectClient ? projectClient + ' ' : ''}${projectName} ${bulletItems[0] || ''}`.trim();
-                            const keyBase = `pregrp-${first.project ?? projectName}-${first?.date || key}`;
-                            const pid = Number.isFinite((first as any).project) ? Number((first as any).project) : null;
-                            const dim = isDimmed(pid);
-                            return (
-                              <div
-                                key={keyBase}
-                                title={titleAttr}
-                                role="button"
-                                tabIndex={0}
-                                onMouseEnter={() => { if (pid != null) setHoveredProjectId(pid); }}
-                                onFocus={() => { if (pid != null) setHoveredProjectId(pid); }}
-                                onBlur={() => setHoveredProjectId(null)}
-                                onKeyDown={(e) => handleKeyDown(pid, e)}
-                                className={`text-xs text-white rounded px-2 py-1 border ${dim ? 'opacity-40 transition-opacity duration-150' : ''}`}
-                                style={{ background: color, border: '1px solid var(--borderOverlay)' }}
-                              >
-                                {many ? (
-                                  <div>
-                                    <div className="font-medium truncate">{header}</div>
-                                    <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
-                                      {bulletItems.map((t: string, i: number) => (
-                                        <li key={`${keyBase}-${i}`} className="leading-tight">
-                                          {t}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ) : (
-                                  <div className="truncate">{titleAttr}</div>
-                                )}
-                              </div>
-                            );
-                          });
+						const preGroupNodes = Array.from(preByProject.values())
+						  .sort((a, b) => ((a[0]?.projectName || '') as string).localeCompare((b[0]?.projectName || '') as string))
+						  .map((arr) => {
+							const first = arr[0] as any;
+							const pid = Number.isFinite((first as any).project) ? Number((first as any).project) : null;
+							return (
+							  <PreDeliverableGroupCard
+							key={`pg-${first.project ?? first.projectName}-${first?.date || key}`}
+								arr={arr}
+								dayKey={key}
+								pid={pid}
+								dim={isDimmed(pid)}
+								onHover={(p) => setHoveredProjectId(p)}
+								onClear={() => setHoveredProjectId(null)}
+								onKey={(p, e) => handleKeyDown(p, e)}
+							  />
+							);
+						  });
 
-                        // Combine, keeping original look tidy
-                        return [...deliverableNodes, ...preGroupNodes];
-                      })()}
+                    return [...deliverableNodes, ...preGroupNodes];
+                    					})()}
                     </div>
                   </div>
                 );
@@ -237,3 +281,4 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
 };
 
 export default CalendarGrid;
+
