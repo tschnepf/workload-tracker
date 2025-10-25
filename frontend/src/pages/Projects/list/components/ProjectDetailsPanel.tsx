@@ -116,6 +116,9 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const { commit } = useInlineProjectUpdate(project.id!);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const clearFieldError = (k: string) => setFieldErrors(prev => { if (!prev[k]) return prev; const n = { ...prev }; delete n[k]; return n; });
+  // Local optimistic patch so values show immediately on commit
+  const [localPatch, setLocalPatch] = React.useState<Partial<Project>>({});
+  React.useEffect(() => { setLocalPatch({}); }, [project.id]);
 
   // Client suggestions state
   const [clientOptions, setClientOptions] = React.useState<string[] | null>(null);
@@ -250,8 +253,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
           <div>
             <h2 className="text-xl font-bold text-[var(--text)] mb-2">
               <InlineText
-                value={project.name}
-                onCommit={async (v) => { await commit('name', (v ?? '').toString()) .catch((e:any)=>{ setFieldErrors(prev=>({...prev,name:e?.message||'Failed to update name'})); throw e }) ; clearFieldError('name'); }}
+                value={localPatch.name ?? project.name}
+                onCommit={async (v) => { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,name:nv})); await commit('name', nv).catch((e:any)=>{ setFieldErrors(prev=>({...prev,name:e?.message||'Failed to update name'})); throw e }); clearFieldError('name'); }}
                 onStartEdit={() => clearFieldError('name')}
                 onDraftChange={() => clearFieldError('name')}
                 ariaLabel="Edit project name"
@@ -264,8 +267,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 <div className="text-[var(--muted)] text-xs">Client:</div>
                 <div className="text-[var(--text)] relative" ref={clientBoxRef}>
                   <InlineText
-                    value={project.client || ''}
-                    onCommit={async (v) => { await commit('client', (v ?? '').toString()); setClientOpen(false); clearFieldError('client'); }}
+                    value={(localPatch.client ?? project.client) || ''}
+                    onCommit={async (v) => { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,client:nv})); await commit('client', nv); setClientOpen(false); clearFieldError('client'); }}
                     onStartEdit={async () => {
                       clearFieldError('client');
                       try {
@@ -324,8 +327,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 <div className="text-[var(--muted)] text-xs">Project Number:</div>
                 <div className="text-[var(--text)]">
                   <InlineText
-                    value={project.projectNumber || ''}
-                    onCommit={async (v) => { try { await commit('projectNumber', (v ?? '').toString()); clearFieldError('projectNumber'); } catch (e:any) { setFieldErrors(prev=>({...prev,projectNumber:'Project Number must be unique'})); throw e; } }}
+                    value={(localPatch.projectNumber ?? project.projectNumber) || ''}
+                    onCommit={async (v) => { try { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,projectNumber:nv})); await commit('projectNumber', nv); clearFieldError('projectNumber'); } catch (e:any) { setFieldErrors(prev=>({...prev,projectNumber:'Project Number must be unique'})); throw e; } }}
                     onStartEdit={() => clearFieldError('projectNumber')}
                     onDraftChange={() => clearFieldError('projectNumber')}
                     placeholder="No Number"
@@ -340,8 +343,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             <div className="mt-3">
               <div className="text-[var(--muted)] text-xs mb-1">Description:</div>
               <InlineTextarea
-                value={project.description || ''}
-                onCommit={async (v) => { await commit('description', (v ?? '').toString()); clearFieldError('description'); }}
+                value={(localPatch.description ?? project.description) || ''}
+                onCommit={async (v) => { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,description:nv})); await commit('description', nv); clearFieldError('description'); }}
                 onStartEdit={() => clearFieldError('description')}
                 onDraftChange={() => clearFieldError('description')}
                 placeholder="Add a short description"
@@ -357,8 +360,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               <div>
                 <div className="text-[var(--muted)] text-xs mb-1">Start Date:</div>
                 <InlineDate
-                  value={project.startDate || null}
-                  onCommit={async (v) => { await commit('startDate', v); clearFieldError('startDate'); }}
+                  value={(localPatch.startDate ?? project.startDate) || null}
+                  onCommit={async (v) => { setLocalPatch(p=>({...p,startDate:v || null as any})); await commit('startDate', v); clearFieldError('startDate'); }}
                   onStartEdit={() => clearFieldError('startDate')}
                   onDraftChange={() => clearFieldError('startDate')}
                   placeholder="—"
@@ -370,11 +373,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               <div>
                 <div className="text-[var(--muted)] text-xs mb-1">Estimated Hours:</div>
                 <InlineText
-                  value={typeof project.estimatedHours === 'number' ? String(project.estimatedHours) : ''}
+                  value={typeof (localPatch.estimatedHours ?? project.estimatedHours) === 'number' ? String(localPatch.estimatedHours ?? project.estimatedHours) : ''}
                   onCommit={async (v) => {
                     const n = (v ?? '').toString().trim()
                     const parsed = n === '' ? undefined : Math.max(0, Math.floor(Number(n)))
                     if (n !== '' && Number.isNaN(parsed)) return
+                    setLocalPatch(p=>({...p,estimatedHours: parsed as any}))
                     await commit('estimatedHours', parsed as any)
                     clearFieldError('estimatedHours')
                   }}
