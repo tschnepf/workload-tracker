@@ -244,7 +244,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               />
             </h2>
             {fieldErrors.name && (<div className="text-red-400 text-xs mt-1">{fieldErrors.name}</div>)}
-            <div className="grid grid-cols-2 gap-4 text-sm mt-1">
+            <div className="grid grid-cols-2 gap-4 text-sm mt-1" style={{ gridTemplateColumns: 'minmax(320px,1fr) 1fr' }}>
               <div>
                 <div className="text-[var(--muted)] text-xs">Client:</div>
                 <div className="text-[var(--text)]">
@@ -304,7 +304,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               {fieldErrors.description && (<div className="text-red-400 text-xs mt-1">{fieldErrors.description}</div>)}
             </div>
             {/* Start Date & Estimated Hours */}
-            <div className="grid grid-cols-2 gap-4 mt-3">
+            <div className="grid grid-cols-2 gap-4 mt-3" style={{ gridTemplateColumns: 'minmax(320px,1fr) 1fr' }}>
               <div>
                 <div className="text-[var(--muted)] text-xs mb-1">Start Date:</div>
                 <InlineDate

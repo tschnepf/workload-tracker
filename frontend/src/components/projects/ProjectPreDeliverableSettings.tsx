@@ -78,7 +78,7 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
         <div className="text-[#cccccc]">Loading…</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-full text-xs">
             <thead className="text-[#cbd5e1]">
               <tr>
                 <th className="py-2 pr-4 text-left">Type</th>
@@ -104,7 +104,7 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
                       min={0}
                       max={60}
                       value={row.daysBefore ?? 0}
-                      className="w-24 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1"
+                      className="w-24 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
                       onChange={e => updateRow(idx, { daysBefore: Math.max(0, Math.min(60, Number(e.currentTarget.value))) })}
                     />
                   </td>
