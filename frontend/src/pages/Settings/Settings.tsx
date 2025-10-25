@@ -22,6 +22,7 @@ import UtilizationSchemeEditor from '@/components/settings/UtilizationSchemeEdit
 import { showToast } from '@/lib/toastBus';
 import DepartmentProjectRolesSection from '@/components/settings/DepartmentProjectRolesSection';
 import { useCapabilities } from '@/hooks/useCapabilities';
+import PreDeliverablesBackfill from '@/components/settings/PreDeliverablesBackfill';
 
 const Settings: React.FC = () => {
   const auth = useAuth();
@@ -217,6 +218,11 @@ const Settings: React.FC = () => {
               enabled={!!((caps.data as any)?.projectRolesByDepartment)}
               isAdmin={!!auth.user?.is_staff}
             />
+          )}
+
+          {/* Admin: Pre‑Deliverables Backfill */}
+          {auth.user?.is_staff && (
+            <PreDeliverablesBackfill />
           )}
 
           {/* Admin: Create New User */}
