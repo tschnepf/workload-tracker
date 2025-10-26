@@ -26,14 +26,29 @@ export function useProjectQuickViewPopover(): QuickViewContextValue {
   return ctx;
 }
 
-type Position = { top: number; left: number; width: number; placement: 'top' | 'bottom' };
+type Position = { top: number; left: number; width: number; placement: 'top' | 'bottom' | 'center' };
 
 function computePosition(anchor: DOMRect, contentSize: { width: number; height: number }, placement: OpenOpts['placement']): Position {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  // Double the default target width for more editing room
-  const target = Math.max(anchor.width * 2, 640);
   const maxWidth = Math.min(1120, vw - VIEWPORT_PADDING * 2);
+
+  // Centered placement: ignore anchor and center within viewport
+  if (placement === 'center') {
+    const width = Math.min(Math.max(720, contentSize.width || 720), maxWidth);
+    const top = Math.max(
+      VIEWPORT_PADDING,
+      Math.round((vh - (contentSize.height || 360)) / 2)
+    );
+    const left = Math.max(
+      VIEWPORT_PADDING,
+      Math.round((vw - width) / 2)
+    );
+    return { top, left, width, placement: 'center' };
+  }
+
+  // Anchored placement below/above target
+  const target = Math.max(anchor.width * 2, 640);
   const width = Math.min(target, maxWidth);
   let place: 'top' | 'bottom' = 'bottom';
   if (placement === 'top-start') place = 'top';
@@ -91,7 +106,7 @@ export const ProjectQuickViewPopoverProvider: React.FC<{ children: React.ReactNo
     rafRef.current = requestAnimationFrame(() => {
       const cont = containerRef.current;
       const size = cont ? cont.getBoundingClientRect() : ({ width: contentSize.width, height: contentSize.height } as DOMRect);
-      const pos = computePosition(state.anchorRect!, { width: size.width, height: size.height }, state.opts?.placement || 'auto');
+      const pos = computePosition(state.anchorRect!, { width: size.width, height: size.height }, state.opts?.placement || 'center');
       positionRef.current = pos;
       if (cont) {
         cont.style.top = `${pos.top}px`;

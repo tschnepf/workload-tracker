@@ -1,4 +1,4 @@
-export type QuickViewPlacement = 'bottom-start' | 'top-start' | 'auto';
+export type QuickViewPlacement = 'bottom-start' | 'top-start' | 'auto' | 'center';
 
 export type OpenOpts = {
   placement?: QuickViewPlacement;
@@ -21,4 +21,3 @@ export type QuickViewContextValue = {
   unregisterOwnedPortal: (el: HTMLElement) => void;
   reposition: () => void;
 };
-

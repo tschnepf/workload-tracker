@@ -1124,8 +1124,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
                           <button
                             type="button"
                             className="truncate cursor-pointer hover:underline"
-                            onClick={(e) => { e.stopPropagation(); openQuickView(p.id!, e.currentTarget as HTMLElement); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openQuickView(p.id!, e.currentTarget as HTMLElement); } }}
+                            onClick={(e) => { e.stopPropagation(); openQuickView(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openQuickView(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
                             onMouseEnter={() => {
                               if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
                               prefetchTimerRef.current = window.setTimeout(() => {
