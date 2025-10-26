@@ -106,6 +106,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [openRoleFor, setOpenRoleFor] = useState<number | null>(null);
   const roleAnchorRef = useRef<HTMLElement | null>(null);
   const [rolesByDept, setRolesByDept] = useState<Record<number, ProjectRole[]>>({});
+  // Quick View popover + prefetch support
+  const { open: openQuickView } = useProjectQuickViewPopover();
+  const queryClient = useQueryClient();
+  const prefetchTimerRef = React.useRef<number | null>(null);
   // Reload trigger for Refresh All
   const [reloadCounter, setReloadCounter] = useState<number>(0);
   const [pendingRefresh, setPendingRefresh] = useState<boolean>(false);
@@ -546,78 +550,29 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const pidList = projects.map(p => p.id!).filter(Boolean) as number[];
         const map: Record<number, Record<string, { type: string; percentage?: number }[]>> = {};
 
-        // Helper to add a bar entry once (dedupe by type+percentage)
         const addEntry = (pid: number, weekKey: string, type: string, percentage?: number) => {
           if (!map[pid]) map[pid] = {};
           if (!map[pid][weekKey]) map[pid][weekKey] = [];
           const arr = map[pid][weekKey];
           const numPct = (percentage == null || Number.isNaN(Number(percentage))) ? undefined : Number(percentage);
-          // If an entry of this type exists, prefer the one that has a numeric percentage
           const existing = arr.find(e => e.type === type);
           if (existing) {
-            // Upgrade undefined -> numeric if we now have a better value
-            if ((existing.percentage == null) && (numPct != null)) {
-              existing.percentage = numPct;
-            }
-            // If both numeric and equal, do nothing; if different numeric values, allow another bar
+            if ((existing.percentage == null) && (numPct != null)) existing.percentage = numPct;
             else if (existing.percentage != null && numPct != null && existing.percentage !== numPct) {
-              if (!arr.some(e => e.type === type && e.percentage === numPct)) {
-                arr.push({ type, percentage: numPct });
-              }
+              if (!arr.some(e => e.type === type && e.percentage === numPct)) arr.push({ type, percentage: numPct });
             }
-            // If new has no percentage or equals existing, skip
             return;
           }
-          // No existing of this type
           arr.push({ type, percentage: numPct });
         };
 
-        // Try bulk API first; if it fails, continue with calendar fallback silently
-        let bulk: Record<string, any[]> = {};
+        // Prefer the authoritative calendar API for the visible window
+        const start = weeks[0].date; const end = endDate.toISOString().slice(0, 10);
+        let loadedViaCalendar = false;
         try {
-          bulk = await deliverablesApi.bulkList(pidList);
-        } catch (e) {
-          // swallow; backend may not support bulk endpoint in this environment
-          bulk = {};
-        }
-
-        for (const [pidStr, list] of Object.entries(bulk || {})) {
-          const pid = Number(pidStr);
-          for (const d of (list || [])) {
-            if (!d?.date) continue;
-            const dt = new Date(d.date);
-            const wr = weekRanges.find(r => dt >= r.s && dt <= r.e);
-            if (!wr) continue;
-            const type = classifyDeliverable((d.description || '').toString());
-            addEntry(pid, wr.key, type, d.percentage == null ? undefined : Number(d.percentage));
-          }
-        }
-
-        // If bulk returned nothing, try per-project listAll to obtain real percentages
-        if (Object.keys(map).length === 0) {
-          try {
-            const lists = await Promise.all(pidList.map(async (pid) => {
-              try { return [pid, await deliverablesApi.listAll(pid)] as const; } catch { return [pid, []] as const; }
-            }));
-            for (const [pid, list] of lists) {
-              for (const d of (list || [])) {
-                if (!d?.date) continue;
-                const dt = new Date(d.date);
-                const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
-                const type = classifyDeliverable((d.description || '').toString());
-                addEntry(pid, wr.key, type, d.percentage == null ? undefined : Number(d.percentage));
-              }
-            }
-          } catch {}
-        }
-
-        // Fallback to calendar to fill any missing weeks OR when still empty
-        const needsCalendar = Object.keys(map).length === 0 || projects.some(p => weekRanges.some(wr => !(map[p.id!] && map[p.id!][wr.key])));
-        if (needsCalendar) {
-          const start = weeks[0].date; const end = endDate.toISOString().slice(0, 10);
-          try {
-            const items = await deliverablesApi.calendar(start, end);
-            for (const it of (items || [])) {
+          const items = await deliverablesApi.calendar(start, end);
+          if (Array.isArray(items)) {
+            for (const it of items) {
               const pid = (it as any).project as number | undefined; const dtStr = (it as any).date as string | undefined;
               if (!pid || !dtStr) continue; const dt = new Date(dtStr);
               const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
@@ -625,7 +580,40 @@ const ProjectAssignmentsGrid: React.FC = () => {
               let pct: number | undefined = undefined; if (title) { const m = title.match(/(\d{1,3})\s*%/); if (m) { const n = parseInt(m[1], 10); if (!Number.isNaN(n) && n >= 0 && n <= 100) pct = n; } }
               addEntry(pid, wr.key, type, pct);
             }
-          } catch {}
+            loadedViaCalendar = true;
+          }
+        } catch { /* fall back below */ }
+
+        if (!loadedViaCalendar) {
+          // Fallback path: use bulk list, then per-project listAll for percentages
+          let bulk: Record<string, any[]> = {};
+          try { bulk = await deliverablesApi.bulkList(pidList); } catch { bulk = {}; }
+          for (const [pidStr, list] of Object.entries(bulk || {})) {
+            const pid = Number(pidStr);
+            for (const d of (list || [])) {
+              if (!d?.date) continue;
+              const dt = new Date(d.date);
+              const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
+              const type = classifyDeliverable((d.description || '').toString());
+              addEntry(pid, wr.key, type, d.percentage == null ? undefined : Number(d.percentage));
+            }
+          }
+          if (Object.keys(map).length === 0) {
+            try {
+              const lists = await Promise.all(pidList.map(async (pid) => {
+                try { return [pid, await deliverablesApi.listAll(pid)] as const; } catch { return [pid, []] as const; }
+              }));
+              for (const [pid, list] of lists) {
+                for (const d of (list || [])) {
+                  if (!d?.date) continue;
+                  const dt = new Date(d.date);
+                  const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
+                  const type = classifyDeliverable((d.description || '').toString());
+                  addEntry(pid, wr.key, type, d.percentage == null ? undefined : Number(d.percentage));
+                }
+              }
+            } catch { /* ignore */ }
+          }
         }
 
         setDeliverableTypesByProjectWeek(map);
@@ -1526,9 +1514,5 @@ const ProjectAssignmentsGrid: React.FC = () => {
     </Layout>
   );
 };
-
-export default ProjectAssignmentsGrid;
-
-  const { open: openQuickView } = useProjectQuickViewPopover();
-  const queryClient = useQueryClient();
-  const prefetchTimerRef = React.useRef<number | null>(null);
+  
+  export default ProjectAssignmentsGrid;

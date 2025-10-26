@@ -31,7 +31,10 @@ type Position = { top: number; left: number; width: number; placement: 'top' | '
 function computePosition(anchor: DOMRect, contentSize: { width: number; height: number }, placement: OpenOpts['placement']): Position {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const width = Math.min(Math.max(320, anchor.width), Math.min(560, vw - VIEWPORT_PADDING * 2));
+  // Double the default target width for more editing room
+  const target = Math.max(anchor.width * 2, 640);
+  const maxWidth = Math.min(1120, vw - VIEWPORT_PADDING * 2);
+  const width = Math.min(target, maxWidth);
   let place: 'top' | 'bottom' = 'bottom';
   if (placement === 'top-start') place = 'top';
   else if (placement === 'bottom-start') place = 'bottom';
@@ -140,16 +143,26 @@ export const ProjectQuickViewPopoverProvider: React.FC<{ children: React.ReactNo
       const active = document.activeElement as HTMLElement | null;
       const focusInside = active ? (container.contains(active) || Array.from(ownedPortalsRef.current).some(el => el.contains(active))) : false;
       if (!focusInside) return;
+
+      // Determine if the active/target element is editable.
+      const target = (e.target as HTMLElement) || active;
+      const tag = (target?.tagName || '').toLowerCase();
+      const isEditable = !!target && (
+        target.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select'
+      );
+
       if (e.key === 'Escape') {
         // If focus is inside owned portal, let it handle Esc first
         const inOwned = active ? Array.from(ownedPortalsRef.current).some(el => el.contains(active)) : false;
         if (!inOwned) {
-          e.preventDefault(); e.stopPropagation();
+          e.preventDefault();
+          e.stopPropagation();
           close();
           return;
         }
         return; // allow portal to consume
       }
+
       if (e.key === 'Tab') {
         // focus loop
         const focusable = container.querySelectorAll<HTMLElement>(
@@ -162,12 +175,31 @@ export const ProjectQuickViewPopoverProvider: React.FC<{ children: React.ReactNo
         if (!e.shiftKey && active === last) { e.preventDefault(); (first as HTMLElement).focus(); return; }
         return; // allow natural tabbing within
       }
-      // block other keys from bubbling to global handlers
-      e.preventDefault();
-      e.stopPropagation();
+
+      // For all other keys while focus is inside the popover:
+      // - If the target is an editable control, allow the event to reach it fully.
+      // - Otherwise, stop propagation so global grid shortcuts don't trigger.
+      if (!isEditable) {
+        e.stopPropagation();
+      }
     }
     window.addEventListener('keydown', onKeyDownCapture, true);
-    return () => window.removeEventListener('keydown', onKeyDownCapture, true);
+    // Also stop propagation during bubble phase at the popover container
+    // so global window-level handlers do not run after inputs handle typing.
+    const cont = containerRef.current;
+    const onKeyDownBubble = (ev: KeyboardEvent) => {
+      const tgt = ev.target as HTMLElement | null;
+      const tag = (tgt?.tagName || '').toLowerCase();
+      const isEditable = !!tgt && (tgt.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select');
+      if (ev.key === 'Escape' || ev.key === 'Tab') return; // handled elsewhere
+      // Always stop propagation at the container boundary; preserve default behavior.
+      ev.stopPropagation();
+    };
+    cont?.addEventListener('keydown', onKeyDownBubble);
+    return () => {
+      window.removeEventListener('keydown', onKeyDownCapture, true);
+      cont?.removeEventListener('keydown', onKeyDownBubble);
+    };
   }, [state.isOpen, close]);
 
   React.useEffect(() => { return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }; }, []);
@@ -212,7 +244,7 @@ export const ProjectQuickViewPopoverProvider: React.FC<{ children: React.ReactNo
         </button>
       </div>
       {/* Slot for content */}
-      <div className="p-3 max-h-[70vh] overflow-auto">
+      <div className="p-3 max-h-[85vh] overflow-auto">
         {/* Lazy-mount container to avoid data fetching in provider */}
         {state.projectId != null ? (
           <QuickViewLazyContainer projectId={state.projectId} onMeasured={setContentSize} onContentChange={() => reposition()} />
@@ -251,4 +283,3 @@ const QuickViewLazyContainer: React.FC<{ projectId: number; onMeasured: (sz: { w
 };
 
 export default ProjectQuickViewPopoverProvider;
-

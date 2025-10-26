@@ -39,6 +39,20 @@ function friendlyErrorMessage(status: number, data: any, fallback: string): stri
 type CacheEntry<T> = { promise: Promise<T>; timestamp: number; data?: T };
 const inflightRequests = new Map<string, CacheEntry<any>>();
 const responseCache = new Map<string, CacheEntry<any>>();
+
+// Expose a narrowly scoped cache invalidator for deliverables GET endpoints
+export function invalidateDeliverablesCache() {
+  try {
+    const KEYS = Array.from(responseCache.keys());
+    for (const k of KEYS) {
+      if (k.includes('/deliverables/')) responseCache.delete(k);
+    }
+    const INFLIGHT = Array.from(inflightRequests.keys());
+    for (const k of INFLIGHT) {
+      if (k.includes('/deliverables/')) inflightRequests.delete(k);
+    }
+  } catch {}
+}
 // Store ETags by endpoint for conditional requests (detail routes)
 // Use shared ETag store to align behavior with typed client
 const DEFAULT_TTL_MS = 15000; // 15s TTL is enough to absorb StrictMode double effects
@@ -836,6 +850,7 @@ export const deliverablesApi = {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
+    try { invalidateDeliverablesCache(); } catch {}
     return res.data as unknown as Deliverable;
   },
 
@@ -846,6 +861,7 @@ export const deliverablesApi = {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
+    try { invalidateDeliverablesCache(); } catch {}
     return res.data as unknown as Deliverable;
   },
 
@@ -856,6 +872,7 @@ export const deliverablesApi = {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
+    try { invalidateDeliverablesCache(); } catch {}
     return;
   },
 

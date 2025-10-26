@@ -35,6 +35,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingFocusField, setEditingFocusField] = useState<'percentage'|'description'|'date'|'notes'|null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -78,6 +79,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       // Invalidate project filter metadata (future deliverables flags)
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       try { onDeliverablesChanged?.(); } catch {}
+      try { emitGridRefresh({ reason: 'deliverable-created' }); } catch {}
       setShowAddForm(false);
     } catch (err: any) {
       setError('Failed to create deliverable');
@@ -101,6 +103,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       await loadDeliverables();
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       try { onDeliverablesChanged?.(); } catch {}
+      try { emitGridRefresh({ reason: 'deliverable-updated' }); } catch {}
       setEditingId(null);
     } catch (err: any) {
       setError('Failed to update deliverable');
@@ -117,6 +120,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       await loadDeliverables();
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       try { onDeliverablesChanged?.(); } catch {}
+      try { emitGridRefresh({ reason: 'deliverable-deleted' }); } catch {}
     } catch (err: any) {
       setError('Failed to delete deliverable');
     }
@@ -187,6 +191,20 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
         </button>
       </div>
 
+      {/* Column Headers */}
+      {deliverables.length > 0 && (
+        <div className="flex items-center text-[var(--muted)] text-xs mb-1">
+          {/* Space for drag handle */}
+          <div className="w-4 mr-2" />
+          <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
+            <div className="font-medium">%</div>
+            <div className="font-medium">Description</div>
+            <div className="font-medium">Date</div>
+            <div className="font-medium">Notes</div>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="mb-2 p-2 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-xs">
           {error}
@@ -210,10 +228,12 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
               editing={editingId === deliverable.id}
               isDragged={draggedIndex === index}
               isDraggedOver={dragOverIndex === index}
-              onEdit={() => setEditingId(deliverable.id!)}
+              onEdit={() => { setEditingId(deliverable.id!); setEditingFocusField(null); }}
+              onEditField={(field) => { setEditingId(deliverable.id!); setEditingFocusField(field); }}
               onSave={(data) => handleUpdateDeliverable(deliverable.id!, data)}
               onCancel={() => setEditingId(null)}
               onDelete={() => handleDeleteDeliverable(deliverable.id!)}
+              focusField={editingId === deliverable.id ? editingFocusField : null}
               onDragStart={() => handleDragStart(index)}
               onDragOver={(e) => handleDragOver(e, index)}
               onDragLeave={handleDragLeave}
@@ -241,6 +261,7 @@ interface DeliverableRowProps {
   isDragged: boolean;
   isDraggedOver: boolean;
   onEdit: () => void;
+  onEditField: (field: 'percentage'|'description'|'date'|'notes') => void;
   onSave: (data: Partial<Deliverable>) => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -249,6 +270,7 @@ interface DeliverableRowProps {
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
+  focusField: 'percentage'|'description'|'date'|'notes'|null;
 }
 
 const DeliverableRow: React.FC<DeliverableRowProps> = ({
@@ -258,6 +280,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
   isDragged,
   isDraggedOver,
   onEdit,
+  onEditField,
   onSave,
   onCancel,
   onDelete,
@@ -266,6 +289,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
   onDragLeave,
   onDrop,
   onDragEnd,
+  focusField,
 }) => {
   const [editData, setEditData] = useState({
     percentage: deliverable.percentage,
@@ -274,6 +298,43 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
     notes: deliverable.notes || '',
     isCompleted: deliverable.isCompleted || false,
   });
+
+  // Lightweight per-cell inline edit state (no row-level edit chrome)
+  const [inlineField, setInlineField] = useState<null | 'percentage' | 'description' | 'date' | 'notes'>(null);
+  const [inlineDraft, setInlineDraft] = useState<string>('');
+
+  function startInline(field: 'percentage'|'description'|'date'|'notes') {
+    setInlineField(field);
+    switch (field) {
+      case 'percentage': setInlineDraft(editData.percentage != null ? String(editData.percentage) : ''); break;
+      case 'description': setInlineDraft(editData.description || ''); break;
+      case 'date': setInlineDraft(editData.date || ''); break;
+      case 'notes': setInlineDraft(editData.notes || ''); break;
+    }
+  }
+
+  async function commitInline() {
+    const field = inlineField; if (!field) return;
+    let patch: Partial<Deliverable> = {};
+    if (field === 'percentage') {
+      const n = inlineDraft.trim();
+      const parsed = n === '' ? null : Math.max(0, Math.min(100, Math.floor(Number(n))));
+      if (n !== '' && Number.isNaN(parsed)) { setInlineField(null); return; }
+      patch = { percentage: parsed } as Partial<Deliverable>;
+    } else if (field === 'description') {
+      patch = { description: inlineDraft } as Partial<Deliverable>;
+    } else if (field === 'date') {
+      const v = inlineDraft.trim();
+      patch = { date: v === '' ? null : v } as Partial<Deliverable>;
+    } else if (field === 'notes') {
+      patch = { notes: inlineDraft } as Partial<Deliverable>;
+    }
+    try {
+      await onSave(patch);
+    } finally {
+      setInlineField(null);
+    }
+  }
 
   // Update edit data when deliverable changes
   useEffect(() => {
@@ -328,6 +389,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             })}
             placeholder="%"
             className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+            ref={el => { if (focusField === 'percentage' && el) { setTimeout(() => el.focus(), 0); } }}
           />
 
           {/* Description Input */}
@@ -337,6 +399,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             onChange={(e) => setEditData({ ...editData, description: e.target.value })}
             placeholder="Description"
             className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
+            ref={el => { if (focusField === 'description' && el) { setTimeout(() => el.focus(), 0); } }}
           />
 
           {/* Date Input with Remove Button */}
@@ -346,6 +409,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
               value={editData.date || ''}
               onChange={(e) => setEditData({ ...editData, date: e.target.value || null })}
               className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs w-full pr-5"
+              ref={el => { if (focusField === 'date' && el) { setTimeout(() => el.focus(), 0); } }}
             />
             {editData.date && (
               <button
@@ -364,6 +428,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
             placeholder="Notes"
             className="px-1 py-0.5 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-xs"
+            ref={el => { if (focusField === 'notes' && el) { setTimeout(() => el.focus(), 0); } }}
           />
 
           {/* Action Buttons */}
@@ -421,38 +486,95 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
       {/* Drag Handle */}
       <DragHandle />
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
-        <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
-          {deliverable.percentage !== null ? `${deliverable.percentage}%` : '-'}
+        {/* Content Grid – per-cell inline editing */}
+        <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
+          <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
+            {inlineField === 'percentage' ? (
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="px-1 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] text-xs w-16 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                value={inlineDraft}
+                onChange={(e) => setInlineDraft(e.currentTarget.value)}
+                onBlur={commitInline}
+                onKeyDown={(e) => { if (e.key==='Enter'){ e.preventDefault(); commitInline(); } else if (e.key==='Escape'){ e.preventDefault(); setInlineField(null); } }}
+                autoFocus
+              />
+            ) : (
+              <button type="button" className="hover:underline" onClick={() => startInline('percentage')}>
+                {deliverable.percentage !== null ? `${deliverable.percentage}%` : '-'}
+              </button>
+            )}
+          </div>
+          <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'} truncate min-w-0`}>
+            {inlineField === 'description' ? (
+              <input
+                type="text"
+                className="w-full px-1 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] text-xs"
+                value={inlineDraft}
+                onChange={(e) => setInlineDraft(e.currentTarget.value)}
+                onBlur={commitInline}
+                onKeyDown={(e) => { if (e.key==='Enter'){ e.preventDefault(); commitInline(); } else if (e.key==='Escape'){ e.preventDefault(); setInlineField(null); } }}
+                autoFocus
+              />
+            ) : (
+              <button type="button" className="truncate hover:underline text-left w-full" onClick={() => startInline('description')}>
+                {deliverable.description || '-'}
+              </button>
+            )}
+          </div>
+          <div className="text-[var(--muted)] whitespace-nowrap">
+            {inlineField === 'date' ? (
+              <input
+                type="date"
+                className="px-1 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] text-xs"
+                value={inlineDraft}
+                onChange={(e) => setInlineDraft(e.currentTarget.value)}
+                onBlur={commitInline}
+                onKeyDown={(e) => { if (e.key==='Enter'){ e.preventDefault(); commitInline(); } else if (e.key==='Escape'){ e.preventDefault(); setInlineField(null); } }}
+                autoFocus
+              />
+            ) : (
+              <button type="button" className="hover:underline" onClick={() => startInline('date')}>
+                {deliverable.date ? formatDateNoYear(deliverable.date) : '-'}
+              </button>
+            )}
+          </div>
+          <div className="text-[var(--muted)] truncate min-w-0">
+            {inlineField === 'notes' ? (
+              <input
+                type="text"
+                className="w-full px-1 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] text-xs"
+                value={inlineDraft}
+                onChange={(e) => setInlineDraft(e.currentTarget.value)}
+                onBlur={commitInline}
+                onKeyDown={(e) => { if (e.key==='Enter'){ e.preventDefault(); commitInline(); } else if (e.key==='Escape'){ e.preventDefault(); setInlineField(null); } }}
+                autoFocus
+              />
+            ) : (
+              <button type="button" className="truncate hover:underline text-left w-full" onClick={() => startInline('notes')}>
+                {deliverable.notes || '-'}
+              </button>
+            )}
+          </div>
         </div>
-        <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'} truncate min-w-0`}>
-          {deliverable.description || '-'}
-        </div>
-        <div className="text-[var(--muted)] whitespace-nowrap">
-          {deliverable.date ? formatDateNoYear(deliverable.date) : '-'}
-        </div>
-        <div className="text-[var(--muted)] truncate min-w-0">
-          {deliverable.notes || '-'}
-        </div>
-      </div>
       
       {/* Action Buttons */}
       <div className="flex gap-1 items-center ml-2">
         {deliverable.isCompleted && (
           <span className="text-emerald-400 text-xs mr-1">✓</span>
         )}
-        <button
-          onClick={onEdit}
-          className="text-[var(--text)] hover:bg-[var(--cardHover)] px-1 py-0.5 rounded text-xs transition-colors"
-        >
-          Edit
-        </button>
+        
         <button
           onClick={onDelete}
-          className="text-red-400 hover:bg-red-500/20 px-1 py-0.5 rounded text-xs transition-colors"
+          className="w-4 h-4 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded transition-colors"
+          title="Delete deliverable"
+          aria-label="Delete deliverable"
         >
-          Del
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
       </div>
     </div>
