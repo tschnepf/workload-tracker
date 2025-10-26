@@ -30,6 +30,8 @@ import StatusFilterChips from '@/components/compact/StatusFilterChips';
 import HeaderActions from '@/components/compact/HeaderActions';
 import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
+import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Project Assignments Grid (scaffold)
 // Prescriptive: lean, best-practice; no client-side week calculations.
@@ -1130,7 +1132,32 @@ const ProjectAssignmentsGrid: React.FC = () => {
                     {/* Project name (no chevron) with status aligned to right */}
                     <div className="pr-2 py-2 text-[var(--text)] text-sm flex items-center" title={p.name}>
                       <div className="min-w-0 truncate">
-                        <span className="truncate">{p.name}</span>
+                        {p.id ? (
+                          <button
+                            type="button"
+                            className="truncate cursor-pointer hover:underline"
+                            onClick={(e) => { e.stopPropagation(); openQuickView(p.id!, e.currentTarget as HTMLElement); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openQuickView(p.id!, e.currentTarget as HTMLElement); } }}
+                            onMouseEnter={() => {
+                              if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                              prefetchTimerRef.current = window.setTimeout(() => {
+                                queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
+                              }, 150);
+                            }}
+                            onMouseLeave={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                            onFocus={() => {
+                              if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                              prefetchTimerRef.current = window.setTimeout(() => {
+                                queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
+                              }, 150);
+                            }}
+                            onBlur={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                          >
+                            {p.name}
+                          </button>
+                        ) : (
+                          <span className="truncate">{p.name}</span>
+                        )}
                       </div>
                       <div className="relative ml-auto" data-dropdown onClick={(e) => e.stopPropagation()}>
                         <StatusBadge
@@ -1502,4 +1529,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
 export default ProjectAssignmentsGrid;
 
-
+  const { open: openQuickView } = useProjectQuickViewPopover();
+  const queryClient = useQueryClient();
+  const prefetchTimerRef = React.useRef<number | null>(null);

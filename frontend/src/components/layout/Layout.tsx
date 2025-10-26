@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { logout as performLogout } from '@/store/auth';
 import { TopBarSlotsProvider, useTopBarSlotValues } from '@/components/layout/TopBarSlots';
 import { LayoutDensityProvider, useLayoutDensity } from '@/components/layout/useLayoutDensity';
+import { ProjectQuickViewPopoverProvider } from '@/components/projects/quickview';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -134,7 +135,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             hamburgerRef={hamburgerRef}
           />
           <MainWithDensity ariaBusy={nav.state !== 'idle'}>
-            {children}
+            <ProjectQuickViewPopoverProvider>
+              {children}
+            </ProjectQuickViewPopoverProvider>
           </MainWithDensity>
         </TopBarSlotsProvider>
       </div>
