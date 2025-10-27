@@ -8,6 +8,7 @@ import { deliverablesApi, deliverableAssignmentsApi } from '@/services/api';
 import type { DeliverableCalendarItem } from '@/types/models';
 import CalendarGrid from '@/components/deliverables/CalendarGrid';
 import { fmtDate, startOfWeekSunday } from '@/components/deliverables/calendar.utils';
+import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 
 // Grid helpers come from shared calendar.utils via CalendarGrid
 
@@ -27,6 +28,7 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
   const [items, setItems] = React.useState<CalendarItemUnion[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = React.useState<number>(0);
 
   const start = React.useMemo(() => fmtDate(anchor), [anchor]);
   const end = React.useMemo(() => {
@@ -34,6 +36,17 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
     d.setDate(d.getDate() + 7 * weeksCount - 1);
     return fmtDate(d);
   }, [anchor, weeksCount]);
+
+  // Live refresh when deliverables change elsewhere (e.g., popover)
+  React.useEffect(() => {
+    const unsub = subscribeGridRefresh((p) => {
+      const r = (p?.reason || '').toLowerCase();
+      if (r.includes('deliverable')) {
+        setRefreshTick((t) => t + 1);
+      }
+    });
+    return unsub;
+  }, []);
 
   useAuthenticatedEffect(() => {
     let active = true;
@@ -100,7 +113,7 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
       }
     })();
     return () => { active = false; };
-  }, [personId, start, end]);
+  }, [personId, start, end, refreshTick]);
 
   // Build date grid
   // Grid rows and date mapping handled by CalendarGrid

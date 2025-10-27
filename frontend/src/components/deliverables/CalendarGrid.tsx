@@ -1,4 +1,7 @@
 import React from 'react';
+import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import { useQueryClient } from '@tanstack/react-query';
+import { projectsApi } from '@/services/api';
 import { fmtDate, typeColors, classify, buildEventLabel, buildPreLabel, startOfWeekSunday } from './calendar.utils';
 
 // Presentational pill for a single deliverable
@@ -14,17 +17,44 @@ type PillProps = {
 const DeliverablePill: React.FC<PillProps> = ({ ev, pid, dim, onHover, onClear, onKey }) => {
   const color = typeColors[classify(ev)] || typeColors.milestone;
   const label = buildEventLabel(ev);
+  const { open } = useProjectQuickViewPopover();
+  const queryClient = useQueryClient();
+  const prefetchTimerRef = React.useRef<number | null>(null);
+  // Prevent re-triggering hover when focus is programmatically restored to the pill
+  // after closing the popover (common a11y pattern). We set this flag on mouse down/click
+  // and skip the next focus-induced hover.
+  const ignoreNextFocusRef = React.useRef(false);
   return (
     <div
       key={`deliverable-${ev.id}-${ev.date}`}
       title={label}
       role="button"
       tabIndex={0}
-      onMouseEnter={() => { if (pid != null) onHover(pid); }}
-      onFocus={() => { if (pid != null) onHover(pid); }}
+      onMouseDown={() => { ignoreNextFocusRef.current = true; }}
+      onMouseEnter={() => {
+        if (pid != null) {
+          onHover(pid);
+          // light prefetch for faster popover open
+          if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+          prefetchTimerRef.current = window.setTimeout(() => {
+            queryClient.ensureQueryData({ queryKey: ['projects', pid], queryFn: () => projectsApi.get(pid) });
+          }, 120);
+        }
+      }}
+      onFocus={() => {
+        if (ignoreNextFocusRef.current) { ignoreNextFocusRef.current = false; return; }
+        if (pid != null) onHover(pid);
+      }}
       onBlur={onClear}
       onMouseLeave={onClear}
       onKeyDown={(e) => onKey(pid, e)}
+      onClick={(e) => {
+        if (pid != null) {
+          ignoreNextFocusRef.current = true; // ensure focus restore does not re-hover
+          e.stopPropagation?.();
+          open(pid, e.currentTarget as HTMLElement, { placement: 'center' });
+        }
+      }}
       className={`text-xs text-white rounded px-2 py-1 truncate ${dim ? 'opacity-5 transition-opacity duration-300' : ''}`}
       style={{ background: color }}
     >
@@ -292,4 +322,3 @@ const CalendarGrid: React.FC<Props> = ({ items, anchor, weeksCount, showPre, cla
 };
 
 export default CalendarGrid;
-

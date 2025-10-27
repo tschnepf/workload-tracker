@@ -1,6 +1,9 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
 import { Link } from 'react-router';
+import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import { useQueryClient } from '@tanstack/react-query';
+import { projectsApi } from '@/services/api';
 import { allStatusOptions, formatStatus, getStatusColor } from '@/components/projects/status.utils';
 
 export type ProjectItem = { id: number; name: string | null; client?: string | null; status?: string | null; nextDeliverableDate?: string | null };
@@ -23,6 +26,10 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
   const filtered = selected.length > 0
     ? sorted.filter(p => selected.includes((p.status || '').toLowerCase()))
     : sorted;
+
+  const { open } = useProjectQuickViewPopover();
+  const queryClient = useQueryClient();
+  const prefetchTimerRef = React.useRef<number | null>(null);
 
   return (
     <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
@@ -60,7 +67,34 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
             {filtered.map(p => (
               <li key={p.id} className="grid grid-cols-[minmax(140px,200px)_1fr_auto] gap-4 items-center">
                 <div className="text-[#94a3b8] whitespace-nowrap overflow-hidden text-ellipsis">{p.client || '—'}</div>
-                <div className="text-[var(--text)]"><Link to={`/projects/${p.id}/edit`} className="hover:underline">{p.name || `Project ${p.id}`}</Link></div>
+                <div className="text-[var(--text)]">
+                  {p.id ? (
+                    <button
+                      type="button"
+                      className="hover:underline truncate"
+                      onClick={(e) => { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
+                      onMouseEnter={() => {
+                        if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                        prefetchTimerRef.current = window.setTimeout(() => {
+                          queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
+                        }, 150);
+                      }}
+                      onMouseLeave={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                      onFocus={() => {
+                        if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                        prefetchTimerRef.current = window.setTimeout(() => {
+                          queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
+                        }, 150);
+                      }}
+                      onBlur={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                    >
+                      {p.name || `Project ${p.id}`}
+                    </button>
+                  ) : (
+                    <span className="truncate">{p.name || `Project ${p.id}`}</span>
+                  )}
+                </div>
                 <div className={`text-xs ${getStatusColor(p.status || '')}`}>{formatStatus(p.status || '')}</div>
               </li>
             ))}
@@ -72,4 +106,3 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
 };
 
 export default MyProjectsCard;
-

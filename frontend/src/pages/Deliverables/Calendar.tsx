@@ -9,6 +9,7 @@ import { getAccessToken } from '@/utils/auth';
 import { darkTheme } from '../../theme/tokens';
 import CalendarGrid from '@/components/deliverables/CalendarGrid';
 import { fmtDate, startOfWeekSunday, typeColors } from '@/components/deliverables/calendar.utils';
+import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 
 type CalendarItemUnion = (DeliverableCalendarItem & { itemType?: 'deliverable' }) | {
   itemType: 'pre_deliverable'; id: number; parentDeliverableId: number; project: number; projectName?: string | null; projectClient?: string | null; preDeliverableType?: string; title: string; date: string | null; isCompleted: boolean; isOverdue?: boolean;
@@ -28,6 +29,7 @@ const MilestoneCalendarPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showPre, setShowPre] = useState<boolean>(true);
+  const [refreshTick, setRefreshTick] = useState<number>(0);
 
   // Person filter state
   const [personQuery, setPersonQuery] = useState<string>('');
@@ -37,6 +39,17 @@ const MilestoneCalendarPage: React.FC = () => {
   const [allowedDeliverableIds, setAllowedDeliverableIds] = useState<Set<number> | null>(null);
   const [allowedProjectIds, setAllowedProjectIds] = useState<Set<number> | null>(null);
   const [filterLoading, setFilterLoading] = useState<boolean>(false);
+
+  // React to deliverable updates emitted from popover/other pages
+  React.useEffect(() => {
+    const unsub = subscribeGridRefresh((p) => {
+      const r = (p?.reason || '').toLowerCase();
+      if (r.includes('deliverable')) {
+        setRefreshTick((t) => t + 1);
+      }
+    });
+    return unsub;
+  }, []);
 
   useAuthenticatedEffect(() => {
     let active = true;
@@ -68,7 +81,7 @@ const MilestoneCalendarPage: React.FC = () => {
       }
     })();
     return () => { active = false; };
-  }, [start, end]);
+  }, [start, end, refreshTick]);
 
   // When a person is selected, fetch their deliverable links and project assignments once
   useAuthenticatedEffect(() => {
