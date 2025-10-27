@@ -6,6 +6,9 @@ import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
+import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import { useQueryClient } from '@tanstack/react-query';
+import { projectsApi } from '@/services/api';
 
 export interface ProjectCellProps {
   assignmentId: number;
@@ -25,13 +28,41 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
   const [openRole, setOpenRole] = React.useState<boolean>(false);
   const roleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
+  const { open: openQuickView } = useProjectQuickViewPopover();
+  const queryClient = useQueryClient();
+  const prefetchTimerRef = React.useRef<number | null>(null);
   return (
     <div className="flex items-start pt-0.5 pb-1 pr-2">
       <div className="min-w-0 flex-1">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gridTemplateRows: 'auto auto', columnGap: '0.5rem' }}>
           {/* Project name (row 1, col 1) */}
           <div className="text-[var(--text)] text-xs truncate leading-5" title={projectName} style={{ gridColumn: 1, gridRow: 1 }}>
-            {projectName}
+            {projectId ? (
+              <button
+                type="button"
+                className="truncate hover:underline"
+                onClick={(e) => { e.stopPropagation(); openQuickView(projectId, e.currentTarget as HTMLElement, { placement: 'center' }); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openQuickView(projectId, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
+                onMouseEnter={() => {
+                  if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                  prefetchTimerRef.current = window.setTimeout(() => {
+                    queryClient.ensureQueryData({ queryKey: ['projects', projectId], queryFn: () => projectsApi.get(projectId) });
+                  }, 150);
+                }}
+                onMouseLeave={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                onFocus={() => {
+                  if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                  prefetchTimerRef.current = window.setTimeout(() => {
+                    queryClient.ensureQueryData({ queryKey: ['projects', projectId], queryFn: () => projectsApi.get(projectId) });
+                  }, 150);
+                }}
+                onBlur={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+              >
+                {projectName}
+              </button>
+            ) : (
+              <span className="truncate">{projectName}</span>
+            )}
           </div>
           {/* Status (row 1-2, col 2) */}
           <div className="relative" style={{ gridColumn: 2, gridRow: '1 / span 2' }}>
