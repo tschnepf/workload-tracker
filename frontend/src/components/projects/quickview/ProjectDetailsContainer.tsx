@@ -5,6 +5,7 @@ import StatusBadge from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import DeliverablesSection from '@/components/deliverables/DeliverablesSection';
+import PreDeliverablesSectionEmbedded from '@/components/deliverables/PreDeliverablesSectionEmbedded';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { useQueryClient } from '@tanstack/react-query';
 import ProjectDetailsCore from './ProjectDetailsCore';
@@ -76,6 +77,10 @@ export const ProjectDetailsContainer: React.FC<{ projectId: number }> = ({ proje
               reposition();
             }}
           />
+          <PreDeliverablesSectionEmbedded
+            projectId={project.id!}
+            onChanged={() => reposition()}
+          />
         </div>
       )}
     </ProjectDetailsCore>
@@ -83,4 +88,3 @@ export const ProjectDetailsContainer: React.FC<{ projectId: number }> = ({ proje
 };
 
 export default ProjectDetailsContainer;
-
