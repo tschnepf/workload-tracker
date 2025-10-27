@@ -33,12 +33,16 @@ function computePosition(anchor: DOMRect, contentSize: { width: number; height: 
   const vh = window.innerHeight;
   const maxWidth = Math.min(1120, vw - VIEWPORT_PADDING * 2);
 
-  // Centered placement: ignore anchor and center within viewport
+  // Centered placement: center horizontally but bias vertically near the top
+  // so tall content stays visible without overlapping the bottom of the viewport.
   if (placement === 'center') {
     const width = Math.min(Math.max(720, contentSize.width || 720), maxWidth);
+    const preferredTop = Math.round(vh * 0.12); // ~12% from top
+    const height = contentSize.height || 360;
+    const maxTop = vh - VIEWPORT_PADDING - height; // keep bottom within viewport
     const top = Math.max(
       VIEWPORT_PADDING,
-      Math.round((vh - (contentSize.height || 360)) / 2)
+      Math.min(preferredTop, maxTop)
     );
     const left = Math.max(
       VIEWPORT_PADDING,
@@ -239,6 +243,8 @@ export const ProjectQuickViewPopoverProvider: React.FC<{ children: React.ReactNo
         top: 0,
         left: 0,
         width: 420,
+        // Prevent overflowing beyond viewport height
+        maxHeight: `calc(100vh - ${VIEWPORT_PADDING * 2}px)`,
         zIndex: POPOVER_Z,
         // No transform/filter to avoid new stacking contexts
       }}
