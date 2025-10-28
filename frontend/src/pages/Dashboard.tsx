@@ -21,6 +21,7 @@ import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
 import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
+import AssignedHoursTimelineCard from '@/components/analytics/AssignedHoursTimelineCard';
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -761,6 +762,9 @@ const Dashboard: React.FC = () => {
           )}
         </Card>
         )}
+
+        {/* Assigned Hours Timeline */}
+        <AssignedHoursTimelineCard />
 
         {/* Utilization Distribution */}
         <Card className="bg-[var(--card)] border-[var(--border)]">

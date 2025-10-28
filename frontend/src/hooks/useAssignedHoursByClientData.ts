@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
-import { getProjectGridSnapshot } from '@/services/projectAssignmentsApi';
+import { getAssignedHoursByClient } from '@/services/analyticsApi';
 
 export type ClientHorizonWeeks = 4 | 8 | 12 | 16;
 
@@ -17,11 +17,6 @@ type Args = {
   includeChildren?: boolean;
 };
 
-export type ProjectSnapshot = {
-  weekKeys: string[];
-  projects: Array<{ id: number; name: string; client?: string | null; status?: string | null }>;
-  hoursByProject: Record<string, Record<string, number>>;
-};
 
 const PALETTE = [
   '#34d399', // emerald
@@ -45,7 +40,6 @@ export function useAssignedHoursByClientData({ weeks, departmentId, includeChild
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [slices, setSlices] = useState<ClientSlice[]>([]);
-  const [snapshot, setSnapshot] = useState<ProjectSnapshot | null>(null);
 
   useAuthenticatedEffect(() => {
     let mounted = true;
@@ -54,37 +48,16 @@ export function useAssignedHoursByClientData({ weeks, departmentId, includeChild
         setLoading(true);
         setError(null);
 
-        const snap = await getProjectGridSnapshot({
+        const res = await getAssignedHoursByClient({
           weeks,
           department: departmentId != null ? Number(departmentId) : undefined,
           include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
-        } as any);
+        });
         if (!mounted) return;
-
-        const weekKeys = snap.weekKeys || [];
-        const hoursByProject = snap.hoursByProject || {};
-        setSnapshot({ weekKeys, projects: snap.projects || [], hoursByProject });
-
-        const clientTotals = new Map<string, number>();
-
-        for (const p of snap.projects || []) {
-          const clientRaw = (p.client ?? 'Unknown').toString().trim();
-          const client = clientRaw.length > 0 ? clientRaw : 'Unknown';
-          const wkmap = hoursByProject[String(p.id)] || {};
-          let sum = 0;
-          for (const wk of weekKeys) {
-            const v = wkmap[wk];
-            if (typeof v === 'number' && isFinite(v)) sum += v;
-          }
-          if (sum <= 0) continue;
-          clientTotals.set(client, (clientTotals.get(client) || 0) + sum);
-        }
-
-        const entries = Array.from(clientTotals.entries()).sort((a, b) => b[1] - a[1]);
-        const built: ClientSlice[] = entries.map(([label, value], idx) => ({
-          key: label,
-          label,
-          value,
+        const built: ClientSlice[] = (res.clients || []).map((row, idx) => ({
+          key: row.label,
+          label: row.label,
+          value: row.hours,
           color: PALETTE[idx % PALETTE.length],
         }));
 
@@ -102,7 +75,7 @@ export function useAssignedHoursByClientData({ weeks, departmentId, includeChild
   }, [weeks, departmentId, includeChildren]);
 
   const total = Math.max(0, slices.reduce((s, x) => s + x.value, 0));
-  return { loading, error, slices, total, snapshot } as { loading: boolean; error: string | null; slices: ClientSlice[]; total: number; snapshot: ProjectSnapshot | null };
+  return { loading, error, slices, total } as { loading: boolean; error: string | null; slices: ClientSlice[]; total: number };
 }
 
 export type { Args as AssignedHoursByClientArgs };

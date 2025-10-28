@@ -1,7 +1,8 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
-import { useAssignedHoursByClientData, type ClientHorizonWeeks, type ProjectSnapshot } from '@/hooks/useAssignedHoursByClientData';
+import { useAssignedHoursByClientData, type ClientHorizonWeeks } from '@/hooks/useAssignedHoursByClientData';
+import { getAssignedHoursClientProjects } from '@/services/analyticsApi';
 
 type Slice = { key: string; label: string; value: number; color: string };
 
@@ -83,7 +84,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
   const { state: deptState } = useDepartmentFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
   const includeChildren = useGlobalDepartmentFilter ? deptState.includeChildren : !!includeChildrenOverride;
-  const { loading, error, slices, total, snapshot } = useAssignedHoursByClientData({ weeks, departmentId, includeChildren });
+  const { loading, error, slices, total } = useAssignedHoursByClientData({ weeks, departmentId, includeChildren });
 
   const [focusClient, setFocusClient] = React.useState<string | null>(null);
 
@@ -93,26 +94,40 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
     '#c084fc', '#2dd4bf', '#fb7185',
   ], []);
 
-  function buildProjectSlices(targetClient: string, snap: ProjectSnapshot | null): Slice[] {
-    if (!snap) return [];
-    const { weekKeys, projects, hoursByProject } = snap;
-    const normalized = (s: string | null | undefined) => {
-      const t = (s ?? 'Unknown').toString().trim();
-      return t.length > 0 ? t : 'Unknown';
-    };
-    const rows: Slice[] = [];
-    const filtered = projects.filter(p => normalized(p.client) === targetClient);
-    filtered.forEach((p, idx) => {
-      const wkmap = hoursByProject[String(p.id)] || {};
-      let sum = 0;
-      for (const wk of weekKeys) {
-        const v = wkmap[wk];
-        if (typeof v === 'number' && isFinite(v)) sum += v;
+  const [drilldownLoading, setDrilldownLoading] = React.useState(false);
+  const [drilldownError, setDrilldownError] = React.useState<string | null>(null);
+  const [drilldown, setDrilldown] = React.useState<Slice[]>([]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!focusClient) return;
+      try {
+        setDrilldownLoading(true);
+        setDrilldownError(null);
+        const res = await getAssignedHoursClientProjects(focusClient, {
+          weeks,
+          department: departmentId != null ? Number(departmentId) : undefined,
+          include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
+        });
+        if (cancelled) return;
+        const rows = (res.projects || []).map((p, idx) => ({
+          key: String(p.id),
+          label: p.name,
+          value: p.hours,
+          color: PALETTE[idx % PALETTE.length],
+        }));
+        setDrilldown(rows);
+      } catch (e: any) {
+        if (cancelled) return;
+        setDrilldownError(e?.message || 'Failed to load client projects');
+      } finally {
+        if (!cancelled) setDrilldownLoading(false);
       }
-      if (sum > 0) rows.push({ key: String(p.id), label: p.name, value: sum, color: PALETTE[idx % PALETTE.length] });
-    });
-    return rows.sort((a, b) => b.value - a.value);
-  }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [focusClient, weeks, departmentId, includeChildren]);
 
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
@@ -194,13 +209,16 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
               {/* Panel 2: By Project within selected Client */}
               <div className="w-full flex-shrink-0 flex items-center gap-3">
                 <div className="shrink-0">
-                  <PieChart
-                    slices={buildProjectSlices(focusClient || '', snapshot)}
-                    size={size}
-                  />
+                  <PieChart slices={drilldown} size={size} />
                 </div>
                 <div className="flex flex-col gap-2 w-full">
-                  {buildProjectSlices(focusClient || '', snapshot).map((s) => (
+                  {drilldownLoading && (
+                    <div className="text-[var(--muted)] text-xs">Loading projects…</div>
+                  )}
+                  {drilldownError && (
+                    <div className="text-red-400 text-xs">{drilldownError}</div>
+                  )}
+                  {!drilldownLoading && !drilldownError && drilldown.map((s) => (
                     <div key={s.key} className="flex items-center gap-2 w-full">
                       <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
                       <div className="text-xs text-[var(--text)] flex items-center justify-between gap-2 w-full whitespace-nowrap">

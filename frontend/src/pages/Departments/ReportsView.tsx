@@ -8,6 +8,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
+import AssignedHoursTimelineCard from '@/components/analytics/AssignedHoursTimelineCard';
 import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
 import { resolveUtilizationLevel, defaultUtilizationScheme } from '@/util/utilization';
@@ -277,10 +278,15 @@ const ReportsView: React.FC = () => {
           </Card>
         </div>
 
-        {/* Assigned Hours Breakdown (Future) */}
+        {/* Assigned Hours Breakdown */}
         <div className="flex flex-wrap gap-4">
           <AssignedHoursBreakdownCard />
           <AssignedHoursByClientCard />
+        </div>
+
+        {/* Assigned Hours Timeline */}
+        <div className="mt-4">
+          <AssignedHoursTimelineCard />
         </div>
 
         {/* Department Reports Table */}
