@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
+import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
 import { resolveUtilizationLevel, defaultUtilizationScheme } from '@/util/utilization';
 import { dashboardApi, departmentsApi, peopleApi, personSkillsApi } from '@/services/api';
@@ -274,6 +275,9 @@ const ReportsView: React.FC = () => {
             </div>
           </Card>
         </div>
+
+        {/* Assigned Hours Breakdown (Future) */}
+        <AssignedHoursBreakdownCard />
 
         {/* Department Reports Table */}
         <Card className="bg-[#2d2d30] border-[#3e3e42]">

@@ -19,6 +19,7 @@ import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
 import { DashboardData, Department, PersonSkill } from '../types/models';
 import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
+import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -368,8 +369,8 @@ const Dashboard: React.FC = () => {
           </div>
         ) : null}
 
-        {/* Summary Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {/* Summary Stats Cards + Analytics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
           <Card className="bg-[var(--card)] border-[var(--border)]">
             <div className="text-[var(--muted)] text-sm">Total Team Members</div>
             <div className="text-2xl font-bold text-[var(--text)]">{data.summary.total_people}</div>
@@ -397,6 +398,9 @@ const Dashboard: React.FC = () => {
             <div className="text-[var(--muted)] text-sm">Overallocated</div>
             <div className="text-2xl font-bold text-red-400">{data.summary.overallocated_count}</div>
           </Card>
+
+          {/* Future Assigned Hours (compact) */}
+          <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -567,6 +571,7 @@ const Dashboard: React.FC = () => {
               <div className="text-[var(--muted)] text-sm">{heatLoading ? 'Loading.' : 'No data'}</div>
             )}
           </Card>
+
           
 
           {/* Team Overview (below heatmap) */}
@@ -802,4 +807,3 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
-

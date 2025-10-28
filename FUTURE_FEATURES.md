@@ -482,8 +482,48 @@ Sources: `prompts/R2-REBUILD-004-MANAGER-FEATURES.md`, `prompts/R2-REBUILD-002-B
 
 ## UI Polish — Calendar Hover Highlight
 
+## VULERABILITY FIXES
+
+Context
+- npm audit surfaced a handful of dev-tooling vulnerabilities. These do not ship to end users but impact CI/dev supply chain risk and should be remediated.
+
+Remediation Items (priority ordered)
+- High: Playwright/@playwright/test (GHSA-7mvr-c777-76hp)
+  - Risk: Browser downloads without SSL cert verification in older versions can enable MITM on CI/dev.
+  - Action: Bump @playwright/test to ^1.56.1 (pulls Playwright =1.55.1).
+
+- High: tar-fs symlink traversal (GHSA-vj76-c3g6-qr5v)
+  - Risk: Malicious tar could write outside extraction dir during tooling downloads/extracts.
+  - Action: Add overrides forcing 	ar-fs to ^3.1.1.
+
+- Moderate: Vite dev server Windows path traversal (GHSA-93m4-6634-74q7)
+  - Risk: Dev-only server.fs.deny bypass via backslash; exposure if dev server is reachable by untrusted clients.
+  - Action: Bump ite to ^7.1.12.
+
+- Low (transitive): tmp, external-editor, inquirer, @lhci/cli
+  - Risk: Temp-file symlink issues and editor/inquirer chains; dev-only impact.
+  - Action: Override to patched ranges: 	mp@^0.2.4, external-editor@^3.1.0, inquirer@^9.3.9; update @lhci/cli or pin subdeps via overrides.
+
+Implementation Steps
+1. Update rontend/package.json:
+   - DevDeps: @playwright/test@^1.56.1, ite@^7.1.12.
+   - Add overrides for: 	ar-fs@^3.1.1, 	mp@^0.2.4, external-editor@^3.1.0, inquirer@^9.3.9.
+2. cd frontend && npm install (refresh lockfile). Clear CI caches if necessary.
+3. Run 
+pm run build, 
+pm audit, and E2E tests to validate.
+4. Commit lockfile changes and push. Track Dependabot to close alerts.
+
+Acceptance Criteria
+- 
+pm audit reports 0 high/critical issues.
+- CI builds green on fresh cache.
+- No dev-server behavior regressions; Playwright tests still run/install safely.
+
 - Add project-scoped hover highlight to Deliverables Calendar.
   - Hovering a deliverable or a grouped pre‑deliverable card dims other projects (opacity only) and keeps the target project at full intensity.
   - Keyboard: focusing a card highlights the project; Esc clears. No hover on touch/mobile.
   - No layout changes; only class toggles to avoid reflow. State resets on week/navigation changes.
+
+
 
