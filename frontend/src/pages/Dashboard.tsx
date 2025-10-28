@@ -20,6 +20,7 @@ import { DashboardData, Department, PersonSkill } from '../types/models';
 import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
+import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -399,8 +400,11 @@ const Dashboard: React.FC = () => {
             <div className="text-2xl font-bold text-red-400">{data.summary.overallocated_count}</div>
           </Card>
 
-          {/* Future Assigned Hours (compact) */}
+          {/* Future Assigned Hours by Status (compact) */}
           <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
+
+          {/* Future Assigned Hours by Client (double width vs. compact) */}
+          <AssignedHoursByClientCard size={96} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

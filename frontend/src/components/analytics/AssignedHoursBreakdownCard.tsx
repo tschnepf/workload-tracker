@@ -1,12 +1,12 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
-import { useAssignedHoursBreakdown, type HorizonWeeks, type Slice } from '@/hooks/useAssignedHoursBreakdown';
+import { useAssignedHoursBreakdownData, type HorizonWeeks, type Slice } from '@/hooks/useAssignedHoursBreakdownData';
 
 // removed old donut chart (kept PieChart below)
 
 // Full pie renderer (filled sectors). Used for compact analytics card.
-function PieChart({ slices, size = 120 }: { slices: Slice[]; size?: number }) {
+function PieChart({ slices, size = 120, title = 'Assigned Hours by Status' }: { slices: Slice[]; size?: number; title?: string }) {
   const total = Math.max(0, slices.reduce((s, x) => s + x.value, 0));
   const data = total > 0 ? slices : slices.map(s => ({ ...s, value: 1 }));
   const sum = data.reduce((s, x) => s + x.value, 0);
@@ -46,8 +46,15 @@ function PieChart({ slices, size = 120 }: { slices: Slice[]; size?: number }) {
     return <path key={`${s.key}-${idx}`} d={d} fill={s.color} />;
   });
 
+  // Compose a short description for a11y
+  const desc = total > 0
+    ? data.map(s => `${s.label}: ${Math.round(s.value)} hours`).join(', ')
+    : 'No assigned hours';
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <svg role="img" aria-label={title} width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <title>{title}</title>
+      <desc>{desc}</desc>
       {total === 0 && <circle cx={cx} cy={cy} r={r} fill="rgba(148,163,184,0.25)" />}
       {paths}
     </svg>
@@ -75,7 +82,7 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
   const { state: deptState } = useDepartmentFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
   const includeChildren = useGlobalDepartmentFilter ? deptState.includeChildren : !!includeChildrenOverride;
-  const { loading, error, slices, total } = useAssignedHoursBreakdown({ weeks, departmentId, includeChildren });
+  const { loading, error, slices, total } = useAssignedHoursBreakdownData({ weeks, departmentId, includeChildren });
 
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
@@ -83,7 +90,7 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
     <Card className={`bg-[var(--card)] border-[var(--border)] w-[280px] max-w-[320px] ${className || ''}`}>
       <div className="p-4">
         <div className="mb-2">
-          <h3 className="text-base font-semibold text-[var(--text)]">Future Assigned Hours</h3>
+          <h3 className="text-base font-semibold text-[var(--text)]">Assigned Hours</h3>
           <div className="text-[10px] text-[var(--muted)]">Includes current week; by project type</div>
         </div>
         <div className="flex items-center gap-1 mb-2">
