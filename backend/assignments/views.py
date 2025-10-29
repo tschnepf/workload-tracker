@@ -872,6 +872,415 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         return Response(payload)
 
     @extend_schema(
+        description=(
+            "Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.\n\n"
+            "Classification rules: explicit phase in description (SD/DD/IFP) wins; otherwise map by percentage: 0-39%→SD, 40-80%→DD, 81-100%→IFP; unknown→other.\n"
+            "Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums. Non-matching items are returned in 'extras' by label (desc or percent). No generic 'other' bucket is included in the series.\n"
+            "Response: { weekKeys: [..], series: { sd, dd, ifp, bulletins }, extras: [{label, values[]}], totalByWeek }"
+        ),
+        parameters=[
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='include_active_ca', type=int, required=False, description='0|1 include active_ca status in addition to active (default 0)')
+        ],
+        responses=inline_serializer(
+            name='AssignedHoursDeliverableTimelineResponse',
+            fields={
+                'weekKeys': serializers.ListField(child=serializers.CharField()),
+                'series': inline_serializer(name='DeliverableSeries', fields={
+                    'sd': serializers.ListField(child=serializers.FloatField()),
+                    'dd': serializers.ListField(child=serializers.FloatField()),
+                    'ifp': serializers.ListField(child=serializers.FloatField()),
+                    'masterplan': serializers.ListField(child=serializers.FloatField()),
+                    'bulletins': serializers.ListField(child=serializers.FloatField()),
+                    'ca': serializers.ListField(child=serializers.FloatField()),
+                }),
+                'extras': serializers.ListField(child=inline_serializer(name='ExtraSeries', fields={
+                    'label': serializers.CharField(),
+                    'values': serializers.ListField(child=serializers.FloatField()),
+                })),
+                'totalByWeek': serializers.ListField(child=serializers.FloatField()),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='analytics_deliverable_timeline', throttle_classes=[GridSnapshotThrottle])
+    def analytics_deliverable_timeline(self, request):
+        from projects.models import Project as Proj
+        from deliverables.models import Deliverable
+        # Detect debug mode early so we don't serve a cached payload without debug details
+        debug_requested = (
+            request.query_params.get('debug_unspecified') == '1' or
+            request.query_params.get('debug_extras') == '1' or
+            request.query_params.get('debug') == '1'
+        )
+
+        # Cache key (skip cache entirely if debug is requested)
+        try:
+            cache_key = None
+            if not debug_requested:
+                cache_key = (
+                    f"assignments:analytics_deliverable_timeline:"
+                    f"w={request.query_params.get('weeks','12')}:"
+                    f"d={request.query_params.get('department','')}:"
+                    f"c={request.query_params.get('include_children','')}:"
+                    f"ac={request.query_params.get('include_active_ca','0')}"
+                )
+                cached = cache.get(cache_key)
+                if cached:
+                    return Response(cached)
+        except Exception:
+            cache_key = None
+
+        # Parse weeks
+        try:
+            weeks = int(request.query_params.get('weeks', 12))
+        except ValueError:
+            weeks = 12
+        weeks = max(1, min(26, weeks))
+
+        # Department scoping
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        dept_ids = None
+        if dept_param not in (None, ""):
+            try:
+                root = int(dept_param)
+                if include_children:
+                    ids = set([root])
+                    stack = [root]
+                    from departments.models import Department as Dept
+                    while stack:
+                        current = stack.pop()
+                        for d in (Dept.objects.filter(parent_department_id=current).values_list('id', flat=True)):
+                            if d not in ids:
+                                ids.add(d)
+                                stack.append(d)
+                    dept_ids = list(ids)
+                else:
+                    dept_ids = [root]
+            except Exception:
+                dept_ids = None
+
+        include_active_ca = (request.query_params.get('include_active_ca') == '1')
+
+        # Build weeks (Sundays)
+        from core.week_utils import sunday_of_week
+        today = date.today()
+        start_sunday = sunday_of_week(today)
+        week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
+
+        # Base assignments
+        qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
+        if dept_ids:
+            qs = qs.filter(person__department_id__in=dept_ids)
+
+        # Aggregate per project per week
+        def hours_for_week_from_json(weekly_hours, sunday_key):
+            try:
+                v = weekly_hours.get(sunday_key)
+                return float(v or 0)
+            except Exception:
+                return 0.0
+
+        by_project_week = {}
+        for a in qs:
+            pid = a.project_id
+            if pid is None:
+                continue
+            m = by_project_week.setdefault(pid, {})
+            wh = a.weekly_hours or {}
+            for wk in week_keys:
+                h = hours_for_week_from_json(wh, wk)
+                if h:
+                    m[wk] = round(m.get(wk, 0.0) + h, 2)
+
+        pids = list(by_project_week.keys())
+        if not pids:
+            return Response({'weekKeys': week_keys, 'series': {'sd': [0]*weeks, 'dd': [0]*weeks, 'ifp': [0]*weeks, 'bulletins': [0]*weeks}, 'extras': [], 'totalByWeek': [0]*weeks})
+
+        # Project statuses and names (for debug context)
+        status_map = {}
+        name_map = {}
+        for row in Proj.objects.filter(id__in=pids).values('id', 'status', 'name'):
+            status_map[row['id']] = (row['status'] or '').lower()
+            name_map[row['id']] = row.get('name') or f"Project {row['id']}"
+
+        # Filter project ids to active (and optional active_ca)
+        filtered_pids = []
+        for pid in pids:
+            st = status_map.get(pid, '')
+            if st == 'active' or (include_active_ca and st == 'active_ca'):
+                filtered_pids.append(pid)
+
+        if not filtered_pids:
+            return Response({'weekKeys': week_keys, 'series': {'sd': [0]*weeks, 'dd': [0]*weeks, 'ifp': [0]*weeks, 'bulletins': [0]*weeks}, 'extras': [], 'totalByWeek': [0]*weeks})
+
+        # Load deliverables for these projects
+        deliv_rows = list(Deliverable.objects.filter(project_id__in=filtered_pids).values('project_id', 'percentage', 'description', 'date'))
+
+        # Build per-project sorted deliverable milestones with week index and monday flag
+        per_proj_deliv = {}
+        for r in deliv_rows:
+            pid = r['project_id']
+            pct = r.get('percentage')
+            desc = (r.get('description') or '').strip()
+            dt = r.get('date')
+            wk = None
+            is_monday = False
+            try:
+                if dt:
+                    wk = sunday_of_week(dt).isoformat()
+                    try:
+                        # datetime.date.weekday(): Monday=0, Sunday=6
+                        is_monday = (dt.weekday() == 0)
+                    except Exception:
+                        is_monday = False
+            except Exception:
+                wk = None
+            per_proj_deliv.setdefault(pid, []).append({'wk': wk, 'pct': pct, 'desc': desc, 'date': dt, 'is_monday': is_monday})
+        for pid in per_proj_deliv.keys():
+            per_proj_deliv[pid].sort(key=lambda x: (x['wk'] or '0000-00-00'))
+
+        def classify(desc: str, pct) -> str:
+            d = (desc or '').lower()
+            # Bulletins/Addendums grouping
+            if 'bulletin' in d or 'addendum' in d:
+                return 'bulletins'
+            # Masterplan grouping (also master planning / masterplanning)
+            if 'masterplan' in d or 'master plan' in d or 'masterplanning' in d:
+                return 'masterplan'
+            if 'sd' in d or 'schematic' in d:
+                return 'sd'
+            if 'dd' in d or 'design development' in d:
+                return 'dd'
+            if 'ifp' in d:
+                return 'ifp'
+            try:
+                if pct is not None:
+                    p = int(pct)
+                    if p <= 39:
+                        return 'sd'
+                    if 40 <= p <= 80:
+                        return 'dd'
+                    if p >= 81:
+                        return 'ifp'
+            except Exception:
+                pass
+            return 'other'
+
+        # For each week, for each project, attribute hours to deliverable class
+        sums_sd = [0.0] * len(week_keys)
+        sums_dd = [0.0] * len(week_keys)
+        sums_ifp = [0.0] * len(week_keys)
+        sums_bulletins = [0.0] * len(week_keys)
+        sums_masterplan = [0.0] * len(week_keys)
+        sums_ca = [0.0] * len(week_keys)
+        extras_series: dict[str, list[float]] = {}
+        # Optional debug output collections
+        debug_flag = request.query_params.get('debug_unspecified') == '1' or \
+                     request.query_params.get('debug_extras') == '1' or \
+                     request.query_params.get('debug') == '1'
+        unspecified_debug: list[dict] = []
+        extras_debug_map: dict[str, dict[int, float]] = {}
+        cat_debug_map: dict[str, dict[int, float]] = {
+            'sd': {}, 'dd': {}, 'ifp': {}, 'masterplan': {}, 'bulletins': {}, 'ca': {}
+        }
+
+        # Helper: for a project, get last deliverable on or before week index i
+        proj_deliv_by_wk = {}
+        wk_index = {wk: idx for idx, wk in enumerate(week_keys)}
+
+        for pid in filtered_pids:
+            rows = per_proj_deliv.get(pid, [])
+            per_week_cls = ['other'] * len(week_keys)
+            # Map deliverable entries to indices and pre-compute classification
+            idx_rows: list[tuple[int, dict]] = []
+            cls_rows: list[str] = []
+            for r in rows:
+                wk = r['wk']
+                if wk in wk_index:
+                    idx_rows.append((wk_index[wk], r))
+                    cls_rows.append(classify(r.get('desc', ''), r.get('pct')))
+            # Ensure sorted by week index
+            tmp = sorted(zip(idx_rows, cls_rows), key=lambda x: x[0][0])
+            idx_rows = [a for (a, _) in tmp]
+            cls_rows = [b for (_, b) in tmp]
+            # Pointer to first deliverable with weekIdx >= i
+            u = 0
+            for i in range(len(week_keys)):
+                while u < len(idx_rows) and idx_rows[u][0] < i:
+                    u += 1
+                if not idx_rows:
+                    # No deliverables for this project at all
+                    per_week_cls[i] = ('ca' if status_map.get(pid) == 'active_ca' else 'other')
+                    continue
+                if u < len(idx_rows):
+                    chosen = u  # first deliverable at/after this week
+                else:
+                    # No next deliverable at/after this week
+                    if status_map.get(pid) == 'active_ca':
+                        per_week_cls[i] = 'ca'
+                        continue
+                    chosen = len(idx_rows) - 1  # fallback to last deliverable
+                # Monday exception: if chosen deliverable falls on Monday and there is a following deliverable,
+                # and this week equals the chosen deliverable's week, assign to next deliverable.
+                try:
+                    chosen_row = idx_rows[chosen][1]
+                    if chosen < len(idx_rows) - 1 and idx_rows[chosen][0] == i and chosen_row.get('is_monday'):
+                        chosen = chosen + 1
+                        chosen_row = idx_rows[chosen][1]
+                except Exception:
+                    chosen_row = idx_rows[chosen][1] if idx_rows else None
+                per_week_cls[i] = cls_rows[chosen] if cls_rows else 'other'
+            proj_deliv_by_wk[pid] = per_week_cls
+
+        for pid in filtered_pids:
+            wkmap = by_project_week.get(pid, {})
+            classes = proj_deliv_by_wk.get(pid, ['other'] * len(week_keys))
+            for i, wk in enumerate(week_keys):
+                val = float(wkmap.get(wk, 0.0))
+                if not val:
+                    continue
+                c = classes[i]
+                if c == 'sd':
+                    sums_sd[i] += val
+                    if debug_flag:
+                        cat_debug_map['sd'][pid] = cat_debug_map['sd'].get(pid, 0.0) + val
+                elif c == 'dd':
+                    sums_dd[i] += val
+                    if debug_flag:
+                        cat_debug_map['dd'][pid] = cat_debug_map['dd'].get(pid, 0.0) + val
+                elif c == 'ifp':
+                    sums_ifp[i] += val
+                    if debug_flag:
+                        cat_debug_map['ifp'][pid] = cat_debug_map['ifp'].get(pid, 0.0) + val
+                elif c == 'bulletins':
+                    sums_bulletins[i] += val
+                    if debug_flag:
+                        cat_debug_map['bulletins'][pid] = cat_debug_map['bulletins'].get(pid, 0.0) + val
+                elif c == 'masterplan':
+                    sums_masterplan[i] += val
+                    if debug_flag:
+                        cat_debug_map['masterplan'][pid] = cat_debug_map['masterplan'].get(pid, 0.0) + val
+                elif c == 'ca':
+                    sums_ca[i] += val
+                    if debug_flag:
+                        cat_debug_map['ca'][pid] = cat_debug_map['ca'].get(pid, 0.0) + val
+                else:
+                    # Track as specific extra based on desc/pct label (no generic 'other' band)
+                    extra_label = 'Unspecified'
+                    # Use the chosen deliverable for this week if present to form a label
+                    chosen_row = None
+                    # Reconstruct chosen_row using same selection logic
+                    rows = per_proj_deliv.get(pid, [])
+                    idx_rows_local: list[tuple[int, dict]] = []
+                    for r in rows:
+                        wk2 = r.get('wk')
+                        if wk2 in wk_index:
+                            idx_rows_local.append((wk_index[wk2], r))
+                    idx_rows_local.sort(key=lambda x: x[0])
+                    uu = 0
+                    while uu < len(idx_rows_local) and idx_rows_local[uu][0] < i:
+                        uu += 1
+                    if idx_rows_local:
+                        if uu < len(idx_rows_local):
+                            cc = uu
+                        else:
+                            cc = len(idx_rows_local) - 1
+                        cr = idx_rows_local[cc][1]
+                        if cc < len(idx_rows_local) - 1 and idx_rows_local[cc][0] == i and cr.get('is_monday'):
+                            cc = cc + 1
+                            cr = idx_rows_local[cc][1]
+                        chosen_row = cr
+                    if chosen_row is not None:
+                        desc = (chosen_row.get('desc') or '').strip()
+                        pct = chosen_row.get('pct')
+                        if desc:
+                            extra_label = desc
+                        elif pct is not None:
+                            try:
+                                extra_label = f"{int(pct)}%"
+                            except Exception:
+                                extra_label = 'Unspecified'
+                    extras_series.setdefault(extra_label, [0.0] * len(week_keys))
+                    extras_series[extra_label][i] += val
+                    if debug_flag:
+                        em = extras_debug_map.setdefault(extra_label, {})
+                        em[pid] = em.get(pid, 0.0) + val
+                    if debug_flag and extra_label == 'Unspecified':
+                        # Record minimal context to help triage categorization
+                        ctx = {
+                            'projectId': pid,
+                            'projectName': name_map.get(pid, str(pid)),
+                            'week': wk,
+                            'hours': round(val, 2),
+                            'chosenDeliverable': {
+                                'week': chosen_row.get('wk') if chosen_row else None,
+                                'description': (chosen_row.get('desc') if chosen_row else None) or None,
+                                'percentage': chosen_row.get('pct') if chosen_row else None,
+                                'isMonday': bool(chosen_row.get('is_monday')) if chosen_row else None,
+                            } if chosen_row else None,
+                            'reason': 'no deliverable found at or after week' if chosen_row is None else 'deliverable had neither description nor percentage',
+                        }
+                        unspecified_debug.append(ctx)
+
+        total_by_week = []
+        for i in range(len(week_keys)):
+            extra_sum = 0.0
+            for vals in extras_series.values():
+                extra_sum += float(vals[i] if i < len(vals) else 0.0)
+            total_by_week.append(round(sums_sd[i] + sums_dd[i] + sums_ifp[i] + sums_masterplan[i] + sums_bulletins[i] + sums_ca[i] + extra_sum, 2))
+        extras = [
+            {'label': k, 'values': [round(x, 2) for x in v]}
+            for k, v in sorted(extras_series.items(), key=lambda item: sum(item[1]), reverse=True)
+        ]
+        payload = {
+            'weekKeys': week_keys,
+            'series': {
+                'sd': [round(x, 2) for x in sums_sd],
+                'dd': [round(x, 2) for x in sums_dd],
+                'ifp': [round(x, 2) for x in sums_ifp],
+                'masterplan': [round(x, 2) for x in sums_masterplan],
+                'bulletins': [round(x, 2) for x in sums_bulletins],
+                'ca': [round(x, 2) for x in sums_ca],
+            },
+            'extras': extras,
+            'totalByWeek': total_by_week,
+        }
+        if debug_flag:
+            payload['unspecifiedDebug'] = unspecified_debug
+            # Flatten extras_debug_map to array for easier client filtering
+            extras_debug_list = []
+            for lbl, pm in extras_debug_map.items():
+                for prj, hrs in pm.items():
+                    extras_debug_list.append({
+                        'label': lbl,
+                        'projectId': prj,
+                        'projectName': name_map.get(prj, str(prj)),
+                        'hours': round(float(hrs), 2),
+                    })
+            payload['extrasDebug'] = extras_debug_list
+            # Flatten category map similarly
+            cat_debug_list = []
+            for cat, pm in cat_debug_map.items():
+                for prj, hrs in pm.items():
+                    cat_debug_list.append({
+                        'category': cat,
+                        'projectId': prj,
+                        'projectName': name_map.get(prj, str(prj)),
+                        'hours': round(float(hrs), 2),
+                    })
+            payload['categoriesDebug'] = cat_debug_list
+        # Only cache non-debug payloads
+        try:
+            if cache_key:
+                cache.set(cache_key, payload, timeout=60)
+        except Exception:
+            pass
+        return Response(payload)
+
+    @extend_schema(
         description="Return compact pre-aggregated grid data for N weeks ahead (default 12).\n\n"
                     "Response shape: { weekKeys: [YYYY-MM-DD], people: [{id, name, weeklyCapacity, department}], hoursByPerson: { <personId>: { <weekKey>: hours } } }",
         parameters=[
