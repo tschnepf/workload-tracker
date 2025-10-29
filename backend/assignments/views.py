@@ -895,6 +895,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'masterplan': serializers.ListField(child=serializers.FloatField()),
                     'bulletins': serializers.ListField(child=serializers.FloatField()),
                     'ca': serializers.ListField(child=serializers.FloatField()),
+                    'other': serializers.ListField(child=serializers.FloatField()),
                 }),
                 'extras': serializers.ListField(child=inline_serializer(name='ExtraSeries', fields={
                     'label': serializers.CharField(),
@@ -1168,9 +1169,9 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     if debug_flag:
                         cat_debug_map['ca'][pid] = cat_debug_map['ca'].get(pid, 0.0) + val
                 else:
-                    # Track as specific extra based on desc/pct label (no generic 'other' band)
-                    extra_label = 'Unspecified'
-                    # Use the chosen deliverable for this week if present to form a label
+                    # Everything that isn't one of the main bands becomes Other
+                    # We still compute chosen_row for debug context
+                    extra_label = 'Other'
                     chosen_row = None
                     # Reconstruct chosen_row using same selection logic
                     rows = per_proj_deliv.get(pid, [])
@@ -1193,22 +1194,19 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                             cc = cc + 1
                             cr = idx_rows_local[cc][1]
                         chosen_row = cr
+                    # Determine if this is truly unspecified (neither description nor percentage)
+                    is_unspecified = False
                     if chosen_row is not None:
                         desc = (chosen_row.get('desc') or '').strip()
                         pct = chosen_row.get('pct')
-                        if desc:
-                            extra_label = desc
-                        elif pct is not None:
-                            try:
-                                extra_label = f"{int(pct)}%"
-                            except Exception:
-                                extra_label = 'Unspecified'
+                        if not desc and pct is None:
+                            is_unspecified = True
                     extras_series.setdefault(extra_label, [0.0] * len(week_keys))
                     extras_series[extra_label][i] += val
                     if debug_flag:
                         em = extras_debug_map.setdefault(extra_label, {})
                         em[pid] = em.get(pid, 0.0) + val
-                    if debug_flag and extra_label == 'Unspecified':
+                    if debug_flag and is_unspecified:
                         # Record minimal context to help triage categorization
                         ctx = {
                             'projectId': pid,
@@ -1225,12 +1223,19 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         }
                         unspecified_debug.append(ctx)
 
+        # Compute 'other' as the per-week sum of extras, and recompute totals using explicit bands
+        other_series = [0.0] * len(week_keys)
+        for i in range(len(week_keys)):
+            s = 0.0
+            for vals in extras_series.values():
+                s += float(vals[i] if i < len(vals) else 0.0)
+            other_series[i] = round(s, 2)
         total_by_week = []
         for i in range(len(week_keys)):
-            extra_sum = 0.0
-            for vals in extras_series.values():
-                extra_sum += float(vals[i] if i < len(vals) else 0.0)
-            total_by_week.append(round(sums_sd[i] + sums_dd[i] + sums_ifp[i] + sums_masterplan[i] + sums_bulletins[i] + sums_ca[i] + extra_sum, 2))
+            total_by_week.append(round(
+                sums_sd[i] + sums_dd[i] + sums_ifp[i] + sums_masterplan[i] + sums_bulletins[i] + sums_ca[i] + other_series[i],
+                2
+            ))
         extras = [
             {'label': k, 'values': [round(x, 2) for x in v]}
             for k, v in sorted(extras_series.items(), key=lambda item: sum(item[1]), reverse=True)
@@ -1244,6 +1249,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'masterplan': [round(x, 2) for x in sums_masterplan],
                 'bulletins': [round(x, 2) for x in sums_bulletins],
                 'ca': [round(x, 2) for x in sums_ca],
+                'other': [round(x, 2) for x in other_series],
             },
             'extras': extras,
             'totalByWeek': total_by_week,

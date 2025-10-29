@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import Card from '@/components/ui/Card';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useAssignedHoursTimelineData, type TimelineWeeks } from '@/hooks/useAssignedHoursTimelineData';
@@ -162,6 +162,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   let yTopD: number[] = [];
   let yTopE: number[] = [];
   let yTopF: number[] = [];
+  let yTopG: number[] = [];
 
   if (mode === 'status') {
     const s = statusData.series;
@@ -179,12 +180,14 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
     const cum4 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.masterplan?.[i] || 0));
     const cum5 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0));
     const cum6 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0) + (s.ca[i] || 0));
+    const cum7 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0) + (s.ca[i] || 0) + ((s.other?.[i] || 0)));
     yTopA = cum1.map(scaleY); // sd
     yTopB = cum2.map(scaleY); // sd+dd
     yTopC = cum3.map(scaleY); // +ifp
     yTopD = cum4.map(scaleY); // +masterplan
     yTopE = cum5.map(scaleY); // +bulletins
     yTopF = cum6.map(scaleY); // +ca
+    yTopG = cum7.map(scaleY); // +other
   }
 
   const baseLine = new Array(n).fill(PAD_TOP + innerH);
@@ -314,6 +317,9 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                   {/* CA */}
                   <path d={buildAreaPath(xs, yTopF, yTopE)} fill={D_CA} fillOpacity={0.24} />
                   <path d={buildLinePath(xs, yTopF)} stroke={D_CA} strokeWidth={2} fill="none" />
+                  {/* Other */}
+                  <path d={buildAreaPath(xs, yTopG, yTopF)} fill={C_GRAY} fillOpacity={0.22} />
+                  <path d={buildLinePath(xs, yTopG)} stroke={C_GRAY} strokeWidth={2} fill="none" />
                 </>
               )}
             </svg>
@@ -328,9 +334,9 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                 </>
               ) : (
                 <>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_SD }} /> <span className="text-[var(--text)]">SD (0–39%)</span></div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_DD }} /> <span className="text-[var(--text)]">DD (40–80%)</span></div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_IFP }} /> <span className="text-[var(--text)]">IFP (81–100%)</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_SD }} /> <span className="text-[var(--text)]">SD (0ΓÇô39%)</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_DD }} /> <span className="text-[var(--text)]">DD (40ΓÇô80%)</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_IFP }} /> <span className="text-[var(--text)]">IFP (81ΓÇô100%)</span></div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_MASTERPLAN }} /> <span className="text-[var(--text)]">Masterplan</span></div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_BULLETIN }} /> <span className="text-[var(--text)]">Bulletins/Addendums</span></div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_CA }} /> <span className="text-[var(--text)]">CA</span></div>
@@ -388,7 +394,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                           aria-expanded={isOpen}
                         >
                           <span className="flex items-center gap-2 text-[var(--text)]">
-                            <span className={`inline-block transform transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                            <span className={`inline-block transform transition-transform ${isOpen ? 'rotate-90' : ''}`}>Γû╢</span>
                             {rawLabel === 'Unspecified' && <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#9ca3af' }} />}
                             <span className="truncate" title={displayLabel}>{displayLabel}</span>
                           </span>
@@ -470,61 +476,8 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                     </div>
                   </div>
                 )}
-                <div className="text-[var(--muted)] mb-1 hidden">Additional breakdown:</div>
-                <div className="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {deliverableData.extras.slice(0, 0).map((e) => {
-                    const total = e.values.reduce((s, v) => s + (v || 0), 0);
-                    const isUnspecified = (e.label || 'Unspecified') === 'Unspecified';
-                    if (!isUnspecified) {
-                      return (
-                        <div key={e.label} className="flex items-center justify-between bg-[var(--surface)]/40 border border-[var(--border)] rounded px-2 py-1">
-                          <span className="truncate text-[var(--text)]" title={e.label}>{e.label || 'Unspecified'}</span>
-                          <span className="text-[var(--muted)]">{Math.round(total)}h</span>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key="__unspecified__" className="bg-[var(--surface)]/40 border border-[var(--border)] rounded">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = !unspecOpen;
-                            setUnspecOpen(next);
-                            if (next && unspecProjects.length === 0 && !unspecLoading) loadUnspecifiedDetails();
-                          }}
-                          className="w-full flex items-center justify-between px-2 py-1 hover:bg-[var(--surfaceHover)]"
-                          aria-expanded={unspecOpen}
-                        >
-                          <span className="flex items-center gap-2 text-[var(--text)]">
-                            <span className={`inline-block transform transition-transform ${unspecOpen ? 'rotate-90' : ''}`}>▶</span>
-                            <span className="truncate">Unspecified</span>
-                          </span>
-                          <span className="text-[var(--muted)]">{Math.round(total)}h</span>
-                        </button>
-                        {unspecOpen && (
-                          <div className="px-2 pb-2">
-                            {unspecLoading && <div className="text-[var(--muted)]">Loading…</div>}
-                            {unspecError && <div className="text-red-400">{unspecError}</div>}
-                            {!unspecLoading && !unspecError && (
-                              <div className="mt-1 space-y-1 max-h-48 overflow-auto pr-1">
-                                {unspecProjects.length === 0 ? (
-                                  <div className="text-[var(--muted)]">No projects found.</div>
-                                ) : (
-                                  unspecProjects.map(p => (
-                                    <div key={p.projectId} className="flex items-center justify-between border border-[var(--border)]/40 rounded px-2 py-1 bg-[var(--surface)]/30">
-                                      <span className="truncate text-[var(--text)]" title={`${p.projectName} (#${p.projectId})`}>{p.projectName}</span>
-                                      <span className="text-[var(--muted)]">{Math.round(p.hours)}h</span>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                
+                      
               </div>
             )}
           </div>
@@ -535,3 +488,5 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
 };
 
 export default AssignedHoursTimelineCard;
+
+

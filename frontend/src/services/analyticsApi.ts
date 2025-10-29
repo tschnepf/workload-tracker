@@ -50,7 +50,7 @@ export async function getAssignedHoursDeliverableTimeline(opts?: { weeks?: numbe
   if (!res.data) throw new Error(`HTTP ${res.response?.status ?? 500}`);
   return res.data as unknown as {
     weekKeys: string[];
-    series: { sd: number[]; dd: number[]; ifp: number[]; masterplan: number[]; bulletins: number[]; ca: number[] };
+    series: { sd: number[]; dd: number[]; ifp: number[]; masterplan: number[]; bulletins: number[]; ca: number[]; other: number[] };
     extras?: Array<{ label: string; values: number[] }>;
     unspecifiedDebug?: Array<any>;
     extrasDebug?: Array<{ label: string; projectId: number; projectName: string; hours: number }>;
