@@ -21,6 +21,8 @@ interface PersonFormData {
   role: string; // Core field - job role/title
   department: number | null; // Phase 2: Department assignment
   location: string; // Location field - city/state or remote
+  hireDate?: string; // Optional start date (YYYY-MM-DD)
+  isActive: boolean; // Active status
 }
 
 const PersonForm: React.FC = () => {
@@ -35,6 +37,8 @@ const PersonForm: React.FC = () => {
     role: '',
     department: null, // Phase 2: No department initially
     location: '', // Location can be empty initially
+    hireDate: '',
+    isActive: true,
   });
 
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department list
@@ -87,6 +91,8 @@ const PersonForm: React.FC = () => {
         role: String(person.role || 1), // Convert role ID to string for form
         department: person.department || null, // Phase 2: Load department
         location: person.location || '', // Load location
+        hireDate: person.hireDate || '',
+        isActive: person.isActive ?? true,
       };
       
       if (import.meta.env.DEV) console.log('🔍 [DEBUG] Setting form data to:', newFormData);
@@ -174,7 +180,7 @@ const PersonForm: React.FC = () => {
     }
   };
 
-  const handleChange = (field: keyof PersonFormData, value: string | number | null) => {
+  const handleChange = (field: keyof PersonFormData, value: string | number | boolean | null) => {
     if (import.meta.env.DEV) console.log('🔍 [DEBUG] handleChange called:', { field, value, type: typeof value });
     
     setFormData(prev => {
@@ -306,6 +312,34 @@ const PersonForm: React.FC = () => {
             <p className="text-[var(--muted)] text-sm mt-1">
               Assign this person to a department for organizational tracking
             </p>
+          </div>
+
+          {/* Hire Date */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text)] mb-2">Hire Date</label>
+            <input
+              type="date"
+              value={formData.hireDate || ''}
+              onChange={(e) => handleChange('hireDate', (e.target as HTMLInputElement).value)}
+              className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
+              disabled={loading}
+            />
+            <p className="text-[var(--muted)] text-sm mt-1">Optional start date (YYYY-MM-DD)</p>
+          </div>
+
+          {/* Active Status */}
+          <div>
+            <label className="inline-flex items-center gap-2 text-[var(--text)] text-sm">
+              <input
+                id="isActive"
+                type="checkbox"
+                checked={!!formData.isActive}
+                onChange={(e) => handleChange('isActive', (e.target as HTMLInputElement).checked)}
+                className="w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
+              />
+              Active
+            </label>
+            <p className="text-[var(--muted)] text-sm mt-1">Uncheck to mark this person inactive</p>
           </div>
 
           {/* Location Field */}

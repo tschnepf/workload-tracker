@@ -74,7 +74,13 @@ const PeopleListTable: React.FC<Props> = ({
                 <div className="col-span-2 text-[var(--muted)] text-xs">{person.departmentName || 'None'}</div>
                 <div className="col-span-2 text-[var(--muted)] text-xs">{person.location || 'Not specified'}</div>
                 <div className="col-span-2 text-[var(--muted)] text-xs">{person.weeklyCapacity || 36}h/week</div>
-                <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[var(--muted)] text-xs`}>{person.roleName || 'Not specified'}</div>
+                <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[var(--muted)] text-xs`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block w-2 h-2 rounded-full ${person.isActive ? 'bg-emerald-400' : 'bg-[var(--muted)]'}`} title={person.isActive ? 'Active' : 'Inactive'} />
+                    <span>{person.roleName || 'Not specified'}</span>
+                  </div>
+                  <div className="mt-0.5 text-[var(--muted)]">{person.hireDate ? `Hired: ${person.hireDate}` : 'Hired: —'}</div>
+                </div>
               </div>
             );
           })}
@@ -109,7 +115,13 @@ const PeopleListTable: React.FC<Props> = ({
             <div className="col-span-2 text-[var(--muted)] text-xs">{person.departmentName || 'None'}</div>
             <div className="col-span-2 text-[var(--muted)] text-xs">{person.location || 'Not specified'}</div>
             <div className="col-span-2 text-[var(--muted)] text-xs">{person.weeklyCapacity || 36}h/week</div>
-            <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[var(--muted)] text-xs`}>{person.roleName || 'Not specified'}</div>
+            <div className={`${bulkMode ? 'col-span-2' : 'col-span-3'} text-[var(--muted)] text-xs`}>
+              <div className="flex items-center gap-2">
+                <span className={`inline-block w-2 h-2 rounded-full ${person.isActive ? 'bg-emerald-400' : 'bg-[var(--muted)]'}`} title={person.isActive ? 'Active' : 'Inactive'} />
+                <span>{person.roleName || 'Not specified'}</span>
+              </div>
+              <div className="mt-0.5 text-[var(--muted)]">{person.hireDate ? `Hired: ${person.hireDate}` : 'Hired: —'}</div>
+            </div>
           </div>
         ))}
         {/* Buffer rows to prevent last person from being cut off */}
@@ -130,4 +142,3 @@ const PeopleListTable: React.FC<Props> = ({
 };
 
 export default PeopleListTable;
-
