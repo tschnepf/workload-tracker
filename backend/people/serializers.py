@@ -48,6 +48,9 @@ class PersonSerializer(serializers.ModelSerializer):
     
     # Core fields
     weeklyCapacity = serializers.IntegerField(source='weekly_capacity', required=False, default=36)
+    # Employment fields
+    hireDate = serializers.DateField(source='hire_date', required=False, allow_null=True)
+    isActive = serializers.BooleanField(source='is_active', required=False)
     
     # Department fields (Phase 2)
     departmentName = serializers.CharField(source='department.name', read_only=True)
@@ -57,7 +60,7 @@ class PersonSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Person
-        fields = ['id', 'name', 'weeklyCapacity', 'role', 'roleName', 'department', 'departmentName', 'location', 'notes', 'createdAt', 'updatedAt']
+        fields = ['id', 'name', 'weeklyCapacity', 'role', 'roleName', 'department', 'departmentName', 'location', 'hireDate', 'isActive', 'notes', 'createdAt', 'updatedAt']
         extra_kwargs = {
             'createdAt': {'source': 'created_at', 'read_only': True},
             'updatedAt': {'source': 'updated_at', 'read_only': True},
