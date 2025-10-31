@@ -245,17 +245,25 @@ export default function FiltersPanel(props: FiltersPanelProps) {
         )}
       </div>
 
-      {/* Status Filter */}
-      <div className="flex items-center gap-2">
+      {/* Status Filter (themed checkbox) */}
+      <label htmlFor="showInactive" className="inline-flex items-center gap-2 cursor-pointer select-none">
         <input
           id="showInactive"
           type="checkbox"
           checked={showInactive}
           onChange={(e) => setShowInactive((e.target as HTMLInputElement).checked)}
-          className="w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
+          className="peer sr-only"
         />
-        <label htmlFor="showInactive" className="text-sm text-[var(--text)]">Show Inactive</label>
-      </div>
+        <span
+          aria-hidden
+          className="inline-flex w-4 h-4 items-center justify-center rounded border border-[var(--border)] bg-[var(--surface)] transition-colors peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--focus)] peer-checked:bg-[var(--primary)] peer-checked:border-[var(--primary)]"
+        >
+          <svg className="w-3 h-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </span>
+        <span className="text-sm text-[var(--text)]">Show Inactive</span>
+      </label>
     </div>
   );
 }
