@@ -1,4 +1,4 @@
-/**
+﻿/**
  * People List - Split-panel layout following ProjectsList.tsx pattern
  * Left panel: People list with filtering
  * Right panel: Person details with skills management
@@ -23,7 +23,8 @@ import { usePeopleQueryPagination } from '@/pages/People/list/hooks/usePeopleQue
 import { usePersonSelection } from '@/pages/People/list/hooks/usePersonSelection';
 
 const PeopleList: React.FC = () => {
-  const { people, loading: listLoading, error: listError, fetchNextPage, hasNextPage } = usePeopleQueryPagination();
+  const [showInactive, setShowInactive] = useState(false);
+  const { people, loading: listLoading, error: listError, fetchNextPage, hasNextPage } = usePeopleQueryPagination(showInactive);
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
   const [roles, setRoles] = useState<Role[]>([]); // Phase 1: Role management
   const { selectedPerson, selectedIndex, onRowClick, setSelectedPerson, setSelectedIndex, selectByIndex } = usePersonSelection(people);
@@ -160,18 +161,18 @@ const PeopleList: React.FC = () => {
   const filteredAndSortedPeople = people
     .filter(person => {
       // Enhanced search filter (includes notes/description + location search)
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         person.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         person.roleName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         person.departmentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         person.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         person.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       // Department filter - Multi-select
-      const matchesDepartment = departmentFilter.length === 0 || 
+      const matchesDepartment = departmentFilter.length === 0 ||
         departmentFilter.includes(person.department?.toString() || '') ||
         (departmentFilter.includes('unassigned') && !person.department);
-      
+
       // Location filter - Multi-select with special Remote handling
       const matchesLocation = locationFilter.length === 0 ||
         locationFilter.some(filterLocation => {
@@ -186,8 +187,11 @@ const PeopleList: React.FC = () => {
           return filterLocation === personLocation;
         }) ||
         (locationFilter.includes('unspecified') && (!person.location || person.location.trim() === ''));
-      
-      return matchesSearch && matchesDepartment && matchesLocation;
+
+      // Status filter: hide inactive unless explicitly shown
+      const matchesStatus = showInactive ? true : (person.isActive !== false);
+
+      return matchesSearch && matchesDepartment && matchesLocation && matchesStatus;
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -270,6 +274,8 @@ const PeopleList: React.FC = () => {
               setShowDepartmentDropdown={setShowDepartmentDropdown}
               showLocationDropdown={showLocationDropdown}
               setShowLocationDropdown={setShowLocationDropdown}
+              showInactive={showInactive}
+              setShowInactive={setShowInactive}
             />
             <div className="flex items-center justify-between mt-2">
               <button
@@ -373,7 +379,6 @@ const PeopleList: React.FC = () => {
 };
 
 export default PeopleList;
-
 
 
 

@@ -72,18 +72,29 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     serializer_class = PersonSerializer
     
     def get_queryset(self):
-        """Filter active people by default"""
-        # Phase 3: tighten fields to reduce payload and queries
-        return (
+        """Filter active people by default; include inactive when requested."""
+        include_inactive = False
+        try:
+            req = getattr(self, 'request', None)
+            if req is not None:
+                raw = req.query_params.get('include_inactive')
+                if raw is not None and str(raw).strip().lower() in ('1', 'true', 'yes', 'on'):  # pragma: no cover - trivial
+                    include_inactive = True
+        except Exception:
+            include_inactive = False
+
+        qs = (
             Person.objects
-            .filter(is_active=True)
             .select_related('department', 'role')
             .only(
                 'id', 'name', 'weekly_capacity', 'role', 'department', 'location', 'notes', 'created_at', 'updated_at',
-                'department__name', 'role__name'
+                'department__name', 'role__name', 'is_active', 'hire_date'
             )
             .order_by('name')
         )
+        if not include_inactive:
+            qs = qs.filter(is_active=True)
+        return qs
     
     @extend_schema(
         parameters=[
@@ -92,6 +103,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
             OpenApiParameter(name='include_children', type=int, required=False, description='Include child departments (0|1)'),
             OpenApiParameter(name='all', type=str, required=False, description='Return all items without pagination when true'),
+            OpenApiParameter(name='include_inactive', type=int, required=False, description='Include inactive people (0|1; default 0)'),
         ]
     )
     def list(self, request, *args, **kwargs):

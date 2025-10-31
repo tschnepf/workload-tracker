@@ -1,6 +1,6 @@
 import { usePeople } from '@/hooks/usePeople';
 
-export function usePeopleQueryPagination() {
+export function usePeopleQueryPagination(includeInactive = false) {
   const {
     people,
     loading,
@@ -10,7 +10,7 @@ export function usePeopleQueryPagination() {
     isFetchingNextPage,
     dataUpdatedAt,
     peopleVersion,
-  } = usePeople();
+  } = usePeople(includeInactive);
 
   return {
     people,
@@ -25,4 +25,3 @@ export function usePeopleQueryPagination() {
 }
 
 export type UsePeopleQueryPaginationReturn = ReturnType<typeof usePeopleQueryPagination>;
-

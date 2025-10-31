@@ -4,11 +4,11 @@ import { peopleApi } from '@/services/api';
 import { Person } from '@/types/models';
 
 // People query hook with state adapter for existing code compatibility
-export function usePeople() {
+export function usePeople(includeInactive = false) {
   const pageSize = 100;
   const query = useInfiniteQuery({
-    queryKey: ['people'],
-    queryFn: ({ pageParam = 1 }) => peopleApi.list({ page: pageParam, page_size: pageSize }),
+    queryKey: ['people', includeInactive ? 'all' : 'active'],
+    queryFn: ({ pageParam = 1 }) => peopleApi.list({ page: pageParam, page_size: pageSize, include_inactive: includeInactive ? 1 : undefined }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
       // If server returned a next URL, infer next page; else stop

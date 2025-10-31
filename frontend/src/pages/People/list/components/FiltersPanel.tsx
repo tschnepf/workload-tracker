@@ -14,6 +14,8 @@ export interface FiltersPanelProps {
   setShowDepartmentDropdown: React.Dispatch<React.SetStateAction<boolean>>;
   showLocationDropdown: boolean;
   setShowLocationDropdown: React.Dispatch<React.SetStateAction<boolean>>;
+  showInactive: boolean;
+  setShowInactive: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export default function FiltersPanel(props: FiltersPanelProps) {
@@ -30,6 +32,8 @@ export default function FiltersPanel(props: FiltersPanelProps) {
     setShowDepartmentDropdown,
     showLocationDropdown,
     setShowLocationDropdown,
+    showInactive,
+    setShowInactive,
   } = props;
 
   const getLocationOptions = () => {
@@ -239,6 +243,18 @@ export default function FiltersPanel(props: FiltersPanelProps) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Status Filter */}
+      <div className="flex items-center gap-2">
+        <input
+          id="showInactive"
+          type="checkbox"
+          checked={showInactive}
+          onChange={(e) => setShowInactive((e.target as HTMLInputElement).checked)}
+          className="w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
+        />
+        <label htmlFor="showInactive" className="text-sm text-[var(--text)]">Show Inactive</label>
       </div>
     </div>
   );
