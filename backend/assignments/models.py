@@ -6,6 +6,8 @@ from django.db import models
 from django.utils import timezone
 from datetime import datetime, timedelta
 import json
+from django.core.validators import MinValueValidator
+from core.choices import DeliverablePhase, SnapshotSource, MembershipEventType
 
 class Assignment(models.Model):
     """Assignment model - the heart of workload tracking"""
@@ -108,3 +110,89 @@ class Assignment(models.Model):
         if self.project:
             return self.project.name
         return self.project_name or "Unknown Project"
+
+
+class WeeklyAssignmentSnapshot(models.Model):
+    """Immutable weekly snapshot of assigned hours per person-project-role.
+
+    Rows are unique per (person, project, role_on_project_id, week_start, source).
+    Denormalized fields ensure historical readability if upstream rows are
+    removed. Hours are non-negative. Snapshots are written idempotently by a
+    weekly job and may be optionally backfilled with source='assigned_backfill'.
+    """
+
+    week_start = models.DateField(help_text="Sunday ISO date key (UTC)")
+    person = models.ForeignKey('people.Person', on_delete=models.SET_NULL, null=True, blank=True, related_name='weekly_snapshots')
+    project = models.ForeignKey('projects.Project', on_delete=models.SET_NULL, null=True, blank=True, related_name='weekly_snapshots')
+    # Denormalized references for resilience/analytics
+    role_on_project_id = models.IntegerField(null=True, blank=True)
+    department_id = models.IntegerField(null=True, blank=True)
+    project_status = models.CharField(max_length=20, null=True, blank=True)
+    deliverable_phase = models.CharField(max_length=20, choices=DeliverablePhase.choices, default=DeliverablePhase.OTHER)
+    hours = models.FloatField(validators=[MinValueValidator(0.0)])
+    source = models.CharField(max_length=20, choices=SnapshotSource.choices, default=SnapshotSource.ASSIGNED)
+    # Denormalized resilience fields
+    person_name = models.CharField(max_length=200, blank=True, default="")
+    project_name = models.CharField(max_length=200, blank=True, default="")
+    client = models.CharField(max_length=100, blank=True, default="")
+    captured_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['person', 'project', 'role_on_project_id', 'week_start', 'source'],
+                name='uniq_weekly_snapshot_identity'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['week_start'], name='idx_was_week_start'),
+            models.Index(fields=['department_id', 'week_start'], name='idx_was_dept_week'),
+            models.Index(fields=['client', 'week_start'], name='idx_was_client_week'),
+            models.Index(fields=['person', 'week_start'], name='idx_was_person_week'),
+            models.Index(fields=['project', 'role_on_project_id', 'week_start'], name='idx_was_project_role_week'),
+            models.Index(fields=['client', 'person'], name='idx_was_client_person'),
+        ]
+        ordering = ['-week_start', 'person_id', 'project_id']
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.person_name or self.person_id} @ {self.project_name or self.project_id} [{self.week_start}] {self.hours}h"
+
+
+class AssignmentMembershipEvent(models.Model):
+    """Immutable weekly join/leave events per person-project-role.
+
+    Events are based on assignment membership, not hours, and capture the
+    deliverable phase at event time along with before/after hour values.
+    """
+
+    week_start = models.DateField(help_text="Sunday ISO date key (UTC)")
+    person = models.ForeignKey('people.Person', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignment_membership_events')
+    project = models.ForeignKey('projects.Project', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignment_membership_events')
+    role_on_project_id = models.IntegerField(null=True, blank=True)
+    event_type = models.CharField(max_length=20, choices=MembershipEventType.choices)
+    deliverable_phase = models.CharField(max_length=20, choices=DeliverablePhase.choices, default=DeliverablePhase.OTHER)
+    hours_before = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    hours_after = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    # Denormalized
+    person_name = models.CharField(max_length=200, blank=True, default="")
+    project_name = models.CharField(max_length=200, blank=True, default="")
+    client = models.CharField(max_length=100, blank=True, default="")
+    captured_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['person', 'project', 'role_on_project_id', 'event_type', 'week_start'],
+                name='uniq_membership_event_identity'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['person', 'project', 'week_start'], name='idx_ame_person_project_week'),
+            models.Index(fields=['client', 'week_start'], name='idx_ame_client_week'),
+        ]
+        ordering = ['-week_start', 'person_id', 'project_id']
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.event_type} {self.person_name or self.person_id} on {self.project_name or self.project_id} [{self.week_start}]"

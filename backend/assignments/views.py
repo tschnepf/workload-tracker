@@ -10,7 +10,9 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
-from django.db.models import Sum, Max, Prefetch, Value  # noqa: F401
+from django.db.models import Sum, Max, Prefetch, Value, Count  # noqa: F401
+from core.deliverable_phase import build_project_week_classification
+from core.choices import DeliverablePhase, MembershipEventType
 from django.db.models.functions import Coalesce, Lower
 from .models import Assignment
 from departments.models import Department
@@ -40,6 +42,11 @@ class HotEndpointThrottle(UserRateThrottle):
 class GridSnapshotThrottle(ScopedRateThrottle):
     """Throttle for grid snapshot aggregate reads"""
     scope = 'grid_snapshot'
+
+
+class SnapshotsThrottle(ScopedRateThrottle):
+    """Throttle for snapshots/experience read endpoints"""
+    scope = 'snapshots'
 
 
 class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
@@ -402,6 +409,577 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         return Response(payload)
 
     @extend_schema(
+        description=(
+            "Experience by Client: list people with totals and role aggregates in a date window.\n\n"
+            "Params: client?, department?, include_children? (0|1), start?, end?, min_weeks?"
+        ),
+        parameters=[
+            OpenApiParameter(name='client', type=str, required=False),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='start', type=str, required=False, description='YYYY-MM-DD'),
+            OpenApiParameter(name='end', type=str, required=False, description='YYYY-MM-DD'),
+            OpenApiParameter(name='min_weeks', type=int, required=False),
+        ],
+        responses=inline_serializer(
+            name='ExperienceByClientResponse',
+            fields={
+                'results': serializers.ListField(child=inline_serializer(name='ExperienceByClientPerson', fields={
+                    'personId': serializers.IntegerField(),
+                    'personName': serializers.CharField(),
+                    'departmentId': serializers.IntegerField(required=False, allow_null=True),
+                    'totals': inline_serializer(name='EBCPTotals', fields={
+                        'weeks': serializers.IntegerField(),
+                        'hours': serializers.FloatField(),
+                        'projectsCount': serializers.IntegerField(),
+                    }),
+                    'roles': serializers.DictField(child=inline_serializer(name='EBCPRoleAgg', fields={
+                        'roleId': serializers.IntegerField(),
+                        'weeks': serializers.IntegerField(),
+                        'hours': serializers.FloatField(),
+                    })),
+                })),
+                'count': serializers.IntegerField(),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='experience_by_client', throttle_classes=[SnapshotsThrottle])
+    def experience_by_client(self, request):
+        from .models import WeeklyAssignmentSnapshot as WAS
+        from core.week_utils import sunday_of_week
+        from core.departments import get_descendant_department_ids
+        try:
+            start = request.query_params.get('start')
+            end = request.query_params.get('end')
+            start_d = (date.fromisoformat(start) if start else date.today())
+            end_d = (date.fromisoformat(end) if end else (date.today() + timedelta(days=7*11)))
+            s0 = sunday_of_week(start_d)
+            s1 = sunday_of_week(end_d)
+        except Exception:
+            s0 = sunday_of_week(date.today())
+            s1 = sunday_of_week(date.today() + timedelta(days=7*11))
+        qs = WAS.objects.all()
+        client = request.query_params.get('client')
+        if client not in (None, ""):
+            qs = qs.filter(client=client)
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        if dept_param not in (None, ""):
+            try:
+                root = int(dept_param)
+                if include_children:
+                    ids = get_descendant_department_ids(root)
+                    qs = qs.filter(department_id__in=ids)
+                else:
+                    qs = qs.filter(department_id=root)
+            except Exception:
+                pass
+        qs = qs.filter(week_start__gte=s0, week_start__lte=s1)
+
+        # Validators
+        try:
+            aggr = qs.aggregate(last_modified=Max('updated_at'))
+            last_modified = aggr.get('last_modified')
+        except Exception:
+            last_modified = None
+        etag = None
+        if last_modified:
+            try:
+                etag = hashlib.md5((str(client or '') + str(s0) + str(s1) + str(dept_param) + str(include_children)).encode()).hexdigest()
+            except Exception:
+                etag = None
+        # Aggregate
+        people_map = {}
+        for row in qs.values('person_id', 'person_name', 'department_id', 'role_on_project_id').annotate(
+            weeks=Count('week_start', distinct=True),
+            hours=Sum('hours'),
+            projects_count=Count('project_id', distinct=True),
+        ):
+            pid = row['person_id']
+            if pid is None:
+                continue
+            rec = people_map.setdefault(pid, {
+                'personId': pid,
+                'personName': row['person_name'] or '',
+                'departmentId': row['department_id'],
+                'totals': {'weeks': 0, 'hours': 0.0, 'projectsCount': 0},
+                'roles': {},
+            })
+            rec['totals']['weeks'] += int(row['weeks'] or 0)
+            rec['totals']['hours'] += float(row['hours'] or 0.0)
+            rec['totals']['projectsCount'] = max(rec['totals']['projectsCount'], int(row['projects_count'] or 0))
+            rid = row['role_on_project_id']
+            if rid is not None:
+                r = rec['roles'].setdefault(rid, {'roleId': rid, 'weeks': 0, 'hours': 0.0})
+                r['weeks'] += int(row['weeks'] or 0)
+                r['hours'] += float(row['hours'] or 0.0)
+
+        # Apply min_weeks filter
+        try:
+            min_weeks = int(request.query_params.get('min_weeks')) if request.query_params.get('min_weeks') else None
+        except Exception:
+            min_weeks = None
+        out = []
+        for p in people_map.values():
+            if min_weeks is not None and p['totals']['weeks'] < min_weeks:
+                continue
+            # round numbers
+            p['totals']['hours'] = round(p['totals']['hours'], 2)
+            for k in list(p['roles'].keys()):
+                p['roles'][k]['hours'] = round(p['roles'][k]['hours'], 2)
+            out.append(p)
+
+        response = Response({'results': out, 'count': len(out)})
+        if etag:
+            response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+            response['Cache-Control'] = 'private, max-age=30'
+        return response
+
+    @extend_schema(
+        description=(
+            "Person Experience Profile: breakdown by client and project with role/phase aggregates, plus eventsCount."
+        ),
+        parameters=[
+            OpenApiParameter(name='person', type=int, required=True),
+            OpenApiParameter(name='start', type=str, required=False),
+            OpenApiParameter(name='end', type=str, required=False),
+        ],
+        responses=inline_serializer(
+            name='PersonExperienceProfileResponse',
+            fields={
+                'byClient': serializers.ListField(child=inline_serializer(name='PEPClient', fields={
+                    'client': serializers.CharField(),
+                    'weeks': serializers.IntegerField(),
+                    'hours': serializers.FloatField(),
+                    'roles': serializers.DictField(child=inline_serializer(name='PEPClientRole', fields={
+                        'roleId': serializers.IntegerField(),
+                        'weeks': serializers.IntegerField(),
+                        'hours': serializers.FloatField(),
+                    })),
+                    'phases': serializers.DictField(child=inline_serializer(name='PEPClientPhase', fields={
+                        'phase': serializers.ChoiceField(choices=DeliverablePhase.choices),
+                        'weeks': serializers.IntegerField(),
+                        'hours': serializers.FloatField(),
+                    })),
+                })),
+                'byProject': serializers.ListField(child=inline_serializer(name='PEPProject', fields={
+                    'projectId': serializers.IntegerField(),
+                    'projectName': serializers.CharField(),
+                    'client': serializers.CharField(),
+                    'weeks': serializers.IntegerField(),
+                    'hours': serializers.FloatField(),
+                    'roles': serializers.DictField(child=inline_serializer(name='PEPProjectRole', fields={
+                        'roleId': serializers.IntegerField(),
+                        'weeks': serializers.IntegerField(),
+                        'hours': serializers.FloatField(),
+                    })),
+                    'phases': serializers.DictField(child=inline_serializer(name='PEPProjectPhase', fields={
+                        'phase': serializers.ChoiceField(choices=DeliverablePhase.choices),
+                        'weeks': serializers.IntegerField(),
+                        'hours': serializers.FloatField(),
+                    })),
+                })),
+                'eventsCount': serializers.IntegerField(),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='person_experience_profile', throttle_classes=[SnapshotsThrottle])
+    def person_experience_profile(self, request):
+        from .models import WeeklyAssignmentSnapshot as WAS, AssignmentMembershipEvent as AME
+        try:
+            person_id = int(request.query_params.get('person'))
+        except Exception:
+            return Response({'error': 'person is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            start = request.query_params.get('start')
+            end = request.query_params.get('end')
+            s0 = date.fromisoformat(start) if start else None
+            s1 = date.fromisoformat(end) if end else None
+        except Exception:
+            s0 = None
+            s1 = None
+        qs = WAS.objects.filter(person_id=person_id)
+        if s0:
+            qs = qs.filter(week_start__gte=s0)
+        if s1:
+            qs = qs.filter(week_start__lte=s1)
+
+        # Validators
+        try:
+            aggr = qs.aggregate(last_modified=Max('updated_at'))
+            last_modified = aggr.get('last_modified')
+        except Exception:
+            last_modified = None
+        etag = None
+        try:
+            etag = hashlib.md5((str(person_id) + str(s0) + str(s1)).encode()).hexdigest()
+        except Exception:
+            etag = None
+
+        # by client
+        by_client: dict[str, dict] = {}
+        for row in qs.values('client', 'role_on_project_id', 'deliverable_phase').annotate(
+            weeks=Count('week_start', distinct=True),
+            hours=Sum('hours'),
+        ):
+            client = row['client'] or 'Unknown'
+            rec = by_client.setdefault(client, {
+                'client': client,
+                'weeks': 0,
+                'hours': 0.0,
+                'roles': {},
+                'phases': {},
+            })
+            rec['weeks'] += int(row['weeks'] or 0)
+            rec['hours'] += float(row['hours'] or 0.0)
+            rid = row['role_on_project_id']
+            if rid is not None:
+                r = rec['roles'].setdefault(rid, {'roleId': rid, 'weeks': 0, 'hours': 0.0})
+                r['weeks'] += int(row['weeks'] or 0)
+                r['hours'] += float(row['hours'] or 0.0)
+            ph = row['deliverable_phase'] or 'other'
+            ph_rec = rec['phases'].setdefault(ph, {'phase': ph, 'weeks': 0, 'hours': 0.0})
+            ph_rec['weeks'] += int(row['weeks'] or 0)
+            ph_rec['hours'] += float(row['hours'] or 0.0)
+
+        # by project
+        by_project: dict[int, dict] = {}
+        for row in qs.values('project_id', 'project_name', 'client', 'role_on_project_id', 'deliverable_phase').annotate(
+            weeks=Count('week_start', distinct=True),
+            hours=Sum('hours'),
+        ):
+            pid = row['project_id']
+            if pid is None:
+                continue
+            rec = by_project.setdefault(pid, {
+                'projectId': pid,
+                'projectName': row['project_name'] or '',
+                'client': row['client'] or 'Unknown',
+                'weeks': 0,
+                'hours': 0.0,
+                'roles': {},
+                'phases': {},
+            })
+            rec['weeks'] += int(row['weeks'] or 0)
+            rec['hours'] += float(row['hours'] or 0.0)
+            rid = row['role_on_project_id']
+            if rid is not None:
+                r = rec['roles'].setdefault(rid, {'roleId': rid, 'weeks': 0, 'hours': 0.0})
+                r['weeks'] += int(row['weeks'] or 0)
+                r['hours'] += float(row['hours'] or 0.0)
+            ph = row['deliverable_phase'] or 'other'
+            ph_rec = rec['phases'].setdefault(ph, {'phase': ph, 'weeks': 0, 'hours': 0.0})
+            ph_rec['weeks'] += int(row['weeks'] or 0)
+            ph_rec['hours'] += float(row['hours'] or 0.0)
+
+        # events count
+        events_qs = AME.objects.filter(person_id=person_id)
+        if s0:
+            events_qs = events_qs.filter(week_start__gte=s0)
+        if s1:
+            events_qs = events_qs.filter(week_start__lte=s1)
+        events_count = events_qs.count()
+
+        # Round hours
+        for rec in by_client.values():
+            rec['hours'] = round(rec['hours'], 2)
+            for v in rec['roles'].values():
+                v['hours'] = round(v['hours'], 2)
+            for v in rec['phases'].values():
+                v['hours'] = round(v['hours'], 2)
+        for rec in by_project.values():
+            rec['hours'] = round(rec['hours'], 2)
+            for v in rec['roles'].values():
+                v['hours'] = round(v['hours'], 2)
+            for v in rec['phases'].values():
+                v['hours'] = round(v['hours'], 2)
+
+        payload = {
+            'byClient': list(by_client.values()),
+            'byProject': list(by_project.values()),
+            'eventsCount': int(events_count),
+        }
+        response = Response(payload)
+        if etag:
+            response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+            response['Cache-Control'] = 'private, max-age=30'
+        return response
+
+    @extend_schema(
+        description=(
+            "Person-Project timeline with coverage blocks, events, and derived role changes."
+        ),
+        parameters=[
+            OpenApiParameter(name='person', type=int, required=True),
+            OpenApiParameter(name='project', type=int, required=True),
+            OpenApiParameter(name='start', type=str, required=False),
+            OpenApiParameter(name='end', type=str, required=False),
+        ],
+        responses=inline_serializer(
+            name='PersonProjectTimelineResponse',
+            fields={
+                'weeksSummary': inline_serializer(name='WeeksSummary', fields={
+                    'weeks': serializers.IntegerField(),
+                    'hours': serializers.FloatField(),
+                }),
+                'coverageBlocks': serializers.ListField(child=inline_serializer(name='CoverageBlock', fields={
+                    'roleId': serializers.IntegerField(),
+                    'start': serializers.CharField(),
+                    'end': serializers.CharField(),
+                    'weeks': serializers.IntegerField(),
+                    'hours': serializers.FloatField(),
+                })),
+                'events': serializers.ListField(child=inline_serializer(name='MembershipEvent', fields={
+                    'week_start': serializers.CharField(),
+                    'event_type': serializers.ChoiceField(choices=MembershipEventType.choices),
+                    'deliverable_phase': serializers.ChoiceField(choices=DeliverablePhase.choices),
+                    'hours_before': serializers.FloatField(),
+                    'hours_after': serializers.FloatField(),
+                })),
+                'roleChanges': serializers.ListField(child=inline_serializer(name='RoleChange', fields={
+                    'week_start': serializers.CharField(),
+                    'roleFromId': serializers.IntegerField(),
+                    'roleToId': serializers.IntegerField(),
+                })),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='person_project_timeline', throttle_classes=[SnapshotsThrottle])
+    def person_project_timeline(self, request):
+        from .models import WeeklyAssignmentSnapshot as WAS, AssignmentMembershipEvent as AME
+        try:
+            person_id = int(request.query_params.get('person'))
+            project_id = int(request.query_params.get('project'))
+        except Exception:
+            return Response({'error': 'person and project are required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            start = request.query_params.get('start')
+            end = request.query_params.get('end')
+            s0 = date.fromisoformat(start) if start else None
+            s1 = date.fromisoformat(end) if end else None
+        except Exception:
+            s0 = None
+            s1 = None
+        qs = WAS.objects.filter(person_id=person_id, project_id=project_id)
+        if s0:
+            qs = qs.filter(week_start__gte=s0)
+        if s1:
+            qs = qs.filter(week_start__lte=s1)
+        qs = qs.order_by('week_start')
+
+        # Validators
+        try:
+            aggr = qs.aggregate(last_modified=Max('updated_at'))
+            last_modified = aggr.get('last_modified')
+        except Exception:
+            last_modified = None
+        etag = None
+        try:
+            etag = hashlib.md5((str(person_id) + ':' + str(project_id) + str(s0) + str(s1)).encode()).hexdigest()
+        except Exception:
+            etag = None
+
+        # Build coverage blocks by role
+        weeks_summary = {'weeks': 0, 'hours': 0.0}
+        blocks: List[dict] = []
+        prev_role = None
+        block_start = None
+        block_weeks = 0
+        block_hours = 0.0
+        for r in qs.values('week_start', 'role_on_project_id', 'hours'):
+            rid = r['role_on_project_id']
+            hours = float(r['hours'] or 0.0)
+            wk = r['week_start']
+            if hours > 0 and rid is not None:
+                if prev_role is None:
+                    prev_role = rid
+                    block_start = wk
+                    block_weeks = 1
+                    block_hours = hours
+                elif rid == prev_role:
+                    block_weeks += 1
+                    block_hours += hours
+                else:
+                    blocks.append({'roleId': prev_role, 'start': str(block_start), 'end': str(wk), 'weeks': block_weeks, 'hours': round(block_hours, 2)})
+                    prev_role = rid
+                    block_start = wk
+                    block_weeks = 1
+                    block_hours = hours
+                weeks_summary['weeks'] += 1
+                weeks_summary['hours'] += hours
+        if prev_role is not None and block_start is not None:
+            blocks.append({'roleId': prev_role, 'start': str(block_start), 'end': str(qs.values_list('week_start', flat=True).last()), 'weeks': block_weeks, 'hours': round(block_hours, 2)})
+        weeks_summary['hours'] = round(weeks_summary['hours'], 2)
+
+        # Events
+        ev_qs = AME.objects.filter(person_id=person_id, project_id=project_id)
+        if s0:
+            ev_qs = ev_qs.filter(week_start__gte=s0)
+        if s1:
+            ev_qs = ev_qs.filter(week_start__lte=s1)
+        events = list(ev_qs.order_by('week_start').values('week_start', 'event_type', 'deliverable_phase', 'hours_before', 'hours_after'))
+        for e in events:
+            e['week_start'] = str(e['week_start'])
+            e['hours_before'] = round(float(e['hours_before'] or 0.0), 2)
+            e['hours_after'] = round(float(e['hours_after'] or 0.0), 2)
+
+        # Derived role changes
+        role_changes: List[dict] = []
+        prev_roles = None
+        prev_week = None
+        for row in qs.values('week_start', 'role_on_project_id', 'hours'):
+            wk = row['week_start']
+            rid = row['role_on_project_id']
+            hrs = float(row['hours'] or 0.0)
+            if prev_week != wk:
+                # move to next week; evaluate change between prev_roles and current assembled
+                if prev_roles is not None and len(prev_roles) == 1 and 'cur_roles' in locals() and len(cur_roles) == 1:
+                    pra = next(iter(prev_roles))
+                    cra = next(iter(cur_roles))
+                    if pra is not None and cra is not None and pra != cra:
+                        role_changes.append({'week_start': str(wk), 'roleFromId': pra, 'roleToId': cra})
+                prev_week = wk
+                cur_roles = set()
+            if hrs > 0 and rid is not None:
+                cur_roles.add(rid)
+            prev_roles = cur_roles
+
+        payload = {
+            'weeksSummary': weeks_summary,
+            'coverageBlocks': blocks,
+            'events': events,
+            'roleChanges': role_changes,
+        }
+        response = Response(payload)
+        if etag:
+            response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+            response['Cache-Control'] = 'private, max-age=30'
+        return response
+
+    @extend_schema(
+        description=(
+            "Project Staffing Timeline: aggregates per role and people lists with events."
+        ),
+        parameters=[
+            OpenApiParameter(name='project', type=int, required=True),
+            OpenApiParameter(name='start', type=str, required=False),
+            OpenApiParameter(name='end', type=str, required=False),
+        ],
+        responses=inline_serializer(
+            name='ProjectStaffingTimelineResponse',
+            fields={
+                'people': serializers.ListField(child=inline_serializer(name='PSTPerson', fields={
+                    'personId': serializers.IntegerField(),
+                    'personName': serializers.CharField(),
+                    'roles': serializers.ListField(child=inline_serializer(name='PSTPersonRole', fields={
+                        'roleId': serializers.IntegerField(allow_null=True),
+                        'weeks': serializers.IntegerField(),
+                        'hours': serializers.FloatField(),
+                    })),
+                    'events': serializers.ListField(child=inline_serializer(name='PSTEvent', fields={
+                        'week_start': serializers.CharField(),
+                        'event_type': serializers.ChoiceField(choices=MembershipEventType.choices),
+                    })),
+                })),
+                'roleAggregates': serializers.ListField(child=inline_serializer(name='PSTRoleAgg', fields={
+                    'roleId': serializers.IntegerField(allow_null=True),
+                    'peopleCount': serializers.IntegerField(),
+                    'weeks': serializers.IntegerField(),
+                    'hours': serializers.FloatField(),
+                })),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='project_staffing_timeline', throttle_classes=[SnapshotsThrottle])
+    def project_staffing_timeline(self, request):
+        from .models import WeeklyAssignmentSnapshot as WAS, AssignmentMembershipEvent as AME
+        try:
+            project_id = int(request.query_params.get('project'))
+        except Exception:
+            return Response({'error': 'project is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            start = request.query_params.get('start')
+            end = request.query_params.get('end')
+            s0 = date.fromisoformat(start) if start else None
+            s1 = date.fromisoformat(end) if end else None
+        except Exception:
+            s0 = None
+            s1 = None
+        qs = WAS.objects.filter(project_id=project_id)
+        if s0:
+            qs = qs.filter(week_start__gte=s0)
+        if s1:
+            qs = qs.filter(week_start__lte=s1)
+
+        # Validators
+        try:
+            aggr = qs.aggregate(last_modified=Max('updated_at'))
+            last_modified = aggr.get('last_modified')
+        except Exception:
+            last_modified = None
+        etag = None
+        try:
+            etag = hashlib.md5((str(project_id) + str(s0) + str(s1)).encode()).hexdigest()
+        except Exception:
+            etag = None
+
+        # Per person/role aggregates and role totals
+        people: dict[int, dict] = {}
+        role_aggr: dict[Optional[int], dict] = {}
+        for row in qs.values('person_id', 'person_name', 'role_on_project_id').annotate(
+            weeks=Count('week_start', distinct=True),
+            hours=Sum('hours'),
+        ):
+            pid = row['person_id']
+            if pid is None:
+                continue
+            rec = people.setdefault(pid, {'personId': pid, 'personName': row['person_name'] or '', 'roles': []})
+            rid = row['role_on_project_id']
+            rec['roles'].append({'roleId': rid, 'weeks': int(row['weeks'] or 0), 'hours': round(float(row['hours'] or 0.0), 2)})
+            ra = role_aggr.setdefault(rid, {'roleId': rid, 'peopleCount': 0, 'weeks': 0, 'hours': 0.0})
+            ra['peopleCount'] += 1
+            ra['weeks'] += int(row['weeks'] or 0)
+            ra['hours'] += float(row['hours'] or 0.0)
+        for v in role_aggr.values():
+            v['hours'] = round(v['hours'], 2)
+
+        # Events per person
+        ev_map: dict[int, list] = {}
+        ev_qs = AME.objects.filter(project_id=project_id)
+        if s0:
+            ev_qs = ev_qs.filter(week_start__gte=s0)
+        if s1:
+            ev_qs = ev_qs.filter(week_start__lte=s1)
+        for e in ev_qs.order_by('week_start').values('person_id', 'week_start', 'event_type'):
+            pid = e['person_id']
+            if pid is None:
+                continue
+            ev_map.setdefault(pid, []).append({'week_start': str(e['week_start']), 'event_type': e['event_type']})
+        # attach to people
+        out_people = []
+        for pid, rec in people.items():
+            rec['events'] = ev_map.get(pid, [])
+            out_people.append(rec)
+
+        payload = {
+            'people': out_people,
+            'roleAggregates': list(role_aggr.values()),
+        }
+        response = Response(payload)
+        if etag:
+            response['ETag'] = f'"{etag}"'
+        if last_modified:
+            response['Last-Modified'] = http_date(last_modified.timestamp())
+            response['Cache-Control'] = 'private, max-age=30'
+        return response
+
+    @extend_schema(
         description="Return authoritative totals for specific projects over current horizon.",
         parameters=[
             OpenApiParameter(name='project_ids', type=str, required=True, description='CSV of project IDs'),
@@ -733,7 +1311,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
     @extend_schema(
         description=(
-            "Assigned hours weekly timeline aggregated by status for N weeks ahead.\n\n"
+            "Assigned hours weekly timeline aggregated by project status for N weeks ahead.\n\n"
+            "Categories reflect Project.status controlled vocabulary: 'active', 'active_ca', and 'other'.\n"
             "Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }"
         ),
         parameters=[
@@ -874,6 +1453,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @extend_schema(
         description=(
             "Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.\n\n"
+            "Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.\n"
             "Classification rules: explicit phase in description (SD/DD/IFP) wins; otherwise map by percentage: 0-39%→SD, 40-80%→DD, 81-100%→IFP; unknown→other.\n"
             "Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums. Non-matching items are returned in 'extras' by label (desc or percent). No generic 'other' bucket is included in the series.\n"
             "Response: { weekKeys: [..], series: { sd, dd, ifp, bulletins }, extras: [{label, values[]}], totalByWeek }"
@@ -897,7 +1477,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'ca': serializers.ListField(child=serializers.FloatField()),
                     'other': serializers.ListField(child=serializers.FloatField()),
                 }),
-                'extras': serializers.ListField(child=inline_serializer(name='ExtraSeries', fields={
+                'extras': serializers.ListField(required=False, allow_null=True, help_text='deprecated: kept for backward compatibility; typically empty', child=inline_serializer(name='ExtraSeries', fields={
                     'label': serializers.CharField(),
                     'values': serializers.ListField(child=serializers.FloatField()),
                 })),
@@ -1043,40 +1623,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         for pid in per_proj_deliv.keys():
             per_proj_deliv[pid].sort(key=lambda x: (x['wk'] or '0000-00-00'))
 
-        def classify(desc: str, pct) -> str:
-            d = (desc or '').lower()
-            # Bulletins/Addendums grouping
-            if 'bulletin' in d or 'addendum' in d:
-                return 'bulletins'
-            # Masterplan grouping (also master planning / masterplanning)
-            if 'masterplan' in d or 'master plan' in d or 'masterplanning' in d:
-                return 'masterplan'
-            if 'sd' in d or 'schematic' in d:
-                return 'sd'
-            if 'dd' in d or 'design development' in d:
-                return 'dd'
-            if 'ifp' in d:
-                return 'ifp'
-            try:
-                if pct is not None:
-                    p = int(pct)
-                    if p <= 39:
-                        return 'sd'
-                    if 40 <= p <= 80:
-                        return 'dd'
-                    if p >= 81:
-                        return 'ifp'
-            except Exception:
-                pass
-            return 'other'
-
-        # For each week, for each project, attribute hours to deliverable class
+        # For each week, for each project, attribute hours to deliverable class via shared classifier
         sums_sd = [0.0] * len(week_keys)
         sums_dd = [0.0] * len(week_keys)
         sums_ifp = [0.0] * len(week_keys)
         sums_bulletins = [0.0] * len(week_keys)
         sums_masterplan = [0.0] * len(week_keys)
         sums_ca = [0.0] * len(week_keys)
+        sums_other = [0.0] * len(week_keys)
         extras_series: dict[str, list[float]] = {}
         # Optional debug output collections
         debug_flag = request.query_params.get('debug_unspecified') == '1' or \
@@ -1087,58 +1641,13 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         cat_debug_map: dict[str, dict[int, float]] = {
             'sd': {}, 'dd': {}, 'ifp': {}, 'masterplan': {}, 'bulletins': {}, 'ca': {}
         }
-
-        # Helper: for a project, get last deliverable on or before week index i
-        proj_deliv_by_wk = {}
-        wk_index = {wk: idx for idx, wk in enumerate(week_keys)}
-
-        for pid in filtered_pids:
-            rows = per_proj_deliv.get(pid, [])
-            per_week_cls = ['other'] * len(week_keys)
-            # Map deliverable entries to indices and pre-compute classification
-            idx_rows: list[tuple[int, dict]] = []
-            cls_rows: list[str] = []
-            for r in rows:
-                wk = r['wk']
-                if wk in wk_index:
-                    idx_rows.append((wk_index[wk], r))
-                    cls_rows.append(classify(r.get('desc', ''), r.get('pct')))
-            # Ensure sorted by week index
-            tmp = sorted(zip(idx_rows, cls_rows), key=lambda x: x[0][0])
-            idx_rows = [a for (a, _) in tmp]
-            cls_rows = [b for (_, b) in tmp]
-            # Pointer to first deliverable with weekIdx >= i
-            u = 0
-            for i in range(len(week_keys)):
-                while u < len(idx_rows) and idx_rows[u][0] < i:
-                    u += 1
-                if not idx_rows:
-                    # No deliverables for this project at all
-                    per_week_cls[i] = ('ca' if status_map.get(pid) == 'active_ca' else 'other')
-                    continue
-                if u < len(idx_rows):
-                    chosen = u  # first deliverable at/after this week
-                else:
-                    # No next deliverable at/after this week
-                    if status_map.get(pid) == 'active_ca':
-                        per_week_cls[i] = 'ca'
-                        continue
-                    chosen = len(idx_rows) - 1  # fallback to last deliverable
-                # Monday exception: if chosen deliverable falls on Monday and there is a following deliverable,
-                # and this week equals the chosen deliverable's week, assign to next deliverable.
-                try:
-                    chosen_row = idx_rows[chosen][1]
-                    if chosen < len(idx_rows) - 1 and idx_rows[chosen][0] == i and chosen_row.get('is_monday'):
-                        chosen = chosen + 1
-                        chosen_row = idx_rows[chosen][1]
-                except Exception:
-                    chosen_row = idx_rows[chosen][1] if idx_rows else None
-                per_week_cls[i] = cls_rows[chosen] if cls_rows else 'other'
-            proj_deliv_by_wk[pid] = per_week_cls
-
         for pid in filtered_pids:
             wkmap = by_project_week.get(pid, {})
-            classes = proj_deliv_by_wk.get(pid, ['other'] * len(week_keys))
+            classes = build_project_week_classification(
+                week_keys,
+                status_map.get(pid),
+                [{'percentage': r.get('pct'), 'description': r.get('desc'), 'date': r.get('date')} for r in per_proj_deliv.get(pid, [])]
+            ) if per_proj_deliv.get(pid) is not None else ['other'] * len(week_keys)
             for i, wk in enumerate(week_keys):
                 val = float(wkmap.get(wk, 0.0))
                 if not val:
@@ -1169,67 +1678,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     if debug_flag:
                         cat_debug_map['ca'][pid] = cat_debug_map['ca'].get(pid, 0.0) + val
                 else:
-                    # Everything that isn't one of the main bands becomes Other
-                    # We still compute chosen_row for debug context
-                    extra_label = 'Other'
-                    chosen_row = None
-                    # Reconstruct chosen_row using same selection logic
-                    rows = per_proj_deliv.get(pid, [])
-                    idx_rows_local: list[tuple[int, dict]] = []
-                    for r in rows:
-                        wk2 = r.get('wk')
-                        if wk2 in wk_index:
-                            idx_rows_local.append((wk_index[wk2], r))
-                    idx_rows_local.sort(key=lambda x: x[0])
-                    uu = 0
-                    while uu < len(idx_rows_local) and idx_rows_local[uu][0] < i:
-                        uu += 1
-                    if idx_rows_local:
-                        if uu < len(idx_rows_local):
-                            cc = uu
-                        else:
-                            cc = len(idx_rows_local) - 1
-                        cr = idx_rows_local[cc][1]
-                        if cc < len(idx_rows_local) - 1 and idx_rows_local[cc][0] == i and cr.get('is_monday'):
-                            cc = cc + 1
-                            cr = idx_rows_local[cc][1]
-                        chosen_row = cr
-                    # Determine if this is truly unspecified (neither description nor percentage)
-                    is_unspecified = False
-                    if chosen_row is not None:
-                        desc = (chosen_row.get('desc') or '').strip()
-                        pct = chosen_row.get('pct')
-                        if not desc and pct is None:
-                            is_unspecified = True
-                    extras_series.setdefault(extra_label, [0.0] * len(week_keys))
-                    extras_series[extra_label][i] += val
-                    if debug_flag:
-                        em = extras_debug_map.setdefault(extra_label, {})
-                        em[pid] = em.get(pid, 0.0) + val
-                    if debug_flag and is_unspecified:
-                        # Record minimal context to help triage categorization
-                        ctx = {
-                            'projectId': pid,
-                            'projectName': name_map.get(pid, str(pid)),
-                            'week': wk,
-                            'hours': round(val, 2),
-                            'chosenDeliverable': {
-                                'week': chosen_row.get('wk') if chosen_row else None,
-                                'description': (chosen_row.get('desc') if chosen_row else None) or None,
-                                'percentage': chosen_row.get('pct') if chosen_row else None,
-                                'isMonday': bool(chosen_row.get('is_monday')) if chosen_row else None,
-                            } if chosen_row else None,
-                            'reason': 'no deliverable found at or after week' if chosen_row is None else 'deliverable had neither description nor percentage',
-                        }
-                        unspecified_debug.append(ctx)
+                    # Controlled vocabulary: attribute to 'other'
+                    sums_other[i] += val
 
-        # Compute 'other' as the per-week sum of extras, and recompute totals using explicit bands
-        other_series = [0.0] * len(week_keys)
-        for i in range(len(week_keys)):
-            s = 0.0
-            for vals in extras_series.values():
-                s += float(vals[i] if i < len(vals) else 0.0)
-            other_series[i] = round(s, 2)
+        # Use controlled 'other' bucket directly
+        other_series = [round(x, 2) for x in sums_other]
         total_by_week = []
         for i in range(len(week_keys)):
             total_by_week.append(round(

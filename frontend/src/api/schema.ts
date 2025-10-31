@@ -36,6 +36,42 @@ export interface paths {
      */
     patch: operations["assignments_partial_update"];
   };
+  "/api/assignments/analytics_by_client/": {
+    /**
+     * @description Assigned hours aggregated by client for N weeks ahead.
+     *
+     * Response: { clients: [{ label: string, hours: number }] }
+     */
+    get: operations["assignments_analytics_by_client_retrieve"];
+  };
+  "/api/assignments/analytics_client_projects/": {
+    /**
+     * @description Assigned hours aggregated by project for a given client over N weeks ahead.
+     *
+     * Response: { projects: [{ id: number, name: string, hours: number }] }
+     */
+    get: operations["assignments_analytics_client_projects_retrieve"];
+  };
+  "/api/assignments/analytics_deliverable_timeline/": {
+    /**
+     * @description Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.
+     *
+     * Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
+     * Classification rules: explicit phase in description (SD/DD/IFP) wins; otherwise map by percentage: 0-39%→SD, 40-80%→DD, 81-100%→IFP; unknown→other.
+     * Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums. Non-matching items are returned in 'extras' by label (desc or percent). No generic 'other' bucket is included in the series.
+     * Response: { weekKeys: [..], series: { sd, dd, ifp, bulletins }, extras: [{label, values[]}], totalByWeek }
+     */
+    get: operations["assignments_analytics_deliverable_timeline_retrieve"];
+  };
+  "/api/assignments/analytics_status_timeline/": {
+    /**
+     * @description Assigned hours weekly timeline aggregated by project status for N weeks ahead.
+     *
+     * Categories reflect Project.status controlled vocabulary: 'active', 'active_ca', and 'other'.
+     * Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }
+     */
+    get: operations["assignments_analytics_status_timeline_retrieve"];
+  };
   "/api/assignments/bulk_update_hours/": {
     /** @description Bulk update weekly hours for multiple assignments in a single transaction. */
     patch: operations["assignments_bulk_update_hours_partial_update"];
@@ -52,6 +88,14 @@ export interface paths {
      */
     post: operations["assignments_check_conflicts_create"];
   };
+  "/api/assignments/experience_by_client/": {
+    /**
+     * @description Experience by Client: list people with totals and role aggregates in a date window.
+     *
+     * Params: client?, department?, include_children? (0|1), start?, end?, min_weeks?
+     */
+    get: operations["assignments_experience_by_client_retrieve"];
+  };
   "/api/assignments/grid_snapshot/": {
     /**
      * @description Return compact pre-aggregated grid data for N weeks ahead (default 12).
@@ -64,6 +108,14 @@ export interface paths {
     /** @description Start async grid snapshot job and return task ID for polling. */
     get: operations["assignments_grid_snapshot_async_retrieve"];
   };
+  "/api/assignments/person_experience_profile/": {
+    /** @description Person Experience Profile: breakdown by client and project with role/phase aggregates, plus eventsCount. */
+    get: operations["assignments_person_experience_profile_retrieve"];
+  };
+  "/api/assignments/person_project_timeline/": {
+    /** @description Person-Project timeline with coverage blocks, events, and derived role changes. */
+    get: operations["assignments_person_project_timeline_retrieve"];
+  };
   "/api/assignments/project_grid_snapshot/": {
     /**
      * @description Project-centric aggregate snapshot for N weeks ahead (default 12).
@@ -75,6 +127,10 @@ export interface paths {
      * metrics: { projectsCount, peopleAssignedCount, totalHours } }
      */
     get: operations["assignments_project_grid_snapshot_retrieve"];
+  };
+  "/api/assignments/project_staffing_timeline/": {
+    /** @description Project Staffing Timeline: aggregates per role and people lists with events. */
+    get: operations["assignments_project_staffing_timeline_retrieve"];
   };
   "/api/assignments/project_totals/": {
     /** @description Return authoritative totals for specific projects over current horizon. */
@@ -105,6 +161,16 @@ export interface paths {
     /** @description Create a new user (staff only) and optionally link to a Person. */
     post: operations["auth_create_user_create"];
   };
+  "/api/auth/invite/": {
+    /**
+     * @description Invite a user by email.
+     *
+     * - If the user exists, sends a password set/reset link.
+     * - If not, creates an account with an unusable password and sends the link.
+     * - Optionally assigns role and links to a Person.
+     */
+    post: operations["auth_invite_create"];
+  };
   "/api/auth/link_person/": {
     /** @description Link or unlink the current user's profile to a Person. */
     post: operations["auth_link_person_create"];
@@ -116,6 +182,18 @@ export interface paths {
   "/api/auth/notification-preferences/": {
     get: operations["auth_notification_preferences_retrieve"];
     put: operations["auth_notification_preferences_update"];
+  };
+  "/api/auth/password_reset/": {
+    /**
+     * @description Request a password reset by email. Always returns 204.
+     *
+     * If a user with the email exists, sends a reset link with uid/token.
+     */
+    post: operations["auth_password_reset_create"];
+  };
+  "/api/auth/password_reset_confirm/": {
+    /** @description Confirm password reset with uid/token and set a new password. */
+    post: operations["auth_password_reset_confirm_create"];
   };
   "/api/auth/set_password/": {
     /** @description Set password for a target user (staff only). */
@@ -132,6 +210,18 @@ export interface paths {
   "/api/auth/users/{user_id}/": {
     /** @description Delete a user account (admin only). */
     delete: operations["auth_users_destroy"];
+  };
+  "/api/auth/users/{user_id}/link_person/": {
+    /** @description Link or unlink a target user to a Person (admin only). */
+    post: operations["auth_users_link_person_create"];
+  };
+  "/api/auth/users/{user_id}/role/": {
+    /**
+     * @description Set role for a target user (admin only).
+     *
+     * Accepts one of: {'role': 'admin' | 'manager' | 'user'}
+     */
+    post: operations["auth_users_role_create"];
   };
   "/api/backups/": {
     get: operations["backups_retrieve"];
@@ -399,6 +489,15 @@ export interface paths {
      */
     post: operations["deliverables_pre_deliverable_items_uncomplete_create"];
   };
+  "/api/deliverables/pre_deliverable_items/backfill/": {
+    /**
+     * @description Staff-only: backfill or regenerate pre-items for a project/date window.
+     *
+     * If ASYNC_JOBS is enabled and Celery task is available, enqueues background job and
+     * returns 202 with job metadata. Otherwise, runs synchronously and returns a summary.
+     */
+    post: operations["deliverables_pre_deliverable_items_backfill_create"];
+  };
   "/api/deliverables/pre_deliverable_items/bulk_complete/": {
     /**
      * @description Adds ETag on detail GET and optional If-Match handling on mutations.
@@ -471,8 +570,11 @@ export interface paths {
      */
     put: operations["people_update"];
     /**
-     * @description Person CRUD API with utilization calculations
-     * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+     * @description Delete a person by primary key.
+     *
+     * Note: bypass get_queryset() filtering so deletes work even if the record
+     * is inactive or excluded from the default list queryset.
+     * Still enforces object-level permissions before deletion.
      */
     delete: operations["people_destroy"];
     /**
@@ -809,6 +911,27 @@ export interface components {
         [key: string]: unknown;
       } | null;
     };
+    AdminLinkUserPersonRequestRequest: {
+      personId?: number | null;
+    };
+    AssignedHoursByClientResponse: {
+      clients: components["schemas"]["ClientTotal"][];
+    };
+    AssignedHoursClientProjectsResponse: {
+      projects: components["schemas"]["ProjectTotal"][];
+    };
+    AssignedHoursDeliverableTimelineResponse: {
+      weekKeys: string[];
+      series: components["schemas"]["DeliverableSeries"];
+      /** @description deprecated: kept for backward compatibility; typically empty */
+      extras?: components["schemas"]["ExtraSeries"][] | null;
+      totalByWeek: number[];
+    };
+    AssignedHoursStatusTimelineResponse: {
+      weekKeys: string[];
+      series: components["schemas"]["StatusSeries"];
+      totalByWeek: number[];
+    };
     /** @description Assignment serializer with weekly hours support */
     Assignment: {
       id: number;
@@ -871,6 +994,19 @@ export interface components {
     ChangePasswordRequestRequest: {
       currentPassword: string;
       newPassword: string;
+    };
+    ClientTotal: {
+      label: string;
+      /** Format: double */
+      hours: number;
+    };
+    CoverageBlock: {
+      roleId: number;
+      start: string;
+      end: string;
+      weeks: number;
+      /** Format: double */
+      hours: number;
     };
     CreateUserRequestRequest: {
       username: string;
@@ -955,6 +1091,17 @@ export interface components {
       isCompleted: boolean;
       assignmentCount: number;
     };
+    /**
+     * @description * `sd` - SD
+     * * `dd` - DD
+     * * `ifp` - IFP
+     * * `masterplan` - Masterplan
+     * * `bulletins` - Bulletins
+     * * `ca` - CA
+     * * `other` - Other
+     * @enum {string}
+     */
+    DeliverablePhaseEnum: "sd" | "dd" | "ifp" | "masterplan" | "bulletins" | "ca" | "other";
     DeliverableReorderRequestRequest: {
       project: number;
       deliverable_ids: number[];
@@ -977,6 +1124,15 @@ export interface components {
       isCompleted?: boolean;
       /** Format: date */
       completedDate?: string | null;
+    };
+    DeliverableSeries: {
+      sd: number[];
+      dd: number[];
+      ifp: number[];
+      masterplan: number[];
+      bulletins: number[];
+      ca: number[];
+      other: number[];
     };
     DeliverableStaffingSummaryItem: {
       linkId?: number | null;
@@ -1019,6 +1175,41 @@ export interface components {
       id: number;
       name: string;
     };
+    EBCPRoleAgg: {
+      roleId: number;
+      weeks: number;
+      /** Format: double */
+      hours: number;
+    };
+    EBCPTotals: {
+      weeks: number;
+      /** Format: double */
+      hours: number;
+      projectsCount: number;
+    };
+    /**
+     * @description * `joined` - Joined
+     * * `left` - Left
+     * @enum {string}
+     */
+    EventTypeEnum: "joined" | "left";
+    ExperienceByClientPerson: {
+      personId: number;
+      personName: string;
+      departmentId?: number | null;
+      totals: components["schemas"]["EBCPTotals"];
+      roles: {
+        [key: string]: components["schemas"]["EBCPRoleAgg"];
+      };
+    };
+    ExperienceByClientResponse: {
+      results: components["schemas"]["ExperienceByClientPerson"][];
+      count: number;
+    };
+    ExtraSeries: {
+      label: string;
+      values: number[];
+    };
     GlobalSettingsUpdateRequest: {
       settings: components["schemas"]["PreDeliverableGlobalSettingsUpdateRequest"][];
     };
@@ -1040,8 +1231,24 @@ export interface components {
         };
       };
     };
+    InviteUserRequestRequest: {
+      /** Format: email */
+      email: string;
+      username?: string;
+      personId?: number | null;
+      role?: components["schemas"]["RoleEnum"];
+    };
     LinkPersonRequestRequest: {
       person_id?: number | null;
+    };
+    MembershipEvent: {
+      week_start: string;
+      event_type: components["schemas"]["EventTypeEnum"];
+      deliverable_phase: components["schemas"]["DeliverablePhaseEnum"];
+      /** Format: double */
+      hours_before: number;
+      /** Format: double */
+      hours_after: number;
     };
     /**
      * @description * `absolute_hours` - Absolute Hours
@@ -1058,6 +1265,79 @@ export interface components {
       emailPreDeliverableReminders: boolean;
       reminderDaysBefore: number;
       dailyDigest: boolean;
+    };
+    PEPClient: {
+      client: string;
+      weeks: number;
+      /** Format: double */
+      hours: number;
+      roles: {
+        [key: string]: components["schemas"]["PEPClientRole"];
+      };
+      phases: {
+        [key: string]: components["schemas"]["PEPClientPhase"];
+      };
+    };
+    PEPClientPhase: {
+      phase: components["schemas"]["PhaseEnum"];
+      weeks: number;
+      /** Format: double */
+      hours: number;
+    };
+    PEPClientRole: {
+      roleId: number;
+      weeks: number;
+      /** Format: double */
+      hours: number;
+    };
+    PEPProject: {
+      projectId: number;
+      projectName: string;
+      client: string;
+      weeks: number;
+      /** Format: double */
+      hours: number;
+      roles: {
+        [key: string]: components["schemas"]["PEPProjectRole"];
+      };
+      phases: {
+        [key: string]: components["schemas"]["PEPProjectPhase"];
+      };
+    };
+    PEPProjectPhase: {
+      phase: components["schemas"]["PhaseEnum"];
+      weeks: number;
+      /** Format: double */
+      hours: number;
+    };
+    PEPProjectRole: {
+      roleId: number;
+      weeks: number;
+      /** Format: double */
+      hours: number;
+    };
+    PSTEvent: {
+      week_start: string;
+      event_type: components["schemas"]["EventTypeEnum"];
+    };
+    PSTPerson: {
+      personId: number;
+      personName: string;
+      roles: components["schemas"]["PSTPersonRole"][];
+      events: components["schemas"]["PSTEvent"][];
+    };
+    PSTPersonRole: {
+      roleId: number | null;
+      weeks: number;
+      /** Format: double */
+      hours: number;
+    };
+    PSTRoleAgg: {
+      roleId: number | null;
+      peopleCount: number;
+      weeks: number;
+      /** Format: double */
+      hours: number;
     };
     PaginatedAssignmentList: {
       /** @example 123 */
@@ -1284,6 +1564,15 @@ export interface components {
       previous?: string | null;
       results: components["schemas"]["WorkloadForecastItem"][];
     };
+    PasswordResetConfirmRequest: {
+      uid: string;
+      token: string;
+      newPassword: string;
+    };
+    PasswordResetRequestRequest: {
+      /** Format: email */
+      email: string;
+    };
     /** @description Assignment serializer with weekly hours support */
     PatchedAssignmentRequest: {
       person?: number;
@@ -1448,6 +1737,17 @@ export interface components {
         [key: string]: number;
       };
     };
+    PersonExperienceProfileResponse: {
+      byClient: components["schemas"]["PEPClient"][];
+      byProject: components["schemas"]["PEPProject"][];
+      eventsCount: number;
+    };
+    PersonProjectTimelineResponse: {
+      weeksSummary: components["schemas"]["WeeksSummary"];
+      coverageBlocks: components["schemas"]["CoverageBlock"][];
+      events: components["schemas"]["MembershipEvent"][];
+      roleChanges: components["schemas"]["RoleChange"][];
+    };
     /** @description Person serializer with department and role integration */
     PersonRequest: {
       name: string;
@@ -1496,6 +1796,17 @@ export interface components {
       development: components["schemas"]["PersonSkillSummary"][];
       learning: components["schemas"]["PersonSkillSummary"][];
     };
+    /**
+     * @description * `sd` - SD
+     * * `dd` - DD
+     * * `ifp` - IFP
+     * * `masterplan` - Masterplan
+     * * `bulletins` - Bulletins
+     * * `ca` - CA
+     * * `other` - Other
+     * @enum {string}
+     */
+    PhaseEnum: "sd" | "dd" | "ifp" | "masterplan" | "bulletins" | "ca" | "other";
     PreDeliverableGlobalSettingsItem: {
       typeId: number;
       typeName: string;
@@ -1544,6 +1855,22 @@ export interface components {
       completedDate?: string | null;
       notes?: string;
       isActive: boolean;
+    };
+    PreItemsBackfillRequestRequest: {
+      projectId?: number;
+      /** Format: date */
+      start?: string;
+      /** Format: date */
+      end?: string;
+      regenerate?: boolean;
+    };
+    PreItemsBackfillResponse: {
+      enqueued: boolean;
+      jobId?: string;
+      statusUrl?: string;
+      result?: {
+        [key: string]: unknown;
+      };
     };
     Project: {
       id: number;
@@ -1647,6 +1974,16 @@ export interface components {
       /** Format: double */
       totalHours: number;
     };
+    ProjectStaffingTimelineResponse: {
+      people: components["schemas"]["PSTPerson"][];
+      roleAggregates: components["schemas"]["PSTRoleAgg"][];
+    };
+    ProjectTotal: {
+      id: number;
+      name: string;
+      /** Format: double */
+      hours: number;
+    };
     ProjectTotalsResponse: {
       hoursByProject: {
         [key: string]: {
@@ -1680,6 +2017,11 @@ export interface components {
       /** Format: date-time */
       updatedAt: string;
     };
+    RoleChange: {
+      week_start: string;
+      roleFromId: number;
+      roleToId: number;
+    };
     /**
      * @description * `admin` - admin
      * * `manager` - manager
@@ -1699,6 +2041,9 @@ export interface components {
     SetPasswordRequestRequest: {
       userId: number;
       newPassword: string;
+    };
+    SetUserRoleRequestRequest: {
+      role: components["schemas"]["RoleEnum"];
     };
     SkillMatchAsyncResponse: {
       jobId: string;
@@ -1752,6 +2097,11 @@ export interface components {
      * @enum {string}
      */
     StatusEnum: "planning" | "active" | "active_ca" | "on_hold" | "completed" | "cancelled";
+    StatusSeries: {
+      active: number[];
+      active_ca: number[];
+      other: number[];
+    };
     TeamOverviewItem: {
       id: number;
       name: string;
@@ -1766,14 +2116,6 @@ export interface components {
       peak_utilization_percent: number;
       peak_week: string;
       is_peak_overallocated: boolean;
-    };
-    TokenObtainPair: {
-      access: string;
-      refresh: string;
-    };
-    TokenObtainPairRequest: {
-      username: string;
-      password: string;
     };
     TokenRefresh: {
       access: string;
@@ -1813,6 +2155,17 @@ export interface components {
       /** Format: date-time */
       updated_at: string;
     };
+    /**
+     * @description Allow login with either username or email.
+     *
+     * If the incoming 'username' field looks like an email or uniquely matches a
+     * user email (case-insensitive), rewrite it to that user's username before
+     * delegating to the base serializer.
+     */
+    UsernameOrEmailTokenObtainPairRequest: {
+      username: string;
+      password: string;
+    };
     UtilizationDistribution: {
       underutilized: number;
       optimal: number;
@@ -1843,6 +2196,11 @@ export interface components {
       orange_max?: number;
       red_min?: number;
       zero_is_blank?: boolean;
+    };
+    WeeksSummary: {
+      weeks: number;
+      /** Format: double */
+      hours: number;
     };
     /** @description Serializer for workload forecast items returned by workload_forecast action. */
     WorkloadForecastItem: {
@@ -1998,6 +2356,105 @@ export interface operations {
       };
     };
   };
+  /**
+   * @description Assigned hours aggregated by client for N weeks ahead.
+   *
+   * Response: { clients: [{ label: string, hours: number }] }
+   */
+  assignments_analytics_by_client_retrieve: {
+    parameters: {
+      query?: {
+        department?: number;
+        /** @description 0|1 */
+        include_children?: number;
+        /** @description Number of weeks (1-26), default 12 */
+        weeks?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AssignedHoursByClientResponse"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Assigned hours aggregated by project for a given client over N weeks ahead.
+   *
+   * Response: { projects: [{ id: number, name: string, hours: number }] }
+   */
+  assignments_analytics_client_projects_retrieve: {
+    parameters: {
+      query: {
+        client: string;
+        department?: number;
+        /** @description 0|1 */
+        include_children?: number;
+        /** @description Number of weeks (1-26), default 12 */
+        weeks?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AssignedHoursClientProjectsResponse"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.
+   *
+   * Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
+   * Classification rules: explicit phase in description (SD/DD/IFP) wins; otherwise map by percentage: 0-39%→SD, 40-80%→DD, 81-100%→IFP; unknown→other.
+   * Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums. Non-matching items are returned in 'extras' by label (desc or percent). No generic 'other' bucket is included in the series.
+   * Response: { weekKeys: [..], series: { sd, dd, ifp, bulletins }, extras: [{label, values[]}], totalByWeek }
+   */
+  assignments_analytics_deliverable_timeline_retrieve: {
+    parameters: {
+      query?: {
+        department?: number;
+        /** @description 0|1 include active_ca status in addition to active (default 0) */
+        include_active_ca?: number;
+        /** @description 0|1 */
+        include_children?: number;
+        /** @description Number of weeks (1-26), default 12 */
+        weeks?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AssignedHoursDeliverableTimelineResponse"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Assigned hours weekly timeline aggregated by project status for N weeks ahead.
+   *
+   * Categories reflect Project.status controlled vocabulary: 'active', 'active_ca', and 'other'.
+   * Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }
+   */
+  assignments_analytics_status_timeline_retrieve: {
+    parameters: {
+      query?: {
+        department?: number;
+        /** @description 0|1 */
+        include_children?: number;
+        /** @description Number of weeks (1-26), default 12 */
+        weeks?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AssignedHoursStatusTimelineResponse"];
+        };
+      };
+    };
+  };
   /** @description Bulk update weekly hours for multiple assignments in a single transaction. */
   assignments_bulk_update_hours_partial_update: {
     requestBody?: {
@@ -2053,6 +2510,33 @@ export interface operations {
     };
   };
   /**
+   * @description Experience by Client: list people with totals and role aggregates in a date window.
+   *
+   * Params: client?, department?, include_children? (0|1), start?, end?, min_weeks?
+   */
+  assignments_experience_by_client_retrieve: {
+    parameters: {
+      query?: {
+        client?: string;
+        department?: number;
+        /** @description YYYY-MM-DD */
+        end?: string;
+        /** @description 0|1 */
+        include_children?: number;
+        min_weeks?: number;
+        /** @description YYYY-MM-DD */
+        start?: string;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ExperienceByClientResponse"];
+        };
+      };
+    };
+  };
+  /**
    * @description Return compact pre-aggregated grid data for N weeks ahead (default 12).
    *
    * Response shape: { weekKeys: [YYYY-MM-DD], people: [{id, name, weeklyCapacity, department}], hoursByPerson: { <personId>: { <weekKey>: hours } } }
@@ -2094,6 +2578,41 @@ export interface operations {
       };
     };
   };
+  /** @description Person Experience Profile: breakdown by client and project with role/phase aggregates, plus eventsCount. */
+  assignments_person_experience_profile_retrieve: {
+    parameters: {
+      query: {
+        end?: string;
+        person: number;
+        start?: string;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PersonExperienceProfileResponse"];
+        };
+      };
+    };
+  };
+  /** @description Person-Project timeline with coverage blocks, events, and derived role changes. */
+  assignments_person_project_timeline_retrieve: {
+    parameters: {
+      query: {
+        end?: string;
+        person: number;
+        project: number;
+        start?: string;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PersonProjectTimelineResponse"];
+        };
+      };
+    };
+  };
   /**
    * @description Project-centric aggregate snapshot for N weeks ahead (default 12).
    *
@@ -2123,6 +2642,23 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["ProjectGridSnapshotResponse"];
+        };
+      };
+    };
+  };
+  /** @description Project Staffing Timeline: aggregates per role and people lists with events. */
+  assignments_project_staffing_timeline_retrieve: {
+    parameters: {
+      query: {
+        end?: string;
+        project: number;
+        start?: string;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectStaffingTimelineResponse"];
         };
       };
     };
@@ -2215,6 +2751,28 @@ export interface operations {
       };
     };
   };
+  /**
+   * @description Invite a user by email.
+   *
+   * - If the user exists, sends a password set/reset link.
+   * - If not, creates an account with an unusable password and sends the link.
+   * - Optionally assigns role and links to a Person.
+   */
+  auth_invite_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InviteUserRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["InviteUserRequestRequest"];
+        "multipart/form-data": components["schemas"]["InviteUserRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
   /** @description Link or unlink the current user's profile to a Person. */
   auth_link_person_create: {
     requestBody?: {
@@ -2264,6 +2822,42 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["NotificationPreferences"];
         };
+      };
+    };
+  };
+  /**
+   * @description Request a password reset by email. Always returns 204.
+   *
+   * If a user with the email exists, sends a reset link with uid/token.
+   */
+  auth_password_reset_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordResetRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PasswordResetRequestRequest"];
+        "multipart/form-data": components["schemas"]["PasswordResetRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  /** @description Confirm password reset with uid/token and set a new password. */
+  auth_password_reset_confirm_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordResetConfirmRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PasswordResetConfirmRequest"];
+        "multipart/form-data": components["schemas"]["PasswordResetConfirmRequest"];
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
       };
     };
   };
@@ -2321,6 +2915,54 @@ export interface operations {
       /** @description No response body */
       204: {
         content: never;
+      };
+    };
+  };
+  /** @description Link or unlink a target user to a Person (admin only). */
+  auth_users_link_person_create: {
+    parameters: {
+      path: {
+        user_id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["AdminLinkUserPersonRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AdminLinkUserPersonRequestRequest"];
+        "multipart/form-data": components["schemas"]["AdminLinkUserPersonRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["UserListItem"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Set role for a target user (admin only).
+   *
+   * Accepts one of: {'role': 'admin' | 'manager' | 'user'}
+   */
+  auth_users_role_create: {
+    parameters: {
+      path: {
+        user_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SetUserRoleRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["SetUserRoleRequestRequest"];
+        "multipart/form-data": components["schemas"]["SetUserRoleRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["UserListItem"];
+        };
       };
     };
   };
@@ -3164,6 +3806,28 @@ export interface operations {
     };
   };
   /**
+   * @description Staff-only: backfill or regenerate pre-items for a project/date window.
+   *
+   * If ASYNC_JOBS is enabled and Celery task is available, enqueues background job and
+   * returns 202 with job metadata. Otherwise, runs synchronously and returns a summary.
+   */
+  deliverables_pre_deliverable_items_backfill_create: {
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PreItemsBackfillRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PreItemsBackfillRequestRequest"];
+        "multipart/form-data": components["schemas"]["PreItemsBackfillRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PreItemsBackfillResponse"];
+        };
+      };
+    };
+  };
+  /**
    * @description Adds ETag on detail GET and optional If-Match handling on mutations.
    *
    * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
@@ -3484,8 +4148,11 @@ export interface operations {
     };
   };
   /**
-   * @description Person CRUD API with utilization calculations
-   * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+   * @description Delete a person by primary key.
+   *
+   * Note: bypass get_queryset() filtering so deletes work even if the record
+   * is inactive or excluded from the default list queryset.
+   * Still enforces object-level permissions before deletion.
    */
   people_destroy: {
     parameters: {
@@ -3806,8 +4473,7 @@ export interface operations {
   projects_retrieve: {
     parameters: {
       path: {
-        /** @description A unique integer value identifying this project. */
-        id: number;
+        id: string;
       };
     };
     responses: {
@@ -3828,8 +4494,7 @@ export interface operations {
   projects_update: {
     parameters: {
       path: {
-        /** @description A unique integer value identifying this project. */
-        id: number;
+        id: string;
       };
     };
     requestBody: {
@@ -3857,8 +4522,7 @@ export interface operations {
   projects_destroy: {
     parameters: {
       path: {
-        /** @description A unique integer value identifying this project. */
-        id: number;
+        id: string;
       };
     };
     responses: {
@@ -3878,8 +4542,7 @@ export interface operations {
   projects_partial_update: {
     parameters: {
       path: {
-        /** @description A unique integer value identifying this project. */
-        id: number;
+        id: string;
       };
     };
     requestBody?: {
@@ -3918,8 +4581,7 @@ export interface operations {
         week?: string;
       };
       path: {
-        /** @description A unique integer value identifying this project. */
-        id: number;
+        id: string;
       };
     };
     responses: {
@@ -3940,8 +4602,7 @@ export interface operations {
   projects_pre_deliverable_settings_retrieve: {
     parameters: {
       path: {
-        /** @description A unique integer value identifying this project. */
-        id: number;
+        id: string;
       };
     };
     responses: {
@@ -3962,8 +4623,7 @@ export interface operations {
   projects_pre_deliverable_settings_update: {
     parameters: {
       path: {
-        /** @description A unique integer value identifying this project. */
-        id: number;
+        id: string;
       };
     };
     requestBody: {
@@ -4530,16 +5190,15 @@ export interface operations {
   token_create: {
     requestBody: {
       content: {
-        "application/json": components["schemas"]["TokenObtainPairRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["TokenObtainPairRequest"];
-        "multipart/form-data": components["schemas"]["TokenObtainPairRequest"];
+        "application/json": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
+        "multipart/form-data": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
       };
     };
     responses: {
+      /** @description No response body */
       200: {
-        content: {
-          "application/json": components["schemas"]["TokenObtainPair"];
-        };
+        content: never;
       };
     };
   };
