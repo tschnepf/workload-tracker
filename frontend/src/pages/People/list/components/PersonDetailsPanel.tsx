@@ -12,7 +12,7 @@ export interface PersonDetailsPanelProps {
   isUpdating: boolean;
   editingName: boolean;
   editingPersonData: Person | null;
-  onFieldChange: (field: keyof Person, value: string | number | null) => void;
+  onFieldChange: (field: keyof Person, value: string | number | boolean | null) => void;
   onSaveField: (field: keyof Person, overrideValue?: any) => Promise<void> | void;
   onEditName: () => void;
   onNameSave: () => Promise<void> | void;
@@ -243,6 +243,34 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Hire Date */}
+              <div>
+                <div className="text-[var(--muted)] text-xs mb-1">Hire Date:</div>
+                <input
+                  type="date"
+                  value={editingPersonData?.hireDate || ''}
+                  onChange={(e) => onFieldChange('hireDate', (e.target as HTMLInputElement).value)}
+                  onBlur={() => onSaveField('hireDate')}
+                  disabled={isUpdating}
+                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
+                />
+              </div>
+
+              {/* Active Status */}
+              <div>
+                <div className="text-[var(--muted)] text-xs mb-1">Status:</div>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!editingPersonData?.isActive}
+                    onChange={(e) => { onFieldChange('isActive', (e.target as HTMLInputElement).checked); onSaveField('isActive', (e.target as HTMLInputElement).checked); }}
+                    disabled={isUpdating}
+                    className="w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
+                  />
+                  <span className="text-sm text-[var(--text)]">Active</span>
+                </label>
               </div>
 
               {/* Location Autocomplete */}

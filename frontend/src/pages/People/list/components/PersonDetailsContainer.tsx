@@ -92,7 +92,7 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
     }
   };
 
-  const onFieldChange = (field: keyof Person, value: string | number | null) => {
+  const onFieldChange = (field: keyof Person, value: string | number | boolean | null) => {
     if (!editingPersonData) return;
     setEditingPersonData((prev) => ({ ...prev!, [field]: value }));
   };
