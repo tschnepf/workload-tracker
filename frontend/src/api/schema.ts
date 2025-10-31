@@ -1747,6 +1747,9 @@ export interface components {
       coverageBlocks: components["schemas"]["CoverageBlock"][];
       events: components["schemas"]["MembershipEvent"][];
       roleChanges: components["schemas"]["RoleChange"][];
+      weeklyHours: {
+        [key: string]: number;
+      };
     };
     /** @description Person serializer with department and role integration */
     PersonRequest: {

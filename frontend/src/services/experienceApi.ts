@@ -52,6 +52,7 @@ export type PersonExperienceProfile = {
     phases: Record<string, { phase: string; weeks: number; hours: number }>;
   }>;
   eventsCount: number;
+  roleNamesById?: Record<string, string>;
 };
 
 export async function fetchPersonExperienceProfile(params: { personId: number; start?: string; end?: string; }) {
@@ -72,6 +73,7 @@ export type PersonProjectTimeline = {
   coverageBlocks: Array<{ roleId: number; start: string; end: string; weeks: number; hours: number }>;
   events: Array<{ week_start: string; event_type: 'joined' | 'left'; deliverable_phase: string; hours_before: number; hours_after: number }>;
   roleChanges: Array<{ week_start: string; roleFromId: number; roleToId: number }>;
+  weeklyHours?: Record<string, number>;
 };
 
 export async function fetchPersonProjectTimeline(params: { personId: number; projectId: number; start?: string; end?: string; }) {

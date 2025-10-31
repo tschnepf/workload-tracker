@@ -289,6 +289,22 @@ const ReportsView: React.FC = () => {
           <AssignedHoursTimelineCard />
         </div>
 
+        {/* Person Experience (link) */}
+        <Card className="bg-[#2d2d30] border-[#3e3e42]">
+          <div className="p-6 flex items-center justify-between gap-4">
+            <div>
+              <div className="text-lg font-semibold text-[#cccccc] mb-1">Person Experience Report</div>
+              <div className="text-[#969696] text-sm">Search by person and see projects, roles, phases, avg hours, and a weekly sparkline over an adjustable window.</div>
+            </div>
+            <a
+              href="/reports/person-experience"
+              className="px-3 py-2 rounded bg-[var(--primary)] text-white text-sm border border-[var(--primary)] hover:opacity-90"
+            >
+              Open Report
+            </a>
+          </div>
+        </Card>
+
         {/* Department Reports Table */}
         <Card className="bg-[#2d2d30] border-[#3e3e42]">
           <div className="p-6">

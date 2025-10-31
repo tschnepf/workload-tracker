@@ -728,6 +728,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/Assignment'
           description: ''
+  /api/assignments/run_weekly_snapshot/:
+    post:
+      operationId: assignments_run_weekly_snapshot_create
+      description: |-
+        Run weekly assignment snapshot writer manually for a given Sunday week.
+
+        If 'week' is omitted, uses the current week's Sunday. Returns writer summary.
+      parameters:
+      - in: query
+        name: week
+        schema:
+          type: string
+        description: YYYY-MM-DD (Sunday)
+      tags:
+      - assignments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssignmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssignmentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunWeeklySnapshotResponse'
+          description: ''
   /api/auth/admin_audit/:
     get:
       operationId: auth_admin_audit_list
@@ -6259,10 +6296,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RoleChange'
+        weeklyHours:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
       required:
       - coverageBlocks
       - events
       - roleChanges
+      - weeklyHours
       - weeksSummary
     PersonRequest:
       type: object
@@ -6960,6 +7003,28 @@ components:
           description: Whether this role is currently available for assignment
       required:
       - name
+    RunWeeklySnapshotResponse:
+      type: object
+      properties:
+        week_start:
+          type: string
+        lock_acquired:
+          type: boolean
+        examined:
+          type: integer
+        inserted:
+          type: integer
+        updated:
+          type: integer
+        skipped:
+          type: integer
+        events_inserted:
+          type: integer
+        skipped_due_to_lock:
+          type: boolean
+      required:
+      - lock_acquired
+      - week_start
     SetPasswordRequestRequest:
       type: object
       properties:

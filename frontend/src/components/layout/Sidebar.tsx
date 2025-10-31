@@ -190,6 +190,12 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       label: 'Forecast',
       description: 'Team forecast & timeline'
     },
+    {
+      path: '/reports/person-experience',
+      icon: 'reports',
+      label: 'Person Experience',
+      description: 'Per-person projects & hours'
+    },
     { 
       path: '/deliverables/calendar', 
       icon: 'calendar', 

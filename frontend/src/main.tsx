@@ -37,6 +37,7 @@ const PerformanceDashboard = React.lazy(() => import('./pages/Performance/Perfor
 const Settings = React.lazy(() => import('./pages/Settings/Settings'))
 const MilestoneCalendar = React.lazy(() => import('./pages/Deliverables/Calendar'))
 const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'))
+const PersonExperiencePage = React.lazy(() => import('./pages/Reports/PersonExperience'))
 const Login = React.lazy(() => import('./pages/Auth/Login'))
 const ResetPassword = React.lazy(() => import('./pages/Auth/ResetPassword'))
 const SetPassword = React.lazy(() => import('./pages/Auth/SetPassword'))
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
       { path: 'deliverables/calendar', element: <RequireAuth><MilestoneCalendar /></RequireAuth> },
       { path: 'reports/forecast', element: <RequireAuth><TeamForecastPage /></RequireAuth> },
+      { path: 'reports/person-experience', element: <RequireAuth><PersonExperiencePage /></RequireAuth> },
       { path: 'help', element: <RequireAuth><ComingSoon /></RequireAuth> },
       { path: 'my-work', element: (getFlag('PERSONAL_DASHBOARD', true) ? (
         <RequireAuth><PersonalDashboard /></RequireAuth>

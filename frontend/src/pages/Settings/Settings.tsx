@@ -23,6 +23,7 @@ import { showToast } from '@/lib/toastBus';
 import DepartmentProjectRolesSection from '@/components/settings/DepartmentProjectRolesSection';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import PreDeliverablesBackfill from '@/components/settings/PreDeliverablesBackfill';
+import ManualSnapshots from '@/components/settings/ManualSnapshots';
 
 const Settings: React.FC = () => {
   const auth = useAuth();
@@ -153,7 +154,7 @@ const Settings: React.FC = () => {
           <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
             <div className="py-10">
               <div className="max-w-md mx-auto">
-                <Loader inline message="Loading settings…" />
+                <Loader inline message="Loading settings..." />
               </div>
             </div>
           </div>
@@ -222,7 +223,10 @@ const Settings: React.FC = () => {
 
           {/* Admin: Pre‑Deliverables Backfill */}
           {auth.user?.is_staff && (
-            <PreDeliverablesBackfill />
+            <>
+              <PreDeliverablesBackfill />
+              <ManualSnapshots />
+            </>
           )}
 
           {/* Admin: Create New User */}
@@ -255,7 +259,7 @@ const Settings: React.FC = () => {
                     value={newUserPersonId}
                     onChange={(e) => setNewUserPersonId(e.target.value === '' ? '' : Number(e.target.value))}
                   >
-                    <option value="">— None —</option>
+                    <option value="">- None -</option>
                     {peopleOptions.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
@@ -284,7 +288,7 @@ const Settings: React.FC = () => {
                     }
                   }}
                 >
-                  {createBusy ? 'Creating…' : 'Create User'}
+                  {createBusy ? 'Creating...' : 'Create User'}
                 </Button>
               </div>
             </div>
@@ -312,7 +316,7 @@ const Settings: React.FC = () => {
                       value={newUserPersonId}
                       onChange={(e) => setNewUserPersonId(e.target.value === '' ? '' : Number(e.target.value))}
                     >
-                      <option value="">— None —</option>
+                      <option value="">- None -</option>
                       {peopleOptions.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
@@ -337,14 +341,14 @@ const Settings: React.FC = () => {
                         }
                       }}
                     >
-                      {inviteBusy ? 'Sending…' : 'Send Invite'}
+                      {inviteBusy ? 'Sending...' : 'Send Invite'}
                     </Button>
                   </div>
                 </div>
                 {/* Using toast for invite status */}
               </div>
               {usersLoading ? (
-                <div className="text-[var(--text)]">Loading users…</div>
+                <div className="text-[var(--text)]">Loading users...</div>
               ) : (
                 <div>
                   {usersMsg && <div className="text-sm text-[var(--text)] mb-2">{usersMsg}</div>}
@@ -412,7 +416,7 @@ const Settings: React.FC = () => {
                               }
                             }}
                           >
-                            <option value="">— None —</option>
+                            <option value="">- None -</option>
                             {peopleOptions.map(p => (
                               <option key={p.id} value={p.id}>{p.name}</option>
                             ))}
@@ -525,7 +529,7 @@ const Settings: React.FC = () => {
                                 }}
                                 aria-label={`Change linked person for ${u.username}`}
                               >
-                                <option value="">— None —</option>
+                                <option value="">- None -</option>
                                 {peopleOptions.map(p => (
                                   <option key={p.id} value={p.id}>{p.name}</option>
                                 ))}
@@ -617,7 +621,7 @@ const Settings: React.FC = () => {
                 </Button>
               </div>
               {auditLoading ? (
-                <div className="text-[var(--text)]">Loading…</div>
+                <div className="text-[var(--text)]">Loading...</div>
               ) : audit.length === 0 ? (
                 <div className="text-[var(--muted)]">No recent events.</div>
               ) : (

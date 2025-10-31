@@ -410,6 +410,52 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
     @extend_schema(
         description=(
+            "Run weekly assignment snapshot writer manually for a given Sunday week.\n\n"
+            "If 'week' is omitted, uses the current week's Sunday. Returns writer summary."
+        ),
+        parameters=[
+            OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Sunday)'),
+        ],
+        responses=inline_serializer(
+            name='RunWeeklySnapshotResponse',
+            fields={
+                'week_start': serializers.CharField(),
+                'lock_acquired': serializers.BooleanField(),
+                'examined': serializers.IntegerField(required=False),
+                'inserted': serializers.IntegerField(required=False),
+                'updated': serializers.IntegerField(required=False),
+                'skipped': serializers.IntegerField(required=False),
+                'events_inserted': serializers.IntegerField(required=False),
+                'skipped_due_to_lock': serializers.BooleanField(required=False),
+            }
+        )
+    )
+    @action(detail=False, methods=['post'], url_path='run_weekly_snapshot', throttle_classes=[SnapshotsThrottle])
+    def run_weekly_snapshot(self, request):
+        """Manual trigger for weekly snapshot writer.
+
+        Admins only recommended; returns writer summary.
+        """
+        # Restrict to staff users
+        user = getattr(request, 'user', None)
+        if not getattr(user, 'is_staff', False):
+            return Response({'detail': 'forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        from assignments.snapshot_service import write_weekly_assignment_snapshots
+        wk = request.data.get('week') or request.query_params.get('week')
+        try:
+            if wk:
+                d = date.fromisoformat(str(wk))
+            else:
+                d = date.today()
+        except Exception:
+            return Response({'detail': 'invalid week'}, status=status.HTTP_400_BAD_REQUEST)
+        from core.week_utils import sunday_of_week
+        sunday = sunday_of_week(d)
+        res = write_weekly_assignment_snapshots(sunday)
+        return Response(res)
+
+    @extend_schema(
+        description=(
             "Experience by Client: list people with totals and role aggregates in a date window.\n\n"
             "Params: client?, department?, include_children? (0|1), start?, end?, min_weeks?"
         ),
@@ -588,6 +634,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='person_experience_profile', throttle_classes=[SnapshotsThrottle])
     def person_experience_profile(self, request):
         from .models import WeeklyAssignmentSnapshot as WAS, AssignmentMembershipEvent as AME
+        from projects.models import ProjectRole as PR
         try:
             person_id = int(request.query_params.get('person'))
         except Exception:
@@ -646,6 +693,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         # by project
         by_project: dict[int, dict] = {}
+        role_ids: set[int] = set()
         for row in qs.values('project_id', 'project_name', 'client', 'role_on_project_id', 'deliverable_phase').annotate(
             weeks=Count('week_start', distinct=True),
             hours=Sum('hours'),
@@ -669,6 +717,10 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 r = rec['roles'].setdefault(rid, {'roleId': rid, 'weeks': 0, 'hours': 0.0})
                 r['weeks'] += int(row['weeks'] or 0)
                 r['hours'] += float(row['hours'] or 0.0)
+                try:
+                    role_ids.add(int(rid))
+                except Exception:
+                    pass
             ph = row['deliverable_phase'] or 'other'
             ph_rec = rec['phases'].setdefault(ph, {'phase': ph, 'weeks': 0, 'hours': 0.0})
             ph_rec['weeks'] += int(row['weeks'] or 0)
@@ -696,10 +748,17 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             for v in rec['phases'].values():
                 v['hours'] = round(v['hours'], 2)
 
+        # Build role name map
+        role_names: dict[int, str] = {}
+        if role_ids:
+            for pr in PR.objects.filter(id__in=list(role_ids)).values('id', 'name'):
+                role_names[int(pr['id'])] = pr.get('name') or f"Role {pr['id']}"
+
         payload = {
             'byClient': list(by_client.values()),
             'byProject': list(by_project.values()),
             'eventsCount': int(events_count),
+            'roleNamesById': role_names,
         }
         response = Response(payload)
         if etag:
@@ -745,6 +804,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'roleFromId': serializers.IntegerField(),
                     'roleToId': serializers.IntegerField(),
                 })),
+                'weeklyHours': serializers.DictField(child=serializers.FloatField()),
             }
         )
     )
@@ -848,11 +908,17 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 cur_roles.add(rid)
             prev_roles = cur_roles
 
+        # Weekly hours series for sparkline
+        weekly_hours: dict[str, float] = {}
+        for r in qs.values('week_start', 'hours').order_by('week_start'):
+            weekly_hours[str(r['week_start'])] = round(float(r['hours'] or 0.0), 2)
+
         payload = {
             'weeksSummary': weeks_summary,
             'coverageBlocks': blocks,
             'events': events,
             'roleChanges': role_changes,
+            'weeklyHours': weekly_hours,
         }
         response = Response(payload)
         if etag:
