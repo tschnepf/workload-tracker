@@ -1908,7 +1908,13 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         asn_aggr = Assignment.objects.filter(person__in=people_qs).aggregate(last_modified=Max('updated_at'))
         lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
         last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
-        etag_content = f"{weeks}-{cache_scope}-" + (last_modified.isoformat() if last_modified else 'none')
+        # Include active people count in ETag to invalidate when users toggle active/inactive
+        active_count = 0
+        try:
+            active_count = people_qs.count()
+        except Exception:
+            active_count = 0
+        etag_content = f"{weeks}-{cache_scope}-{active_count}-" + (last_modified.isoformat() if last_modified else 'none')
         etag = hashlib.md5(etag_content.encode()).hexdigest()
 
         # Conditional request handling
