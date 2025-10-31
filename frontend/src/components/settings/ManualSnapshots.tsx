@@ -17,12 +17,13 @@ export default function ManualSnapshots() {
   const [week, setWeek] = React.useState<string>(() => sundayOfWeek(new Date()));
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState<any | null>(null);
+  const [useBackfill, setUseBackfill] = React.useState(false);
 
   const run = async () => {
     try {
       setBusy(true);
       setResult(null);
-      const res = await triggerWeeklySnapshot(week);
+      const res = await triggerWeeklySnapshot(week, { backfill: useBackfill });
       setResult(res);
       if (res.lock_acquired) {
         showToast(`Snapshot done: inserted ${res.inserted ?? 0}, updated ${res.updated ?? 0}, events ${res.events_inserted ?? 0}`, 'success');
@@ -48,6 +49,14 @@ export default function ManualSnapshots() {
           onChange={e => setWeek((e.target as HTMLInputElement).value)}
           className="px-2 py-1 rounded bg-[var(--surface)] border border-[var(--border)]"
         />
+        <label className="ml-4 inline-flex items-center gap-2 text-sm text-[var(--muted)]">
+          <input
+            type="checkbox"
+            checked={useBackfill}
+            onChange={e => setUseBackfill((e.target as HTMLInputElement).checked)}
+          />
+          Use backfill (initial snapshot)
+        </label>
         <button
           disabled={busy}
           onClick={run}

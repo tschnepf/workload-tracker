@@ -410,11 +410,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
     @extend_schema(
         description=(
-            "Run weekly assignment snapshot writer manually for a given Sunday week.\n\n"
-            "If 'week' is omitted, uses the current week's Sunday. Returns writer summary."
+            "Run weekly assignment snapshot writer or backfill for a given Sunday week.\n\n"
+            "If 'week' is omitted, uses the current week's Sunday. Add 'backfill=1' to use the"
+            " backfill service (optional 'emit_events' and 'force' flags). Returns summary."
         ),
         parameters=[
             OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Sunday)'),
+            OpenApiParameter(name='backfill', type=bool, required=False, description='Use backfill mode (0|1/true|false)'),
+            OpenApiParameter(name='emit_events', type=bool, required=False, description='Backfill: emit joined/left events'),
+            OpenApiParameter(name='force', type=bool, required=False, description='Backfill: overwrite existing rows'),
         ],
         responses=inline_serializer(
             name='RunWeeklySnapshotResponse',
@@ -440,7 +444,16 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         user = getattr(request, 'user', None)
         if not getattr(user, 'is_staff', False):
             return Response({'detail': 'forbidden'}, status=status.HTTP_403_FORBIDDEN)
-        from assignments.snapshot_service import write_weekly_assignment_snapshots
+        from assignments.snapshot_service import write_weekly_assignment_snapshots, backfill_weekly_assignment_snapshots
+        
+        def _get_bool(name: str) -> bool:
+            raw = request.data.get(name)
+            if raw is None:
+                raw = request.query_params.get(name)
+            if raw is None:
+                return False
+            s = str(raw).strip().lower()
+            return s in ('1', 'true', 't', 'yes', 'y', 'on')
         wk = request.data.get('week') or request.query_params.get('week')
         try:
             if wk:
@@ -451,7 +464,13 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return Response({'detail': 'invalid week'}, status=status.HTTP_400_BAD_REQUEST)
         from core.week_utils import sunday_of_week
         sunday = sunday_of_week(d)
-        res = write_weekly_assignment_snapshots(sunday)
+        # Optional backfill mode for initial snapshot seeding
+        if _get_bool('backfill'):
+            emit_events = _get_bool('emit_events')
+            force = _get_bool('force')
+            res = backfill_weekly_assignment_snapshots(sunday, emit_events=emit_events, force=force)
+        else:
+            res = write_weekly_assignment_snapshots(sunday)
         return Response(res)
 
     @extend_schema(
