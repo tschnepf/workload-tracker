@@ -258,19 +258,17 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
                 />
               </div>
 
-              {/* Active Status */}
+              {/* Active/Inactive Dropdown (compact, similar to Project status dropdown) */}
               <div>
                 <div className="text-[var(--muted)] text-xs mb-1">Status:</div>
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!editingPersonData?.isActive}
-                    onChange={(e) => { onFieldChange('isActive', (e.target as HTMLInputElement).checked); onSaveField('isActive', (e.target as HTMLInputElement).checked); }}
-                    disabled={isUpdating}
-                    className="w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
-                  />
-                  <span className="text-sm text-[var(--text)]">Active</span>
-                </label>
+                <PersonActiveDropdown
+                  active={!!editingPersonData?.isActive}
+                  onChange={(next) => {
+                    onFieldChange('isActive', next);
+                    onSaveField('isActive', next);
+                  }}
+                  disabled={isUpdating}
+                />
               </div>
 
               {/* Location Autocomplete */}
@@ -475,5 +473,56 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
         )}
       </div>
     </>
+  );
+}
+
+function PersonActiveDropdown({ active, onChange, disabled }: { active: boolean; onChange: (next: boolean) => void; disabled?: boolean }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Element;
+      if (ref.current && !ref.current.contains(t)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, []);
+  const label = active ? 'Active' : 'Inactive';
+  const colorClass = active ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' : 'text-[var(--muted)] border-[var(--border)] bg-[var(--surface)]';
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        type="button"
+        disabled={!!disabled}
+        onClick={() => setOpen(!open)}
+        className={`px-2 py-1 rounded border text-xs flex items-center gap-1 hover:bg-[var(--surfaceHover)] transition-colors ${colorClass} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Person status dropdown"
+      >
+        {label}
+        <svg className={`w-3 h-3 ${open ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="6,9 12,15 18,9" />
+        </svg>
+      </button>
+      {open && !disabled && (
+        <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[140px]">
+          <button
+            className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--cardHover)] transition-colors first:rounded-t ${active ? 'bg-[var(--surfaceOverlay)]' : ''} text-emerald-400`}
+            onClick={(e) => { e.stopPropagation(); setOpen(false); if (!active) onChange(true); }}
+          >
+            Active
+          </button>
+          <button
+            className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--cardHover)] transition-colors last:rounded-b ${!active ? 'bg-[var(--surfaceOverlay)]' : ''} text-[var(--muted)]`}
+            onClick={(e) => { e.stopPropagation(); setOpen(false); if (active) onChange(false); }}
+          >
+            Inactive
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
