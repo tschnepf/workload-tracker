@@ -1110,6 +1110,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = 12
 
         people = self.get_queryset()
+        # Heatmap must exclude inactive people regardless of detail/list behavior
+        people = people.filter(is_active=True)
         # Prefetch active assignments to avoid N+1 when computing utilization
         try:
             people = people.prefetch_related(
@@ -1153,7 +1155,12 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
         last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
 
-        etag_content = f"{weeks}-{cache_scope}-" + (last_modified.isoformat() if last_modified else 'none')
+        # Include active people count to invalidate ETag when active/inactive toggles occur
+        try:
+            active_count = people.count()
+        except Exception:
+            active_count = 0
+        etag_content = f"{weeks}-{cache_scope}-{active_count}-" + (last_modified.isoformat() if last_modified else 'none')
         etag = hashlib.md5(etag_content.encode()).hexdigest()
 
         # Handle conditional request
