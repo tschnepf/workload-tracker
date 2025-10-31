@@ -106,7 +106,7 @@ def write_weekly_assignment_snapshots(week_start: date | str, *, source: str = S
         qs = (
             Assignment.objects
             .filter(is_active=True)
-            .select_related('person', 'person__department', 'project')
+            .select_related('person', 'person__department', 'person__role', 'project')
         )
         examined = 0
         to_upsert: List[WeeklyAssignmentSnapshot] = []
@@ -154,6 +154,9 @@ def write_weekly_assignment_snapshots(week_start: date | str, *, source: str = S
                 person_name=getattr(person, 'name', '') or '',
                 project_name=getattr(proj, 'name', '') or '',
                 client=getattr(proj, 'client', '') or '',
+                person_is_active=bool(getattr(person, 'is_active', True)),
+                person_role_id=getattr(person, 'role_id', None),
+                person_role_name=getattr(getattr(person, 'role', None), 'name', '') or '',
                 updated_at=now,
             ))
 
@@ -167,7 +170,9 @@ def write_weekly_assignment_snapshots(week_start: date | str, *, source: str = S
                     update_conflicts=True,
                     update_fields=[
                         'hours', 'project_status', 'deliverable_phase', 'department_id',
-                        'person_name', 'project_name', 'client', 'updated_at'
+                        'person_name', 'project_name', 'client',
+                        'person_is_active', 'person_role_id', 'person_role_name',
+                        'updated_at'
                     ],
                     unique_fields=['person', 'project', 'role_on_project_id', 'week_start', 'source']
                 )
@@ -337,7 +342,7 @@ def backfill_weekly_assignment_snapshots(week_start: date | str, *, emit_events:
         qs = (
             Assignment.objects
             .filter(is_active=True)
-            .select_related('person', 'person__department', 'project')
+            .select_related('person', 'person__department', 'person__role', 'project')
         )
         examined = 0
         rows: List[WeeklyAssignmentSnapshot] = []
@@ -373,6 +378,9 @@ def backfill_weekly_assignment_snapshots(week_start: date | str, *, emit_events:
                 person_name=getattr(person, 'name', '') or '',
                 project_name=getattr(proj, 'name', '') or '',
                 client=getattr(proj, 'client', '') or '',
+                person_is_active=bool(getattr(person, 'is_active', True)),
+                person_role_id=getattr(person, 'role_id', None),
+                person_role_name=getattr(getattr(person, 'role', None), 'name', '') or '',
                 updated_at=now,
             ))
 
@@ -384,7 +392,7 @@ def backfill_weekly_assignment_snapshots(week_start: date | str, *, emit_events:
                     WeeklyAssignmentSnapshot.objects.bulk_create(
                         rows,
                         update_conflicts=True,
-                        update_fields=['hours', 'project_status', 'deliverable_phase', 'department_id', 'person_name', 'project_name', 'client', 'updated_at'],
+                        update_fields=['hours', 'project_status', 'deliverable_phase', 'department_id', 'person_name', 'project_name', 'client', 'person_is_active', 'person_role_id', 'person_role_name', 'updated_at'],
                         unique_fields=['person', 'project', 'role_on_project_id', 'week_start', 'source']
                     )
                 else:

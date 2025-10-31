@@ -135,6 +135,10 @@ class WeeklyAssignmentSnapshot(models.Model):
     person_name = models.CharField(max_length=200, blank=True, default="")
     project_name = models.CharField(max_length=200, blank=True, default="")
     client = models.CharField(max_length=100, blank=True, default="")
+    # New: person status + role at capture time (for historical analysis)
+    person_is_active = models.BooleanField(default=True)
+    person_role_id = models.IntegerField(null=True, blank=True)
+    person_role_name = models.CharField(max_length=100, blank=True, default="")
     captured_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
