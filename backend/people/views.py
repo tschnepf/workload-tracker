@@ -72,17 +72,12 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     serializer_class = PersonSerializer
     
     def get_queryset(self):
-        """Filter active people by default; include inactive when requested."""
-        include_inactive = False
-        try:
-            req = getattr(self, 'request', None)
-            if req is not None:
-                raw = req.query_params.get('include_inactive')
-                if raw is not None and str(raw).strip().lower() in ('1', 'true', 'yes', 'on'):  # pragma: no cover - trivial
-                    include_inactive = True
-        except Exception:
-            include_inactive = False
+        """Use active-only filter for list; allow all for detail/update.
 
+        The list action hides inactive by default (unless include_inactive=1).
+        Detail and write actions must be able to fetch inactive rows to allow
+        toggling status — otherwise GET/PATCH on an inactive person 404s.
+        """
         qs = (
             Person.objects
             .select_related('department', 'role')
@@ -92,8 +87,21 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             )
             .order_by('name')
         )
-        if not include_inactive:
-            qs = qs.filter(is_active=True)
+
+        # Apply active-only filter only for list action
+        if getattr(self, 'action', None) == 'list':
+            include_inactive = False
+            try:
+                req = getattr(self, 'request', None)
+                if req is not None:
+                    raw = req.query_params.get('include_inactive')
+                    if raw is not None and str(raw).strip().lower() in ('1', 'true', 'yes', 'on'):
+                        include_inactive = True
+            except Exception:
+                include_inactive = False
+            if not include_inactive:
+                qs = qs.filter(is_active=True)
+
         return qs
     
     @extend_schema(

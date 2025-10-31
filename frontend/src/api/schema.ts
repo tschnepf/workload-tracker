@@ -149,6 +149,14 @@ export interface paths {
      */
     get: operations["assignments_rebalance_suggestions_retrieve"];
   };
+  "/api/assignments/run_weekly_snapshot/": {
+    /**
+     * @description Run weekly assignment snapshot writer or backfill for a given Sunday week.
+     *
+     * If 'week' is omitted, uses the current week's Sunday. Add 'backfill=1' to use the backfill service (optional 'emit_events' and 'force' flags). Returns summary.
+     */
+    post: operations["assignments_run_weekly_snapshot_create"];
+  };
   "/api/auth/admin_audit/": {
     /** @description Read-only endpoint for recent admin audit logs (admin only). */
     get: operations["auth_admin_audit_list"];
@@ -1624,6 +1632,9 @@ export interface components {
       role?: number | null;
       department?: number | null;
       location?: string | null;
+      /** Format: date */
+      hireDate?: string | null;
+      isActive?: boolean;
       notes?: string;
     };
     /** @description Person skill serializer with camelCase field names and related data */
@@ -1709,6 +1720,9 @@ export interface components {
       department?: number | null;
       departmentName: string;
       location?: string | null;
+      /** Format: date */
+      hireDate?: string | null;
+      isActive?: boolean;
       notes?: string;
       /** Format: date-time */
       createdAt: string;
@@ -1760,6 +1774,9 @@ export interface components {
       role?: number | null;
       department?: number | null;
       location?: string | null;
+      /** Format: date */
+      hireDate?: string | null;
+      isActive?: boolean;
       notes?: string;
     };
     /** @description Person skill serializer with camelCase field names and related data */
@@ -2040,6 +2057,16 @@ export interface components {
       description?: string;
       /** @description Whether this role is currently available for assignment */
       isActive?: boolean;
+    };
+    RunWeeklySnapshotResponse: {
+      week_start: string;
+      lock_acquired: boolean;
+      examined?: number;
+      inserted?: number;
+      updated?: number;
+      skipped?: number;
+      events_inserted?: number;
+      skipped_due_to_lock?: boolean;
     };
     SetPasswordRequestRequest: {
       userId: number;
@@ -2702,6 +2729,39 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["Assignment"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Run weekly assignment snapshot writer or backfill for a given Sunday week.
+   *
+   * If 'week' is omitted, uses the current week's Sunday. Add 'backfill=1' to use the backfill service (optional 'emit_events' and 'force' flags). Returns summary.
+   */
+  assignments_run_weekly_snapshot_create: {
+    parameters: {
+      query?: {
+        /** @description Use backfill mode (0|1/true|false) */
+        backfill?: boolean;
+        /** @description Backfill: emit joined/left events */
+        emit_events?: boolean;
+        /** @description Backfill: overwrite existing rows */
+        force?: boolean;
+        /** @description YYYY-MM-DD (Sunday) */
+        week?: string;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AssignmentRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
+        "multipart/form-data": components["schemas"]["AssignmentRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["RunWeeklySnapshotResponse"];
         };
       };
     };
@@ -4071,6 +4131,8 @@ export interface operations {
         department?: number;
         /** @description Include child departments (0|1) */
         include_children?: number;
+        /** @description Include inactive people (0|1; default 0) */
+        include_inactive?: number;
         /** @description Page number */
         page?: number;
         /** @description Page size */

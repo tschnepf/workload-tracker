@@ -175,7 +175,7 @@ class DashboardView(APIView):
         avg_utilization = round(total_utilization / total_people, 1) if total_people > 0 else 0
         
         # Get total active assignments, optionally filtered by department
-        assignments_qs = Assignment.objects.filter(is_active=True)
+        assignments_qs = Assignment.objects.filter(is_active=True, person__is_active=True)
         if department_filter:
             assignments_qs = assignments_qs.filter(person__department_id=department_filter)
         total_assignments = assignments_qs.count()
@@ -183,7 +183,8 @@ class DashboardView(APIView):
         # Recent assignments (last 7 days), optionally filtered by department
         recent_assignments = []
         recent_assignment_qs = Assignment.objects.filter(
-            created_at__gte=today - timedelta(days=7)
+            created_at__gte=today - timedelta(days=7),
+            person__is_active=True
         ).select_related('person')
         
         if department_filter:

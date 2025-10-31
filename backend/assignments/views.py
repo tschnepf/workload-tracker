@@ -55,7 +55,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
     """
     queryset = (
-        Assignment.objects.filter(is_active=True)
+        Assignment.objects.filter(is_active=True, person__is_active=True)
         .select_related('person', 'person__department', 'project', 'department', 'role_on_project_ref')
         .order_by('-created_at')
     )
@@ -298,7 +298,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
         # Base assignments queryset
-        qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
+        qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
 
@@ -1124,7 +1124,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
-        qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).select_related('person', 'project')
+        qs = Assignment.objects.filter(is_active=True, person__is_active=True, project_id__in=project_ids).select_related('person', 'project')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
 
@@ -1225,7 +1225,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
         # Base assignments
-        qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
+        qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
 
@@ -1357,7 +1357,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if not project_ids:
             return Response({'projects': []})
 
-        qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).select_related('person', 'project')
+        qs = Assignment.objects.filter(is_active=True, person__is_active=True, project_id__in=project_ids).select_related('person', 'project')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
 
@@ -1472,7 +1472,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
         # Base assignments
-        qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
+        qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
 
@@ -1637,7 +1637,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
         # Base assignments
-        qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
+        qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
 

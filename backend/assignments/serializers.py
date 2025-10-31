@@ -97,6 +97,13 @@ class AssignmentSerializer(serializers.ModelSerializer):
         - If a role FK is provided, enforce department match at the application level.
         """
         person = self.instance.person if getattr(self, 'instance', None) else attrs.get('person')
+        # Prevent assigning projects to inactive people when person is explicitly set/changed
+        if attrs.get('person') is not None:
+            try:
+                if not attrs['person'].is_active:
+                    raise serializers.ValidationError({'person': 'Cannot assign projects to inactive people.'})
+            except AttributeError:
+                pass
         dept = attrs.get('department')
         if dept is None and person is not None:
             # Default department from person

@@ -79,7 +79,6 @@ const PeopleListTable: React.FC<Props> = ({
                     <span className={`inline-block w-2 h-2 rounded-full ${person.isActive ? 'bg-emerald-400' : 'bg-[var(--muted)]'}`} title={person.isActive ? 'Active' : 'Inactive'} />
                     <span>{person.roleName || 'Not specified'}</span>
                   </div>
-                  <div className="mt-0.5 text-[var(--muted)]">{person.hireDate ? `Hired: ${person.hireDate}` : 'Hired: —'}</div>
                 </div>
               </div>
             );
@@ -120,7 +119,6 @@ const PeopleListTable: React.FC<Props> = ({
                 <span className={`inline-block w-2 h-2 rounded-full ${person.isActive ? 'bg-emerald-400' : 'bg-[var(--muted)]'}`} title={person.isActive ? 'Active' : 'Inactive'} />
                 <span>{person.roleName || 'Not specified'}</span>
               </div>
-              <div className="mt-0.5 text-[var(--muted)]">{person.hireDate ? `Hired: ${person.hireDate}` : 'Hired: —'}</div>
             </div>
           </div>
         ))}
