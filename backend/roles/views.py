@@ -35,7 +35,32 @@ class RoleViewSet(viewsets.ModelViewSet):
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
         
-        return queryset.order_by('name')
+        # Default ordering respects user-defined sort_order then name
+        return queryset.order_by('sort_order', 'name', 'id')
+
+    @action(detail=False, methods=['post'], url_path='reorder')
+    def reorder(self, request):
+        """Bulk reorder roles by IDs.
+
+        Body: { "ids": [int, ...] }
+        Requires staff privileges.
+        """
+        user = getattr(request, 'user', None)
+        if not getattr(user, 'is_staff', False):
+            return Response({'detail': 'forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        ids = request.data.get('ids')
+        if not isinstance(ids, list) or not all(isinstance(x, int) for x in ids):
+            return Response({'detail': 'ids[] required'}, status=status.HTTP_400_BAD_REQUEST)
+        qs_ids = set(Role.objects.filter(id__in=ids).values_list('id', flat=True))
+        if len(qs_ids) != len(set(ids)):
+            return Response({'detail': 'one or more ids invalid'}, status=status.HTTP_400_BAD_REQUEST)
+        # Apply ordering in a single transaction
+        from django.db import transaction
+        with transaction.atomic():
+            step = 10
+            for idx, rid in enumerate(ids):
+                Role.objects.filter(id=rid).update(sort_order=(idx + 1) * step)
+        return Response({'detail': 'ok'})
     
     @extend_schema(
         parameters=[

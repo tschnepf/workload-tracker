@@ -24,6 +24,7 @@ export interface Role {
   name: string;
   description?: string;
   isActive?: boolean;
+  sortOrder?: number;
   createdAt?: string;
   updatedAt?: string;
 }

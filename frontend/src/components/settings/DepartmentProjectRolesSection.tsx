@@ -2,6 +2,7 @@
 import { departmentsApi } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
 import { useProjectRoles, useProjectRoleMutations } from '@/roles/hooks/useProjectRoles';
+import { reorderProjectRoles } from '@/roles/api';
 
 type Dept = { id?: number; name: string };
 
@@ -59,33 +60,44 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
         ) : roles.length === 0 ? (
           <div className="text-[var(--muted)] text-sm">No roles configured for this department.</div>
         ) : (
-          <div className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-md bg-[var(--surface)]">
-            {roles.map(r => (
-              <div key={r.id} className="flex items-center justify-between px-3 py-2">
-                <div className="text-sm truncate text-[var(--text)]" title={r.name}>{r.name}</div>
-                {canMutate && (
-                  <button
-                    aria-label={`Delete ${r.name}`}
-                    title="Delete role permanently"
-                    className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-                    onClick={async () => {
-                      if (!selectedDeptId) return;
-                      const ok = window.confirm(`Delete \"${r.name}\" permanently? This will fail if the role is referenced by any assignments.`);
-                      if (!ok) return;
-                      try {
-                        await remove.mutateAsync({ id: r.id });
-                        showToast('Role deleted', 'success');
-                      } catch (e: any) {
-                        showToast(e?.message || 'Failed to delete role (it may be referenced)', 'error');
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+          <DraggableRoleList
+            items={roles.map(r => ({ id: r.id, label: r.name }))}
+            disabled={!canMutate}
+            onReorder={async (orderedIds) => {
+              try {
+                if (!selectedDeptId) return;
+                await reorderProjectRoles(selectedDeptId, orderedIds);
+                showToast('Order saved', 'success');
+                await refetch();
+              } catch (e: any) {
+                showToast(e?.message || 'Failed to save order', 'error');
+              }
+            }}
+            renderActions={(id) => {
+              const r = roles.find(x => x.id === id);
+              if (!r || !canMutate) return null;
+              return (
+                <button
+                  aria-label={`Delete ${r.name}`}
+                  title="Delete role permanently"
+                  className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                  onClick={async () => {
+                    if (!selectedDeptId) return;
+                    const ok = window.confirm(`Delete \"${r.name}\" permanently? This will fail if the role is referenced by any assignments.`);
+                    if (!ok) return;
+                    try {
+                      await remove.mutateAsync({ id: r.id });
+                      showToast('Role deleted', 'success');
+                    } catch (e: any) {
+                      showToast(e?.message || 'Failed to delete role (it may be referenced)', 'error');
+                    }
+                  }}
+                >
+                  Delete
+                </button>
+              );
+            }}
+          />
         )}
       </div>
 
@@ -131,4 +143,50 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
 };
 
 export default DepartmentProjectRolesSection;
+
+// Lightweight draggable list with a grab handle
+function DraggableRoleList({ items, disabled, onReorder, renderActions }: { items: { id: number; label: string }[]; disabled?: boolean; onReorder: (ids: number[]) => void | Promise<void>; renderActions?: (id: number) => React.ReactNode }) {
+  const [order, setOrder] = React.useState(items.map(i => i.id));
+  const [dragId, setDragId] = React.useState<number | null>(null);
+  React.useEffect(() => { setOrder(items.map(i => i.id)); }, [items.map(i => i.id).join(',')]);
+  function onDragStart(e: React.DragEvent, id: number) { if (disabled) return; setDragId(id); e.dataTransfer.effectAllowed = 'move'; }
+  function onDragOver(e: React.DragEvent, overId: number) {
+    if (disabled) return; e.preventDefault(); if (dragId == null || dragId === overId) return;
+    const next = order.slice();
+    const from = next.indexOf(dragId); const to = next.indexOf(overId);
+    if (from === -1 || to === -1) return;
+    next.splice(from, 1); next.splice(to, 0, dragId);
+    setOrder(next);
+  }
+  async function onDropFinalize() {
+    if (disabled) return;
+    const ids = order.slice();
+    setDragId(null);
+    await onReorder(ids);
+  }
+  return (
+    <div className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-md bg-[var(--surface)]">
+      {order.map(id => {
+        const item = items.find(i => i.id === id)!;
+        return (
+          <div key={id} className="flex items-center justify-between px-3 py-2" draggable={!disabled} onDragStart={(e) => onDragStart(e, id)} onDragOver={(e) => onDragOver(e, id)} onDragEnd={onDropFinalize}>
+            <div className="flex items-center gap-2 min-w-0">
+              <GrabHandle disabled={!!disabled} />
+              <div className="text-sm truncate text-[var(--text)]" title={item.label}>{item.label}</div>
+            </div>
+            <div className="shrink-0">{renderActions ? renderActions(id) : null}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GrabHandle({ disabled }: { disabled?: boolean }) {
+  return (
+    <span className={`inline-flex cursor-${disabled ? 'default' : 'grab'} text-[var(--muted)]`} title={disabled ? '' : 'Drag to reorder'}>
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="5" cy="5" r="1"/><circle cx="5" cy="10" r="1"/><circle cx="5" cy="15" r="1"/><circle cx="10" cy="5" r="1"/><circle cx="10" cy="10" r="1"/><circle cx="10" cy="15" r="1"/></svg>
+    </span>
+  );
+}
 

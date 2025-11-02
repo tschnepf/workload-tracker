@@ -112,6 +112,16 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleReorderRoles = async (ids: number[]) => {
+    try {
+      await rolesApi.reorder(ids);
+      showToast('Role order saved', 'success');
+      await loadRoles();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to save order', 'error');
+    }
+  };
+
   const handleCreateRole = () => {
     setEditingRole(null);
     setShowRoleForm(true);
@@ -205,6 +215,7 @@ const Settings: React.FC = () => {
               onEditRole={handleEditRole}
               onDeleteRole={handleDeleteRole}
               loading={loading}
+              onReorder={auth.user?.is_staff ? handleReorderRoles : undefined}
             />
           </div>
 

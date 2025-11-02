@@ -127,3 +127,35 @@ class ProjectRoleDetailView(APIView):
             raise
         # No content on success
         return Response(status=204)
+
+
+class ProjectRoleReorderView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        request=inline_serializer(name='ProjectRoleReorderRequest', fields={
+            'ids': serializers.ListField(child=serializers.IntegerField()),
+        }),
+        responses=inline_serializer(name='ProjectRoleReorderResponse', fields={'detail': serializers.CharField()}),
+    )
+    def post(self, request):
+        dept_param = request.query_params.get('department')
+        try:
+            dept_id = int(dept_param) if dept_param is not None else None
+        except Exception:
+            return Response({'detail': 'invalid department'}, status=400)
+        if not dept_id:
+            return Response({'detail': 'department is required'}, status=400)
+        ids = request.data.get('ids')
+        if not isinstance(ids, list) or not all(isinstance(x, int) for x in ids):
+            return Response({'detail': 'ids[] required'}, status=400)
+        qs = ProjectRole.objects.filter(department_id=dept_id, id__in=ids).values_list('id', flat=True)
+        have = set(qs)
+        if len(have) != len(set(ids)):
+            return Response({'detail': 'ids contain roles from another department or invalid ids'}, status=400)
+        from django.db import transaction
+        with transaction.atomic():
+            step = 10
+            for idx, rid in enumerate(ids):
+                ProjectRole.objects.filter(id=rid).update(sort_order=(idx + 1) * step)
+        return Response({'detail': 'ok'})

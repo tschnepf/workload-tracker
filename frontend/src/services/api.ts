@@ -1091,6 +1091,16 @@ export const rolesApi = {
     fetchApi<void>(`/roles/${id}/`, {
       method: 'DELETE',
     }),
+
+  // Bulk reorder roles by ids (staff only)
+  reorder: async (ids: number[]) => {
+    const res = await apiClient.POST('/roles/reorder/' as any, { body: { ids } as any, headers: authHeaders() });
+    if (!res.data && (res.response?.status ?? 200) >= 400) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, res.error, `HTTP ${status}`), status);
+    }
+    return true as const;
+  },
 };
 
 // Jobs API (async background tasks)

@@ -29,3 +29,12 @@ export async function updateProjectRole(id: number, payload: { name?: string; is
 export async function deleteProjectRole(id: number): Promise<void> {
   await apiClient.DELETE('/projects/project-roles/{id}/' as any, { params: { path: { id } } });
 }
+
+export async function reorderProjectRoles(departmentId: number, ids: number[]): Promise<void> {
+  const sp: any = { department: departmentId };
+  const res = await apiClient.POST('/projects/project-roles/reorder/' as any, { params: { query: sp }, body: { ids } as any });
+  if (res.error || (res.response && !res.response.ok)) {
+    const status = res.response?.status ?? 500;
+    throw new Error(`Reorder failed: HTTP ${status}`);
+  }
+}

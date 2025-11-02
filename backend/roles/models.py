@@ -18,6 +18,8 @@ class Role(models.Model):
         blank=True,
         help_text="Optional description of the role responsibilities"
     )
+    # User-controlled ordering for display
+    sort_order = models.IntegerField(default=0)
     is_active = models.BooleanField(
         default=True,
         help_text="Whether this role is currently available for assignment"
@@ -26,7 +28,7 @@ class Role(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        ordering = ['name']
+        ordering = ['sort_order', 'name', 'id']
         verbose_name = 'Role'
         verbose_name_plural = 'Roles'
     
