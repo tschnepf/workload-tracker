@@ -31,6 +31,7 @@ const Settings: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reorderMode, setReorderMode] = useState(false);
   // People options (for admin create-user linking)
   const [peopleOptions, setPeopleOptions] = useState<Array<{ id: number; name: string }>>([]);
   // Create user (admin)
@@ -205,9 +206,15 @@ const Settings: React.FC = () => {
                   Manage job roles used throughout the system. Roles can be assigned to people and used for reporting.
                 </p>
               </div>
-              <Button onClick={handleCreateRole}>
-                Add Role
-              </Button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setReorderMode(v => !v)}
+                  className={`px-3 py-2 rounded text-sm border ${reorderMode ? 'text-white bg-[var(--primary)] border-[var(--primary)]' : 'text-[var(--muted)] border-[var(--border)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'}`}
+                >{reorderMode ? 'Done Reordering' : 'Reorder'}</button>
+                <Button onClick={handleCreateRole}>
+                  Add Role
+                </Button>
+              </div>
             </div>
 
             <RoleList
@@ -215,7 +222,7 @@ const Settings: React.FC = () => {
               onEditRole={handleEditRole}
               onDeleteRole={handleDeleteRole}
               loading={loading}
-              onReorder={auth.user?.is_staff ? handleReorderRoles : undefined}
+              onReorder={auth.user?.is_staff && reorderMode ? handleReorderRoles : undefined}
             />
           </div>
 

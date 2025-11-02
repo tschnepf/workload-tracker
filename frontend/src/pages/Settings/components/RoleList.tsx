@@ -3,9 +3,10 @@
  * Phase 2.3: Follows TABLE COLUMN SORTING STANDARDS
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { formatUtcToLocal } from '@/utils/dates';
 import { Role } from '@/types/models';
+import SortableList from '@/components/common/SortableList';
 
 interface RoleListProps {
   roles: Role[];
@@ -66,31 +67,29 @@ const RoleList: React.FC<RoleListProps> = ({
     </button>
   );
 
-  // Sort roles based on current sort settings (fallback when not using server order)
-  const sortedRoles = [...roles].sort((a, b) => {
-    let comparison = 0;
-    
-    switch (sortBy) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case 'description':
-        const aDesc = a.description || '';
-        const bDesc = b.description || '';
-        comparison = aDesc.localeCompare(bDesc);
-        break;
-      case 'createdAt':
-        const aDate = new Date(a.createdAt || '').getTime();
-        const bDate = new Date(b.createdAt || '').getTime();
-        comparison = aDate - bDate;
-        break;
-      default:
-        comparison = a.name.localeCompare(b.name);
-        break;
-    }
-
-    return sortDirection === 'desc' ? -comparison : comparison;
-  });
+  // Respect server order when in reorder mode; otherwise allow user sort
+  const sortedRoles = useMemo(() => {
+    if (onReorder) return roles;
+    const copy = [...roles];
+    copy.sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'description':
+          comparison = (a.description || '').localeCompare(b.description || '');
+          break;
+        case 'createdAt':
+          comparison = new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
+          break;
+        default:
+          comparison = a.name.localeCompare(b.name);
+      }
+      return sortDirection === 'desc' ? -comparison : comparison;
+    });
+    return copy;
+  }, [roles, onReorder, sortBy, sortDirection]);
 
   if (loading) {
     return (
@@ -106,6 +105,16 @@ const RoleList: React.FC<RoleListProps> = ({
         <div className="mb-2">No roles found</div>
         <div className="text-sm">Click "Add Role" to create your first role</div>
       </div>
+    );
+  }
+
+  // Reorder mode: simplified list with drag handles and role names
+  if (onReorder) {
+    return (
+      <SortableList
+        items={roles.map(r => ({ id: r.id, label: r.name }))}
+        onReorder={onReorder}
+      />
     );
   }
 

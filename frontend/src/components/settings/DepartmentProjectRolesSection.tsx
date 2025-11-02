@@ -3,6 +3,7 @@ import { departmentsApi } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
 import { useProjectRoles, useProjectRoleMutations } from '@/roles/hooks/useProjectRoles';
 import { reorderProjectRoles } from '@/roles/api';
+import SortableList from '@/components/common/SortableList';
 
 type Dept = { id?: number; name: string };
 
@@ -60,9 +61,8 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
         ) : roles.length === 0 ? (
           <div className="text-[var(--muted)] text-sm">No roles configured for this department.</div>
         ) : (
-          <DraggableRoleList
+          <SortableList
             items={roles.map(r => ({ id: r.id, label: r.name }))}
-            disabled={!canMutate}
             onReorder={async (orderedIds) => {
               try {
                 if (!selectedDeptId) return;
@@ -73,6 +73,7 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
                 showToast(e?.message || 'Failed to save order', 'error');
               }
             }}
+            disabled={!canMutate}
             renderActions={(id) => {
               const r = roles.find(x => x.id === id);
               if (!r || !canMutate) return null;
@@ -143,50 +144,4 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
 };
 
 export default DepartmentProjectRolesSection;
-
-// Lightweight draggable list with a grab handle
-function DraggableRoleList({ items, disabled, onReorder, renderActions }: { items: { id: number; label: string }[]; disabled?: boolean; onReorder: (ids: number[]) => void | Promise<void>; renderActions?: (id: number) => React.ReactNode }) {
-  const [order, setOrder] = React.useState(items.map(i => i.id));
-  const [dragId, setDragId] = React.useState<number | null>(null);
-  React.useEffect(() => { setOrder(items.map(i => i.id)); }, [items.map(i => i.id).join(',')]);
-  function onDragStart(e: React.DragEvent, id: number) { if (disabled) return; setDragId(id); e.dataTransfer.effectAllowed = 'move'; }
-  function onDragOver(e: React.DragEvent, overId: number) {
-    if (disabled) return; e.preventDefault(); if (dragId == null || dragId === overId) return;
-    const next = order.slice();
-    const from = next.indexOf(dragId); const to = next.indexOf(overId);
-    if (from === -1 || to === -1) return;
-    next.splice(from, 1); next.splice(to, 0, dragId);
-    setOrder(next);
-  }
-  async function onDropFinalize() {
-    if (disabled) return;
-    const ids = order.slice();
-    setDragId(null);
-    await onReorder(ids);
-  }
-  return (
-    <div className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-md bg-[var(--surface)]">
-      {order.map(id => {
-        const item = items.find(i => i.id === id)!;
-        return (
-          <div key={id} className="flex items-center justify-between px-3 py-2" draggable={!disabled} onDragStart={(e) => onDragStart(e, id)} onDragOver={(e) => onDragOver(e, id)} onDragEnd={onDropFinalize}>
-            <div className="flex items-center gap-2 min-w-0">
-              <GrabHandle disabled={!!disabled} />
-              <div className="text-sm truncate text-[var(--text)]" title={item.label}>{item.label}</div>
-            </div>
-            <div className="shrink-0">{renderActions ? renderActions(id) : null}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function GrabHandle({ disabled }: { disabled?: boolean }) {
-  return (
-    <span className={`inline-flex cursor-${disabled ? 'default' : 'grab'} text-[var(--muted)]`} title={disabled ? '' : 'Drag to reorder'}>
-      <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="5" cy="5" r="1"/><circle cx="5" cy="10" r="1"/><circle cx="5" cy="15" r="1"/><circle cx="10" cy="5" r="1"/><circle cx="10" cy="10" r="1"/><circle cx="10" cy="15" r="1"/></svg>
-    </span>
-  );
-}
 
