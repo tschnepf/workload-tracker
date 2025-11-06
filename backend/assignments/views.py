@@ -608,8 +608,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         description=(
             "Per-role capacity vs assigned hours timeline for a department over the next N weeks.\n\n"
             "Rules: Only includes active people; applies hireDate gating (capacity contributes only on or after start).\n"
-            "A person contributes their full weekly capacity once per role/week if they have any assignment snapshot in that role/week.\n"
-            "Assigned hours are summed from WeeklyAssignmentSnapshot per role/week."
+            "Capacity is the sum of weekly capacity for all active people in the department with the selected role(s) for each week, gated by hire date.\n"
+            "Assigned hours are summed from current Assignments.weekly_hours by person role and week."
         ),
         parameters=[
             OpenApiParameter(name='department', type=int, required=True, description='Department ID'),
@@ -676,61 +676,70 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return Response({'weekKeys': [wk.strftime('%Y-%m-%d') for wk in week_keys], 'roles': [], 'series': []})
 
         # Fetch snapshots limited by scope
-        from .models import WeeklyAssignmentSnapshot as WAS
-        qs = (
-            WAS.objects
-            .filter(department_id=dept_id, week_start__in=week_keys, person_role_id__in=role_ids)
-            .values('week_start', 'person_role_id', 'person_id', 'person_is_active', 'hours')
+        # Build capacity from People by role for department
+        people_qs = (
+            Person.objects
+            .filter(is_active=True, department_id=dept_id)
+            .only('id', 'role_id', 'weekly_capacity', 'hire_date')
         )
-
-        # Aggregate assigned hours by (week, role)
-        assigned: Dict[Tuple[str, int], float] = {}
-        # Track unique people per (week, role)
-        people_per_week_role: Dict[Tuple[str, int], Set[int]] = {}
-        person_ids: Set[int] = set()
-        for row in qs.iterator():
-            wk: date = row['week_start']
-            wk_key = wk.strftime('%Y-%m-%d')
-            rid: int = row['person_role_id'] or 0
-            hours = float(row['hours'] or 0.0)
-            if not row.get('person_is_active', True):
-                # Skip inactive people per snapshot
+        # role -> list of (cap, hire_date)
+        people_by_role: Dict[int, List[Tuple[int, date | None]]] = {}
+        for p in people_qs.iterator():
+            rid = getattr(p, 'role_id', None)
+            if not rid:
                 continue
-            assigned[(wk_key, rid)] = assigned.get((wk_key, rid), 0.0) + hours
-            pid = row['person_id']
-            if pid:
-                person_ids.add(pid)
-                key = (wk_key, rid)
-                s = people_per_week_role.get(key)
-                if s is None:
-                    s = set()
-                    people_per_week_role[key] = s
-                s.add(pid)
+            if role_ids and rid not in role_ids:
+                continue
+            lst = people_by_role.get(rid)
+            if lst is None:
+                lst = []
+                people_by_role[rid] = lst
+            lst.append((int(getattr(p, 'weekly_capacity', 0) or 0), getattr(p, 'hire_date', None)))
 
-        # Fetch person capacity and start dates in bulk
-        people_map: Dict[int, Tuple[int, date | None, bool]] = {}
-        if person_ids:
-            for p in Person.objects.filter(id__in=list(person_ids)).only('id', 'weekly_capacity', 'hire_date', 'is_active').iterator():
-                people_map[p.id] = (int(p.weekly_capacity or 0), p.hire_date, bool(p.is_active))
-
-        # Build capacity sums per (week, role)
         caps: Dict[Tuple[str, int], float] = {}
-        for (wk_key, rid), pid_set in people_per_week_role.items():
-            # parse wk_key to date
-            try:
-                wk_date = date.fromisoformat(wk_key)
-            except Exception:
-                wk_date = None
-            total = 0.0
-            for pid in pid_set:
-                cap, hire, active = people_map.get(pid, (0, None, False))
-                if not active:
+        for rid, lst in people_by_role.items():
+            for wk in week_keys:
+                total = 0.0
+                for cap, hire in lst:
+                    if hire and hire > wk:
+                        continue
+                    total += float(cap or 0)
+                caps[(wk.strftime('%Y-%m-%d'), rid)] = total
+
+        # Assigned hours from Assignments.weekly_hours grouped by person's Role
+        from .models import Assignment as Asn
+        asn_qs = (
+            Asn.objects
+            .filter(is_active=True, person__is_active=True, person__department_id=dept_id)
+            .select_related('person')
+            .only('id', 'weekly_hours', 'person__id', 'person__role_id', 'person__hire_date', 'person__is_active')
+        )
+        week_set = set(wk_strs)
+        assigned: Dict[Tuple[str, int], float] = {}
+        for a in asn_qs.iterator():
+            rid = getattr(a.person, 'role_id', None)
+            if not rid:
+                continue
+            if role_ids and rid not in role_ids:
+                continue
+            wh = getattr(a, 'weekly_hours', None) or {}
+            hire = getattr(a.person, 'hire_date', None)
+            for k, v in wh.items():
+                if k not in week_set:
                     continue
-                if hire is not None and wk_date is not None and hire > wk_date:
-                    # before start date -> no capacity yet
+                try:
+                    hours = float(v or 0.0)
+                except Exception:
+                    hours = 0.0
+                if hours <= 0:
                     continue
-                total += float(cap or 0)
-            caps[(wk_key, rid)] = total
+                try:
+                    wk_d = date.fromisoformat(k)
+                except Exception:
+                    wk_d = None
+                if hire and wk_d and hire > wk_d:
+                    continue
+                assigned[(k, rid)] = assigned.get((k, rid), 0.0) + hours
 
         # Prepare response arrays aligned by weekKeys and roles order
         wk_strs = [wk.strftime('%Y-%m-%d') for wk in week_keys]
