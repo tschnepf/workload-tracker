@@ -400,6 +400,17 @@ const ReportsView: React.FC = () => {
 
         {/* Department Insights */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* New: Role Capacity vs Assigned quick access */}
+          <Card className="bg-[var(--card)] border-[var(--border)]">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-[var(--text)] mb-2">Role Capacity vs Assigned</h3>
+              <p className="text-[var(--muted)] text-sm mb-3">Compare weekly capacity and assigned hours per department project role over 4/8/12/16/20 weeks. Respects hire dates and active status.</p>
+              <a href="/reports/role-capacity" className="inline-flex items-center gap-2 px-3 py-1 rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]">
+                Open Report
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </a>
+            </div>
+          </Card>
           {/* Utilization Distribution */}
           <Card className="bg-[#2d2d30] border-[#3e3e42]">
             <div className="p-6">

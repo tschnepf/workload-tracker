@@ -58,3 +58,19 @@ export async function getAssignedHoursDeliverableTimeline(opts?: { weeks?: numbe
     totalByWeek: number[];
   };
 }
+
+// Role capacity vs assigned timeline per department
+export async function getRoleCapacityTimeline(opts: { department: number; weeks?: number; roleIdsCsv?: string }) {
+  const sp = new URLSearchParams();
+  sp.set('department', String(opts.department));
+  if (opts.weeks != null) sp.set('weeks', String(opts.weeks));
+  if (opts.roleIdsCsv) sp.set('role_ids', opts.roleIdsCsv);
+  const qs = `?${sp.toString()}`;
+  const res = await apiClient.GET(`/assignments/analytics_role_capacity/${qs}` as any, { headers: authHeaders() });
+  if (!res.data) throw new Error(`HTTP ${res.response?.status ?? 500}`);
+  return res.data as unknown as {
+    weekKeys: string[];
+    roles: Array<{ id: number; name: string }>;
+    series: Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[] }>;
+  };
+}

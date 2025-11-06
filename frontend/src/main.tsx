@@ -30,6 +30,7 @@ const DepartmentsList = React.lazy(() => import('./pages/Departments').then(m =>
 const ManagerDashboard = React.lazy(() => import('./pages/Departments').then(m => ({ default: m.ManagerDashboard })))
 const HierarchyView = React.lazy(() => import('./pages/Departments').then(m => ({ default: m.HierarchyView })))
 const ReportsView = React.lazy(() => import('./pages/Departments').then(m => ({ default: m.ReportsView })))
+const RoleCapacityReport = React.lazy(() => import('./pages/Reports/RoleCapacity'))
 const Projects = React.lazy(() => import('./pages/Projects'))
 const ProjectForm = React.lazy(() => import('./pages/Projects/ProjectForm'))
 const SkillsDashboard = React.lazy(() => import('./pages/Skills').then(m => ({ default: m.SkillsDashboard })))
@@ -70,6 +71,7 @@ const router = createBrowserRouter([
       { path: 'departments/manager', element: <RequireAuth><ManagerDashboard /></RequireAuth> },
       { path: 'departments/hierarchy', element: <RequireAuth><HierarchyView /></RequireAuth> },
       { path: 'departments/reports', element: <RequireAuth><ReportsView /></RequireAuth> },
+      { path: 'reports/role-capacity', element: <RequireAuth><RoleCapacityReport /></RequireAuth> },
       { path: 'assignments', element: <RequireAuth><AssignmentGrid /></RequireAuth> },
       { path: 'project-assignments', element: <RequireAuth><ProjectAssignmentsGrid /></RequireAuth> },
       { path: 'assignments/list', element: <RequireAuth><AssignmentList /></RequireAuth> },

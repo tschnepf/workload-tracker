@@ -28,6 +28,8 @@ from datetime import date, timedelta
 import hashlib
 import os
 import time
+from typing import List, Dict, Tuple, Set
+from projects.models import ProjectRole
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
@@ -601,6 +603,149 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             response['Last-Modified'] = http_date(last_modified.timestamp())
             response['Cache-Control'] = 'private, max-age=30'
         return response
+
+    @extend_schema(
+        description=(
+            "Per-role capacity vs assigned hours timeline for a department over the next N weeks.\n\n"
+            "Rules: Only includes active people; applies hireDate gating (capacity contributes only on or after start).\n"
+            "A person contributes their full weekly capacity once per role/week if they have any assignment snapshot in that role/week.\n"
+            "Assigned hours are summed from WeeklyAssignmentSnapshot per role/week."
+        ),
+        parameters=[
+            OpenApiParameter(name='department', type=int, required=True, description='Department ID'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of future weeks (4,8,12,16,20). Default 12'),
+            OpenApiParameter(name='role_ids', type=str, required=False, description='CSV of department ProjectRole IDs to include'),
+        ],
+        responses=inline_serializer(
+            name='RoleCapacityTimelineResponse',
+            fields={
+                'weekKeys': serializers.ListField(child=serializers.CharField()),
+                'roles': serializers.ListField(child=inline_serializer(name='ProjectRoleLite', fields={
+                    'id': serializers.IntegerField(),
+                    'name': serializers.CharField(),
+                })),
+                'series': serializers.ListField(child=inline_serializer(name='RoleSeries', fields={
+                    'roleId': serializers.IntegerField(),
+                    'roleName': serializers.CharField(),
+                    'assigned': serializers.ListField(child=serializers.FloatField()),
+                    'capacity': serializers.ListField(child=serializers.FloatField()),
+                })),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='analytics_role_capacity', throttle_classes=[SnapshotsThrottle])
+    def analytics_role_capacity(self, request):
+        try:
+            dept_id = int(request.query_params.get('department') or '0')
+        except Exception:
+            return Response({'error': 'department is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not dept_id:
+            return Response({'error': 'department is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            weeks = int(request.query_params.get('weeks', 12))
+        except Exception:
+            weeks = 12
+        if weeks not in (4, 8, 12, 16, 20):
+            weeks = 12
+
+        # Build week keys (Sundays) for current + N-1 weeks
+        today = date.today()
+        # Compute canonical Sunday for this week
+        dow = today.weekday()  # Mon=0..Sun=6
+        # convert to Sunday offset (0 when Sunday)
+        days_since_sunday = (dow + 1) % 7
+        start_sunday = today if days_since_sunday == 0 else (today - timedelta(days=days_since_sunday))
+        week_keys: List[date] = [start_sunday + timedelta(days=7 * i) for i in range(weeks)]
+
+        # Roles to include
+        role_ids_param = (request.query_params.get('role_ids') or '').strip()
+        role_ids: List[int] = []
+        if role_ids_param:
+            try:
+                role_ids = [int(x) for x in role_ids_param.split(',') if x.strip().isdigit()]
+            except Exception:
+                role_ids = []
+        if role_ids:
+            roles = list(ProjectRole.objects.filter(id__in=role_ids, department_id=dept_id).order_by('sort_order', 'name'))
+        else:
+            roles = list(ProjectRole.objects.filter(department_id=dept_id, is_active=True).order_by('sort_order', 'name'))
+            role_ids = [r.id for r in roles]
+
+        if not roles:
+            return Response({'weekKeys': [wk.strftime('%Y-%m-%d') for wk in week_keys], 'roles': [], 'series': []})
+
+        # Fetch snapshots limited by scope
+        from .models import WeeklyAssignmentSnapshot as WAS
+        qs = (
+            WAS.objects
+            .filter(department_id=dept_id, week_start__in=week_keys, role_on_project_id__in=role_ids)
+            .values('week_start', 'role_on_project_id', 'person_id', 'person_is_active', 'hours')
+        )
+
+        # Aggregate assigned hours by (week, role)
+        assigned: Dict[Tuple[str, int], float] = {}
+        # Track unique people per (week, role)
+        people_per_week_role: Dict[Tuple[str, int], Set[int]] = {}
+        person_ids: Set[int] = set()
+        for row in qs.iterator():
+            wk: date = row['week_start']
+            wk_key = wk.strftime('%Y-%m-%d')
+            rid: int = row['role_on_project_id'] or 0
+            hours = float(row['hours'] or 0.0)
+            if not row.get('person_is_active', True):
+                # Skip inactive people per snapshot
+                continue
+            assigned[(wk_key, rid)] = assigned.get((wk_key, rid), 0.0) + hours
+            pid = row['person_id']
+            if pid:
+                person_ids.add(pid)
+                key = (wk_key, rid)
+                s = people_per_week_role.get(key)
+                if s is None:
+                    s = set()
+                    people_per_week_role[key] = s
+                s.add(pid)
+
+        # Fetch person capacity and start dates in bulk
+        people_map: Dict[int, Tuple[int, date | None, bool]] = {}
+        if person_ids:
+            for p in Person.objects.filter(id__in=list(person_ids)).only('id', 'weekly_capacity', 'hire_date', 'is_active').iterator():
+                people_map[p.id] = (int(p.weekly_capacity or 0), p.hire_date, bool(p.is_active))
+
+        # Build capacity sums per (week, role)
+        caps: Dict[Tuple[str, int], float] = {}
+        for (wk_key, rid), pid_set in people_per_week_role.items():
+            # parse wk_key to date
+            try:
+                wk_date = date.fromisoformat(wk_key)
+            except Exception:
+                wk_date = None
+            total = 0.0
+            for pid in pid_set:
+                cap, hire, active = people_map.get(pid, (0, None, False))
+                if not active:
+                    continue
+                if hire is not None and wk_date is not None and hire > wk_date:
+                    # before start date -> no capacity yet
+                    continue
+                total += float(cap or 0)
+            caps[(wk_key, rid)] = total
+
+        # Prepare response arrays aligned by weekKeys and roles order
+        wk_strs = [wk.strftime('%Y-%m-%d') for wk in week_keys]
+        roles_payload = [{'id': r.id, 'name': r.name} for r in roles]
+        series = []
+        for r in roles:
+            assigned_series = [float(assigned.get((wk, r.id), 0.0)) for wk in wk_strs]
+            capacity_series = [float(caps.get((wk, r.id), 0.0)) for wk in wk_strs]
+            series.append({
+                'roleId': r.id,
+                'roleName': r.name,
+                'assigned': assigned_series,
+                'capacity': capacity_series,
+            })
+
+        return Response({'weekKeys': wk_strs, 'roles': roles_payload, 'series': series})
 
     @extend_schema(
         description=(
