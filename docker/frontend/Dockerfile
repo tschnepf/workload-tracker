@@ -20,7 +20,8 @@ WORKDIR /app
 COPY package*.json ./
 # Prevent git hooks from running during CI/container installs
 ENV HUSKY=0
-RUN npm ci
+# Prefer clean, reproducible installs; fall back to npm install when lockfile is stale
+RUN npm ci || npm install
 COPY . .
 # Allow passing Vite flags at build time
 ARG VITE_API_URL

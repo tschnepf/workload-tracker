@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Assignment, Person } from '@/types/models';
 import { assignmentsApi } from '@/services/api';
+import { listProjectRoles, type ProjectRole } from '@/roles/api';
+import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 
 interface UseProjectAssignmentsParams {
@@ -30,15 +32,37 @@ export function useProjectAssignments({ projectId, people }: UseProjectAssignmen
         page = page + 1;
       }
     }
-    // Stable order by person name, then id
-    all.sort((a, b) => {
-      const an = (a as any).personName || '';
-      const bn = (b as any).personName || '';
-      if (an.toLowerCase() < bn.toLowerCase()) return -1;
-      if (an.toLowerCase() > bn.toLowerCase()) return 1;
-      return (a.id || 0) - (b.id || 0);
-    });
-    setAssignments(all);
+    // Sort by department ProjectRole order, then name
+    try {
+      const deptIds = Array.from(new Set(
+        all.map(a => (a as any).personDepartmentId as number | null | undefined)
+      ))
+        .filter((v): v is number => typeof v === 'number' && v > 0);
+
+      const rolesByDept: Record<number, ProjectRole[]> = {};
+      await Promise.all(
+        deptIds.map(async (deptId) => {
+          try {
+            rolesByDept[deptId] = await listProjectRoles(deptId);
+          } catch {
+            rolesByDept[deptId] = [];
+          }
+        })
+      );
+
+      const sorted = sortAssignmentsByProjectRole(all, rolesByDept);
+      setAssignments(sorted);
+    } catch {
+      // Fallback: stable order by name then id
+      all.sort((a, b) => {
+        const an = (a as any).personName || '';
+        const bn = (b as any).personName || '';
+        if (an.toLowerCase() < bn.toLowerCase()) return -1;
+        if (an.toLowerCase() > bn.toLowerCase()) return 1;
+        return (a.id || 0) - (b.id || 0);
+      });
+      setAssignments(all);
+    }
   }, []);
 
   // Load when selection changes (preserves original behavior via authenticated effect)

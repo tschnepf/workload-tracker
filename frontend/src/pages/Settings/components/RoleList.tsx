@@ -23,7 +23,8 @@ const RoleList: React.FC<RoleListProps> = ({
   loading,
   onReorder,
 }) => {
-  const [sortBy, setSortBy] = useState<'name' | 'description' | 'createdAt'>('name');
+  // Default to server order (sort_order from backend). Users can switch by clicking headers.
+  const [sortBy, setSortBy] = useState<'server' | 'name' | 'description' | 'createdAt'>('server');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Handle column header clicks for sorting
@@ -69,7 +70,8 @@ const RoleList: React.FC<RoleListProps> = ({
 
   // Respect server order when in reorder mode; otherwise allow user sort
   const sortedRoles = useMemo(() => {
-    if (onReorder) return roles;
+    // In reorder mode or when user didn't choose a column, respect server order
+    if (onReorder || sortBy === 'server') return roles;
     const copy = [...roles];
     copy.sort((a, b) => {
       let comparison = 0;
@@ -116,28 +118,6 @@ const RoleList: React.FC<RoleListProps> = ({
         onReorder={onReorder}
       />
     );
-  }
-
-  // Basic drag state for manual ordering (uses server order of input list)
-  const [dragOrder, setDragOrder] = useState<number[] | null>(null);
-  const order = dragOrder ?? roles.map(r => r.id);
-  function onDragStart(e: React.DragEvent, id: number) { e.dataTransfer.effectAllowed = 'move'; setDragOrder(order.slice()); }
-  function onDragOver(e: React.DragEvent, overId: number) {
-    if (!dragOrder) return; e.preventDefault();
-    const next = dragOrder.slice();
-    const draggingId = Number(e.dataTransfer.getData('text/plain')) || next[0];
-    // Use element attribute to track dragging id if not set
-    const from = next.indexOf(draggingId);
-    const to = next.indexOf(overId);
-    if (from === -1 || to === -1 || from === to) return;
-    next.splice(from, 1); next.splice(to, 0, draggingId);
-    setDragOrder(next);
-  }
-  async function onDropFinalize() {
-    if (!dragOrder) return;
-    const ids = dragOrder.slice();
-    setDragOrder(null);
-    if (onReorder) await onReorder(ids);
   }
 
   return (
@@ -207,22 +187,13 @@ const RoleList: React.FC<RoleListProps> = ({
 
         {/* Table Body */}
         <div className="divide-y divide-[var(--border)]">
-        {(dragOrder ? order.map(id => roles.find(r => r.id === id)!).filter(Boolean) : sortedRoles).map((role) => (
+        {sortedRoles.map((role) => (
           <div
             key={role.id}
             className="grid grid-cols-12 gap-4 px-4 py-4 hover:bg-[var(--surfaceHover)] transition-colors"
-            draggable={!!onReorder}
-            onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(role.id)); onDragStart(e, role.id); }}
-            onDragOver={(e) => onDragOver(e, role.id)}
-            onDragEnd={onDropFinalize}
           >
               {/* Role Name + Grab handle */}
               <div className="col-span-3 flex items-center gap-2">
-                {onReorder && (
-                  <span className="text-[var(--muted)] cursor-grab" title="Drag to reorder">
-                    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><circle cx="5" cy="5" r="1"/><circle cx="5" cy="10" r="1"/><circle cx="5" cy="15" r="1"/><circle cx="10" cy="5" r="1"/><circle cx="10" cy="10" r="1"/><circle cx="10" cy="15" r="1"/></svg>
-                  </span>
-                )}
                 <div className="font-medium text-[var(--text)]">{role.name}</div>
               </div>
 

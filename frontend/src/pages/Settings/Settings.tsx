@@ -113,13 +113,33 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Quiet refresh helper that does not toggle the global loading spinner
+  const refreshRolesQuietly = async () => {
+    try {
+      const page = await rolesApi.list();
+      setRoles(page.results || []);
+    } catch (e) {
+      // Swallow silently; optimistic state remains
+    }
+  };
+
   const handleReorderRoles = async (ids: number[]) => {
+    // Optimistic local reorder for smooth UX
+    setRoles(prev => {
+      const map = new Map(prev.map(r => [r.id, r] as const));
+      const ordered = ids.map(id => map.get(id)).filter(Boolean) as Role[];
+      const missing = prev.filter(r => !ids.includes(r.id));
+      return [...ordered, ...missing];
+    });
     try {
       await rolesApi.reorder(ids);
       showToast('Role order saved', 'success');
-      await loadRoles();
+      // Refresh in background to ensure we stay in sync with server
+      void refreshRolesQuietly();
     } catch (e: any) {
       showToast(e?.message || 'Failed to save order', 'error');
+      // Best effort: re-fetch current server order
+      void refreshRolesQuietly();
     }
   };
 
@@ -190,7 +210,7 @@ const Settings: React.FC = () => {
           )}
 
           {/* Quick section navigation */}
-          <div className="mb-4 text-sm text-[var(--muted)]">
+          <div className={`mb-4 text-sm text-[var(--muted)] ${reorderMode ? 'pointer-events-none select-none opacity-80' : ''}`}>
             Sections:
             <a href="#role-management" className="ml-2 text-[var(--text)] hover:text-[var(--text)]">Role Management</a>
             <span className="mx-2 text-[var(--border)]">|</span>
@@ -208,10 +228,11 @@ const Settings: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setReorderMode(v => !v)}
                   className={`px-3 py-2 rounded text-sm border ${reorderMode ? 'text-white bg-[var(--primary)] border-[var(--primary)]' : 'text-[var(--muted)] border-[var(--border)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'}`}
                 >{reorderMode ? 'Done Reordering' : 'Reorder'}</button>
-                <Button onClick={handleCreateRole}>
+                <Button type="button" onClick={handleCreateRole}>
                   Add Role
                 </Button>
               </div>
