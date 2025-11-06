@@ -29,7 +29,7 @@ import hashlib
 import os
 import time
 from typing import List, Dict, Tuple, Set
-from projects.models import ProjectRole
+from roles.models import Role
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
@@ -657,7 +657,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_sunday = today if days_since_sunday == 0 else (today - timedelta(days=days_since_sunday))
         week_keys: List[date] = [start_sunday + timedelta(days=7 * i) for i in range(weeks)]
 
-        # Roles to include
+        # Roles to include (global roles assigned to Person.role)
         role_ids_param = (request.query_params.get('role_ids') or '').strip()
         role_ids: List[int] = []
         if role_ids_param:
@@ -665,10 +665,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 role_ids = [int(x) for x in role_ids_param.split(',') if x.strip().isdigit()]
             except Exception:
                 role_ids = []
+        # Global roles are not department-scoped; list active roles (or subset by ids) and order by sort_order
         if role_ids:
-            roles = list(ProjectRole.objects.filter(id__in=role_ids, department_id=dept_id).order_by('sort_order', 'name'))
+            roles = list(Role.objects.filter(id__in=role_ids, is_active=True).order_by('sort_order', 'name'))
         else:
-            roles = list(ProjectRole.objects.filter(department_id=dept_id, is_active=True).order_by('sort_order', 'name'))
+            roles = list(Role.objects.filter(is_active=True).order_by('sort_order', 'name'))
             role_ids = [r.id for r in roles]
 
         if not roles:
@@ -678,8 +679,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         from .models import WeeklyAssignmentSnapshot as WAS
         qs = (
             WAS.objects
-            .filter(department_id=dept_id, week_start__in=week_keys, role_on_project_id__in=role_ids)
-            .values('week_start', 'role_on_project_id', 'person_id', 'person_is_active', 'hours')
+            .filter(department_id=dept_id, week_start__in=week_keys, person_role_id__in=role_ids)
+            .values('week_start', 'person_role_id', 'person_id', 'person_is_active', 'hours')
         )
 
         # Aggregate assigned hours by (week, role)
@@ -690,7 +691,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         for row in qs.iterator():
             wk: date = row['week_start']
             wk_key = wk.strftime('%Y-%m-%d')
-            rid: int = row['role_on_project_id'] or 0
+            rid: int = row['person_role_id'] or 0
             hours = float(row['hours'] or 0.0)
             if not row.get('person_is_active', True):
                 # Skip inactive people per snapshot

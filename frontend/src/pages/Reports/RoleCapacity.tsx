@@ -2,7 +2,7 @@ import React from 'react';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
-import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
+import { rolesApi } from '@/services/api';
 import { getRoleCapacityTimeline } from '@/services/analyticsApi';
 import MultiRoleCapacityChart from '@/components/charts/MultiRoleCapacityChart';
 
@@ -12,7 +12,14 @@ const RoleCapacityReport: React.FC = () => {
   const { state: deptState } = useDepartmentFilter();
   const departmentId = deptState.selectedDepartmentId ? Number(deptState.selectedDepartmentId) : null;
   const [weeks, setWeeks] = React.useState<number>(12);
-  const { data: roles = [] } = useProjectRoles(departmentId ?? undefined);
+  const [roles, setRoles] = React.useState<Array<{ id: number; name: string }>>([]);
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try { const list = await rolesApi.listAll(); if (mounted) setRoles(list || []); } catch { if (mounted) setRoles([]); }
+    })();
+    return () => { mounted = false; };
+  }, []);
   const [selectedRoleIds, setSelectedRoleIds] = React.useState<Set<number>>(new Set());
 
   const [weekKeys, setWeekKeys] = React.useState<string[]>([]);
