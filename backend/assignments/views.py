@@ -677,6 +677,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         # Fetch snapshots limited by scope
         # Build capacity from People by role for department
+        wk_strs = [wk.strftime('%Y-%m-%d') for wk in week_keys]
         people_qs = (
             Person.objects
             .filter(is_active=True, department_id=dept_id)
@@ -742,7 +743,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 assigned[(k, rid)] = assigned.get((k, rid), 0.0) + hours
 
         # Prepare response arrays aligned by weekKeys and roles order
-        wk_strs = [wk.strftime('%Y-%m-%d') for wk in week_keys]
+        # wk_strs already computed above
         roles_payload = [{'id': r.id, 'name': r.name} for r in roles]
         series = []
         for r in roles:
