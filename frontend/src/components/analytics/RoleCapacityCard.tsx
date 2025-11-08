@@ -144,7 +144,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
           )}
           <div>
             <button onClick={() => refresh()} disabled={!canQuery || loading}
-              className="px-3 py-1 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] disabled:opacity-50">
+              className="px-2 py-0.5 rounded border text-xs bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] disabled:opacity-50">
               {loading ? 'Loading...' : 'Refresh'}
             </button>
           </div>
