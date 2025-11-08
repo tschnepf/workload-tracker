@@ -36,7 +36,9 @@ export function roleColorForId(roleId: number): string {
 }
 
 export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension, hideLegend, height: heightProp }) => {
-  if (!weekKeys?.length || !series?.length) return <div className="text-[var(--muted)]">No data</div>;
+  // Keep the chart frame visible even when series is empty (e.g., all roles deselected).
+  // Only fall back to a small "No data" placeholder when there are no week keys to render an axis.
+  if (!weekKeys?.length) return <div className="text-[var(--muted)]">No data</div>;
 
   const pad = 40;
   const step = 44;
