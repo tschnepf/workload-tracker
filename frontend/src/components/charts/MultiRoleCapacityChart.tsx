@@ -14,6 +14,7 @@ export interface MultiRoleCapacityChartProps {
   series: RoleSeries[]; // one entry per role
   mode?: ChartMode; // raw hours (default) or % of capacity
   tension?: number; // 0..1 smoothing (Catmull-Rom)
+  hideLegend?: boolean; // allow parent to own legend/selection
 }
 
 const COLORS = [
@@ -27,7 +28,13 @@ const COLORS = [
   '#eab308', // yellow-500
 ];
 
-export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension }) => {
+export function roleColorForId(roleId: number): string {
+  // Deterministic color selection by id for legend/selection parity
+  const hash = (Math.imul(roleId, 2654435761) >>> 0) % COLORS.length;
+  return COLORS[hash];
+}
+
+export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension, hideLegend }) => {
   if (!weekKeys?.length || !series?.length) return <div className="text-[var(--muted)]">No data</div>;
 
   const pad = 40;
@@ -102,8 +109,8 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
         ))}
 
         {/* Series */}
-        {seriesData.map((s, idx) => {
-          const color = COLORS[idx % COLORS.length];
+        {seriesData.map((s) => {
+          const color = roleColorForId(s.roleId);
           const assignedPath = linePath(s.assigned);
           const capacityPath = linePath(s.capacity);
           return (
@@ -124,16 +131,18 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
         ))}
       </svg>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3 mt-2">
-        {seriesData.map((s, idx) => (
-          <div key={s.roleId} className="flex items-center gap-2 text-xs text-[var(--text)]">
-            <span style={{ background: COLORS[idx % COLORS.length], width: 12, height: 2, display: 'inline-block' }}></span>
-            <span>{s.roleName}</span>
-            <span className="text-[var(--muted)]">(solid: {normalized ? '% assigned' : 'assigned'}, dashed: {normalized ? '100% cap' : 'capacity'})</span>
-          </div>
-        ))}
-      </div>
+      {/* Legend (optional) */}
+      {!hideLegend && (
+        <div className="flex flex-wrap gap-3 mt-2">
+          {seriesData.map((s) => (
+            <div key={s.roleId} className="flex items-center gap-2 text-xs text-[var(--text)]">
+              <span style={{ background: roleColorForId(s.roleId), width: 12, height: 2, display: 'inline-block' }}></span>
+              <span>{s.roleName}</span>
+              <span className="text-[var(--muted)]">(solid: {normalized ? '% assigned' : 'assigned'}, dashed: {normalized ? '100% cap' : 'capacity'})</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
