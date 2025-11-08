@@ -15,6 +15,7 @@ from core.deliverable_phase import build_project_week_classification
 from core.choices import DeliverablePhase, MembershipEventType
 from django.db.models.functions import Coalesce, Lower
 from .models import Assignment
+from .analytics import compute_role_capacity
 from departments.models import Department
 from .serializers import AssignmentSerializer
 from people.models import Person
@@ -29,6 +30,7 @@ import hashlib
 import os
 import time
 from typing import List, Dict, Tuple, Set
+import logging
 from roles.models import Role
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
@@ -635,6 +637,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'], url_path='analytics_role_capacity', throttle_classes=[SnapshotsThrottle])
     def analytics_role_capacity(self, request):
+        logger = logging.getLogger(__name__)
+        t0 = time.perf_counter()
         try:
             dept_id = int(request.query_params.get('department') or '0')
         except Exception:
@@ -675,88 +679,46 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if not roles:
             return Response({'weekKeys': [wk.strftime('%Y-%m-%d') for wk in week_keys], 'roles': [], 'series': []})
 
-        # Fetch snapshots limited by scope
-        # Build capacity from People by role for department
-        wk_strs = [wk.strftime('%Y-%m-%d') for wk in week_keys]
-        people_qs = (
-            Person.objects
-            .filter(is_active=True, department_id=dept_id)
-            .only('id', 'role_id', 'weekly_capacity', 'hire_date')
+        # Short‑TTL cache (acceptable 60s staleness)
+        try:
+            if request.query_params.get('nocache') != '1':
+                cache_key = f"rc:{dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}"
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+        except Exception:
+            # Cache must never break the request path
+            cache_key = None
+            cached = None
+        else:
+            # ensure key exists for later set
+            cache_key = cache_key
+
+        # Compute role capacity via vendor-aware helper (Postgres JSONB path or optimized Python fallback)
+        wk_strs, roles_payload, series = compute_role_capacity(
+            dept_id=dept_id,
+            week_keys=week_keys,
+            role_ids=role_ids or None,
         )
-        # role -> list of (cap, hire_date)
-        people_by_role: Dict[int, List[Tuple[int, date | None]]] = {}
-        for p in people_qs.iterator():
-            rid = getattr(p, 'role_id', None)
-            if not rid:
-                continue
-            if role_ids and rid not in role_ids:
-                continue
-            lst = people_by_role.get(rid)
-            if lst is None:
-                lst = []
-                people_by_role[rid] = lst
-            lst.append((int(getattr(p, 'weekly_capacity', 0) or 0), getattr(p, 'hire_date', None)))
-
-        caps: Dict[Tuple[str, int], float] = {}
-        for rid, lst in people_by_role.items():
-            for wk in week_keys:
-                total = 0.0
-                for cap, hire in lst:
-                    if hire and hire > wk:
-                        continue
-                    total += float(cap or 0)
-                caps[(wk.strftime('%Y-%m-%d'), rid)] = total
-
-        # Assigned hours from Assignments.weekly_hours grouped by person's Role
-        from .models import Assignment as Asn
-        asn_qs = (
-            Asn.objects
-            .filter(is_active=True, person__is_active=True, person__department_id=dept_id)
-            .select_related('person')
-            .only('id', 'weekly_hours', 'person__id', 'person__role_id', 'person__hire_date', 'person__is_active')
-        )
-        week_set = set(wk_strs)
-        assigned: Dict[Tuple[str, int], float] = {}
-        for a in asn_qs.iterator():
-            rid = getattr(a.person, 'role_id', None)
-            if not rid:
-                continue
-            if role_ids and rid not in role_ids:
-                continue
-            wh = getattr(a, 'weekly_hours', None) or {}
-            hire = getattr(a.person, 'hire_date', None)
-            for k, v in wh.items():
-                if k not in week_set:
-                    continue
-                try:
-                    hours = float(v or 0.0)
-                except Exception:
-                    hours = 0.0
-                if hours <= 0:
-                    continue
-                try:
-                    wk_d = date.fromisoformat(k)
-                except Exception:
-                    wk_d = None
-                if hire and wk_d and hire > wk_d:
-                    continue
-                assigned[(k, rid)] = assigned.get((k, rid), 0.0) + hours
-
-        # Prepare response arrays aligned by weekKeys and roles order
-        # wk_strs already computed above
-        roles_payload = [{'id': r.id, 'name': r.name} for r in roles]
-        series = []
-        for r in roles:
-            assigned_series = [float(assigned.get((wk, r.id), 0.0)) for wk in wk_strs]
-            capacity_series = [float(caps.get((wk, r.id), 0.0)) for wk in wk_strs]
-            series.append({
-                'roleId': r.id,
-                'roleName': r.name,
-                'assigned': assigned_series,
-                'capacity': capacity_series,
-            })
-
-        return Response({'weekKeys': wk_strs, 'roles': roles_payload, 'series': series})
+        payload = {'weekKeys': wk_strs, 'roles': roles_payload, 'series': series}
+        # Set cache (best‑effort)
+        try:
+            if cache_key and request.query_params.get('nocache') != '1':
+                cache.set(cache_key, payload, timeout=60)
+        except Exception:
+            pass
+        finally:
+            t1 = time.perf_counter()
+            try:
+                logger.info("role_capacity", extra={
+                    'dept_id': dept_id,
+                    'weeks': weeks,
+                    'roles_count': len(role_ids or []),
+                    'duration_ms': int((t1 - t0) * 1000),
+                })
+            except Exception:
+                pass
+        return Response(payload)
 
     @extend_schema(
         description=(
