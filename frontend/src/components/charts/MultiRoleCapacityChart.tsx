@@ -40,9 +40,12 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
   // Only fall back to a small "No data" placeholder when there are no week keys to render an axis.
   if (!weekKeys?.length) return <div className="text-[var(--muted)]">No data</div>;
 
-  const pad = 40;
+  // Padding tuned to avoid clipping rotated Y label and y-tick values
+  const padV = 40; // top/bottom
+  const padLeft = 72; // extra room for label and tick text
+  const padRight = 24;
   const step = 44;
-  const width = Math.max(720, pad * 2 + (weekKeys.length - 1) * step);
+  const width = Math.max(720, padLeft + padRight + (weekKeys.length - 1) * step);
   const height = heightProp ?? 300;
   const xLabel = 'Week';
   const yLabel = mode === 'hours' ? 'Hours' : '% of Capacity';
@@ -65,8 +68,8 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     for (const v of [...s.assigned, ...s.capacity]) maxY = Math.max(maxY, v || 0);
   }
   maxY *= 1.15;
-  const x = (i: number) => pad + i * step;
-  const y = (v: number) => height - pad - (v * (height - 2 * pad)) / maxY;
+  const x = (i: number) => padLeft + i * step;
+  const y = (v: number) => height - padV - (v * (height - 2 * padV)) / maxY;
 
   // Smooth line using Catmull-Rom -> cubic Bezier conversion
   const linePath = (vals: number[]) => {
@@ -96,18 +99,18 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     <div style={{ overflowX: 'auto', display: 'inline-block', maxWidth: '100%' }}>
       <svg width={width} height={height} role="img" aria-label="Role capacity vs assigned">
         {/* Axes */}
-        <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="#4b5563" strokeWidth={1} />
-        <line x1={pad} y1={pad} x2={pad} y2={height - pad} stroke="#4b5563" strokeWidth={1} />
+        <line x1={padLeft} y1={height - padV} x2={width - padRight} y2={height - padV} stroke="#4b5563" strokeWidth={1} />
+        <line x1={padLeft} y1={padV} x2={padLeft} y2={height - padV} stroke="#4b5563" strokeWidth={1} />
 
         {/* Axis labels */}
         <text x={width / 2} y={height - 6} fontSize={11} fill="#94a3b8" textAnchor="middle">{xLabel}</text>
-        <text x={4} y={height / 2} fontSize={11} fill="#94a3b8" textAnchor="middle" transform={`rotate(-90, 4, ${height / 2})`}>{yLabel}</text>
+        <text x={18} y={height / 2} fontSize={11} fill="#94a3b8" textAnchor="middle" transform={`rotate(-90, 18, ${height / 2})`}>{yLabel}</text>
 
         {/* Y ticks */}
         {yTicks.map((t) => (
           <g key={t}>
-            <line x1={pad - 4} y1={y(t)} x2={width - pad} y2={y(t)} stroke="#374151" strokeDasharray="2,4" />
-            <text x={8} y={y(t) + 4} fontSize={10} fill="#9ca3af">{t}</text>
+            <line x1={padLeft - 4} y1={y(t)} x2={width - padRight} y2={y(t)} stroke="#374151" strokeDasharray="2,4" />
+            <text x={padLeft - 10} y={y(t) + 4} fontSize={10} fill="#9ca3af" textAnchor="end">{t}</text>
           </g>
         ))}
 
@@ -128,7 +131,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
 
         {/* X labels */}
         {weekKeys.map((wk, i) => (
-          <text key={wk} x={x(i)} y={height - pad + 14} fontSize={10} fill="#94a3b8" textAnchor="middle">
+          <text key={wk} x={x(i)} y={height - padV + 14} fontSize={10} fill="#94a3b8" textAnchor="middle">
             {wk.slice(5)}
           </text>
         ))}
