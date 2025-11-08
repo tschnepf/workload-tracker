@@ -160,7 +160,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
             {/* Combined legend + role selector (vertical, right side) */}
             <div className="w-64 shrink-0">
               <div className="text-[var(--muted)] text-xs mb-1">Roles</div>
-              <div className="flex flex-col gap-2 max-h-[300px] overflow-auto pr-1">
+              <div className="flex flex-col gap-2 pr-1">
                 {roles.map((r) => {
                   const selected = selectedRoleIds.has(r.id);
                   const color = roleColorForId(r.id);
