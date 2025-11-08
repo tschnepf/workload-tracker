@@ -99,6 +99,14 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
     return series.filter((s) => selectedRoleIds.has(s.roleId));
   }, [series, selectedRoleIds]);
 
+  // Grow chart height with number of roles so legend fits visually
+  const dynamicHeight = React.useMemo(() => {
+    const min = 300; // baseline chart height
+    const perRole = 34; // approximate per-chip vertical space
+    const header = 40; // spacing for axis labels/legend header
+    return Math.max(min, header + roles.length * perRole);
+  }, [roles.length]);
+
   return (
     <Card className={className ?? 'bg-[var(--card)] border-[var(--border)]'}>
       <div className="p-4 space-y-4">
@@ -154,6 +162,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
                   mode={mode}
                   tension={tension}
                   hideLegend
+                  height={dynamicHeight}
                 />
               )}
             </div>

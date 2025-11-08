@@ -15,6 +15,7 @@ export interface MultiRoleCapacityChartProps {
   mode?: ChartMode; // raw hours (default) or % of capacity
   tension?: number; // 0..1 smoothing (Catmull-Rom)
   hideLegend?: boolean; // allow parent to own legend/selection
+  height?: number; // override default height
 }
 
 const COLORS = [
@@ -34,13 +35,13 @@ export function roleColorForId(roleId: number): string {
   return COLORS[hash];
 }
 
-export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension, hideLegend }) => {
+export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension, hideLegend, height: heightProp }) => {
   if (!weekKeys?.length || !series?.length) return <div className="text-[var(--muted)]">No data</div>;
 
   const pad = 40;
   const step = 44;
   const width = Math.max(720, pad * 2 + (weekKeys.length - 1) * step);
-  const height = 300;
+  const height = heightProp ?? 300;
   const xLabel = 'Week';
   const yLabel = mode === 'hours' ? 'Hours' : '% of Capacity';
 
