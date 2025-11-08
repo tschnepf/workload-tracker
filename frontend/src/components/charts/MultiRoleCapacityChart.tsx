@@ -78,6 +78,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     if (pts.length === 1) return `M ${pts[0].x},${pts[0].y}`;
     if (pts.length === 2) return `M ${pts[0].x},${pts[0].y} L ${pts[1].x},${pts[1].y}`;
     const smooth = Math.max(0, Math.min(1, tension ?? 0.75)); // looser default
+    const yFloor = y(0); // do not allow curves to dip below 0
     let d = `M ${pts[0].x},${pts[0].y}`;
     for (let i = 0; i < pts.length - 1; i++) {
       const p0 = pts[i - 1] || pts[i];
@@ -85,9 +86,12 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
       const p2 = pts[i + 1];
       const p3 = pts[i + 2] || p2;
       const c1x = p1.x + ((p2.x - p0.x) / 6) * smooth;
-      const c1y = p1.y + ((p2.y - p0.y) / 6) * smooth;
+      let c1y = p1.y + ((p2.y - p0.y) / 6) * smooth;
       const c2x = p2.x - ((p3.x - p1.x) / 6) * smooth;
-      const c2y = p2.y - ((p3.y - p1.y) / 6) * smooth;
+      let c2y = p2.y - ((p3.y - p1.y) / 6) * smooth;
+      // Clamp control points so the curve never dips below 0
+      if (c1y > yFloor) c1y = yFloor;
+      if (c2y > yFloor) c2y = yFloor;
       d += ` C ${c1x},${c1y} ${c2x},${c2y} ${p2.x},${p2.y}`;
     }
     return d;
