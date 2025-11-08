@@ -93,6 +93,12 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
 
   React.useEffect(() => { if (canQuery) refresh(); }, [canQuery, refresh]);
 
+  const displayedSeries = React.useMemo(() => {
+    if (!series?.length) return series;
+    // Filter to selected roles for immediate visual feedback; backend still filters on refresh
+    return series.filter((s) => selectedRoleIds.has(s.roleId));
+  }, [series, selectedRoleIds]);
+
   return (
     <Card className={className ?? 'bg-[var(--card)] border-[var(--border)]'}>
       <div className="p-4 space-y-4">
@@ -139,34 +145,43 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
         <div>
           <h2 className="text-lg font-semibold text-[var(--text)] mb-2">{title}</h2>
           {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
-          {!error && (
-            <MultiRoleCapacityChart weekKeys={weekKeys} series={series as any} mode={mode} tension={tension} hideLegend />
-          )}
-        </div>
-
-        {/* Combined legend + role selector */}
-        <div className="pt-1">
-          <div className="text-[var(--muted)] text-xs mb-1">Roles</div>
-          <div className="flex flex-wrap gap-2">
-            {roles.map((r) => {
-              const selected = selectedRoleIds.has(r.id);
-              const color = roleColorForId(r.id);
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => setSelectedRoleIds((prev) => {
-                    const n = new Set(prev);
-                    if (n.has(r.id)) n.delete(r.id); else n.add(r.id);
-                    return n;
-                  })}
-                  className={`flex items-center gap-2 px-2 py-0.5 rounded border text-xs transition-colors ${selected ? 'bg-[var(--primary)] border-[var(--primary)] text-white' : 'bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]'}`}
-                  aria-pressed={selected}
-                >
-                  <span style={{ background: color, width: 16, height: 3, display: 'inline-block' }} />
-                  <span>{r.name}</span>
-                </button>
-              );
-            })}
+          <div className="flex items-start gap-4">
+            <div className="flex-1 min-w-0">
+              {!error && (
+                <MultiRoleCapacityChart
+                  weekKeys={weekKeys}
+                  series={displayedSeries as any}
+                  mode={mode}
+                  tension={tension}
+                  hideLegend
+                />
+              )}
+            </div>
+            {/* Combined legend + role selector (vertical, right side) */}
+            <div className="w-64 shrink-0">
+              <div className="text-[var(--muted)] text-xs mb-1">Roles</div>
+              <div className="flex flex-col gap-2 max-h-[300px] overflow-auto pr-1">
+                {roles.map((r) => {
+                  const selected = selectedRoleIds.has(r.id);
+                  const color = roleColorForId(r.id);
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => setSelectedRoleIds((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(r.id)) n.delete(r.id); else n.add(r.id);
+                        return n;
+                      })}
+                      className={`flex items-center justify-start gap-2 px-2 py-1 rounded border text-xs text-left transition-colors ${selected ? 'bg-[var(--primary)] border-[var(--primary)] text-white' : 'bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]'}`}
+                      aria-pressed={selected}
+                    >
+                      <span style={{ background: color, width: 18, height: 3, display: 'inline-block' }} />
+                      <span className="truncate">{r.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
