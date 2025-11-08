@@ -2,8 +2,9 @@ import React from 'react';
 import Card from '@/components/ui/Card';
 import MultiRoleCapacityChart, { type ChartMode, roleColorForId } from '@/components/charts/MultiRoleCapacityChart';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
-import { rolesApi } from '@/services/api';
+import { rolesApi, departmentsApi } from '@/services/api';
 import { getRoleCapacityTimeline } from '@/services/analyticsApi';
+import type { Department } from '@/types/models';
 
 type HideControls = {
   timeframe?: boolean;
@@ -42,6 +43,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   const [roles, setRoles] = React.useState<Array<{ id: number; name: string }>>([]);
   const [selectedRoleIds, setSelectedRoleIds] = React.useState<Set<number>>(new Set(initialSelectedRoleIds || []));
   const initializedSelection = React.useRef(false);
+  const [departments, setDepartments] = React.useState<Department[]>([]);
   const [weekKeys, setWeekKeys] = React.useState<string[]>([]);
   const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[] }>>([]);
   const [loading, setLoading] = React.useState(false);
@@ -56,6 +58,20 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
         if (mounted) setRoles(list || []);
       } catch {
         if (mounted) setRoles([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Load departments once (for name display)
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const page = await departmentsApi.list({ page: 1, page_size: 500 });
+        if (mounted) setDepartments((page.results || []) as Department[]);
+      } catch {
+        if (mounted) setDepartments([]);
       }
     })();
     return () => { mounted = false; };
@@ -113,7 +129,13 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
         <div className="flex items-end gap-4 flex-wrap">
           <div className="min-w-[120px]">
             <div className="text-[var(--muted)] text-xs">Department</div>
-            <div className="text-[var(--text)] text-sm">{effectiveDeptId ?? 'Select in header'}</div>
+            <div className="text-[var(--text)] text-sm">
+              {(() => {
+                if (effectiveDeptId == null) return 'Select in header';
+                const dep = departments.find(d => d.id === Number(effectiveDeptId));
+                return dep?.name ?? `#${effectiveDeptId}`;
+              })()}
+            </div>
           </div>
           {!hideControls?.timeframe && (
             <div>
