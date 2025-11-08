@@ -91,7 +91,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
   const yTicks = Array.from({ length: 4 + 1 }, (_, i) => Math.round((maxY * i) / 4));
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto', display: 'inline-block', maxWidth: '100%' }}>
       <svg width={width} height={height} role="img" aria-label="Role capacity vs assigned">
         {/* Axes */}
         <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="#4b5563" strokeWidth={1} />

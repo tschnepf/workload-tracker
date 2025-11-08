@@ -154,7 +154,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
           <h2 className="text-lg font-semibold text-[var(--text)] mb-2">{title}</h2>
           {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
           <div className="flex items-start gap-4">
-            <div className="flex-1 min-w-0">
+            <div className="shrink-0">
               {!error && (
                 <MultiRoleCapacityChart
                   weekKeys={weekKeys}
