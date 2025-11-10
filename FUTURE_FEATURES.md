@@ -207,6 +207,34 @@ Acceptance Criteria
 **Estimated Timeline**: 1-2 days
 **Trigger Point**: When any API dataset exceeds 1,000 records
 
+### 2. One‑Trip Deliverables Fetch (Audit + Refactor)
+
+Problem
+- Multiple screens fetch deliverables more than once for the same view (e.g., "next" and "last" in separate calls; or N× per project). This increases latency and server load.
+
+Goal
+- Standardize a single-request pattern per view: prefer the calendar API for the visible window; otherwise call one bulk endpoint (`bulkList(projectIds)`); if still needed, fall back to one `listAll()` and filter client-side by project/date.
+
+Scope/Targets to Audit
+- Projects list (done): next/prev derived from one bulk fetch.
+- Assignments grid (done): calendar → bulkList → single listAll fallback; removed per‑project loops.
+- Personal calendar widget, Deliverables calendar page, quick‑actions (milestone review), and any other views that double‑call or loop per project.
+
+Refactor Checklist
+- Replace double-calls with one bulk call and compute both "next" and "last" locally.
+- Avoid per‑project `listAll(pid)` loops; use a single `listAll()` filtered client‑side when needed.
+- Centralize date parsing and selection helpers (e.g., `pickNextUpcoming`, `pickMostRecent`).
+
+Testing
+- Add unit tests for next/prev pickers (date boundaries, timezone, "today" handling).
+- Add tests for the fallback chain (calendar unavailable → bulkList → listAll) to ensure identical UI outcomes.
+
+Telemetry
+- Track request counts and load times before/after to validate improvements.
+
+Rollout
+- Optional feature flag; stage and compare metrics, then remove legacy paths.
+
 ---
 
 ## 📋 Medium Priority - User Experience
