@@ -86,6 +86,8 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     availableHours: number;
     availablePct: number;
     peopleCount?: number;
+    medianAvailableHours: number;
+    medianAvailablePct: number;
     color: string;
   }>(null);
 
@@ -233,10 +235,30 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             const pctAssigned = rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0;
             const availableHours = Math.max(0, rawCapacity - rawAssigned);
             const availablePct = rawCapacity > 0 ? Math.max(0, 100 - pctAssigned) : 0;
+            // Median available across displayed roles for this week
+            const valuesH: number[] = [];
+            const valuesP: number[] = [];
+            for (const r of series) {
+              const cap = Number(r.capacity[i] || 0);
+              const asn = Number(r.assigned[i] || 0);
+              const avh = Math.max(0, cap - asn);
+              const avp = cap > 0 ? Math.max(0, 100 - (asn / (cap || 1)) * 100) : 0;
+              valuesH.push(avh);
+              valuesP.push(avp);
+            }
+            const median = (arr: number[]) => {
+              if (!arr.length) return 0;
+              const srt = [...arr].sort((a, b) => a - b);
+              const mid = Math.floor(srt.length / 2);
+              return srt.length % 2 ? srt[mid] : (srt[mid - 1] + srt[mid]) / 2;
+            };
+            const medianAvailableHours = median(valuesH);
+            const medianAvailablePct = median(valuesP);
+
             const color = roleColorForId(best.roleId);
             const ayPlot = y(normalized ? (rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0) : rawAssigned);
             const peopleCount = (raw.people && raw.people[i] != null) ? Number(raw.people[i]) : undefined;
-            setHover({ i, roleId: best.roleId, roleName: best.roleName, x: mx, y: ayPlot, rawAssigned, rawCapacity, pctAssigned, availableHours, availablePct, peopleCount, color });
+            setHover({ i, roleId: best.roleId, roleName: best.roleName, x: mx, y: ayPlot, rawAssigned, rawCapacity, pctAssigned, availableHours, availablePct, peopleCount, medianAvailableHours, medianAvailablePct, color });
           }}
         />
 
@@ -278,6 +300,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
           <div style={{ color: 'var(--muted)' }}>{weekKeys[hover.i]}</div>
           <div>Assigned: {Math.round(hover.rawAssigned)}h, Available: {Math.round(hover.availableHours)}h</div>
           <div>Assigned: {Math.round(hover.pctAssigned)}%, Available: {Math.round(hover.availablePct)}%</div>
+          <div style={{ marginTop: 4, color: 'var(--muted)' }}>Median available: {Math.round(hover.medianAvailableHours)}h, {Math.round(hover.medianAvailablePct)}%</div>
           </div>
         );
       })()}
