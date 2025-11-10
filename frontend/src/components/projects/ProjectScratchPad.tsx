@@ -24,11 +24,27 @@ export default function ProjectScratchPad({ projectId, initialHtml, canEdit = tr
   }, [projectId, initialHtml]);
 
   const apply = (cmd: string) => {
+    const el = editorRef.current;
+    if (!el) return;
+    // Keep focus/selection in the editor so execCommand works reliably
+    el.focus();
+    const sel = window.getSelection();
+    const inside = !!(sel && sel.rangeCount > 0 && el.contains(sel.anchorNode));
+    if (!inside) {
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false); // caret at end
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch {}
+    }
     try { document.execCommand(cmd); } catch {}
+    // Re-read DOM for dirty state
     setTimeout(() => {
-      const next = editorRef.current?.innerHTML || '';
+      const next = el.innerHTML || '';
       setHtml(next);
-      setDirty(true);
+      setDirty(next !== savedHtml);
     }, 0);
   };
 
@@ -61,24 +77,28 @@ export default function ProjectScratchPad({ projectId, initialHtml, canEdit = tr
           <button
             type="button"
             className="text-xs px-2 py-0.5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => apply('bold')}
             disabled={!canEdit}
           >B</button>
           <button
             type="button"
             className="text-xs px-2 py-0.5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => apply('italic')}
             disabled={!canEdit}
           ><i>I</i></button>
           <button
             type="button"
             className="text-xs px-2 py-0.5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => apply('underline')}
             disabled={!canEdit}
           ><u>U</u></button>
           <button
             type="button"
             className="text-xs px-2 py-0.5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => apply('insertUnorderedList')}
             disabled={!canEdit}
           >• List</button>
@@ -93,9 +113,33 @@ export default function ProjectScratchPad({ projectId, initialHtml, canEdit = tr
       <div className="p-3">
         <div
           ref={editorRef}
-          className={`min-h-[140px] rounded outline-none bg-[var(--surface)] border border-[var(--border)] p-2 text-[var(--text)] ${canEdit ? '' : 'opacity-70'}`}
+          className={`min-h-[140px] rounded outline-none bg-[var(--surface)] border border-[var(--border)] p-2 text-[var(--text)] whitespace-pre-wrap ${canEdit ? '' : 'opacity-70'}`}
           contentEditable={canEdit}
           suppressContentEditableWarning
+          role="textbox"
+          aria-multiline="true"
+          onKeyDown={(e) => {
+            // Keep all keystrokes inside the editor; avoid global hotkeys/grid nav
+            e.stopPropagation();
+            if (e.key === 'Tab') {
+              e.preventDefault();
+              try {
+                // Insert two spaces as a safe, consistent indent in HTML
+                document.execCommand('insertText', false, '  ');
+              } catch {
+                // Fallback: mutate selection via Range API
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) {
+                  const range = sel.getRangeAt(0);
+                  range.deleteContents();
+                  range.insertNode(document.createTextNode('  '));
+                  range.collapse(false);
+                }
+              }
+              // Recompute dirty state after DOM mutation
+              setTimeout(() => onInput(), 0);
+            }
+          }}
           onInput={onInput}
           aria-label="Project notes editor"
         />
