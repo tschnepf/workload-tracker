@@ -39,8 +39,8 @@ export function roleColorForId(roleId: number): string {
 export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension, hideLegend, height: heightProp }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   // Keep the chart frame visible even when series is empty (e.g., all roles deselected).
-  // Only fall back to a small "No data" placeholder when there are no week keys to render an axis.
-  if (!weekKeys?.length) return <div className="text-[var(--muted)]">No data</div>;
+  // Avoid early return so hook order remains stable across renders.
+  const noData = !weekKeys?.length;
 
   // Padding tuned to avoid clipping rotated Y label and y-tick values
   const padV = 40; // top/bottom
@@ -276,8 +276,8 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             <strong style={{ fontWeight: 600 }}>{hover.roleName}{hover.peopleCount != null ? ` (${hover.peopleCount})` : ''}</strong>
           </div>
           <div style={{ color: 'var(--muted)' }}>{weekKeys[hover.i]}</div>
-          <div>Assigned: {Math.round(hover.rawAssigned)}h / Available: {Math.round(hover.availableHours)}h</div>
-          <div>Assigned: {Math.round(hover.pctAssigned)}% / Available: {Math.round(hover.availablePct)}%</div>
+          <div>Assigned: {Math.round(hover.rawAssigned)}h, Available: {Math.round(hover.availableHours)}h</div>
+          <div>Assigned: {Math.round(hover.pctAssigned)}%, Available: {Math.round(hover.availablePct)}%</div>
           </div>
         );
       })()}
@@ -293,6 +293,9 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             </div>
           ))}
         </div>
+      )}
+      {noData && (
+        <div className="text-[var(--muted)] mt-2">No data</div>
       )}
     </div>
   );
