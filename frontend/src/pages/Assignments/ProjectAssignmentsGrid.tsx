@@ -646,7 +646,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         } catch { /* fall back below */ }
 
         if (!loadedViaCalendar) {
-          // Fallback path: use bulk list, then per-project listAll for percentages
+          // Fallback path: prefer a single bulk request; if empty, a single all-deliverables request
           let bulk: Record<string, any[]> = {};
           try { bulk = await deliverablesApi.bulkList(pidList); } catch { bulk = {}; }
           for (const [pidStr, list] of Object.entries(bulk || {})) {
@@ -661,17 +661,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
           }
           if (Object.keys(map).length === 0) {
             try {
-              const lists = await Promise.all(pidList.map(async (pid) => {
-                try { return [pid, await deliverablesApi.listAll(pid)] as const; } catch { return [pid, []] as const; }
-              }));
-              for (const [pid, list] of lists) {
-                for (const d of (list || [])) {
-                  if (!d?.date) continue;
-                  const dt = new Date(d.date);
-                  const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
-                  const type = classifyDeliverable((d.description || '').toString());
-                  addEntry(pid, wr.key, type, d.percentage == null ? undefined : Number(d.percentage));
-                }
+              const all = await deliverablesApi.listAll();
+              for (const d of (all || [])) {
+                const pid = (d as any)?.project as number | undefined;
+                if (!pid || !pidList.includes(pid)) continue;
+                if (!d?.date) continue;
+                const dt = new Date((d as any).date as string);
+                const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
+                const type = classifyDeliverable(((d as any).description || '').toString());
+                const pct = (d as any).percentage == null ? undefined : Number((d as any).percentage);
+                addEntry(pid, wr.key, type, pct);
               }
             } catch { /* ignore */ }
           }
