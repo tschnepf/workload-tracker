@@ -132,7 +132,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
   return (
-    <Card className={`bg-[var(--card)] border-[var(--border)] w-[560px] max-w-[640px] ${className || ''}`}>
+    <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
       <div className="p-4">
         <div className="mb-2 flex items-center justify-between">
           <div>

@@ -189,7 +189,16 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
             </div>
             {/* Combined legend + role selector (vertical, right side) */}
             <div className="w-64 shrink-0">
-              <div className="text-[var(--muted)] text-xs mb-1">Roles</div>
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-[var(--muted)] text-xs">Roles</div>
+                <button
+                  onClick={() => setSelectedRoleIds(new Set())}
+                  disabled={selectedRoleIds.size === 0}
+                  className="px-2 py-0.5 rounded border text-[10px] bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)] disabled:opacity-50"
+                >
+                  Clear Selection
+                </button>
+              </div>
               <div className="flex flex-col gap-2 pr-1">
                 {roles.map((r) => {
                   const selected = selectedRoleIds.has(r.id);

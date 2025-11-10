@@ -22,6 +22,7 @@ import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
 import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
 import AssignedHoursTimelineCard from '@/components/analytics/AssignedHoursTimelineCard';
+import RoleCapacityCard from '@/components/analytics/RoleCapacityCard';
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -405,7 +406,15 @@ const Dashboard: React.FC = () => {
           <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
 
           {/* Future Assigned Hours by Client (double width vs. compact) */}
-          <AssignedHoursByClientCard size={96} />
+          <div className="lg:col-span-2">
+            <AssignedHoursByClientCard size={96} className="w-full" />
+          </div>
+
+          {/* Role Capacity vs Assigned by Role (placed to the right of client card) */}
+          <div className="lg:col-span-4">
+            {/* Show display mode toggle on dashboard; keep timeframe compact */}
+            <RoleCapacityCard hideControls={{ timeframe: true }} />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
