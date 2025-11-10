@@ -103,6 +103,10 @@ const ProjectsTable: React.FC<Props> = ({
         const prevTopRaw = prevDeliverable ? `${prevDeliverable.percentage != null ? `${prevDeliverable.percentage}% ` : ''}${prevDeliverable.description || ''}`.trim() : '';
         const prevTop = prevTopRaw || '-';
         const prevBottom = prevDeliverable?.date ? parseLocal(prevDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const today = new Date(); today.setHours(0,0,0,0);
+        const prevDate = prevDeliverable?.date ? parseLocal(prevDeliverable.date) : null;
+        const isRecentPrev = !!(prevDate && prevDate <= today && (today.getTime() - prevDate.getTime()) <= 8*24*60*60*1000);
+        const prevTopClass = isRecentPrev ? 'text-[var(--text)] text-xs font-semibold leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         return (
           <div
             key={project.id}
@@ -155,7 +159,7 @@ const ProjectsTable: React.FC<Props> = ({
             <div className="col-span-2">
               {prevDeliverable ? (
                 <>
-                  <div className="text-[var(--muted)] text-xs leading-tight">{prevTop}</div>
+                  <div className={prevTopClass}>{prevTop}</div>
                   <div className="text-[var(--muted)] text-xs leading-tight">{prevBottom || ''}</div>
                 </>
               ) : (
@@ -202,6 +206,10 @@ const ProjectsTable: React.FC<Props> = ({
           const prevTopRaw = prevDeliverable ? `${prevDeliverable.percentage != null ? `${prevDeliverable.percentage}% ` : ''}${prevDeliverable.description || ''}`.trim() : '';
           const prevTop = prevTopRaw || '-';
           const prevBottom = prevDeliverable?.date ? parseLocal(prevDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+          const today2 = new Date(); today2.setHours(0,0,0,0);
+          const prevDate2 = prevDeliverable?.date ? parseLocal(prevDeliverable.date) : null;
+          const isRecentPrev2 = !!(prevDate2 && prevDate2 <= today2 && (today2.getTime() - prevDate2.getTime()) <= 8*24*60*60*1000);
+          const prevTopClass2 = isRecentPrev2 ? 'text-[var(--text)] text-xs font-semibold leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           return (
             <div
               key={project.id}
@@ -253,7 +261,7 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="col-span-2">
                 {prevDeliverable ? (
                   <>
-                    <div className="text-[var(--muted)] text-xs leading-tight">{prevTop}</div>
+                    <div className={prevTopClass2}>{prevTop}</div>
                     <div className="text-[var(--muted)] text-xs leading-tight">{prevBottom || ''}</div>
                   </>
                 ) : (
