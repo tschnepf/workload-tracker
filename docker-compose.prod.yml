@@ -8,7 +8,7 @@ services:
       # to skip auto-migrate in entrypoint and run migrations manually.
       - RUN_MIGRATIONS_ON_START=${RUN_MIGRATIONS_ON_START:-true}
       # Sentry DSN (set in host env to enable production error reporting)
-      - SENTRY_DSN=${SENTRY_DSN}
+      - SENTRY_DSN=${SENTRY_DSN:-}
       - DEBUG=false
       - DJANGO_SETTINGS_MODULE=config.settings
       - SILK_ENABLED=false  # Disable Silk profiling in production
@@ -38,7 +38,7 @@ services:
       start_period: 40s
     build:
       context: ./backend
-      dockerfile: ../docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: production
 
   # Production frontend - static build
@@ -62,7 +62,7 @@ services:
       start_period: 40s
     build:
       context: ./frontend
-      dockerfile: ../docker/frontend/Dockerfile
+      dockerfile: Dockerfile
       target: production
       args:
         VITE_API_URL: /api
@@ -141,7 +141,7 @@ services:
   worker:
     build:
       context: ./backend
-      dockerfile: ../docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: production
     restart: unless-stopped
     read_only: true
@@ -176,7 +176,7 @@ services:
   worker_db:
     build:
       context: ./backend
-      dockerfile: ../docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: production
     restart: unless-stopped
     read_only: true
@@ -206,7 +206,7 @@ services:
   worker_beat:
     build:
       context: ./backend
-      dockerfile: ../docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: production
     restart: unless-stopped
     read_only: true

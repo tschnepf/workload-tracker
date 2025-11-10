@@ -45,7 +45,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: ../docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: dev
     container_name: workload-tracker-backend
     restart: unless-stopped
@@ -81,7 +81,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: ../docker/frontend/Dockerfile
+      dockerfile: Dockerfile
       target: dev
     container_name: workload-tracker-frontend
     restart: unless-stopped
@@ -103,7 +103,7 @@ services:
   worker:
     build:
       context: ./backend
-      dockerfile: ../docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: dev
     container_name: workload-tracker-worker
     restart: unless-stopped
@@ -138,7 +138,7 @@ services:
   worker_db:
     build:
       context: ./backend
-      dockerfile: ../docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: dev
     container_name: workload-tracker-worker-db
     restart: unless-stopped
@@ -172,7 +172,7 @@ services:
   worker_beat:
     build:
       context: ./backend
-      dockerfile: ../docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: dev
     container_name: workload-tracker-beat
     restart: unless-stopped

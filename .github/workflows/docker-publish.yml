@@ -156,7 +156,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          file: ./docker/backend/Dockerfile
+          file: ./backend/Dockerfile
           target: production
           push: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
           tags: ${{ steps.meta-backend.outputs.tags }}
@@ -179,7 +179,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
-          file: ./docker/frontend/Dockerfile
+          file: ./frontend/Dockerfile
           target: production
           push: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
           tags: ${{ steps.meta-frontend.outputs.tags }}

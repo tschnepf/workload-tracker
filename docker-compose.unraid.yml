@@ -33,7 +33,7 @@ services:
   backend:
     build:
       context: /mnt/user/appdata/workload-tracker/backend
-      dockerfile: /mnt/user/appdata/workload-tracker/docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: production
     env_file:
       - /boot/config/plugins/compose.manager/projects/workload-tracker/.env
@@ -61,7 +61,7 @@ services:
       - COOKIE_REFRESH_AUTH=${COOKIE_REFRESH_AUTH:-false}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - RUN_MIGRATIONS_ON_START=${RUN_MIGRATIONS_ON_START:-true}
-      - SENTRY_DSN=${SENTRY_DSN}
+      - SENTRY_DSN=${SENTRY_DSN:-}
       # Avoid HTTP→HTTPS redirect during local/LAN testing
       - SECURE_SSL_REDIRECT=${SECURE_SSL_REDIRECT:-false}
     volumes:
@@ -92,7 +92,7 @@ services:
   worker:
     build:
       context: /mnt/user/appdata/workload-tracker/backend
-      dockerfile: /mnt/user/appdata/workload-tracker/docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: production
     env_file:
       - /boot/config/plugins/compose.manager/projects/workload-tracker/.env
@@ -127,7 +127,7 @@ services:
   worker_db:
     build:
       context: /mnt/user/appdata/workload-tracker/backend
-      dockerfile: /mnt/user/appdata/workload-tracker/docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: production
     env_file:
       - /boot/config/plugins/compose.manager/projects/workload-tracker/.env
@@ -159,7 +159,7 @@ services:
   worker_beat:
     build:
       context: /mnt/user/appdata/workload-tracker/backend
-      dockerfile: /mnt/user/appdata/workload-tracker/docker/backend/Dockerfile
+      dockerfile: Dockerfile
       target: production
     env_file:
       - /boot/config/plugins/compose.manager/projects/workload-tracker/.env
@@ -194,7 +194,7 @@ services:
   frontend:
     build:
       context: /mnt/user/appdata/workload-tracker/frontend
-      dockerfile: /mnt/user/appdata/workload-tracker/docker/frontend/Dockerfile
+      dockerfile: Dockerfile
       target: production
       args:
         # Point the frontend at the backend API directly when not using a reverse proxy.
