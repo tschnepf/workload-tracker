@@ -21,10 +21,12 @@ class ProjectSerializer(serializers.ModelSerializer):
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     # Scratch pad notes (rich-text HTML accepted)
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # Canonical TipTap JSON (camelCase -> snake_case)
+    notesJson = serializers.JSONField(source='notes_json', required=False, allow_null=True)
     
     class Meta:
         model = Project
-        fields = ['id', 'name', 'status', 'client', 'description', 'notes', 'projectNumber', 
+        fields = ['id', 'name', 'status', 'client', 'description', 'notes', 'notesJson', 'projectNumber', 
                  'startDate', 'endDate', 'estimatedHours', 'isActive', 'createdAt', 'updatedAt']
         read_only_fields = ['id', 'createdAt', 'updatedAt']
 

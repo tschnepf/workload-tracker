@@ -457,6 +457,62 @@
                 }
             }
         },
+        "/api/assignments/analytics_role_capacity/": {
+            "get": {
+                "operationId": "assignments_analytics_role_capacity_retrieve",
+                "description": "Per-role capacity vs assigned hours timeline for a department over the next N weeks.\n\nRules: Only includes active people; applies hireDate gating (capacity contributes only on or after start).\nCapacity is the sum of weekly capacity for all active people in the department with the selected role(s) for each week, gated by hire date.\nAssigned hours are summed from current Assignments.weekly_hours by person role and week.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Department ID",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "role_ids",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of department ProjectRole IDs to include"
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of future weeks (4,8,12,16,20). Default 12"
+                    }
+                ],
+                "tags": [
+                    "assignments"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RoleCapacityTimelineResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/assignments/analytics_status_timeline/": {
             "get": {
                 "operationId": "assignments_analytics_status_timeline_retrieve",
@@ -6012,6 +6068,54 @@
                 }
             }
         },
+        "/api/projects/project-roles/reorder/": {
+            "post": {
+                "operationId": "projects_project_roles_reorder_create",
+                "tags": [
+                    "projects"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleReorderRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleReorderRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleReorderRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectRoleReorderResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/reports/pre-deliverable-completion/": {
             "get": {
                 "operationId": "reports_pre_deliverable_completion_retrieve",
@@ -6367,6 +6471,55 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PaginatedRoleList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/roles/reorder/": {
+            "post": {
+                "operationId": "roles_reorder_create",
+                "description": "Bulk reorder roles by IDs.\n\nBody: { \"ids\": [int, ...] }\nRequires staff privileges.",
+                "tags": [
+                    "roles"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
                                 }
                             }
                         },
@@ -9410,6 +9563,13 @@
                     "description": {
                         "type": "string"
                     },
+                    "notes": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "notesJson": {
+                        "nullable": true
+                    },
                     "projectNumber": {
                         "type": "string",
                         "nullable": true
@@ -9467,6 +9627,11 @@
                     "isActive": {
                         "type": "boolean",
                         "description": "Whether this role is currently available for assignment"
+                    },
+                    "sortOrder": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648
                     }
                 }
             },
@@ -10172,6 +10337,13 @@
                     "description": {
                         "type": "string"
                     },
+                    "notes": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "notesJson": {
+                        "nullable": true
+                    },
                     "projectNumber": {
                         "type": "string",
                         "nullable": true
@@ -10393,6 +10565,13 @@
                     "description": {
                         "type": "string"
                     },
+                    "notes": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "notesJson": {
+                        "nullable": true
+                    },
                     "projectNumber": {
                         "type": "string",
                         "nullable": true
@@ -10469,6 +10648,46 @@
                     "department_id",
                     "id",
                     "name"
+                ]
+            },
+            "ProjectRoleLite": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
+                ]
+            },
+            "ProjectRoleReorderRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "ids"
+                ]
+            },
+            "ProjectRoleReorderResponse": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
                 ]
             },
             "ProjectSnapshotMetrics": {
@@ -10618,6 +10837,11 @@
                         "type": "boolean",
                         "description": "Whether this role is currently available for assignment"
                     },
+                    "sortOrder": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648
+                    },
                     "createdAt": {
                         "type": "string",
                         "format": "date-time",
@@ -10634,6 +10858,34 @@
                     "id",
                     "name",
                     "updatedAt"
+                ]
+            },
+            "RoleCapacityTimelineResponse": {
+                "type": "object",
+                "properties": {
+                    "weekKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProjectRoleLite"
+                        }
+                    },
+                    "series": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RoleSeries"
+                        }
+                    }
+                },
+                "required": [
+                    "roles",
+                    "series",
+                    "weekKeys"
                 ]
             },
             "RoleChange": {
@@ -10681,10 +10933,52 @@
                     "isActive": {
                         "type": "boolean",
                         "description": "Whether this role is currently available for assignment"
+                    },
+                    "sortOrder": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648
                     }
                 },
                 "required": [
                     "name"
+                ]
+            },
+            "RoleSeries": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "integer"
+                    },
+                    "roleName": {
+                        "type": "string"
+                    },
+                    "assigned": {
+                        "type": "array",
+                        "items": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "capacity": {
+                        "type": "array",
+                        "items": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "people": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "assigned",
+                    "capacity",
+                    "roleId",
+                    "roleName"
                 ]
             },
             "RunWeeklySnapshotResponse": {

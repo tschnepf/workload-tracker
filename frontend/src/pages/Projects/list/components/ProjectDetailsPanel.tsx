@@ -624,9 +624,14 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             </div>
           )}
         </div>
-        {/* Scratch Pad (Project Notes) */}
+        {/* Project Notes (TipTap) */}
         <div className="mt-4">
-          <ProjectScratchPad projectId={project.id!} initialHtml={(localPatch as any).notes ?? (project as any).notes} canEdit={canEdit} />
+          <ProjectNotesEditor
+            projectId={project.id!}
+            initialJson={(project as any).notesJson as any}
+            initialHtml={(localPatch as any).notes ?? (project as any).notes}
+            canEdit={canEdit}
+          />
         </div>
       
     </>
@@ -639,4 +644,4 @@ import { useInlineProjectUpdate } from '@/hooks/useInlineProjectUpdate';
 import { useAuth } from '@/hooks/useAuth';
 import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';
 import { projectsApi } from '@/services/api';
-import ProjectScratchPad from '@/components/projects/ProjectScratchPad';
+import ProjectNotesEditor from '@/components/projects/ProjectNotesEditor';

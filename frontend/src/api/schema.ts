@@ -63,6 +63,16 @@ export interface paths {
      */
     get: operations["assignments_analytics_deliverable_timeline_retrieve"];
   };
+  "/api/assignments/analytics_role_capacity/": {
+    /**
+     * @description Per-role capacity vs assigned hours timeline for a department over the next N weeks.
+     *
+     * Rules: Only includes active people; applies hireDate gating (capacity contributes only on or after start).
+     * Capacity is the sum of weekly capacity for all active people in the department with the selected role(s) for each week, gated by hire date.
+     * Assigned hours are summed from current Assignments.weekly_hours by person role and week.
+     */
+    get: operations["assignments_analytics_role_capacity_retrieve"];
+  };
   "/api/assignments/analytics_status_timeline/": {
     /**
      * @description Assigned hours weekly timeline aggregated by project status for N weeks ahead.
@@ -770,6 +780,9 @@ export interface paths {
     delete: operations["projects_project_roles_destroy"];
     patch: operations["projects_project_roles_partial_update"];
   };
+  "/api/projects/project-roles/reorder/": {
+    post: operations["projects_project_roles_reorder_create"];
+  };
   "/api/reports/pre-deliverable-completion/": {
     get: operations["reports_pre_deliverable_completion_retrieve"];
   };
@@ -838,6 +851,15 @@ export interface paths {
      * Access via: GET /api/roles/bulk/
      */
     get: operations["roles_bulk_list"];
+  };
+  "/api/roles/reorder/": {
+    /**
+     * @description Bulk reorder roles by IDs.
+     *
+     * Body: { "ids": [int, ...] }
+     * Requires staff privileges.
+     */
+    post: operations["roles_reorder_create"];
   };
   "/api/skills/person-skills/": {
     /** @description CRUD operations for person skills */
@@ -1664,6 +1686,8 @@ export interface components {
       status?: components["schemas"]["StatusEnum"];
       client?: string;
       description?: string;
+      notes?: string | null;
+      notesJson?: unknown;
       projectNumber?: string | null;
       /** Format: date */
       startDate?: string | null;
@@ -1686,6 +1710,7 @@ export interface components {
       description?: string;
       /** @description Whether this role is currently available for assignment */
       isActive?: boolean;
+      sortOrder?: number;
     };
     /** @description Skill tag serializer with camelCase field names */
     PatchedSkillTagRequest: {
@@ -1898,6 +1923,8 @@ export interface components {
       status?: components["schemas"]["StatusEnum"];
       client?: string;
       description?: string;
+      notes?: string | null;
+      notesJson?: unknown;
       projectNumber?: string | null;
       /** Format: date */
       startDate?: string | null;
@@ -1967,6 +1994,8 @@ export interface components {
       status?: components["schemas"]["StatusEnum"];
       client?: string;
       description?: string;
+      notes?: string | null;
+      notesJson?: unknown;
       projectNumber?: string | null;
       /** Format: date */
       startDate?: string | null;
@@ -1987,6 +2016,16 @@ export interface components {
       is_active?: boolean;
       sort_order?: number;
       department_id: number;
+    };
+    ProjectRoleLite: {
+      id: number;
+      name: string;
+    };
+    ProjectRoleReorderRequestRequest: {
+      ids: number[];
+    };
+    ProjectRoleReorderResponse: {
+      detail: string;
     };
     ProjectSnapshotMetrics: {
       projectsCount: number;
@@ -2032,10 +2071,16 @@ export interface components {
       description?: string;
       /** @description Whether this role is currently available for assignment */
       isActive?: boolean;
+      sortOrder?: number;
       /** Format: date-time */
       createdAt: string;
       /** Format: date-time */
       updatedAt: string;
+    };
+    RoleCapacityTimelineResponse: {
+      weekKeys: string[];
+      roles: components["schemas"]["ProjectRoleLite"][];
+      series: components["schemas"]["RoleSeries"][];
     };
     RoleChange: {
       week_start: string;
@@ -2057,6 +2102,14 @@ export interface components {
       description?: string;
       /** @description Whether this role is currently available for assignment */
       isActive?: boolean;
+      sortOrder?: number;
+    };
+    RoleSeries: {
+      roleId: number;
+      roleName: string;
+      assigned: number[];
+      capacity: number[];
+      people?: number[];
     };
     RunWeeklySnapshotResponse: {
       week_start: string;
@@ -2457,6 +2510,32 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["AssignedHoursDeliverableTimelineResponse"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Per-role capacity vs assigned hours timeline for a department over the next N weeks.
+   *
+   * Rules: Only includes active people; applies hireDate gating (capacity contributes only on or after start).
+   * Capacity is the sum of weekly capacity for all active people in the department with the selected role(s) for each week, gated by hire date.
+   * Assigned hours are summed from current Assignments.weekly_hours by person role and week.
+   */
+  assignments_analytics_role_capacity_retrieve: {
+    parameters: {
+      query: {
+        /** @description Department ID */
+        department: number;
+        /** @description CSV of department ProjectRole IDs to include */
+        role_ids?: string;
+        /** @description Number of future weeks (4,8,12,16,20). Default 12 */
+        weeks?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["RoleCapacityTimelineResponse"];
         };
       };
     };
@@ -4825,6 +4904,22 @@ export interface operations {
       };
     };
   };
+  projects_project_roles_reorder_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectRoleReorderRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleReorderRequestRequest"];
+        "multipart/form-data": components["schemas"]["ProjectRoleReorderRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRoleReorderResponse"];
+        };
+      };
+    };
+  };
   reports_pre_deliverable_completion_retrieve: {
     responses: {
       /** @description No response body */
@@ -5008,6 +5103,28 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["PaginatedRoleList"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Bulk reorder roles by IDs.
+   *
+   * Body: { "ids": [int, ...] }
+   * Requires staff privileges.
+   */
+  roles_reorder_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RoleRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["RoleRequest"];
+        "multipart/form-data": components["schemas"]["RoleRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["Role"];
         };
       };
     };

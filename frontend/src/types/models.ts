@@ -36,6 +36,8 @@ export interface Project {
   client?: string;
   description?: string;
   notes?: string; // Rich-text scratch pad (HTML)
+  // Canonical rich-text content (TipTap JSON)
+  notesJson?: any;
   startDate?: string;
   endDate?: string;
   estimatedHours?: number;
