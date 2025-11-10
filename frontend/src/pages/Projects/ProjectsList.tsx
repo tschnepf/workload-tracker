@@ -33,6 +33,7 @@ import { useProjectAssignmentAdd } from '@/pages/Projects/list/hooks/useProjectA
 import { useProjectStatusMutation } from '@/pages/Projects/list/hooks/useProjectStatusMutation';
 import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 import { useNextDeliverables } from '@/pages/Projects/list/hooks/useNextDeliverables';
+import { usePrevDeliverables } from '@/pages/Projects/list/hooks/usePrevDeliverables';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -61,6 +62,7 @@ const ProjectsList: React.FC = () => {
 
   // Next Deliverables map for list column + sorting
   const { nextMap: nextDeliverablesMap, refreshOne: refreshNextFor } = useNextDeliverables(projects);
+  const { prevMap: prevDeliverablesMap } = usePrevDeliverables(projects);
 
   // Recompute filters with custom sort getter when needed (stable ID mapping)
   const {
@@ -462,6 +464,7 @@ const ProjectsList: React.FC = () => {
             onSort={onSort}
             loading={loading}
             nextDeliverables={nextDeliverablesMap}
+            prevDeliverables={prevDeliverablesMap}
             onChangeStatus={handleTableStatusChange}
           />
         </div>
