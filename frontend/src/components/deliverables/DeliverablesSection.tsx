@@ -14,11 +14,11 @@ import { showToast } from '@/lib/toastBus';
 import { useQueryClient } from '@tanstack/react-query';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 
-// Compact date formatter without year for single-line rows (e.g., "Oct 15")
+// Compact date formatter with year for single-line rows (e.g., "Apr 17, 2026")
 const formatDateNoYear = (dateStr: string) => {
   try {
     const d = new Date(dateStr.length <= 10 ? `${dateStr}T00:00:00` : dateStr);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;
   }
