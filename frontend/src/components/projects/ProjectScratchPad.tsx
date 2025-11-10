@@ -8,13 +8,18 @@ type Props = {
 };
 
 export default function ProjectScratchPad({ projectId, initialHtml, canEdit = true }: Props) {
+  // Keep the editor uncontrolled to avoid caret jumps and reversed typing
   const [html, setHtml] = React.useState<string>(initialHtml || '');
+  const [savedHtml, setSavedHtml] = React.useState<string>(initialHtml || '');
   const [saving, setSaving] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
   const editorRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
+    // Initialize/replace content directly in the DOM without re-rendering
+    if (editorRef.current) editorRef.current.innerHTML = initialHtml || '';
     setHtml(initialHtml || '');
+    setSavedHtml(initialHtml || '');
     setDirty(false);
   }, [projectId, initialHtml]);
 
@@ -30,13 +35,16 @@ export default function ProjectScratchPad({ projectId, initialHtml, canEdit = tr
   const onInput = () => {
     const next = editorRef.current?.innerHTML || '';
     setHtml(next);
-    setDirty(true);
+    setDirty(next !== savedHtml);
   };
 
   const onSave = async () => {
     try {
       setSaving(true);
-      await projectsApi.update(projectId, { notes: html });
+      const current = editorRef.current?.innerHTML || html;
+      await projectsApi.update(projectId, { notes: current });
+      setSavedHtml(current);
+      setHtml(current);
       setDirty(false);
     } catch (e) {
       // Swallow; API layer toasts errors already when appropriate
@@ -89,7 +97,6 @@ export default function ProjectScratchPad({ projectId, initialHtml, canEdit = tr
           contentEditable={canEdit}
           suppressContentEditableWarning
           onInput={onInput}
-          dangerouslySetInnerHTML={{ __html: html }}
           aria-label="Project notes editor"
         />
         {!canEdit && <div className="mt-1 text-xs text-[var(--muted)]">Read-only</div>}
@@ -97,4 +104,3 @@ export default function ProjectScratchPad({ projectId, initialHtml, canEdit = tr
     </div>
   );
 }
-
