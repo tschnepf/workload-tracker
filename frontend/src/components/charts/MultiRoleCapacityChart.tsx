@@ -81,7 +81,8 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     rawAssigned: number;
     rawCapacity: number;
     pctAssigned: number;
-    pctCapacity: number;
+    availableHours: number;
+    availablePct: number;
     color: string;
   }>(null);
 
@@ -218,10 +219,11 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             const rawAssigned = Number(raw.assigned[i] || 0);
             const rawCapacity = Number(raw.capacity[i] || 0);
             const pctAssigned = rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0;
-            const pctCapacity = rawCapacity > 0 ? 100 : 0;
+            const availableHours = Math.max(0, rawCapacity - rawAssigned);
+            const availablePct = rawCapacity > 0 ? Math.max(0, 100 - pctAssigned) : 0;
             const color = roleColorForId(best.roleId);
             const ayPlot = y(normalized ? (rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0) : rawAssigned);
-            setHover({ i, roleId: best.roleId, roleName: best.roleName, x: mx, y: ayPlot, rawAssigned, rawCapacity, pctAssigned, pctCapacity, color });
+            setHover({ i, roleId: best.roleId, roleName: best.roleName, x: mx, y: ayPlot, rawAssigned, rawCapacity, pctAssigned, availableHours, availablePct, color });
           }}
         />
 
@@ -244,8 +246,8 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             <strong style={{ fontWeight: 600 }}>{hover.roleName}</strong>
           </div>
           <div style={{ color: 'var(--muted)' }}>{weekKeys[hover.i]}</div>
-          <div>Assigned: {Math.round(hover.rawAssigned)}h / Capacity: {Math.round(hover.rawCapacity)}h</div>
-          <div>Assigned: {Math.round(hover.pctAssigned)}% / Capacity: {hover.pctCapacity}%</div>
+          <div>Assigned: {Math.round(hover.rawAssigned)}h / Available: {Math.round(hover.availableHours)}h</div>
+          <div>Assigned: {Math.round(hover.pctAssigned)}% / Available: {Math.round(hover.availablePct)}%</div>
         </div>
       )}
 
