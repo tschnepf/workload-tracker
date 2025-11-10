@@ -639,12 +639,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     def analytics_role_capacity(self, request):
         logger = logging.getLogger(__name__)
         t0 = time.perf_counter()
-        try:
-            dept_id = int(request.query_params.get('department') or '0')
-        except Exception:
-            return Response({'error': 'department is required'}, status=status.HTTP_400_BAD_REQUEST)
-        if not dept_id:
-            return Response({'error': 'department is required'}, status=status.HTTP_400_BAD_REQUEST)
+        # Department: if omitted, aggregate across all departments
+        dept_param = request.query_params.get('department')
+        dept_id = None
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+            except Exception:
+                return Response({'error': 'invalid department'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             weeks = int(request.query_params.get('weeks', 12))
         except Exception:
@@ -682,7 +684,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Short‑TTL cache (acceptable 60s staleness)
         try:
             if request.query_params.get('nocache') != '1':
-                cache_key = f"rc:{dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}"
+                cache_key = f"rc:{'all' if dept_id is None else dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}"
                 cached = cache.get(cache_key)
                 if cached is not None:
                     return Response(cached)

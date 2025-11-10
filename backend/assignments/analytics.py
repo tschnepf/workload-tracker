@@ -11,7 +11,7 @@ from roles.models import Role
 
 
 def _python_role_capacity(
-    dept_id: int,
+    dept_id: int | None,
     week_keys: List[date],
     role_ids: List[int] | None,
 ) -> Tuple[List[str], List[Dict], List[Dict]]:
@@ -31,11 +31,10 @@ def _python_role_capacity(
     roles_payload = [{'id': r.id, 'name': r.name} for r in roles]
 
     # Capacity per role/week (hire-date gated)
-    people_qs: QuerySet[Person] = (
-        Person.objects
-        .filter(is_active=True, department_id=dept_id)
-        .only('id', 'role_id', 'weekly_capacity', 'hire_date')
-    )
+    people_qs: QuerySet[Person] = Person.objects.filter(is_active=True)
+    if dept_id is not None:
+        people_qs = people_qs.filter(department_id=dept_id)
+    people_qs = people_qs.only('id', 'role_id', 'weekly_capacity', 'hire_date')
     people_by_role: Dict[int, List[Tuple[int, date | None]]] = {}
     for p in people_qs.iterator():
         rid = getattr(p, 'role_id', None)
@@ -56,12 +55,10 @@ def _python_role_capacity(
             caps[(wk.strftime('%Y-%m-%d'), rid)] = total
 
     # Assigned hours: iterate only requested week keys; string compare for hire gating
-    asn_qs = (
-        Asn.objects
-        .filter(is_active=True, person__is_active=True, person__department_id=dept_id)
-        .select_related('person')
-        .only('id', 'weekly_hours', 'person__id', 'person__role_id', 'person__hire_date', 'person__is_active')
-    )
+    asn_qs = Asn.objects.filter(is_active=True, person__is_active=True)
+    if dept_id is not None:
+        asn_qs = asn_qs.filter(person__department_id=dept_id)
+    asn_qs = asn_qs.select_related('person').only('id', 'weekly_hours', 'person__id', 'person__role_id', 'person__hire_date', 'person__is_active')
     assigned: Dict[Tuple[str, int], float] = {}
     for a in asn_qs.iterator():
         rid = getattr(a.person, 'role_id', None)
@@ -97,7 +94,7 @@ def _python_role_capacity(
 
 
 def _postgres_role_capacity(
-    dept_id: int,
+    dept_id: int | None,
     week_keys: List[date],
     role_ids: List[int] | None,
 ) -> Tuple[List[str], List[Dict], List[Dict]]:
@@ -115,11 +112,10 @@ def _postgres_role_capacity(
     roles_payload = [{'id': r.id, 'name': r.name} for r in roles]
 
     # Capacity (kept in ORM for clarity/perf suffices)
-    people_qs: QuerySet[Person] = (
-        Person.objects
-        .filter(is_active=True, department_id=dept_id)
-        .only('id', 'role_id', 'weekly_capacity', 'hire_date')
-    )
+    people_qs: QuerySet[Person] = Person.objects.filter(is_active=True)
+    if dept_id is not None:
+        people_qs = people_qs.filter(department_id=dept_id)
+    people_qs = people_qs.only('id', 'role_id', 'weekly_capacity', 'hire_date')
     people_by_role: Dict[int, List[Tuple[int, date | None]]] = {}
     for p in people_qs.iterator():
         rid = getattr(p, 'role_id', None)
@@ -142,14 +138,14 @@ def _postgres_role_capacity(
     # Assigned hours via raw SQL
     assigned: Dict[Tuple[str, int], float] = {}
     with connection.cursor() as cur:
-        sql = (
+        base_sql = (
             """
             SELECT j.key AS wk, p.role_id, SUM(GREATEST(0, COALESCE(NULLIF(j.value,'')::numeric, 0))) AS hours
             FROM assignments_assignment a
             JOIN people_person p ON p.id = a.person_id
             WHERE a.is_active = TRUE
               AND p.is_active = TRUE
-              AND p.department_id = %s
+            
               AND a.weekly_hours ?| %s
             CROSS JOIN LATERAL jsonb_each_text(a.weekly_hours) AS j(key, value)
             WHERE j.key = ANY(%s)
@@ -158,8 +154,14 @@ def _postgres_role_capacity(
             GROUP BY j.key, p.role_id
             """
         )
-        # psycopg will serialize Python list to Postgres array with correct oid when using extras, but here we pass as tuple
-        params = [dept_id, wk_strs, wk_strs, None if not role_ids else role_ids, None if not role_ids else role_ids]
+        # Add department filter dynamically when provided
+        if dept_id is not None:
+            sql = base_sql.replace("WHERE a.is_active = TRUE\n              AND p.is_active = TRUE\n", "WHERE a.is_active = TRUE\n              AND p.is_active = TRUE\n              AND p.department_id = %s\n")
+            params = [wk_strs, wk_strs, None if not role_ids else role_ids, None if not role_ids else role_ids]
+            params = [dept_id] + params
+        else:
+            sql = base_sql
+            params = [wk_strs, wk_strs, None if not role_ids else role_ids, None if not role_ids else role_ids]
         cur.execute(sql, params)
         for wk, rid, hours in cur.fetchall():
             if rid is None:
@@ -179,7 +181,7 @@ def _postgres_role_capacity(
 
 
 def compute_role_capacity(
-    dept_id: int,
+    dept_id: int | None,
     week_keys: List[date],
     role_ids: List[int] | None,
 ) -> Tuple[List[str], List[Dict], List[Dict]]:
@@ -193,4 +195,3 @@ def compute_role_capacity(
             # Fall back to Python path on any SQL/driver error
             return _python_role_capacity(dept_id, week_keys, role_ids)
     return _python_role_capacity(dept_id, week_keys, role_ids)
-

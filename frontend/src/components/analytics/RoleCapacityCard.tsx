@@ -88,14 +88,13 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
     setSelectedRoleIds(new Set(ids));
   }, [roles, initialSelectedRoleIds]);
 
-  const canQuery = effectiveDeptId != null;
+  const canQuery = true; // Allow querying across all departments when no selection
   const refresh = React.useCallback(async () => {
-    if (!canQuery) return;
     setLoading(true);
     setError(null);
     try {
       const roleIdsCsv = (selectedRoleIds && selectedRoleIds.size > 0) ? Array.from(selectedRoleIds).join(',') : undefined;
-      const res = await getRoleCapacityTimeline({ department: Number(effectiveDeptId), weeks, roleIdsCsv });
+      const res = await getRoleCapacityTimeline({ department: effectiveDeptId != null ? Number(effectiveDeptId) : undefined, weeks, roleIdsCsv });
       setWeekKeys(res.weekKeys || []);
       setSeries(res.series || []);
     } catch (e: any) {
@@ -131,7 +130,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
             <div className="text-[var(--muted)] text-xs">Department</div>
             <div className="text-[var(--text)] text-sm">
               {(() => {
-                if (effectiveDeptId == null) return 'Select in header';
+                if (effectiveDeptId == null) return 'All Departments';
                 const dep = departments.find(d => d.id === Number(effectiveDeptId));
                 return dep?.name ?? `#${effectiveDeptId}`;
               })()}
