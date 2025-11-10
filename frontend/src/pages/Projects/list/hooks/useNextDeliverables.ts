@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Deliverable, Project } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
+import { pickNextUpcoming } from './deliverablePickers';
 
 export interface NextDeliverablesResult {
   nextMap: Map<number, Deliverable | null>;
@@ -10,28 +11,7 @@ export interface NextDeliverablesResult {
   refreshOne: (projectId: number) => Promise<void>;
 }
 
-// Parse server YYYY-MM-DD as local midnight to avoid TZ off-by-one
-const parseLocal = (dateStr: string) => {
-  try {
-    const s = (dateStr || '').slice(0, 10);
-    return new Date(`${s}T00:00:00`);
-  } catch {
-    return new Date(NaN);
-  }
-};
-
-function pickNextUpcoming(deliverables: Deliverable[] | undefined): Deliverable | null {
-  if (!deliverables || deliverables.length === 0) return null;
-  const today = new Date();
-  // Normalize to start of day
-  today.setHours(0, 0, 0, 0);
-  const candidates = deliverables
-    .filter(d => !d.isCompleted && d.date)
-    .map(d => ({ d, when: parseLocal(d.date as string) }))
-    .filter(x => !isNaN(x.when.getTime()) && x.when >= today)
-    .sort((a, b) => a.when.getTime() - b.when.getTime());
-  return candidates.length > 0 ? candidates[0].d : null;
-}
+// pickNextUpcoming moved to deliverablePickers
 
 export function useNextDeliverables(projects: Project[] | null | undefined): NextDeliverablesResult {
   const [nextMap, setNextMap] = useState<Map<number, Deliverable | null>>(new Map());
