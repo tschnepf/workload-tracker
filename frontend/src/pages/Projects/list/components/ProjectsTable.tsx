@@ -71,8 +71,8 @@ const ProjectsTable: React.FC<Props> = ({
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('status')}>
         STATUS<SortIcon column="status" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
-      <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center">
-        LAST DELIVERABLE
+      <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('lastDue')}>
+        LAST DELIVERABLE<SortIcon column="lastDue" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('nextDue')}>
         NEXT DELIVERABLE<SortIcon column="nextDue" sortBy={sortBy} sortDirection={sortDirection} />
@@ -99,14 +99,21 @@ const ProjectsTable: React.FC<Props> = ({
         const nextTopRaw = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
         const nextTop = nextTopRaw || '-';
         const parseLocal = (s: string) => new Date((s || '').slice(0,10) + 'T00:00:00');
-        const nextBottom = nextDeliverable?.date ? parseLocal(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const nextDate = nextDeliverable?.date ? parseLocal(nextDeliverable.date) : null;
+        const nextBottom = nextDate ? nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const soonLimit = new Date(); soonLimit.setHours(0,0,0,0); const soonEnd = new Date(soonLimit.getTime() + 13*24*60*60*1000);
+        const isSoonNext = !!(nextDate && nextDate >= soonLimit && nextDate <= soonEnd);
+        const nextTopClass = isSoonNext ? 'text-[#b22222] font-semibold leading-tight' : 'text-[var(--text)] font-medium leading-tight';
+        const nextBottomClass = isSoonNext ? 'text-[#b22222] text-xs leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         const prevTopRaw = prevDeliverable ? `${prevDeliverable.percentage != null ? `${prevDeliverable.percentage}% ` : ''}${prevDeliverable.description || ''}`.trim() : '';
         const prevTop = prevTopRaw || '-';
         const prevBottom = prevDeliverable?.date ? parseLocal(prevDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         const today = new Date(); today.setHours(0,0,0,0);
         const prevDate = prevDeliverable?.date ? parseLocal(prevDeliverable.date) : null;
         const isRecentPrev = !!(prevDate && prevDate <= today && (today.getTime() - prevDate.getTime()) <= 8*24*60*60*1000);
-        const prevTopClass = isRecentPrev ? 'text-[var(--text)] text-xs font-semibold leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+        // Recent last deliverable: chocolate tint (#d2691e), italic, still smaller than next deliverable
+        const prevTopClass = isRecentPrev ? 'text-[#d2691e] text-xs font-semibold italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+        const prevBottomClass = isRecentPrev ? 'text-[#d2691e] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         return (
           <div
             key={project.id}
@@ -160,7 +167,7 @@ const ProjectsTable: React.FC<Props> = ({
               {prevDeliverable ? (
                 <>
                   <div className={prevTopClass}>{prevTop}</div>
-                  <div className="text-[var(--muted)] text-xs leading-tight">{prevBottom || ''}</div>
+                  <div className={prevBottomClass}>{prevBottom || ''}</div>
                 </>
               ) : (
                 <div className="text-[var(--muted)] text-xs">-</div>
@@ -169,8 +176,8 @@ const ProjectsTable: React.FC<Props> = ({
             <div className="col-span-2">
               {nextDeliverable ? (
                 <>
-                  <div className="text-[var(--text)] font-medium leading-tight">{nextTop}</div>
-                  <div className="text-[var(--muted)] text-xs leading-tight">{nextBottom || ''}</div>
+                  <div className={nextTopClass}>{nextTop}</div>
+                  <div className={nextBottomClass}>{nextBottom || ''}</div>
                 </>
               ) : (
                 <div className="text-[var(--muted)] text-xs">-</div>
@@ -202,14 +209,20 @@ const ProjectsTable: React.FC<Props> = ({
           const nextTopRaw = nextDeliverable ? `${nextDeliverable.percentage != null ? `${nextDeliverable.percentage}% ` : ''}${nextDeliverable.description || ''}`.trim() : '';
           const nextTop = nextTopRaw || '-';
           const parseLocal = (s: string) => new Date((s || '').slice(0,10) + 'T00:00:00');
-          const nextBottom = nextDeliverable?.date ? parseLocal(nextDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+          const nextDate2 = nextDeliverable?.date ? parseLocal(nextDeliverable.date) : null;
+          const nextBottom = nextDate2 ? nextDate2.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+          const soonLimit2 = new Date(); soonLimit2.setHours(0,0,0,0); const soonEnd2 = new Date(soonLimit2.getTime() + 13*24*60*60*1000);
+          const isSoonNext2 = !!(nextDate2 && nextDate2 >= soonLimit2 && nextDate2 <= soonEnd2);
+          const nextTopClass2 = isSoonNext2 ? 'text-[#b22222] font-semibold leading-tight' : 'text-[var(--text)] font-medium leading-tight';
+          const nextBottomClass2 = isSoonNext2 ? 'text-[#b22222] text-xs leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           const prevTopRaw = prevDeliverable ? `${prevDeliverable.percentage != null ? `${prevDeliverable.percentage}% ` : ''}${prevDeliverable.description || ''}`.trim() : '';
           const prevTop = prevTopRaw || '-';
           const prevBottom = prevDeliverable?.date ? parseLocal(prevDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
           const today2 = new Date(); today2.setHours(0,0,0,0);
           const prevDate2 = prevDeliverable?.date ? parseLocal(prevDeliverable.date) : null;
           const isRecentPrev2 = !!(prevDate2 && prevDate2 <= today2 && (today2.getTime() - prevDate2.getTime()) <= 8*24*60*60*1000);
-          const prevTopClass2 = isRecentPrev2 ? 'text-[var(--text)] text-xs font-semibold leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+          const prevTopClass2 = isRecentPrev2 ? 'text-[#d2691e] text-xs font-semibold italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+          const prevBottomClass2 = isRecentPrev2 ? 'text-[#d2691e] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           return (
             <div
               key={project.id}
@@ -262,7 +275,7 @@ const ProjectsTable: React.FC<Props> = ({
                 {prevDeliverable ? (
                   <>
                     <div className={prevTopClass2}>{prevTop}</div>
-                    <div className="text-[var(--muted)] text-xs leading-tight">{prevBottom || ''}</div>
+                    <div className={prevBottomClass2}>{prevBottom || ''}</div>
                   </>
                 ) : (
                   <div className="text-[var(--muted)] text-xs">-</div>
@@ -271,8 +284,8 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="col-span-2">
                 {nextDeliverable ? (
                   <>
-                    <div className="text-[var(--text)] font-medium leading-tight">{nextTop}</div>
-                    <div className="text-[var(--muted)] text-xs leading-tight">{nextBottom || ''}</div>
+                    <div className={nextTopClass2}>{nextTop}</div>
+                    <div className={nextBottomClass2}>{nextBottom || ''}</div>
                   </>
                 ) : (
                   <div className="text-[var(--muted)] text-xs">-</div>

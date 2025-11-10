@@ -83,6 +83,10 @@ const ProjectsList: React.FC = () => {
         const d = p.id != null ? nextDeliverablesMap.get(p.id) : null;
         return d?.date || null;
       },
+      lastDue: (p) => {
+        const d = p.id != null ? prevDeliverablesMap.get(p.id) : null;
+        return d?.date || null;
+      },
     },
   });
 

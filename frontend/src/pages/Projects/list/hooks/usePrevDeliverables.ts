@@ -28,8 +28,8 @@ function pickMostRecent(deliverables: Deliverable[] | undefined): Deliverable | 
     .filter(d => !!d.date)
     .map(d => ({ d, when: parseLocal(d.date as string), completed: !!d.isCompleted }))
     .filter(x => !isNaN(x.when.getTime()))
-    // consider items up to today, or explicitly completed
-    .filter(x => x.when <= today || x.completed)
+    // consider items strictly before today (deliverables dated today should appear in "Next", not "Last")
+    .filter(x => x.when < today)
     .sort((a, b) => b.when.getTime() - a.when.getTime());
   return candidates.length > 0 ? candidates[0].d : null;
 }
@@ -86,4 +86,3 @@ export function usePrevDeliverables(projects: Project[] | null | undefined): Pre
 }
 
 export type UsePrevDeliverablesReturn = ReturnType<typeof usePrevDeliverables>;
-
