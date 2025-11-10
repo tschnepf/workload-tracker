@@ -71,6 +71,20 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
   const x = (i: number) => padLeft + i * step;
   const y = (v: number) => height - padV - (v * (height - 2 * padV)) / maxY;
 
+  // Hover state for tooltip/crosshair
+  const [hover, setHover] = React.useState<null | {
+    i: number;
+    roleId: number;
+    roleName: string;
+    x: number;
+    y: number; // anchor near assigned line
+    rawAssigned: number;
+    rawCapacity: number;
+    pctAssigned: number;
+    pctCapacity: number;
+    color: string;
+  }>(null);
+
   // Smooth line using Catmull-Rom -> cubic Bezier conversion
   const linePath = (vals: number[]) => {
     const pts = vals.map((v, i) => ({ x: x(i), y: y(v) }));
@@ -116,7 +130,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
   }
 
   return (
-    <div style={{ overflowX: 'auto', display: 'inline-block', maxWidth: '100%' }}>
+    <div style={{ overflowX: 'auto', display: 'inline-block', maxWidth: '100%', position: 'relative' }}>
       <svg width={width} height={height} role="img" aria-label="Role capacity vs assigned">
         {/* Axes */}
         <line x1={padLeft} y1={height - padV} x2={width - padRight} y2={height - padV} stroke="#4b5563" strokeWidth={1} />
@@ -149,6 +163,68 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
           );
         })}
 
+        {/* Hover crosshair + markers */}
+        {hover && (
+          <g pointerEvents="none">
+            {/* vertical line */}
+            <line x1={hover.x} y1={padV} x2={hover.x} y2={height - padV} stroke="#6b7280" strokeDasharray="3,3" />
+            {/* markers for hovered role */}
+            {(() => {
+              const sRaw = series.find((r) => r.roleId === hover.roleId);
+              if (!sRaw) return null;
+              const i = hover.i;
+              const color = hover.color;
+              const ay = y(normalized ? (sRaw.assigned[i] && sRaw.capacity[i] ? (sRaw.assigned[i] / (sRaw.capacity[i] || 1)) * 100 : 0) : (sRaw.assigned[i] || 0));
+              const cy = y(normalized ? (sRaw.capacity[i] > 0 ? 100 : 0) : (sRaw.capacity[i] || 0));
+              const ax = x(i);
+              return (
+                <g>
+                  <circle cx={ax} cy={ay} r={3} fill={color} />
+                  <circle cx={ax} cy={cy} r={3} fill={color} opacity={0.7} />
+                </g>
+              );
+            })()}
+          </g>
+        )}
+
+        {/* Transparent overlay to capture pointer events */}
+        <rect
+          x={padLeft}
+          y={padV}
+          width={width - padLeft - padRight}
+          height={height - 2 * padV}
+          fill="transparent"
+          onMouseLeave={() => setHover(null)}
+          onMouseMove={(e) => {
+            const ne = e.nativeEvent as any;
+            const offsetX: number = ne.offsetX;
+            const offsetY: number = ne.offsetY;
+            // Find nearest week index
+            let i = Math.round((offsetX - padLeft) / step);
+            i = Math.max(0, Math.min(weekKeys.length - 1, i));
+            const mx = x(i);
+            const my = offsetY;
+            // Choose nearest role series to cursor at this x
+            let best: null | { roleId: number; roleName: string; dist: number } = null;
+            for (const s of seriesData) {
+              const ay = y(s.assigned[i] || 0);
+              const cy = y(s.capacity[i] || 0);
+              const d = Math.min(Math.abs(ay - my), Math.abs(cy - my));
+              if (!best || d < best.dist) best = { roleId: s.roleId, roleName: s.roleName, dist: d };
+            }
+            if (!best) { setHover(null); return; }
+            const raw = series.find(r => r.roleId === best!.roleId);
+            if (!raw) { setHover(null); return; }
+            const rawAssigned = Number(raw.assigned[i] || 0);
+            const rawCapacity = Number(raw.capacity[i] || 0);
+            const pctAssigned = rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0;
+            const pctCapacity = rawCapacity > 0 ? 100 : 0;
+            const color = roleColorForId(best.roleId);
+            const ayPlot = y(normalized ? (rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0) : rawAssigned);
+            setHover({ i, roleId: best.roleId, roleName: best.roleName, x: mx, y: ayPlot, rawAssigned, rawCapacity, pctAssigned, pctCapacity, color });
+          }}
+        />
+
         {/* X labels */}
         {weekKeys.map((wk, i) => (
           <text key={wk} x={x(i)} y={height - padV + 14} fontSize={10} fill="#94a3b8" textAnchor="middle">
@@ -156,6 +232,22 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
           </text>
         ))}
       </svg>
+
+      {/* HTML tooltip rendered above the SVG (positioned within container) */}
+      {hover && (
+        <div
+          style={{ position: 'absolute', left: hover.x + 10, top: Math.max(8, hover.y - 36), pointerEvents: 'none', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}
+          role="tooltip"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ width: 10, height: 10, background: hover.color, borderRadius: 2, display: 'inline-block' }} />
+            <strong style={{ fontWeight: 600 }}>{hover.roleName}</strong>
+          </div>
+          <div style={{ color: 'var(--muted)' }}>{weekKeys[hover.i]}</div>
+          <div>Assigned: {Math.round(hover.rawAssigned)}h / Capacity: {Math.round(hover.rawCapacity)}h</div>
+          <div>Assigned: {Math.round(hover.pctAssigned)}% / Capacity: {hover.pctCapacity}%</div>
+        </div>
+      )}
 
       {/* Legend (optional) */}
       {!hideLegend && (
