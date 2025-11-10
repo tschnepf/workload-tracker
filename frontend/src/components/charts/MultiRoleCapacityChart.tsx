@@ -67,7 +67,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
   for (const s of seriesData) {
     for (const v of [...s.assigned, ...s.capacity]) maxY = Math.max(maxY, v || 0);
   }
-  maxY *= 1.15;
+  if (!normalized) maxY *= 1.15;
   const x = (i: number) => padLeft + i * step;
   const y = (v: number) => height - padV - (v * (height - 2 * padV)) / maxY;
 
@@ -97,7 +97,23 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     return d;
   };
 
-  const yTicks = Array.from({ length: 4 + 1 }, (_, i) => Math.round((maxY * i) / 4));
+  // Build y-axis ticks
+  let yTicks: number[] = [];
+  if (normalized) {
+    // Fixed percent ticks at 0,20,40,60,80,100
+    yTicks = [0, 20, 40, 60, 80, 100];
+  } else {
+    // Nice tick step around 10/50/100 (1-2-5 progression * power of ten)
+    const desired = 5;
+    const raw = maxY / desired;
+    const pow10 = Math.pow(10, Math.floor(Math.log10(Math.max(raw, 1e-6))));
+    const r = raw / pow10;
+    let step = 1;
+    if (r <= 1) step = 1; else if (r <= 2) step = 2; else if (r <= 5) step = 5; else step = 10;
+    step *= pow10;
+    const top = Math.ceil(maxY / step) * step;
+    for (let v = 0; v <= top + 1e-9; v += step) yTicks.push(Math.round(v));
+  }
 
   return (
     <div style={{ overflowX: 'auto', display: 'inline-block', maxWidth: '100%' }}>

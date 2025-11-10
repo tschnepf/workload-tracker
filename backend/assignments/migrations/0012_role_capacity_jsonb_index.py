@@ -6,19 +6,9 @@ def create_jsonb_gin_index(apps, schema_editor):
         return
     # Use a raw cursor to create index concurrently and safely ignore if exists
     with connection.cursor() as cur:
+        # Note: CONCURRENTLY cannot run inside a function; use standard creation with IF NOT EXISTS
         cur.execute(
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 FROM pg_class c
-                    JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE c.relname = 'ix_asn_weekly_hours_gin'
-                ) THEN
-                    EXECUTE 'CREATE INDEX CONCURRENTLY ix_asn_weekly_hours_gin ON assignments_assignment USING GIN (weekly_hours jsonb_ops)';
-                END IF;
-            END$$;
-            """
+            "CREATE INDEX IF NOT EXISTS ix_asn_weekly_hours_gin ON assignments_assignment USING GIN (weekly_hours jsonb_ops)"
         )
 
 
@@ -26,20 +16,7 @@ def drop_jsonb_gin_index(apps, schema_editor):
     if connection.vendor != 'postgresql':
         return
     with connection.cursor() as cur:
-        cur.execute(
-            """
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1 FROM pg_class c
-                    JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE c.relname = 'ix_asn_weekly_hours_gin'
-                ) THEN
-                    EXECUTE 'DROP INDEX CONCURRENTLY ix_asn_weekly_hours_gin';
-                END IF;
-            END$$;
-            """
-        )
+        cur.execute("DROP INDEX IF EXISTS ix_asn_weekly_hours_gin")
 
 
 class Migration(migrations.Migration):
@@ -52,4 +29,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(create_jsonb_gin_index, reverse_code=drop_jsonb_gin_index),
     ]
-
