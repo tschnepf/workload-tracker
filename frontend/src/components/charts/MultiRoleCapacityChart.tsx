@@ -37,6 +37,7 @@ export function roleColorForId(roleId: number): string {
 }
 
 export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension, hideLegend, height: heightProp }) => {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
   // Keep the chart frame visible even when series is empty (e.g., all roles deselected).
   // Only fall back to a small "No data" placeholder when there are no week keys to render an axis.
   if (!weekKeys?.length) return <div className="text-[var(--muted)]">No data</div>;
@@ -132,8 +133,17 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     for (let v = 0; v <= top + 1e-9; v += step) yTicks.push(Math.round(v));
   }
 
+  const tooltipRef = React.useRef<HTMLDivElement | null>(null);
+  const [ttSize, setTtSize] = React.useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  React.useLayoutEffect(() => {
+    if (tooltipRef.current) {
+      const r = tooltipRef.current.getBoundingClientRect();
+      setTtSize({ w: r.width, h: r.height });
+    }
+  }, [hover]);
+
   return (
-    <div style={{ overflowX: 'auto', display: 'inline-block', maxWidth: '100%', position: 'relative' }}>
+    <div ref={containerRef} style={{ overflowX: 'auto', display: 'inline-block', maxWidth: '100%', position: 'relative' }}>
       <svg width={width} height={height} role="img" aria-label="Role capacity vs assigned">
         {/* Axes */}
         <line x1={padLeft} y1={height - padV} x2={width - padRight} y2={height - padV} stroke="#4b5563" strokeWidth={1} />
@@ -239,11 +249,28 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
       </svg>
 
       {/* HTML tooltip rendered above the SVG (positioned within container) */}
-      {hover && (
-        <div
-          style={{ position: 'absolute', left: hover.x + 10, top: Math.max(8, hover.y - 36), pointerEvents: 'none', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}
-          role="tooltip"
-        >
+      {hover && (() => {
+        // Compute bounded tooltip position to avoid causing scrollbars
+        const tw = ttSize.w || 180;
+        const th = ttSize.h || 72;
+        let left = hover.x + 10;
+        if (left + tw > width - padRight) left = hover.x - tw - 10; // flip to left near right edge
+        if (left < padLeft + 4) left = padLeft + 4; // keep inside y-axis
+        // prefer above; if not enough room, place below; otherwise clamp to bottom padding
+        let top = hover.y - th - 8;
+        const maxTop = height - padV - th - 4;
+        if (top < padV + 4) {
+          const below = hover.y + 8;
+          top = (below + th <= height - padV) ? below : Math.max(padV + 4, maxTop);
+        } else if (top > maxTop) {
+          top = maxTop;
+        }
+        return (
+          <div
+            ref={tooltipRef}
+            style={{ position: 'absolute', left, top, pointerEvents: 'none', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}
+            role="tooltip"
+          >
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span style={{ width: 10, height: 10, background: hover.color, borderRadius: 2, display: 'inline-block' }} />
             <strong style={{ fontWeight: 600 }}>{hover.roleName}{hover.peopleCount != null ? ` (${hover.peopleCount})` : ''}</strong>
@@ -251,8 +278,9 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
           <div style={{ color: 'var(--muted)' }}>{weekKeys[hover.i]}</div>
           <div>Assigned: {Math.round(hover.rawAssigned)}h / Available: {Math.round(hover.availableHours)}h</div>
           <div>Assigned: {Math.round(hover.pctAssigned)}% / Available: {Math.round(hover.availablePct)}%</div>
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* Legend (optional) */}
       {!hideLegend && (
