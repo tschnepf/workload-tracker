@@ -155,7 +155,7 @@ const ProjectsTable: React.FC<Props> = ({
             <div className="col-span-2">
               {prevDeliverable ? (
                 <>
-                  <div className="text-[var(--text)] font-medium leading-tight">{prevTop}</div>
+                  <div className="text-[var(--muted)] text-xs leading-tight">{prevTop}</div>
                   <div className="text-[var(--muted)] text-xs leading-tight">{prevBottom || ''}</div>
                 </>
               ) : (
@@ -253,7 +253,7 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="col-span-2">
                 {prevDeliverable ? (
                   <>
-                    <div className="text-[var(--text)] font-medium leading-tight">{prevTop}</div>
+                    <div className="text-[var(--muted)] text-xs leading-tight">{prevTop}</div>
                     <div className="text-[var(--muted)] text-xs leading-tight">{prevBottom || ''}</div>
                   </>
                 ) : (
