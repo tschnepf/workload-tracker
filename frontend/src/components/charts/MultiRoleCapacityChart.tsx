@@ -5,6 +5,7 @@ export interface RoleSeries {
   roleName: string;
   assigned: number[]; // per week
   capacity: number[]; // per week
+  people?: number[]; // per week headcount (optional)
 }
 
 export type ChartMode = 'hours' | 'percent';
@@ -83,6 +84,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     pctAssigned: number;
     availableHours: number;
     availablePct: number;
+    peopleCount?: number;
     color: string;
   }>(null);
 
@@ -223,7 +225,8 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             const availablePct = rawCapacity > 0 ? Math.max(0, 100 - pctAssigned) : 0;
             const color = roleColorForId(best.roleId);
             const ayPlot = y(normalized ? (rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0) : rawAssigned);
-            setHover({ i, roleId: best.roleId, roleName: best.roleName, x: mx, y: ayPlot, rawAssigned, rawCapacity, pctAssigned, availableHours, availablePct, color });
+            const peopleCount = (raw.people && raw.people[i] != null) ? Number(raw.people[i]) : undefined;
+            setHover({ i, roleId: best.roleId, roleName: best.roleName, x: mx, y: ayPlot, rawAssigned, rawCapacity, pctAssigned, availableHours, availablePct, peopleCount, color });
           }}
         />
 
@@ -243,7 +246,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span style={{ width: 10, height: 10, background: hover.color, borderRadius: 2, display: 'inline-block' }} />
-            <strong style={{ fontWeight: 600 }}>{hover.roleName}</strong>
+            <strong style={{ fontWeight: 600 }}>{hover.roleName}{hover.peopleCount != null ? ` (${hover.peopleCount})` : ''}</strong>
           </div>
           <div style={{ color: 'var(--muted)' }}>{weekKeys[hover.i]}</div>
           <div>Assigned: {Math.round(hover.rawAssigned)}h / Available: {Math.round(hover.availableHours)}h</div>

@@ -631,6 +631,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'roleName': serializers.CharField(),
                     'assigned': serializers.ListField(child=serializers.FloatField()),
                     'capacity': serializers.ListField(child=serializers.FloatField()),
+                    'people': serializers.ListField(child=serializers.IntegerField(), required=False),
                 })),
             }
         )

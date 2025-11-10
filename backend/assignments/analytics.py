@@ -45,14 +45,19 @@ def _python_role_capacity(
         people_by_role.setdefault(rid, []).append((int(getattr(p, 'weekly_capacity', 0) or 0), getattr(p, 'hire_date', None)))
 
     caps: Dict[Tuple[str, int], float] = {}
+    heads: Dict[Tuple[str, int], int] = {}
     for rid, lst in people_by_role.items():
         for wk in week_keys:
             total = 0.0
+            count = 0
             for cap, hire in lst:
                 if hire and hire > wk:
                     continue
                 total += float(cap or 0)
-            caps[(wk.strftime('%Y-%m-%d'), rid)] = total
+                count += 1
+            k = (wk.strftime('%Y-%m-%d'), rid)
+            caps[k] = total
+            heads[k] = count
 
     # Assigned hours: iterate only requested week keys; string compare for hire gating
     asn_qs = Asn.objects.filter(is_active=True, person__is_active=True)
@@ -88,6 +93,7 @@ def _python_role_capacity(
             'roleName': r.name,
             'assigned': [float(assigned.get((wk, r.id), 0.0)) for wk in wk_strs],
             'capacity': [float(caps.get((wk, r.id), 0.0)) for wk in wk_strs],
+            'people': [int(heads.get((wk, r.id), 0)) for wk in wk_strs],
         })
 
     return wk_strs, roles_payload, series
@@ -126,14 +132,19 @@ def _postgres_role_capacity(
         people_by_role.setdefault(rid, []).append((int(getattr(p, 'weekly_capacity', 0) or 0), getattr(p, 'hire_date', None)))
 
     caps: Dict[Tuple[str, int], float] = {}
+    heads: Dict[Tuple[str, int], int] = {}
     for rid, lst in people_by_role.items():
         for wk in week_keys:
             total = 0.0
+            count = 0
             for cap, hire in lst:
                 if hire and hire > wk:
                     continue
                 total += float(cap or 0)
-            caps[(wk.strftime('%Y-%m-%d'), rid)] = total
+                count += 1
+            k = (wk.strftime('%Y-%m-%d'), rid)
+            caps[k] = total
+            heads[k] = count
 
     # Assigned hours via raw SQL
     assigned: Dict[Tuple[str, int], float] = {}
@@ -175,6 +186,7 @@ def _postgres_role_capacity(
             'roleName': r.name,
             'assigned': [float(assigned.get((wk, r.id), 0.0)) for wk in wk_strs],
             'capacity': [float(caps.get((wk, r.id), 0.0)) for wk in wk_strs],
+            'people': [int(heads.get((wk, r.id), 0)) for wk in wk_strs],
         })
 
     return wk_strs, roles_payload, series

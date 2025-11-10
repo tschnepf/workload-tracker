@@ -71,6 +71,6 @@ export async function getRoleCapacityTimeline(opts: { department?: number | null
   return res.data as unknown as {
     weekKeys: string[];
     roles: Array<{ id: number; name: string }>;
-    series: Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[] }>;
+    series: Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[]; people?: number[] }>;
   };
 }
