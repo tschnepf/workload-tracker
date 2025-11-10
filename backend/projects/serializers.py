@@ -19,10 +19,12 @@ class ProjectSerializer(serializers.ModelSerializer):
     isActive = serializers.BooleanField(source='is_active', default=True)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    # Scratch pad notes (rich-text HTML accepted)
+    notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     
     class Meta:
         model = Project
-        fields = ['id', 'name', 'status', 'client', 'description', 'projectNumber', 
+        fields = ['id', 'name', 'status', 'client', 'description', 'notes', 'projectNumber', 
                  'startDate', 'endDate', 'estimatedHours', 'isActive', 'createdAt', 'updatedAt']
         read_only_fields = ['id', 'createdAt', 'updatedAt']
 

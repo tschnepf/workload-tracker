@@ -35,6 +35,7 @@ export interface Project {
   status?: string;
   client?: string;
   description?: string;
+  notes?: string; // Rich-text scratch pad (HTML)
   startDate?: string;
   endDate?: string;
   estimatedHours?: number;

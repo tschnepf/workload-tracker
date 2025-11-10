@@ -20,6 +20,8 @@ class Project(models.Model):
     ], default='active')
     client = models.CharField(max_length=100, blank=True, default='Internal')
     description = models.TextField(blank=True)
+    # Rich text scratch pad / notes (HTML or Markdown stored as text)
+    notes = models.TextField(blank=True)
     
     # Dates (optional, add when needed)
     start_date = models.DateField(blank=True, null=True)
