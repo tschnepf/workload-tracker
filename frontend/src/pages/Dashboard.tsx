@@ -372,34 +372,35 @@ const Dashboard: React.FC = () => {
           </div>
         ) : null}
 
-        {/* Summary Stats Cards + Analytics */}
+        {/* Summary Stats + Analytics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-          <Card className="bg-[var(--card)] border-[var(--border)]">
-            <div className="text-[var(--muted)] text-sm">Total Team Members</div>
-            <div className="text-2xl font-bold text-[var(--text)]">{data.summary.total_people}</div>
-          </Card>
-          
-          <Card className="bg-[var(--card)] border-[var(--border)]">
-            <div className="text-[var(--muted)] text-sm">Average Utilization</div>
-            <div className="text-2xl font-bold text-blue-400">{data.summary.avg_utilization}%</div>
-          </Card>
-          
-          <Card className="bg-[var(--card)] border-[var(--border)]">
-            <div className="text-[var(--muted)] text-sm">Peak Utilization</div>
-            <div className="text-2xl font-bold text-amber-400">{data.summary.peak_utilization}%</div>
-            {data.summary.peak_person && (
-              <div className="text-xs text-[var(--muted)] mt-1">{data.summary.peak_person}</div>
-            )}
-          </Card>
-          
-          <Card className="bg-[var(--card)] border-[var(--border)]">
-            <div className="text-[var(--muted)] text-sm">Active Assignments</div>
-            <div className="text-2xl font-bold text-[var(--text)]">{data.summary.total_assignments}</div>
-          </Card>
-          
-          <Card className="bg-[var(--card)] border-[var(--border)]">
-            <div className="text-[var(--muted)] text-sm">Overallocated</div>
-            <div className="text-2xl font-bold text-red-400">{data.summary.overallocated_count}</div>
+          {/* Consolidated summary card (spans full width on large screens) */}
+          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div>
+                <div className="text-[var(--muted)] text-sm">Total Team Members</div>
+                <div className="text-2xl font-bold text-[var(--text)]">{data.summary.total_people}</div>
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-sm">Average Utilization</div>
+                <div className="text-2xl font-bold text-blue-400">{data.summary.avg_utilization}%</div>
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-sm">Peak Utilization</div>
+                <div className="text-2xl font-bold text-amber-400">{data.summary.peak_utilization}%</div>
+                {data.summary.peak_person && (
+                  <div className="text-xs text-[var(--muted)] mt-0.5">{data.summary.peak_person}</div>
+                )}
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-sm">Active Assignments</div>
+                <div className="text-2xl font-bold text-[var(--text)]">{data.summary.total_assignments}</div>
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-sm">Overallocated</div>
+                <div className="text-2xl font-bold text-red-400">{data.summary.overallocated_count}</div>
+              </div>
+            </div>
           </Card>
 
           {/* Future Assigned Hours by Status (compact) */}
