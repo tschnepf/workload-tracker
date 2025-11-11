@@ -556,3 +556,39 @@ pm audit reports 0 high/critical issues.
 
 
 - NEED TO ADD IN ADDITIONAL REPORTING DATA
+
+## Repo Root Declutter: Move Compose Files into docker/ with COMPOSE_FILE (Option A)
+
+Context
+- The repository root has many operational files (several docker-compose*.yml, setup scripts, samples) that make the file list long in GitHub.
+- We want to group these by purpose without breaking developer or production workflows.
+
+Decision
+- Adopt “Option A”: move compose files under `docker/` and rely on `COMPOSE_FILE` so `docker compose up` still works from the repo root.
+
+Scope & Steps
+1. File moves (no functional changes)
+   - Move `docker-compose.yml`, `docker-compose.override.yml` (dev) and `docker-compose.prod.yml` (prod) to `docker/`.
+   - Optional: Move Unraid and other deployment compose files to `docker/` or `deploy/` uniformly.
+2. Path adjustments in moved compose files
+   - Because compose resolves paths relative to the compose file location, update:
+     - `build.context: ./backend` → `../backend`
+     - `build.context: ./frontend` → `../frontend`
+     - Volume mounts `./nginx/...` → `../nginx/...`
+     - Any `env_file: .env` → `../.env` if used.
+3. Root .env update (prod and dev hosts)
+   - Add `COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.override.yml` (dev) and/or `COMPOSE_FILE=docker/docker-compose.prod.yml` (prod).
+   - Keep `COMPOSE_PROJECT_NAME=workload-tracker` for stable container names.
+4. Script/automation updates
+   - Update systemd/cron/CI scripts that call compose: either rely on `COMPOSE_FILE` or pass `-f docker/<file>.yml` explicitly.
+5. Validation
+   - From repo root: `docker compose config` (ensure paths resolve), `docker compose pull|build`, `docker compose up -d`.
+6. Rollout
+   - Zero‑downtime: `docker compose up -d --no-deps --build backend frontend nginx` on prod host.
+7. Rollback
+   - Temporarily run with explicit `-f` pointing to the old location or keep a one‑release shim file at root.
+
+Acceptance Criteria
+- Running `docker compose up -d` from the repo root continues to work for dev and prod (with COMPOSE_FILE set).
+- All build contexts and volume mounts resolve after the move.
+- CI and deployment scripts succeed without path errors.
