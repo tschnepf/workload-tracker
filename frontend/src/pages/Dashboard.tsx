@@ -403,13 +403,36 @@ const Dashboard: React.FC = () => {
             </div>
           </Card>
 
+          {/* Utilization Distribution (moved to top row, 1 column, vertical) */}
+          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-1 w-full">
+            <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Utilization Distribution</h3>
+            <div className="flex flex-col gap-6">
+              <div>
+                <div className="text-[var(--muted)] text-sm">Underutilized (&lt;70%)</div>
+                <div className="text-2xl font-bold text-emerald-400">{data.utilization_distribution.underutilized}</div>
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-sm">Optimal (70-85%)</div>
+                <div className="text-2xl font-bold text-blue-400">{data.utilization_distribution.optimal}</div>
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-sm">High (85-100%)</div>
+                <div className="text-2xl font-bold text-amber-400">{data.utilization_distribution.high}</div>
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-sm">Overallocated (&gt;100%)</div>
+                <div className="text-2xl font-bold text-red-400">{data.utilization_distribution.overallocated}</div>
+              </div>
+            </div>
+          </Card>
+
           {/* Future Assigned Hours by Status (compact) */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-1">
             <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
           </div>
 
           {/* Future Assigned Hours by Client (double width vs. compact) */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-1">
             <AssignedHoursByClientCard size={96} className="w-full" />
           </div>
 
@@ -778,28 +801,7 @@ const Dashboard: React.FC = () => {
         {/* Assigned Hours Timeline */}
         <AssignedHoursTimelineCard />
 
-        {/* Utilization Distribution */}
-        <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-1 w-full">
-          <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Utilization Distribution</h3>
-          <div className="flex flex-col gap-6">
-            <div>
-              <div className="text-[var(--muted)] text-sm">Underutilized (&lt;70%)</div>
-              <div className="text-2xl font-bold text-emerald-400">{data.utilization_distribution.underutilized}</div>
-            </div>
-            <div>
-              <div className="text-[var(--muted)] text-sm">Optimal (70-85%)</div>
-              <div className="text-2xl font-bold text-blue-400">{data.utilization_distribution.optimal}</div>
-            </div>
-            <div>
-              <div className="text-[var(--muted)] text-sm">High (85-100%)</div>
-              <div className="text-2xl font-bold text-amber-400">{data.utilization_distribution.high}</div>
-            </div>
-            <div>
-              <div className="text-[var(--muted)] text-sm">Overallocated (&gt;100%)</div>
-              <div className="text-2xl font-bold text-red-400">{data.utilization_distribution.overallocated}</div>
-            </div>
-          </div>
-        </Card>
+        {/* Utilization Distribution moved to top row */}
 
         {/* Recent Assignments */}
         {data.recent_assignments.length > 0 && (
