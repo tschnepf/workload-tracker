@@ -374,9 +374,9 @@ const Dashboard: React.FC = () => {
 
         {/* Summary Stats + Analytics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-          {/* Consolidated summary card (spans full width on large screens) */}
-          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-6">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {/* Consolidated summary card (narrow, vertical list) */}
+          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-2 max-w-sm">
+            <div className="flex flex-col gap-6">
               <div>
                 <div className="text-[var(--muted)] text-sm">Total Team Members</div>
                 <div className="text-2xl font-bold text-[var(--text)]">{data.summary.total_people}</div>
@@ -389,7 +389,7 @@ const Dashboard: React.FC = () => {
                 <div className="text-[var(--muted)] text-sm">Peak Utilization</div>
                 <div className="text-2xl font-bold text-amber-400">{data.summary.peak_utilization}%</div>
                 {data.summary.peak_person && (
-                  <div className="text-xs text-[var(--muted)] mt-0.5">{data.summary.peak_person}</div>
+                  <div className="text-xs text-[var(--muted)] mt-1">{data.summary.peak_person}</div>
                 )}
               </div>
               <div>
