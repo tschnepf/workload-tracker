@@ -18,3 +18,26 @@ export function formatUtcToLocal(
   }
 }
 
+/**
+ * Format a date string with weekday, e.g., "Mon, Nov 10, 2025".
+ * Accepts ISO date or YYYY-MM-DD. Returns empty string on invalid input.
+ */
+export function formatDateWithWeekday(
+  iso: string | null | undefined,
+  includeYear: boolean = true
+): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const opts: Intl.DateTimeFormatOptions = {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    };
+    if (includeYear) opts.year = 'numeric';
+    return new Intl.DateTimeFormat(undefined, opts).format(d);
+  } catch {
+    return '';
+  }
+}

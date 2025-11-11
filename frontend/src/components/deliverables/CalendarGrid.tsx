@@ -3,6 +3,7 @@ import { useProjectQuickViewPopover } from '@/components/projects/quickview';
 import { useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/services/api';
 import { fmtDate, typeColors, classify, buildEventLabel, buildPreLabel, startOfWeekSunday } from './calendar.utils';
+import { formatDateWithWeekday } from '@/utils/dates';
 
 // Presentational pill for a single deliverable
 type PillProps = {
@@ -17,6 +18,7 @@ type PillProps = {
 const DeliverablePill: React.FC<PillProps> = ({ ev, pid, dim, onHover, onClear, onKey }) => {
   const color = typeColors[classify(ev)] || typeColors.milestone;
   const label = buildEventLabel(ev);
+  const when = formatDateWithWeekday((ev as any)?.date as string | undefined);
   const { open } = useProjectQuickViewPopover();
   const queryClient = useQueryClient();
   const prefetchTimerRef = React.useRef<number | null>(null);
@@ -27,7 +29,7 @@ const DeliverablePill: React.FC<PillProps> = ({ ev, pid, dim, onHover, onClear, 
   return (
     <div
       key={`deliverable-${ev.id}-${ev.date}`}
-      title={label}
+      title={when ? `${when} — ${label}` : label}
       role="button"
       tabIndex={0}
       onMouseDown={() => { ignoreNextFocusRef.current = true; }}
@@ -82,9 +84,11 @@ const PreDeliverableGroupCard: React.FC<PreGroupProps> = ({ arr, dayKey, pid, di
   const many = arr.length > 1;
   const header = [projectClient, projectName].filter(Boolean).join(' ').trim() || projectName || 'Project';
   const bulletItems = arr.map((it: any) => (it.preDeliverableType || it.title || '').trim()).filter(Boolean);
-  const titleAttr = many
+  const titleCore = many
     ? `${header}\n- ${bulletItems.join('\n- ')}`
     : `${projectClient ? projectClient + ' ' : ''}${projectName} ${bulletItems[0] || ''}`.trim();
+  const when = formatDateWithWeekday((first as any)?.date || dayKey);
+  const titleAttr = when ? `${when}\n${titleCore}` : titleCore;
   const keyBase = `pre-group-${first.project ?? projectName}-${first?.date || dayKey}`;
   return (
     <div

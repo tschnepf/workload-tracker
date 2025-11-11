@@ -11,6 +11,7 @@ import type { Project, Assignment, Person } from '@/types/models';
 import { showToast } from '@/lib/toastBus';
 import { useAbortManager } from '@/utils/useAbortManager';
 import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
+import { formatDateWithWeekday } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
@@ -128,7 +129,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [deliverablesByProjectWeek, setDeliverablesByProjectWeek] = useState<Record<number, Record<string, number>>>({});
   const [hasFutureDeliverablesByProject, setHasFutureDeliverablesByProject] = useState<Set<number>>(new Set());
   // Deliverable types per project/week for vertical bar rendering
-  const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, { type: string; percentage?: number }[]>>>({});
+  const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, { type: string; percentage?: number; dates?: string[] }[]>>>({});
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
   const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
@@ -611,20 +612,21 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const pidList = projects.map(p => p.id!).filter(Boolean) as number[];
         const map: Record<number, Record<string, { type: string; percentage?: number }[]>> = {};
 
-        const addEntry = (pid: number, weekKey: string, type: string, percentage?: number) => {
+        const addEntry = (pid: number, weekKey: string, type: string, percentage?: number, dateStr?: string) => {
           if (!map[pid]) map[pid] = {};
           if (!map[pid][weekKey]) map[pid][weekKey] = [];
           const arr = map[pid][weekKey];
           const numPct = (percentage == null || Number.isNaN(Number(percentage))) ? undefined : Number(percentage);
-          const existing = arr.find(e => e.type === type);
+          const existing = arr.find(e => e.type === type && (e.percentage ?? undefined) === (numPct ?? undefined));
           if (existing) {
             if ((existing.percentage == null) && (numPct != null)) existing.percentage = numPct;
-            else if (existing.percentage != null && numPct != null && existing.percentage !== numPct) {
-              if (!arr.some(e => e.type === type && e.percentage === numPct)) arr.push({ type, percentage: numPct });
+            if (dateStr) {
+              existing.dates = Array.from(new Set([...(existing.dates || []), dateStr]));
             }
             return;
           }
-          arr.push({ type, percentage: numPct });
+          const entry = { type, percentage: numPct, dates: dateStr ? [dateStr] : undefined } as { type: string; percentage?: number; dates?: string[] };
+          arr.push(entry);
         };
 
         // Prefer the authoritative calendar API for the visible window
@@ -639,7 +641,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
               const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
               const title = (it as any).title as string | undefined; const type = classifyDeliverable(title);
               let pct: number | undefined = undefined; if (title) { const m = title.match(/(\d{1,3})\s*%/); if (m) { const n = parseInt(m[1], 10); if (!Number.isNaN(n) && n >= 0 && n <= 100) pct = n; } }
-              addEntry(pid, wr.key, type, pct);
+              addEntry(pid, wr.key, type, pct, dtStr);
             }
             loadedViaCalendar = true;
           }
@@ -656,7 +658,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
               const dt = new Date(d.date);
               const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
               const type = classifyDeliverable((d.description || '').toString());
-              addEntry(pid, wr.key, type, d.percentage == null ? undefined : Number(d.percentage));
+              addEntry(pid, wr.key, type, d.percentage == null ? undefined : Number(d.percentage), (d as any).date as string | undefined);
             }
           }
           if (Object.keys(map).length === 0) {
@@ -670,7 +672,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
                 const type = classifyDeliverable(((d as any).description || '').toString());
                 const pct = (d as any).percentage == null ? undefined : Number((d as any).percentage);
-                addEntry(pid, wr.key, type, pct);
+                addEntry(pid, wr.key, type, pct, (d as any).date as string | undefined);
               }
             } catch { /* ignore */ }
           }
@@ -1236,7 +1238,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       const v = (hoursByProject[p.id!] || {})[w.date] || 0;
                       const entries = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || [];
                       return (
-                        <div key={w.date} className="relative py-2 flex items-center justify-center text-[var(--text)] text-xs font-medium border-l border-[var(--border)]" title={entries.length ? entries.map(e => `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`).join('\n') : undefined}>
+                    <div key={w.date} className="relative py-2 flex items-center justify-center text-[var(--text)] text-xs font-medium border-l border-[var(--border)]" title={(() => { const dtHeader = formatDateWithWeekday(w.date); const lines = entries.length ? entries.flatMap(e => { const ds = (e as any).dates as string[] | undefined; const base = `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`; if (ds && ds.length) { return ds.map(d => `${formatDateWithWeekday(d)} — ${base}`); } return [`${dtHeader} — ${base}`]; }).join('\n') : undefined; return lines; })()}>
                           {v > 0 ? v : ''}
                           {entries.length > 0 && (
                             <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px]">
@@ -1442,7 +1444,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                 onClick={(e) => selection.onCellSelect(String(asn.id), w.date, (e as any).shiftKey)}
                                 onDoubleClick={() => { setEditingCell({ rowKey: String(asn.id), weekKey: w.date }); setEditingValue(hours ? String(hours) : ''); }}
                                 aria-selected={selection.isCellSelected(String(asn.id), w.date)}
-                                title={(() => { const entries = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || []; return entries.length ? entries.map(e => `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`).join('\n') : undefined; })()}
+                                title={(() => { const entries = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || []; const dtHeader = formatDateWithWeekday(w.date); return entries.length ? entries.flatMap(e => { const ds = (e as any).dates as string[] | undefined; const base = `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`; if (ds && ds.length) { return ds.map(d => `${formatDateWithWeekday(d)} — ${base}`); } return [`${dtHeader} — ${base}`]; }).join('\n') : undefined; })()}
                                 tabIndex={0}
                                 onKeyDown={(e) => {
                                   if (isEditing) return;

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Deliverable } from '@/types/models';
 import { deliverableTypeColors, classifyDeliverableType } from '@/util/deliverables';
+import { formatDateWithWeekday } from '@/utils/dates';
 
 export interface DeliverableEntry { type: string; percentage?: number }
 
@@ -41,6 +42,8 @@ export function useDeliverableBars(deliverablesForWeek: Deliverable[] | undefine
     return deliverablesForWeek
       .map(d => {
         const title = (d as any).description ?? (d as any).title ?? '';
+        const dateStr = (d as any).date as string | undefined;
+        const when = formatDateWithWeekday(dateStr);
         const pctVal = (d as any).percentage;
         let pct: number | undefined = undefined;
         if (pctVal != null && !Number.isNaN(Number(pctVal))) pct = Number(pctVal);
@@ -50,7 +53,8 @@ export function useDeliverableBars(deliverablesForWeek: Deliverable[] | undefine
         }
         const pctStr = pct != null ? `${pct}% ` : '';
         const notes = (d as any).notes ? ` - ${(d as any).notes}` : '';
-        return `${pctStr}${title}${notes}`.trim();
+        const main = `${pctStr}${title}${notes}`.trim();
+        return when ? `${when} — ${main}` : main;
       })
       .filter(Boolean)
       .join('\n');
