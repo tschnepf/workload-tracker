@@ -12,11 +12,11 @@ import UtilizationBadge from '../components/ui/UtilizationBadge';
 import { utilizationLevelToClasses, getUtilizationPill, defaultUtilizationScheme, utilizationLevelToTokens } from '@/util/utilization';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import SkillsFilter from '../components/skills/SkillsFilter';
-import { dashboardApi, departmentsApi, personSkillsApi, projectsApi } from '../services/api';
+import { dashboardApi, departmentsApi, personSkillsApi, projectsApi, peopleApi, rolesApi } from '../services/api';
 import { useAuth } from '@/hooks/useAuth';
 import { formatUtcToLocal } from '@/utils/dates';
 import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
-import { DashboardData, Department, PersonSkill } from '../types/models';
+import { DashboardData, Department, PersonSkill, Role } from '../types/models';
 import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
@@ -42,6 +42,10 @@ const Dashboard: React.FC = () => {
   const [projectCounts, setProjectCounts] = useState<Record<string, number>>({});
   const [projectsTotal, setProjectsTotal] = useState<number>(0);
   const [projectsError, setProjectsError] = useState<string | null>(null);
+  // People metadata (hire date, active) for availability filtering
+  const [peopleMeta, setPeopleMeta] = useState<Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>>(new Map());
+  // Roles (ordered by settings sort_order)
+  const [roles, setRoles] = useState<Role[]>([]);
 
   // Display helper to format project status labels nicely
   const formatStatusLabel = (raw: string | undefined | null): string => {
@@ -76,6 +80,42 @@ const Dashboard: React.FC = () => {
     if (!auth.accessToken) return;
     loadProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.accessToken]);
+
+  // Load people metadata for availability filters (respect department scope)
+  useAuthenticatedEffect(() => {
+    if (!auth.accessToken) return;
+    (async () => {
+      try {
+        const list = await peopleApi.listAll({
+          department: deptState.selectedDepartmentId ?? undefined,
+          include_children: deptState.includeChildren ? 1 : 0,
+        });
+        const m = new Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>();
+        for (const p of list) {
+          if (p.id != null) m.set(p.id, { isActive: p.isActive, hireDate: p.hireDate || undefined, roleId: (p as any).role ?? null, roleName: (p as any).roleName ?? null });
+        }
+        setPeopleMeta(m);
+      } catch (err) {
+        // Non-fatal; fall back to backend heatmap filtering
+        console.warn('Failed to load people metadata for availability filtering:', err);
+        setPeopleMeta(new Map());
+      }
+    })();
+  }, [auth.accessToken, deptState.selectedDepartmentId, deptState.includeChildren]);
+
+  // Load ordered roles for grouping
+  useAuthenticatedEffect(() => {
+    if (!auth.accessToken) return;
+    (async () => {
+      try {
+        const list = await rolesApi.listAll();
+        setRoles(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.warn('Failed to load roles for availability grouping:', err);
+        setRoles([]);
+      }
+    })();
   }, [auth.accessToken]);
 
   const heatQuery = useCapacityHeatmap({ departmentId: deptState.selectedDepartmentId, includeChildren: deptState.includeChildren }, heatWeeks, !loading && !!auth.accessToken);
@@ -431,10 +471,120 @@ const Dashboard: React.FC = () => {
             <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
           </div>
 
-          {/* Future Assigned Hours by Client (double width vs. compact) */}
+          {/* Future Assigned Hours by Client (double width vs. compact) */
+          }
           <div className="lg:col-span-1">
             <AssignedHoursByClientCard size={96} className="w-full" />
           </div>
+
+          {/* Availability (1 column, top row) */}
+          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-1">
+            <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Availability</h3>
+            {heatData && heatData.length > 0 && currentWeekKey ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr className="text-[var(--muted)]">
+                      <th className="text-left py-1 pr-2">Name</th>
+                      <th className="text-right py-1 px-2">Current Week</th>
+                      <th className="text-right py-1 pl-2">Next Week</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const rows = heatData
+                        .map((row: any) => {
+                          const wkCap = Number(row.weeklyCapacity || 0);
+                          const curH = Number(row.weekTotals?.[currentWeekKey] || 0);
+                          const nextH = nextWeekKey ? Number(row.weekTotals?.[nextWeekKey] || 0) : 0;
+                          const curAvail = Math.max(
+                            0,
+                            typeof row.availableByWeek?.[currentWeekKey] === 'number'
+                              ? row.availableByWeek[currentWeekKey]
+                              : wkCap - curH
+                          );
+                          const nextAvail = nextWeekKey
+                            ? Math.max(
+                                0,
+                                typeof row.availableByWeek?.[nextWeekKey] === 'number'
+                                  ? row.availableByWeek[nextWeekKey]
+                                  : wkCap - nextH
+                              )
+                            : 0;
+                          return { id: row.id, name: row.name, curAvail, nextAvail };
+                        })
+                        .filter((r: any) => {
+                          // Exclude inactive or future hires
+                          const meta = peopleMeta.get(r.id);
+                          if (meta && meta.isActive === false) return false;
+                          if (meta && meta.hireDate) {
+                            // Compare as dates (hireDate is YYYY-MM-DD)
+                            const today = new Date();
+                            const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                            const hire = new Date(`${meta.hireDate}T00:00:00`);
+                            if (hire > todayMid) return false;
+                          }
+                          return r.curAvail > 0 || r.nextAvail > 0;
+                        })
+                        .sort((a: any, b: any) => b.curAvail - a.curAvail || b.nextAvail - a.nextAvail);
+
+                      const filtered = selectedSkills.length
+                        ? rows.filter((r: any) =>
+                            peopleSkills.some(
+                              (ps) =>
+                                ps.person === r.id &&
+                                ps.skillType === 'strength' &&
+                                selectedSkills.some((s) => (ps.skillTagName || '').toLowerCase().includes(s.toLowerCase()))
+                            )
+                          )
+                        : rows;
+
+                      // Group by role using ordered roles from settings
+                      const byRole = new Map<number | null, typeof filtered>();
+                      for (const item of filtered) {
+                        const meta = peopleMeta.get(item.id);
+                        const rid = (meta && typeof meta.roleId !== 'undefined') ? (meta.roleId as number | null) : null;
+                        const arr = byRole.get(rid) || [];
+                        arr.push(item);
+                        byRole.set(rid, arr);
+                      }
+
+                      // Build display order: roles from settings in order, then unassigned/null
+                      const orderIds: Array<number | null> = [...roles.map(r => r.id), null];
+                      const elements: JSX.Element[] = [];
+                      for (const rid of orderIds) {
+                        const group = byRole.get(rid) || [];
+                        if (!group.length) continue;
+                        const roleName = rid == null ? 'Unassigned' : (roles.find(r => r.id === rid)?.name || 'Unknown');
+                        elements.push(
+                          <tr key={`role-${rid ?? 'none'}`}>
+                            <td colSpan={3} className="pt-2">
+                              <div className="font-semibold text-[var(--text)]">{roleName}</div>
+                            </td>
+                          </tr>
+                        );
+                        // Sort within role by availability desc (current then next)
+                        group.sort((a: any, b: any) => b.curAvail - a.curAvail || b.nextAvail - a.nextAvail);
+                        for (const r of group) {
+                          elements.push(
+                            <tr key={`p-${rid ?? 'none'}-${r.id}`} className="border-t border-[var(--border)]">
+                              <td className="py-1 pr-2 text-[var(--text)] pl-3">{r.name}</td>
+                              <td className="py-1 px-2 text-right text-emerald-400">{r.curAvail.toFixed(0)}h</td>
+                              <td className="py-1 pl-2 text-right text-emerald-400">{r.nextAvail.toFixed(0)}h</td>
+                            </tr>
+                          );
+                        }
+                      }
+
+                      return elements;
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-[var(--muted)] text-sm">{heatLoading ? 'Loading.' : 'No data'}</div>
+            )}
+          </Card>
 
           {/* Role Capacity vs Assigned by Role (placed to the right of client card) */}
           <div className="lg:col-span-6">
@@ -568,49 +718,7 @@ const Dashboard: React.FC = () => {
             )}
           </Card>
 
-          {/* Availability (stacked under Team Members) */}
-          <Card className="bg-[var(--card)] border-[var(--border)]">
-            <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Availability</h3>
-            {heatData && heatData.length > 0 && currentWeekKey ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm" style={{ borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr className="text-[var(--muted)]">
-                      <th className="text-left py-1 pr-2">Name</th>
-                      <th className="text-right py-1 px-2">Current Week</th>
-                      <th className="text-right py-1 pl-2">Next Week</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const rows = heatData.map((row:any) => {
-                        const wkCap = Number(row.weeklyCapacity || 0);
-                        const curH = Number(row.weekTotals?.[currentWeekKey] || 0);
-                        const nextH = nextWeekKey ? Number(row.weekTotals?.[nextWeekKey] || 0) : 0;
-                        const curAvail = Math.max(0, (typeof row.availableByWeek?.[currentWeekKey] === 'number') ? row.availableByWeek[currentWeekKey] : wkCap - curH);
-                        const nextAvail = nextWeekKey ? Math.max(0, (typeof row.availableByWeek?.[nextWeekKey] === 'number') ? row.availableByWeek[nextWeekKey] : wkCap - nextH) : 0;
-                        return { id: row.id, name: row.name, curAvail, nextAvail };
-                      })
-                      .filter(r => r.curAvail > 0 || r.nextAvail > 0)
-                      .sort((a,b) => b.curAvail - a.curAvail || b.nextAvail - a.nextAvail);
-                      const filtered = selectedSkills.length ? rows.filter(r => {
-                        return peopleSkills.some(ps => ps.person === r.id && ps.skillType === 'strength' && selectedSkills.some(s => (ps.skillTagName||'').toLowerCase().includes(s.toLowerCase())));
-                      }) : rows;
-                      return filtered.slice(0, 30).map(r => (
-                        <tr key={r.id} className="border-t border-[var(--border)]">
-                          <td className="py-1 pr-2 text-[var(--text)]">{r.name}</td>
-                          <td className="py-1 px-2 text-right text-emerald-400">{r.curAvail.toFixed(0)}h</td>
-                          <td className="py-1 pl-2 text-right text-emerald-400">{r.nextAvail.toFixed(0)}h</td>
-                        </tr>
-                      ));
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-[var(--muted)] text-sm">{heatLoading ? 'Loading.' : 'No data'}</div>
-            )}
-          </Card>
+          {/* Availability moved to top row */}
 
           
 
