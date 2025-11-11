@@ -551,7 +551,7 @@ const Dashboard: React.FC = () => {
 
                       // Build display order: roles from settings in order, then unassigned/null
                       const orderIds: Array<number | null> = [...roles.map(r => r.id), null];
-                      const elements: JSX.Element[] = [];
+                      const elements: React.ReactElement[] = [];
                       for (const rid of orderIds) {
                         const group = byRole.get(rid) || [];
                         if (!group.length) continue;
