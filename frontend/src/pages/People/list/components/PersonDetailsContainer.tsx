@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Department, Person, PersonSkill, Role } from '@/types/models';
-import { personSkillsApi } from '@/services/api';
+import { personSkillsApi, jobsApi } from '@/services/api';
 import { useUpdatePerson, useDeletePerson } from '@/hooks/usePeople';
 import { showToast } from '@/lib/toastBus';
 import PersonDetailsPanel from '@/pages/People/list/components/PersonDetailsPanel';
@@ -104,8 +104,31 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
       setError(null);
       const fieldValue = overrideValue !== undefined ? overrideValue : (editingPersonData as any)[field];
       const updateData = { [field]: fieldValue } as Partial<Person>;
-      await updatePersonMutation.mutateAsync({ id: person.id, data: updateData });
+      const result = await updatePersonMutation.mutateAsync({ id: person.id, data: updateData }) as any;
       showToast('Saved changes', 'success');
+      // If marking inactive, surface background cleanup job start + completion
+      if (field === 'isActive' && fieldValue === false) {
+        try { showToast('Deactivation cleanup started in background', 'info'); } catch {}
+        const jobId: string | undefined = result?._jobId;
+        if (jobId) {
+          // Poll job status until completion or timeout (~2 minutes)
+          (async () => {
+            const start = Date.now();
+            let lastState = '';
+            while (Date.now() - start < 120000 /* 2 min */) {
+              try {
+                const st = await jobsApi.getStatus(jobId);
+                if (st?.state && st.state !== lastState) {
+                  lastState = st.state;
+                }
+                if (st?.state === 'SUCCESS') { try { showToast('Deactivation cleanup completed', 'success'); } catch {} break; }
+                if (st?.state === 'FAILURE') { try { showToast('Deactivation cleanup failed', 'error'); } catch {} break; }
+              } catch {}
+              await new Promise(r => setTimeout(r, 2000));
+            }
+          })();
+        }
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to update');
       showToast('Failed to update', 'error');

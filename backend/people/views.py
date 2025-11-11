@@ -120,6 +120,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         instance.refresh_from_db()
 
         now_inactive = was_active and (not instance.is_active)
+        job_id = None
         if now_inactive:
             try:
                 actor_id = getattr(getattr(request, 'user', None), 'id', None)
@@ -127,7 +128,11 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 actor_id = None
             try:
                 if deactivate_person_cleanup_task is not None:
-                    deactivate_person_cleanup_task.delay(instance.id, 'all', actor_id)
+                    task = deactivate_person_cleanup_task.delay(instance.id, 'all', actor_id)
+                    try:
+                        job_id = getattr(task, 'id', None)
+                    except Exception:
+                        job_id = None
                 else:
                     # Fallback synchronous path
                     deactivate_person_cleanup(instance.id, zero_mode='all', actor_user_id=actor_id)
@@ -135,7 +140,15 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 # Non-fatal: the person is already inactive; aggregates will eventually reflect
                 pass
 
-        return Response(serializer.data)
+        resp = Response(serializer.data)
+        # Surface async job metadata via headers without changing response schema
+        if job_id:
+            try:
+                resp['X-Job-Id'] = str(job_id)
+                resp['X-Job-Status-Url'] = request.build_absolute_uri(f"/api/jobs/{job_id}/")
+            except Exception:
+                pass
+        return resp
     
     @extend_schema(
         parameters=[

@@ -347,7 +347,16 @@ export const peopleApi = {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
-    return res.data as unknown as Person;
+    // Capture optional async job headers (when backend enqueues background work)
+    let jobId: string | undefined;
+    let jobStatusUrl: string | undefined;
+    try {
+      const h = res.response?.headers;
+      jobId = h?.get?.('X-Job-Id') ?? undefined;
+      jobStatusUrl = h?.get?.('X-Job-Status-Url') ?? undefined;
+    } catch {}
+    const person = res.data as unknown as Person;
+    return { ...(person as any), _jobId: jobId, _jobStatusUrl: jobStatusUrl } as Person & { _jobId?: string; _jobStatusUrl?: string };
   },
 
   // Delete person
