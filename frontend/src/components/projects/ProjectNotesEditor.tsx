@@ -86,11 +86,10 @@ export default function ProjectNotesEditor({ projectId, initialJson, initialHtml
         </div>
       </div>
       <div className="p-3">
-        <div className="pm-editor ProseMirror min-h-[160px] bg-[var(--surface)] border border-[var(--border)] rounded p-2 text-[var(--text)]" onKeyDown={(e)=>{e.stopPropagation();}}>
+        <div className="pm-editor min-h-[160px] bg-[var(--surface)] border border-[var(--border)] rounded p-2 text-[var(--text)]" onKeyDown={(e)=>{e.stopPropagation();}}>
           {editor && <EditorContent editor={editor} />}
         </div>
       </div>
     </div>
   );
 }
-
