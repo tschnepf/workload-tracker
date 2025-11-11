@@ -375,7 +375,7 @@ const Dashboard: React.FC = () => {
         {/* Summary Stats + Analytics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
           {/* Consolidated summary card (narrow, vertical list) */}
-          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-2 max-w-sm">
+          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-2 w-full">
             <div className="flex flex-col gap-6">
               <div>
                 <div className="text-[var(--muted)] text-sm">Total Team Members</div>
@@ -404,7 +404,9 @@ const Dashboard: React.FC = () => {
           </Card>
 
           {/* Future Assigned Hours by Status (compact) */}
-          <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
+          <div className="lg:col-span-2">
+            <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
+          </div>
 
           {/* Future Assigned Hours by Client (double width vs. compact) */}
           <div className="lg:col-span-2">
