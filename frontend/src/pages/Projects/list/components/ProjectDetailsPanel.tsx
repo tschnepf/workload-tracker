@@ -458,6 +458,13 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               {deliverablesSlot}
             </div>
             <ProjectPreDeliverableSettings projectId={project.id || null} />
+            {/* Project Notes (TipTap) placed in the same left column to match width behavior */}
+            <ProjectNotesEditor
+              projectId={project.id!}
+              initialJson={(project as any).notesJson as any}
+              initialHtml={(localPatch as any).notes ?? (project as any).notes}
+              canEdit={canEdit}
+            />
           </div>
 
           {/* Right column: stack department cards vertically */}
@@ -624,15 +631,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             </div>
           )}
         </div>
-        {/* Project Notes (TipTap) */}
-        <div className="mt-4">
-          <ProjectNotesEditor
-            projectId={project.id!}
-            initialJson={(project as any).notesJson as any}
-            initialHtml={(localPatch as any).notes ?? (project as any).notes}
-            canEdit={canEdit}
-          />
-        </div>
+        
       
     </>
   );
