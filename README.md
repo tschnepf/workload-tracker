@@ -1,391 +1,201 @@
-# Workload Tracker - User Guide
+Workload Tracker — User Guide
 
-**Professional resource management and workload allocation system**
-
-## 📋 Overview
-
-Workload Tracker is a comprehensive team management application designed to help managers efficiently allocate resources, track utilization, and optimize team performance. Built with a dark, professional interface optimized for productivity.
-
-## 🚀 Key Features
-
-### 👥 **People Management**
-Comprehensive team member management with capacity tracking.
-
-**What you can do:**
-- **Add Team Members**: Create profiles with name, weekly capacity (hours), role, and department assignment
-- **Edit Team Information**: Update capacity, roles, department assignments, and contact details
-- **Track Skills & Expertise**: Tag team members with their strengths, areas for improvement, and current learning goals
-- **View Team Directory**: Search and filter team members by name, department, or role
-- **Capacity Planning**: Set individual weekly hour capacities (default 36h, customizable 1-80h)
-
-**How to use:**
-1. Navigate to **People** in the sidebar
-2. Click **"+ New"** to add team members
-3. Fill in basic information (name and capacity are required)
-4. Assign to departments and add skill tags as needed
-5. Use the search bar to quickly find team members
+Welcome to Workload Tracker. This guide explains, in plain language, what you can do on each page and how to get your work done. It is written for everyday users and managers — no technical background is required.
 
 
-## My Work (Personal Dashboard)
+Getting Started
+- Sign in at the login screen with your account.
+- If you forget your password, use “Forgot password?” to receive a reset link.
+- After signing in, you will land on “My Work” or the Team Dashboard depending on your settings.
 
-A focused, personal view showing your assignments, upcoming pre-deliverables, near-term schedule, and alerts.
 
-- Where: Sidebar ? "My Work" (`/my-work`) � visible when enabled by administrators
-- What you'll see:
-  - Summary: your utilization %, allocated vs available hours for the current week
-  - Pre-deliverables: your due/overdue pre-items (e.g., Specs, TOC) with quick complete actions
-  - Deliverables: next milestones across your active projects
-  - Projects: your projects with next milestone dates
-  - Schedule: compact week-by-week capacity strip
-- Performance: page prefetches when you hover; second visits are faster due to caching and ETags
+Navigation Overview
+- My Work: Your personal overview — assignments, milestones, and schedule.
+- Dashboard: Organization‑wide snapshot of workload and upcoming items.
+- Assignments: Spreadsheet‑style planning by person. Add and adjust weekly hours.
+- Project Assignments: Planning by project. See who is assigned and when.
+- Projects: Create, edit, and manage projects and their milestones.
+- People: Browse the team, filter by department/location, and make updates.
+- Departments: Manage departments, view manager tools, and see the org chart.
+- Deliverables Calendar: Week‑by‑week timeline of upcoming milestones.
+- Reports: Role capacity, team forecast, and personal experience insights.
+- Settings: System and admin tools such as roles, backups, and calendar feeds.
+- Profile: Update your name, password, and color theme.
+
+
+Page‑by‑Page Guide
+
+1) My Work
+- Purpose: A personal cockpit showing your projects, milestones, and schedule.
+- What you’ll see:
+  - Summary of items that need attention (for example, overdue milestones).
+  - Your projects list and upcoming milestones.
+  - A compact calendar with your upcoming work.
+  - A weekly schedule strip showing capacity versus planned hours.
 - Tips:
-  - Link your account to a Person profile (admin can assist) to enable this view
-  - Use quick actions to open Assignments and Calendar scoped to you
-
-Administrators
-- Toggle availability via `PERSONAL_DASHBOARD` flag (frontend) and feature flags in backend settings
-- Capabilities endpoint (`/api/capabilities/`) advertises `personalDashboard: true` for client gating
-- Aggregated endpoint: `GET /api/personal/work/` (ETag + short-TTL cache)
-
-------
-
-## Serializer & Naming Discipline
-
-Centralize snake_case → camelCase mapping in DRF serializers; avoid hand‑mapping in views.
-
-- Backend: Use serializers for both model and aggregate responses (see `docs/NAMING-DISCIPLINE.md`).
-- Frontend: Use typed models in `frontend/src/types/models.ts`; do not manually rename fields in components.
-
----
-
-## Structured JSON Logs
-
-The backend emits JSON logs for each HTTP request (includes `request_id`, `user_id`, `path`, `status`, and `duration_ms`). Each response also includes an `X-Request-ID` header to correlate with logs and Sentry.
-
-Quick examples:
-
-- Docker (dev):
-  - Tail backend logs: `docker compose logs -f backend`
-  - Filter request lines only: `docker compose logs -f backend | rg '"logger":"request"'`
-  - Pretty-print with `jq` (optional): `docker compose logs -f backend | rg '"logger":"request"' | jq .`
-
-- Kubernetes (example):
-  - `kubectl logs -f deploy/workload-tracker-backend | jq .`
-
-Tip: Include `X-Request-ID` on client requests to propagate an external trace ID; otherwise the server generates one.
-
----
-
-### 📊 **Assignment Management**
-Smart workload allocation with visual planning tools.
-
-**What you can do:**
-- **Create Assignments**: Allocate people to projects with detailed hour planning
-- **12-Week Planning**: Set specific hours per week for flexible scheduling
-- **Visual Grid View**: See all assignments in an interactive calendar-style grid
-- **Smart Suggestions**: Get department-based recommendations for team assignments
-- **Bulk Operations**: Quickly set hours across multiple weeks
-- **Overallocation Alerts**: Visual warnings when someone exceeds their capacity
-
-**How to use:**
-1. Go to **Assignments** to see the visual grid
-2. Click **"New Assignment"** to create allocations
-3. Select person and project from department-aware dropdowns
-4. Use the 12-week planner to set hours per week
-5. Use **"Quick Set All Weeks"** for consistent allocations
-6. Monitor utilization badges to avoid overallocation
-
----
-
-### 🏢 **Department Management**
-Complete organizational structure and hierarchy management.
-
-#### **Core Department Features:**
-**What you can do:**
-- **Create Departments**: Set up organizational units with descriptions
-- **Hierarchy Management**: Build parent-child department relationships
-- **Manager Assignment**: Assign department managers from your team
-- **Team Organization**: Move people between departments
-- **Bulk Operations**: Assign multiple people to departments at once
-
-**How to use:**
-1. Navigate to **Departments** in the sidebar
-2. Click **"Add Department"** to create new departments
-3. Set parent departments to build hierarchy
-4. Assign managers and move team members as needed
-5. Use bulk actions in **People** section to reassign multiple team members
-
-#### **Manager Dashboard** (`/departments/manager`)
-**What you can do:**
-- **Department-Specific Metrics**: View utilization and assignments for your department only
-- **Team Oversight**: Monitor each team member's workload and availability
-- **Multi-Week Analysis**: Track performance over 1-8 week periods
-- **Quick Actions**: Access team management, reports, and workload balancing tools
-
-**How to use:**
-1. Click **"Manager View"** in the advanced department section
-2. Select your department from the dropdown
-3. Choose time period (1w, 2w, 4w, or 8w)
-4. Review team utilization and take action on overallocated members
-
-#### **Organizational Chart** (`/departments/hierarchy`)
-**What you can do:**
-- **Visual Hierarchy**: See complete organizational structure
-- **Interactive Exploration**: Click departments to view details
-- **Team Composition**: See team members and sub-departments at a glance
-- **Department Statistics**: View team sizes, reporting relationships
-
-**How to use:**
-1. Click **"Org Chart"** in the advanced department section
-2. Navigate the visual hierarchy by scrolling horizontally
-3. Click any department card to see detailed information in the side panel
-4. Use the legend to understand the visual indicators
-
----
-
-## Project Assignments Grid (Project‑Centric)
-
-- Route: `/project-assignments`
-- Server‑authoritative: week headers, per‑project totals, deliverables shading, and quick metrics are returned from the backend snapshot.
-- Editing: double‑click a week cell on an assignment row to edit; press Enter to commit. Select a range within the same row to apply to multiple weeks. On success, totals refresh from the server.
-- Status: update project status inline via the status badge. Capability checks apply.
-- Filters: department scope and project status filters (including “Active – No Deliverables”) are pushed to the server. Week horizon control (8/12/16/20).
-- URL state: weeks and status filters sync to the URL for easy sharing; a “People View” link switches to `/assignments`.
-
-#### **Department Reports** (`/departments/reports`)
-**What you can do:**
-- **Performance Analytics**: Compare all departments side-by-side
-- **Health Scoring**: Automated 0-100 health assessment for each department
-- **Resource Analysis**: See available capacity across departments
-- **Utilization Tracking**: Visual distribution charts and trends
-- **Multi-Timeframe Analysis**: 1-12 week performance comparison
-
-**How to use:**
-1. Click **"Reports"** in the advanced department section
-2. Select timeframe (1w to 12w) for analysis
-3. Review the performance table for all departments
-4. Check utilization distribution and available resources
-5. Focus on departments with low health scores
-
----
-
-### 📈 **Dashboard & Analytics**
-Real-time insights and team performance metrics.
-
-**What you can do:**
-- **Team Overview**: See utilization status for all team members
-- **Department Filtering**: Focus on specific departments or view company-wide
-- **Multi-Week Analysis**: Track utilization over 1-12 week periods
-- **Peak Utilization Tracking**: Identify highest workload weeks
-- **Available Resources**: Find team members with spare capacity
-- **Recent Activity**: Monitor new assignments and changes
-
-**How to use:**
-1. **Dashboard** is your starting point (opens by default)
-2. Use the **Department** dropdown to filter by specific departments
-3. Adjust the **Time Period** to see trends over multiple weeks
-4. Look for red badges indicating overallocated team members
-5. Check "Available People" section for resource planning
-
----
-
-### 🎯 **Project Management**
-Organize work into structured projects for better tracking.
-
-**What you can do:**
-- **Project Creation**: Set up projects with clients, status, and descriptions
-- **Status Tracking**: Monitor projects through planning, active, completed phases
-- **Client Management**: Track internal and external client projects
-- **Assignment Integration**: Link assignments to structured projects
-- **Project Deliverables**: Plan and track project milestones and deliverables
-
-**How to use:**
-1. Navigate to **Projects** in the sidebar
-2. Create projects with meaningful names and client information
-3. Set appropriate status (Planning, Active, On Hold, Completed, Cancelled)
-4. Add descriptions to provide context for team members
-5. Use projects when creating assignments for better organization
-
----
-
-## 🎨 **Smart Features**
-
-### **Department-Aware Assignment Creation**
-When creating assignments, the system provides intelligent suggestions:
-- **Same-Department Priority**: Team members from the same department are highlighted with ⭐
-- **Collaboration Insights**: Get suggestions for involving other department members
-- **Department Context**: See department information for every team member
-- **Resource Recommendations**: View available capacity within departments
-
-### **Advanced Search & Filtering**
-Throughout the application:
-- **Smart Search**: Find people by name, role, department, or notes
-- **Multi-Field Filtering**: Combine department and search filters
-- **Auto-Selection**: First items are automatically selected for faster workflow
-- **Progressive Discovery**: Features become available as you add data
-
-### **Utilization Intelligence**
-Sophisticated capacity management:
-- **Color-Coded Status**: Green (available), Blue (optimal), Amber (high), Red (overallocated)
-- **Peak Tracking**: Identify highest utilization weeks in multi-week analysis
-- **Capacity Alerts**: Visual warnings prevent overallocation
-- **Availability Insights**: Quickly find team members with spare capacity
-
----
-
-## 🗺️ **Navigation Guide**
-
-### **Sidebar Structure:**
-- **Dashboard** - Team overview and metrics
-- **People** - Team member management
-- **Departments** - Basic department CRUD
-- **Assignments** - Workload allocation grid
-- **Projects** - Project organization
-
-### **Advanced Department Tools:**
-- **Manager View** - Department-specific management dashboard
-- **Org Chart** - Hierarchical visualization  
-- **Reports** - Performance analytics and insights
-
-### **System Tools:**
-- **Settings** - System configuration (planned)
-
----
-
-## 📱 **Using the Interface**
-
-### **Dark Mode Design**
-The application uses a professional dark theme optimized for long work sessions:
-- **High Contrast**: Clear text and visual hierarchy
-- **Color Coding**: Consistent use of colors for status indication
-- **Comfortable Navigation**: Hover tooltips and visual feedback
-
-### **Responsive Layout**
-- **Split-Panel Views**: List on left, details on right (People, Departments)
-- **Grid Views**: Visual planning interface (Assignments)
-- **Modal Forms**: Focused data entry without losing context
-- **Sidebar Navigation**: Persistent access to all features
-
-### **Interactive Elements**
-- **Click to Select**: Single-click selection throughout
-- **Hover for Details**: Tooltips provide additional information
-- **Visual Feedback**: Buttons and links respond to interaction
-- **Progress Indicators**: Loading states and progress feedback
-
----
-
-## 🎯 **Best Practices**
-
-### **Getting Started:**
-1. **Add Team Members** first with realistic weekly capacities
-2. **Create Departments** and assign people to them
-3. **Set up Projects** for better assignment organization  
-4. **Start with Simple Assignments** using the 12-week planner
-5. **Use Dashboard** regularly to monitor team utilization
-
-### **For Managers:**
-1. **Use Department Filtering** to focus on your team
-2. **Monitor Health Scores** in Department Reports
-3. **Check Peak Utilization** during busy periods
-4. **Use Manager Dashboard** for team-specific insights
-5. **Review Org Chart** for understanding reporting relationships
-
-### **For Resource Planning:**
-1. **Check Available People** section for spare capacity
-2. **Use Multi-Week Analysis** for trend identification
-3. **Monitor Overallocation Alerts** proactively
-4. **Leverage Department-Based Suggestions** for team formation
-5. **Use Bulk Actions** for efficient team reorganization
-
----
-
-## 💡 **Tips for Maximum Effectiveness**
-
-### **Utilization Management:**
-- **Optimal Range**: Target 70-85% utilization for sustainable performance
-- **Buffer Capacity**: Keep 15-30% available for urgent work and professional development
-- **Peak Awareness**: Use multi-week analysis to identify and smooth out utilization spikes
-
-### **Department Organization:**
-- **Clear Hierarchy**: Set up logical parent-child relationships
-- **Manager Assignment**: Assign department managers for accountability
-- **Cross-Department Visibility**: Use company-wide dashboard view for resource sharing
-
-### **Assignment Planning:**
-- **12-Week Planning**: Use the weekly hour allocation for flexible scheduling
-- **Smart Suggestions**: Pay attention to department-based recommendations
-- **Regular Review**: Check assignments weekly and adjust as needed
-
-### **Data Quality:**
-- **Accurate Capacities**: Set realistic weekly hour capacities for each person
-- **Complete Profiles**: Fill in roles, departments, and skills for better insights
-- **Regular Updates**: Keep project status and team assignments current
-
----
-
-## 🚀 **Advanced Workflows**
-
-### **Team Formation:**
-1. Use **Assignment Creation** to see department-based suggestions
-2. Check **Available People** for capacity
-3. Review **Department Reports** for workload balance
-4. Use **Org Chart** to understand reporting relationships
-
-### **Capacity Planning:**
-1. Start with **Dashboard** filtered by timeframe
-2. Use **Department Reports** for cross-department comparison
-3. Check **Manager Dashboard** for department-specific details
-4. Plan assignments based on available capacity insights
-
-### **Performance Monitoring:**
-1. Use **Multi-Week Analysis** to identify trends
-2. Monitor **Health Scores** in Department Reports
-3. Track **Peak Utilization** across departments
-4. Review **Recent Assignments** for activity patterns
-
----
-
-The Workload Tracker provides a comprehensive solution for modern team management, from individual assignment tracking to organizational analytics. Start with the basics and gradually leverage advanced features as your team grows and your processes mature.
-
----
-
-## 🌐 Global Department Filter
-
-Apply a department scope across the entire app and share deep links.
-
-- Persistent filter visible in the header. Toggle “Include sub-departments.”
-- Deep link parameters: `?dept=<id>&deptChildren=0|1` (when unset, params are removed)
-- URL precedence on first load; thereafter changes update the URL without adding history entries.
-- Keyboard shortcut: Alt+Shift+D to focus the filter from anywhere.
-- Pages and APIs automatically respect this filter (People, Assignments, Capacity Heatmap, Workload Forecast).
-
-Tip: Use the “Copy link” action in the header to share a filtered view.
-
----
-
-## Administration & Auth
-
-### Authentication Enforcement Toggle (AUTH_ENFORCED)
-- Purpose: stage the switch to authenticated APIs during rollout.
-- Behavior:
-  - When AUTH_ENFORCED=true (default), the backend enforces IsAuthenticated globally.
-  - When AUTH_ENFORCED=false, the backend relaxes to AllowAny to support staggered frontend/backend deploys.
-- Configure via env (e.g., .env):
-  - AUTH_ENFORCED=true for staging/production
-
-### Create a Dev User (local)
-Quickly create or update a local account:
-
-`ash
-docker compose exec backend python manage.py create_dev_user \
-  --username admin --password admin123 --email admin@example.com --staff --superuser
-` 
-
-This also ensures a corresponding UserProfile exists via signals.
-
-### Production Safety (Highlights)
-- DEBUG=false in production (enforced in docker-compose.prod.yml).
-- Set SECRET_KEY, ALLOWED_HOSTS, and CORS_ALLOWED_ORIGINS via env.
-- If behind a proxy/ingress, Django honors X-Forwarded-* headers (SECURE_PROXY_SSL_HEADER, USE_X_FORWARDED_HOST).
-
+  - If your account isn’t linked to your person profile yet, you’ll see a note to contact an administrator.
+
+2) Dashboard
+- Purpose: A team‑level overview for quick health checks and planning.
+- What you’ll see:
+  - Headline metrics: assignments, project mix, and utilization summaries.
+  - Visual cards for hours by client, weekly trends, and role capacity.
+  - A heatmap to spot busy and quiet weeks across the team.
+- Tips:
+  - Use the department selector to focus on a specific group.
+  - Adjust the weeks shown to widen or narrow the planning window.
+
+3) Assignments (Grid)
+- Purpose: Plan weekly hours in a familiar, spreadsheet‑like view per person.
+- What you’ll see:
+  - Left column: people grouped by department.
+  - Columns by week with each person’s planned hours per project.
+  - A floating legend that explains milestone markers and colors.
+- Common actions:
+  - Add assignment: Use the “Add project” row under a person to attach a project.
+  - Edit hours: Click a week cell and type the hours for that week.
+  - Change role: Open the role menu on a row to assign a role for that project.
+  - Filter: Use the top‑bar department and status filters to narrow the view.
+- Tips:
+  - The header “Weeks” selector adjusts how far ahead you plan.
+  - Markers show upcoming project milestones to help you place hours.
+
+4) Project Assignments (Grid)
+- Purpose: See planning by project rather than by person.
+- What you’ll see:
+  - Projects in rows, weeks in columns, similar to the people‑oriented grid.
+  - A quick view on project names to peek at details without leaving the page.
+- Common actions:
+  - Sort by client, project, or milestones to focus your work.
+  - Edit weekly hours in the grid where appropriate.
+- Tips:
+  - Use the status chips to hide projects you don’t need to see.
+
+5) Projects (List)
+- Purpose: Manage the list of projects.
+- What you’ll see:
+  - Search, sort, and quick filters (including upcoming/previous milestones).
+  - A details panel for the selected project (assignments and notes).
+- Common actions:
+  - Create: “New Project” opens the form to add a project.
+  - Update status: Use the status badge dropdown (for example, Active, On Hold).
+  - Inline staffing: From the project details, add people to the project.
+
+6) Project Form (Create/Edit)
+- Purpose: Add a new project or update an existing one.
+- What to fill in:
+  - Project name and client (required), project number (optional), description, and start date.
+  - Pre‑deliverable rules for the project (for example, when to create design reviews ahead of the main milestone) if your organization uses them.
+- Tips:
+  - You can return later to refine details such as hours and pre‑deliverable rules.
+
+7) People
+- Purpose: Browse and manage the team.
+- What you’ll see:
+  - Left panel: a searchable list with department/location filters.
+  - Right panel: details for the selected person — including skills.
+- Common actions:
+  - Edit basic details and role for a person.
+  - Use bulk actions to assign people to a department in one step.
+  - Load more results as you scroll when the list is long.
+
+8) Departments (List)
+- Purpose: Create and maintain departments.
+- What you’ll see:
+  - A searchable list of departments.
+  - A details panel with manager, description, and team statistics.
+- Common actions:
+  - Add, rename, or remove departments.
+  - Pick a department to see its people and related information.
+
+9) Manager Dashboard (Departments)
+- Purpose: A focused view for department leaders.
+- What you’ll see:
+  - Team size, average utilization, and items that need attention.
+  - Quick period buttons (1, 2, 4, 8 weeks) to change the summary window.
+- Tips:
+  - Choose a department at the top‑right to switch context.
+
+10) Hierarchy (Departments)
+- Purpose: An organizational chart of all departments and teams.
+- What you’ll see:
+  - A visual tree of the department structure and a side panel with details.
+- Tips:
+  - Click a department in the chart to view its manager, team members, and stats.
+
+11) Deliverables Calendar
+- Purpose: A weekly calendar showing upcoming milestones.
+- What you’ll see:
+  - A timeline of milestones by week, with color‑coding by type.
+  - Optional pre‑deliverables (pre‑work items) you can show or hide.
+- Common actions:
+  - Change the week range using the controls at the top.
+  - Search and filter by person to see milestones relevant to them.
+
+12) Reports — Role Capacity
+- Purpose: See how staffing compares to capacity for each role.
+- What you’ll see:
+  - A card summarizing where you are under‑ or over‑staffed by role.
+- Tips:
+  - Use this to guide hiring or reassignments.
+
+13) Reports — Team Forecast
+- Purpose: Look ahead at team workload and a project’s weekly timeline.
+- What you’ll see:
+  - A capacity timeline across weeks.
+  - A project chooser that shows weekly hours and milestone markers for that project.
+- Tips:
+  - Adjust the weeks shown and the department to focus your view.
+
+14) Reports — Person Experience
+- Purpose: Summarize project experience for a person over a time window.
+- What you’ll see:
+  - Search for a person and select a time frame (months or years).
+  - A breakdown of projects, hours, common roles, and phases worked.
+
+15) Settings
+- Purpose: Administrative tools and system options.
+- Sections include:
+  - Roles: Add, remove, reorder, and rename job roles used across the system.
+  - Utilization scheme: Adjust color ranges and thresholds for workload badges.
+  - Backups and restore: Create or restore database backups.
+  - Department‑scoped roles (if enabled): Configure allowed roles by department.
+  - Calendar Feeds: Generate a private link you can paste into calendar tools.
+- Calendar feeds (Subscriptions):
+  - The “Calendar Feeds” card shows a private address ending with “deliverables.ics”.
+  - Copy the link and add it to your calendar:
+    - Outlook: Add calendar → Subscribe from web → paste the link.
+    - Google Calendar: Other calendars → From URL → paste the link.
+  - Anyone with the link can view milestones. Regenerate the token to revoke old links.
+
+16) Profile
+- Purpose: Update your personal information and preferences.
+- What you can do:
+  - Change your display name and password.
+  - Choose a color theme.
+  - See your username, email, and account role.
+
+17) Authentication Pages
+- Login: Enter your username (or email) and password.
+- Reset Password: Request a reset link if you forget your password.
+- Set Password: Complete a reset by choosing a new password from the link.
+
+18) Coming Soon
+- Placeholder page used for features that are being prepared and will appear in future updates.
+
+
+Helpful Concepts (Plain English)
+- Assignment: A person planned to work on a project, with weekly hours.
+- Deliverable: A project milestone or due date.
+- Pre‑deliverable: A preparatory step created automatically before a milestone.
+- Capacity: The hours a person can work in a week.
+- Utilization: How much of someone’s capacity is planned (for example, 30 of 36 hours).
+- Department: A group such as “Design” or “Engineering”.
+- Role: A job type such as “Project Manager” or “Designer”.
+
+
+Where to Get Help
+- If something looks wrong on a page, try refreshing the browser.
+- If you cannot sign in, use “Forgot password?” on the login page.
+- For account or data issues, contact your administrator.
 
