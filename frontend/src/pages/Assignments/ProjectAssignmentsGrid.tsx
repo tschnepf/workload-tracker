@@ -610,7 +610,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const weekRanges = weeks.map(w => { const s = new Date(w.date); const e = new Date(w.date); e.setDate(e.getDate() + 6); return { key: w.date, s, e }; });
 
         const pidList = projects.map(p => p.id!).filter(Boolean) as number[];
-        const map: Record<number, Record<string, { type: string; percentage?: number }[]>> = {};
+        const map: Record<number, Record<string, { type: string; percentage?: number; dates?: string[] }[]>> = {};
 
         const addEntry = (pid: number, weekKey: string, type: string, percentage?: number, dateStr?: string) => {
           if (!map[pid]) map[pid] = {};
