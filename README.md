@@ -1,8 +1,5 @@
 Workload Tracker — User Guide
 
-Welcome to Workload Tracker. This guide explains, in plain language, what you can do on each page and how to get your work done. It is written for everyday users and managers — no technical background is required.
-
-
 Getting Started
 - Sign in at the login screen with your account.
 - If you forget your password, use “Forgot password?” to receive a reset link.
@@ -25,8 +22,8 @@ Navigation Overview
 
 Page‑by‑Page Guide
 
-1) My Work
-- Purpose: A personal cockpit showing your projects, milestones, and schedule.
+**My Work**
+- Purpose: Shows your projects, milestones, and schedule.
 - What you’ll see:
   - Summary of items that need attention (for example, overdue milestones).
   - Your projects list and upcoming milestones.
@@ -35,7 +32,7 @@ Page‑by‑Page Guide
 - Tips:
   - If your account isn’t linked to your person profile yet, you’ll see a note to contact an administrator.
 
-2) Dashboard
+**Dashboard**
 - Purpose: A team‑level overview for quick health checks and planning.
 - What you’ll see:
   - Headline metrics: assignments, project mix, and utilization summaries.
@@ -45,7 +42,7 @@ Page‑by‑Page Guide
   - Use the department selector to focus on a specific group.
   - Adjust the weeks shown to widen or narrow the planning window.
 
-3) Assignments (Grid)
+**Assignments (Grid)**
 - Purpose: Plan weekly hours in a familiar, spreadsheet‑like view per person.
 - What you’ll see:
   - Left column: people grouped by department.
@@ -60,7 +57,7 @@ Page‑by‑Page Guide
   - The header “Weeks” selector adjusts how far ahead you plan.
   - Markers show upcoming project milestones to help you place hours.
 
-4) Project Assignments (Grid)
+**Project Assignments (Grid)**
 - Purpose: See planning by project rather than by person.
 - What you’ll see:
   - Projects in rows, weeks in columns, similar to the people‑oriented grid.
@@ -71,7 +68,7 @@ Page‑by‑Page Guide
 - Tips:
   - Use the status chips to hide projects you don’t need to see.
 
-5) Projects (List)
+**Projects (List)**
 - Purpose: Manage the list of projects.
 - What you’ll see:
   - Search, sort, and quick filters (including upcoming/previous milestones).
@@ -81,7 +78,7 @@ Page‑by‑Page Guide
   - Update status: Use the status badge dropdown (for example, Active, On Hold).
   - Inline staffing: From the project details, add people to the project.
 
-6) Project Form (Create/Edit)
+**Project Form (Create/Edit)**
 - Purpose: Add a new project or update an existing one.
 - What to fill in:
   - Project name and client (required), project number (optional), description, and start date.
@@ -89,7 +86,7 @@ Page‑by‑Page Guide
 - Tips:
   - You can return later to refine details such as hours and pre‑deliverable rules.
 
-7) People
+**People**
 - Purpose: Browse and manage the team.
 - What you’ll see:
   - Left panel: a searchable list with department/location filters.
@@ -99,7 +96,7 @@ Page‑by‑Page Guide
   - Use bulk actions to assign people to a department in one step.
   - Load more results as you scroll when the list is long.
 
-8) Departments (List)
+**Departments (List)**
 - Purpose: Create and maintain departments.
 - What you’ll see:
   - A searchable list of departments.
@@ -108,7 +105,7 @@ Page‑by‑Page Guide
   - Add, rename, or remove departments.
   - Pick a department to see its people and related information.
 
-9) Manager Dashboard (Departments)
+**Manager Dashboard (Departments)**
 - Purpose: A focused view for department leaders.
 - What you’ll see:
   - Team size, average utilization, and items that need attention.
@@ -116,14 +113,14 @@ Page‑by‑Page Guide
 - Tips:
   - Choose a department at the top‑right to switch context.
 
-10) Hierarchy (Departments)
+**Hierarchy (Departments)**
 - Purpose: An organizational chart of all departments and teams.
 - What you’ll see:
   - A visual tree of the department structure and a side panel with details.
 - Tips:
   - Click a department in the chart to view its manager, team members, and stats.
 
-11) Deliverables Calendar
+**Deliverables Calendar**
 - Purpose: A weekly calendar showing upcoming milestones.
 - What you’ll see:
   - A timeline of milestones by week, with color‑coding by type.
@@ -132,14 +129,14 @@ Page‑by‑Page Guide
   - Change the week range using the controls at the top.
   - Search and filter by person to see milestones relevant to them.
 
-12) Reports — Role Capacity
+**Reports — Role Capacity**
 - Purpose: See how staffing compares to capacity for each role.
 - What you’ll see:
   - A card summarizing where you are under‑ or over‑staffed by role.
 - Tips:
   - Use this to guide hiring or reassignments.
 
-13) Reports — Team Forecast
+**Reports — Team Forecast**
 - Purpose: Look ahead at team workload and a project’s weekly timeline.
 - What you’ll see:
   - A capacity timeline across weeks.
@@ -147,13 +144,13 @@ Page‑by‑Page Guide
 - Tips:
   - Adjust the weeks shown and the department to focus your view.
 
-14) Reports — Person Experience
+**Reports — Person Experience**
 - Purpose: Summarize project experience for a person over a time window.
 - What you’ll see:
   - Search for a person and select a time frame (months or years).
   - A breakdown of projects, hours, common roles, and phases worked.
 
-15) Settings
+**Settings**
 - Purpose: Administrative tools and system options.
 - Sections include:
   - Roles: Add, remove, reorder, and rename job roles used across the system.
@@ -168,23 +165,23 @@ Page‑by‑Page Guide
     - Google Calendar: Other calendars → From URL → paste the link.
   - Anyone with the link can view milestones. Regenerate the token to revoke old links.
 
-16) Profile
+**Profile**
 - Purpose: Update your personal information and preferences.
 - What you can do:
   - Change your display name and password.
   - Choose a color theme.
   - See your username, email, and account role.
 
-17) Authentication Pages
+**Authentication Pages**
 - Login: Enter your username (or email) and password.
 - Reset Password: Request a reset link if you forget your password.
 - Set Password: Complete a reset by choosing a new password from the link.
 
-18) Coming Soon
+**Coming Soon**
 - Placeholder page used for features that are being prepared and will appear in future updates.
 
 
-Helpful Concepts (Plain English)
+Helpful Concepts
 - Assignment: A person planned to work on a project, with weekly hours.
 - Deliverable: A project milestone or due date.
 - Pre‑deliverable: A preparatory step created automatically before a milestone.
@@ -198,4 +195,3 @@ Where to Get Help
 - If something looks wrong on a page, try refreshing the browser.
 - If you cannot sign in, use “Forgot password?” on the login page.
 - For account or data issues, contact your administrator.
-
