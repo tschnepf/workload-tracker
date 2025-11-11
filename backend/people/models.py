@@ -223,6 +223,117 @@ class Person(models.Model):
             'assignments': assignment_details
         }
 
+    def get_utilization_over_weeks(self, weeks=1):
+        """Calculate utilization over multiple weeks (average) based on weekly hours.
+
+        Uses a Monday-based week key and tolerates nearby date keys (+/- 3 days)
+        to accommodate historical data keyed slightly off the week start.
+        """
+        from datetime import datetime, timedelta
+
+        active_assignments = self.assignments.filter(is_active=True)
+
+        # Current week (Monday) to align with frontend calculation
+        today = datetime.now().date()
+        days_since_monday = today.weekday()
+        current_monday = today - timedelta(days=days_since_monday)
+
+        # Build week keys for the horizon
+        try:
+            horizon = int(weeks or 1)
+        except Exception:
+            horizon = 1
+        week_keys = [(current_monday + timedelta(weeks=w)).strftime('%Y-%m-%d') for w in range(horizon)]
+
+        total_allocated_hours = 0.0
+        assignment_details = []
+        week_totals = {wk: 0.0 for wk in week_keys}
+
+        for assignment in active_assignments:
+            if not assignment.weekly_hours:
+                continue
+            assignment_total_hours = 0.0
+            assignment_weeks_with_data = 0
+
+            for wk in week_keys:
+                week_hours = 0.0
+                used_key = None
+                if wk in assignment.weekly_hours:
+                    try:
+                        week_hours = float(assignment.weekly_hours[wk] or 0)
+                    except (TypeError, ValueError):
+                        week_hours = 0.0
+                    used_key = wk
+                else:
+                    # Check nearby dates (+/- 3 days)
+                    try:
+                        base_date = datetime.strptime(wk, '%Y-%m-%d').date()
+                        for offset in range(-3, 4):
+                            check = (base_date + timedelta(days=offset)).strftime('%Y-%m-%d')
+                            if check in assignment.weekly_hours:
+                                try:
+                                    week_hours = float(assignment.weekly_hours[check] or 0)
+                                except (TypeError, ValueError):
+                                    week_hours = 0.0
+                                used_key = check
+                                break
+                    except Exception:
+                        pass
+
+                if week_hours > 0:
+                    assignment_total_hours += week_hours
+                    assignment_weeks_with_data += 1
+                    week_totals[wk] += week_hours
+
+            total_allocated_hours += assignment_total_hours
+            if assignment_total_hours > 0:
+                assignment_details.append({
+                    'project_name': assignment.project_name,
+                    'total_hours': assignment_total_hours,
+                    'average_weekly_hours': assignment_total_hours / horizon if horizon else assignment_total_hours,
+                    'weeks_with_data': assignment_weeks_with_data,
+                    'allocation_percentage': min(100, (assignment_total_hours / (horizon or 1) / self.weekly_capacity * 100)) if (self.weekly_capacity or 0) > 0 else 0,
+                })
+
+        # Aggregate stats
+        average_weekly_hours = total_allocated_hours / horizon if horizon > 0 else 0.0
+        average_percentage = (average_weekly_hours / self.weekly_capacity * 100) if (self.weekly_capacity or 0) > 0 else 0.0
+        average_available_hours = max(0.0, (self.weekly_capacity or 0) - average_weekly_hours)
+
+        peak_weekly_hours = max(week_totals.values()) if week_totals else 0.0
+        peak_percentage = (peak_weekly_hours / self.weekly_capacity * 100) if (self.weekly_capacity or 0) > 0 else 0.0
+        peak_week_key = None
+        if peak_weekly_hours > 0:
+            for wk, hours in week_totals.items():
+                if hours == peak_weekly_hours:
+                    peak_week_key = wk
+                    break
+
+        return {
+            'total_percentage': round(average_percentage, 1),
+            'allocated_hours': round(average_weekly_hours, 1),
+            'available_hours': round(average_available_hours, 1),
+            'is_overallocated': average_weekly_hours > (self.weekly_capacity or 0),
+            'peak_percentage': round(peak_percentage, 1),
+            'peak_weekly_hours': round(peak_weekly_hours, 1),
+            'peak_week_key': peak_week_key,
+            'is_peak_overallocated': peak_weekly_hours > (self.weekly_capacity or 0),
+            'weeks_analyzed': horizon,
+            'week_keys': week_keys,
+            'week_totals': {k: round(v, 1) for k, v in week_totals.items()},
+            'total_hours_all_weeks': round(total_allocated_hours, 1),
+            'assignments': assignment_details,
+        }
+
+    @property
+    def is_available(self):
+        """Check availability based on current week hours."""
+        try:
+            util = self.get_current_utilization()
+            return util.get('allocated_hours', 0) < (self.weekly_capacity or 0)
+        except Exception:
+            return False
+
 
 class DeactivationAudit(models.Model):
     """Audit record for cleanup actions performed when a person is deactivated.
