@@ -11,6 +11,20 @@ def _fmt_date(d: date) -> str:
     return d.strftime('%Y%m%d')
 
 
+def _esc(text: str) -> str:
+    """Escape text per RFC5545: backslash, comma, semicolon, and newlines.
+
+    Also ensure we don't emit raw CR/LF inside property values; use \n instead.
+    """
+    if text is None:
+        return ''
+    s = str(text)
+    s = s.replace('\\', r'\\')
+    s = s.replace(';', r'\;').replace(',', r'\,')
+    s = s.replace('\r\n', r'\n').replace('\n', r'\n').replace('\r', r'\n')
+    return s
+
+
 def deliverables_ics(request):
     """Public read-only iCalendar feed for project deliverables (no pre-deliverables).
 
@@ -50,6 +64,9 @@ def deliverables_ics(request):
     lines.append('VERSION:2.0')
     lines.append('PRODID:-//Workload Tracker//Deliverables//EN')
     lines.append('CALSCALE:GREGORIAN')
+    lines.append('METHOD:PUBLISH')
+    # Advisory refresh hints (some clients honor X-PUBLISHED-TTL)
+    lines.append('X-PUBLISHED-TTL:PT12H')
     lines.append('X-WR-CALNAME:Project Deliverables')
     lines.append('X-WR-TIMEZONE:UTC')
     stamp = now().strftime('%Y%m%dT%H%M%SZ')
@@ -80,17 +97,18 @@ def deliverables_ics(request):
         except Exception:
             pass
         lines.append('BEGIN:VEVENT')
-        lines.append(f'UID:{uid}')
+        lines.append(f'UID:{_esc(uid)}')
         lines.append(f'DTSTAMP:{stamp}')
         lines.append(f'DTSTART;VALUE=DATE:{_fmt_date(dt)}')
-        lines.append(f'SUMMARY:{summary}')
+        # Provide DTEND (exclusive) for all-day events to maximize client compatibility
+        lines.append(f'DTEND;VALUE=DATE:{_fmt_date(dt + timedelta(days=1))}')
+        lines.append(f'SUMMARY:{_esc(summary)}')
         if desc_parts:
-            # Fold long lines per iCal spec (optional here)
-            desc = '\n'.join(desc_parts)
+            # Use \n within property value; avoid raw newlines
+            desc = _esc('\n'.join(desc_parts))
             lines.append(f'DESCRIPTION:{desc}')
         lines.append('END:VEVENT')
 
     lines.append('END:VCALENDAR')
     ics = '\r\n'.join(lines) + '\r\n'
     return HttpResponse(ics, content_type='text/calendar; charset=utf-8')
-
