@@ -1,5 +1,13 @@
 
 services:
+  # One-shot migrator ensures DB schema is up to date before app/worker start
+  migrator:
+    image: workload-tracker-backend
+    command: python manage.py migrate --noinput
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
   # Production backend with gunicorn
   backend:
     command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --worker-class gevent --worker-connections 1000 --max-requests 1000 --max-requests-jitter 50 --preload
@@ -36,6 +44,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -167,6 +178,8 @@ services:
       - media_volume:/app/media
       - ./backups:/backups
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       - db
       - redis
     networks:
@@ -199,6 +212,8 @@ services:
       - ./backend:/app:ro
       - ./backups:/backups
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       - db
       - redis
 
@@ -232,6 +247,8 @@ services:
       - ./backend:/app:ro
       - ./backups:/backups
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       - db
       - redis
 

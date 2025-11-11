@@ -120,6 +120,7 @@ class CapacityAnalysisService:
 
 # --- Deactivation cleanup utilities ---
 from django.db import transaction
+from django.db.utils import ProgrammingError, OperationalError
 from django.utils import timezone
 from typing import Any
 from people.models import Person, DeactivationAudit
@@ -199,22 +200,30 @@ def deactivate_person_cleanup(person_id: int, zero_mode: str = 'all', actor_user
         links_qs = DeliverableAssignment.objects.select_for_update().filter(person_id=person_id, is_active=True)
         deliverable_links_deactivated = links_qs.update(is_active=False)
 
-        # Audit
-        audit = DeactivationAudit.objects.create(
-            person=person,
-            user_id=actor_user_id,
-            mode=zero_mode,
-            assignments_touched=assignments_touched,
-            assignments_deactivated=assignments_deactivated,
-            hours_zeroed=float(round(hours_zeroed_total, 2)),
-            week_keys_touched=sorted(list(week_keys_touched)),
-            deliverable_links_deactivated=int(deliverable_links_deactivated or 0),
-        )
+        # Audit (non-blocking): tolerate write failures so cleanup never rolls back
+        audit_id = None
+        try:
+            audit = DeactivationAudit.objects.create(
+                person=person,
+                user_id=actor_user_id,
+                mode=zero_mode,
+                assignments_touched=assignments_touched,
+                assignments_deactivated=assignments_deactivated,
+                hours_zeroed=float(round(hours_zeroed_total, 2)),
+                week_keys_touched=sorted(list(week_keys_touched)),
+                deliverable_links_deactivated=int(deliverable_links_deactivated or 0),
+            )
+            audit_id = audit.id
+        except (ProgrammingError, OperationalError) as e:
+            # Common during rollout if the migration hasn't applied yet in a worker
+            logger.warning("DeactivationAudit write skipped (non-blocking): %s", e)
+        except Exception as e:
+            logger.warning("DeactivationAudit write failed (non-blocking): %s", e)
 
         _bump_analytics_cache_version()
 
         return {
-            'audit_id': audit.id,
+            'audit_id': audit_id,
             'assignments_touched': assignments_touched,
             'assignments_deactivated': assignments_deactivated,
             'hours_zeroed': float(round(hours_zeroed_total, 2)),
