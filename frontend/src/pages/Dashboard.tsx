@@ -779,24 +779,24 @@ const Dashboard: React.FC = () => {
         <AssignedHoursTimelineCard />
 
         {/* Utilization Distribution */}
-        <Card className="bg-[var(--card)] border-[var(--border)]">
+        <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-1 w-full">
           <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Utilization Distribution</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
+          <div className="flex flex-col gap-6">
+            <div>
+              <div className="text-[var(--muted)] text-sm">Underutilized (&lt;70%)</div>
               <div className="text-2xl font-bold text-emerald-400">{data.utilization_distribution.underutilized}</div>
-              <div className="text-sm text-[var(--muted)]">Underutilized (&lt;70%)</div>
             </div>
-            <div className="text-center">
+            <div>
+              <div className="text-[var(--muted)] text-sm">Optimal (70-85%)</div>
               <div className="text-2xl font-bold text-blue-400">{data.utilization_distribution.optimal}</div>
-              <div className="text-sm text-[var(--muted)]">Optimal (70-85%)</div>
             </div>
-            <div className="text-center">
+            <div>
+              <div className="text-[var(--muted)] text-sm">High (85-100%)</div>
               <div className="text-2xl font-bold text-amber-400">{data.utilization_distribution.high}</div>
-              <div className="text-sm text-[var(--muted)]">High (85-100%)</div>
             </div>
-            <div className="text-center">
+            <div>
+              <div className="text-[var(--muted)] text-sm">Overallocated (&gt;100%)</div>
               <div className="text-2xl font-bold text-red-400">{data.utilization_distribution.overallocated}</div>
-              <div className="text-sm text-[var(--muted)]">Overallocated (&gt;100%)</div>
             </div>
           </div>
         </Card>
