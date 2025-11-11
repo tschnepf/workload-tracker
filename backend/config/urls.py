@@ -27,6 +27,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from deliverables.ics_views import deliverables_ics
 
 def health_check(request):
     """Health check endpoint for Docker and monitoring"""
@@ -144,9 +145,10 @@ urlpatterns = [
     path('api/reports/', include('reports.urls')),
     path('api/core/', include('core.urls')),
     path('api/', include('roles.urls')),
+    # Public ICS calendar feeds (token-protected via querystring)
+    path('calendar/deliverables.ics', deliverables_ics, name='calendar_deliverables_ics'),
 ]
 
 # Add Silk profiling URLs in development/debug mode
 if settings.SILK_ENABLED:
     urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
-

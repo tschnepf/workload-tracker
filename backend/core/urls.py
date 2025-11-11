@@ -6,6 +6,7 @@ from .views import (
     DepartmentProjectRolesMapView,
     DepartmentProjectRolesView,
     DepartmentProjectRoleDeleteView,
+    CalendarFeedsView,
 )
 
 urlpatterns = [
@@ -16,4 +17,5 @@ urlpatterns = [
     path('department_project_roles/map/', DepartmentProjectRolesMapView.as_view(), name='department_project_roles_map'),
     path('department_project_roles/', DepartmentProjectRolesView.as_view(), name='department_project_roles'),
     path('department_project_roles/<int:department>/<int:role_id>/', DepartmentProjectRoleDeleteView.as_view(), name='department_project_roles_delete'),
+    path('calendar_feeds/', CalendarFeedsView.as_view(), name='calendar_feeds'),
 ]

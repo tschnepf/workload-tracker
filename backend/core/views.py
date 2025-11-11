@@ -12,8 +12,9 @@ from .serializers import (
     PreDeliverableGlobalSettingsUpdateSerializer,
     UtilizationSchemeSerializer,
     ProjectRoleSerializer,
+    CalendarFeedSettingsSerializer,
 )
-from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole
+from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole, CalendarFeedSettings
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
 from assignments.models import Assignment  # type: ignore
@@ -456,3 +457,38 @@ class DepartmentProjectRoleDeleteView(APIView):
         if not existed:
             return Response({'detail': 'not found'}, status=404)
         return Response({'detail': 'deleted'})
+
+
+class CalendarFeedsView(APIView):
+    """Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+
+    - GET: returns current token values
+    - PATCH: set a specific token or regenerate with {regenerate: true}
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(responses=CalendarFeedSettingsSerializer)
+    def get(self, request):
+        obj = CalendarFeedSettings.get_active()
+        return Response(CalendarFeedSettingsSerializer(obj).data)
+
+    @extend_schema(
+        request=inline_serializer(name='CalendarFeedsPatch', fields={
+            'deliverables_token': serializers.CharField(required=False),
+            'regenerate': serializers.BooleanField(required=False),
+        }),
+        responses=CalendarFeedSettingsSerializer,
+    )
+    def patch(self, request):
+        obj = CalendarFeedSettings.get_active()
+        regen = bool(request.data.get('regenerate'))
+        token = request.data.get('deliverables_token')
+        if regen:
+            obj.rotate_deliverables_token()
+        elif token is not None:
+            t = str(token).strip()
+            if len(t) < 16:
+                return Response({'detail': 'token too short'}, status=400)
+            obj.deliverables_token = t
+            obj.save(update_fields=['deliverables_token', 'updated_at'])
+        return Response(CalendarFeedSettingsSerializer(obj).data)

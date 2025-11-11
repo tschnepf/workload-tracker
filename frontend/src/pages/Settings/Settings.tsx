@@ -23,7 +23,8 @@ import { showToast } from '@/lib/toastBus';
 import DepartmentProjectRolesSection from '@/components/settings/DepartmentProjectRolesSection';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import PreDeliverablesBackfill from '@/components/settings/PreDeliverablesBackfill';
-import ManualSnapshots from '@/components/settings/ManualSnapshots';
+
+import CalendarFeeds from '@/components/settings/CalendarFeeds';
 
 const Settings: React.FC = () => {
   const auth = useAuth();
@@ -264,8 +265,8 @@ const Settings: React.FC = () => {
           {auth.user?.is_staff && (
             <>
               <PreDeliverablesBackfill />
-              <ManualSnapshots />
-            </>
+              
+              <CalendarFeeds /></>
           )}
 
           {/* Admin: Create New User */}
@@ -720,3 +721,5 @@ const Settings: React.FC = () => {
 };
 
 export default Settings;
+
+

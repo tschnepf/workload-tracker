@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import PreDeliverableGlobalSettings, DepartmentProjectRole
+from .models import PreDeliverableGlobalSettings, DepartmentProjectRole, CalendarFeedSettings
 
 
 @admin.register(PreDeliverableGlobalSettings)
@@ -24,3 +24,9 @@ class DepartmentProjectRoleAdmin(admin.ModelAdmin):
     list_filter = ('is_active', 'department')
     search_fields = ('department__name', 'project_role__name')
     ordering = ('department__name', 'project_role__name')
+
+
+@admin.register(CalendarFeedSettings)
+class CalendarFeedSettingsAdmin(admin.ModelAdmin):
+    list_display = ('key', 'deliverables_token', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')

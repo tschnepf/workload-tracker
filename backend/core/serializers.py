@@ -5,7 +5,7 @@ NEVER write manual field mappings - always use these base classes.
 
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
-from .models import UtilizationScheme, ProjectRole
+from .models import UtilizationScheme, ProjectRole, CalendarFeedSettings
 
 
 class PreDeliverableGlobalSettingsItemSerializer(serializers.Serializer):
@@ -97,3 +97,9 @@ class ProjectRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectRole
         fields = ['id', 'name', 'created_at', 'updated_at']
+
+
+class CalendarFeedSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalendarFeedSettings
+        fields = ['deliverables_token', 'updated_at']

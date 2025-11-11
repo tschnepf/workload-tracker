@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+import secrets
 
 
 class PreDeliverableGlobalSettings(models.Model):
@@ -227,3 +228,38 @@ class DepartmentProjectRole(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"DPR(dept={self.department_id}, role={self.project_role_id})"
+
+
+class CalendarFeedSettings(models.Model):
+    """Singleton storing tokens for public read-only calendar feeds.
+
+    Initial scope: a single token securing the deliverables ICS feed.
+    """
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    deliverables_token = models.CharField(max_length=128, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"CalendarFeedSettings({self.key})"
+
+    @classmethod
+    def _random_token(cls) -> str:
+        # URL-safe, high-entropy token (~43 chars for 32 bytes)
+        return secrets.token_urlsafe(32)
+
+    @classmethod
+    def get_active(cls):
+        obj, created = cls.objects.get_or_create(
+            key='default',
+            defaults={'deliverables_token': cls._random_token()},
+        )
+        return obj
+
+    def rotate_deliverables_token(self) -> None:
+        self.deliverables_token = self._random_token()
+        self.save(update_fields=['deliverables_token', 'updated_at'])
