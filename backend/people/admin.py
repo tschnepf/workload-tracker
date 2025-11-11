@@ -9,7 +9,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.contrib.admin import helpers
 from django.template.response import TemplateResponse
-from .models import Person
+from .models import Person, DeactivationAudit
 from .utils.excel_handler import export_people_to_excel, import_people_from_excel
 from .utils.csv_handler import export_people_to_csv, import_people_from_csv
 from .forms import PeopleImportForm
@@ -82,6 +82,16 @@ class PersonAdmin(admin.ModelAdmin):
     list_filter = ('role', 'is_active', 'department')
     search_fields = ('name', 'email', 'role__name')
     ordering = ('name',)
+
+
+@admin.register(DeactivationAudit)
+class DeactivationAuditAdmin(admin.ModelAdmin):
+    list_display = (
+        'person', 'mode', 'assignments_touched', 'assignments_deactivated',
+        'hours_zeroed', 'deliverable_links_deactivated', 'started_at', 'finished_at'
+    )
+    list_filter = ('mode',)
+    search_fields = ('person__name',)
     
     actions = [
         export_people_excel,

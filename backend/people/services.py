@@ -116,3 +116,107 @@ class CapacityAnalysisService:
         except Exception:
             logger.warning("Cache SET failed: %s", key)
         return forecast
+
+
+# --- Deactivation cleanup utilities ---
+from django.db import transaction
+from django.utils import timezone
+from typing import Any
+from people.models import Person, DeactivationAudit
+from assignments.models import Assignment
+from deliverables.models import DeliverableAssignment
+
+
+def _bump_analytics_cache_version() -> None:
+    key = 'analytics_cache_version'
+    try:
+        cache.incr(key)
+    except Exception:
+        current = cache.get(key, 1)
+        try:
+            cache.set(key, int(current) + 1, None)
+        except Exception:
+            pass
+
+
+def deactivate_person_cleanup(person_id: int, zero_mode: str = 'all', actor_user_id: int | None = None) -> Dict[str, Any]:
+    """Cleanup assignments and links when a person is deactivated.
+
+    - Set Assignment.is_active=False for all their assignments
+    - Zero out weekly_hours (all by default; or only future weeks if zero_mode == 'future')
+    - Set end_date to today when applicable
+    - Deactivate DeliverableAssignment links (is_active=False)
+    - Create DeactivationAudit with summary metrics
+    - Bump analytics cache version to invalidate aggregates
+    """
+    from core.week_utils import sunday_of_week
+    today = timezone.now().date()
+    this_week = sunday_of_week(today).isoformat()
+
+    with transaction.atomic():
+        person = Person.objects.select_for_update().get(id=person_id)
+
+        assignments = list(Assignment.objects.select_for_update().filter(person_id=person_id))
+        assignments_touched = len(assignments)
+        assignments_deactivated = 0
+        hours_zeroed_total = 0.0
+        week_keys_touched: set[str] = set()
+
+        for a in assignments:
+            # Sum existing hours for audit
+            try:
+                if a.weekly_hours:
+                    hours_zeroed_total += sum(float(v or 0) for v in a.weekly_hours.values())
+            except Exception:
+                pass
+
+            wh = a.weekly_hours or {}
+            if zero_mode == 'future':
+                new_wh = {}
+                for wk, v in wh.items():
+                    try:
+                        if wk < this_week:
+                            new_wh[wk] = v
+                        else:
+                            week_keys_touched.add(wk)
+                    except Exception:
+                        new_wh[wk] = v
+                wh = new_wh
+            else:
+                for wk in wh.keys():
+                    week_keys_touched.add(wk)
+                wh = {}
+
+            a.weekly_hours = wh
+            if a.is_active:
+                a.is_active = False
+                assignments_deactivated += 1
+            if a.end_date is None or (a.end_date and a.end_date > today):
+                a.end_date = today
+            a.save(update_fields=['weekly_hours', 'is_active', 'end_date', 'updated_at'])
+
+        # Deactivate deliverable links
+        links_qs = DeliverableAssignment.objects.select_for_update().filter(person_id=person_id, is_active=True)
+        deliverable_links_deactivated = links_qs.update(is_active=False)
+
+        # Audit
+        audit = DeactivationAudit.objects.create(
+            person=person,
+            user_id=actor_user_id,
+            mode=zero_mode,
+            assignments_touched=assignments_touched,
+            assignments_deactivated=assignments_deactivated,
+            hours_zeroed=float(round(hours_zeroed_total, 2)),
+            week_keys_touched=sorted(list(week_keys_touched)),
+            deliverable_links_deactivated=int(deliverable_links_deactivated or 0),
+        )
+
+        _bump_analytics_cache_version()
+
+        return {
+            'audit_id': audit.id,
+            'assignments_touched': assignments_touched,
+            'assignments_deactivated': assignments_deactivated,
+            'hours_zeroed': float(round(hours_zeroed_total, 2)),
+            'deliverable_links_deactivated': int(deliverable_links_deactivated or 0),
+        }

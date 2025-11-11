@@ -222,6 +222,31 @@ class Person(models.Model):
             'current_week': current_week_key,
             'assignments': assignment_details
         }
+
+
+class DeactivationAudit(models.Model):
+    """Audit record for cleanup actions performed when a person is deactivated.
+
+    Stores compact metrics to assist support and observability while
+    preserving assignment rows for historical reporting.
+    """
+
+    person = models.ForeignKey('people.Person', on_delete=models.CASCADE, related_name='deactivation_audits')
+    user_id = models.IntegerField(blank=True, null=True)
+    mode = models.CharField(max_length=20, default='all')  # 'all' or 'future'
+    assignments_touched = models.IntegerField(default=0)
+    assignments_deactivated = models.IntegerField(default=0)
+    hours_zeroed = models.FloatField(default=0.0)
+    week_keys_touched = models.JSONField(default=list)
+    deliverable_links_deactivated = models.IntegerField(default=0)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-started_at']
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"DeactivationAudit(p={self.person_id}, a={self.assignments_touched}, h={self.hours_zeroed:.1f})"
     
     def get_utilization_over_weeks(self, weeks=1):
         """Calculate utilization over multiple weeks (average)"""

@@ -12,6 +12,7 @@ from django.core.files.storage import default_storage
 from django.db.models import Q
 
 from .models import Person
+from .services import deactivate_person_cleanup
 from .utils.excel_handler import export_people_to_excel, import_people_from_excel
 
 
@@ -106,3 +107,12 @@ def import_people_excel_task(self, storage_path: str, update_existing: bool = Tr
     except Exception as e:
         # Let Celery mark as FAILURE with exception; also include meta for clients
         raise e
+
+
+@shared_task(bind=True)
+def deactivate_person_cleanup_task(self, person_id: int, zero_mode: str = 'all', actor_user_id: int | None = None) -> Dict[str, Any]:
+    """Celery wrapper for deactivation cleanup; safe to run multiple times."""
+    self.update_state(state='STARTED', meta={'progress': 5, 'message': 'Deactivating assignments'})
+    result = deactivate_person_cleanup(person_id=person_id, zero_mode=zero_mode, actor_user_id=actor_user_id)
+    self.update_state(state='PROGRESS', meta={'progress': 95, 'message': 'Finalizing'})
+    return result

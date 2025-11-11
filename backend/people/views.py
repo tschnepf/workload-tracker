@@ -43,10 +43,12 @@ except Exception:
     bulk_skill_matching_async = None  # type: ignore
 try:
     # Celery tasks (optional until async jobs are enabled)
-    from .tasks import export_people_excel_task, import_people_excel_task
+    from .tasks import export_people_excel_task, import_people_excel_task, deactivate_person_cleanup_task
 except Exception:
     export_people_excel_task = None  # type: ignore
     import_people_excel_task = None  # type: ignore
+    deactivate_person_cleanup_task = None  # type: ignore
+from .services import deactivate_person_cleanup
 
 class FindAvailableThrottle(ScopedRateThrottle):
     scope = 'find_available'
@@ -103,6 +105,37 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 qs = qs.filter(is_active=True)
 
         return qs
+
+    def update(self, request, *args, **kwargs):
+        """Override update to trigger deactivation cleanup when is_active flips to false.
+
+        Enqueues a Celery task when available; otherwise runs synchronously in-process.
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        was_active = bool(instance.is_active)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        instance.refresh_from_db()
+
+        now_inactive = was_active and (not instance.is_active)
+        if now_inactive:
+            try:
+                actor_id = getattr(getattr(request, 'user', None), 'id', None)
+            except Exception:
+                actor_id = None
+            try:
+                if deactivate_person_cleanup_task is not None:
+                    deactivate_person_cleanup_task.delay(instance.id, 'all', actor_id)
+                else:
+                    # Fallback synchronous path
+                    deactivate_person_cleanup(instance.id, zero_mode='all', actor_user_id=actor_id)
+            except Exception:
+                # Non-fatal: the person is already inactive; aggregates will eventually reflect
+                pass
+
+        return Response(serializer.data)
     
     @extend_schema(
         parameters=[
