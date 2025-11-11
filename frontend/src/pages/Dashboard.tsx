@@ -375,7 +375,7 @@ const Dashboard: React.FC = () => {
         {/* Summary Stats + Analytics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
           {/* Consolidated summary card (narrow, vertical list) */}
-          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-2 w-full">
+          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-1 w-full">
             <div className="flex flex-col gap-6">
               <div>
                 <div className="text-[var(--muted)] text-sm">Total Team Members</div>
@@ -409,12 +409,12 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Future Assigned Hours by Client (double width vs. compact) */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <AssignedHoursByClientCard size={96} className="w-full" />
           </div>
 
           {/* Role Capacity vs Assigned by Role (placed to the right of client card) */}
-          <div className="lg:col-span-4">
+          <div className="lg:col-span-6">
             {/* Show display mode toggle on dashboard; keep timeframe compact */}
             <RoleCapacityCard hideControls={{ timeframe: true }} />
           </div>
