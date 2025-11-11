@@ -71,6 +71,12 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
         secure: false,
       },
+      // Proxy public calendar feeds to Django (so the SPA doesn't intercept them)
+      '/calendar': {
+        target: DEV_PROXY_TARGET,
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   resolve: {
