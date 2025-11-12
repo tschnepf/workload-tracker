@@ -413,9 +413,9 @@ const Dashboard: React.FC = () => {
         ) : null}
 
         {/* Summary Stats + Analytics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+        <div className="grid grid-cols-12 gap-6">
           {/* Consolidated summary card (narrow, vertical list) */}
-          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-1 w-full">
+          <Card className="bg-[var(--card)] border-[var(--border)] col-span-12 sm:col-span-6 lg:col-span-3 w-full min-w-[16rem]">
             <div className="flex flex-col gap-6">
               <div>
                 <div className="text-[var(--muted)] text-sm">Total Team Members</div>
@@ -444,7 +444,7 @@ const Dashboard: React.FC = () => {
           </Card>
 
           {/* Utilization Distribution (moved to top row, 1 column, vertical) */}
-          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-1 w-full">
+          <Card className="bg-[var(--card)] border-[var(--border)] col-span-12 sm:col-span-6 lg:col-span-3 w-full min-w-[16rem]">
             <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Utilization Distribution</h3>
             <div className="flex flex-col gap-6">
               <div>
@@ -467,18 +467,18 @@ const Dashboard: React.FC = () => {
           </Card>
 
           {/* Future Assigned Hours by Status (compact) */}
-          <div className="lg:col-span-1">
+          <div className="col-span-12 sm:col-span-6 lg:col-span-3 min-w-[16rem]">
             <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
           </div>
 
           {/* Future Assigned Hours by Client (double width vs. compact) */
           }
-          <div className="lg:col-span-1">
+          <div className="col-span-12 sm:col-span-6 lg:col-span-3 min-w-[16rem]">
             <AssignedHoursByClientCard size={96} className="w-full" />
           </div>
 
           {/* Availability (1 column, top row) */}
-          <Card className="bg-[var(--card)] border-[var(--border)] lg:col-span-1">
+          <Card className="bg-[var(--card)] border-[var(--border)] col-span-12 sm:col-span-6 lg:col-span-3 min-w-[16rem]">
             <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Availability</h3>
             {heatData && heatData.length > 0 && currentWeekKey ? (
               <div className="overflow-x-auto">
@@ -587,15 +587,15 @@ const Dashboard: React.FC = () => {
           </Card>
 
           {/* Role Capacity vs Assigned by Role (placed to the right of client card) */}
-          <div className="lg:col-span-6">
+          <div className="col-span-12">
             {/* Show display mode toggle on dashboard; keep timeframe compact */}
             <RoleCapacityCard hideControls={{ timeframe: true }} />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-12 gap-6">
           {/* Team Utilization Heat Map (compact) - moved up to left column */}
-          <Card className="lg:col-span-2 lg:row-span-2 bg-[var(--card)] border-[var(--border)]">
+          <Card className="col-span-12 lg:col-span-8 lg:row-span-2 bg-[var(--card)] border-[var(--border)]">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-semibold text-[var(--text)]">Team Utilization Heat Map</h3>
               <div className="flex items-center gap-2 text-sm">
@@ -686,7 +686,7 @@ const Dashboard: React.FC = () => {
           </Card>
 
           {/* Team Members (by department) - right of heatmap */}
-          <Card className="bg-[var(--card)] border-[var(--border)]">
+          <Card className="bg-[var(--card)] border-[var(--border)] col-span-12 lg:col-span-4">
             <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Team Members</h3>
             {heatData && heatData.length > 0 ? (
               <div className="text-sm">
@@ -723,7 +723,7 @@ const Dashboard: React.FC = () => {
           
 
           {/* Team Overview (below heatmap) */}
-          <Card className="lg:col-span-2 bg-[var(--card)] border-[var(--border)]">
+          <Card className="col-span-12 lg:col-span-8 bg-[var(--card)] border-[var(--border)]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-[var(--text)]">Team Overview</h3>
               <div className="flex items-center gap-2 text-sm">

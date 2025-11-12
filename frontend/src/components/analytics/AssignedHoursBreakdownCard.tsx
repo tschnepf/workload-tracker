@@ -87,7 +87,7 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
   return (
-    <Card className={`bg-[var(--card)] border-[var(--border)] w-[280px] max-w-[320px] ${className || ''}`}>
+    <Card className={`bg-[var(--card)] border-[var(--border)] w-full min-w-[16rem] ${className || ''}`}>
       <div className="p-4">
         <div className="mb-2">
           <h3 className="text-base font-semibold text-[var(--text)]">Assigned Hours</h3>

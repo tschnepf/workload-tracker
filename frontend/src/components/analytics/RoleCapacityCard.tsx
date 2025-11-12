@@ -175,17 +175,19 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
           <h2 className="text-lg font-semibold text-[var(--text)] mb-2">{title}</h2>
           {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
           <div className="flex items-start gap-4">
-            <div className="shrink-0">
-              {!error && (
-                <MultiRoleCapacityChart
-                  weekKeys={weekKeys}
-                  series={displayedSeries as any}
-                  mode={mode}
-                  tension={tension}
-                  hideLegend
-                  height={dynamicHeight}
-                />
-              )}
+            <div className="shrink-0 w-full overflow-x-auto">
+              <div className="inline-block">
+                {!error && (
+                  <MultiRoleCapacityChart
+                    weekKeys={weekKeys}
+                    series={displayedSeries as any}
+                    mode={mode}
+                    tension={tension}
+                    hideLegend
+                    height={dynamicHeight}
+                  />
+                )}
+              </div>
             </div>
             {/* Combined legend + role selector (vertical, right side) */}
             <div className="w-64 shrink-0">
