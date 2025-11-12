@@ -468,13 +468,13 @@ const Dashboard: React.FC = () => {
 
           {/* Future Assigned Hours by Status (compact) */}
           <div className="col-span-12 sm:col-span-6 lg:col-span-3 min-w-[16rem]">
-            <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} />
+            <AssignedHoursBreakdownCard className="w-full max-w-none" size={96} responsive />
           </div>
 
           {/* Future Assigned Hours by Client (double width vs. compact) */
           }
           <div className="col-span-12 sm:col-span-6 lg:col-span-3 min-w-[16rem]">
-            <AssignedHoursByClientCard size={96} className="w-full" />
+            <AssignedHoursByClientCard size={96} className="w-full" responsive />
           </div>
 
           {/* Availability (1 column, top row) */}
