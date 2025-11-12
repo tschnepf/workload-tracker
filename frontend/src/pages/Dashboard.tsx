@@ -568,7 +568,7 @@ const Dashboard: React.FC = () => {
                         for (const r of group) {
                           elements.push(
                             <tr key={`p-${rid ?? 'none'}-${r.id}`} className="border-t border-[var(--border)]">
-                              <td className="py-1 pr-2 text-[var(--text)] pl-3">{r.name}</td>
+                              <td className="py-1 pr-2 text-[var(--text)] pl-3 max-w-[12rem] truncate" title={r.name}>{r.name}</td>
                               <td className="py-1 px-2 text-right text-emerald-400">{r.curAvail.toFixed(0)}h</td>
                               <td className="py-1 pl-2 text-right text-emerald-400">{r.nextAvail.toFixed(0)}h</td>
                             </tr>
