@@ -68,6 +68,7 @@ type Props = {
   departmentIdOverride?: number | null;
   includeChildrenOverride?: boolean;
   className?: string;
+  responsive?: boolean; // derive size from container width when true
 };
 
 const AssignedHoursBreakdownCard: React.FC<Props> = ({
@@ -77,7 +78,10 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
   departmentIdOverride,
   includeChildrenOverride,
   className,
+  responsive = false,
 }) => {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const { width } = (require('@/hooks/useContainerWidth') as typeof import('@/hooks/useContainerWidth')).useContainerWidth(rootRef);
   const [weeks, setWeeks] = React.useState<HorizonWeeks>(initialWeeks);
   const { state: deptState } = useDepartmentFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
@@ -86,9 +90,15 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
 
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
+  const chartSize = React.useMemo(() => {
+    if (!responsive || !width) return size;
+    const s = Math.floor(width * 0.35);
+    return Math.max(96, Math.min(180, s));
+  }, [responsive, width, size]);
+
   return (
     <Card className={`bg-[var(--card)] border-[var(--border)] w-full min-w-[16rem] ${className || ''}`}>
-      <div className="p-4">
+      <div ref={rootRef} className="p-4">
         <div className="mb-2">
           <h3 className="text-base font-semibold text-[var(--text)]">Assigned Hours</h3>
           <div className="text-[10px] text-[var(--muted)]">Includes current week; by project type</div>
@@ -119,7 +129,7 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
         ) : (
           <div className="flex items-center gap-3">
             <div className="shrink-0">
-              <PieChart slices={slices} size={size} />
+              <PieChart slices={slices} size={chartSize} />
             </div>
 
             <div className="flex flex-col gap-2">

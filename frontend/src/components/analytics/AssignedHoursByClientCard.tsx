@@ -70,6 +70,7 @@ type Props = {
   departmentIdOverride?: number | null;
   includeChildrenOverride?: boolean;
   className?: string;
+  responsive?: boolean; // derive pie size from container width when true
 };
 
 const AssignedHoursByClientCard: React.FC<Props> = ({
@@ -79,7 +80,10 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
   departmentIdOverride,
   includeChildrenOverride,
   className,
+  responsive = false,
 }) => {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const { width } = (require('@/hooks/useContainerWidth') as typeof import('@/hooks/useContainerWidth')).useContainerWidth(rootRef);
   const [weeks, setWeeks] = React.useState<ClientHorizonWeeks>(initialWeeks);
   const { state: deptState } = useDepartmentFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
@@ -131,9 +135,15 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
 
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
+  const chartSize = React.useMemo(() => {
+    if (!responsive || !width) return size;
+    const s = Math.floor(width * 0.35);
+    return Math.max(96, Math.min(180, s));
+  }, [responsive, width, size]);
+
   return (
     <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
-      <div className="p-4">
+      <div ref={rootRef} className="p-4">
         <div className="mb-2 flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-[var(--text)]">
@@ -186,7 +196,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
               {/* Panel 1: By Client */}
               <div className="w-full flex-shrink-0 flex items-center gap-3">
                 <div className="shrink-0">
-                  <PieChart slices={slices} size={size} onSliceClick={(s) => setFocusClient(s.label)} />
+                  <PieChart slices={slices} size={chartSize} onSliceClick={(s) => setFocusClient(s.label)} />
                 </div>
 
                 <div className="flex flex-col gap-2 w-full">
