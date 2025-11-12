@@ -21,6 +21,7 @@ export interface RoleCapacityCardProps {
   tension?: number; // 0..1 smoothing
   className?: string;
   hideControls?: HideControls;
+  responsive?: boolean; // when true, derive chart height from container width
 }
 
 const WEEK_OPTIONS: ReadonlyArray<4 | 8 | 12 | 16 | 20> = [4, 8, 12, 16, 20];
@@ -34,7 +35,9 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   tension = 0.75,
   className,
   hideControls,
+  responsive = false,
 }) => {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
   const { state: globalDept } = useDepartmentFilter();
   const effectiveDeptId = (departmentId ?? globalDept.selectedDepartmentId) ?? null;
 
@@ -122,9 +125,24 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
     return Math.max(min, header + roles.length * perRole);
   }, [roles.length]);
 
+  // Optional responsive height derived from container width
+  const containerWidth = (() => {
+    try {
+      // Lazy import to avoid circular reference issues if any
+      const mod = require('@/hooks/useContainerWidth') as typeof import('@/hooks/useContainerWidth');
+      const { width } = mod.useContainerWidth(rootRef);
+      return width;
+    } catch { return undefined; }
+  })();
+  const autoHeight = React.useMemo(() => {
+    if (!responsive || !containerWidth) return dynamicHeight;
+    const h = Math.floor(containerWidth * 0.5);
+    return Math.max(280, Math.min(560, h));
+  }, [responsive, containerWidth, dynamicHeight]);
+
   return (
     <Card className={className ?? 'bg-[var(--card)] border-[var(--border)]'}>
-      <div className="p-4 space-y-4">
+      <div ref={rootRef} className="p-4 space-y-4">
         <div className="flex items-end gap-4 flex-wrap">
           <div className="min-w-[120px]">
             <div className="text-[var(--muted)] text-xs">Department</div>
@@ -184,7 +202,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
                     mode={mode}
                     tension={tension}
                     hideLegend
-                    height={dynamicHeight}
+                    height={autoHeight}
                   />
                 )}
               </div>
