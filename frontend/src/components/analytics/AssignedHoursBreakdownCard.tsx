@@ -1,6 +1,7 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { useAssignedHoursBreakdownData, type HorizonWeeks, type Slice } from '@/hooks/useAssignedHoursBreakdownData';
 
 // removed old donut chart (kept PieChart below)
@@ -81,7 +82,7 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
   responsive = false,
 }) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
-  const { width } = (require('@/hooks/useContainerWidth') as typeof import('@/hooks/useContainerWidth')).useContainerWidth(rootRef);
+  const { width } = useContainerWidth(rootRef);
   const [weeks, setWeeks] = React.useState<HorizonWeeks>(initialWeeks);
   const { state: deptState } = useDepartmentFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
