@@ -22,13 +22,21 @@ class Migration(migrations.Migration):
         # Backfill example roles from existing assignments, best effort
         migrations.RunSQL(
             sql=(
-                "INSERT INTO core_projectrole (name, name_key, created_at, updated_at) "
-                "SELECT DISTINCT role_on_project, LOWER(TRIM(role_on_project)), NOW(), NOW() "
-                "FROM assignments_assignment "
-                "WHERE role_on_project IS NOT NULL AND TRIM(role_on_project) <> '' "
-                "ON CONFLICT (name_key) DO NOTHING;"
+                "DO $$ "
+                "BEGIN "
+                "IF EXISTS ("
+                "    SELECT 1 FROM information_schema.tables "
+                "    WHERE table_name = 'assignments_assignment' "
+                "      AND table_schema = 'public'"
+                ") THEN "
+                "    INSERT INTO core_projectrole (name, name_key, created_at, updated_at) "
+                "    SELECT DISTINCT role_on_project, LOWER(TRIM(role_on_project)), NOW(), NOW() "
+                "    FROM assignments_assignment "
+                "    WHERE role_on_project IS NOT NULL AND TRIM(role_on_project) <> '' "
+                "    ON CONFLICT (name_key) DO NOTHING; "
+                "END IF; "
+                "END $$;"
             ),
             reverse_sql=migrations.RunSQL.noop,
         ),
     ]
-

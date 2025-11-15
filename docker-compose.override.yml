@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # Frontend developer experience (Vite dev server inside container)
   frontend:

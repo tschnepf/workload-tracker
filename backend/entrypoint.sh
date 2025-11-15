@@ -50,6 +50,12 @@ else
   echo "Skipping collectstatic (COLLECT_STATIC=${COLLECT_STATIC})"
 fi
 
+# Ensure Celery beat schedule directory exists if a custom path is configured
+if [ -n "${CELERY_BEAT_SCHEDULE_FILE:-}" ]; then
+  BEAT_DIR=$(dirname "${CELERY_BEAT_SCHEDULE_FILE}")
+  mkdir -p "$BEAT_DIR"
+fi
+
 if [ "${DEBUG:-false}" = "true" ]; then
   echo "Ensuring default superuser (dev only)..."
   python - <<'PY'
