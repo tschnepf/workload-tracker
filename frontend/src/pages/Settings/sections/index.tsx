@@ -8,7 +8,7 @@ import CalendarFeedsSection, { CALENDAR_FEEDS_SECTION_ID } from './CalendarFeeds
 import AdminUsersSection, { ADMIN_USERS_SECTION_ID } from './AdminUsersSection';
 import BackupRestoreSection, { BACKUP_RESTORE_SECTION_ID } from './BackupRestoreSection';
 import AuditLogSection, { AUDIT_LOG_SECTION_ID } from './AuditLogSection';
-import IntegrationsPlaceholderSection, { INTEGRATIONS_SECTION_ID } from './IntegrationsPlaceholderSection';
+import IntegrationsSection, { INTEGRATIONS_SECTION_ID } from './IntegrationsSection';
 
 export type SettingsSectionDefinition = {
   id: string;
@@ -66,7 +66,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Integrations Hub',
     requiresAdmin: true,
     featureFlag: (caps) => !!caps?.integrations?.enabled,
-    component: IntegrationsPlaceholderSection,
+    component: IntegrationsSection,
   },
   {
     id: AUDIT_LOG_SECTION_ID,

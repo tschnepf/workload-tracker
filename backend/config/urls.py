@@ -103,6 +103,10 @@ def capabilities_view(request):
         caps['projectRolesByDepartment'] = bool(settings.FEATURES.get('PROJECT_ROLES_BY_DEPARTMENT', False))
     except Exception:
         caps['projectRolesByDepartment'] = False
+    try:
+        caps['integrations'] = {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}
+    except Exception:
+        caps['integrations'] = {'enabled': False}
     return Response(caps)
 
 urlpatterns = [
@@ -145,6 +149,7 @@ urlpatterns = [
     path('api/reports/', include('reports.urls')),
     path('api/core/', include('core.urls')),
     path('api/', include('roles.urls')),
+    path('api/integrations/', include('integrations.urls')),
     # Public ICS calendar feeds (token-protected via querystring)
     path('calendar/deliverables.ics', deliverables_ics, name='calendar_deliverables_ics'),
 ]

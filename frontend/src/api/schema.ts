@@ -268,6 +268,22 @@ export interface paths {
      */
     get: operations["capabilities_retrieve"];
   };
+  "/api/core/calendar_feeds/": {
+    /**
+     * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+     *
+     * - GET: returns current token values
+     * - PATCH: set a specific token or regenerate with {regenerate: true}
+     */
+    get: operations["core_calendar_feeds_retrieve"];
+    /**
+     * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+     *
+     * - GET: returns current token values
+     * - PATCH: set a specific token or regenerate with {regenerate: true}
+     */
+    patch: operations["core_calendar_feeds_partial_update"];
+  };
   "/api/core/department_project_roles/": {
     get: operations["core_department_project_roles_retrieve"];
     post: operations["core_department_project_roles_create"];
@@ -547,6 +563,42 @@ export interface paths {
     delete: operations["departments_destroy"];
     patch: operations["departments_partial_update"];
   };
+  "/api/integrations/connections/": {
+    get: operations["integrations_connections_list"];
+    post: operations["integrations_connections_create"];
+  };
+  "/api/integrations/connections/{id}/": {
+    get: operations["integrations_connections_retrieve"];
+    put: operations["integrations_connections_update"];
+    delete: operations["integrations_connections_destroy"];
+    patch: operations["integrations_connections_partial_update"];
+  };
+  "/api/integrations/providers/": {
+    get: operations["integrations_providers_retrieve"];
+  };
+  "/api/integrations/providers/{key}/": {
+    get: operations["integrations_providers_retrieve_2"];
+  };
+  "/api/integrations/providers/{key}/catalog/": {
+    get: operations["integrations_providers_catalog_retrieve"];
+  };
+  "/api/integrations/providers/{key}/objects/": {
+    get: operations["integrations_providers_objects_retrieve"];
+  };
+  "/api/integrations/providers/{provider_key}/{object_key}/mapping/defaults/": {
+    get: operations["integrations_providers_mapping_defaults_retrieve"];
+    post: operations["integrations_providers_mapping_defaults_create"];
+  };
+  "/api/integrations/rules/": {
+    get: operations["integrations_rules_list"];
+    post: operations["integrations_rules_create"];
+  };
+  "/api/integrations/rules/{id}/": {
+    get: operations["integrations_rules_retrieve"];
+    put: operations["integrations_rules_update"];
+    delete: operations["integrations_rules_destroy"];
+    patch: operations["integrations_rules_partial_update"];
+  };
   "/api/jobs/{job_id}/": {
     /**
      * @description Return status and metadata for a Celery job.
@@ -583,8 +635,9 @@ export interface paths {
      */
     get: operations["people_retrieve"];
     /**
-     * @description Person CRUD API with utilization calculations
-     * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+     * @description Override update to trigger deactivation cleanup when is_active flips to false.
+     *
+     * Enqueues a Celery task when available; otherwise runs synchronously in-process.
      */
     put: operations["people_update"];
     /**
@@ -1021,6 +1074,11 @@ export interface components {
       status: string;
       etag: string;
     };
+    CalendarFeedSettings: {
+      deliverables_token: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
     ChangePasswordRequestRequest: {
       currentPassword: string;
       newPassword: string;
@@ -1218,6 +1276,12 @@ export interface components {
       projectsCount: number;
     };
     /**
+     * @description * `sandbox` - Sandbox
+     * * `production` - Production
+     * @enum {string}
+     */
+    EnvironmentEnum: "sandbox" | "production";
+    /**
      * @description * `joined` - Joined
      * * `left` - Left
      * @enum {string}
@@ -1260,6 +1324,48 @@ export interface components {
           [key: string]: number;
         };
       };
+    };
+    IntegrationConnection: {
+      id: number;
+      provider: string;
+      providerDisplayName: string;
+      company_id: string;
+      environment: components["schemas"]["EnvironmentEnum"];
+      is_active?: boolean;
+      needs_reauth?: boolean;
+      is_disabled?: boolean;
+      extra_headers?: unknown;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    IntegrationConnectionRequest: {
+      providerKey: string;
+      company_id: string;
+      environment: components["schemas"]["EnvironmentEnum"];
+      is_active?: boolean;
+      needs_reauth?: boolean;
+      is_disabled?: boolean;
+      extra_headers?: unknown;
+    };
+    IntegrationRule: {
+      id: number;
+      connection: number;
+      object_key: string;
+      config?: unknown;
+      is_enabled?: boolean;
+      revision: number;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    IntegrationRuleRequest: {
+      connection_id: number;
+      object_key: string;
+      config?: unknown;
+      is_enabled?: boolean;
     };
     InviteUserRequestRequest: {
       /** Format: email */
@@ -1444,6 +1550,36 @@ export interface components {
       previous?: string | null;
       results: components["schemas"]["Department"][];
     };
+    PaginatedIntegrationConnectionList: {
+      /** @example 123 */
+      count: number;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=4
+       */
+      next?: string | null;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=2
+       */
+      previous?: string | null;
+      results: components["schemas"]["IntegrationConnection"][];
+    };
+    PaginatedIntegrationRuleList: {
+      /** @example 123 */
+      count: number;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=4
+       */
+      next?: string | null;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=2
+       */
+      previous?: string | null;
+      results: components["schemas"]["IntegrationRule"][];
+    };
     PaginatedPersonCapacityHeatmapItemList: {
       /** @example 123 */
       count: number;
@@ -1614,6 +1750,10 @@ export interface components {
     PatchedBulkUpdateHoursRequestRequest: {
       updates?: components["schemas"]["AssignmentHoursUpdateRequest"][];
     };
+    PatchedCalendarFeedsPatchRequest: {
+      deliverables_token?: string;
+      regenerate?: boolean;
+    };
     /** @description Serializer for linking people to deliverables with weekly hours. */
     PatchedDeliverableAssignmentRequest: {
       deliverable?: number;
@@ -1644,6 +1784,21 @@ export interface components {
       manager?: number | null;
       description?: string;
       isActive?: boolean;
+    };
+    PatchedIntegrationConnectionRequest: {
+      providerKey?: string;
+      company_id?: string;
+      environment?: components["schemas"]["EnvironmentEnum"];
+      is_active?: boolean;
+      needs_reauth?: boolean;
+      is_disabled?: boolean;
+      extra_headers?: unknown;
+    };
+    PatchedIntegrationRuleRequest: {
+      connection_id?: number;
+      object_key?: string;
+      config?: unknown;
+      is_enabled?: boolean;
     };
     /** @description Person serializer with department and role integration */
     PatchedPersonRequest: {
@@ -3192,6 +3347,43 @@ export interface operations {
       };
     };
   };
+  /**
+   * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+   *
+   * - GET: returns current token values
+   * - PATCH: set a specific token or regenerate with {regenerate: true}
+   */
+  core_calendar_feeds_retrieve: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["CalendarFeedSettings"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+   *
+   * - GET: returns current token values
+   * - PATCH: set a specific token or regenerate with {regenerate: true}
+   */
+  core_calendar_feeds_partial_update: {
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
+        "multipart/form-data": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["CalendarFeedSettings"];
+        };
+      };
+    };
+  };
   core_department_project_roles_retrieve: {
     responses: {
       /** @description No response body */
@@ -4120,6 +4312,289 @@ export interface operations {
       };
     };
   };
+  integrations_connections_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedIntegrationConnectionList"];
+        };
+      };
+    };
+  };
+  integrations_connections_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntegrationConnectionRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["IntegrationConnectionRequest"];
+        "multipart/form-data": components["schemas"]["IntegrationConnectionRequest"];
+      };
+    };
+    responses: {
+      201: {
+        content: {
+          "application/json": components["schemas"]["IntegrationConnection"];
+        };
+      };
+    };
+  };
+  integrations_connections_retrieve: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this integration connection. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["IntegrationConnection"];
+        };
+      };
+    };
+  };
+  integrations_connections_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this integration connection. */
+        id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntegrationConnectionRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["IntegrationConnectionRequest"];
+        "multipart/form-data": components["schemas"]["IntegrationConnectionRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["IntegrationConnection"];
+        };
+      };
+    };
+  };
+  integrations_connections_destroy: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this integration connection. */
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  integrations_connections_partial_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this integration connection. */
+        id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PatchedIntegrationConnectionRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedIntegrationConnectionRequest"];
+        "multipart/form-data": components["schemas"]["PatchedIntegrationConnectionRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["IntegrationConnection"];
+        };
+      };
+    };
+  };
+  integrations_providers_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_retrieve_2: {
+    parameters: {
+      path: {
+        key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_catalog_retrieve: {
+    parameters: {
+      path: {
+        key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_objects_retrieve: {
+    parameters: {
+      path: {
+        key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_mapping_defaults_retrieve: {
+    parameters: {
+      path: {
+        object_key: string;
+        provider_key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_mapping_defaults_create: {
+    parameters: {
+      path: {
+        object_key: string;
+        provider_key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_rules_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedIntegrationRuleList"];
+        };
+      };
+    };
+  };
+  integrations_rules_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntegrationRuleRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleRequest"];
+        "multipart/form-data": components["schemas"]["IntegrationRuleRequest"];
+      };
+    };
+    responses: {
+      201: {
+        content: {
+          "application/json": components["schemas"]["IntegrationRule"];
+        };
+      };
+    };
+  };
+  integrations_rules_retrieve: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this integration rule. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["IntegrationRule"];
+        };
+      };
+    };
+  };
+  integrations_rules_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this integration rule. */
+        id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntegrationRuleRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleRequest"];
+        "multipart/form-data": components["schemas"]["IntegrationRuleRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["IntegrationRule"];
+        };
+      };
+    };
+  };
+  integrations_rules_destroy: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this integration rule. */
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  integrations_rules_partial_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this integration rule. */
+        id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PatchedIntegrationRuleRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedIntegrationRuleRequest"];
+        "multipart/form-data": components["schemas"]["PatchedIntegrationRuleRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["IntegrationRule"];
+        };
+      };
+    };
+  };
   /**
    * @description Return status and metadata for a Celery job.
    *
@@ -4266,8 +4741,9 @@ export interface operations {
     };
   };
   /**
-   * @description Person CRUD API with utilization calculations
-   * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+   * @description Override update to trigger deactivation cleanup when is_active flips to false.
+   *
+   * Enqueues a Celery task when available; otherwise runs synchronously in-process.
    */
   people_update: {
     parameters: {

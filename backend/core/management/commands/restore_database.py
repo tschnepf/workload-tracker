@@ -14,6 +14,12 @@ from django.core.management import call_command
 
 from core.backup_utils import meta_path_for
 
+try:  # pragma: no cover - defensive import
+    from integrations.services import flag_connections_after_restore  # type: ignore
+except Exception:  # pragma: no cover
+    def flag_connections_after_restore(_meta):
+        return False
+
 CONFIRM_PHRASE = "I understand this will irreversibly overwrite data"
 
 
@@ -347,6 +353,11 @@ class Command(BaseCommand):
                     vacuumed = True
                 except Exception:
                     pass
+
+            try:
+                flag_connections_after_restore(sidecar)
+            except Exception:
+                pass
 
             out = {
                 "success": True,

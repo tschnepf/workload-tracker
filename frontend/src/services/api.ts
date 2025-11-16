@@ -30,6 +30,19 @@ class ApiError extends Error {
 
 const IS_DEV = import.meta.env && (import.meta.env.DEV ?? false);
 
+export type SystemCapabilities = {
+  asyncJobs: boolean;
+  aggregates: Record<string, boolean>;
+  cache: { shortTtlAggregates: boolean; aggregateTtlSeconds: number };
+  projectRolesByDepartment?: boolean;
+  personalDashboard?: boolean;
+  integrations?: {
+    enabled: boolean;
+    providers?: Array<{ key: string; displayName: string }>;
+    details?: Record<string, unknown>;
+  };
+};
+
 // Delegate to shared error mapper to avoid duplication
 function friendlyErrorMessage(status: number, data: any, fallback: string): string {
   return _friendlyErrorMessage(status, data, fallback);
@@ -1241,8 +1254,8 @@ export const backupApi = {
 
 // System API (capabilities, etc.)
 export const systemApi = {
-  getCapabilities: async (): Promise<{ asyncJobs: boolean; aggregates: Record<string, boolean>; cache: { shortTtlAggregates: boolean; aggregateTtlSeconds: number } }> => {
-    return fetchApi(`/capabilities/`);
+  getCapabilities: async (): Promise<SystemCapabilities> => {
+    return fetchApi<SystemCapabilities>(`/capabilities/`);
   },
 };
 

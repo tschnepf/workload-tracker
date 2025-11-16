@@ -172,6 +172,19 @@ Page‑by‑Page Guide
   - Choose a color theme.
   - See your username, email, and account role.
 
+## Integrations Prerequisites
+
+The upcoming Integrations Hub relies on `cryptography` (for secure token storage) and `jsonschema` (provider metadata validation). Both packages are tracked in `backend/requirements.txt`. Run `pip install -r backend/requirements.txt` after pulling the latest code so these dependencies are available before working on the Integrations app.
+
+When running the backend container locally, set:
+
+- `INTEGRATIONS_ENABLED=true`
+- `INTEGRATIONS_SECRET_KEY=<base64 Fernet key>` (comma-separated for MultiFernet rotation)
+
+Without those values the Integrations endpoints stay disabled.
+
+For OAuth callbacks, set `BQE_CLIENT_ID`, `BQE_CLIENT_SECRET`, and `BQE_REDIRECT_URI` (match the URL configured in the BQE developer portal so `/api/integrations/bqe/connect/callback` succeeds).
+
 **Authentication Pages**
 - Login: Enter your username (or email) and password.
 - Reset Password: Request a reset link if you forget your password.

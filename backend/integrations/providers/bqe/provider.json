@@ -1,0 +1,87 @@
+{
+  "providerSchemaVersion": "1.0.0",
+  "key": "bqe",
+  "displayName": "BQE CORE",
+  "oauth": {
+    "flows": ["authorization_code_pkce", "client_credentials"],
+    "scopes": [
+      "bqe_api",
+      "offline_access",
+      "projects.read",
+      "projects.write"
+    ],
+    "authBaseUrl": "https://auth.bqe.com/oauth2/authorize",
+    "tokenUrl": "https://auth.bqe.com/oauth2/token"
+  },
+  "requiredHeaders": [
+    {
+      "key": "X-Company-Id",
+      "label": "Company ID",
+      "source": "connection"
+    },
+    {
+      "key": "X-Request-ID",
+      "label": "Request ID",
+      "source": "env",
+      "envKey": "INTEGRATIONS_REQUEST_ID"
+    }
+  ],
+  "baseUrlVariants": {
+    "default": "https://api.bqe.com/v3",
+    "sandbox": "https://sandbox-api.bqe.com/v3"
+  },
+  "rateLimits": {
+    "requestsPerMinute": 60,
+    "burst": 120,
+    "maxConcurrentPerConnection": 4,
+    "globalRequestsPerMinute": 600
+  },
+  "objects": [
+    {
+      "key": "projects",
+      "label": "Projects",
+      "capabilities": {
+        "list": true,
+        "delta": true
+      },
+      "fields": [
+        { "key": "projectId", "label": "Project ID", "type": "string", "nullable": false },
+        { "key": "name", "label": "Project Name", "type": "string", "nullable": false },
+        { "key": "number", "label": "Project Number", "type": "string", "nullable": true },
+        { "key": "status", "label": "Status", "type": "string", "nullable": false },
+        { "key": "clientName", "label": "Client Name", "type": "string", "nullable": true },
+        { "key": "clientId", "label": "Client ID", "type": "string", "nullable": true },
+        { "key": "parentProjectId", "label": "Parent Project ID", "type": "string", "nullable": true },
+        { "key": "updatedOn", "label": "Updated On", "type": "datetime", "nullable": false },
+        { "key": "startDate", "label": "Start Date", "type": "date", "nullable": true },
+        { "key": "endDate", "label": "End Date", "type": "date", "nullable": true }
+      ],
+      "hierarchy": {
+        "parentKey": "parentProjectId",
+        "childPredicate": "parentProjectId != null"
+      },
+      "filters": {
+        "parentOnly": {
+          "query": "parentProjectId=null",
+          "description": "Server-side filter that returns only top-level projects."
+        },
+        "updatedSince": {
+          "query": "updatedOn>{cursor}",
+          "description": "Delta filter for incremental syncs."
+        }
+      },
+      "deletionPolicy": "mark_inactive_keep_link",
+      "mapping": {
+        "schemaVersion": "1.0.0",
+        "defaults": [
+          { "source": "clientName", "target": "project.client", "behavior": "write_once" },
+          { "source": "clientName", "target": "project.bqe_client_name", "behavior": "follow_bqe" },
+          { "source": "clientId", "target": "project.bqe_client_id", "behavior": "follow_bqe" },
+          { "source": "name", "target": "project.name", "behavior": "follow_bqe" },
+          { "source": "status", "target": "project.status", "behavior": "follow_bqe" },
+          { "source": "number", "target": "project.project_number", "behavior": "write_once" }
+        ]
+      }
+    }
+  ]
+}

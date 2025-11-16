@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Integration Rule",
+  "type": "object",
+  "required": [
+    "objectKey",
+    "fields",
+    "filters",
+    "syncBehavior",
+    "conflictPolicy",
+    "deletionPolicy",
+    "initialSyncMode",
+    "clientSyncPolicy"
+  ],
+  "properties": {
+    "objectKey": { "type": "string" },
+    "fields": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "filters": { "type": "object" },
+    "intervalMinutes": { "type": "integer", "minimum": 5 },
+    "cronExpression": {
+      "type": "string",
+      "minLength": 9,
+      "description": "Standard 5-field cron expression (minute hour day month weekday)."
+    },
+    "syncBehavior": { "type": "string", "enum": ["full", "delta"] },
+    "conflictPolicy": { "type": "string", "enum": ["upsert", "skip"] },
+    "deletionPolicy": {
+      "type": "string",
+      "enum": ["mark_inactive_keep_link", "ignore", "soft_delete"]
+    },
+    "includeSubprojects": { "type": "boolean", "default": false },
+    "initialSyncMode": {
+      "type": "string",
+      "enum": ["full_once", "delta_only_after_date", "delta_only_from_now"]
+    },
+    "initialSyncSince": { "type": "string", "format": "date-time" },
+    "clientSyncPolicy": {
+      "type": "string",
+      "enum": ["preserve_local", "follow_bqe", "write_once"]
+    },
+    "dryRun": { "type": "boolean", "default": false }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "initialSyncMode": { "const": "delta_only_after_date" } },
+        "required": ["initialSyncMode"]
+      },
+      "then": { "required": ["initialSyncSince"] }
+    }
+  ],
+  "anyOf": [
+    { "required": ["intervalMinutes"] },
+    { "required": ["cronExpression"] }
+  ],
+  "additionalProperties": true
+}

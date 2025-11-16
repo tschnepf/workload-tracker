@@ -8,6 +8,7 @@ from pathlib import Path
 from datetime import timedelta
 import logging
 import sentry_sdk
+from django.core.exceptions import ImproperlyConfigured
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
@@ -63,6 +64,7 @@ LOCAL_APPS = [
     'accounts',
     'reports',
     'personal',
+    'integrations',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -213,6 +215,11 @@ FEATURES.update({
     'WEEK_KEYS_CANONICAL': os.getenv('WEEK_KEYS_CANONICAL', 'sunday').lower(),
     'WEEK_KEYS_TRANSITION_READ_BOTH': os.getenv('WEEK_KEYS_TRANSITION_READ_BOTH', 'true').lower() == 'true',
 })
+
+# Integrations
+INTEGRATIONS_ENABLED = os.getenv('INTEGRATIONS_ENABLED', 'false').lower() == 'true'
+INTEGRATIONS_SECRET_KEY = os.getenv('INTEGRATIONS_SECRET_KEY')
+INTEGRATIONS_RESTORE_MAX_AGE_DAYS = int(os.getenv('INTEGRATIONS_RESTORE_MAX_AGE_DAYS', '14'))
 
 # With header-only JWT auth, do not allow credentials by default.
 # Enable credentials when cookie-based refresh flow is active.
@@ -536,6 +543,11 @@ CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'false').lower(
 CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_TASK_ROUTES = {
     'core.backup_tasks.*': {'queue': 'db_maintenance'},
+}
+CELERY_BEAT_SCHEDULE = globals().get('CELERY_BEAT_SCHEDULE', {})
+CELERY_BEAT_SCHEDULE['integrations-rule-planner'] = {
+    'task': 'integrations.tasks.integration_rule_planner',
+    'schedule': timedelta(minutes=int(os.getenv('INTEGRATIONS_PLANNER_INTERVAL_MINUTES', '5'))),
 }
 
 # CSP rollout configuration

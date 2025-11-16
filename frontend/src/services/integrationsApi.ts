@@ -1,0 +1,337 @@
+import { apiClient, authHeaders } from '@/api/client';
+import { ApiError } from './api';
+
+export type IntegrationProviderSummary = {
+  key: string;
+  displayName: string;
+  schemaVersion: string;
+  metadata: Record<string, unknown>;
+};
+
+export type IntegrationCatalogField = {
+  key: string;
+  label: string;
+  type?: string;
+  nullable?: boolean;
+};
+
+export type IntegrationCatalogObject = {
+  key: string;
+  label: string;
+  capabilities?: Record<string, boolean>;
+  fields?: IntegrationCatalogField[];
+  fieldSignatureHash?: string;
+  mapping?: {
+    schemaVersion?: string;
+    defaults?: IntegrationMappingEntry[];
+  };
+};
+
+export type IntegrationProviderCatalog = {
+  key: string;
+  displayName: string;
+  schemaVersion: string;
+  rateLimits?: Record<string, unknown>;
+  baseUrlVariants?: Record<string, string>;
+  objects: IntegrationCatalogObject[];
+};
+
+export type IntegrationConnection = {
+  id: number;
+  provider: string;
+  providerDisplayName: string;
+  company_id: string;
+  environment: 'production' | 'sandbox';
+  is_active: boolean;
+  needs_reauth: boolean;
+  is_disabled: boolean;
+  extra_headers: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IntegrationRuleConfig = {
+  objectKey: string;
+  fields: string[];
+  filters: Record<string, unknown>;
+  intervalMinutes?: number;
+  cronExpression?: string;
+  syncBehavior: 'full' | 'delta';
+  conflictPolicy: 'upsert' | 'skip';
+  deletionPolicy: 'mark_inactive_keep_link' | 'ignore' | 'soft_delete';
+  includeSubprojects?: boolean;
+  initialSyncMode: 'full_once' | 'delta_only_after_date' | 'delta_only_from_now';
+  initialSyncSince?: string;
+  clientSyncPolicy: 'preserve_local' | 'follow_bqe' | 'write_once';
+  dryRun?: boolean;
+};
+
+export type IntegrationRule = {
+  id: number;
+  connection: number;
+  object_key: string;
+  config: IntegrationRuleConfig;
+  is_enabled: boolean;
+  revision: number;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_success_at: string | null;
+  last_error: string;
+  resync_required: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IntegrationMappingEntry = {
+  source: string;
+  target: string;
+  behavior?: string;
+};
+
+export type IntegrationMappingState = {
+  schemaVersion?: string;
+  defaults: IntegrationMappingEntry[];
+  fieldSignatureHash?: string;
+  overrides: {
+    version?: string;
+    fieldSignatureHash?: string;
+    mappings: IntegrationMappingEntry[];
+  } | null;
+  stale: boolean;
+};
+
+export type IntegrationJob = {
+  id: number;
+  connection: number;
+  object_key: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  payload: Record<string, unknown>;
+  logs: Array<Record<string, unknown>>;
+  celery_id: string;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IntegrationHealth = {
+  healthy: boolean;
+  workersAvailable: boolean;
+  cacheAvailable: boolean;
+  message?: string | null;
+};
+
+export type IntegrationResyncResponse = {
+  rule: IntegrationRule;
+  state: Record<string, unknown>;
+};
+
+type ApiResult<T> = { data?: T; response?: Response; error?: unknown };
+
+function ensureData<T>(res: ApiResult<T>, entity: string): T {
+  if (!res.data) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError(`${entity} request failed`, status, res.error);
+  }
+  return res.data as T;
+}
+
+function coerceList<T>(value: any, entity: string): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && Array.isArray(value.results)) return value.results as T[];
+  throw new ApiError(`${entity} response is not a list`, 500, value);
+}
+
+export async function listProviders(): Promise<IntegrationProviderSummary[]> {
+  const res = await apiClient.GET('/integrations/providers/' as any, { headers: authHeaders() });
+  return ensureData<IntegrationProviderSummary[]>(res, 'Providers');
+}
+
+export async function getProviderCatalog(key: string): Promise<IntegrationProviderCatalog> {
+  const res = await apiClient.GET('/integrations/providers/{key}/catalog/' as any, {
+    params: { path: { key } },
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationProviderCatalog>(res, 'Provider catalog');
+}
+
+export async function listConnections(provider?: string): Promise<IntegrationConnection[]> {
+  const res = await apiClient.GET('/integrations/connections/' as any, {
+    params: provider ? { query: { provider } } : undefined,
+    headers: authHeaders(),
+  });
+  const data = ensureData<any>(res, 'Connections');
+  return coerceList<IntegrationConnection>(data, 'Connections');
+}
+
+export type CreateIntegrationConnectionPayload = {
+  providerKey: string;
+  company_id: string;
+  environment?: 'production' | 'sandbox';
+  extra_headers?: Record<string, string>;
+};
+
+export async function createConnection(payload: CreateIntegrationConnectionPayload): Promise<IntegrationConnection> {
+  const res = await apiClient.POST('/integrations/connections/' as any, {
+    body: payload,
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationConnection>(res, 'Create connection');
+}
+
+export type UpdateIntegrationConnectionPayload = Partial<Omit<IntegrationConnection, 'id' | 'provider' | 'providerDisplayName'>> & {
+  providerKey?: string;
+};
+
+export async function updateConnection(id: number, payload: UpdateIntegrationConnectionPayload): Promise<IntegrationConnection> {
+  const res = await apiClient.PATCH('/integrations/connections/{id}/' as any, {
+    params: { path: { id } },
+    body: payload,
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationConnection>(res, 'Update connection');
+}
+
+export async function deleteConnection(id: number): Promise<void> {
+  const res = await apiClient.DELETE('/integrations/connections/{id}/' as any, {
+    params: { path: { id } },
+    headers: authHeaders(),
+  });
+  if (res.error) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError('Delete connection failed', status, res.error);
+  }
+}
+
+export type ListRulesOptions = { connection?: number; provider?: string };
+
+export async function listRules(opts?: ListRulesOptions): Promise<IntegrationRule[]> {
+  const params: Record<string, string | number> = {};
+  if (opts?.connection) params.connection = opts.connection;
+  if (opts?.provider) params.provider = opts.provider;
+  const res = await apiClient.GET('/integrations/rules/' as any, {
+    params: { query: params },
+    headers: authHeaders(),
+  });
+  const data = ensureData<any>(res, 'Rules');
+  return coerceList<IntegrationRule>(data, 'Rules');
+}
+
+export type CreateRulePayload = {
+  connection_id: number;
+  object_key: string;
+  config: IntegrationRuleConfig;
+  is_enabled?: boolean;
+};
+
+export async function createRule(payload: CreateRulePayload): Promise<IntegrationRule> {
+  const res = await apiClient.POST('/integrations/rules/' as any, {
+    body: payload,
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationRule>(res, 'Create rule');
+}
+
+export type UpdateRulePayload = Partial<CreateRulePayload>;
+
+export async function updateRule(id: number, payload: UpdateRulePayload): Promise<IntegrationRule> {
+  const res = await apiClient.PATCH('/integrations/rules/{id}/' as any, {
+    params: { path: { id } },
+    body: payload,
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationRule>(res, 'Update rule');
+}
+
+export async function deleteRule(id: number): Promise<void> {
+  const res = await apiClient.DELETE('/integrations/rules/{id}/' as any, {
+    params: { path: { id } },
+    headers: authHeaders(),
+  });
+  if (res.error) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError('Delete rule failed', status, res.error);
+  }
+}
+
+export async function getMappingDefaults(providerKey: string, objectKey: string, connectionId?: number): Promise<IntegrationMappingState> {
+  const query: Record<string, number> = {};
+  if (connectionId) query.connectionId = connectionId;
+  const res = await apiClient.GET('/integrations/providers/{provider_key}/{object_key}/mapping/defaults/' as any, {
+    params: { path: { provider_key: providerKey, object_key: objectKey }, query },
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationMappingState>(res, 'Mapping defaults');
+}
+
+export type SaveMappingPayload = {
+  providerKey: string;
+  objectKey: string;
+  connectionId: number;
+  version?: string;
+  mappings: IntegrationMappingEntry[];
+};
+
+export async function saveMapping(payload: SaveMappingPayload): Promise<IntegrationMappingState['overrides']> {
+  const res = await apiClient.POST('/integrations/providers/{provider_key}/{object_key}/mapping/defaults/' as any, {
+    params: { path: { provider_key: payload.providerKey, object_key: payload.objectKey } },
+    body: {
+      connectionId: payload.connectionId,
+      version: payload.version,
+      mappings: payload.mappings,
+    },
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationMappingState['overrides']>(res, 'Save mapping');
+}
+
+export type ListJobsOptions = {
+  connection?: number;
+  object?: string;
+  limit?: number;
+};
+
+export async function listJobs(providerKey: string, opts?: ListJobsOptions): Promise<IntegrationJob[]> {
+  const res = await apiClient.GET('/integrations/providers/{provider_key}/jobs/' as any, {
+    params: {
+      path: { provider_key: providerKey },
+      query: {
+        connection: opts?.connection,
+        object: opts?.object,
+        limit: opts?.limit,
+      },
+    },
+    headers: authHeaders(),
+  });
+  const data = ensureData<{ items: IntegrationJob[] }>(res, 'Jobs');
+  return data.items;
+}
+
+export async function getHealth(): Promise<IntegrationHealth> {
+  const res = await apiClient.GET('/integrations/health/' as any, { headers: authHeaders() });
+  return ensureData<IntegrationHealth>(res, 'Integrations health');
+}
+
+export async function resyncRule(ruleId: number, scope: string): Promise<IntegrationResyncResponse> {
+  const res = await apiClient.POST('/integrations/rules/{id}/resync/' as any, {
+    params: { path: { id: ruleId } },
+    body: { scope },
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationResyncResponse>(res, 'Rule resync');
+}
+
+export type SecretKeyStatus = { configured: boolean };
+
+export async function getSecretKeyStatus(): Promise<SecretKeyStatus> {
+  const res = await apiClient.GET('/integrations/secret-key/' as any, { headers: authHeaders() });
+  return ensureData<SecretKeyStatus>(res, 'Secret key status');
+}
+
+export async function setSecretKey(secretKey: string): Promise<SecretKeyStatus> {
+  const res = await apiClient.POST('/integrations/secret-key/' as any, {
+    body: { secretKey },
+    headers: authHeaders(),
+  });
+  return ensureData<SecretKeyStatus>(res, 'Secret key update');
+}
