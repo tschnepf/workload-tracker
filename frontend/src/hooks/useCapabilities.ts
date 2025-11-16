@@ -5,6 +5,8 @@ export type Capabilities = {
   asyncJobs: boolean;
   aggregates: Record<string, boolean>;
   cache: { shortTtlAggregates: boolean; aggregateTtlSeconds: number };
+  projectRolesByDepartment?: boolean;
+  integrations?: { enabled: boolean };
 };
 
 const defaultCaps: Capabilities = {
@@ -17,6 +19,8 @@ const defaultCaps: Capabilities = {
     skillMatch: true,
   },
   cache: { shortTtlAggregates: false, aggregateTtlSeconds: 30 },
+  projectRolesByDepartment: false,
+  integrations: { enabled: false },
 };
 
 export function useCapabilities() {
@@ -28,4 +32,3 @@ export function useCapabilities() {
     select: (data) => ({ ...defaultCaps, ...data, cache: { ...defaultCaps.cache, ...(data?.cache || {}) } }),
   });
 }
-
