@@ -181,7 +181,9 @@ Testing
 
 Prompt: “Add an Integrations section under Settings (admin-only) with: Providers list (card/grid), connection status badges, and a ‘Connect’ CTA that initiates OAuth (or Client Credentials form). Keep components small, typed, and reusable.”
 
-Prompt: “Build a metadata‑driven Config panel: fetch provider catalog and JSON Schemas, render dynamic forms (minimal internal renderer) for connection parameters and rules (fields, filters, intervals, behaviors). No provider‑specific hardcoding in UI.”
+Note: “Plug the section into the split-pane Settings layout (`frontend/src/pages/Settings/sections/index.tsx`). Replace the temporary `IntegrationsPlaceholderSection` by registering the real component with metadata (`requiresAdmin=true`, `featureFlag: caps => !!caps?.integrations?.enabled`). Ensure the section consumes shared auth/capability state via `useSettingsData` per `docs/settings-overview.md`.”
+
+Prompt: “Build a metadata-driven Config panel: fetch provider catalog and JSON Schemas, render dynamic forms (minimal internal renderer) for connection parameters and rules (fields, filters, intervals, behaviors). No provider-specific hardcoding in UI.”
 
 Hardening notes
 - Gate all UI on the typed `/api/capabilities/` `integrations.enabled` flag (after regenerating the OpenAPI + `useCapabilities` hook typings) and hide actions when disabled or when the viewer lacks admin rights.
@@ -250,6 +252,8 @@ Testing
 Prompt: “Add structured logging (request IDs, provider, connection, object) and metrics (jobs run, items processed, success/error rates). Provide `/api/integrations/health` with minimal health summary, including Celery/Redis worker health and whether integrations scheduling is currently paused due to background worker unavailability.”
 
 Prompt: “Add logging redaction guard (headers/body fields: Authorization, client_secret, refresh_token, code). Enforce correlation via `X-Request-ID` propagation to the HTTP client.”
+
+Prompt: “Update `docs/settings-sections.md` and `docs/settings-overview.md` when the Integrations section is wired up so the regression checklist and contributor guide cover the new workflows (search visibility, deep links, feature-flag gating).”
 
 Prompt: “Add a simple Admin screen in the Integrations UI for viewing job history with filters (provider/object/status) and retry action button. Surface IntegrationConnection health here as well: show when a connection has `needs_reauth` or has been unable to connect to BQE for more than 24 hours, with a clear ‘Admin attention needed’ banner and actions to revoke tokens, force re‑connect, or temporarily disable the connection without deleting it. Ensure APIs already exist.”
 
@@ -329,7 +333,7 @@ Testing
 - Sync jobs must be idempotent. Use provider stable IDs and connection IDs to avoid duplicates.
 - Logs/metrics must never include secrets. Add redaction guards.
 - Enforce BQE parent‑only imports: apply a server‑side ‘parentOnly’ filter and a client‑side guard to drop any subprojects/subtasks; reflect this in provider metadata and UI (disabled ‘Include subprojects’).
-- Add an `integrations` capability flag in `/api/capabilities/`; gate UI rendering and actions accordingly. Regenerate OpenAPI (`backend/openapi.json`) and the typed client (`npm run openapi:regen`) whenever endpoints change.
+- Add an `integrations` capability object in `/api/capabilities/` (e.g., `{ integrations: { enabled: bool, providers?: [...] } }`); gate UI rendering and actions accordingly. Regenerate OpenAPI (`backend/openapi.json`) and the typed client (`npm run openapi:regen`) whenever endpoints change so `useCapabilities` can expose `caps.integrations?.enabled` to the Settings split-pane.
 - No Nginx changes are required for OAuth callbacks because `/api/*` is already proxied.
 
 Endpoint shape guidance
