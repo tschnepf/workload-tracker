@@ -1,13 +1,29 @@
 from __future__ import annotations
 
+import json
+import logging
+from datetime import timedelta
+from typing import Any
+
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from cryptography.fernet import Fernet
+from requests import RequestException
 
-from .models import IntegrationConnection, IntegrationSetting, IntegrationRule, IntegrationJob, IntegrationSecretKey
+from .models import (
+    IntegrationConnection,
+    IntegrationSetting,
+    IntegrationRule,
+    IntegrationJob,
+    IntegrationSecretKey,
+    IntegrationProvider,
+    IntegrationProviderCredential,
+)
 from .serializers import (
     IntegrationConnectionSerializer,
     IntegrationRuleSerializer,
@@ -18,6 +34,74 @@ from .registry import get_registry
 from .scheduler import scheduler_health
 from .services import clear_resync_and_schedule
 from .encryption import reset_key_cache
+from .matching import suggest_project_matches, confirm_project_matches
+from .tasks import run_integration_rule
+from .audit import record_audit_event
+from .providers.bqe.projects_client import BQEProjectsClient
+from .exceptions import IntegrationProviderError
+from .logging_utils import integration_log_extra
+from .oauth import (
+    OAuthError,
+    OAuthStateManager,
+    build_authorization_url,
+    exchange_code_for_connection,
+    connection_has_token,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _job_health_summary() -> dict:
+    window_hours = 24
+    window_start = timezone.now() - timedelta(hours=window_hours)
+    recent_jobs = IntegrationJob.objects.filter(created_at__gte=window_start)
+    total = recent_jobs.count()
+    succeeded = recent_jobs.filter(status='succeeded').count()
+    failed = recent_jobs.filter(status='failed').count()
+    running = IntegrationJob.objects.filter(status='running').count()
+    last_job = IntegrationJob.objects.order_by('-created_at').first()
+    last_failure = IntegrationJob.objects.filter(status='failed').order_by('-finished_at').first()
+
+    items_processed = 0
+    for metrics in recent_jobs.values_list('metrics', flat=True):
+        if isinstance(metrics, dict):
+            for value in metrics.values():
+                if isinstance(value, int):
+                    items_processed += value
+
+    return {
+        'running': running,
+        'lastJobAt': (last_job.finished_at or last_job.created_at).isoformat() if last_job else None,
+        'lastFailureAt': (
+            (last_failure.finished_at or last_failure.created_at).isoformat()
+            if last_failure
+            else None
+        ),
+        'recent': {
+            'windowHours': window_hours,
+            'total': total,
+            'succeeded': succeeded,
+            'failed': failed,
+            'successRate': (succeeded / total) if total else None,
+            'itemsProcessed': items_processed,
+        },
+    }
+
+
+def _ensure_provider_model(key: str) -> IntegrationProvider | None:
+    registry = get_registry()
+    meta = registry.get_provider(key)
+    if not meta:
+        return None
+    provider, _ = IntegrationProvider.objects.get_or_create(
+        key=meta.key,
+        defaults={
+            'display_name': meta.display_name,
+            'metadata': meta.raw,
+            'schema_version': meta.schema_version,
+        },
+    )
+    return provider
 
 
 class ProviderListView(APIView):
@@ -80,6 +164,134 @@ class ProviderCatalogView(APIView):
             entry['fieldSignatureHash'] = provider.field_signature(obj.get('key', '')) or ''
             catalog['objects'].append(entry)
         return Response(catalog)
+
+
+class ProviderCredentialView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, key: str):
+        provider = _ensure_provider_model(key)
+        if not provider:
+            return Response({'detail': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+        credential = getattr(provider, 'credentials', None)
+        data = {
+            'clientId': credential.client_id if credential else '',
+            'redirectUri': credential.redirect_uri if credential else '',
+            'hasClientSecret': bool(credential and credential.has_client_secret),
+        }
+        data['configured'] = bool(data['clientId'] and data['redirectUri'] and data['hasClientSecret'])
+        return Response(data)
+
+    def post(self, request, key: str):
+        provider = _ensure_provider_model(key)
+        if not provider:
+            return Response({'detail': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+        payload = request.data or {}
+        client_id = (payload.get('clientId') or '').strip()
+        redirect_uri = (payload.get('redirectUri') or '').strip()
+        client_secret = (payload.get('clientSecret') or '').strip()
+        if not client_id:
+            return Response({'detail': 'clientId is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not redirect_uri:
+            return Response({'detail': 'redirectUri is required'}, status=status.HTTP_400_BAD_REQUEST)
+        credential, _ = IntegrationProviderCredential.objects.get_or_create(provider=provider)
+        credential.client_id = client_id
+        credential.redirect_uri = redirect_uri
+        if client_secret:
+            credential.set_client_secret(client_secret)
+        elif not credential.has_client_secret:
+            return Response({'detail': 'clientSecret is required'}, status=status.HTTP_400_BAD_REQUEST)
+        credential.save()
+        data = {
+            'clientId': credential.client_id,
+            'redirectUri': credential.redirect_uri,
+            'hasClientSecret': credential.has_client_secret,
+        }
+        data['configured'] = bool(data['clientId'] and data['redirectUri'] and data['hasClientSecret'])
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class ProviderResetView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, key: str):
+        provider = _ensure_provider_model(key)
+        if not provider:
+            return Response({'detail': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+        confirmed = bool((request.data or {}).get('confirm')) if isinstance(request.data, dict) else False
+        if not confirmed:
+            return Response({'detail': 'confirm=true is required to reset the provider'}, status=status.HTTP_400_BAD_REQUEST)
+        IntegrationProviderCredential.objects.filter(provider=provider).delete()
+        IntegrationConnection.objects.filter(provider=provider).delete()
+        return Response({'reset': True})
+
+
+class ProviderConnectStartView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, key: str):
+        connection_id = (request.data or {}).get('connectionId')
+        if not connection_id:
+            return Response({'detail': 'connectionId is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            connection = IntegrationConnection.objects.select_related('provider', 'provider__credentials').get(
+                id=connection_id,
+                provider__key=key,
+            )
+        except IntegrationConnection.DoesNotExist:
+            return Response({'detail': 'Connection not found'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            authorize_url, state = build_authorization_url(connection, request.user.id)
+        except OAuthError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'authorizeUrl': authorize_url, 'state': state})
+
+
+def _oauth_callback_response(payload: dict[str, Any]) -> HttpResponse:
+    payload = dict(payload)
+    payload.setdefault('source', 'integration-oauth')
+    payload_json = json.dumps(payload)
+    body = f"""<!DOCTYPE html><html><body>
+    <script>
+      (function() {{
+        var data = {payload_json};
+        if (window.opener) {{
+          window.opener.postMessage(data, '*');
+        }}
+        window.close();
+      }})();
+    </script>
+    </body></html>"""
+    return HttpResponse(body, content_type='text/html')
+
+
+class ProviderConnectCallbackView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, key: str):
+        error = request.query_params.get('error')
+        state = request.query_params.get('state')
+        code = request.query_params.get('code')
+        if error:
+            return _oauth_callback_response({'ok': False, 'message': error, 'provider': key})
+        if not state or not code:
+            return _oauth_callback_response({'ok': False, 'message': 'Missing state or code', 'provider': key})
+        try:
+            connection_id, _ = OAuthStateManager.parse_state(state)
+        except OAuthError as exc:
+            return _oauth_callback_response({'ok': False, 'message': str(exc), 'provider': key})
+        try:
+            connection = IntegrationConnection.objects.select_related('provider', 'provider__credentials').get(
+                id=connection_id,
+                provider__key=key,
+            )
+        except IntegrationConnection.DoesNotExist:
+            return _oauth_callback_response({'ok': False, 'message': 'Connection not found', 'provider': key})
+        try:
+            exchange_code_for_connection(connection, code, state)
+        except OAuthError as exc:
+            return _oauth_callback_response({'ok': False, 'message': str(exc), 'provider': key})
+        return _oauth_callback_response({'ok': True, 'provider': key})
 
 
 class MappingDefaultsView(APIView):
@@ -150,7 +362,7 @@ class MappingDefaultsView(APIView):
 class IntegrationConnectionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     serializer_class = IntegrationConnectionSerializer
-    queryset = IntegrationConnection.objects.select_related('provider').all()
+    queryset = IntegrationConnection.objects.select_related('provider').prefetch_related('secrets').all()
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -158,6 +370,23 @@ class IntegrationConnectionViewSet(viewsets.ModelViewSet):
         if provider:
             qs = qs.filter(provider__key=provider)
         return qs
+
+    def perform_create(self, serializer):
+        connection = serializer.save()
+        record_audit_event(user=self.request.user, action='connection.created', connection=connection)
+
+    def perform_update(self, serializer):
+        connection = serializer.save()
+        record_audit_event(
+            user=self.request.user,
+            action='connection.updated',
+            connection=connection,
+            metadata={'fields': list(serializer.validated_data.keys())},
+        )
+
+    def perform_destroy(self, instance):
+        record_audit_event(user=self.request.user, action='connection.deleted', connection=instance)
+        return super().perform_destroy(instance)
 
 
 class IntegrationRuleViewSet(viewsets.ModelViewSet):
@@ -175,6 +404,23 @@ class IntegrationRuleViewSet(viewsets.ModelViewSet):
             qs = qs.filter(connection__provider__key=provider)
         return qs
 
+    def perform_create(self, serializer):
+        rule = serializer.save()
+        record_audit_event(user=self.request.user, action='rule.created', rule=rule)
+
+    def perform_update(self, serializer):
+        rule = serializer.save()
+        record_audit_event(
+            user=self.request.user,
+            action='rule.updated',
+            rule=rule,
+            metadata={'fields': list(serializer.validated_data.keys())},
+        )
+
+    def perform_destroy(self, instance):
+        record_audit_event(user=self.request.user, action='rule.deleted', rule=instance)
+        return super().perform_destroy(instance)
+
 
 class IntegrationRuleResyncView(APIView):
     permission_classes = [IsAdminUser]
@@ -186,6 +432,12 @@ class IntegrationRuleResyncView(APIView):
             pk=pk,
         )
         state = clear_resync_and_schedule(rule, scope=scope or 'delta')
+        record_audit_event(
+            user=request.user,
+            action='rule.resync',
+            rule=rule,
+            metadata={'scope': scope or 'delta'},
+        )
         serializer = IntegrationRuleSerializer(rule)
         return Response({
             'rule': serializer.data,
@@ -204,6 +456,11 @@ class IntegrationJobListView(APIView):
         object_key = request.query_params.get('object')
         if object_key:
             qs = qs.filter(object_key=object_key)
+        status_values = request.query_params.get('status')
+        if status_values:
+            statuses = [value.strip() for value in status_values.split(',') if value.strip()]
+            if statuses:
+                qs = qs.filter(status__in=statuses)
         try:
             limit = int(request.query_params.get('limit', 50))
         except Exception:
@@ -219,8 +476,98 @@ class IntegrationHealthView(APIView):
 
     def get(self, request):
         health = scheduler_health()
+        jobs = _job_health_summary()
         status_code = status.HTTP_200_OK if health.get('healthy') else status.HTTP_503_SERVICE_UNAVAILABLE
-        return Response(health, status=status_code)
+        payload = dict(health)
+        payload['schedulerPaused'] = not health.get('healthy')
+        payload['jobs'] = jobs
+        return Response(payload, status=status_code)
+
+
+class IntegrationJobRetryView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk: int):
+        job = get_object_or_404(
+            IntegrationJob.objects.select_related('connection', 'connection__provider'),
+            pk=pk,
+        )
+        payload = job.payload or {}
+        rule_id = payload.get('rule_id') if isinstance(payload, dict) else None
+        if not rule_id:
+            return Response({'detail': 'Job cannot be retried (missing rule reference)'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            rule = IntegrationRule.objects.select_related('connection', 'connection__provider').get(id=rule_id)
+        except IntegrationRule.DoesNotExist:
+            return Response({'detail': 'Rule not found'}, status=status.HTTP_404_NOT_FOUND)
+        run_integration_rule.apply_async(args=[rule.id], kwargs={'expected_revision': rule.revision})
+        record_audit_event(user=request.user, action='job.retry', rule=rule, metadata={'jobId': job.id})
+        return Response({'queued': True}, status=status.HTTP_202_ACCEPTED)
+
+
+def _test_bqe_connection(connection: IntegrationConnection, provider) -> dict:
+    client = BQEProjectsClient(connection, provider)
+    iterator = client.fetch(updated_since=None, extra_params={'pageSize': 1})
+    first_batch = next(iterator, [])
+    sample_count = len(first_batch)
+    message = 'Fetched sample project list successfully.' if sample_count else 'Connected but no projects returned.'
+    return {'sampleCount': sample_count, 'message': message}
+
+
+def _test_connection(connection: IntegrationConnection) -> dict:
+    provider_meta = get_registry().get_provider(connection.provider.key)
+    if not provider_meta:
+        raise ValueError('Provider metadata missing')
+    if provider_meta.key == 'bqe':
+        return _test_bqe_connection(connection, provider_meta)
+    raise ValueError('Connection testing not implemented for this provider yet')
+
+
+class IntegrationConnectionTestView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk: int):
+        connection = get_object_or_404(
+            IntegrationConnection.objects.select_related('provider'),
+            pk=pk,
+        )
+        try:
+            result = _test_connection(connection)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except OAuthError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrationProviderError as exc:
+            payload = {'detail': str(exc)}
+            if exc.provider_message:
+                payload['providerMessage'] = exc.provider_message
+            if exc.code:
+                payload['providerCode'] = exc.code
+            status_code = status.HTTP_409_CONFLICT if exc.status_code == 409 else status.HTTP_400_BAD_REQUEST
+            return Response(payload, status=status_code)
+        except RequestException as exc:
+            logger.exception(
+                'integration_connection_test_http_error',
+                extra=integration_log_extra(connection=connection),
+            )
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as exc:
+            logger.exception(
+                'integration_connection_test_failed',
+                extra=integration_log_extra(connection=connection),
+            )
+            return Response({'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        payload = {
+            'ok': True,
+            'provider': connection.provider.display_name,
+            'environment': connection.environment,
+            'checkedAt': timezone.now().isoformat(),
+            'sampleCount': result.get('sampleCount', 0),
+        }
+        if result.get('message'):
+            payload['message'] = result['message']
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class IntegrationSecretKeyView(APIView):
@@ -243,3 +590,55 @@ class IntegrationSecretKeyView(APIView):
         IntegrationSecretKey.set_plaintext(value)
         reset_key_cache()
         return Response({'configured': True}, status=status.HTTP_200_OK)
+
+
+class ProjectMatchingSuggestionView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, provider_key: str):
+        connection_id = request.query_params.get('connectionId')
+        if not connection_id:
+            return Response({'detail': 'connectionId is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            connection = IntegrationConnection.objects.select_related('provider').get(
+                id=connection_id,
+                provider__key=provider_key,
+            )
+        except IntegrationConnection.DoesNotExist:
+            return Response({'detail': 'Connection not found'}, status=status.HTTP_404_NOT_FOUND)
+        if not connection_has_token(connection):
+            return Response({'detail': 'Authorize the provider before loading matching data.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            data = suggest_project_matches(connection)
+        except OAuthError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(data)
+
+
+class ProjectMatchingConfirmView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, provider_key: str):
+        connection_id = (request.data or {}).get('connectionId')
+        if not connection_id:
+            return Response({'detail': 'connectionId is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            connection = IntegrationConnection.objects.select_related('provider').get(
+                id=connection_id,
+                provider__key=provider_key,
+            )
+        except IntegrationConnection.DoesNotExist:
+            return Response({'detail': 'Connection not found'}, status=status.HTTP_404_NOT_FOUND)
+        matches = (request.data or {}).get('matches') or []
+        if not isinstance(matches, list):
+            return Response({'detail': 'matches must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+        enable_rule = bool((request.data or {}).get('enableRule'))
+        try:
+            if not connection_has_token(connection):
+                raise OAuthError('Authorize the provider before confirming matches.')
+            summary = confirm_project_matches(connection, matches, enable_rule=enable_rule)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except OAuthError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(summary, status=status.HTTP_200_OK)
