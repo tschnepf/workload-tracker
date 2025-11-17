@@ -64,6 +64,14 @@ services:
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/1}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
       - BACKUPS_DIR=/backups
+      - INTEGRATIONS_ENABLED=${INTEGRATIONS_ENABLED:-false}
+      - INTEGRATIONS_SECRET_KEY=${INTEGRATIONS_SECRET_KEY:-}
+      - BQE_CLIENT_ID=${BQE_CLIENT_ID:-}
+      - BQE_CLIENT_SECRET=${BQE_CLIENT_SECRET:-}
+      - BQE_AUTH_BASE_URL=${BQE_AUTH_BASE_URL:-https://api-identity.bqecore.com/idp/connect}
+      - "BQE_SCOPES=${BQE_SCOPES:-readwrite:core offline_access openid email profile}"
+      - BQE_COMPANY_ID=${BQE_COMPANY_ID:-}
+      - BQE_REDIRECT_URI=${BQE_REDIRECT_URI:-http://localhost:8000/api/integrations/bqe/connect/callback}
     depends_on:
       db:
         condition: service_healthy
@@ -129,6 +137,14 @@ services:
       - CELERY_WORKER_MAX_TASKS_PER_CHILD=200
       - CELERY_WORKER_PREFETCH_MULTIPLIER=1
       - COLLECT_STATIC=false
+      - INTEGRATIONS_ENABLED=${INTEGRATIONS_ENABLED:-false}
+      - INTEGRATIONS_SECRET_KEY=${INTEGRATIONS_SECRET_KEY:-}
+      - BQE_CLIENT_ID=${BQE_CLIENT_ID:-}
+      - BQE_CLIENT_SECRET=${BQE_CLIENT_SECRET:-}
+      - BQE_AUTH_BASE_URL=${BQE_AUTH_BASE_URL:-https://api-identity.bqecore.com/idp/connect}
+      - "BQE_SCOPES=${BQE_SCOPES:-readwrite:core offline_access openid email profile}"
+      - BQE_COMPANY_ID=${BQE_COMPANY_ID:-}
+      - BQE_REDIRECT_URI=${BQE_REDIRECT_URI:-http://localhost:8000/api/integrations/bqe/connect/callback}
     command: celery -A config worker -l info --concurrency=2
     mem_limit: 512m
     cpus: 0.50
@@ -162,6 +178,14 @@ services:
       - BACKUPS_DIR=/backups
       - RUN_MIGRATIONS_ON_START=false
       - COLLECT_STATIC=false
+      - INTEGRATIONS_ENABLED=${INTEGRATIONS_ENABLED:-false}
+      - INTEGRATIONS_SECRET_KEY=${INTEGRATIONS_SECRET_KEY:-}
+      - BQE_CLIENT_ID=${BQE_CLIENT_ID:-}
+      - BQE_CLIENT_SECRET=${BQE_CLIENT_SECRET:-}
+      - BQE_AUTH_BASE_URL=${BQE_AUTH_BASE_URL:-https://api-identity.bqecore.com/idp/connect}
+      - "BQE_SCOPES=${BQE_SCOPES:-readwrite:core offline_access openid email profile}"
+      - BQE_COMPANY_ID=${BQE_COMPANY_ID:-}
+      - BQE_REDIRECT_URI=${BQE_REDIRECT_URI:-http://localhost:8000/api/integrations/bqe/connect/callback}
     command: celery -A config worker -l info --concurrency=1 -Q db_maintenance
     mem_limit: 256m
     cpus: 0.25
@@ -189,6 +213,14 @@ services:
       # Optional: explicit schedule file (defaults to /tmp/celerybeat-schedule)
       # - CELERY_BEAT_SCHEDULE_FILE=/tmp/celerybeat-schedule
       - RUN_MIGRATIONS_ON_START=false
+      - INTEGRATIONS_ENABLED=${INTEGRATIONS_ENABLED:-false}
+      - INTEGRATIONS_SECRET_KEY=${INTEGRATIONS_SECRET_KEY:-}
+      - BQE_CLIENT_ID=${BQE_CLIENT_ID:-}
+      - BQE_CLIENT_SECRET=${BQE_CLIENT_SECRET:-}
+      - BQE_AUTH_BASE_URL=${BQE_AUTH_BASE_URL:-https://api-identity.bqecore.com/idp/connect}
+      - "BQE_SCOPES=${BQE_SCOPES:-readwrite:core offline_access openid email profile}"
+      - BQE_COMPANY_ID=${BQE_COMPANY_ID:-}
+      - BQE_REDIRECT_URI=${BQE_REDIRECT_URI:-http://localhost:8000/api/integrations/bqe/connect/callback}
     volumes:
       - ./backend:/app:ro
       - ./backups:/backups:rw

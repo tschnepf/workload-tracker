@@ -36,18 +36,39 @@ export type IntegrationProviderCatalog = {
   objects: IntegrationCatalogObject[];
 };
 
+export type IntegrationProviderCredentials = {
+  clientId: string;
+  redirectUri: string;
+  hasClientSecret: boolean;
+  configured: boolean;
+};
+
 export type IntegrationConnection = {
   id: number;
   provider: string;
   providerDisplayName: string;
-  company_id: string;
   environment: 'production' | 'sandbox';
   is_active: boolean;
   needs_reauth: boolean;
   is_disabled: boolean;
-  extra_headers: Record<string, string>;
+  hasToken: boolean;
+  extra_headers?: Record<string, string>;
   created_at: string;
   updated_at: string;
+};
+
+export type IntegrationConnectionTestResult = {
+  ok: boolean;
+  provider: string;
+  environment: 'production' | 'sandbox';
+  checkedAt: string;
+  sampleCount: number;
+  message?: string;
+};
+
+export type IntegrationOAuthStart = {
+  authorizeUrl: string;
+  state: string;
 };
 
 export type IntegrationRuleConfig = {
@@ -103,10 +124,15 @@ export type IntegrationMappingState = {
 export type IntegrationJob = {
   id: number;
   connection: number;
+  provider: string;
+  providerDisplayName: string;
+  connectionCompany: string;
+  connectionEnvironment: 'production' | 'sandbox';
   object_key: string;
   status: 'pending' | 'running' | 'succeeded' | 'failed';
   payload: Record<string, unknown>;
   logs: Array<Record<string, unknown>>;
+  metrics: Record<string, number>;
   celery_id: string;
   started_at: string | null;
   finished_at: string | null;
@@ -118,7 +144,21 @@ export type IntegrationHealth = {
   healthy: boolean;
   workersAvailable: boolean;
   cacheAvailable: boolean;
+  schedulerPaused: boolean;
   message?: string | null;
+  jobs: {
+    running: number;
+    lastJobAt: string | null;
+    lastFailureAt: string | null;
+    recent: {
+      windowHours: number;
+      total: number;
+      succeeded: number;
+      failed: number;
+      successRate: number | null;
+      itemsProcessed: number;
+    };
+  };
 };
 
 export type IntegrationResyncResponse = {
@@ -155,6 +195,57 @@ export async function getProviderCatalog(key: string): Promise<IntegrationProvid
   return ensureData<IntegrationProviderCatalog>(res, 'Provider catalog');
 }
 
+export async function getProviderCredentials(key: string): Promise<IntegrationProviderCredentials> {
+  const res = await apiClient.GET('/integrations/providers/{key}/credentials/' as any, {
+    params: { path: { key } },
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationProviderCredentials>(res, 'Provider credentials');
+}
+
+export type SaveProviderCredentialsPayload = {
+  clientId: string;
+  redirectUri: string;
+  clientSecret?: string;
+};
+
+export async function saveProviderCredentials(key: string, payload: SaveProviderCredentialsPayload): Promise<IntegrationProviderCredentials> {
+  const res = await apiClient.POST('/integrations/providers/{key}/credentials/' as any, {
+    params: { path: { key } },
+    body: payload,
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationProviderCredentials>(res, 'Save provider credentials');
+}
+
+export async function resetProvider(key: string): Promise<void> {
+  const res = await apiClient.POST('/integrations/providers/{key}/reset/' as any, {
+    params: { path: { key } },
+    body: { confirm: true },
+    headers: authHeaders(),
+  });
+  if (res.error) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError('Provider reset failed', status, res.error);
+  }
+}
+
+export async function testConnection(id: number): Promise<IntegrationConnectionTestResult> {
+  const res = await apiClient.POST('/integrations/connections/{id}/test/' as any, {
+    params: { path: { id } },
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationConnectionTestResult>(res, 'Test connection');
+}
+
+export async function testActivityConnection(id: number): Promise<IntegrationConnectionTestResult> {
+  const res = await apiClient.POST('/integrations/connections/{id}/test-activity/' as any, {
+    params: { path: { id } },
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationConnectionTestResult>(res, 'Test activity endpoint');
+}
+
 export async function listConnections(provider?: string): Promise<IntegrationConnection[]> {
   const res = await apiClient.GET('/integrations/connections/' as any, {
     params: provider ? { query: { provider } } : undefined,
@@ -164,9 +255,17 @@ export async function listConnections(provider?: string): Promise<IntegrationCon
   return coerceList<IntegrationConnection>(data, 'Connections');
 }
 
+export async function startConnectionOAuth(providerKey: string, connectionId: number): Promise<IntegrationOAuthStart> {
+  const res = await apiClient.POST('/integrations/providers/{key}/connect/start/' as any, {
+    params: { path: { key: providerKey } },
+    body: { connectionId },
+    headers: authHeaders(),
+  });
+  return ensureData<IntegrationOAuthStart>(res, 'Start OAuth');
+}
+
 export type CreateIntegrationConnectionPayload = {
   providerKey: string;
-  company_id: string;
   environment?: 'production' | 'sandbox';
   extra_headers?: Record<string, string>;
 };
@@ -289,22 +388,35 @@ export type ListJobsOptions = {
   connection?: number;
   object?: string;
   limit?: number;
+  status?: 'pending' | 'running' | 'succeeded' | 'failed';
 };
 
 export async function listJobs(providerKey: string, opts?: ListJobsOptions): Promise<IntegrationJob[]> {
+  const query: Record<string, string | number> = {};
+  if (opts?.connection) query.connection = opts.connection;
+  if (opts?.object) query.object = opts.object;
+  if (opts?.limit) query.limit = opts.limit;
+  if (opts?.status) query.status = opts.status;
   const res = await apiClient.GET('/integrations/providers/{provider_key}/jobs/' as any, {
     params: {
       path: { provider_key: providerKey },
-      query: {
-        connection: opts?.connection,
-        object: opts?.object,
-        limit: opts?.limit,
-      },
+      query,
     },
     headers: authHeaders(),
   });
   const data = ensureData<{ items: IntegrationJob[] }>(res, 'Jobs');
   return data.items;
+}
+
+export async function retryJob(jobId: number): Promise<void> {
+  const res = await apiClient.POST('/integrations/jobs/{id}/retry/' as any, {
+    params: { path: { id: jobId } },
+    headers: authHeaders(),
+  });
+  if (res.error) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError('Retry job failed', status, res.error);
+  }
 }
 
 export async function getHealth(): Promise<IntegrationHealth> {
@@ -334,4 +446,51 @@ export async function setSecretKey(secretKey: string): Promise<SecretKeyStatus> 
     headers: authHeaders(),
   });
   return ensureData<SecretKeyStatus>(res, 'Secret key update');
+}
+
+export type ProjectMatchCandidate = {
+  id: number;
+  name: string;
+  client: string;
+  projectNumber?: string | null;
+};
+
+export type ProjectMatchItem = {
+  externalId: string;
+  externalName?: string;
+  externalNumber?: string;
+  externalClient?: string;
+  status: string;
+  matchReason?: string | null;
+  matchedProject?: ProjectMatchCandidate | null;
+  candidates: ProjectMatchCandidate[];
+};
+
+export type ProjectMatchResponse = {
+  items: ProjectMatchItem[];
+  summary: Record<string, number>;
+  localProjects: ProjectMatchCandidate[];
+};
+
+export async function getProjectMatchSuggestions(connectionId: number, providerKey: string): Promise<ProjectMatchResponse> {
+  const res = await apiClient.GET('/integrations/providers/{provider_key}/projects/matching/suggestions/' as any, {
+    params: { path: { provider_key: providerKey }, query: { connectionId } },
+    headers: authHeaders(),
+  });
+  return ensureData<ProjectMatchResponse>(res, 'Project matching suggestions');
+}
+
+export type ConfirmProjectMatchPayload = {
+  connectionId: number;
+  matches: Array<{ externalId: string; projectId: number }>;
+  enableRule?: boolean;
+};
+
+export async function confirmProjectMatches(providerKey: string, payload: ConfirmProjectMatchPayload) {
+  const res = await apiClient.POST('/integrations/providers/{provider_key}/projects/matching/confirm/' as any, {
+    params: { path: { provider_key: providerKey } },
+    body: payload,
+    headers: authHeaders(),
+  });
+  return ensureData<Record<string, number>>(res, 'Project matching confirmation');
 }

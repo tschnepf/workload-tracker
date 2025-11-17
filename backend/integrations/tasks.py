@@ -4,6 +4,8 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from core.request_context import reset_request_id, set_current_request_id
+
 from .models import IntegrationRule, IntegrationJob
 from .registry import get_registry
 from .scheduler import (
@@ -15,6 +17,9 @@ from .scheduler import (
 )
 from .services import ensure_rule_state_initialized
 from .state import save_state
+from .providers.bqe.projects_sync import sync_projects as bqe_sync_projects
+from .providers.bqe.clients_sync import sync_clients as bqe_sync_clients
+from .logging_utils import integration_log_extra
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +58,31 @@ class RuleExecutor:
         provider = registry.get_provider(self.rule.connection.provider.key)
         self._log('Provider metadata loaded', provider=(provider.key if provider else None))
 
+        dry_run = bool((self.rule.config or {}).get('dryRun'))
+        if provider and provider.key == 'bqe':
+            if self.rule.object_key == 'projects':
+                result = bqe_sync_projects(self.rule, state=state, dry_run=dry_run)
+            elif self.rule.object_key == 'clients':
+                result = bqe_sync_clients(self.rule, state=state, dry_run=dry_run)
+            else:
+                result = None
+            if result:
+                new_state = dict(state)
+                if result.cursor:
+                    new_state['cursor'] = result.cursor
+                now_iso = timezone.now().isoformat()
+                new_state['lastRunAt'] = now_iso
+                new_state['lastRuleRevision'] = self.rule.revision
+                save_state(self.rule.connection, self.rule.object_key, new_state)
+                self._progress(100, f"{self.rule.object_key.title()} sync complete")
+                return result.metrics
+
         self._progress(30, 'Fetching records (placeholder)')
         fetched_records = 0
 
         self._progress(55, 'Mapping payload (placeholder)')
         mapped_records = fetched_records
 
-        dry_run = bool((self.rule.config or {}).get('dryRun'))
         if dry_run:
             self._log('Dry-run enabled; skipping writes', level='warning')
         else:
@@ -70,7 +93,7 @@ class RuleExecutor:
         now_iso = timezone.now().isoformat()
         new_state['lastRunAt'] = now_iso
         new_state['lastRuleRevision'] = self.rule.revision
-        new_state['lastCursor'] = cursor
+        new_state['lastCursor'] = state.get('cursor')
         save_state(self.rule.connection, self.rule.object_key, new_state)
 
         self._progress(100, 'Sync placeholder complete')
@@ -85,20 +108,26 @@ def run_integration_rule(self, rule_id: int, expected_revision: int | None = Non
             .get(id=rule_id, is_enabled=True)
         )
     except IntegrationRule.DoesNotExist:
-        logger.warning("integration_rule_missing", extra={'rule_id': rule_id})
+        logger.warning(
+            "integration_rule_missing",
+            extra=integration_log_extra(extra={'rule_id': rule_id}),
+        )
         return
     if expected_revision and rule.revision != expected_revision:
         logger.info(
             "integration_rule_revision_mismatch",
-            extra={'rule_id': rule_id, 'expected': expected_revision, 'actual': rule.revision},
+            extra=integration_log_extra(
+                rule=rule,
+                extra={'rule_id': rule.id, 'expected': expected_revision, 'actual': rule.revision},
+            ),
         )
         return
     if rule.resync_required or rule.connection.needs_reauth or not rule.connection.is_active or rule.connection.is_disabled:
-        logger.info("integration_rule_not_runnable", extra={'rule_id': rule.id})
+        logger.info("integration_rule_not_runnable", extra=integration_log_extra(rule=rule, extra={'rule_id': rule.id}))
         return
     ttl = lock_ttl_seconds(rule.config or {})
     if not acquire_rule_lock(rule.connection_id, rule.object_key, ttl):
-        logger.info("integration_rule_skip_locked", extra={'rule_id': rule.id})
+        logger.info("integration_rule_skip_locked", extra=integration_log_extra(rule=rule, extra={'rule_id': rule.id}))
         return
     request_meta = getattr(self, 'request', None)
     celery_task_id = (getattr(request_meta, 'id', None) or '') if request_meta else ''
@@ -115,18 +144,26 @@ def run_integration_rule(self, rule_id: int, expected_revision: int | None = Non
     rule.save(update_fields=['last_run_at'])
     success = False
     logs: list[dict] = []
+    job_metrics: dict | None = None
+    request_token = None
     try:
+        request_token = set_current_request_id(job.celery_id or f"integration-job-{job.id}")
         executor = RuleExecutor(rule, job, self)
-        executor.execute()
+        job_metrics = executor.execute()
         logs = executor.logs
         success = True
     except Exception as exc:  # pragma: no cover - defensive
-        logger.exception("integration_rule_error", extra={'rule_id': rule.id})
+        logger.exception(
+            "integration_rule_error",
+            extra=integration_log_extra(rule=rule, job=job, extra={'rule_id': rule.id}),
+        )
         logs.append({'level': 'error', 'message': str(exc), 'timestamp': timezone.now().isoformat()})
         success = False
         error_message = str(exc)
     finally:
-        job.mark_finished(success, logs=logs if logs else None)
+        job.mark_finished(success, logs=logs if logs else None, metrics=job_metrics)
+        if request_token is not None:
+            reset_request_id(request_token)
         release_rule_lock(rule.connection_id, rule.object_key)
         now = timezone.now()
         next_run = schedule_next_run(rule, base_time=now, commit=False)
@@ -145,7 +182,7 @@ def run_integration_rule(self, rule_id: int, expected_revision: int | None = Non
 def integration_rule_planner():
     health = scheduler_health()
     if not health['healthy']:
-        logger.warning('integration_scheduler_paused', extra={'reason': health.get('message')})
+        logger.warning('integration_scheduler_paused', extra=integration_log_extra(extra={'reason': health.get('message')}))
         return
     now = timezone.now()
     rules = (

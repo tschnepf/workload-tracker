@@ -16,6 +16,15 @@ The Settings page now uses a split-pane layout:
 4. Update `docs/settings-sections.md` with new regression scenarios.
 5. If the section gates future work (e.g., Integrations), add an entry with `featureFlag` so the nav slot exists but stays hidden until the capability flag is true.
 
+## Integrations Hub Section
+
+The Integrations Hub is the first “split-pane native” section that coordinates backend capabilities and multiple UI states:
+
+- It is admin-only and hidden unless `/api/capabilities/` reports `integrations.enabled` and the Fernet secret key has been configured. The section shows the secret-key unlock form when needed.
+- Provider metadata, connection list, mappings, matching wizard, and job history are all driven by `integrationsApi` calls; avoid local copies of the schema.
+- Connection cards surface an “Admin attention needed” banner whenever `needs_reauth`, long gaps since the last successful sync, or a disabled flag is detected. The banner exposes the required actions (revoke tokens, force reconnect, disable/enable).
+- The Sync Controls card now includes backend health warnings, 24‑hour job metrics, status/object filters, and per-job retry buttons. Tests should cover these filters and the retry mutation so the admin workflow stays reliable.
+
 ## Regression Checklist
 
 See `docs/settings-sections.md` for the authoritative list. At a minimum:
@@ -24,4 +33,3 @@ See `docs/settings-sections.md` for the authoritative list. At a minimum:
 - Confirm search/filter, keyboard navigation, and persistence of the selected section.
 - Ensure the split-pane flag works (toggle in `.env` and reload).
 - Run `npm run test:run -- RoleManagementSection` and `npm run build` after changes.
-

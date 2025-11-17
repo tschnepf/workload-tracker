@@ -10,7 +10,7 @@ from integrations.services import flag_connections_after_restore
 class RestoreServiceTests(TestCase):
     def setUp(self):
         self.provider = IntegrationProvider.objects.create(key='bqe', display_name='BQE', metadata={}, schema_version='1.0.0')
-        self.connection = IntegrationConnection.objects.create(provider=self.provider, company_id='acme', environment='sandbox')
+        self.connection = IntegrationConnection.objects.create(provider=self.provider, environment='sandbox')
         self.rule = IntegrationRule.objects.create(
             connection=self.connection,
             object_key='projects',

@@ -176,14 +176,22 @@ Page‑by‑Page Guide
 
 The upcoming Integrations Hub relies on `cryptography` (for secure token storage) and `jsonschema` (provider metadata validation). Both packages are tracked in `backend/requirements.txt`. Run `pip install -r backend/requirements.txt` after pulling the latest code so these dependencies are available before working on the Integrations app.
 
-When running the backend container locally, set:
+When running the backend container locally, set `INTEGRATIONS_ENABLED=true`. OAuth client metadata (`client_id`, `client_secret`, redirect URI) is now stored via the Integrations UI instead of `.env`, so you can rotate it without redeploying. (Environment variables are still supported for advanced overrides.)
 
-- `INTEGRATIONS_ENABLED=true`
-- `INTEGRATIONS_SECRET_KEY=<base64 Fernet key>` (comma-separated for MultiFernet rotation)
+Register an app in the BQE developer portal and set the redirect URI to your instance’s callback path (`https://<host>/api/integrations/providers/bqe/connect/callback`). Keep the client ID/secret handy—they are entered inside Settings → Integrations rather than `.env`, but you can still rotate them without downtime. The Integrations Hub currently understands the BQE **Projects** and **Clients** objects; use the mapping UI to decide which fields flow into local storage.
 
-Without those values the Integrations endpoints stay disabled.
+See `docs/integrations/key-rotation.md` for the MultiFernet rotation runbook and `prompts/INTEGRATIONS-HUB-E2E-CHECKLIST.md` for the manual test plan.
 
-For OAuth callbacks, set `BQE_CLIENT_ID`, `BQE_CLIENT_SECRET`, and `BQE_REDIRECT_URI` (match the URL configured in the BQE developer portal so `/api/integrations/bqe/connect/callback` succeeds).
+## Using the Integrations Hub (BQE)
+
+1. **Unlock the hub** – Navigate to Settings → Integrations. If this is the first run, paste or generate a Fernet key in the unlock form and click **Save Key**. The key is stored encrypted and can be rotated any time via the same UI.
+2. **Enter provider credentials** – In the “Provider Credentials” card, paste the BQE `client_id`, `client_secret`, and redirect URI from the BQE developer portal. BQE CORE now requires OAuth 2.0 Authorization Code + PKCE against `https://api-identity.bqecore.com/idp/connect/authorize` and `https://api-identity.bqecore.com/idp/connect/token` with the scopes `readwrite:core offline_access openid email profile`. The redirect URI must match exactly, and the secret is encrypted via MultiFernet.
+3. **Connect to BQE** – Click the “Connect Provider” button on the BQE card, choose Sandbox or Production, and walk through the OAuth consent screen. Each environment supports one connection per provider; use “Force reconnect” (or “Reconnect OAuth”) to re-authorize the existing Sandbox/Production record instead of creating duplicates. Successful connections appear as selectable pills with environment badges.
+3. **Configure field mapping** – Within the provider’s detail card, open the “Field Mapping” section to review the defaults (e.g., BQE `clientName` → local `project.client` and `project.bqe_client_name`). Adjust or add rows, then click **Save Mapping**. The same flow is available for the new **Clients** object (`integration_client.*` fields).
+4. **Create/enable rules** – Use the Rules panel to define sync interval, fields, client sync policy, and deletion behavior per object. Saving a rule schedules the Celery planner to run it automatically; you can also trigger a Post-restore resync from the Sync Controls modal.
+5. **Run the matching wizard (Projects)** – Before enabling automatic project sync, click “Load Initial Matching” to pair BQE parent projects with local records. Review suggestions, override as needed, and Save Matches. Enabling “turn on the rule after saving” will immediately allow deltas.
+6. **Monitor jobs & health** – The Sync Controls card lists recent jobs, metrics (running count, 24h success rate, items processed), and job history filters. Failed jobs expose a **Retry job** action that queues a new run and logs an audit entry. If Celery or Redis are unavailable, a banner will warn that sync controls are temporarily paused.
+7. **Sync additional objects** – The catalog now includes the BQE **Clients** object. Create a Clients rule to keep the `IntegrationClient` table up to date and use that data elsewhere in the platform (e.g., to drive mapping suggestions or future client matching flows).
 
 **Authentication Pages**
 - Login: Enter your username (or email) and password.

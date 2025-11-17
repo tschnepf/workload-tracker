@@ -1,4 +1,5 @@
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest import mock
 
 from django.test import TestCase
@@ -24,7 +25,6 @@ class IntegrationTaskTests(TestCase):
         )
         self.connection = IntegrationConnection.objects.create(
             provider=self.provider,
-            company_id='acme',
             environment='sandbox',
         )
         self.rule = IntegrationRule.objects.create(
@@ -67,12 +67,15 @@ class IntegrationTaskTests(TestCase):
         apply_async.assert_not_called()
 
     @mock.patch('integrations.tasks.acquire_rule_lock', return_value=True)
-    def test_run_rule_creates_job_and_state(self, acquire_lock):
+    @mock.patch('integrations.tasks.bqe_sync_projects')
+    def test_run_rule_creates_job_and_state(self, sync_projects, acquire_lock):
+        sync_projects.return_value = SimpleNamespace(metrics={'fetched': 1, 'updated': 1}, cursor='2025-01-01T00:00:00Z')
         run_integration_rule.run(self.rule.id, expected_revision=self.rule.revision)
         jobs = IntegrationJob.objects.filter(connection=self.connection)
         self.assertEqual(jobs.count(), 1)
         job = jobs.first()
         self.assertEqual(job.status, 'succeeded')
+        self.assertEqual(job.metrics.get('updated'), 1)
         self.rule.refresh_from_db()
         self.assertIsNotNone(self.rule.last_run_at)
         self.assertIsNotNone(self.rule.last_success_at)
@@ -80,6 +83,19 @@ class IntegrationTaskTests(TestCase):
         setting = IntegrationSetting.objects.filter(connection=self.connection, key='state.projects').first()
         self.assertIsNotNone(setting)
         self.assertEqual(setting.data.get('lastRuleRevision'), self.rule.revision)
+
+    @mock.patch('integrations.tasks.acquire_rule_lock', return_value=True)
+    @mock.patch('integrations.tasks.bqe_sync_clients')
+    def test_run_rule_handles_clients_object(self, sync_clients, acquire_lock):
+        rule = IntegrationRule.objects.create(
+            connection=self.connection,
+            object_key='clients',
+            config=self.rule.config,
+            is_enabled=True,
+        )
+        sync_clients.return_value = SimpleNamespace(metrics={'fetched': 2, 'updated': 2}, cursor='2025-03-01T00:00:00Z')
+        run_integration_rule.run(rule.id, expected_revision=rule.revision)
+        self.assertTrue(sync_clients.called)
 
     def test_run_rule_skips_on_revision_mismatch(self):
         run_integration_rule.run(self.rule.id, expected_revision=self.rule.revision + 1)

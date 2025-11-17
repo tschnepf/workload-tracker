@@ -7,6 +7,7 @@ from .models import IntegrationConnection, IntegrationProvider, IntegrationRule,
 from .registry import get_registry
 from .rules import validate_rule_config
 from .scheduler import schedule_next_run
+from .oauth import connection_has_token
 
 
 class ProviderSerializer(serializers.Serializer):
@@ -20,6 +21,7 @@ class IntegrationConnectionSerializer(serializers.ModelSerializer):
     providerKey = serializers.CharField(write_only=True)
     provider = serializers.CharField(source='provider.key', read_only=True)
     providerDisplayName = serializers.CharField(source='provider.display_name', read_only=True)
+    hasToken = serializers.SerializerMethodField()
 
     class Meta:
         model = IntegrationConnection
@@ -28,19 +30,19 @@ class IntegrationConnectionSerializer(serializers.ModelSerializer):
             'provider',
             'providerDisplayName',
             'providerKey',
-            'company_id',
             'environment',
             'is_active',
             'needs_reauth',
             'is_disabled',
             'extra_headers',
+            'hasToken',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'provider', 'providerDisplayName', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'provider', 'providerDisplayName', 'hasToken', 'created_at', 'updated_at']
         extra_kwargs = {
-            'company_id': {'required': True},
             'environment': {'required': True},
+            'extra_headers': {'write_only': True, 'required': False},
         }
 
     def validate_providerKey(self, value: str) -> str:
@@ -48,6 +50,38 @@ class IntegrationConnectionSerializer(serializers.ModelSerializer):
         if not registry.get_provider(value):
             raise serializers.ValidationError('Unknown provider')
         return value
+
+    def get_hasToken(self, obj: IntegrationConnection) -> bool:
+        return connection_has_token(obj)
+
+    @staticmethod
+    def _environment_label(value: str) -> str:
+        for key, label in IntegrationConnection.ENVIRONMENT_CHOICES:
+            if key == value:
+                return label
+        return value.title()
+
+    def validate(self, attrs):  # type: ignore[override]
+        attrs = super().validate(attrs)
+        provider_key = attrs.get('providerKey') or (self.instance.provider.key if self.instance else None)
+        environment = attrs.get('environment') or (self.instance.environment if self.instance else None)
+        if provider_key and environment:
+            conflict_qs = IntegrationConnection.objects.select_related('provider').filter(
+                provider__key=provider_key,
+                environment=environment,
+            )
+            if self.instance:
+                conflict_qs = conflict_qs.exclude(pk=self.instance.pk)
+            conflict = conflict_qs.first()
+            if conflict:
+                provider_label = conflict.provider.display_name or conflict.provider.key.upper()
+                env_label = self._environment_label(environment)
+                message = (
+                    f"{provider_label} already has a {env_label} connection. "
+                    'Select the existing connection to re-authorize tokens instead of creating a duplicate.'
+                )
+                raise serializers.ValidationError({'environment': message})
+        return attrs
 
     def create(self, validated_data):
         provider_key = validated_data.pop('providerKey')
@@ -68,15 +102,25 @@ class IntegrationConnectionSerializer(serializers.ModelSerializer):
 
 
 class IntegrationJobSerializer(serializers.ModelSerializer):
+    provider = serializers.CharField(source='provider.key', read_only=True)
+    providerDisplayName = serializers.CharField(source='provider.display_name', read_only=True)
+    connectionCompany = serializers.SerializerMethodField()
+    connectionEnvironment = serializers.CharField(source='connection.environment', read_only=True)
+
     class Meta:
         model = IntegrationJob
         fields = [
             'id',
             'connection',
+            'provider',
+            'providerDisplayName',
+            'connectionCompany',
+            'connectionEnvironment',
             'object_key',
             'status',
             'payload',
             'logs',
+            'metrics',
             'celery_id',
             'started_at',
             'finished_at',
@@ -84,6 +128,11 @@ class IntegrationJobSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = fields
+
+    def get_connectionCompany(self, obj):
+        if obj.connection_id:
+            return f"{obj.connection.provider.display_name} ({obj.connection.environment})"
+        return ''
 
 
 class IntegrationRuleSerializer(serializers.ModelSerializer):

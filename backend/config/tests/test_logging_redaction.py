@@ -19,10 +19,11 @@ class LoggingRedactionTests(TestCase):
             logger.info(
                 'testing',
                 extra={
-                    'authorization': 'Bearer xyz',
+                    'authorization': {'token': 'abc'},
                     'password': 'supersecret',
                     'token': 'abc',
                     'refresh': 'def',
+                    'code': 'xyz',
                     'request_id': 'req-1',
                 },
             )
@@ -36,4 +37,4 @@ class LoggingRedactionTests(TestCase):
         assert payload['refresh'] == '[REDACTED]'
         # Non-sensitive field remains
         assert payload['request_id'] == 'req-1'
-
+        assert payload['code'] == '[REDACTED]'

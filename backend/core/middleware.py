@@ -7,6 +7,8 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.conf import settings
 from django.db import connections
 
+from core.request_context import set_current_request_id, reset_request_id
+
 try:
     import sentry_sdk
 except Exception:  # pragma: no cover
@@ -45,81 +47,85 @@ class RequestIDLogMiddleware:
         except Exception:
             has_restore_lock = False
 
-        response = self.get_response(request)
-
-        duration_ms = int((time.monotonic() - start) * 1000)
-        remote = request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
-        # Avoid evaluating request.user (which may hit DB) during restore
-        user_id = None if has_restore_lock else getattr(getattr(request, 'user', None), 'id', None)
-
-        # Collect DB metrics (available when DEBUG; otherwise best-effort)
-        db_queries = None
-        db_time_ms = None
+        token = set_current_request_id(rid)
         try:
-            # Skip introspection when restore lock is present to reduce coupling
-            if not has_restore_lock:
-                total = 0
-                t = 0.0
-                for alias in connections:
-                    try:
-                        qs = connections[alias].queries
-                        total += len(qs)
-                        for q in qs:
-                            try:
-                                t += float(q.get('time', 0.0))
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                db_queries = total
-                db_time_ms = int(t * 1000)
-        except Exception:
-            pass
+            response = self.get_response(request)
 
-        # Echo the request ID on the response
-        try:
-            response['X-Request-ID'] = rid
-        except Exception:
-            pass
+            duration_ms = int((time.monotonic() - start) * 1000)
+            remote = request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
+            # Avoid evaluating request.user (which may hit DB) during restore
+            user_id = None if has_restore_lock else getattr(getattr(request, 'user', None), 'id', None)
 
-        # Emit structured log
-        try:
-            self.logger.info(
-                'request',
-                extra={
-                    'request_id': rid,
-                    'user_id': user_id,
-                    'path': request.path,
-                    'method': request.method,
-                    'status_code': getattr(response, 'status_code', None),
-                    'duration_ms': duration_ms,
-                    'remote_addr': remote,
-                    'db_queries': db_queries,
-                    'db_time_ms': db_time_ms,
-                },
-            )
-        except Exception:
-            pass
-
-        # Sentry breadcrumb with performance hints
-        if sentry_sdk is not None:
+            # Collect DB metrics (available when DEBUG; otherwise best-effort)
+            db_queries = None
+            db_time_ms = None
             try:
-                sentry_sdk.add_breadcrumb(
-                    category='http.performance',
-                    message='endpoint',
-                    data={
+                # Skip introspection when restore lock is present to reduce coupling
+                if not has_restore_lock:
+                    total = 0
+                    t = 0.0
+                    for alias in connections:
+                        try:
+                            qs = connections[alias].queries
+                            total += len(qs)
+                            for q in qs:
+                                try:
+                                    t += float(q.get('time', 0.0))
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+                    db_queries = total
+                    db_time_ms = int(t * 1000)
+            except Exception:
+                pass
+
+            # Echo the request ID on the response
+            try:
+                response['X-Request-ID'] = rid
+            except Exception:
+                pass
+
+            # Emit structured log
+            try:
+                self.logger.info(
+                    'request',
+                    extra={
+                        'request_id': rid,
+                        'user_id': user_id,
                         'path': request.path,
-                        'status': getattr(response, 'status_code', None),
+                        'method': request.method,
+                        'status_code': getattr(response, 'status_code', None),
                         'duration_ms': duration_ms,
+                        'remote_addr': remote,
                         'db_queries': db_queries,
                         'db_time_ms': db_time_ms,
                     },
-                    level='info',
                 )
             except Exception:
                 pass
 
-        return response
+            # Sentry breadcrumb with performance hints
+            if sentry_sdk is not None:
+                try:
+                    sentry_sdk.add_breadcrumb(
+                        category='http.performance',
+                        message='endpoint',
+                        data={
+                            'path': request.path,
+                            'status': getattr(response, 'status_code', None),
+                            'duration_ms': duration_ms,
+                            'db_queries': db_queries,
+                            'db_time_ms': db_time_ms,
+                        },
+                        level='info',
+                    )
+                except Exception:
+                    pass
+
+            return response
+        finally:
+            reset_request_id(token)
 
 
 class CSPMiddleware:

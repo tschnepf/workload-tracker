@@ -30,6 +30,7 @@ No other repo references were found via `rg -n "#role" -g"*.md"`.
 | Create User & Admin User Table | Inline JSX + `authApi` calls | Yes | None | `authApi` (create user, invite, list, role/person updates, delete) | Includes invite resend, delete, linked person selection |
 | Backup & Restore | `BackupOverview`, `BackupManagement`, `RestoreManagement` | Yes | None | `/api/backups/*` endpoints | Anchor `#backup-restore` | 
 | Admin Audit Log | Inline table | Yes | None | `authApi.listAdminAudit` | Refresh button triggers fetch |
+| Integrations Hub | `IntegrationsSection` | Yes | `caps.integrations.enabled` | `integrationsApi` (secret key, providers, connections, mapping, rules, jobs, matching) | Secret-key gate, provider cards, connection attention banner, matching wizard, job filters + retry |
 
 ## Regression Scenarios
 
@@ -49,6 +50,10 @@ No other repo references were found via `rg -n "#role" -g"*.md"`.
 10. RestoreManagement action guardrails (warnings, disabled state when another restore runs).
 11. Admin audit log refresh, loading spinner, empty-state message.
 12. Quick navigation links (`#role-management`, `#backup-restore`) still deep link until redirects are in place.
+13. Integrations secret-key flow: locked state shows instructions, generate/save works, unlocking triggers provider fetch.
+14. Integrations provider/connection management: add connection modal, disable/enable toggle, “Mark tokens invalid” button, and the admin attention banner actions (revoke tokens, force reconnect, disable/enable).
+15. Mapping + rule config: field toggles, client sync policy select, save rule, save mapping, and initial matching wizard load/edit/save (including enable-rule toggle).
+16. Sync controls: worker outage banner, job metric cards, status/object filters, refresh button, job retry action, and Post-restore Resync modal.
 
 ### Split-Pane Specific Checks
 

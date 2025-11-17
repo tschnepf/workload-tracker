@@ -13,6 +13,10 @@ import {
   createConnection,
   updateConnection,
   getProviderCatalog,
+  getProviderCredentials,
+  saveProviderCredentials,
+  resetProvider,
+  startConnectionOAuth,
   listRules,
   createRule,
   updateRule,
@@ -23,12 +27,19 @@ import {
   resyncRule,
   getSecretKeyStatus,
   setSecretKey,
+  getProjectMatchSuggestions,
+  confirmProjectMatches,
+  retryJob,
+  testConnection,
+  testActivityConnection,
+  type ProjectMatchResponse,
   type IntegrationProviderSummary,
   type IntegrationConnection,
   type IntegrationRule,
   type IntegrationRuleConfig,
   type IntegrationMappingEntry,
   type IntegrationCatalogObject,
+  type IntegrationProviderCredentials,
   type IntegrationMappingState,
   type IntegrationJob,
   type IntegrationHealth,
@@ -51,13 +62,21 @@ const behaviorOptions = [
   { value: 'write_once', label: 'Write Once' },
 ];
 
+const jobStatusOptions = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'running', label: 'Running' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'succeeded', label: 'Succeeded' },
+  { value: 'failed', label: 'Failed' },
+];
+
 const clientPolicyOptions: Array<{ value: IntegrationRuleConfig['clientSyncPolicy']; label: string }> = [
   { value: 'preserve_local', label: 'Preserve Local (default)' },
   { value: 'follow_bqe', label: 'Follow BQE' },
   { value: 'write_once', label: 'Write Once' },
 ];
 
-type ConnectFormState = { companyId: string; environment: 'sandbox' | 'production' };
+type ConnectFormState = { environment: 'sandbox' | 'production' };
 
 function generateFernetKey(): string {
   const cryptoObj: Crypto | undefined = typeof globalThis !== 'undefined' ? (globalThis.crypto as Crypto | undefined) : undefined;
@@ -139,6 +158,12 @@ const IntegrationsSection: React.FC = () => {
       showToast(err?.message || 'Unable to generate key in this browser.', 'error');
     }
   };
+  const [matchingData, setMatchingData] = useState<ProjectMatchResponse | null>(null);
+  const [matchingSelections, setMatchingSelections] = useState<Record<string, number | ''>>({});
+  const [matchingLoading, setMatchingLoading] = useState(false);
+  const [matchingEnableRule, setMatchingEnableRule] = useState(true);
+  const [jobStatusFilter, setJobStatusFilter] = useState<'all' | 'running' | 'pending' | 'succeeded' | 'failed'>('all');
+  const [jobObjectFilter, setJobObjectFilter] = useState<string>('all');
 
   const providersQuery = useQuery({
     queryKey: ['integrations', 'providers'],
@@ -155,12 +180,59 @@ const IntegrationsSection: React.FC = () => {
   }, [providers, selectedProviderKey]);
   const selectedProvider = providers.find((p) => p.key === selectedProviderKey) ?? providers[0];
 
+  const credentialsQueryKey = ['integrations', 'credentials', selectedProviderKey] as const;
+  const providerCredentialsQuery = useQuery<IntegrationProviderCredentials, Error>({
+    queryKey: credentialsQueryKey,
+    queryFn: () => getProviderCredentials(selectedProviderKey!),
+    enabled: !!selectedProviderKey,
+  });
+  const credentials = providerCredentialsQuery.data;
+  const [credentialForm, setCredentialForm] = useState({ clientId: '', redirectUri: '', clientSecret: '' });
+  useEffect(() => {
+    if (credentials) {
+      setCredentialForm({ clientId: credentials.clientId ?? '', redirectUri: credentials.redirectUri ?? '', clientSecret: '' });
+    } else {
+      setCredentialForm({ clientId: '', redirectUri: '', clientSecret: '' });
+    }
+  }, [credentials, selectedProviderKey]);
+  const saveCredentialsMutation = useMutation({
+    mutationFn: () => saveProviderCredentials(selectedProviderKey!, {
+      clientId: credentialForm.clientId.trim(),
+      redirectUri: credentialForm.redirectUri.trim(),
+      clientSecret: credentialForm.clientSecret.trim() || undefined,
+    }),
+    onSuccess: () => {
+      showToast('Credentials saved', 'success');
+      setCredentialForm((prev) => ({ ...prev, clientSecret: '' }));
+      queryClient.invalidateQueries({ queryKey: credentialsQueryKey });
+    },
+    onError: (err: any) => showToast(err?.message || 'Failed to save credentials', 'error'),
+  });
+  const resetProviderMutation = useMutation({
+    mutationFn: () => resetProvider(selectedProviderKey!),
+    onSuccess: () => {
+      showToast('Provider reset complete', 'success');
+      queryClient.invalidateQueries({ queryKey: credentialsQueryKey });
+      queryClient.invalidateQueries({ queryKey: queryConnectionsKey });
+      queryClient.invalidateQueries({ queryKey: queryRulesKey });
+    },
+    onError: (err: any) => showToast(err?.message || 'Failed to reset provider', 'error'),
+  });
+  const providerCredentialsConfigured = credentials?.configured ?? false;
+
+  const [connectForm, setConnectForm] = useState<ConnectFormState>({ environment: 'sandbox' });
+  const connectEnvironmentLabel = connectForm.environment === 'production' ? 'Production' : 'Sandbox';
+
   const connectionsQuery = useQuery({
     queryKey: ['integrations', 'connections', selectedProviderKey],
     queryFn: () => listConnections(selectedProviderKey || undefined),
     enabled: secretKeyConfigured && !!selectedProviderKey,
   });
   const connections = connectionsQuery.data ?? [];
+  const existingEnvConnection = useMemo(
+    () => connections.find((conn) => conn.environment === connectForm.environment) ?? null,
+    [connections, connectForm.environment],
+  );
   const [selectedConnectionId, setSelectedConnectionId] = useState<number | null>(null);
   useEffect(() => {
     if (!connections.length) {
@@ -172,6 +244,8 @@ const IntegrationsSection: React.FC = () => {
     }
   }, [connections, selectedConnectionId]);
   const selectedConnection = connections.find((c) => c.id === selectedConnectionId) ?? null;
+  const connectionHasToken = !!selectedConnection?.hasToken;
+  const connectionAuthorized = !!selectedConnection && connectionHasToken && !selectedConnection.needs_reauth;
 
   const providerCatalogQuery = useQuery({
     queryKey: ['integrations', 'catalog', selectedProviderKey],
@@ -188,6 +262,12 @@ const IntegrationsSection: React.FC = () => {
       setSelectedObjectKey(providerObjects[0].key);
     }
   }, [providerObjects, selectedObjectKey]);
+  useEffect(() => {
+    if (jobObjectFilter === 'all') return;
+    if (!providerObjects.some((obj) => obj.key === jobObjectFilter)) {
+      setJobObjectFilter('all');
+    }
+  }, [providerObjects, jobObjectFilter]);
   const selectedObject = providerObjects.find((obj) => obj.key === selectedObjectKey);
 
   const rulesQuery = useQuery({
@@ -226,9 +306,14 @@ const IntegrationsSection: React.FC = () => {
   }, [mappingState]);
 
   const jobsQuery = useQuery({
-    queryKey: ['integrations', 'jobs', selectedProviderKey, selectedConnectionId],
-    queryFn: () => listJobs(selectedProviderKey!, { connection: selectedConnectionId ?? undefined, limit: 10 }),
-    enabled: !!selectedProviderKey && !!selectedConnectionId,
+    queryKey: ['integrations', 'jobs', selectedProviderKey, selectedConnectionId, jobStatusFilter, jobObjectFilter],
+    queryFn: () => listJobs(selectedProviderKey!, {
+      connection: selectedConnectionId ?? undefined,
+      limit: 20,
+      status: jobStatusFilter === 'all' ? undefined : jobStatusFilter,
+      object: jobObjectFilter === 'all' ? undefined : jobObjectFilter,
+    }),
+    enabled: !!selectedProviderKey,
     refetchInterval: 30_000,
   });
   const jobs = jobsQuery.data ?? [];
@@ -239,25 +324,44 @@ const IntegrationsSection: React.FC = () => {
     refetchInterval: 60_000,
   });
   const health: IntegrationHealth | undefined = healthQuery.data;
-  const syncDisabled = !!health && !health.healthy;
+  const jobSummary = health?.jobs;
+  const syncDisabled = !!health && (!health.healthy || health.schedulerPaused);
+  const schedulerPaused = !!health?.schedulerPaused;
 
   const metadataMismatch = providerCatalogQuery.data && selectedProvider
     && providerCatalogQuery.data.schemaVersion !== selectedProvider.schemaVersion;
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
-  const [connectForm, setConnectForm] = useState<ConnectFormState>({ companyId: '', environment: 'sandbox' });
   const [resyncModalOpen, setResyncModalOpen] = useState(false);
   const [resyncScope, setResyncScope] = useState<'delta_from_now' | 'full'>('delta_from_now');
+  const [oauthWindow, setOauthWindow] = useState<Window | null>(null);
 
   const queryConnectionsKey = ['integrations', 'connections', selectedProviderKey];
   const queryRulesKey = ['integrations', 'rules', selectedConnectionId];
   const queryMappingKey = ['integrations', 'mapping', selectedProviderKey, selectedObjectKey, selectedConnectionId];
-  const queryJobsKey = ['integrations', 'jobs', selectedProviderKey, selectedConnectionId];
+  const queryJobsKey = ['integrations', 'jobs', selectedProviderKey, selectedConnectionId, jobStatusFilter, jobObjectFilter];
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (!event.data || event.data.source !== 'integration-oauth') return;
+      if (event.data.ok) {
+        showToast('Provider authorized successfully.', 'success');
+        queryClient.invalidateQueries({ queryKey: queryConnectionsKey });
+      } else {
+        showToast(event.data.message || 'Authorization failed', 'error');
+      }
+      if (oauthWindow) {
+        oauthWindow.close();
+        setOauthWindow(null);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [oauthWindow, queryClient, queryConnectionsKey]);
 
   const createConnectionMutation = useMutation({
     mutationFn: () => createConnection({
       providerKey: selectedProviderKey!,
-      company_id: connectForm.companyId.trim(),
       environment: connectForm.environment,
     }),
     onSuccess: (data: IntegrationConnection) => {
@@ -265,6 +369,11 @@ const IntegrationsSection: React.FC = () => {
       setConnectModalOpen(false);
       setSelectedConnectionId(data.id);
       queryClient.invalidateQueries({ queryKey: queryConnectionsKey });
+      if (providerCredentialsConfigured) {
+        startOAuthMutation.mutate(data.id);
+      } else {
+        showToast('Save provider credentials before authorizing.', 'warning');
+      }
     },
     onError: (err: any) => showToast(err?.message || 'Failed to create connection', 'error'),
   });
@@ -276,6 +385,37 @@ const IntegrationsSection: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: queryConnectionsKey });
     },
     onError: (err: any) => showToast(err?.message || 'Failed to update connection', 'error'),
+  });
+
+  const startOAuthMutation = useMutation({
+    mutationFn: (connectionId: number) => startConnectionOAuth(selectedProviderKey!, connectionId),
+    onSuccess: ({ authorizeUrl }) => {
+      const popup = window.open(authorizeUrl, 'integration-oauth', 'width=520,height=720');
+      if (!popup) {
+        showToast('Allow pop-ups to complete the authorization flow.', 'warning');
+        return;
+      }
+      setOauthWindow(popup);
+    },
+    onError: (err: any) => showToast(err?.message || 'Unable to start provider authorization', 'error'),
+  });
+
+  const testConnectionMutation = useMutation({
+    mutationFn: (connectionId: number) => testConnection(connectionId),
+    onSuccess: (data) => {
+      const message = data.message || `Connected to ${data.provider} (${data.environment}).`;
+      showToast(message, 'success');
+    },
+    onError: (err: any) => showToast(err?.message || 'Failed to reach provider', 'error'),
+  });
+
+  const testActivityMutation = useMutation({
+    mutationFn: (connectionId: number) => testActivityConnection(connectionId),
+    onSuccess: (data) => {
+      const message = data.message || `Activities endpoint responded for ${data.provider}.`;
+      showToast(message, 'success');
+    },
+    onError: (err: any) => showToast(err?.message || 'Failed to reach activities endpoint', 'error'),
   });
 
   const saveRuleMutation = useMutation({
@@ -328,6 +468,73 @@ const IntegrationsSection: React.FC = () => {
     onError: (err: any) => showToast(err?.message || 'Failed to enqueue resync', 'error'),
   });
 
+  const retryJobMutation = useMutation({
+    mutationFn: (jobId: number) => retryJob(jobId),
+    onSuccess: () => {
+      showToast('Retry requested', 'success');
+      queryClient.invalidateQueries({ queryKey: queryJobsKey });
+    },
+    onError: (err: any) => showToast(err?.message || 'Failed to retry job', 'error'),
+  });
+
+  const lastSuccessAt = activeRule?.last_success_at ? new Date(activeRule.last_success_at) : null;
+  const connectionHoursSinceSuccess = lastSuccessAt ? (Date.now() - lastSuccessAt.getTime()) / (1000 * 60 * 60) : null;
+  const connectionStale = connectionHoursSinceSuccess !== null && connectionHoursSinceSuccess > 24;
+  const connectionAttentionReasons: string[] = [];
+  if (selectedConnection?.needs_reauth) {
+    connectionAttentionReasons.push('OAuth tokens require re-authentication.');
+  }
+  if (connectionStale) {
+    connectionAttentionReasons.push('No successful sync in the last 24 hours.');
+  }
+  if (selectedConnection?.is_disabled) {
+    connectionAttentionReasons.push('Connection is currently disabled.');
+  }
+  const connectionHealthBanner = selectedConnection && connectionAttentionReasons.length > 0 ? (
+    <div className="border border-amber-500 bg-amber-500/10 text-amber-100 rounded-lg p-4 space-y-2">
+      <div className="font-semibold text-amber-100">Admin attention needed</div>
+      <ul className="list-disc list-inside text-sm">
+        {connectionAttentionReasons.map((reason) => (
+          <li key={reason}>{reason}</li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={updateConnectionMutation.isPending}
+          onClick={() => updateConnectionMutation.mutate({ needs_reauth: true })}
+        >
+          Revoke tokens
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            setConnectForm({ environment: selectedConnection.environment as ConnectFormState['environment'] });
+            setConnectModalOpen(true);
+          }}
+        >
+          Force reconnect
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={updateConnectionMutation.isPending}
+          onClick={() => updateConnectionMutation.mutate({ is_disabled: !selectedConnection.is_disabled })}
+        >
+          {selectedConnection.is_disabled ? 'Enable connection' : 'Disable connection'}
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
+  const workerBanner = schedulerPaused ? (
+    <div className="border border-red-500 bg-red-500/10 text-red-100 rounded-lg p-4 text-sm">
+      Sync temporarily paused because background workers are offline. Retry actions and new jobs are disabled until health recovers.
+    </div>
+  ) : null;
+
   const handleFieldToggle = (fieldKey: string) => {
     setRuleForm((prev) => {
       const exists = prev.fields.includes(fieldKey);
@@ -336,6 +543,61 @@ const IntegrationsSection: React.FC = () => {
       }
       return { ...prev, fields: [...prev.fields, fieldKey] };
     });
+  };
+
+  const loadMatchingSuggestions = async () => {
+    if (!selectedConnectionId || !selectedProvider) return;
+    if (!connectionAuthorized) {
+      showToast('Authorize the provider before loading matching data.', 'warning');
+      return;
+    }
+    setMatchingLoading(true);
+    try {
+      const data = await getProjectMatchSuggestions(selectedConnectionId, selectedProvider.key);
+      setMatchingData(data);
+      const initialSelections: Record<string, number | ''> = {};
+      data.items.forEach((item) => {
+        initialSelections[item.externalId] = item.matchedProject?.id ?? '';
+      });
+      setMatchingSelections(initialSelections);
+    } catch (err: any) {
+      showToast(err?.message || 'Unable to load matching suggestions', 'error');
+    } finally {
+      setMatchingLoading(false);
+    }
+  };
+
+  const submitMatching = async () => {
+    if (!selectedConnectionId || !selectedProvider || !matchingData) return;
+    if (!connectionAuthorized) {
+      showToast('Authorize the provider before saving matches.', 'warning');
+      return;
+    }
+    const matches = Object.entries(matchingSelections)
+      .filter(([, projectId]) => !!projectId)
+      .map(([externalId, projectId]) => ({ externalId, projectId: Number(projectId) }));
+    if (matches.length === 0) {
+      showToast('Select at least one project to match.', 'warning');
+      return;
+    }
+    try {
+      await confirmProjectMatches(selectedProvider.key, {
+        connectionId: selectedConnectionId,
+        matches,
+        enableRule: matchingEnableRule,
+      });
+      showToast('Matches saved', 'success');
+      setMatchingData(null);
+      setMatchingSelections({});
+      queryClient.invalidateQueries({ queryKey: queryRulesKey });
+      queryClient.invalidateQueries({ queryKey: queryConnectionsKey });
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save matches', 'error');
+    }
+  };
+
+  const updateMatchSelection = (externalId: string, projectId: string) => {
+    setMatchingSelections((prev) => ({ ...prev, [externalId]: projectId ? Number(projectId) : '' }));
   };
 
   const mappingIsDirty = useMemo(() => {
@@ -350,6 +612,28 @@ const IntegrationsSection: React.FC = () => {
 
   const providersReady = !providersQuery.isLoading && !providersQuery.isError;
   const connecting = createConnectionMutation.isPending;
+  const handleConnectSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedProviderKey) return;
+    if (!providerCredentialsConfigured) {
+      showToast('Save provider credentials before authorizing.', 'warning');
+      return;
+    }
+    if (existingEnvConnection) {
+      const providerName = selectedProvider?.displayName || selectedProviderKey.toUpperCase();
+      showToast(
+        `${providerName} already has a ${connectEnvironmentLabel} connection. Re-opening the OAuth flow for that record.`,
+        'info',
+      );
+      setSelectedConnectionId(existingEnvConnection.id);
+      setConnectModalOpen(false);
+      if (!startOAuthMutation.isPending) {
+        startOAuthMutation.mutate(existingEnvConnection.id);
+      }
+      return;
+    }
+    createConnectionMutation.mutate();
+  };
 
   const connectionSelector = connections.length > 1 ? (
     <label className="block text-sm text-[var(--muted)] mt-2">
@@ -361,7 +645,7 @@ const IntegrationsSection: React.FC = () => {
       >
         {connections.map((conn) => (
           <option key={conn.id} value={conn.id}>
-            {conn.company_id} ({conn.environment})
+            {conn.providerDisplayName} ({conn.environment})
           </option>
         ))}
       </select>
@@ -554,16 +838,94 @@ const IntegrationsSection: React.FC = () => {
 
       {selectedProvider && (
         <div className="border border-[var(--border)] rounded-lg p-4 space-y-3">
+          <div>
+            <h4 className="text-base font-semibold text-[var(--text)]">Provider Credentials</h4>
+            <p className="text-sm text-[var(--muted)]">
+              Enter the BQE OAuth client details from the developer portal. BQE CORE uses OAuth 2.0 Authorization Code + PKCE
+              against <code>https://api-identity.bqecore.com/idp/connect/authorize</code> / <code>https://api-identity.bqecore.com/idp/connect/token</code> with the scopes
+              <code>readwrite:core offline_access openid email profile</code>. Secrets are encrypted via MultiFernet and the redirect
+              URI must match exactly.
+            </p>
+          </div>
+          {providerCredentialsQuery.isLoading ? (
+            <Loader inline message="Loading credentials..." />
+          ) : (
+            <form
+              className="grid gap-3 md:grid-cols-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveCredentialsMutation.mutate();
+              }}
+            >
+              <Input
+                label="Client ID"
+                required
+                value={credentialForm.clientId}
+                onChange={(e) => setCredentialForm((prev) => ({ ...prev, clientId: (e.target as HTMLInputElement).value }))}
+              />
+              <Input
+                label="Redirect URI"
+                required
+                value={credentialForm.redirectUri}
+                onChange={(e) => setCredentialForm((prev) => ({ ...prev, redirectUri: (e.target as HTMLInputElement).value }))}
+              />
+              <Input
+                label="Client Secret"
+                type="password"
+                value={credentialForm.clientSecret}
+                onChange={(e) => setCredentialForm((prev) => ({ ...prev, clientSecret: (e.target as HTMLInputElement).value }))}
+                placeholder={credentials?.hasClientSecret ? '••••••••' : ''}
+              />
+              <div className="col-span-full text-xs text-[var(--muted)]">
+                {credentials?.hasClientSecret
+                  ? 'Leave the secret blank to keep the current value.'
+                  : 'Paste the client secret from the BQE developer portal.'}
+              </div>
+              <div className="col-span-full flex gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  type="submit"
+                  disabled={saveCredentialsMutation.isPending || !selectedProviderKey}
+                >
+                  {saveCredentialsMutation.isPending ? 'Saving...' : 'Save Credentials'}
+                </Button>
+                {!providerCredentialsConfigured && (
+                  <span className="text-xs text-amber-200 self-center">
+                    Configure credentials before connecting this provider.
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={resetProviderMutation.isPending}
+                  onClick={() => {
+                    if (!selectedProviderKey) return;
+                    const confirmed = window.confirm('Resetting removes all BQE connections, rules, and stored credentials. Continue?');
+                    if (!confirmed) return;
+                    resetProviderMutation.mutate();
+                  }}
+                >
+                  {resetProviderMutation.isPending ? 'Resetting…' : 'Reset Provider'}
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      {selectedProvider && (
+        <div className="border border-[var(--border)] rounded-lg p-4 space-y-3">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <div>
               <h4 className="text-base font-semibold text-[var(--text)]">{selectedProvider.displayName}</h4>
               <p className="text-sm text-[var(--muted)]">Manage connections and sync rules.</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={() => {
-                setConnectForm({ companyId: '', environment: 'sandbox' });
-                setConnectModalOpen(true);
-              }}>
+        <Button variant="secondary" size="sm" onClick={() => {
+          setConnectForm({ environment: 'sandbox' });
+          setConnectModalOpen(true);
+        }}>
                 {connections.length ? `Add ${selectedProvider.displayName} Connection` : `Connect ${selectedProvider.displayName}`}
               </Button>
             </div>
@@ -573,9 +935,6 @@ const IntegrationsSection: React.FC = () => {
           ) : selectedConnection ? (
             <>
               <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="px-2 py-1 rounded bg-[var(--surfaceHover)] border border-[var(--border)]">
-                  Company ID: <strong>{selectedConnection.company_id}</strong>
-                </span>
                 <span className="px-2 py-1 rounded bg-[var(--surfaceHover)] border border-[var(--border)]">
                   Environment: <strong>{selectedConnection.environment}</strong>
                 </span>
@@ -592,9 +951,43 @@ const IntegrationsSection: React.FC = () => {
                     Needs re-authentication
                   </span>
                 )}
+                {!connectionHasToken && !selectedConnection.needs_reauth && (
+                  <span className="px-2 py-1 rounded border border-amber-500 bg-amber-500/10 text-amber-100 text-xs font-semibold uppercase">
+                    OAuth pending
+                  </span>
+                )}
               </div>
+              {!connectionHasToken && (
+                <div className="text-sm text-amber-100 border border-amber-500 bg-amber-500/10 rounded px-3 py-2">
+                  Authorize this connection before running tests or matching. Use “Connect Provider” or “Reconnect OAuth”.
+                </div>
+              )}
               {connectionSelector}
               <div className="flex flex-wrap gap-2 mt-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!selectedConnectionId || testConnectionMutation.isPending || !connectionAuthorized}
+                  onClick={() => selectedConnectionId && testConnectionMutation.mutate(selectedConnectionId)}
+                >
+                  {testConnectionMutation.isPending ? 'Testing…' : 'Test Connection'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!selectedConnectionId || testActivityMutation.isPending || !connectionAuthorized}
+                  onClick={() => selectedConnectionId && testActivityMutation.mutate(selectedConnectionId)}
+                >
+                  {testActivityMutation.isPending ? 'Testing Activities…' : 'Test Activities Endpoint'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!selectedConnectionId || startOAuthMutation.isPending}
+                  onClick={() => selectedConnectionId && startOAuthMutation.mutate(selectedConnectionId)}
+                >
+                  {startOAuthMutation.isPending ? 'Authorizing…' : 'Reconnect OAuth'}
+                </Button>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -603,6 +996,16 @@ const IntegrationsSection: React.FC = () => {
                 >
                   {selectedConnection.is_active ? 'Disable Connection' : 'Enable Connection'}
                 </Button>
+                {!selectedConnection.needs_reauth && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={updateConnectionMutation.isPending}
+                    onClick={() => updateConnectionMutation.mutate({ needs_reauth: true })}
+                  >
+                    Mark tokens invalid
+                  </Button>
+                )}
                 {selectedConnection.needs_reauth && (
                   <Button
                     variant="secondary"
@@ -615,17 +1018,21 @@ const IntegrationsSection: React.FC = () => {
                 )}
               </div>
             </>
-          ) : (
+      ) : (
             <div className="text-[var(--muted)]">
-              No active connection yet. Click “Connect Provider” to add credentials.
+              {!providerCredentialsConfigured
+                ? 'Enter the provider credentials above before connecting.'
+                : 'No active connection yet. Click “Connect Provider” to add credentials.'}
             </div>
           )}
         </div>
       )}
 
-      {metadataWarning}
+  {metadataWarning}
+  {workerBanner}
+  {connectionHealthBanner}
 
-      {selectedConnection ? (
+  {selectedConnection ? (
         <>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="border border-[var(--border)] rounded-lg p-4 space-y-4">
@@ -887,6 +1294,104 @@ const IntegrationsSection: React.FC = () => {
           <div className="border border-[var(--border)] rounded-lg p-4 space-y-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               <div>
+                <h4 className="text-base font-semibold text-[var(--text)]">Initial Project Matching</h4>
+                <p className="text-sm text-[var(--muted)]">
+                  Link BQE parent projects to local records before turning on automatic sync.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!selectedConnection || matchingLoading || !connectionAuthorized}
+                onClick={loadMatchingSuggestions}
+              >
+                {matchingLoading ? 'Loading…' : 'Load Initial Matching'}
+              </Button>
+            </div>
+            {matchingLoading && <Loader inline message="Loading matching suggestions..." />}
+            {!matchingLoading && matchingData && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-4 text-sm text-[var(--muted)]">
+                  {Object.entries(matchingData.summary || {}).map(([key, value]) => (
+                    <span key={key} className="px-2 py-1 rounded bg-[var(--surfaceHover)] border border-[var(--border)]">
+                      {key}: <strong>{value}</strong>
+                    </span>
+                  ))}
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[var(--muted)] border-b border-[var(--border)]">
+                        <th className="py-2 pr-2">BQE Project</th>
+                        <th className="py-2 pr-2">Local Project</th>
+                        <th className="py-2 pr-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {matchingData.items.map((item) => {
+                        const selectValue = matchingSelections[item.externalId] ?? '';
+                        const options = item.candidates.length > 0 ? item.candidates : matchingData.localProjects;
+                        return (
+                          <tr key={item.externalId} className="border-b border-[var(--border)]">
+                            <td className="py-2 pr-2">
+                              <div className="font-semibold text-[var(--text)]">{item.externalName || 'Untitled'}</div>
+                              <div className="text-xs text-[var(--muted)]">
+                                #{item.externalNumber || item.externalId} · {item.externalClient || 'No client'}
+                              </div>
+                            </td>
+                            <td className="py-2 pr-2">
+                              <select
+                                className={SELECT_STYLES}
+                                value={selectValue}
+                                onChange={(e) => updateMatchSelection(item.externalId, e.target.value)}
+                              >
+                                <option value="">-- Leave unmatched --</option>
+                                {options.map((opt) => (
+                                  <option key={`${item.externalId}-${opt.id}`} value={opt.id}>
+                                    {opt.name} ({opt.client || '—'})
+                                  </option>
+                                ))}
+                              </select>
+                              {item.matchReason && (
+                                <div className="text-xs text-[var(--muted)] mt-1">
+                                  Suggested via {item.matchReason === 'project_number' ? 'project number' : 'name + client'}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2 pr-2 capitalize">{item.status.replace('_', ' ')}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={matchingEnableRule}
+                      onChange={(e) => setMatchingEnableRule(e.target.checked)}
+                    />
+                    Enable the Projects rule after saving matches
+                  </label>
+                  <Button
+                    size="sm"
+                    onClick={submitMatching}
+                    disabled={Object.values(matchingSelections).every((value) => !value)}
+                  >
+                    Save Matches
+                  </Button>
+                </div>
+              </div>
+            )}
+            {!matchingLoading && !matchingData && (
+              <p className="text-sm text-[var(--muted)]">Load suggestions to review auto-matched projects.</p>
+            )}
+          </div>
+
+          <div className="border border-[var(--border)] rounded-lg p-4 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <div>
                 <h4 className="text-base font-semibold text-[var(--text)]">Sync Controls</h4>
                 <p className="text-sm text-[var(--muted)]">Monitor last run, next schedule, and job history.</p>
               </div>
@@ -930,6 +1435,54 @@ const IntegrationsSection: React.FC = () => {
                 This rule requires a manual resync after a restore. Use “Post-restore Resync” to reset cursors.
               </div>
             )}
+            {jobSummary && (
+              <div className="grid gap-3 md:grid-cols-3 text-sm">
+                <div className="p-3 rounded border border-[var(--border)]">
+                  <div className="text-[var(--muted)]">Running jobs</div>
+                  <div className="font-semibold text-[var(--text)]">{jobSummary.running}</div>
+                </div>
+                <div className="p-3 rounded border border-[var(--border)]">
+                  <div className="text-[var(--muted)]">24h success rate</div>
+                  <div className="font-semibold text-[var(--text)]">
+                    {jobSummary.recent.total ? `${Math.round((jobSummary.recent.successRate ?? 0) * 100)}%` : '—'}
+                  </div>
+                  <div className="text-xs text-[var(--muted)]">{jobSummary.recent.total} jobs</div>
+                </div>
+                <div className="p-3 rounded border border-[var(--border)]">
+                  <div className="text-[var(--muted)]">Items processed</div>
+                  <div className="font-semibold text-[var(--text)]">{jobSummary.recent.itemsProcessed}</div>
+                </div>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="flex flex-col gap-1">
+                Job status
+                <select
+                  className={SELECT_STYLES}
+                  value={jobStatusFilter}
+                  onChange={(e) => setJobStatusFilter(e.target.value as typeof jobStatusFilter)}
+                >
+                  {jobStatusOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                Object filter
+                <select
+                  className={SELECT_STYLES}
+                  value={jobObjectFilter}
+                  onChange={(e) => setJobObjectFilter(e.target.value)}
+                >
+                  <option value="all">All objects</option>
+                  {providerObjects.map((obj) => (
+                    <option key={obj.key} value={obj.key}>{obj.label || obj.key}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="overflow-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -937,14 +1490,15 @@ const IntegrationsSection: React.FC = () => {
                     <th className="py-2 pr-2">Status</th>
                     <th className="py-2 pr-2">Started</th>
                     <th className="py-2 pr-2">Finished</th>
+                    <th className="py-2 pr-2">Result</th>
                     <th className="py-2">Notes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {jobs.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-3 text-[var(--muted)]">
-                        No jobs yet for this connection.
+                      <td colSpan={5} className="py-3 text-[var(--muted)]">
+                        No jobs match the selected filters.
                       </td>
                     </tr>
                   )}
@@ -963,6 +1517,30 @@ const IntegrationsSection: React.FC = () => {
                       </td>
                       <td className="py-2 pr-2">{formatDate(job.started_at)}</td>
                       <td className="py-2 pr-2">{formatDate(job.finished_at)}</td>
+                      <td className="py-2 pr-2 space-y-2">
+                        {job.metrics && Object.keys(job.metrics).length > 0 ? (
+                          <div className="text-xs text-[var(--muted)]">
+                            {Object.entries(job.metrics).map(([key, value]) => (
+                              <span key={key} className="inline-block mr-2">
+                                {key}: <strong className="text-[var(--text)]">{value}</strong>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[var(--muted)]">—</span>
+                        )}
+                        {job.status === 'failed' && (
+                          <Button
+                            size="sm"
+                            className="text-xs"
+                            variant="secondary"
+                            onClick={() => retryJobMutation.mutate(job.id)}
+                            disabled={retryJobMutation.isPending}
+                          >
+                            {retryJobMutation.isPending ? 'Retrying…' : 'Retry job'}
+                          </Button>
+                        )}
+                      </td>
                       <td className="py-2">
                         {job.logs?.length ? (
                           <details>
@@ -995,18 +1573,9 @@ const IntegrationsSection: React.FC = () => {
         width={480}
       >
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createConnectionMutation.mutate();
-          }}
+          onSubmit={handleConnectSubmit}
           className="space-y-4"
         >
-          <Input
-            label="Company ID"
-            required
-            value={connectForm.companyId}
-            onChange={(e) => setConnectForm((prev) => ({ ...prev, companyId: e.target.value }))}
-          />
           <label className="block text-sm text-[var(--muted)]">
             Environment
             <select
@@ -1021,6 +1590,16 @@ const IntegrationsSection: React.FC = () => {
           <p className="text-xs text-[var(--muted)]">
             OAuth tokens are stored securely via MultiFernet. Use sandbox for testing; production enforces stricter rate limits.
           </p>
+          <p className="text-xs text-[var(--muted)]">
+            BQE allows exactly one {connectEnvironmentLabel} connection per client. Reuse the existing record when you need to
+            re-authorize tokens.
+          </p>
+          {existingEnvConnection && (
+            <p className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500 rounded px-3 py-2">
+              {selectedProvider?.displayName || 'This provider'} already has a {connectEnvironmentLabel} connection. Clicking
+              Connect will reopen the OAuth window for that connection instead of creating a duplicate.
+            </p>
+          )}
           <div className="flex gap-2 justify-end">
             <Button
               type="button"
@@ -1033,7 +1612,7 @@ const IntegrationsSection: React.FC = () => {
             <Button
               type="submit"
               size="sm"
-              disabled={!connectForm.companyId || connecting}
+              disabled={connecting || !providerCredentialsConfigured}
             >
               {connecting ? 'Connecting…' : 'Connect'}
             </Button>

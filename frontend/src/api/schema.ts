@@ -573,6 +573,15 @@ export interface paths {
     delete: operations["integrations_connections_destroy"];
     patch: operations["integrations_connections_partial_update"];
   };
+  "/api/integrations/connections/{id}/test/": {
+    post: operations["integrations_connections_test_create"];
+  };
+  "/api/integrations/health/": {
+    get: operations["integrations_health_retrieve"];
+  };
+  "/api/integrations/jobs/{id}/retry/": {
+    post: operations["integrations_jobs_retry_create"];
+  };
   "/api/integrations/providers/": {
     get: operations["integrations_providers_retrieve"];
   };
@@ -582,12 +591,34 @@ export interface paths {
   "/api/integrations/providers/{key}/catalog/": {
     get: operations["integrations_providers_catalog_retrieve"];
   };
+  "/api/integrations/providers/{key}/connect/callback/": {
+    get: operations["integrations_providers_connect_callback_retrieve"];
+  };
+  "/api/integrations/providers/{key}/connect/start/": {
+    post: operations["integrations_providers_connect_start_create"];
+  };
+  "/api/integrations/providers/{key}/credentials/": {
+    get: operations["integrations_providers_credentials_retrieve"];
+    post: operations["integrations_providers_credentials_create"];
+  };
   "/api/integrations/providers/{key}/objects/": {
     get: operations["integrations_providers_objects_retrieve"];
+  };
+  "/api/integrations/providers/{key}/reset/": {
+    post: operations["integrations_providers_reset_create"];
   };
   "/api/integrations/providers/{provider_key}/{object_key}/mapping/defaults/": {
     get: operations["integrations_providers_mapping_defaults_retrieve"];
     post: operations["integrations_providers_mapping_defaults_create"];
+  };
+  "/api/integrations/providers/{provider_key}/jobs/": {
+    get: operations["integrations_providers_jobs_retrieve"];
+  };
+  "/api/integrations/providers/{provider_key}/projects/matching/confirm/": {
+    post: operations["integrations_providers_projects_matching_confirm_create"];
+  };
+  "/api/integrations/providers/{provider_key}/projects/matching/suggestions/": {
+    get: operations["integrations_providers_projects_matching_suggestions_retrieve"];
   };
   "/api/integrations/rules/": {
     get: operations["integrations_rules_list"];
@@ -598,6 +629,13 @@ export interface paths {
     put: operations["integrations_rules_update"];
     delete: operations["integrations_rules_destroy"];
     patch: operations["integrations_rules_partial_update"];
+  };
+  "/api/integrations/rules/{id}/resync/": {
+    post: operations["integrations_rules_resync_create"];
+  };
+  "/api/integrations/secret-key/": {
+    get: operations["integrations_secret_key_retrieve"];
+    post: operations["integrations_secret_key_create"];
   };
   "/api/jobs/{job_id}/": {
     /**
@@ -1329,12 +1367,10 @@ export interface components {
       id: number;
       provider: string;
       providerDisplayName: string;
-      company_id: string;
       environment: components["schemas"]["EnvironmentEnum"];
       is_active?: boolean;
       needs_reauth?: boolean;
       is_disabled?: boolean;
-      extra_headers?: unknown;
       /** Format: date-time */
       created_at: string;
       /** Format: date-time */
@@ -1342,7 +1378,6 @@ export interface components {
     };
     IntegrationConnectionRequest: {
       providerKey: string;
-      company_id: string;
       environment: components["schemas"]["EnvironmentEnum"];
       is_active?: boolean;
       needs_reauth?: boolean;
@@ -1356,6 +1391,14 @@ export interface components {
       config?: unknown;
       is_enabled?: boolean;
       revision: number;
+      /** Format: date-time */
+      next_run_at: string | null;
+      /** Format: date-time */
+      last_run_at: string | null;
+      /** Format: date-time */
+      last_success_at: string | null;
+      last_error: string;
+      resync_required: boolean;
       /** Format: date-time */
       created_at: string;
       /** Format: date-time */
@@ -1787,7 +1830,6 @@ export interface components {
     };
     PatchedIntegrationConnectionRequest: {
       providerKey?: string;
-      company_id?: string;
       environment?: components["schemas"]["EnvironmentEnum"];
       is_active?: boolean;
       needs_reauth?: boolean;
@@ -2088,6 +2130,9 @@ export interface components {
       estimatedHours?: number | null;
       /** @default true */
       isActive?: boolean;
+      bqeClientName: string;
+      bqeClientId: string;
+      clientSyncPolicyState: string;
       /** Format: date-time */
       createdAt: string;
       /** Format: date-time */
@@ -2332,9 +2377,10 @@ export interface components {
      * * `on_hold` - On Hold
      * * `completed` - Completed
      * * `cancelled` - Cancelled
+     * * `inactive` - Inactive
      * @enum {string}
      */
-    StatusEnum: "planning" | "active" | "active_ca" | "on_hold" | "completed" | "cancelled";
+    StatusEnum: "planning" | "active" | "active_ca" | "on_hold" | "completed" | "cancelled" | "inactive";
     StatusSeries: {
       active: number[];
       active_ca: number[];
@@ -4416,6 +4462,40 @@ export interface operations {
       };
     };
   };
+  integrations_connections_test_create: {
+    parameters: {
+      path: {
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_health_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_jobs_retry_create: {
+    parameters: {
+      path: {
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
   integrations_providers_retrieve: {
     responses: {
       /** @description No response body */
@@ -4450,7 +4530,72 @@ export interface operations {
       };
     };
   };
+  integrations_providers_connect_callback_retrieve: {
+    parameters: {
+      path: {
+        key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_connect_start_create: {
+    parameters: {
+      path: {
+        key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_credentials_retrieve: {
+    parameters: {
+      path: {
+        key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_credentials_create: {
+    parameters: {
+      path: {
+        key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
   integrations_providers_objects_retrieve: {
+    parameters: {
+      path: {
+        key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_reset_create: {
     parameters: {
       path: {
         key: string;
@@ -4481,6 +4626,45 @@ export interface operations {
     parameters: {
       path: {
         object_key: string;
+        provider_key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_jobs_retrieve: {
+    parameters: {
+      path: {
+        provider_key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_projects_matching_confirm_create: {
+    parameters: {
+      path: {
+        provider_key: string;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_providers_projects_matching_suggestions_retrieve: {
+    parameters: {
+      path: {
         provider_key: string;
       };
     };
@@ -4592,6 +4776,35 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["IntegrationRule"];
         };
+      };
+    };
+  };
+  integrations_rules_resync_create: {
+    parameters: {
+      path: {
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_secret_key_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  integrations_secret_key_create: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
       };
     };
   };

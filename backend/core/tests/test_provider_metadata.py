@@ -24,9 +24,14 @@ class ProviderMetadataTests(SimpleTestCase):
         errors = sorted(self.validator.iter_errors(self.provider), key=lambda e: e.path)
         self.assertEqual(errors, [], f"Provider metadata has schema violations: {errors}")
 
-    def test_missing_required_header_fails_validation(self):
+    def test_required_headers_optional(self):
         broken = copy.deepcopy(self.provider)
         broken.pop('requiredHeaders', None)
+        self.validator.validate(broken)
+
+    def test_required_header_entries_must_be_valid(self):
+        broken = copy.deepcopy(self.provider)
+        broken['requiredHeaders'] = [{'key': 'X-Test'}]
         with self.assertRaises(ValidationError):
             self.validator.validate(broken)
 

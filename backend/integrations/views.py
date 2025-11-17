@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from cryptography.fernet import Fernet
-from requests import RequestException
+from requests import RequestException, HTTPError
 
 from .models import (
     IntegrationConnection,
@@ -38,14 +38,18 @@ from .matching import suggest_project_matches, confirm_project_matches
 from .tasks import run_integration_rule
 from .audit import record_audit_event
 from .providers.bqe.projects_client import BQEProjectsClient
+from .providers.bqe.errors import translate_bqe_error
 from .exceptions import IntegrationProviderError
 from .logging_utils import integration_log_extra
+from .http import IntegrationHttpClient
 from .oauth import (
     OAuthError,
     OAuthStateManager,
     build_authorization_url,
     exchange_code_for_connection,
     connection_has_token,
+    get_connection_access_token,
+    get_connection_endpoint,
 )
 
 logger = logging.getLogger(__name__)
@@ -514,6 +518,40 @@ def _test_bqe_connection(connection: IntegrationConnection, provider) -> dict:
     return {'sampleCount': sample_count, 'message': message}
 
 
+def _test_bqe_activity_probe(connection: IntegrationConnection, provider) -> dict:
+    base_url = get_connection_endpoint(connection, provider)
+    token = get_connection_access_token(connection, provider_meta=provider)
+    http = IntegrationHttpClient(base_url, enable_legacy_tls_fallback=True)
+    headers = dict(connection.extra_headers or {})
+    headers['Authorization'] = f'Bearer {token}'
+    try:
+        response = http.request('GET', '/activity', params={'page': '1,1'}, headers=headers, timeout=(5, 60))
+        response.raise_for_status()
+    except HTTPError as exc:
+        translate_bqe_error(
+            response,
+            exc,
+            connection=connection,
+            object_key='activities',
+        )
+        raise
+    payload = response.json()
+
+    def _coerce_items(body: Any) -> list[dict[str, Any]]:
+        if isinstance(body, list):
+            return [dict(item or {}) for item in body]
+        if isinstance(body, dict):
+            for key in ('items', 'results', 'data'):
+                if isinstance(body.get(key), list):
+                    return [dict(item or {}) for item in body[key]]
+        return []
+
+    items = _coerce_items(payload)
+    sample_count = len(items)
+    message = 'Fetched sample activity list successfully.' if sample_count else 'Connected but no activities returned.'
+    return {'sampleCount': sample_count, 'message': message}
+
+
 def _test_connection(connection: IntegrationConnection) -> dict:
     provider_meta = get_registry().get_provider(connection.provider.key)
     if not provider_meta:
@@ -554,6 +592,56 @@ class IntegrationConnectionTestView(APIView):
         except Exception as exc:
             logger.exception(
                 'integration_connection_test_failed',
+                extra=integration_log_extra(connection=connection),
+            )
+            return Response({'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        payload = {
+            'ok': True,
+            'provider': connection.provider.display_name,
+            'environment': connection.environment,
+            'checkedAt': timezone.now().isoformat(),
+            'sampleCount': result.get('sampleCount', 0),
+        }
+        if result.get('message'):
+            payload['message'] = result['message']
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class IntegrationActivityTestView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk: int):
+        connection = get_object_or_404(
+            IntegrationConnection.objects.select_related('provider'),
+            pk=pk,
+        )
+        provider_meta = get_registry().get_provider(connection.provider.key)
+        if not provider_meta:
+            return Response({'detail': 'Provider metadata missing'}, status=status.HTTP_400_BAD_REQUEST)
+        if provider_meta.key != 'bqe':
+            return Response({'detail': 'Activity probe is only available for BQE connections'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = _test_bqe_activity_probe(connection, provider_meta)
+        except OAuthError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrationProviderError as exc:
+            payload = {'detail': str(exc)}
+            if exc.provider_message:
+                payload['providerMessage'] = exc.provider_message
+            if exc.code:
+                payload['providerCode'] = exc.code
+            status_code = status.HTTP_409_CONFLICT if exc.status_code == 409 else status.HTTP_400_BAD_REQUEST
+            return Response(payload, status=status_code)
+        except RequestException as exc:
+            logger.exception(
+                'integration_activity_test_http_error',
+                extra=integration_log_extra(connection=connection),
+            )
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as exc:
+            logger.exception(
+                'integration_activity_test_failed',
                 extra=integration_log_extra(connection=connection),
             )
             return Response({'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

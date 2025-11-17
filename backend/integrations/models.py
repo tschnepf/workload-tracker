@@ -43,7 +43,6 @@ class IntegrationConnection(models.Model):
     )
 
     provider = models.ForeignKey(IntegrationProvider, on_delete=models.CASCADE, related_name='connections')
-    company_id = models.CharField(max_length=100)
     environment = models.CharField(max_length=20, choices=ENVIRONMENT_CHOICES, default='production')
     is_active = models.BooleanField(default=True)
     needs_reauth = models.BooleanField(default=False)
@@ -54,11 +53,11 @@ class IntegrationConnection(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['provider', 'company_id', 'environment'], name='uniq_integration_connection')
+            models.UniqueConstraint(fields=['provider', 'environment'], name='uniq_integration_connection')
         ]
 
     def __str__(self) -> str:  # pragma: no cover
-        return f"{self.provider_id}:{self.company_id} ({self.environment})"
+        return f"{self.provider_id}:{self.environment}"
 
 
 class EncryptedSecret(models.Model):
@@ -78,7 +77,7 @@ class EncryptedSecret(models.Model):
         return cls.objects.create(connection=connection, key_id=key_id, cipher_text=cipher)
 
     def decrypt(self) -> dict:
-        return decrypt_secret(self.cipher_text)
+        return decrypt_secret(bytes(self.cipher_text))
 
 
 class IntegrationSetting(models.Model):
@@ -129,6 +128,32 @@ class IntegrationSecretKey(models.Model):
         return raw.decode('utf-8')
 
 
+class IntegrationProviderCredential(models.Model):
+    provider = models.OneToOneField(IntegrationProvider, on_delete=models.CASCADE, related_name='credentials')
+    client_id = models.CharField(max_length=255)
+    redirect_uri = models.CharField(max_length=500)
+    encrypted_client_secret = models.BinaryField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['provider']
+
+    def set_client_secret(self, secret: str):
+        payload = {'client_secret': secret}
+        self.encrypted_client_secret = encrypt_secret(payload)
+
+    def get_client_secret(self) -> str | None:
+        if not self.encrypted_client_secret:
+            return None
+        data = decrypt_secret(bytes(self.encrypted_client_secret))
+        return data.get('client_secret')
+
+    @property
+    def has_client_secret(self) -> bool:
+        return bool(self.encrypted_client_secret)
+
+
 class IntegrationRule(models.Model):
     connection = models.ForeignKey(IntegrationConnection, on_delete=models.CASCADE, related_name='rules')
     object_key = models.CharField(max_length=50)
@@ -165,6 +190,7 @@ class IntegrationJob(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     payload = models.JSONField(default=dict)
     logs = models.JSONField(default=list, blank=True)
+    metrics = models.JSONField(default=dict, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -175,12 +201,66 @@ class IntegrationJob(models.Model):
         self.started_at = timezone.now()
         self.save(update_fields=['status', 'started_at', 'updated_at'])
 
-    def mark_finished(self, success: bool, logs: list | None = None):
+    def mark_finished(self, success: bool, *, logs: list | None = None, metrics: dict | None = None):
         self.status = 'succeeded' if success else 'failed'
         self.finished_at = timezone.now()
         if logs is not None:
             self.logs = logs
-        self.save(update_fields=['status', 'finished_at', 'logs', 'updated_at'])
+        if metrics is not None:
+            self.metrics = metrics
+        fields = ['status', 'finished_at', 'updated_at']
+        if logs is not None:
+            fields.append('logs')
+        if metrics is not None:
+            fields.append('metrics')
+        self.save(update_fields=fields)
+
+
+class IntegrationAuditLog(models.Model):
+    ACTION_CHOICES = (
+        ('connection.created', 'Connection created'),
+        ('connection.updated', 'Connection updated'),
+        ('connection.deleted', 'Connection deleted'),
+        ('rule.created', 'Rule created'),
+        ('rule.updated', 'Rule updated'),
+        ('rule.deleted', 'Rule deleted'),
+        ('rule.resync', 'Rule resync requested'),
+        ('job.retry', 'Job retry requested'),
+    )
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    provider = models.ForeignKey(IntegrationProvider, null=True, blank=True, on_delete=models.SET_NULL)
+    connection = models.ForeignKey(IntegrationConnection, null=True, blank=True, on_delete=models.SET_NULL)
+    rule = models.ForeignKey(IntegrationRule, null=True, blank=True, on_delete=models.SET_NULL)
+    action = models.CharField(max_length=64, choices=ACTION_CHOICES)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class IntegrationClient(models.Model):
+    connection = models.ForeignKey(IntegrationConnection, on_delete=models.CASCADE, related_name='clients')
+    external_id = models.CharField(max_length=128)
+    name = models.CharField(max_length=255, blank=True)
+    client_number = models.CharField(max_length=100, blank=True, null=True)
+    status = models.CharField(max_length=100, blank=True, null=True)
+    email = models.CharField(max_length=255, blank=True, null=True)
+    phone = models.CharField(max_length=100, blank=True, null=True)
+    is_archived = models.BooleanField(default=False)
+    updated_on = models.DateTimeField(null=True, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('connection', 'external_id')
+        indexes = [
+            models.Index(fields=['connection', 'client_number'], name='idx_integration_client_number'),
+            models.Index(fields=['connection', 'name'], name='idx_integration_client_name'),
+        ]
 
 
 class IntegrationExternalLink(models.Model):

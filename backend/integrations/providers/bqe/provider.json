@@ -3,32 +3,21 @@
   "key": "bqe",
   "displayName": "BQE CORE",
   "oauth": {
-    "flows": ["authorization_code_pkce", "client_credentials"],
+    "flows": ["authorization_code_pkce"],
     "scopes": [
-      "bqe_api",
+      "readwrite:core",
       "offline_access",
-      "projects.read",
-      "projects.write"
+      "openid",
+      "email",
+      "profile"
     ],
-    "authBaseUrl": "https://auth.bqe.com/oauth2/authorize",
-    "tokenUrl": "https://auth.bqe.com/oauth2/token"
+    "authBaseUrl": "https://api-identity.bqecore.com/idp/connect/authorize",
+    "tokenUrl": "https://api-identity.bqecore.com/idp/connect/token"
   },
-  "requiredHeaders": [
-    {
-      "key": "X-Company-Id",
-      "label": "Company ID",
-      "source": "connection"
-    },
-    {
-      "key": "X-Request-ID",
-      "label": "Request ID",
-      "source": "env",
-      "envKey": "INTEGRATIONS_REQUEST_ID"
-    }
-  ],
+  "requiredHeaders": [],
   "baseUrlVariants": {
-    "default": "https://api.bqe.com/v3",
-    "sandbox": "https://sandbox-api.bqe.com/v3"
+    "default": "https://api.bqecore.com/api",
+    "sandbox": "https://api.bqecore.com/api"
   },
   "rateLimits": {
     "requestsPerMinute": 60,
@@ -80,6 +69,41 @@
           { "source": "name", "target": "project.name", "behavior": "follow_bqe" },
           { "source": "status", "target": "project.status", "behavior": "follow_bqe" },
           { "source": "number", "target": "project.project_number", "behavior": "write_once" }
+        ]
+      }
+    },
+    {
+      "key": "clients",
+      "label": "Clients",
+      "capabilities": {
+        "list": true,
+        "delta": true
+      },
+      "fields": [
+        { "key": "clientId", "label": "Client ID", "type": "string", "nullable": false },
+        { "key": "name", "label": "Client Name", "type": "string", "nullable": false },
+        { "key": "number", "label": "Client Number", "type": "string", "nullable": true },
+        { "key": "status", "label": "Status", "type": "string", "nullable": true },
+        { "key": "email", "label": "Email", "type": "string", "nullable": true },
+        { "key": "phone", "label": "Phone", "type": "string", "nullable": true },
+        { "key": "isArchived", "label": "Archived", "type": "boolean", "nullable": false },
+        { "key": "updatedOn", "label": "Updated On", "type": "datetime", "nullable": true }
+      ],
+      "filters": {
+        "updatedSince": {
+          "query": "updatedOn>{cursor}",
+          "description": "Delta filter for incremental syncs."
+        }
+      },
+      "mapping": {
+        "schemaVersion": "1.0.0",
+        "defaults": [
+          { "source": "name", "target": "integration_client.name", "behavior": "follow_bqe" },
+          { "source": "number", "target": "integration_client.client_number", "behavior": "follow_bqe" },
+          { "source": "status", "target": "integration_client.status", "behavior": "follow_bqe" },
+          { "source": "email", "target": "integration_client.email", "behavior": "follow_bqe" },
+          { "source": "phone", "target": "integration_client.phone", "behavior": "follow_bqe" },
+          { "source": "isArchived", "target": "integration_client.is_archived", "behavior": "follow_bqe" }
         ]
       }
     }

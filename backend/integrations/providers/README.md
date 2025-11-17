@@ -10,7 +10,7 @@ Provider metadata lives under `backend/integrations/providers/<provider>/provide
 | `key` | string | Internal provider key (`bqe`, `netsuite`, etc.). |
 | `displayName` | string | Human-friendly name for UI listings. |
 | `oauth` | object | OAuth configuration (flows, scopes, auth/token URLs). |
-| `requiredHeaders` | array | Headers the HTTP client must set for every call. |
+| `requiredHeaders` | array | Optional headers the HTTP client must set for every call (default empty). |
 | `baseUrlVariants` | object | `default`, `sandbox`, and optional regional overrides. |
 | `rateLimits` | object | Tunable rate limit settings (per-connection + global). |
 | `objects` | array | Metadata for each syncable object (projects, clients, etc.). |

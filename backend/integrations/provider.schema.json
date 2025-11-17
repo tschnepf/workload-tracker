@@ -7,7 +7,6 @@
     "key",
     "displayName",
     "oauth",
-    "requiredHeaders",
     "baseUrlVariants",
     "rateLimits",
     "objects"
@@ -40,6 +39,7 @@
     },
     "requiredHeaders": {
       "type": "array",
+      "minItems": 0,
       "items": {
         "type": "object",
         "required": ["key", "label", "source"],
@@ -50,7 +50,8 @@
           "envKey": { "type": "string" }
         },
         "additionalProperties": true
-      }
+      },
+      "default": []
     },
     "baseUrlVariants": {
       "type": "object",

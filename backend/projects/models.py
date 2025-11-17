@@ -17,6 +17,7 @@ class Project(models.Model):
         ('on_hold', 'On Hold'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
+        ('inactive', 'Inactive'),
     ], default='active')
     client = models.CharField(max_length=100, blank=True, default='Internal')
     description = models.TextField(blank=True)
@@ -32,14 +33,23 @@ class Project(models.Model):
     
     # Metadata for future expansion
     project_number = models.CharField(max_length=50, blank=True, unique=True, null=True)
-    
+
+    # Integrations metadata
+    bqe_client_name = models.CharField(max_length=255, blank=True, null=True)
+    bqe_client_id = models.CharField(max_length=128, blank=True, null=True)
+    client_sync_policy_state = models.CharField(max_length=32, blank=True, default='preserve_local')
+
     # System fields
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         ordering = ['-created_at', 'name']
+        indexes = [
+            models.Index(fields=['bqe_client_id'], name='idx_project_bqe_client_id'),
+            models.Index(fields=['bqe_client_name'], name='idx_project_bqe_client_name'),
+        ]
     
     def __str__(self):
         return self.name
