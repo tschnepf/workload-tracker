@@ -5,25 +5,28 @@
   "oauth": {
     "flows": ["authorization_code_pkce"],
     "scopes": [
-      "readwrite:core",
-      "offline_access",
-      "openid",
-      "email",
-      "profile"
+      "read:core",
+      "offline_access"
     ],
     "authBaseUrl": "https://api-identity.bqecore.com/idp/connect/authorize",
     "tokenUrl": "https://api-identity.bqecore.com/idp/connect/token"
   },
-  "requiredHeaders": [],
+  "requiredHeaders": [
+    {
+      "key": "X-UTC-OFFSET",
+      "label": "UTC offset (minutes)",
+      "source": "connection"
+    }
+  ],
   "baseUrlVariants": {
     "default": "https://api.bqecore.com/api",
     "sandbox": "https://api.bqecore.com/api"
   },
   "rateLimits": {
-    "requestsPerMinute": 60,
-    "burst": 120,
-    "maxConcurrentPerConnection": 4,
-    "globalRequestsPerMinute": 600
+    "requestsPerMinute": 100,
+    "burst": 100,
+    "maxConcurrentPerConnection": 2,
+    "globalRequestsPerMinute": 100
   },
   "objects": [
     {
@@ -34,28 +37,29 @@
         "delta": true
       },
       "fields": [
-        { "key": "projectId", "label": "Project ID", "type": "string", "nullable": false },
+        { "key": "id", "label": "Project ID", "type": "string", "nullable": false },
         { "key": "name", "label": "Project Name", "type": "string", "nullable": false },
         { "key": "number", "label": "Project Number", "type": "string", "nullable": true },
         { "key": "status", "label": "Status", "type": "string", "nullable": false },
         { "key": "clientName", "label": "Client Name", "type": "string", "nullable": true },
         { "key": "clientId", "label": "Client ID", "type": "string", "nullable": true },
-        { "key": "parentProjectId", "label": "Parent Project ID", "type": "string", "nullable": true },
-        { "key": "updatedOn", "label": "Updated On", "type": "datetime", "nullable": false },
+        { "key": "parentId", "label": "Parent Project ID", "type": "string", "nullable": true },
+        { "key": "rootProjectId", "label": "Root Project ID", "type": "string", "nullable": true },
+        { "key": "lastUpdated", "label": "Last Updated", "type": "datetime", "nullable": false },
         { "key": "startDate", "label": "Start Date", "type": "date", "nullable": true },
         { "key": "endDate", "label": "End Date", "type": "date", "nullable": true }
       ],
       "hierarchy": {
-        "parentKey": "parentProjectId",
-        "childPredicate": "parentProjectId != null"
+        "parentKey": "parentId",
+        "childPredicate": "parentId != null"
       },
       "filters": {
         "parentOnly": {
-          "query": "parentProjectId=null",
+          "query": "parentId is null",
           "description": "Server-side filter that returns only top-level projects."
         },
-        "updatedSince": {
-          "query": "updatedOn>{cursor}",
+        "delta": {
+          "query": "lastUpdated>={cursor}",
           "description": "Delta filter for incremental syncs."
         }
       },
@@ -80,18 +84,17 @@
         "delta": true
       },
       "fields": [
-        { "key": "clientId", "label": "Client ID", "type": "string", "nullable": false },
+        { "key": "id", "label": "Client ID", "type": "string", "nullable": false },
         { "key": "name", "label": "Client Name", "type": "string", "nullable": false },
         { "key": "number", "label": "Client Number", "type": "string", "nullable": true },
         { "key": "status", "label": "Status", "type": "string", "nullable": true },
         { "key": "email", "label": "Email", "type": "string", "nullable": true },
         { "key": "phone", "label": "Phone", "type": "string", "nullable": true },
-        { "key": "isArchived", "label": "Archived", "type": "boolean", "nullable": false },
-        { "key": "updatedOn", "label": "Updated On", "type": "datetime", "nullable": true }
+        { "key": "lastUpdated", "label": "Last Updated", "type": "datetime", "nullable": true }
       ],
       "filters": {
-        "updatedSince": {
-          "query": "updatedOn>{cursor}",
+        "delta": {
+          "query": "lastUpdated>={cursor}",
           "description": "Delta filter for incremental syncs."
         }
       },
@@ -102,8 +105,7 @@
           { "source": "number", "target": "integration_client.client_number", "behavior": "follow_bqe" },
           { "source": "status", "target": "integration_client.status", "behavior": "follow_bqe" },
           { "source": "email", "target": "integration_client.email", "behavior": "follow_bqe" },
-          { "source": "phone", "target": "integration_client.phone", "behavior": "follow_bqe" },
-          { "source": "isArchived", "target": "integration_client.is_archived", "behavior": "follow_bqe" }
+          { "source": "phone", "target": "integration_client.phone", "behavior": "follow_bqe" }
         ]
       }
     }

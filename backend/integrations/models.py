@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError, ImproperlyConfigured
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from cryptography.fernet import Fernet
@@ -48,6 +49,11 @@ class IntegrationConnection(models.Model):
     needs_reauth = models.BooleanField(default=False)
     is_disabled = models.BooleanField(default=False)
     extra_headers = models.JSONField(default=dict, blank=True)
+    utc_offset_minutes = models.SmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(-720), MaxValueValidator(840)],
+        help_text='Timezone offset in minutes for APIs requiring X-UTC-OFFSET headers.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -243,6 +249,7 @@ class IntegrationAuditLog(models.Model):
 class IntegrationClient(models.Model):
     connection = models.ForeignKey(IntegrationConnection, on_delete=models.CASCADE, related_name='clients')
     external_id = models.CharField(max_length=128)
+    legacy_external_id = models.CharField(max_length=128, blank=True, default='')
     name = models.CharField(max_length=255, blank=True)
     client_number = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=100, blank=True, null=True)
@@ -260,6 +267,7 @@ class IntegrationClient(models.Model):
         indexes = [
             models.Index(fields=['connection', 'client_number'], name='idx_integration_client_number'),
             models.Index(fields=['connection', 'name'], name='idx_integration_client_name'),
+            models.Index(fields=['connection', 'legacy_external_id'], name='idx_integration_client_legacy'),
         ]
 
 
@@ -273,6 +281,7 @@ class IntegrationExternalLink(models.Model):
     connection = models.ForeignKey(IntegrationConnection, on_delete=models.CASCADE, related_name='external_links')
     object_type = models.CharField(max_length=50, choices=PROVIDER_OBJECT_CHOICES)
     external_id = models.CharField(max_length=128)
+    legacy_external_id = models.CharField(max_length=128, blank=True, default='')
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     local_object = GenericForeignKey('content_type', 'object_id')
@@ -285,6 +294,9 @@ class IntegrationExternalLink(models.Model):
                 fields=['provider', 'object_type', 'connection', 'external_id'],
                 name='uniq_external_link'
             )
+        ]
+        indexes = [
+            models.Index(fields=['connection', 'legacy_external_id'], name='idx_external_link_legacy')
         ]
 
     @staticmethod

@@ -15,6 +15,8 @@ from integrations.oauth import (
 from integrations.models import IntegrationConnection
 from integrations.registry import ProviderMetadata
 from integrations.providers.bqe.errors import translate_bqe_error
+from integrations.providers.bqe.query import WhereClauseBuilder
+from integrations.providers.bqe.rate_limit import BQERateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -44,21 +46,21 @@ class BQEClientsClient:
             enable_legacy_tls_fallback=True,
         )
         self.sleep = sleep_fn or time.sleep
-        self.page_size = min(int(provider_metadata.raw.get('pageSize', self.MAX_PAGE_SIZE)), self.MAX_PAGE_SIZE)
+        self.page_size = self._resolve_page_size(provider_metadata)
         self.headers = self._build_headers()
+        self.rate_limiter = self._build_rate_limiter(provider_metadata)
 
     def _build_headers(self) -> Dict[str, str]:
         headers = dict(self.connection.extra_headers or {})
         token = get_connection_access_token(self.connection, provider_meta=self.metadata)
         headers['Authorization'] = f"Bearer {token}"
+        headers['X-UTC-OFFSET'] = str(self._resolve_utc_offset())
         return headers
 
     def fetch(self, updated_since: str | None = None) -> Iterable[List[Dict[str, Any]]]:
         page = 1
         while True:
-            params = {'page': page, 'pageSize': self.page_size}
-            if updated_since:
-                params['updatedSince'] = updated_since
+            params = self._build_params(page, updated_since)
             payload = self._request_json('/client', params=params)
             items = self._extract_items(payload)
             yield items
@@ -94,7 +96,8 @@ class BQEClientsClient:
     def _request_json(self, path: str, *, params: Dict[str, Any]) -> Any:
         attempts = 0
         while True:
-            response = self.http.request('GET', path, params=params, headers=self.headers, timeout=(5, 60))
+            with self.rate_limiter.slot():
+                response = self.http.request('GET', path, params=params, headers=self.headers, timeout=(5, 60))
             if response.status_code in (429, 503):
                 retry_after = self._retry_after_seconds(response)
                 attempts += 1
@@ -121,3 +124,46 @@ class BQEClientsClient:
         except Exception:
             value = 1
         return max(1, min(value, self.MAX_BACKOFF_SECONDS))
+
+    def _resolve_page_size(self, metadata: ProviderMetadata) -> int:
+        raw_value = metadata.raw.get('pageSize', self.MAX_PAGE_SIZE)
+        try:
+            size = int(raw_value)
+        except Exception:
+            size = self.MAX_PAGE_SIZE
+        return max(1, min(size, self.MAX_PAGE_SIZE))
+
+    def _page_argument(self, page_number: int, *, page_size: int | None = None) -> str:
+        size = page_size if page_size is not None else self.page_size
+        size = max(1, min(int(size), self.MAX_PAGE_SIZE))
+        number = max(1, int(page_number))
+        return f"{number},{size}"
+
+    def _build_params(self, page_number: int, updated_since: str | None) -> Dict[str, Any]:
+        params: Dict[str, Any] = {'page': self._page_argument(page_number)}
+        builder = WhereClauseBuilder()
+        if updated_since:
+            builder.gte('lastUpdated', updated_since)
+        where_clause = builder.build()
+        if where_clause:
+            params['where'] = where_clause
+        return params
+
+    def _resolve_utc_offset(self) -> int:
+        try:
+            value = int(self.connection.utc_offset_minutes)
+        except (TypeError, ValueError):
+            value = 0
+        return max(-720, min(840, value))
+
+    def _build_rate_limiter(self, metadata: ProviderMetadata) -> BQERateLimiter:
+        limits = metadata.raw.get('rateLimits') or {}
+        max_concurrent = int(limits.get('maxConcurrentPerConnection', 4) or 4)
+        global_rpm = int(limits.get('globalRequestsPerMinute', 0) or 0)
+        return BQERateLimiter(
+            provider_key=metadata.key,
+            connection_id=self.connection.id,
+            max_concurrent=max_concurrent,
+            global_rpm=global_rpm,
+            sleep_fn=self.sleep,
+        )

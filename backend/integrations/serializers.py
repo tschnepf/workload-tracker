@@ -22,6 +22,7 @@ class IntegrationConnectionSerializer(serializers.ModelSerializer):
     provider = serializers.CharField(source='provider.key', read_only=True)
     providerDisplayName = serializers.CharField(source='provider.display_name', read_only=True)
     hasToken = serializers.SerializerMethodField()
+    utc_offset_minutes = serializers.IntegerField(required=False, min_value=-720, max_value=840)
 
     class Meta:
         model = IntegrationConnection
@@ -35,6 +36,7 @@ class IntegrationConnectionSerializer(serializers.ModelSerializer):
             'needs_reauth',
             'is_disabled',
             'extra_headers',
+            'utc_offset_minutes',
             'hasToken',
             'created_at',
             'updated_at',
@@ -43,6 +45,7 @@ class IntegrationConnectionSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'environment': {'required': True},
             'extra_headers': {'write_only': True, 'required': False},
+            'utc_offset_minutes': {'required': False},
         }
 
     def validate_providerKey(self, value: str) -> str:
@@ -82,6 +85,15 @@ class IntegrationConnectionSerializer(serializers.ModelSerializer):
                 )
                 raise serializers.ValidationError({'environment': message})
         return attrs
+
+    def validate_utc_offset_minutes(self, value: int | None) -> int:
+        if value is None:
+            return 0
+        if not isinstance(value, int):
+            raise serializers.ValidationError('Offset must be an integer value in minutes.')
+        if value < -720 or value > 840:
+            raise serializers.ValidationError('UTC offset must be between -720 and 840 minutes.')
+        return value
 
     def create(self, validated_data):
         provider_key = validated_data.pop('providerKey')

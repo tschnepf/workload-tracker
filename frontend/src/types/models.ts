@@ -273,6 +273,7 @@ export interface PersonCapacityHeatmapItem {
   weekTotals: { [weekKey: string]: number };
   peak: { weekKey: string | null; percentage: number };
   averagePercentage: number;
+  availableByWeek?: { [weekKey: string]: number };
 }
 
 // Team workload forecast item

@@ -52,6 +52,7 @@ export type IntegrationConnection = {
   needs_reauth: boolean;
   is_disabled: boolean;
   hasToken: boolean;
+  utc_offset_minutes: number;
   extra_headers?: Record<string, string>;
   created_at: string;
   updated_at: string;
@@ -268,6 +269,7 @@ export type CreateIntegrationConnectionPayload = {
   providerKey: string;
   environment?: 'production' | 'sandbox';
   extra_headers?: Record<string, string>;
+  utc_offset_minutes?: number;
 };
 
 export async function createConnection(payload: CreateIntegrationConnectionPayload): Promise<IntegrationConnection> {
@@ -457,6 +459,7 @@ export type ProjectMatchCandidate = {
 
 export type ProjectMatchItem = {
   externalId: string;
+  legacyExternalId?: string;
   externalName?: string;
   externalNumber?: string;
   externalClient?: string;
@@ -482,7 +485,7 @@ export async function getProjectMatchSuggestions(connectionId: number, providerK
 
 export type ConfirmProjectMatchPayload = {
   connectionId: number;
-  matches: Array<{ externalId: string; projectId: number }>;
+  matches: Array<{ externalId: string; legacyExternalId?: string; projectId: number }>;
   enableRule?: boolean;
 };
 

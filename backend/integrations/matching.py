@@ -42,6 +42,12 @@ def _coerce_project_number(payload: Dict[str, Any]) -> str:
     return _normalize(number)
 
 
+def _extract_remote_ids(payload: Dict[str, Any]) -> tuple[str, str]:
+    primary = str(payload.get('id') or '').strip()
+    legacy = str(payload.get('projectId') or '').strip()
+    return primary, legacy
+
+
 def _build_local_indexes(projects: Iterable[Project]):
     by_number = defaultdict(list)
     by_name_client = defaultdict(list)
@@ -69,22 +75,22 @@ def suggest_project_matches(connection: IntegrationConnection) -> Dict[str, Any]
     remote_rows = fetch_bqe_parent_projects(connection)
     projects = Project.objects.all().only('id', 'name', 'client', 'project_number')
     by_number, by_name_client = _build_local_indexes(projects)
-    existing_links = {
-        link.external_id: link
-        for link in IntegrationExternalLink.objects.filter(
-            provider=connection.provider,
-            connection=connection,
-            object_type='projects',
-        )
-    }
+    link_qs = IntegrationExternalLink.objects.filter(
+        provider=connection.provider,
+        connection=connection,
+        object_type='projects',
+    )
+    existing_by_id = {link.external_id: link for link in link_qs if link.external_id}
+    existing_by_legacy = {link.legacy_external_id: link for link in link_qs if link.legacy_external_id}
     results: List[Dict[str, Any]] = []
     stats = {'total': 0, 'matched': 0, 'conflicts': 0, 'unmatched': 0, 'linked': 0}
 
     for row in remote_rows:
         stats['total'] += 1
-        external_id = str(row.get('projectId') or '').strip()
+        external_id, legacy_external_id = _extract_remote_ids(row)
         suggestion = {
-            'externalId': external_id,
+            'externalId': external_id or legacy_external_id,
+            'legacyExternalId': legacy_external_id or '',
             'externalName': row.get('name'),
             'externalNumber': row.get('projectNumber') or row.get('number'),
             'externalClient': row.get('clientName'),
@@ -93,8 +99,16 @@ def suggest_project_matches(connection: IntegrationConnection) -> Dict[str, Any]
             'matchedProject': None,
             'candidates': [],
         }
-        if external_id in existing_links:
-            link = existing_links[external_id]
+        link = None
+        if external_id and external_id in existing_by_id:
+            link = existing_by_id[external_id]
+        elif legacy_external_id and legacy_external_id in existing_by_legacy:
+            link = existing_by_legacy[legacy_external_id]
+            if link and external_id:
+                IntegrationExternalLink.objects.filter(pk=link.pk).update(external_id=external_id)
+                link.external_id = external_id
+                existing_by_id[external_id] = link
+        if link:
             project = link.local_object if isinstance(link.local_object, Project) else None
             suggestion['status'] = 'linked'
             if project:
@@ -157,6 +171,7 @@ def confirm_project_matches(connection: IntegrationConnection, matches: List[Dic
     with transaction.atomic():
         for entry in matches:
             external_id = str(entry.get('externalId') or '').strip()
+            legacy_external_id = str(entry.get('legacyExternalId') or external_id or '').strip()
             project_id = entry.get('projectId')
             if not external_id or not project_id:
                 skipped += 1
@@ -175,6 +190,7 @@ def confirm_project_matches(connection: IntegrationConnection, matches: List[Dic
                 defaults={
                     'content_type': content_type,
                     'object_id': project.id,
+                    'legacy_external_id': legacy_external_id,
                 },
             )
             seen_external.add(external_id)

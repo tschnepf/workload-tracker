@@ -25,6 +25,7 @@ from integrations.matching import suggest_project_matches, confirm_project_match
 from projects.models import Project
 from integrations.encryption import reset_key_cache
 from integrations.exceptions import IntegrationProviderError
+from integrations.views import _test_bqe_connection
 
 TEST_SECRET_KEY = 'XvDOvRMNzSVskLFaPrEMHcKXqswNyptPVJ0cDIe8x5g='
 
@@ -105,6 +106,33 @@ class BQEClientTests(TestCase):
         self.assertIn('security permissions', str(ctx.exception))
         self.assertEqual(ctx.exception.code, 'MsgPermissions')
 
+    def test_fetch_builds_page_and_delta_params(self):
+        response = DummyResponse(200, {'items': []})
+        http = SimpleNamespace(request=mock.Mock(return_value=response))
+        client = BQEProjectsClient(self.connection, integration_registry_provider(), http_client=http)
+        iterator = client.fetch(updated_since='2025-01-01T00:00:00Z')
+        next(iterator)
+        first_call = http.request.call_args_list[0]
+        self.assertEqual(first_call.kwargs['params'], {
+            'page': '1,200',
+            'where': "lastUpdated>='2025-01-01T00:00:00Z'",
+        })
+        headers = first_call.kwargs['headers']
+        self.assertEqual(headers['X-UTC-OFFSET'], '0')
+
+    def test_fetch_merges_extra_where_and_page_override(self):
+        response = DummyResponse(200, {'items': []})
+        http = SimpleNamespace(request=mock.Mock(return_value=response))
+        client = BQEProjectsClient(self.connection, integration_registry_provider(), http_client=http)
+        iterator = client.fetch(
+            updated_since='2025-01-01T00:00:00Z',
+            extra_params={'where': 'parentId is null', 'page': '5,1'},
+        )
+        next(iterator)
+        params = http.request.call_args_list[0].kwargs['params']
+        self.assertEqual(params['page'], '5,1')
+        self.assertEqual(params['where'], "lastUpdated>='2025-01-01T00:00:00Z' and parentId is null")
+
 
 class BQESyncTests(TestCase):
     def setUp(self):
@@ -142,7 +170,8 @@ class BQESyncTests(TestCase):
             provider=self.provider,
             connection=self.connection,
             object_type='projects',
-            external_id='1',
+            external_id='guid-1',
+            legacy_external_id='1',
             content_type=ContentType.objects.get_for_model(Project),
             object_id=self.project.id,
         )
@@ -151,16 +180,18 @@ class BQESyncTests(TestCase):
         payloads = [
             [
                 {
+                    'id': 'guid-1',
                     'projectId': 1,
                     'name': 'Remote Project',
                     'status': 'Archived',
                     'clientName': 'Remote Client',
                     'clientId': '123',
-                    'updatedOn': '2025-01-01T00:00:00Z',
+                    'lastUpdated': '2025-01-01T00:00:00Z',
                 },
                 {
+                    'id': 'guid-child',
                     'projectId': 999,
-                    'parentProjectId': 1,
+                    'parentId': 'guid-1',
                     'name': 'Sub project',
                 },
             ]
@@ -198,10 +229,11 @@ class BQESyncTests(TestCase):
 
             def fetch(self, updated_since=None):
                 yield [{
+                    'id': 'guid-1',
                     'projectId': 1,
                     'name': 'Remote Project',
                     'clientName': 'Remote Client',
-                    'updatedOn': '2025-01-01T00:00:00Z',
+                    'lastUpdated': '2025-01-01T00:00:00Z',
                 }]
 
         sync_projects(self.rule, state={}, dry_run=False, client_factory=DummyClient)
@@ -209,11 +241,37 @@ class BQESyncTests(TestCase):
         self.assertEqual(self.project.client, 'Custom Client')
         self.assertEqual(self.project.bqe_client_name, 'Remote Client')
 
+    def test_sync_promotes_legacy_external_id(self):
+        legacy_project = Project.objects.create(name='Legacy Project', client='Legacy')
+        link = IntegrationExternalLink.objects.create(
+            provider=self.provider,
+            connection=self.connection,
+            object_type='projects',
+            external_id='legacy-42',
+            legacy_external_id='legacy-42',
+            content_type=ContentType.objects.get_for_model(Project),
+            object_id=legacy_project.id,
+        )
+
+        class DummyClient:
+            def fetch(self, updated_since=None):
+                yield [{
+                    'id': 'guid-legacy-42',
+                    'projectId': 'legacy-42',
+                    'name': 'Legacy Project',
+                    'clientName': 'Legacy',
+                    'lastUpdated': '2025-02-01T00:00:00Z',
+                }]
+
+        sync_projects(self.rule, state={}, dry_run=False, client_factory=DummyClient)
+        link.refresh_from_db()
+        self.assertEqual(link.external_id, 'guid-legacy-42')
+
     @mock.patch('integrations.matching.fetch_bqe_parent_projects')
     def test_suggest_project_matches(self, fetch_mock):
         fetch_mock.return_value = [
-            {'projectId': '10', 'name': 'Alpha', 'projectNumber': 'P-100', 'clientName': 'ACME'},
-            {'projectId': '11', 'name': 'Beta', 'projectNumber': None, 'clientName': 'Client B'},
+            {'id': 'p-10', 'projectId': '10', 'name': 'Alpha', 'projectNumber': 'P-100', 'clientName': 'ACME'},
+            {'id': 'p-11', 'projectId': '11', 'name': 'Beta', 'projectNumber': None, 'clientName': 'Client B'},
         ]
         Project.objects.create(name='Alpha', client='ACME', project_number='P-100')
         Project.objects.create(name='Beta', client='Client B')
@@ -227,7 +285,7 @@ class BQESyncTests(TestCase):
         project = Project.objects.create(name='Alpha', client='ACME', project_number='P-100')
         summary = confirm_project_matches(
             self.connection,
-            matches=[{'externalId': '99', 'projectId': project.id}],
+            matches=[{'externalId': '99', 'legacyExternalId': 'L-99', 'projectId': project.id}],
             enable_rule=True,
         )
         self.assertEqual(summary['updated'], 1)
@@ -236,6 +294,7 @@ class BQESyncTests(TestCase):
                 provider=self.provider,
                 connection=self.connection,
                 external_id='99',
+                legacy_external_id='L-99',
             ).exists()
         )
 
@@ -246,3 +305,40 @@ def integration_registry_provider():
     if not provider:
         raise RuntimeError('Provider metadata missing for tests')
     return provider
+
+
+class BQEConnectionHelperTests(TestCase):
+    def setUp(self):
+        self.provider = IntegrationProvider.objects.create(
+            key='bqe',
+            display_name='BQE',
+            metadata={},
+            schema_version='1.0.0',
+        )
+        self.connection = IntegrationConnection.objects.create(
+            provider=self.provider,
+            environment='sandbox',
+        )
+
+    @mock.patch('integrations.views.BQEProjectsClient')
+    def test_connection_test_requests_single_record(self, client_mock):
+        instance = client_mock.return_value
+        instance.fetch.return_value = iter([[{'id': '1'}]])
+        result = _test_bqe_connection(self.connection, integration_registry_provider())
+        self.assertIn('sampleCount', result)
+        instance.fetch.assert_called_once()
+        call_kwargs = instance.fetch.call_args.kwargs
+        self.assertEqual(call_kwargs.get('extra_params'), {'page': '1,1'})
+
+    @mock.patch('integrations.views.get_connection_endpoint', return_value='https://example.com/api')
+    @mock.patch('integrations.views.get_connection_access_token', return_value='token')
+    @mock.patch('integrations.views.IntegrationHttpClient')
+    def test_activity_probe_sets_offset_header(self, http_client_cls, _token_mock, _endpoint_mock):
+        connection = self.connection
+        connection.utc_offset_minutes = -420
+        http_instance = http_client_cls.return_value
+        http_instance.request.return_value = DummyResponse(200, {'items': []})
+        _test_bqe_activity_probe(connection, integration_registry_provider())
+        http_instance.request.assert_called_once()
+        headers = http_instance.request.call_args.kwargs['headers']
+        self.assertEqual(headers['X-UTC-OFFSET'], str(connection.utc_offset_minutes))

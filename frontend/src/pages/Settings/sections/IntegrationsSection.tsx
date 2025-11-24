@@ -55,6 +55,11 @@ const SELECT_STYLES = `
   focus:ring-1 focus:ring-[var(--focus)] focus:outline-none motion-reduce:transition-none
   min-h-[44px]
 `;
+const INPUT_STYLES = `
+  w-full px-3 py-2 rounded-md border text-sm bg-[var(--surface)]
+  border-[var(--border)] text-[var(--text)] focus:border-[var(--focus)]
+  focus:ring-1 focus:ring-[var(--focus)] focus:outline-none motion-reduce:transition-none
+`;
 
 const behaviorOptions = [
   { value: 'follow_bqe', label: 'Follow BQE' },
@@ -76,7 +81,7 @@ const clientPolicyOptions: Array<{ value: IntegrationRuleConfig['clientSyncPolic
   { value: 'write_once', label: 'Write Once' },
 ];
 
-type ConnectFormState = { environment: 'sandbox' | 'production' };
+type ConnectFormState = { environment: 'sandbox' | 'production'; utcOffsetMinutes: number };
 
 function generateFernetKey(): string {
   const cryptoObj: Crypto | undefined = typeof globalThis !== 'undefined' ? (globalThis.crypto as Crypto | undefined) : undefined;
@@ -220,7 +225,7 @@ const IntegrationsSection: React.FC = () => {
   });
   const providerCredentialsConfigured = credentials?.configured ?? false;
 
-  const [connectForm, setConnectForm] = useState<ConnectFormState>({ environment: 'sandbox' });
+  const [connectForm, setConnectForm] = useState<ConnectFormState>({ environment: 'sandbox', utcOffsetMinutes: 0 });
   const connectEnvironmentLabel = connectForm.environment === 'production' ? 'Production' : 'Sandbox';
 
   const connectionsQuery = useQuery({
@@ -335,6 +340,8 @@ const IntegrationsSection: React.FC = () => {
   const [resyncModalOpen, setResyncModalOpen] = useState(false);
   const [resyncScope, setResyncScope] = useState<'delta_from_now' | 'full'>('delta_from_now');
   const [oauthWindow, setOauthWindow] = useState<Window | null>(null);
+  const [connectionUtcOffsetDraft, setConnectionUtcOffsetDraft] = useState<string>('0');
+  const clampUtcOffset = (value: number) => Math.max(-720, Math.min(840, value));
 
   const queryConnectionsKey = ['integrations', 'connections', selectedProviderKey];
   const queryRulesKey = ['integrations', 'rules', selectedConnectionId];
@@ -359,10 +366,17 @@ const IntegrationsSection: React.FC = () => {
     return () => window.removeEventListener('message', handler);
   }, [oauthWindow, queryClient, queryConnectionsKey]);
 
+  useEffect(() => {
+    if (selectedConnection) {
+      setConnectionUtcOffsetDraft(String(selectedConnection.utc_offset_minutes ?? 0));
+    }
+  }, [selectedConnection]);
+
   const createConnectionMutation = useMutation({
     mutationFn: () => createConnection({
       providerKey: selectedProviderKey!,
       environment: connectForm.environment,
+      utc_offset_minutes: connectForm.utcOffsetMinutes,
     }),
     onSuccess: (data: IntegrationConnection) => {
       showToast('Connection created', 'success');
@@ -511,7 +525,10 @@ const IntegrationsSection: React.FC = () => {
           size="sm"
           variant="secondary"
           onClick={() => {
-            setConnectForm({ environment: selectedConnection.environment as ConnectFormState['environment'] });
+          setConnectForm({
+            environment: selectedConnection.environment as ConnectFormState['environment'],
+            utcOffsetMinutes: selectedConnection.utc_offset_minutes ?? 0,
+          });
             setConnectModalOpen(true);
           }}
         >
@@ -575,7 +592,14 @@ const IntegrationsSection: React.FC = () => {
     }
     const matches = Object.entries(matchingSelections)
       .filter(([, projectId]) => !!projectId)
-      .map(([externalId, projectId]) => ({ externalId, projectId: Number(projectId) }));
+      .map(([externalId, projectId]) => {
+        const suggestion = matchingData.items.find((item) => item.externalId === externalId);
+        return {
+          externalId,
+          legacyExternalId: suggestion?.legacyExternalId,
+          projectId: Number(projectId),
+        };
+      });
     if (matches.length === 0) {
       showToast('Select at least one project to match.', 'warning');
       return;
@@ -923,7 +947,7 @@ const IntegrationsSection: React.FC = () => {
             </div>
             <div className="flex gap-2">
         <Button variant="secondary" size="sm" onClick={() => {
-          setConnectForm({ environment: 'sandbox' });
+          setConnectForm({ environment: 'sandbox', utcOffsetMinutes: 0 });
           setConnectModalOpen(true);
         }}>
                 {connections.length ? `Add ${selectedProvider.displayName} Connection` : `Connect ${selectedProvider.displayName}`}
@@ -1017,6 +1041,48 @@ const IntegrationsSection: React.FC = () => {
                   </Button>
                 )}
               </div>
+              <form
+                className="mt-4 border border-[var(--border)] rounded-lg p-3 space-y-2 max-w-md"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!selectedConnectionId) return;
+                  const parsed = Number(connectionUtcOffsetDraft);
+                  if (Number.isNaN(parsed)) {
+                    showToast('Enter a valid integer offset.', 'warning');
+                    return;
+                  }
+                  updateConnectionMutation.mutate({ utc_offset_minutes: clampUtcOffset(Math.round(parsed)) });
+                }}
+              >
+                <label className="block text-sm text-[var(--muted)]">
+                  UTC offset (minutes)
+                  <input
+                    type="number"
+                    min={-720}
+                    max={840}
+                    className={INPUT_STYLES}
+                    value={connectionUtcOffsetDraft}
+                    onChange={(e) => setConnectionUtcOffsetDraft((e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <p className="text-xs text-[var(--muted)]">
+                  Used when calling BQE APIs via the <code>X-UTC-OFFSET</code> header. Keep this synchronized with the tenant&apos;s timezone.
+                </p>
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="secondary"
+                    disabled={
+                      updateConnectionMutation.isPending
+                      || !selectedConnection
+                      || Number(connectionUtcOffsetDraft) === selectedConnection.utc_offset_minutes
+                    }
+                  >
+                    {updateConnectionMutation.isPending ? 'Saving…' : 'Save Offset'}
+                  </Button>
+                </div>
+              </form>
             </>
       ) : (
             <div className="text-[var(--muted)]">
@@ -1587,6 +1653,25 @@ const IntegrationsSection: React.FC = () => {
               <option value="production">Production</option>
             </select>
           </label>
+          <label className="block text-sm text-[var(--muted)]">
+            UTC offset (minutes)
+            <input
+              type="number"
+              min={-720}
+              max={840}
+              className={INPUT_STYLES}
+              value={connectForm.utcOffsetMinutes}
+              onChange={(e) => {
+                const value = Number((e.target as HTMLInputElement).value || 0);
+                setConnectForm((prev) => ({ ...prev, utcOffsetMinutes: Math.max(-720, Math.min(840, value)) }));
+              }}
+              required
+            />
+          </label>
+          <p className="text-xs text-[var(--muted)]">
+            This value sets the <code>X-UTC-OFFSET</code> header for BQE APIs. Example: Pacific Time Standard is <code>-480</code>,
+            Eastern Time Standard is <code>-300</code>. Use positive values for UTC+ timezones.
+          </p>
           <p className="text-xs text-[var(--muted)]">
             OAuth tokens are stored securely via MultiFernet. Use sandbox for testing; production enforces stricter rate limits.
           </p>

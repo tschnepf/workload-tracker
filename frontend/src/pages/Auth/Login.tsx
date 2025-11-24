@@ -40,6 +40,8 @@ const Login: React.FC = () => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
               required
             />
           </div>
@@ -71,5 +73,4 @@ const Login: React.FC = () => {
 };
 
 export default Login;
-
 

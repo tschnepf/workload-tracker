@@ -49,23 +49,23 @@ def sync_projects(
         'skippedMissingId': 0,
     }
     max_updated: Optional[datetime] = None
-    parent_key = ((object_meta.get('hierarchy') or {}).get('parentKey')) or 'parentProjectId'
+    parent_key = ((object_meta.get('hierarchy') or {}).get('parentKey')) or 'parentId'
     cursor = state.get('cursor')
 
     for batch in client.fetch(updated_since=cursor):
         for row in batch:
             metrics['fetched'] += 1
-            updated_on = _parse_datetime(row.get('updatedOn'))
+            updated_on = _parse_datetime(row.get('lastUpdated') or row.get('updatedOn'))
             if updated_on:
                 max_updated = max(max_updated, updated_on) if max_updated else updated_on
             if _is_child(row, parent_key):
                 metrics['skippedChildren'] += 1
                 continue
-            external_id = _coerce_external_id(row.get('projectId'))
+            external_id, legacy_external_id = _extract_remote_ids(row)
             if not external_id:
                 metrics['skippedMissingId'] += 1
                 continue
-            link = _get_link(rule.connection, external_id)
+            link = _get_link(rule.connection, external_id, legacy_external_id)
             if not link or not isinstance(link.local_object, Project):
                 metrics['skippedUnlinked'] += 1
                 continue
@@ -90,6 +90,12 @@ def _load_mapping(connection: IntegrationConnection, object_key: str, object_met
     return ((object_meta.get('mapping') or {}).get('defaults')) or []
 
 
+def _extract_remote_ids(row: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+    legacy = _coerce_external_id(row.get('projectId'))
+    primary = _coerce_external_id(row.get('id')) or legacy
+    return primary, legacy
+
+
 def _coerce_external_id(value: Any) -> Optional[str]:
     if value is None:
         return None
@@ -97,18 +103,29 @@ def _coerce_external_id(value: Any) -> Optional[str]:
     return text or None
 
 
-def _get_link(connection: IntegrationConnection, external_id: str) -> Optional[IntegrationExternalLink]:
-    return (
-        IntegrationExternalLink.objects
-        .select_related('content_type')
-        .filter(
-            provider=connection.provider,
-            connection=connection,
-            object_type='projects',
-            external_id=external_id,
-        )
-        .first()
+def _get_link(connection: IntegrationConnection, external_id: str, legacy_external_id: Optional[str]) -> Optional[IntegrationExternalLink]:
+    qs = IntegrationExternalLink.objects.select_related('content_type').filter(
+        provider=connection.provider,
+        connection=connection,
+        object_type='projects',
     )
+    if external_id:
+        link = qs.filter(external_id=external_id).first()
+        if link:
+            if legacy_external_id and not link.legacy_external_id:
+                IntegrationExternalLink.objects.filter(pk=link.pk).update(legacy_external_id=legacy_external_id)
+                link.legacy_external_id = legacy_external_id
+            return link
+    if legacy_external_id:
+        link = qs.filter(legacy_external_id=legacy_external_id).first()
+        if link and external_id:
+            IntegrationExternalLink.objects.filter(pk=link.pk).update(external_id=external_id)
+            link.external_id = external_id
+        if link and legacy_external_id and not link.legacy_external_id:
+            IntegrationExternalLink.objects.filter(pk=link.pk).update(legacy_external_id=legacy_external_id)
+            link.legacy_external_id = legacy_external_id
+        return link
+    return None
 
 
 def _is_child(row: Dict[str, Any], parent_key: str | None) -> bool:

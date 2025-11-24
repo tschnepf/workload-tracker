@@ -511,7 +511,7 @@ class IntegrationJobRetryView(APIView):
 
 def _test_bqe_connection(connection: IntegrationConnection, provider) -> dict:
     client = BQEProjectsClient(connection, provider)
-    iterator = client.fetch(updated_since=None, extra_params={'pageSize': 1})
+    iterator = client.fetch(updated_since=None, extra_params={'page': '1,1'})
     first_batch = next(iterator, [])
     sample_count = len(first_batch)
     message = 'Fetched sample project list successfully.' if sample_count else 'Connected but no projects returned.'
@@ -524,6 +524,7 @@ def _test_bqe_activity_probe(connection: IntegrationConnection, provider) -> dic
     http = IntegrationHttpClient(base_url, enable_legacy_tls_fallback=True)
     headers = dict(connection.extra_headers or {})
     headers['Authorization'] = f'Bearer {token}'
+    headers['X-UTC-OFFSET'] = str(_connection_utc_offset(connection))
     try:
         response = http.request('GET', '/activity', params={'page': '1,1'}, headers=headers, timeout=(5, 60))
         response.raise_for_status()
@@ -550,6 +551,14 @@ def _test_bqe_activity_probe(connection: IntegrationConnection, provider) -> dic
     sample_count = len(items)
     message = 'Fetched sample activity list successfully.' if sample_count else 'Connected but no activities returned.'
     return {'sampleCount': sample_count, 'message': message}
+
+
+def _connection_utc_offset(connection: IntegrationConnection) -> int:
+    try:
+        value = int(connection.utc_offset_minutes)
+    except (TypeError, ValueError):
+        value = 0
+    return max(-720, min(840, value))
 
 
 def _test_connection(connection: IntegrationConnection) -> dict:

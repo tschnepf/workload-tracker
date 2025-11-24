@@ -1024,7 +1024,7 @@ export const skillTagsApi = {
 
 export const personSkillsApi = {
   // List person skills
-  list: (params?: { person?: number; skill_type?: string }) => {
+  list: (params?: { person?: number; skill_type?: string; search?: string; page_size?: number }) => {
     const queryParams = params ? new URLSearchParams(
       Object.entries(params).filter(([_, value]) => value !== undefined && value !== '')
         .map(([key, value]) => [key, String(value)])

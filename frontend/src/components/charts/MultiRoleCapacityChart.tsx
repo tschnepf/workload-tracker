@@ -38,6 +38,7 @@ export function roleColorForId(roleId: number): string {
 
 export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension, hideLegend, height: heightProp }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = React.useState<number | null>(null);
   // Keep the chart frame visible even when series is empty (e.g., all roles deselected).
   // Avoid early return so hook order remains stable across renders.
   const noData = !weekKeys?.length;
@@ -46,8 +47,15 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
   const padV = 40; // top/bottom
   const padLeft = 72; // extra room for label and tick text
   const padRight = 24;
-  const step = 44;
-  const width = Math.max(720, padLeft + padRight + (weekKeys.length - 1) * step);
+  const defaultStep = 44;
+  const minStep = 24;
+  const columns = Math.max(weekKeys.length - 1, 1);
+  const desiredWidth = padLeft + padRight + columns * defaultStep;
+  const available = containerWidth ? containerWidth - padLeft - padRight : null;
+  const step = available && available < columns * defaultStep
+    ? Math.max(minStep, available / columns)
+    : defaultStep;
+  const width = available ? Math.max(padLeft + padRight + columns * step, Math.min(desiredWidth, containerWidth)) : Math.max(720, desiredWidth);
   const height = heightProp ?? 300;
   const xLabel = 'Week';
   const yLabel = mode === 'hours' ? 'Hours' : '% of Capacity';
@@ -144,8 +152,22 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     }
   }, [hover]);
 
+  React.useLayoutEffect(() => {
+    const node = containerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') {
+      if (node) setContainerWidth(node.getBoundingClientRect().width);
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setContainerWidth(entry.contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div ref={containerRef} style={{ overflowX: 'auto', display: 'inline-block', maxWidth: '100%', position: 'relative' }}>
+    <div ref={containerRef} style={{ display: 'block', maxWidth: '100%', position: 'relative' }}>
       <svg width={width} height={height} role="img" aria-label="Role capacity vs assigned">
         {/* Axes */}
         <line x1={padLeft} y1={height - padV} x2={width - padRight} y2={height - padV} stroke="#4b5563" strokeWidth={1} />

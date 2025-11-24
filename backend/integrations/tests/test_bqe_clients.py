@@ -78,6 +78,17 @@ class BQEClientsClientTests(TestCase):
         self.assertEqual(len(batches[0]), 1)
         self.assertEqual(sleeps, [1])
 
+    def test_fetch_builds_page_and_delta_where(self):
+        response = DummyResponse(200, {'items': []})
+        http = SimpleNamespace(request=mock.Mock(return_value=response))
+        client = BQEClientsClient(self.connection, integration_registry_provider(), http_client=http)
+        iterator = client.fetch(updated_since='2025-03-01T00:00:00Z')
+        next(iterator)
+        params = http.request.call_args_list[0].kwargs['params']
+        self.assertEqual(params, {'page': '1,200', 'where': "lastUpdated>='2025-03-01T00:00:00Z'"})
+        headers = http.request.call_args_list[0].kwargs['headers']
+        self.assertEqual(headers['X-UTC-OFFSET'], '0')
+
 
 class BQEClientsSyncTests(TestCase):
     def setUp(self):
@@ -107,7 +118,7 @@ class BQEClientsSyncTests(TestCase):
         )
 
     def test_sync_creates_records(self):
-        payloads = [[{'clientId': '77', 'name': 'Client A', 'number': 'C-1', 'status': 'Active', 'updatedOn': '2025-02-01T00:00:00Z'}]]
+        payloads = [[{'id': 'guid-77', 'clientId': '77', 'name': 'Client A', 'number': 'C-1', 'status': 'Active', 'lastUpdated': '2025-02-01T00:00:00Z'}]]
 
         class DummyClient:
             def __init__(self, *_args, **_kwargs):
@@ -118,10 +129,11 @@ class BQEClientsSyncTests(TestCase):
 
         result = sync_clients(self.rule, state={}, dry_run=False, client_factory=DummyClient)
         self.assertEqual(result.metrics['inserted'], 1)
-        client = IntegrationClient.objects.get(connection=self.connection, external_id='77')
+        client = IntegrationClient.objects.get(connection=self.connection, external_id='guid-77')
         self.assertEqual(client.name, 'Client A')
         self.assertEqual(client.client_number, 'C-1')
         self.assertEqual(client.status, 'Active')
+        self.assertEqual(client.legacy_external_id, '77')
         self.assertIsNotNone(result.cursor)
 
     def test_dry_run_skips_writes(self):
@@ -135,6 +147,28 @@ class BQEClientsSyncTests(TestCase):
         result = sync_clients(self.rule, state={}, dry_run=True, client_factory=DummyClient)
         self.assertEqual(IntegrationClient.objects.count(), 0)
         self.assertEqual(result.metrics['fetched'], 1)
+
+    def test_sync_promotes_legacy_external_id(self):
+        IntegrationClient.objects.create(
+            connection=self.connection,
+            external_id='legacy-77',
+            legacy_external_id='legacy-77',
+            name='Legacy Client',
+        )
+
+        class DummyClient:
+            def fetch(self, updated_since=None):
+                yield [{
+                    'id': 'guid-legacy-77',
+                    'clientId': 'legacy-77',
+                    'name': 'Legacy Client',
+                    'status': 'Active',
+                }]
+
+        result = sync_clients(self.rule, state={}, dry_run=False, client_factory=DummyClient)
+        self.assertEqual(result.metrics['updated'], 1)
+        client = IntegrationClient.objects.get(connection=self.connection, external_id='guid-legacy-77')
+        self.assertEqual(client.legacy_external_id, 'legacy-77')
 
 
 def integration_registry_provider():
