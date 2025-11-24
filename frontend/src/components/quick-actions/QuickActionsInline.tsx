@@ -11,6 +11,9 @@ const btnCls =
   'px-2 py-1 text-xs rounded border transition-colors bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]';
 
 const QuickActionsInline: React.FC = () => {
+  const quickActionsEnabled = false;
+  if (!quickActionsEnabled) return null;
+
   const [openAction, setOpenAction] = useState<ActionKey>(null);
   const open = (key: ActionKey) => setOpenAction(key);
   const close = () => setOpenAction(null);

@@ -97,6 +97,13 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
     return Math.max(96, Math.min(180, s));
   }, [responsive, width, size]);
 
+  const legendLayoutClass = React.useMemo(() => {
+    if ((width ?? 0) >= 520) {
+      return 'flex flex-wrap gap-x-6 gap-y-1';
+    }
+    return 'flex flex-col gap-2';
+  }, [width]);
+
   return (
     <Card className={`bg-[var(--card)] border-[var(--border)] w-full min-w-[16rem] ${className || ''}`}>
       <div ref={rootRef} className="p-4">
@@ -133,7 +140,7 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
               <PieChart slices={slices} size={chartSize} />
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className={legendLayoutClass}>
               {slices.map((s) => (
                 <div key={s.key} className="flex items-center gap-2">
                   <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />

@@ -189,37 +189,43 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
           </div>
         </div>
 
-        <div>
+        <div className="w-full">
           <h2 className="text-lg font-semibold text-[var(--text)] mb-2">{title}</h2>
           {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
-          <div className="flex items-start gap-4">
-            <div className="shrink-0 w-full overflow-x-auto">
-              <div className="inline-block">
-                {!error && (
-                  <MultiRoleCapacityChart
-                    weekKeys={weekKeys}
-                    series={displayedSeries as any}
-                    mode={mode}
-                    tension={tension}
-                    hideLegend
-                    height={autoHeight}
-                  />
-                )}
-              </div>
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-6 lg:items-start">
+            <div className="flex-1 overflow-visible">
+              {!error && (
+                <MultiRoleCapacityChart
+                  weekKeys={weekKeys}
+                  series={displayedSeries as any}
+                  mode={mode}
+                  tension={tension}
+                  hideLegend
+                  height={autoHeight}
+                />
+              )}
             </div>
-            {/* Combined legend + role selector (vertical, right side) */}
-            <div className="w-64 shrink-0">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-[var(--muted)] text-xs">Roles</div>
-                <button
-                  onClick={() => setSelectedRoleIds(new Set())}
-                  disabled={selectedRoleIds.size === 0}
-                  className="px-2 py-0.5 rounded border text-[10px] bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)] disabled:opacity-50"
-                >
-                  Clear Selection
-                </button>
+            {/* Combined legend + role selector */}
+            <div className="w-full lg:w-auto">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <div className="text-[var(--muted)] text-xs uppercase tracking-wide">Roles</div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedRoleIds(new Set(roles.map(r => r.id)))}
+                    className="px-2 py-0.5 rounded border text-[10px] bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={() => setSelectedRoleIds(new Set())}
+                    disabled={selectedRoleIds.size === 0}
+                    className="px-2 py-0.5 rounded border text-[10px] bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)] disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-col gap-2 pr-1">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 max-h-64 overflow-y-auto pr-1">
                 {roles.map((r) => {
                   const selected = selectedRoleIds.has(r.id);
                   const color = roleColorForId(r.id);
