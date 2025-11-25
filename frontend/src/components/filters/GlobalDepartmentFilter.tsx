@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 // Tokenized: use CSS variables (themes.css) instead of fixed dark theme
 import { departmentsApi } from '@/services/api';
@@ -30,6 +31,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
   const liveRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<{ left: number; top: number; width: number } | null>(null);
 
   // Fetch departments once
   useAuthenticatedEffect(() => {
@@ -158,75 +160,47 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  };
-
-  const inputStyle: React.CSSProperties = {
-    backgroundColor: 'var(--surface)',
-    color: 'var(--text)',
-    border: '1px solid var(--border)',
-    borderRadius: '6px',
-    padding: '6px 8px',
-    minWidth: 220,
-    outline: 'none',
-  };
-
   const listboxStyle: React.CSSProperties = {
-    position: 'absolute',
-    // Ensure combobox overlays sticky headers (Assignments header uses z-30)
-    zIndex: 60,
-    marginTop: 4,
+    position: 'fixed',
+    zIndex: 1000,
     maxHeight: 280,
     overflowY: 'auto',
-    width: '100%',
     backgroundColor: 'var(--surface)',
     border: '1px solid var(--border)',
     borderRadius: '6px',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
   };
-
-  const buttonStyle: React.CSSProperties = {
-    backgroundColor: 'var(--surface)',
-    color: 'var(--text)',
-    border: '1px solid var(--border)',
-    borderRadius: '6px',
-    padding: '6px 8px',
-  };
-
   const selectedDeptName = useMemo(() => {
     if (state.selectedDepartmentId == null) return null;
     const dep = departments.find(d => d.id === state.selectedDepartmentId);
     return dep?.name ?? `#${state.selectedDepartmentId}`;
   }, [state.selectedDepartmentId, departments]);
 
+  useEffect(() => {
+    if (open && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownRect({ left: rect.left, top: rect.bottom + 4, width: rect.width });
+    } else {
+      setDropdownRect(null);
+    }
+  }, [open, query, state.selectedDepartmentId, showAll]);
+
   return (
-    <div style={containerStyle} aria-label="Global department filter area">
+    <div
+      className="flex items-center gap-2 min-w-0 flex-1"
+      aria-label="Global department filter area"
+      style={{ position: 'relative' }}
+    >
       {/* Active badge with clear */}
       {state.selectedDepartmentId != null && (
         <div
-          style={{
-            backgroundColor: 'var(--surface)',
-            color: 'var(--text)',
-            border: '1px solid var(--border)',
-            borderRadius: '999px',
-            padding: '2px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
+          className="flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)] text-xs sm:text-sm text-[var(--text)] shrink-0"
         >
           <span>Dept: {selectedDeptName}</span>
           <button
             onClick={handleClear}
             aria-label="Clear department filter"
-            style={{
-              background: 'transparent',
-              color: 'var(--muted)',
-              border: 'none',
-              cursor: 'pointer',
-            }}
+            className="text-[var(--muted)] hover:text-[var(--text)] focus:outline-none"
           >
             ×
           </button>
@@ -234,7 +208,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
       )}
 
       {/* Combobox */}
-      <div style={{ position: 'relative' }}>
+      <div className="relative flex-1 min-w-0">
         <input
           id={INPUT_ID}
           ref={inputRef}
@@ -250,57 +224,65 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          style={inputStyle}
+          className="w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 py-1 text-base sm:text-sm min-w-[120px] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] relative z-50"
         />
-        {open && (
-          <div
-            ref={listRef}
-            id="global-dept-filter-listbox"
-            role="listbox"
-            style={listboxStyle}
-          >
-            {error && (
-              <div style={{ padding: 8, color: '#ef4444' }}>Error: {error}</div>
-            )}
-            {!error && results.length === 0 && (
-              <div style={{ padding: 8, color: 'var(--muted)' }}>No results</div>
-            )}
-            {!error && results.map((dep, idx) => (
-              <div
-                key={dep.id}
-                role="option"
-                aria-selected={idx === highlightIndex}
-                onMouseEnter={() => setHighlightIndex(idx)}
-                onMouseDown={(e) => { e.preventDefault(); handleSelect(dep); }}
-                style={{
-                  padding: '6px 8px',
-                  cursor: 'pointer',
-                  backgroundColor: idx === highlightIndex ? 'var(--surfaceHover)' : 'transparent',
-                  color: 'var(--text)',
-                }}
-              >
-                {dep.name}
-              </div>
-            ))}
-            {!showAll && filtered.length > LIMITED && (
-              <div style={{ padding: 8, display: 'flex', justifyContent: 'center' }}>
-                <button style={buttonStyle} onMouseDown={(e) => { e.preventDefault(); setShowAll(true); }}>Show more</button>
-              </div>
-            )}
-          </div>
-        )}
+        {open && dropdownRect &&
+          createPortal(
+            <div
+              ref={listRef}
+              id="global-dept-filter-listbox"
+              role="listbox"
+              style={{ ...listboxStyle, left: dropdownRect.left, top: dropdownRect.top, width: dropdownRect.width }}
+            >
+              {error && (
+                <div style={{ padding: 8, color: '#ef4444' }}>Error: {error}</div>
+              )}
+              {!error && results.length === 0 && (
+                <div style={{ padding: 8, color: 'var(--muted)' }}>No results</div>
+              )}
+              {!error && results.map((dep, idx) => (
+                <div
+                  key={dep.id}
+                  role="option"
+                  aria-selected={idx === highlightIndex}
+                  onMouseEnter={() => setHighlightIndex(idx)}
+                  onMouseDown={(e) => { e.preventDefault(); handleSelect(dep); }}
+                  className={`px-2 py-1 cursor-pointer text-[var(--text)] ${idx === highlightIndex ? 'bg-[var(--surfaceHover)]' : ''}`}
+                >
+                  {dep.name}
+                </div>
+              ))}
+              {!showAll && filtered.length > LIMITED && (
+                <div className="p-2 flex justify-center">
+                  <button
+                    className="px-2 py-1 text-xs border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text)]"
+                    onMouseDown={(e) => { e.preventDefault(); setShowAll(true); }}
+                  >
+                    Show more
+                  </button>
+                </div>
+              )}
+            </div>,
+            document.body
+          )}
       </div>
 
       {/* Include sub-departments removed per request */}
 
       {/* Right-side actions */}
       {rightActions ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="flex items-center gap-2">
           {rightActions}
         </div>
       ) : (
         showCopyLink && (
-          <button onClick={handleCopyLink} aria-label="Copy link to current filter" style={buttonStyle}>Copy link</button>
+          <button
+            onClick={handleCopyLink}
+            aria-label="Copy link to current filter"
+            className="px-2 py-1 text-xs border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text)]"
+          >
+            Copy link
+          </button>
         )
       )}
 

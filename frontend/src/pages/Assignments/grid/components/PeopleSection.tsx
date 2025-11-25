@@ -42,12 +42,28 @@ export interface PeopleSectionProps {
   renderAddRow: (person: PersonWithAssignmentsMinimal) => React.ReactNode;
   showAddRow: (person: PersonWithAssignmentsMinimal) => boolean;
   renderWeekTotals: (person: PersonWithAssignmentsMinimal, week: WeekHeader) => React.ReactNode;
+  virtualPaddingLeft?: number;
+  virtualPaddingRight?: number;
 }
 
 const PeopleSection: React.FC<PeopleSectionProps> = (props) => {
-  const { people, weeks, gridTemplate, loadingAssignments, projectsById, getVisibleAssignments, renderAddAction, renderAddRow, showAddRow, renderWeekTotals, ...rest } = props;
+  const {
+    people,
+    weeks,
+    gridTemplate,
+    loadingAssignments,
+    projectsById,
+    getVisibleAssignments,
+    renderAddAction,
+    renderAddRow,
+    showAddRow,
+    renderWeekTotals,
+    virtualPaddingLeft = 0,
+    virtualPaddingRight = 0,
+    ...rest
+  } = props;
   return (
-    <div>
+    <div style={{ paddingLeft: virtualPaddingLeft, paddingRight: virtualPaddingRight }}>
       {people.map((person) => {
         const visibleAssignments = getVisibleAssignments(person.assignments);
         const isLoading = loadingAssignments.has(person.id!);

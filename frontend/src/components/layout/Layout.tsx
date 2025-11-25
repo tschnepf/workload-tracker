@@ -201,8 +201,9 @@ const TopBarInner: React.FC<{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 12,
-        padding: '8px 12px',
+        gap: 8,
+        flexWrap: 'nowrap',
+        padding: '6px 10px',
         borderBottom: '1px solid var(--border)',
         backgroundColor: 'var(--surface)',
         zIndex: 30,
@@ -210,7 +211,7 @@ const TopBarInner: React.FC<{
         top: 0,
       }}
     >
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
         <button
           type="button"
           aria-label="Open navigation"
@@ -230,13 +231,15 @@ const TopBarInner: React.FC<{
         <div id="topbar-right-mount" className="min-w-0" />
         {left ? <div className="min-w-0">{left}</div> : null}
       </div>
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-2 min-w-0 ml-auto">
         {authPresent && (
           <Button
             variant="ghost"
             size="sm"
             aria-label="Log out"
             onClick={onLogout}
+            className="px-2 py-1 text-xs sm:text-sm"
+            style={{ minHeight: 32 }}
           >
             Log out
           </Button>

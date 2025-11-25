@@ -3,7 +3,7 @@
  * Replaces the form-based AssignmentForm with a modern grid view
  */
 
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
@@ -40,7 +40,6 @@ import AddAssignmentRow from '@/pages/Assignments/grid/components/AddAssignmentR
 import { useProjectAssignmentAdd } from '@/pages/Assignments/grid/useProjectAssignmentAdd';
 import HeaderBarComp from '@/pages/Assignments/grid/components/HeaderBar';
 import { useGridColumnWidthsAssign } from '@/pages/Assignments/grid/useGridColumnWidths';
-import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
 import StatusBar from '@/pages/Assignments/grid/components/StatusBar';
 import { useStatusControls } from '@/pages/Assignments/grid/useStatusControls';
 import { useEditingCell as useEditingCellHook } from '@/pages/Assignments/grid/useEditingCell';
@@ -48,17 +47,21 @@ import { useEditingCell as useEditingCellHook } from '@/pages/Assignments/grid/u
 import { useAssignmentsSnapshot } from '@/pages/Assignments/grid/useAssignmentsSnapshot';
 import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeyboardNavigation';
 import { useDeliverablesIndex } from '@/pages/Assignments/grid/useDeliverablesIndex';
-import { useScrollSync } from '@/pages/Assignments/grid/useScrollSync';
 import { useProjectStatusFilters } from '@/pages/Assignments/grid/useProjectStatusFilters';
 import { getFlag } from '@/lib/flags';
 import { useTopBarSlots } from '@/components/layout/TopBarSlots';
-import { useLayoutDensity } from '@/components/layout/useLayoutDensity';
+import { useAssignmentsInteractionStore } from '@/pages/Assignments/grid/useAssignmentsInteractionStore';
 import WeeksSelector from '@/components/compact/WeeksSelector';
 import StatusFilterChips from '@/components/compact/StatusFilterChips';
 import HeaderActions from '@/components/compact/HeaderActions';
 import { buildProjectAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
+import MobilePersonAccordions from '@/pages/Assignments/grid/components/MobilePersonAccordions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import MobileAssignmentSheet from '@/pages/Assignments/grid/components/MobileAssignmentSheet';
+import MobileAddAssignmentSheet from '@/pages/Assignments/grid/components/MobileAddAssignmentSheet';
+import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
 
 // Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
 
@@ -92,6 +95,7 @@ const AssignmentGrid: React.FC = () => {
   // On-demand detail loading flags
   const [loadedAssignmentIds, setLoadedAssignmentIds] = useState<Set<number>>(new Set());
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
+  const [mobileEditTarget, setMobileEditTarget] = useState<{ personId: number; assignmentId: number } | null>(null);
   // Grid snapshot aggregation state (declared above)
   
   // Enhanced memoized projectsById map with loading states and type safety
@@ -167,33 +171,17 @@ const AssignmentGrid: React.FC = () => {
     setLoading,
   });
   const { weeks, isSnapshotMode, loadData, asyncJob } = snapshot;
-  // Compact header feature: inject controls into global top bar
+  const canEditAssignments = caps.data?.aggregates?.gridSnapshot !== false;
+  const isMobileLayout = useMediaQuery('(max-width: 1023px)');
+  const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
+  const weekVirtualization = useWeekVirtualization(weeks, 70, 2);
+  const mobileWeeks = isMobileLayout ? weekVirtualization.visibleWeeks : weeks;
+  const weekPaddingLeft = isMobileLayout ? weekVirtualization.paddingLeft : 0;
+  const weekPaddingRight = isMobileLayout ? weekVirtualization.paddingRight : 0;
   const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
   const { setLeft, setRight, clearLeft, clearRight } = useTopBarSlots();
-  const { setMainPadding } = useLayoutDensity();
-  // Ensure the grid header hugs the top/side edges when compact mode is on
-  // by switching the Layout "density" to compact (removes main padding).
-  useLayoutEffect(() => {
-    if (compact) setMainPadding('compact');
-    return () => setMainPadding('default');
-    // Only depends on compact flag and setter
-  }, [compact, setMainPadding]);
-  // topBarHeader is defined later after handlers
-  // Selection state via useCellSelection
-  const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
   const rowKeyFor = (personId: number, assignmentId: number) => `${personId}:${assignmentId}`;
-  const {
-    selectedCell: selCell,
-    selectedCells: selCells,
-    selectionStart: selStart,
-    isDragging: isDraggingSel,
-    onCellMouseDown: csMouseDown,
-    onCellMouseEnter: csMouseEnter,
-    onCellSelect: csSelect,
-    clearSelection: csClear,
-    isCellSelected: csIsSelected,
-    selectionSummary,
-  } = useCellSelection(weekKeys, useMemo(() => {
+  const rowOrder = useMemo(() => {
     const out: string[] = [];
     try {
       const now = new Date();
@@ -213,9 +201,12 @@ const AssignmentGrid: React.FC = () => {
           let visible = false;
           if (project) {
             const showAll = selectedStatusFilters.has('Show All') || selectedStatusFilters.size === 0;
-            if (showAll) visible = true; else {
+            if (showAll) visible = true;
+            else {
               const status = (project.status || '').toLowerCase();
-              const baseMatch = Array.from(selectedStatusFilters).some(f => f !== 'Show All' && f !== 'active_no_deliverables' && f === status);
+              const baseMatch = Array.from(selectedStatusFilters).some(
+                (f) => f !== 'Show All' && f !== 'active_no_deliverables' && f === status
+              );
               const noDelSel = selectedStatusFilters.has('active_no_deliverables');
               const noDelMatch = noDelSel && status === 'active' && !projectHasFutureDeliverables.get(project.id!);
               visible = baseMatch || noDelMatch;
@@ -226,12 +217,61 @@ const AssignmentGrid: React.FC = () => {
       }
     } catch {}
     return out;
-  }, [people, loadingAssignments, deliverables, projectsById, selectedStatusFilters]));
+  }, [people, loadingAssignments, deliverables, projectsById, selectedStatusFilters]);
+  const interactionStore = useAssignmentsInteractionStore({ weeks: weekKeys, rowOrder });
+  const {
+    selection: {
+      selectedCell: selCell,
+      selectedCells: selCells,
+      selectionStart: selStart,
+      isDragging: isDraggingSel,
+      onCellMouseDown: csMouseDown,
+      onCellMouseEnter: csMouseEnter,
+      onCellSelect: csSelect,
+      clearSelection: csClear,
+      isCellSelected: csIsSelected,
+      selectionSummary,
+    },
+    scroll: { headerRef: headerScrollRef, bodyRef: bodyScrollRef, onHeaderScroll, onBodyScroll },
+    density: { setMainPadding },
+  } = interactionStore;
+  const handleHeaderScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      if (isMobileLayout) {
+        weekVirtualization.updateRange(e.currentTarget.scrollLeft, e.currentTarget.clientWidth);
+      }
+      onHeaderScroll(e);
+    },
+    [weekVirtualization, onHeaderScroll, isMobileLayout]
+  );
+  const handleBodyScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      if (isMobileLayout) {
+        weekVirtualization.updateRange(e.currentTarget.scrollLeft, e.currentTarget.clientWidth);
+      }
+      onBodyScroll(e);
+    },
+    [weekVirtualization, onBodyScroll, isMobileLayout]
+  );
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    const node = bodyScrollRef.current;
+    if (!node) return;
+    const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    weekVirtualization.updateRange(node.scrollLeft, node.clientWidth || fallbackWidth);
+  }, [bodyScrollRef, weekVirtualization, weeks.length, isMobileLayout]);
+  // Ensure the grid header hugs the top/side edges when compact mode is on
+  // by switching the Layout "density" to compact (removes main padding).
+  useLayoutEffect(() => {
+    if (compact) setMainPadding('compact');
+    return () => setMainPadding('default');
+    // Only depends on compact flag and setter
+  }, [compact, setMainPadding]);
+  // topBarHeader is defined later after handlers
   const selectedCell = useMemo(() => selCell ? (() => { const [p,a] = selCell.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: selCell.weekKey }; })() : null, [selCell]);
   const selectedCells = useMemo(() => selCells.map(k => { const [p,a] = k.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: k.weekKey }; }), [selCells]);
   const selectionStart = useMemo(() => selStart ? (() => { const [p,a] = selStart.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: selStart.weekKey }; })() : null, [selStart]);
   const url = useGridUrlState();
-  const { headerRef: headerScrollRef, bodyRef: bodyScrollRef, onHeaderScroll, onBodyScroll } = useScrollSync();
 
   // Per-person assignment sort mode (default client->project; alt by next deliverable date)
   const [personSortMode, setPersonSortMode] = useState<'client_project' | 'deliverable'>('client_project');
@@ -270,8 +310,9 @@ const AssignmentGrid: React.FC = () => {
 
   // Create dynamic grid template based on column widths
   const gridTemplate = useMemo(() => {
-    return `${clientColumnWidth}px ${projectColumnWidth}px 40px repeat(${weeks.length}, 70px)`;
-  }, [clientColumnWidth, projectColumnWidth, weeks.length]);
+    const count = Math.max(1, (isMobileLayout ? mobileWeeks.length : weeks.length));
+    return `${clientColumnWidth}px ${projectColumnWidth}px 40px repeat(${count}, 70px)`;
+  }, [clientColumnWidth, projectColumnWidth, mobileWeeks.length, weeks.length, isMobileLayout]);
 
   // Calculate total minimum width
   const totalMinWidth = useMemo(() => {
@@ -654,6 +695,11 @@ const AssignmentGrid: React.FC = () => {
     }
   };
 
+  const handleMobileAssignmentPress = (personId: number, assignmentId: number) => {
+    setMobileEditTarget({ personId, assignmentId });
+    void ensureAssignmentsLoaded(personId);
+  };
+
   // Status filter matching provided by useProjectStatusFilters
 
   // Filter assignments based on multi-select status filters
@@ -841,158 +887,197 @@ const AssignmentGrid: React.FC = () => {
     );
   }
 
+  const mobileToolbar = (
+    <div className="md:hidden sticky top-0 z-30 bg-[var(--bg)] border border-[var(--border)] rounded-lg shadow-sm px-3 py-2 space-y-2">
+      <div className="flex items-center justify-between gap-1">
+        <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        <button
+          type="button"
+          className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
+          onClick={refreshAllAssignments}
+          disabled={loading || loadingAssignments.size > 0}
+        >
+          Refresh
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <StatusFilterChips
+          options={statusFilterOptions as unknown as readonly string[]}
+          selected={selectedStatusFilters as unknown as Set<string>}
+          format={formatFilterStatus as any}
+          onToggle={(s) => toggleStatusFilter(s as any)}
+        />
+      </div>
+      {!canEditAssignments && (
+        <div className="text-xs text-[var(--muted)]">Editing disabled for your role. You can still view assignments.</div>
+      )}
+    </div>
+  );
+
   return (
     <Layout>
-      {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
-      <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* Sticky Header Section */}
-        {!compact && (
-        <HeaderBarComp
-          headerRef={headerRef}
-          title="Assignment Grid"
-          weeksCount={weeks.length}
-          isSnapshotMode={isSnapshotMode}
-          weeksHorizon={weeksHorizon}
-          setWeeksHorizon={setWeeksHorizon}
-          projectViewHref={(function(){ const s=selectedStatusFilters; const statusStr = (s.size===0 || s.has('Show All')) ? '' : `&status=${encodeURIComponent(Array.from(s).join(','))}`; return `/project-assignments?view=project&weeks=${weeksHorizon}${statusStr}`; })()}
-          peopleCount={people.length}
-          assignmentsCount={people.reduce((total,p)=> total + p.assignments.length, 0)}
-          asyncJobId={asyncJob.id}
-          asyncProgress={asyncJob.progress}
-          asyncMessage={asyncJob.message}
-          loading={loading}
-          loadingAssignmentsInProgress={loadingAssignments.size > 0}
-          onExpandAllAndRefresh={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
-          onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
-          onRefreshAll={refreshAllAssignments}
-          statusFilterOptions={statusFilterOptions as unknown as readonly string[]}
-          selectedStatusFilters={selectedStatusFilters as unknown as Set<string>}
-          formatFilterStatus={(status) => formatFilterStatus(status as any)}
-          toggleStatusFilter={(status) => toggleStatusFilter(status as any)}
-        />)}
-
-        {/* Sticky Week Header - positioned directly below measured header */}
-        <WeekHeaderComp
-          top={compact ? 0 : headerHeight}
-          minWidth={totalMinWidth}
-          gridTemplate={gridTemplate}
-          weeks={weeks}
-          onStartResize={startColumnResize}
-          scrollRef={headerScrollRef}
-          onScroll={onHeaderScroll}
-          onClientClick={() => setPersonSortMode('client_project')}
-          onWeeksClick={() => setPersonSortMode('deliverable')}
-        />
-
-        {/* Floating deliverables legend (wide screens only) */}
-        <DeliverableLegendFloating top={(compact ? 0 : headerHeight) + 8} />
-
-        
-
-        {/* Full Width Grid Container */}
-        <div className="flex-1 overflow-x-auto bg-[var(--bg)]" ref={bodyScrollRef} onScroll={onBodyScroll}>
-          <div style={{ minWidth: totalMinWidth }}>
-
-            {/* Data Rows */}
-            <div>
-              <PeopleSection
-                people={people as any}
-                weeks={weeks}
-                gridTemplate={gridTemplate}
-                loadingAssignments={loadingAssignments}
-                projectsById={projectsById as any}
-                getVisibleAssignments={getVisibleAssignments}
-                togglePersonExpanded={(pid) => togglePersonExpanded(pid)}
-                addAssignment={addAssignment}
-                removeAssignment={(assignmentId, personId) => removeAssignment(assignmentId, personId)}
-                onCellSelect={handleCellSelection}
-                onCellMouseDown={handleCellMouseDown}
-                onCellMouseEnter={handleCellMouseEnter}
-                editingCell={editingCell}
-                onEditStart={startEditing}
-                onEditSave={saveEdit}
-                onEditCancel={cancelEdit}
-                editingValue={editingValue}
-                onEditValueChange={setEditingValue}
-                selectedCell={selectedCell}
-                selectedCells={selectedCells}
-                getDeliverablesForProjectWeek={getDeliverablesForProjectWeek}
-                getProjectStatus={getProjectStatus}
-                statusDropdown={statusDropdown}
-                projectStatus={projectStatus}
-                onStatusChange={handleStatusChange}
-                onAssignmentRoleChange={handleAssignmentRoleChange}
-                renderAddAction={(person) => (
-                  <button
-                    className="w-7 h-7 rounded text-white hover:text-[var(--muted)] hover:bg-[var(--surface)] transition-colors text-center text-sm font-medium leading-none font-mono"
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    title="Add new assignment"
-                    onClick={() => { addUI.open(person.id!); }}
-                  >
-                    +
-                  </button>
-                )}
-                renderAddRow={(person) => (
-                  <AddAssignmentRow
-                    personId={person.id!}
-                    weeks={weeks}
-                    gridTemplate={gridTemplate}
-                    newProjectName={addUI.newProjectName}
-                    onSearchChange={addUI.onSearchChange}
-                    projectSearchResults={addUI.projectSearchResults}
-                    selectedDropdownIndex={addUI.selectedDropdownIndex}
-                    setSelectedDropdownIndex={addUI.setSelectedDropdownIndex}
-                    showProjectDropdown={addUI.showProjectDropdown}
-                    setShowProjectDropdown={addUI.setShowProjectDropdown}
-                    selectedProject={addUI.selectedProject}
-                    onProjectSelect={addUI.onProjectSelect}
-                    onAddProject={(proj) => addUI.addProject(person.id!, proj)}
-                    onAddSelected={() => addUI.addSelected(person.id!)}
-                    onCancel={addUI.cancel}
-                  />
-                )}
-                showAddRow={(person) => person.isExpanded && addUI.isAddingFor === person.id}
-                renderWeekTotals={(p, week) => {
-                  const totalHours = getPersonTotalHours(p as any, week.date);
-                  const pill = getUtilizationPill({ hours: totalHours, capacity: (p as any).weeklyCapacity!, scheme: schemeData || defaultUtilizationScheme, output: 'classes' });
-                  const aria = totalHours > 0 ? `${totalHours} hours` : '0 hours';
-                  return (
-                    <div className={`inline-flex items-center justify-center h-6 px-2 leading-none rounded-full text-xs font-medium min-w-[40px] text-center ${pill.classes}`} aria-label={aria}>
-                      {pill.label}
-                    </div>
-                  );
-                }}
-              />
+      {compact && !isMobileLayout && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
+      {isMobileLayout ? (
+        <div className="flex-1 flex flex-col min-w-0 px-4 py-4 space-y-4">
+          {mobileToolbar}
+          <MobilePersonAccordions
+            people={people as any}
+            weeks={weeks}
+            hoursByPerson={hoursByPerson}
+            onExpand={(pid) => ensureAssignmentsLoaded(pid)}
+            onAssignmentPress={handleMobileAssignmentPress}
+            canEditAssignments={canEditAssignments}
+            onAddAssignment={(pid) => addUI.open(pid)}
+            activeAddPersonId={addUI.isAddingFor}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col min-w-0">
+          {!compact && (
+            <HeaderBarComp
+              headerRef={headerRef}
+              title="Assignment Grid"
+              weeksCount={weeks.length}
+              isSnapshotMode={isSnapshotMode}
+              weeksHorizon={weeksHorizon}
+              setWeeksHorizon={setWeeksHorizon}
+              projectViewHref={(function(){ const s=selectedStatusFilters; const statusStr = (s.size===0 || s.has('Show All')) ? '' : `&status=${encodeURIComponent(Array.from(s).join(','))}`; return `/project-assignments?view=project&weeks=${weeksHorizon}${statusStr}`; })()}
+              peopleCount={people.length}
+              assignmentsCount={people.reduce((total,p)=> total + p.assignments.length, 0)}
+              asyncJobId={asyncJob.id}
+              asyncProgress={asyncJob.progress}
+              asyncMessage={asyncJob.message}
+              loading={loading}
+              loadingAssignmentsInProgress={loadingAssignments.size > 0}
+              onExpandAllAndRefresh={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
+              onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
+              onRefreshAll={refreshAllAssignments}
+              statusFilterOptions={statusFilterOptions as unknown as readonly string[]}
+              selectedStatusFilters={selectedStatusFilters as unknown as Set<string>}
+              formatFilterStatus={(status) => formatFilterStatus(status as any)}
+              toggleStatusFilter={(status) => toggleStatusFilter(status as any)}
+            />
+          )}
+          <WeekHeaderComp
+            top={compact ? 0 : headerHeight}
+            minWidth={totalMinWidth}
+            gridTemplate={gridTemplate}
+            weeks={isMobileLayout ? mobileWeeks : weeks}
+            onStartResize={startColumnResize}
+            scrollRef={headerScrollRef}
+            onScroll={handleHeaderScroll}
+            onClientClick={() => setPersonSortMode('client_project')}
+            onWeeksClick={() => setPersonSortMode('deliverable')}
+            virtualPaddingLeft={isMobileLayout ? weekPaddingLeft : 0}
+            virtualPaddingRight={isMobileLayout ? weekPaddingRight : 0}
+          />
+          <DeliverableLegendFloating top={(compact ? 0 : headerHeight) + 8} />
+          <div className="flex-1 overflow-x-auto bg-[var(--bg)] snap-x snap-mandatory" ref={bodyScrollRef} onScroll={handleBodyScroll}>
+            <div style={{ minWidth: totalMinWidth }}>
+              <div>
+                <PeopleSection
+                  people={people as any}
+                  weeks={isMobileLayout ? mobileWeeks : weeks}
+                  gridTemplate={gridTemplate}
+                  loadingAssignments={loadingAssignments}
+                  projectsById={projectsById as any}
+                  getVisibleAssignments={getVisibleAssignments}
+                  togglePersonExpanded={(pid) => togglePersonExpanded(pid)}
+                  addAssignment={addAssignment}
+                  removeAssignment={(assignmentId, personId) => removeAssignment(assignmentId, personId)}
+                  onCellSelect={handleCellSelection}
+                  onCellMouseDown={handleCellMouseDown}
+                  onCellMouseEnter={handleCellMouseEnter}
+                  editingCell={editingCell}
+                  onEditStart={startEditing}
+                  onEditSave={saveEdit}
+                  onEditCancel={cancelEdit}
+                  editingValue={editingValue}
+                  onEditValueChange={setEditingValue}
+                  selectedCell={selectedCell}
+                  selectedCells={selectedCells}
+                  getDeliverablesForProjectWeek={getDeliverablesForProjectWeek}
+                  getProjectStatus={getProjectStatus}
+                  statusDropdown={statusDropdown}
+                  projectStatus={projectStatus}
+                  onStatusChange={handleStatusChange}
+                  onAssignmentRoleChange={handleAssignmentRoleChange}
+                  virtualPaddingLeft={isMobileLayout ? weekPaddingLeft : 0}
+                  virtualPaddingRight={isMobileLayout ? weekPaddingRight : 0}
+                  renderAddAction={(person) => (
+                    <button
+                      className="w-7 h-7 rounded text-white hover:text-[var(--muted)] hover:bg-[var(--surface)] transition-colors text-center text-sm font-medium leading-none font-mono"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      title="Add new assignment"
+                      onClick={() => { addUI.open(person.id!); }}
+                    >
+                      +
+                    </button>
+                  )}
+                  renderAddRow={(person) => (
+                    <AddAssignmentRow
+                      personId={person.id!}
+                      weeks={isMobileLayout ? mobileWeeks : weeks}
+                      gridTemplate={gridTemplate}
+                      newProjectName={addUI.newProjectName}
+                      onSearchChange={addUI.onSearchChange}
+                      projectSearchResults={addUI.projectSearchResults}
+                      selectedDropdownIndex={addUI.selectedDropdownIndex}
+                      setSelectedDropdownIndex={addUI.setSelectedDropdownIndex}
+                      showProjectDropdown={addUI.showProjectDropdown}
+                      setShowProjectDropdown={addUI.setShowProjectDropdown}
+                      selectedProject={addUI.selectedProject}
+                      onProjectSelect={addUI.onProjectSelect}
+                      onAddProject={(proj) => addUI.addProject(person.id!, proj)}
+                      onAddSelected={() => addUI.addSelected(person.id!)}
+                      onCancel={addUI.cancel}
+                    />
+                  )}
+                  showAddRow={(person) => person.isExpanded && addUI.isAddingFor === person.id}
+                  renderWeekTotals={(p, week) => {
+                    const totalHours = getPersonTotalHours(p as any, week.date);
+                    const pill = getUtilizationPill({ hours: totalHours, capacity: (p as any).weeklyCapacity!, scheme: schemeData || defaultUtilizationScheme, output: 'classes' });
+                    const aria = totalHours > 0 ? `${totalHours} hours` : '0 hours';
+                    return (
+                      <div className={`inline-flex items-center justify-center h-6 px-2 leading-none rounded-full text-xs font-medium min-w-[40px] text-center ${pill.classes}`} aria-label={aria}>
+                        {pill.label}
+                      </div>
+                    );
+                  }}
+                />
+              </div>
+              {(() => {
+                const s = schemeData ?? defaultUtilizationScheme;
+                const labels = s.mode === 'absolute_hours'
+                  ? {
+                      blue: `${s.blue_min}-${s.blue_max}h`,
+                      green: `${s.green_min}-${s.green_max}h`,
+                      orange: `${s.orange_min}-${s.orange_max}h`,
+                      red: `${s.red_min}h+`,
+                    }
+                  : {
+                      blue: '<=70%',
+                      green: '70-85%',
+                      orange: '85-100%',
+                      red: '>100%',
+                    } as const;
+                return <StatusBar labels={labels} selectionSummary={selectionSummary} />;
+              })()}
             </div>
-          
-        
-
-        {/* Status Bar */}
-        {(() => {
-          const s = (schemeData ?? defaultUtilizationScheme);
-          const labels = s.mode === 'absolute_hours'
-            ? {
-                blue: `${s.blue_min}-${s.blue_max}h`,
-                green: `${s.green_min}-${s.green_max}h`,
-                orange: `${s.orange_min}-${s.orange_max}h`,
-                red: `${s.red_min}h+`,
-              }
-            : {
-                blue: '<=70%',
-                green: '70-85%',
-                orange: '85-100%',
-                red: '>100%',
-              } as const;
-          return (
-            <StatusBar labels={labels} selectionSummary={selectionSummary} />
-          );
-        })()}
           </div>
         </div>
-      </div>
-
-      {/* Toast Notifications */}
+      )}
+      <MobileAddAssignmentSheet addController={addUI} people={people as any} canEditAssignments={canEditAssignments} />
+      <MobileAssignmentSheet
+        target={mobileEditTarget}
+        people={people as any}
+        weeks={weeks}
+        onClose={() => setMobileEditTarget(null)}
+        onSaveHours={updateAssignmentHours}
+        onRoleChange={handleAssignmentRoleChange}
+        loadingAssignments={loadingAssignments}
+        canEditAssignments={canEditAssignments}
+      />
       {toast && (
         <Toast
           message={toast.message}

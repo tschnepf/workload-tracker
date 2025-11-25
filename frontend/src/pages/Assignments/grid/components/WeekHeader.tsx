@@ -11,18 +11,35 @@ export interface WeekHeaderProps {
   onScroll?: React.UIEventHandler<HTMLDivElement>;
   onClientClick?: () => void;
   onWeeksClick?: () => void;
+  virtualPaddingLeft?: number;
+  virtualPaddingRight?: number;
 }
 
-const WeekHeader: React.FC<WeekHeaderProps> = ({ top, minWidth, gridTemplate, weeks, onStartResize, scrollRef, onScroll, onClientClick, onWeeksClick }) => {
+const WeekHeader: React.FC<WeekHeaderProps> = ({
+  top,
+  minWidth,
+  gridTemplate,
+  weeks,
+  onStartResize,
+  scrollRef,
+  onScroll,
+  onClientClick,
+  onWeeksClick,
+  virtualPaddingLeft = 0,
+  virtualPaddingRight = 0,
+}) => {
   return (
     <div
       ref={scrollRef}
       onScroll={onScroll}
-      className="sticky left-0 right-0 bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto"
+      className="sticky left-0 right-0 bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto snap-x snap-mandatory"
       style={{ top, marginTop: 0 }}
     >
       <div style={{ minWidth }}>
-        <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
+        <div
+          className="grid gap-px p-2"
+          style={{ gridTemplateColumns: gridTemplate, paddingLeft: virtualPaddingLeft, paddingRight: virtualPaddingRight }}
+        >
           <div
             className={`font-medium text-[var(--text)] text-sm px-2 py-1 relative group ${onClientClick ? 'cursor-pointer hover:text-[var(--text)]' : ''}`}
             onClick={onClientClick}
@@ -51,7 +68,7 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({ top, minWidth, gridTemplate, we
           {weeks.map((week, index) => (
             <div
               key={week.date}
-              className={`text-center px-1 ${onWeeksClick ? 'cursor-pointer select-none hover:text-[var(--text)]' : ''}`}
+              className={`text-center px-1 snap-start ${onWeeksClick ? 'cursor-pointer select-none hover:text-[var(--text)]' : ''}`}
               onClick={onWeeksClick}
               role={onWeeksClick ? 'columnheader' : undefined}
               aria-label={onWeeksClick ? `Week starting ${week.display}` : undefined}
