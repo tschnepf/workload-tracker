@@ -3,11 +3,11 @@
 export const statusOptions = [
   'active',
   'active_ca',
+  'active_with_dates',
+  'active_no_deliverables',
   'on_hold',
   'completed',
   'cancelled',
-  'active_no_deliverables',
   'no_assignments',
   'Show All',
 ] as const;
-

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 
 export function useGridColumnWidthsAssign() {
-  const [clientColumnWidth, setClientColumnWidth] = useState(210);
+  const defaultClientWidth = Math.round(210 * 0.6);
+  const [clientColumnWidth, setClientColumnWidth] = useState(defaultClientWidth);
   const [projectColumnWidth, setProjectColumnWidth] = useState(300);
   const [isResizing, setIsResizing] = useState<'client' | 'project' | null>(null);
   const [resizeStartX, setResizeStartX] = useState(0);
@@ -12,7 +13,7 @@ export function useGridColumnWidthsAssign() {
       const cw = localStorage.getItem('assignGrid:clientColumnWidth');
       const pw = localStorage.getItem('assignGrid:projectColumnWidth');
       if (cw) {
-        const n = parseInt(cw, 10); if (!Number.isNaN(n)) setClientColumnWidth(Math.max(80, n));
+        const n = parseInt(cw, 10); if (!Number.isNaN(n)) setClientColumnWidth(Math.max(defaultClientWidth, n));
       }
       if (pw) {
         const n = parseInt(pw, 10); if (!Number.isNaN(n)) setProjectColumnWidth(Math.max(80, n));
@@ -24,7 +25,7 @@ export function useGridColumnWidthsAssign() {
     try {
       const fix = localStorage.getItem('assignGrid:widthsFix_v2025_10');
       if (!fix) {
-        setClientColumnWidth(w => (w < 180 ? 210 : w));
+        setClientColumnWidth(w => (w < defaultClientWidth ? defaultClientWidth : w));
         setProjectColumnWidth(w => (w < 260 ? 300 : w));
         localStorage.setItem('assignGrid:widthsFix_v2025_10', '1');
       }
@@ -51,4 +52,3 @@ export function useGridColumnWidthsAssign() {
     setResizeStartWidth,
   } as const;
 }
-

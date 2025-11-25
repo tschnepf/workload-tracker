@@ -184,40 +184,20 @@ const AssignmentGrid: React.FC = () => {
   const rowOrder = useMemo(() => {
     const out: string[] = [];
     try {
-      const now = new Date();
-      const projectHasFutureDeliverables = new Map<number, boolean>();
-      (deliverables || []).forEach((d: any) => {
-        if (d?.project && d?.date) {
-          const dt = new Date(d.date);
-          if (dt >= now) projectHasFutureDeliverables.set(d.project, true);
-        }
-      });
       for (const person of people || []) {
         if (!person?.isExpanded) continue;
         if (loadingAssignments.has(person.id!)) continue;
         const assignments = person.assignments || [];
         for (const a of assignments) {
           const project = a?.project ? projectsById.get(a.project) : undefined;
-          let visible = false;
-          if (project) {
-            const showAll = selectedStatusFilters.has('Show All') || selectedStatusFilters.size === 0;
-            if (showAll) visible = true;
-            else {
-              const status = (project.status || '').toLowerCase();
-              const baseMatch = Array.from(selectedStatusFilters).some(
-                (f) => f !== 'Show All' && f !== 'active_no_deliverables' && f === status
-              );
-              const noDelSel = selectedStatusFilters.has('active_no_deliverables');
-              const noDelMatch = noDelSel && status === 'active' && !projectHasFutureDeliverables.get(project.id!);
-              visible = baseMatch || noDelMatch;
-            }
+          if (project && matchesStatusFilters(project as Project) && a?.id != null) {
+            out.push(`${person.id!}:${a.id!}`);
           }
-          if (visible && a?.id != null) out.push(`${person.id!}:${a.id!}`);
         }
       }
     } catch {}
     return out;
-  }, [people, loadingAssignments, deliverables, projectsById, selectedStatusFilters]);
+  }, [people, loadingAssignments, projectsById, matchesStatusFilters]);
   const interactionStore = useAssignmentsInteractionStore({ weeks: weekKeys, rowOrder });
   const {
     selection: {
@@ -841,30 +821,33 @@ const AssignmentGrid: React.FC = () => {
 
   const { data: schemeData } = useUtilizationScheme();
   const topBarHeader = (
-    <div className="flex items-center gap-4 min-w-0">
-      <div className="min-w-0">
-        <div className="text-lg font-semibold text-[var(--text)] leading-tight">Assignments</div>
-        <div className="text-[var(--muted)] text-xs">Manage team workload allocation across {weeks.length} weeks</div>
+    <div className="flex flex-col gap-2 min-w-0 w-full">
+      <div className="flex flex-wrap items-center gap-3 min-w-0">
+        <div className="min-w-[120px]">
+          <div className="text-lg font-semibold text-[var(--text)] leading-tight">Assignments</div>
+        </div>
+        <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        <HeaderActions
+          onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
+          onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
+          onRefreshAll={refreshAllAssignments}
+          disabled={loading || (loadingAssignments.size > 0)}
+        />
+        <a
+          href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
+          className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+        >
+          Project View
+        </a>
       </div>
-      <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
-      <HeaderActions
-        onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
-        onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
-        onRefreshAll={refreshAllAssignments}
-        disabled={loading || (loadingAssignments.size > 0)}
-      />
-      <StatusFilterChips
-        options={statusFilterOptions as unknown as readonly string[]}
-        selected={selectedStatusFilters as unknown as Set<string>}
-        format={formatFilterStatus as any}
-        onToggle={(s) => toggleStatusFilter(s as any)}
-      />
-      <a
-        href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
-        className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
-      >
-        Project View
-      </a>
+      <div className="flex flex-wrap items-center gap-1">
+        <StatusFilterChips
+          options={statusFilterOptions as unknown as readonly string[]}
+          selected={selectedStatusFilters as unknown as Set<string>}
+          format={formatFilterStatus as any}
+          onToggle={(s) => toggleStatusFilter(s as any)}
+        />
+      </div>
     </div>
   );
 
@@ -972,7 +955,11 @@ const AssignmentGrid: React.FC = () => {
             virtualPaddingRight={isMobileLayout ? weekPaddingRight : 0}
           />
           <DeliverableLegendFloating top={(compact ? 0 : headerHeight) + 8} />
-          <div className="flex-1 overflow-x-auto bg-[var(--bg)] snap-x snap-mandatory" ref={bodyScrollRef} onScroll={handleBodyScroll}>
+          <div
+            className={`flex-1 overflow-x-auto bg-[var(--bg)] ${isMobileLayout ? 'snap-x snap-mandatory' : ''}`}
+            ref={bodyScrollRef}
+            onScroll={handleBodyScroll}
+          >
             <div style={{ minWidth: totalMinWidth }}>
               <div>
                 <PeopleSection

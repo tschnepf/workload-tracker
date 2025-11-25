@@ -3,6 +3,11 @@ import type { Project } from '@/types/models';
 import type { ProjectFilterMetadataResponse } from '@/types/models';
 import { formatStatus, statusOptions } from '@/components/projects/StatusBadge';
 import { trackPerformanceEvent } from '@/utils/monitoring';
+import {
+  buildFutureDeliverableLookupFromMetadata,
+  projectMatchesActiveWithDates,
+  projectMatchesActiveWithoutDates,
+} from '@/components/projects/statusFilterUtils';
 
 export function useProjectFilters(
   projects: Project[],
@@ -36,6 +41,7 @@ export function useProjectFilters(
   const formatFilterStatus = (status: string): string => {
     if (status === 'Show All') return 'Show All';
     if (status === 'active_no_deliverables') return 'Active - No Dates';
+    if (status === 'active_with_dates') return 'Active - With Dates';
     if (status === 'active_ca') return 'Active CA';
     if (status === 'no_assignments') return 'No Assignments';
     return formatStatus(status);
@@ -79,23 +85,25 @@ export function useProjectFilters(
     return meta ? meta.assignmentCount === 0 : false;
   };
 
-  const hasNoFutureDeliverables = (projectId: number | undefined, metadata: ProjectFilterMetadataResponse | null): boolean => {
-    if (!projectId) return false;
-    const meta = metadata?.projectFilters?.[String(projectId)];
-    return meta ? !meta.hasFutureDeliverables : false;
-  };
+  const futureDeliverableLookup = useMemo(
+    () => buildFutureDeliverableLookupFromMetadata(filterMetadata),
+    [filterMetadata]
+  );
 
   const matchesStatusFilter = useCallback((project: Project, statusFilter: string, metadata: ProjectFilterMetadataResponse | null): boolean => {
     if (!project) return false;
     if (statusFilter === 'Show All') return true;
     if (statusFilter === 'active_no_deliverables') {
-      return project.status === 'active' && hasNoFutureDeliverables(project.id, metadata);
+      return projectMatchesActiveWithoutDates(project, futureDeliverableLookup);
+    }
+    if (statusFilter === 'active_with_dates') {
+      return projectMatchesActiveWithDates(project, futureDeliverableLookup);
     }
     if (statusFilter === 'no_assignments') {
       return hasNoAssignments(project.id, metadata);
     }
     return project.status === statusFilter;
-  }, [filterMetadata]);
+  }, [futureDeliverableLookup, filterMetadata]);
 
   const filteredProjects = useMemo(() => {
     const tStart = performance.now();

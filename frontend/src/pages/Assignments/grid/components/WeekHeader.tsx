@@ -32,7 +32,7 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({
     <div
       ref={scrollRef}
       onScroll={onScroll}
-      className="sticky left-0 right-0 bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto snap-x snap-mandatory"
+      className={`sticky left-0 right-0 bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto${(virtualPaddingLeft || virtualPaddingRight) ? ' snap-x snap-mandatory' : ''}`}
       style={{ top, marginTop: 0 }}
     >
       <div style={{ minWidth }}>

@@ -103,52 +103,55 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-6">
-        <div className="flex-1 min-w-[320px]">
-          <GlobalDepartmentFilter
-            showCopyLink={false}
-            rightActions={(
-              <>
-                <button
-                  className={`px-2 py-0.5 rounded border border-[var(--border)] text-xs transition-colors ${
-                    loadingAssignmentsInProgress
-                      ? 'text-[var(--muted)] cursor-wait'
-                      : 'text-[var(--muted)] hover:text-[var(--text)]'
-                  }`}
-                  title="Expand all people and refresh their assignments"
-                  onClick={onExpandAllAndRefresh}
-                  disabled={loadingAssignmentsInProgress}
-                >
-                  {loadingAssignmentsInProgress ? 'Expanding...' : 'Expand All'}
-                </button>
-                <button
-                  className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                  title="Collapse all people"
-                  onClick={onCollapseAll}
-                >
-                  Collapse All
-                </button>
-                <button
-                  className={`px-2 py-0.5 rounded border text-xs transition-colors ${
-                    loading || loadingAssignmentsInProgress
-                      ? 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)] cursor-wait'
-                      : 'bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
-                  }`}
-                  title="Refresh assignments for all people"
-                  onClick={onRefreshAll}
-                  disabled={loading || loadingAssignmentsInProgress}
-                >
-                  {loadingAssignmentsInProgress ? 'Refreshing...' : 'Refresh All'}
-                </button>
-              </>
-            )}
-          />
+      <div className="mt-3 flex flex-col gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex-none min-w-[220px]">
+            <GlobalDepartmentFilter
+              showCopyLink={false}
+              rightActions={(
+                <>
+                  <button
+                    className={`px-2 py-0.5 rounded border border-[var(--border)] text-xs transition-colors ${
+                      loadingAssignmentsInProgress
+                        ? 'text-[var(--muted)] cursor-wait'
+                        : 'text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                    title="Expand all people and refresh their assignments"
+                    onClick={onExpandAllAndRefresh}
+                    disabled={loadingAssignmentsInProgress}
+                  >
+                    {loadingAssignmentsInProgress ? 'Expanding...' : 'Expand All'}
+                  </button>
+                  <button
+                    className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                    title="Collapse all people"
+                    onClick={onCollapseAll}
+                  >
+                    Collapse All
+                  </button>
+                  <button
+                    className={`px-2 py-0.5 rounded border text-xs transition-colors ${
+                      loading || loadingAssignmentsInProgress
+                        ? 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)] cursor-wait'
+                        : 'bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                    title="Refresh assignments for all people"
+                    onClick={onRefreshAll}
+                    disabled={loading || loadingAssignmentsInProgress}
+                  >
+                    {loadingAssignmentsInProgress ? 'Refreshing...' : 'Refresh All'}
+                  </button>
+                </>
+              )}
+            />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-1">
           {statusFilterOptions.map((status) => {
-            const isActive = status === 'Show All'
-              ? selectedStatusFilters.size === 0
-              : selectedStatusFilters.has(status);
+            const isActive =
+              status === 'Show All'
+                ? selectedStatusFilters.size === 0
+                : selectedStatusFilters.has(status);
             return (
               <button
                 key={status}

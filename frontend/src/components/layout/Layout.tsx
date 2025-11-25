@@ -225,7 +225,7 @@ const TopBarInner: React.FC<{
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <GlobalDepartmentFilter />
+        <GlobalDepartmentFilter expand={false} />
         {/* Explicit portal mount points for page headers */}
         <div id="topbar-left-mount" className="min-w-0" />
         <div id="topbar-right-mount" className="min-w-0" />

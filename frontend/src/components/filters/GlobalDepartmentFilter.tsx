@@ -13,9 +13,10 @@ const LIVE_ID = 'global-dept-filter-live';
 type Props = {
   rightActions?: React.ReactNode;
   showCopyLink?: boolean;
+  expand?: boolean;
 };
 
-export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = false }) => {
+export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = false, expand = true }) => {
   const { state, setDepartment, clearDepartment, setIncludeChildren } = useDepartmentFilter();
 
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -187,7 +188,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
 
   return (
     <div
-      className="flex items-center gap-2 min-w-0 flex-1"
+      className={`flex items-center gap-2 ${expand ? 'min-w-0 flex-1' : 'flex-none'} flex-wrap`}
       aria-label="Global department filter area"
       style={{ position: 'relative' }}
     >
@@ -208,7 +209,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
       )}
 
       {/* Combobox */}
-      <div className="relative flex-1 min-w-0">
+      <div className="relative w-[180px] max-w-[220px] shrink-0">
         <input
           id={INPUT_ID}
           ref={inputRef}

@@ -96,7 +96,7 @@ const ProjectsListMockup: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(mockProjects.findIndex(p => p.isSelected));
 
-  const statusOptions = ['Active', 'Active No Dates', 'On Hold', 'Complete', 'Cancelled', 'Show All'];
+  const statusOptions = ['Active', 'Active With Dates', 'Active No Dates', 'On Hold', 'Complete', 'Cancelled', 'Show All'];
 
   const handleProjectClick = (project: typeof mockProjects[0], index: number) => {
     setSelectedProject(project);

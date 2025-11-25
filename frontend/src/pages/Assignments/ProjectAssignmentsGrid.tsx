@@ -34,6 +34,11 @@ import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import { useProjectQuickViewPopover } from '@/components/projects/quickview';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  buildFutureDeliverableLookupFromSet,
+  projectMatchesActiveWithDates,
+  projectMatchesActiveWithoutDates,
+} from '@/components/projects/statusFilterUtils';
 
 // Local helper component: use the quick view hook inside a descendant of Layout's provider
 const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.ReactNode }> = ({ projectId, children }) => {
@@ -127,7 +132,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [hoursByProject, setHoursByProject] = useState<Record<number, Record<string, number>>>({});
   const [loadingTotals, setLoadingTotals] = useState<Set<number>>(new Set());
   const [deliverablesByProjectWeek, setDeliverablesByProjectWeek] = useState<Record<number, Record<string, number>>>({});
-  const [hasFutureDeliverablesByProject, setHasFutureDeliverablesByProject] = useState<Set<number>>(new Set());
   // Deliverable types per project/week for vertical bar rendering
   const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, { type: string; percentage?: number; dates?: string[] }[]>>>({});
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
@@ -303,7 +307,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [personResults, setPersonResults] = useState<Array<{ id: number; name: string; department: number | null }>>([]);
   const [selectedPersonIndex, setSelectedPersonIndex] = useState<number>(-1);
   // Status filter chips
-  const statusFilterOptions = ['active', 'active_ca', 'on_hold', 'completed', 'cancelled', 'active_no_deliverables', 'Show All'] as const;
+  const statusFilterOptions = [
+    'active',
+    'active_ca',
+    'active_with_dates',
+    'active_no_deliverables',
+    'on_hold',
+    'completed',
+    'cancelled',
+    'Show All',
+  ] as const;
   type StatusFilter = typeof statusFilterOptions[number];
   const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<StatusFilter>>(() => {
     try {
@@ -322,6 +335,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     switch (status) {
       case 'active': return 'Active';
       case 'active_ca': return 'Active CA';
+      case 'active_with_dates': return 'Active - With Dates';
       case 'on_hold': return 'On-Hold';
       case 'completed': return 'Completed';
       case 'cancelled': return 'Cancelled';
@@ -449,7 +463,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const set = new Set<StatusFilter>();
         for (const t of toks) {
           const tok = t as StatusFilter;
-          if ((['active','active_ca','on_hold','completed','cancelled','active_no_deliverables','Show All'] as const).includes(tok)) set.add(tok);
+          if ((['active','active_ca','on_hold','completed','cancelled','active_no_deliverables','active_with_dates','Show All'] as const).includes(tok)) set.add(tok);
         }
         if (set.size > 0) setSelectedStatusFilters(set);
       } else {
@@ -472,9 +486,27 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const statuses = Array.from(selectedStatusFilters);
         const hasShowAll = statuses.includes('Show All');
         const hasNoDelivs = statuses.includes('active_no_deliverables');
-        const statusIn = hasShowAll ? undefined : statuses.filter(s => s !== 'active_no_deliverables' && s !== 'Show All').join(',') || undefined;
-        const hasFutureParam = (!hasShowAll && hasNoDelivs && statuses.length === 1) ? 0 : undefined;
-        const snap = await getProjectGridSnapshot({ weeks: weeksHorizon, department: dept, include_children: inc, status_in: statusIn, has_future_deliverables: hasFutureParam });
+        const hasFutureWithDates = statuses.includes('active_with_dates');
+        const normalizedForApi = hasShowAll
+          ? []
+          : statuses
+              .filter((s) => s !== 'Show All' && s !== 'active_no_deliverables')
+              .map((s) => (s === 'active_with_dates' ? 'active' : s));
+        const statusIn = hasShowAll
+          ? undefined
+          : (normalizedForApi.length > 0 ? Array.from(new Set(normalizedForApi)).join(',') : undefined);
+        let hasFutureParam: 0 | 1 | undefined;
+        if (!hasShowAll && statuses.length === 1) {
+          if (hasNoDelivs) hasFutureParam = 0;
+          else if (hasFutureWithDates) hasFutureParam = 1;
+        }
+        const snap = await getProjectGridSnapshot({
+          weeks: weeksHorizon,
+          department: dept,
+          include_children: inc,
+          status_in: statusIn,
+          has_future_deliverables: hasFutureParam,
+        });
         if (!mounted) return;
         setWeeks(toWeekHeader(snap.weekKeys || []));
         // Normalize projects from snapshot
@@ -482,14 +514,21 @@ const ProjectAssignmentsGrid: React.FC = () => {
           .map(p => ({ id: p.id, name: p.name, client: p.client ?? undefined, status: p.status ?? undefined, assignments: [], isExpanded: false }));
 
         // Augment with projects that match filters even if they currently have no assignments in the snapshot
-        // When status filter is only "active_no_deliverables" we rely solely on the snapshot (needs server data)
+        // When the filter relies on deliverable metadata exclusively we rely on the snapshot (needs server data)
         let augmented: ProjectWithAssignments[] = fromSnapshot;
         try {
-          const onlyNoDelivs = (!hasShowAll && hasNoDelivs && statuses.length === 1);
-          if (!onlyNoDelivs) {
+          const onlySpecialFilter =
+            (!hasShowAll && hasNoDelivs && statuses.length === 1) ||
+            (!hasShowAll && hasFutureWithDates && statuses.length === 1);
+          if (!onlySpecialFilter) {
             const allProjects = await projectsApi.listAll();
             const allowAllStatuses = hasShowAll || statuses.length === 0;
-            const allowed = new Set((statuses || []).filter(s => s !== 'active_no_deliverables' && s !== 'Show All').map(s => s.toLowerCase()));
+            const allowed = new Set(
+              (statuses || [])
+                .filter((s) => s !== 'Show All' && s !== 'active_no_deliverables')
+                .map((s) => (s === 'active_with_dates' ? 'active' : s))
+                .map((s) => s.toLowerCase())
+            );
             const seen = new Set(fromSnapshot.map(p => p.id));
             const extras = (allProjects || [])
               .filter(p => !seen.has(p.id!))
@@ -512,7 +551,23 @@ const ProjectAssignmentsGrid: React.FC = () => {
           const bn = (b.name || '').toString().trim().toLowerCase();
           return an.localeCompare(bn);
         });
-        setProjects(proj);
+        const future = new Set<number>();
+        Object.entries(snap.hasFutureDeliverablesByProject || {}).forEach(([pid, val]) => { if (val) future.add(Number(pid)); });
+        const futureLookup = buildFutureDeliverableLookupFromSet(future);
+        const showAllSelected = hasShowAll || statuses.length === 0;
+        const allowedStatusSet = new Set(
+          normalizedForApi.map((s) => s.toLowerCase())
+        );
+        const filteredProjects = showAllSelected
+          ? proj
+          : proj.filter((project) => {
+              const status = (project.status || '').toLowerCase();
+              const baseMatch = allowedStatusSet.has(status);
+              const withDatesMatch = hasFutureWithDates && projectMatchesActiveWithDates(project, futureLookup);
+              const noDatesMatch = hasNoDelivs && projectMatchesActiveWithoutDates(project, futureLookup);
+              return baseMatch || withDatesMatch || noDatesMatch;
+            });
+        setProjects(filteredProjects);
         // Coerce hours map keys to numbers
         const hb: Record<number, Record<string, number>> = {};
         Object.entries(snap.hoursByProject || {}).forEach(([pid, wk]) => { hb[Number(pid)] = wk; });
@@ -521,10 +576,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const dbw: Record<number, Record<string, number>> = {};
         Object.entries(snap.deliverablesByProjectWeek || {}).forEach(([pid, wk]) => { dbw[Number(pid)] = wk; });
         setDeliverablesByProjectWeek(dbw);
-        const future = new Set<number>();
-        Object.entries(snap.hasFutureDeliverablesByProject || {}).forEach(([pid, val]) => { if (val) future.add(Number(pid)); });
-        setHasFutureDeliverablesByProject(future);
-
         // Expand projects from URL param and lazy-load their assignments
         try {
           const expandedParam = url.get('expanded');
