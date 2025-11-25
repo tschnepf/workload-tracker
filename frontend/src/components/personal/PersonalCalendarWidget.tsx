@@ -1,7 +1,6 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useAuth } from '@/hooks/useAuth';
 import { apiClient, authHeaders } from '@/api/client';
 import { deliverablesApi, deliverableAssignmentsApi } from '@/services/api';
@@ -48,7 +47,7 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
     return unsub;
   }, []);
 
-  useAuthenticatedEffect(() => {
+  React.useEffect(() => {
     let active = true;
     if (!personId) { setItems([]); return; }
     (async () => {
@@ -125,7 +124,7 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
 
   return (
     <Card className={className}>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 sticky top-0 bg-[var(--card)] z-10">
         <div className="text-[var(--text)] font-semibold">My Calendar</div>
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={prevWeek}>Prev</Button>
@@ -150,14 +149,19 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
       )}
 
       {personId && (
-        <div className="overflow-x-auto">
+        <div className="relative">
+          <div className="sticky left-0 top-16 z-10 text-xs font-semibold text-[var(--muted)] bg-gradient-to-r from-[var(--card)] to-transparent px-3 py-1 w-24">
+            Weeks
+          </div>
+          <div className="overflow-x-auto snap-x snap-mandatory pl-24" aria-label="Personal calendar weeks">
           {loading ? (
             <div className="p-4 text-sm text-[#94a3b8]">Loading…</div>
           ) : error ? (
             <div className="p-4 text-sm text-[#fca5a5]">{error}</div>
           ) : (
-            <CalendarGrid items={items} anchor={anchor} weeksCount={weeksCount} showPre={showPre} />
+            <CalendarGrid items={items} anchor={anchor} weeksCount={weeksCount} showPre={showPre} className="min-w-[720px] snap-start" />
           )}
+        </div>
         </div>
       )}
     </Card>
