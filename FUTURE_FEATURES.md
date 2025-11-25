@@ -509,6 +509,7 @@ Sources: `prompts/R2-REBUILD-004-MANAGER-FEATURES.md`, `prompts/R2-REBUILD-002-B
 ---
 
 ## UI Polish — Calendar Hover Highlight
+- Hovering a deliverable while pre-deliverables are hidden should temporarily reveal the associated pre items. Current implementation still fails in container builds even after recompose; revisit highlight group IDs/hover logic post Phase 4 to ensure hidden pills appear on hover.
 
 ## VULERABILITY FIXES
 

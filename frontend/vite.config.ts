@@ -109,6 +109,15 @@ export default defineConfig(({ mode }) => {
           
           // React Query for data fetching
           'query': ['@tanstack/react-query', '@tanstack/react-query-devtools'],
+
+          // FullCalendar bundle (lazy-loaded)
+          'fullcalendar': [
+            '@fullcalendar/react',
+            '@fullcalendar/core',
+            '@fullcalendar/daygrid',
+            '@fullcalendar/timegrid',
+            '@fullcalendar/list',
+          ],
         },
         
         // Generate hashed filenames for cache busting

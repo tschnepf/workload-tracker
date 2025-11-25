@@ -27,6 +27,16 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
     ? sorted.filter(p => selected.includes((p.status || '').toLowerCase()))
     : sorted;
 
+  const groupedByClient = React.useMemo(() => {
+    const m = new Map<string, ProjectItem[]>();
+    for (const project of filtered) {
+      const key = (project.client || 'Unassigned Client').trim() || 'Unassigned Client';
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(project);
+    }
+    return m;
+  }, [filtered]);
+
   const { open } = useProjectQuickViewPopover();
   const queryClient = useQueryClient();
   const prefetchTimerRef = React.useRef<number | null>(null);
@@ -63,39 +73,45 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
         {filtered.length === 0 ? (
           <div className="text-[var(--muted)] text-sm">No projects match the selected status</div>
         ) : (
-          <ul className="space-y-2 text-sm">
-            {filtered.map(p => (
-              <li key={p.id} className="grid grid-cols-[minmax(140px,200px)_1fr_auto] gap-4 items-center">
-                <div className="text-[#94a3b8] whitespace-nowrap overflow-hidden text-ellipsis">{p.client || '—'}</div>
-                <div className="text-[var(--text)]">
-                  {p.id ? (
-                    <button
-                      type="button"
-                      className="hover:underline truncate"
-                      onClick={(e) => { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
-                      onMouseEnter={() => {
-                        if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
-                        prefetchTimerRef.current = window.setTimeout(() => {
-                          queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
-                        }, 150);
-                      }}
-                      onMouseLeave={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
-                      onFocus={() => {
-                        if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
-                        prefetchTimerRef.current = window.setTimeout(() => {
-                          queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
-                        }, 150);
-                      }}
-                      onBlur={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
-                    >
-                      {p.name || `Project ${p.id}`}
-                    </button>
-                  ) : (
-                    <span className="truncate">{p.name || `Project ${p.id}`}</span>
-                  )}
-                </div>
-                <div className={`text-xs ${getStatusColor(p.status || '')}`}>{formatStatus(p.status || '')}</div>
+          <ul className="space-y-4 text-sm">
+            {Array.from(groupedByClient.entries()).map(([clientName, clientProjects]) => (
+              <li key={clientName} className="space-y-2">
+                <div className="text-xs font-semibold uppercase text-[#94a3b8] tracking-wide">{clientName}</div>
+                <ul className="space-y-1">
+                  {clientProjects.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-3 pl-4">
+                      <div className="text-[var(--text)] min-w-0 flex-1">
+                        {p.id ? (
+                          <button
+                            type="button"
+                            className="hover:underline truncate"
+                            onClick={(e) => { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
+                            onMouseEnter={() => {
+                              if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                              prefetchTimerRef.current = window.setTimeout(() => {
+                                queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
+                              }, 150);
+                            }}
+                            onMouseLeave={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                            onFocus={() => {
+                              if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                              prefetchTimerRef.current = window.setTimeout(() => {
+                                queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
+                              }, 150);
+                            }}
+                            onBlur={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                          >
+                            {p.name || `Project ${p.id}`}
+                          </button>
+                        ) : (
+                          <span className="truncate">{p.name || `Project ${p.id}`}</span>
+                        )}
+                      </div>
+                      <div className={`text-xs whitespace-nowrap ${getStatusColor(p.status || '')}`}>{formatStatus(p.status || '')}</div>
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>

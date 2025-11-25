@@ -1,182 +1,197 @@
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
-import Layout from '../../components/layout/Layout';
-import Card from '../../components/ui/Card';
-import { assignmentsApi, deliverablesApi, deliverableAssignmentsApi, peopleApi } from '../../services/api';
-import { DeliverableCalendarItem } from '../../types/models';
-import { resolveApiBase } from '@/utils/apiBase';
-import { getAccessToken } from '@/utils/auth';
-import { darkTheme } from '../../theme/tokens';
-import CalendarGrid from '@/components/deliverables/CalendarGrid';
-import { fmtDate, startOfWeekSunday, typeColors } from '@/components/deliverables/calendar.utils';
+import Layout from '@/components/layout/Layout';
+import Card from '@/components/ui/Card';
+import { assignmentsApi, deliverableAssignmentsApi, peopleApi } from '@/services/api';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
+import { FullCalendarWrapper, mapDeliverableCalendarToEvents, formatDeliverableInlineLabel } from '@/features/fullcalendar';
+import {
+  buildCalendarRange,
+  clampWeeks,
+  subtractOneDay,
+  toIsoDate,
+  useDeliverablesCalendar,
+} from '@/hooks/useDeliverablesCalendar';
+import type { CalendarRange } from '@/hooks/useDeliverablesCalendar';
+import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import type { DatesSetArg, EventContentArg, EventClickArg } from '@fullcalendar/core';
+import type { DeliverableEventMeta } from '@/features/fullcalendar';
 
-type CalendarItemUnion = (DeliverableCalendarItem & { itemType?: 'deliverable' }) | {
-  itemType: 'pre_deliverable'; id: number; parentDeliverableId: number; project: number; projectName?: string | null; projectClient?: string | null; preDeliverableType?: string; title: string; date: string | null; isCompleted: boolean; isOverdue?: boolean;
-};
+const DEFAULT_WEEKS = 8;
+const WEEK_OPTIONS = [4, 8, 12];
 
-const MilestoneCalendarPage: React.FC = () => {
-  const [anchor, setAnchor] = useState<Date>(() => startOfWeekSunday(new Date()));
-  const [weeksCount, setWeeksCount] = useState<number>(8);
-  const start = useMemo(() => fmtDate(anchor), [anchor]);
-  const end = useMemo(() => {
-    const d = new Date(anchor);
-    d.setDate(d.getDate() + 7 * weeksCount - 1);
-    return fmtDate(d);
-  }, [anchor, weeksCount]);
+export const DeliverablesCalendarContent: React.FC = () => {
+  const [weeks, setWeeks] = React.useState(DEFAULT_WEEKS);
+  const [range, setRange] = React.useState<CalendarRange>(() => buildCalendarRange(DEFAULT_WEEKS));
+  const [showPre, setShowPre] = React.useState(false);
+  const [personQuery, setPersonQuery] = React.useState('');
+  const [personResults, setPersonResults] = React.useState<Array<{ id: number; name: string }>>([]);
+  const [selectedPersonIndex, setSelectedPersonIndex] = React.useState(-1);
+  const [selectedPerson, setSelectedPerson] = React.useState<{ id: number; name: string } | null>(null);
+  const [allowedDeliverableIds, setAllowedDeliverableIds] = React.useState<Set<number> | null>(null);
+  const [allowedProjectIds, setAllowedProjectIds] = React.useState<Set<number> | null>(null);
+  const [filterLoading, setFilterLoading] = React.useState(false);
+  const { open } = useProjectQuickViewPopover();
 
-  const [items, setItems] = useState<CalendarItemUnion[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showPre, setShowPre] = useState<boolean>(true);
-  const [refreshTick, setRefreshTick] = useState<number>(0);
+  const calendarQuery = useDeliverablesCalendar(range, { mineOnly: false });
+  const { data, isLoading, error, refetch } = calendarQuery;
 
-  // Person filter state
-  const [personQuery, setPersonQuery] = useState<string>('');
-  const [personResults, setPersonResults] = useState<Array<{ id: number; name: string }>>([]);
-  const [selectedPersonIndex, setSelectedPersonIndex] = useState<number>(-1);
-  const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string } | null>(null);
-  const [allowedDeliverableIds, setAllowedDeliverableIds] = useState<Set<number> | null>(null);
-  const [allowedProjectIds, setAllowedProjectIds] = useState<Set<number> | null>(null);
-  const [filterLoading, setFilterLoading] = useState<boolean>(false);
-
-  // React to deliverable updates emitted from popover/other pages
   React.useEffect(() => {
-    const unsub = subscribeGridRefresh((p) => {
-      const r = (p?.reason || '').toLowerCase();
-      if (r.includes('deliverable')) {
-        setRefreshTick((t) => t + 1);
+    const unsub = subscribeGridRefresh((payload) => {
+      if ((payload?.reason || '').toLowerCase().includes('deliverable')) {
+        refetch();
       }
     });
     return unsub;
-  }, []);
+  }, [refetch]);
 
   useAuthenticatedEffect(() => {
     let active = true;
     (async () => {
       try {
-        setLoading(true);
-        setError(null);
-        // Try unified endpoint first; fallback to legacy calendar
-        const base = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
-        const token = getAccessToken();
-        try {
-          const params = new URLSearchParams();
-          if (start) params.set('start', start);
-          if (end) params.set('end', end);
-          const resp = await fetch(`${base}/deliverables/calendar_with_pre_items/?${params.toString()}`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
-          if (resp.ok) {
-            const union = await resp.json();
-            if (active) setItems(union || []);
-            return;
-          }
-        } catch {}
-        // Fallback
-        const legacy = await deliverablesApi.calendar(start, end);
-        if (active) setItems((legacy || []).map(it => ({ ...it, itemType: 'deliverable' as const })));
-      } catch (e: any) {
-        if (active) setError(e?.message || 'Failed to load calendar');
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, [start, end, refreshTick]);
-
-  // When a person is selected, fetch their deliverable links and project assignments once
-  useAuthenticatedEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        if (!selectedPerson) { setAllowedDeliverableIds(null); setAllowedProjectIds(null); return; }
+        if (!selectedPerson) {
+          setAllowedDeliverableIds(null);
+          setAllowedProjectIds(null);
+          return;
+        }
         setFilterLoading(true);
         const [links, projects] = await Promise.all([
-          (async () => { try { return await deliverableAssignmentsApi.byPerson(selectedPerson.id); } catch { return [] as any[]; } })(),
-          (async () => { try { return await assignmentsApi.byPerson(selectedPerson.id); } catch { return [] as any[]; } })(),
+          (async () => {
+            try {
+              return await deliverableAssignmentsApi.byPerson(selectedPerson.id);
+            } catch {
+              return [] as any[];
+            }
+          })(),
+          (async () => {
+            try {
+              return await assignmentsApi.byPerson(selectedPerson.id);
+            } catch {
+              return [] as any[];
+            }
+          })(),
         ]);
         if (!active) return;
-        const dset = new Set<number>((links as any[]).map((l: any) => l.deliverable).filter((n: any) => Number.isFinite(n)));
-        const pset = new Set<number>((projects as any[]).map((a: any) => a.project).filter((n: any) => Number.isFinite(n)));
-        setAllowedDeliverableIds(dset);
-        setAllowedProjectIds(pset);
+        const deliverableSet = new Set<number>(
+          (links as any[]).map((l: any) => l.deliverable).filter((id: any) => Number.isFinite(id))
+        );
+        const projectSet = new Set<number>(
+          (projects as any[]).map((p: any) => p.project).filter((id: any) => Number.isFinite(id))
+        );
+        setAllowedDeliverableIds(deliverableSet.size ? deliverableSet : null);
+        setAllowedProjectIds(projectSet.size ? projectSet : null);
       } finally {
         if (active) setFilterLoading(false);
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [selectedPerson]);
 
-  const filteredItems = useMemo(() => {
+  const filteredItems = React.useMemo(() => {
+    const items = data ?? [];
     if (!selectedPerson) return items;
-    const dset = allowedDeliverableIds; const pset = allowedProjectIds;
-    if (!dset && !pset) return [];
-    return items.filter((it) => {
-      if (it.itemType === 'pre_deliverable') {
-        const parentId = (it as any).parentDeliverableId as number | undefined;
-        const projId = (it as any).project as number | undefined;
-        return (parentId != null && dset?.has(parentId)) || (projId != null && pset?.has(projId));
+    if (!allowedDeliverableIds && !allowedProjectIds) return [];
+    return items.filter((item) => {
+      const projectId = (item as any).project as number | undefined;
+      const deliverableId = (item as any).id as number | undefined;
+      if (item.itemType === 'pre_deliverable') {
+        const parentId = (item as any).parentDeliverableId as number | undefined;
+        return (
+          (parentId != null && allowedDeliverableIds?.has(parentId)) ||
+          (projectId != null && allowedProjectIds?.has(projectId))
+        );
       }
-      // deliverable item
-      const delivId = (it as any).id as number | undefined;
-      const projId = (it as any).project as number | undefined;
-      return (delivId != null && dset?.has(delivId)) || (projId != null && pset?.has(projId));
+      return (
+        (deliverableId != null && allowedDeliverableIds?.has(deliverableId)) ||
+        (projectId != null && allowedProjectIds?.has(projectId))
+      );
     });
-  }, [items, selectedPerson, allowedDeliverableIds, allowedProjectIds]);
+  }, [data, selectedPerson, allowedDeliverableIds, allowedProjectIds]);
 
-  const dateMap = useMemo(() => {
-    const m = new Map<string, CalendarItemUnion[]>();
-    const src = filteredItems;
-    for (const it of src) {
-      if (!it.date) continue;
-      if (!m.has(it.date)) m.set(it.date, []);
-      if (it.itemType === 'pre_deliverable' && !showPre) continue;
-      m.get(it.date)!.push(it);
+  const events = React.useMemo(
+    () => mapDeliverableCalendarToEvents(filteredItems, { includePreDeliverables: showPre }),
+    [filteredItems, showPre]
+  );
+
+  const multiWeekView = React.useMemo(
+    () => ({
+      deliverablesMultiWeek: {
+        type: 'dayGrid',
+        duration: { weeks: clampWeeks(weeks) },
+      },
+    }),
+    [weeks]
+  );
+
+  const handleDatesSet = React.useCallback((arg: DatesSetArg) => {
+    const nextRange = {
+      start: toIsoDate(arg.start),
+      end: toIsoDate(subtractOneDay(arg.end)),
+    };
+    setRange((prev) => (prev.start === nextRange.start && prev.end === nextRange.end ? prev : nextRange));
+  }, []);
+
+  const handleWeeksChange = React.useCallback((value: number) => {
+    setWeeks(value);
+    setRange((prev) => buildCalendarRange(value, new Date(prev.start)));
+  }, []);
+
+  const renderEventContent = React.useCallback((arg: EventContentArg) => {
+    const meta = arg.event.extendedProps as DeliverableEventMeta;
+    if (meta?.kind === 'pre_deliverable_group') {
+      const titles = meta.preDeliverableTitles ?? [];
+      return (
+        <div className="flex flex-col text-xs leading-tight">
+          <span className="font-semibold truncate">{meta.projectName || meta.projectClient || arg.event.title}</span>
+          <ul className="list-disc pl-4 text-[var(--muted)] space-y-0.5">
+            {titles.map((label, idx) => (
+              <li key={`${arg.event.id}-group-${idx}`} className="truncate">
+                {label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
     }
-    return m;
-  }, [filteredItems, showPre]);
+    if (meta?.kind === 'pre_deliverable') {
+      const subtitle = meta.projectClient || meta.projectName;
+      return (
+        <div className="flex flex-col text-xs leading-tight">
+          <span className="font-semibold truncate">{arg.event.title}</span>
+          {subtitle ? <span className="text-[var(--muted)] truncate">{subtitle}</span> : null}
+        </div>
+      );
+    }
+    const label = formatDeliverableInlineLabel(meta, arg.event.title);
+    return (
+      <span className="fc-deliverable-line" title={label}>
+        {label}
+      </span>
+    );
+  }, []);
 
-  const weeks: Date[][] = useMemo(() => {
-    const rows: Date[][] = [];
-    let day = new Date(anchor);
-    for (let r = 0; r < weeksCount; r++) {
-      const row: Date[] = [];
-      for (let c = 0; c < 7; c++) {
-        row.push(new Date(day));
-        day.setDate(day.getDate() + 1);
+  const handleEventClick = React.useCallback(
+    (arg: EventClickArg) => {
+      const meta = arg.event.extendedProps as any;
+      const projectId = meta?.projectId ?? meta?.project ?? null;
+      if (projectId) {
+        open(projectId, arg.el as HTMLElement, { placement: 'center' });
       }
-      rows.push(row);
-    }
-    return rows;
-  }, [anchor, weeksCount]);
-
-  const goPrev = () => {
-    const d = new Date(anchor);
-    d.setDate(d.getDate() - 7);
-    setAnchor(startOfWeekSunday(d));
-  };
-  const goNext = () => {
-    const d = new Date(anchor);
-    d.setDate(d.getDate() + 7);
-    setAnchor(startOfWeekSunday(d));
-  };
-
-  const isToday = (d: Date) => {
-    const t = new Date();
-    return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
-  };
-
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    },
+    [open]
+  );
 
   return (
-    <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-[#cccccc]">{`Deliverables Calendar (${weeksCount} Weeks)`}</h1>
-            <p className="text-[#969696] mt-1">Weeks start on Sunday; current week at top</p>
+            <h1 className="text-3xl font-bold text-[#cccccc]">{`Deliverables Calendar (${weeks} Weeks)`}</h1>
+            <p className="text-[#969696] mt-1">Milestones and pre-deliverables with list view on mobile.</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 mr-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2">
               <label className="text-sm text-[var(--muted)] whitespace-nowrap">Person Filter</label>
               <div className="relative">
                 {selectedPerson ? (
@@ -184,7 +199,12 @@ const MilestoneCalendarPage: React.FC = () => {
                     <span>{selectedPerson.name}</span>
                     <button
                       className="text-[var(--muted)] hover:text-[var(--text)]"
-                      onClick={() => { setSelectedPerson(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1); }}
+                      onClick={() => {
+                        setSelectedPerson(null);
+                        setPersonQuery('');
+                        setPersonResults([]);
+                        setSelectedPersonIndex(-1);
+                      }}
                       title="Clear person filter"
                     >
                       ×
@@ -200,146 +220,119 @@ const MilestoneCalendarPage: React.FC = () => {
                       onChange={async (e) => {
                         const q = e.currentTarget.value;
                         setPersonQuery(q);
-                        if (!q || q.trim().length === 0) { setPersonResults([]); setSelectedPersonIndex(-1); return; }
+                        if (!q || q.trim().length === 0) {
+                          setPersonResults([]);
+                          setSelectedPersonIndex(-1);
+                          return;
+                        }
                         try {
                           const res = await peopleApi.autocomplete(q, 20);
                           setPersonResults(res || []);
-                          setSelectedPersonIndex((res && res.length > 0) ? 0 : -1);
-                        } catch {}
+                          setSelectedPersonIndex(res && res.length > 0 ? 0 : -1);
+                        } catch {
+                          setPersonResults([]);
+                          setSelectedPersonIndex(-1);
+                        }
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedPersonIndex(i => Math.min(i + 1, personResults.length - 1)); }
-                        else if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedPersonIndex(i => Math.max(i - 1, 0)); }
-                        else if (e.key === 'Enter') {
+                        if (e.key === 'ArrowDown') {
                           e.preventDefault();
-                          const sel = selectedPersonIndex >= 0 ? personResults[selectedPersonIndex] : null;
-                          if (sel) { setSelectedPerson(sel); setPersonResults([]); }
+                          setSelectedPersonIndex((idx) => Math.min(idx + 1, personResults.length - 1));
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setSelectedPersonIndex((idx) => Math.max(idx - 1, 0));
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const pick = selectedPersonIndex >= 0 ? personResults[selectedPersonIndex] : null;
+                          if (pick) {
+                            setSelectedPerson(pick);
+                            setPersonResults([]);
+                          }
                         }
                       }}
                     />
-                    {personResults && personResults.length > 0 && (
+                    {personResults.length > 0 && (
                       <div className="absolute z-10 mt-1 w-56 max-h-64 overflow-auto border border-[var(--border)] bg-[var(--card)] rounded shadow">
                         {personResults.map((p, idx) => (
                           <div
                             key={p.id}
-                            className={`px-2 py-1 text-sm cursor-pointer ${idx === selectedPersonIndex ? 'bg-[var(--cardHover)] text-[var(--text)]' : 'text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'}`}
+                            className={`px-2 py-1 text-sm cursor-pointer ${
+                              idx === selectedPersonIndex
+                                ? 'bg-[var(--cardHover)] text-[var(--text)]'
+                                : 'text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'
+                            }`}
                             onMouseEnter={() => setSelectedPersonIndex(idx)}
-                            onMouseDown={(e) => { e.preventDefault(); setSelectedPerson(p); setPersonResults([]); }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setSelectedPerson(p);
+                              setPersonResults([]);
+                            }}
                           >
                             {p.name}
                           </div>
                         ))}
-                        {filterLoading && (
-                          <div className="px-2 py-1 text-xs text-[var(--muted)]">Loading…</div>
-                        )}
+                        {filterLoading && <div className="px-2 py-1 text-xs text-[var(--muted)]">Loading…</div>}
                       </div>
                     )}
                   </>
                 )}
               </div>
             </div>
-            <button onClick={goPrev} className="px-3 py-1.5 text-sm rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]">&lt; Prev Week</button>
-            <button onClick={goNext} className="px-3 py-1.5 text-sm rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]">Next Week &gt;</button>
-            <div className="flex items-center gap-2 ml-2">
-              <span className="text-sm text-[var(--muted)]">Weeks:</span>
-              {[8, 12, 16].map((w) => (
+            <label className="inline-flex items-center gap-2 text-sm text-[var(--muted)]">
+              <input type="checkbox" checked={showPre} onChange={(e) => setShowPre(e.currentTarget.checked)} />
+              Show Pre-Deliverables
+            </label>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-[var(--muted)]">Weeks:</span>
+              {WEEK_OPTIONS.map((option) => (
                 <button
-                  key={w}
-                  onClick={() => setWeeksCount(w)}
-                  aria-pressed={weeksCount === w}
-                  className={`px-2 py-1 text-xs rounded border transition-colors ${
-                    weeksCount === w
-                      ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                      : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'
+                  key={option}
+                  onClick={() => handleWeeksChange(option)}
+                  className={`px-2 py-0.5 rounded ${
+                    weeks === option
+                      ? 'bg-[var(--primary)] text-white'
+                      : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
                   }`}
+                  aria-pressed={weeks === option}
                 >
-                  {w}
+                  {option}w
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-          <Card className="bg-[#2d2d30] border-[#3e3e42]">
-            <div className="grid grid-cols-7 border-b border-[#3e3e42]">
-              {dayNames.map((n) => (
-                <div key={n} className="px-3 py-2 text-sm font-medium text-[#cbd5e1] border-r border-[#3e3e42] last:border-r-0">{n}</div>
-              ))}
-            </div>
-            {loading ? (
-              <div className="p-4 text-[#969696]">Loading calendar...</div>
-            ) : error ? (
-              <div className="p-4 text-red-400">{error}</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <CalendarGrid items={filteredItems} anchor={anchor} weeksCount={weeksCount} showPre={showPre} />
-              </div>
-            )}
-          </Card>
-
-          <div className="space-y-4">
-            <Card className="bg-[#2d2d30] border-[#3e3e42]">
-              <div className="p-4">
-                <div className="text-[#cccccc] font-semibold mb-2">Deliverable Types</div>
-                <div className="space-y-2 text-sm">
-                  {[
-                    ['Bulletin', 'bulletin'],
-                    ['CD', 'cd'],
-                    ['DD', 'dd'],
-                    ['IFC', 'ifc'],
-                    ['IFP', 'ifp'],
-                    ['Masterplan', 'masterplan'],
-                    ['SD', 'sd'],
-                    ['Milestone', 'milestone'],
-                  ].map(([label, key]) => (
-                    <div key={key as string} className="flex items-center gap-2 text-[#cbd5e1]">
-                      <span className="inline-block w-3 h-3 rounded" style={{ background: typeColors[key as string] }} />
-                      {label}
-                    </div>
-                  ))}
-                  <div className="flex items-center gap-2 text-[#cbd5e1]">
-                    <span className="inline-block w-3 h-3 rounded" style={{ background: typeColors['pre_deliverable'] }} />
-                    Pre-Deliverable
-                  </div>
-                  <div className="mt-3">
-                    <label className="inline-flex items-center gap-2 text-[#cbd5e1]">
-                      <input type="checkbox" checked={showPre} onChange={e => setShowPre(e.currentTarget.checked)} />
-                      Show Pre-Deliverables
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </Card>
-            <Card className="bg-[#2d2d30] border-[#3e3e42]">
-              <div className="p-4 text-sm text-[#cbd5e1] space-y-2">
-                <div className="font-semibold">How to use</div>
-                <ul className="list-disc ml-5 space-y-1 text-[#94a3b8]">
-                  <li>Today is highlighted with the accent color</li>
-                  <li>Prev/Next shifts the view by one week</li>
-                  <li>Colors indicate deliverable type (parsed from title)</li>
-                </ul>
-              </div>
-            </Card>
-          </div>
-        </div>
+        <Card className="bg-[var(--card)] border-[var(--border)] p-4">
+          <FullCalendarWrapper
+            className="min-h-[640px]"
+            events={events}
+            loading={isLoading}
+            emptyState={
+              error ? (
+                <div className="text-sm text-[#fca5a5]">{(error as Error)?.message || 'Failed to load calendar'}</div>
+              ) : (
+                <div className="text-sm text-[var(--muted)]">No milestones scheduled for this window.</div>
+              )
+            }
+            initialDate={range.start}
+            initialView="deliverablesMultiWeek"
+            responsiveViews={{ mobile: 'listWeek', desktop: 'deliverablesMultiWeek' }}
+            views={multiWeekView}
+            eventContent={renderEventContent}
+            onEventClick={handleEventClick}
+            onDatesSet={handleDatesSet}
+            dayMaxEvents={false}
+            eventOrder={['extendedProps.sortPriority', 'start']}
+          />
+        </Card>
       </div>
-    </Layout>
   );
 };
 
-export default MilestoneCalendarPage;
+const DeliverablesCalendarPage: React.FC = () => (
+  <Layout>
+    <DeliverablesCalendarContent />
+  </Layout>
+);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+export default DeliverablesCalendarPage;

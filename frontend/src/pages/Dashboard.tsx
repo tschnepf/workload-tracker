@@ -32,6 +32,11 @@ import {
   type DashboardHeatmapRow,
 } from '@/mobile/dashboardAdapters';
 import TeamMembersCard from '@/components/dashboard/TeamMembersCard';
+import { FullCalendarWrapper, mapCapacityHeatmapToEvents, mapDeliverableCalendarToEvents, formatDeliverableInlineLabel } from '@/features/fullcalendar';
+import { useDeliverablesCalendar, buildCalendarRange, subtractOneDay, toIsoDate } from '@/hooks/useDeliverablesCalendar';
+import type { CalendarRange } from '@/hooks/useDeliverablesCalendar';
+import type { DeliverableCalendarUnion } from '@/features/fullcalendar/eventAdapters';
+import type { EventContentArg, DatesSetArg } from '@fullcalendar/core';
 
 const PRIMARY_ANALYTICS_CARDS = DASHBOARD_ANALYTICS_CARD_SPECS.filter(
   (card) => (card.section ?? 'primary') === 'primary'
@@ -65,6 +70,7 @@ const Dashboard: React.FC = () => {
   const mobileDashboardEnabled = useMobileUiFlag('dashboard');
   const [toolbarOffset, setToolbarOffset] = useState(0);
   const [heatmapDetailPerson, setHeatmapDetailPerson] = useState<DashboardHeatmapRow | null>(null);
+  const [teamCalendarRange, setTeamCalendarRange] = useState<CalendarRange>(() => buildCalendarRange(Math.min(heatWeeks, 12)));
 
   // Display helper to format project status labels nicely
   const formatStatusLabel = (raw: string | undefined | null): string => {
@@ -137,6 +143,10 @@ const Dashboard: React.FC = () => {
   }, [auth.accessToken]);
 
   useEffect(() => {
+    setTeamCalendarRange((prev) => buildCalendarRange(Math.min(heatWeeks, 12), new Date(prev.start)));
+  }, [heatWeeks]);
+
+  useEffect(() => {
     if (!mobileDashboardEnabled) return;
     if (typeof window === 'undefined') return;
     const topbar = document.getElementById('app-topbar');
@@ -163,6 +173,9 @@ const Dashboard: React.FC = () => {
   const weekKeys = heatmapView.weekKeys;
   const currentWeekKey = heatmapView.currentWeekKey;
   const nextWeekKey = heatmapView.nextWeekKey;
+  const teamDeliverablesQuery = useDeliverablesCalendar(teamCalendarRange, { mineOnly: false });
+  const teamDeliverables = teamDeliverablesQuery.data ?? [];
+  const teamDeliverablesLoading = teamDeliverablesQuery.isLoading;
   const { data: utilScheme } = useUtilizationScheme();
   const summaryTiles = useMemo(() => getDashboardSummaryTiles(data), [data]);
   const availabilityRows = useMemo(() => {
@@ -397,7 +410,6 @@ const Dashboard: React.FC = () => {
                 ))}
               </div>
             </Card>
-
             {/* Project Summary */}
             <Card className="bg-[var(--card)] border-[var(--border)] h-full col-span-12 sm:col-span-6 lg:col-span-2 min-w-[14rem]">
               <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Project Summary</h3>
@@ -634,128 +646,15 @@ const Dashboard: React.FC = () => {
                 </div>
               </Card>
             </div>
-            <Card className="bg-[var(--card)] border-[var(--border)]">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-[var(--text)]">Team Utilization Heat Map</h3>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-[var(--muted)]">Weeks:</span>
-                  {[4, 8, 12, 20].map((w) => (
-                    <button
-                      key={w}
-                      onClick={() => setHeatWeeks(w)}
-                      className={`px-2 py-0.5 rounded ${heatWeeks === w ? 'bg-[var(--primary)] text-white' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'}`}
-                      aria-pressed={heatWeeks === w}
-                    >
-                      {w}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {heatData && heatData.length > 0 ? (
-                <>
-                  <div className={mobileDashboardEnabled ? 'hidden lg:block' : ''}>
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: 'auto', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                        <colgroup>
-                          <col style={{ width: '140px' }} />
-                          {heatData[0].weekKeys.map((wk) => (
-                            <col key={`col-top-${wk}`} style={{ width: 26 }} />
-                          ))}
-                        </colgroup>
-                        <thead>
-                          <tr>
-                            <th
-                              style={{ textAlign: 'left', padding: '4px 6px', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, fontSize: '12px' }}
-                            >
-                              Person
-                            </th>
-                            {heatData[0].weekKeys.map((wk) => (
-                              <th key={`head-top-${wk}`} style={{ textAlign: 'center', padding: '2px', whiteSpace: 'nowrap', fontWeight: 600, position: 'sticky', top: 0, background: 'var(--card)', fontSize: '12px' }}>
-                                {wk.slice(5)}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {heatData.map((row) => (
-                            <tr key={`row-top-${row.id}`}>
-                              <td style={{ padding: '4px 6px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</td>
-                              {row.weekKeys.map((wk) => {
-                                const h = row.weekTotals[wk] || 0;
-                                const pill = getUtilizationPill({ hours: h, capacity: row.weeklyCapacity || 0, scheme: utilScheme || defaultUtilizationScheme, output: 'token' });
-                                const bg = pill.tokens?.bg || '#10b981';
-                                return (
-                                  <td key={`cell-top-${row.id}-${wk}`} title={`${wk} - ${Math.round(h)}h`} style={{ padding: 3, textAlign: 'center' }}>
-                                    <div style={{ width: 20, height: 20, background: bg, opacity: 0.9, borderRadius: 3, border: '1px solid var(--border)', margin: '0 auto' }} />
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <div className="mt-2 flex items-center gap-3 text-[11px] text-[var(--muted)]">
-                        {(() => {
-                          const s = utilScheme || defaultUtilizationScheme;
-                          const labels = s.mode === 'absolute_hours'
-                            ? [
-                                `${s.blue_min}-${s.blue_max}h`,
-                                `${s.green_min}-${s.green_max}h`,
-                                `${s.orange_min}-${s.orange_max}h`,
-                                `${s.red_min}h+`,
-                              ]
-                            : ['0-70%', '70-85%', '85-100%', '100%+'];
-                          const blue = utilizationLevelToTokens('blue').bg;
-                          const green = utilizationLevelToTokens('green').bg;
-                          const orange = utilizationLevelToTokens('orange').bg;
-                          const red = utilizationLevelToTokens('red').bg;
-                          return (
-                            <>
-                              <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: blue }}></span> {labels[0]}</div>
-                              <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: green }}></span> {labels[1]}</div>
-                              <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: orange }}></span> {labels[2]}</div>
-                              <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: red }}></span> {labels[3]}</div>
-                              {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                  {mobileDashboardEnabled ? (
-                    <div className="lg:hidden max-h-[480px] overflow-y-auto space-y-3 pr-1" role="list" aria-label="Team utilization cards">
-                      {heatData.map((row) => (
-                        <div key={`heatmap-mobile-${row.id}`} className="border border-[var(--border)] rounded-lg p-3 bg-[var(--surface)]/40" role="listitem">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-[var(--text)] font-semibold truncate">{row.name}</div>
-                              <div className="text-xs text-[var(--muted)] truncate">{row.department || 'Unassigned'}</div>
-                            </div>
-                            <div className="text-right text-xs text-[var(--muted)]">
-                              <div>Avg {Math.round(row.averagePercentage || 0)}%</div>
-                              {row.peak?.percentage != null ? <div>Peak {Math.round(row.peak.percentage)}%</div> : null}
-                            </div>
-                          </div>
-                          <HeatmapSparkline row={row} />
-                          <div className="mt-2 flex items-center justify-between text-xs text-[var(--muted)]">
-                            <span>{row.weekKeys.length} weeks tracked</span>
-                            <button
-                              type="button"
-                              className="text-[var(--primary)] hover:underline font-semibold"
-                              onClick={() => setHeatmapDetailPerson(row)}
-                            >
-                              View timeline
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="text-[var(--muted)]">{heatLoading ? 'Loading…' : 'No data'}</div>
-              )}
-            </Card>
+            <div className="col-span-12">
+              <TeamCapacityCalendarCard
+                rows={heatData}
+                loading={heatLoading}
+                deliverables={teamDeliverables}
+                deliverablesLoading={teamDeliverablesLoading}
+                onRangeChange={setTeamCalendarRange}
+              />
+            </div>
           </div>
         </div>
 
@@ -813,111 +712,6 @@ const Dashboard: React.FC = () => {
             ))}
           </div>
         </Card>
-
-        {/* Team Utilization Heat Map (compact) [legacy block moved up] */}
-        {false && (
-        <Card className="lg:col-span-2 bg-[var(--card)] border-[var(--border)]">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-[var(--text)]">Team Utilization Heat Map</h3>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-[var(--muted)]">Weeks:</span>
-              {[4, 8, 12, 20].map((w) => (
-                <button
-                  key={w}
-                  onClick={() => setHeatWeeks(w)}
-                  className={`px-2 py-0.5 rounded ${heatWeeks === w ? 'bg-[var(--primary)] text-white' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'}`}
-                  aria-pressed={heatWeeks === w}
-                >
-                  {w}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {heatData && heatData.length > 0 ? (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: 'auto', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '140px' }} />
-                  {heatData[0].weekKeys.map((wk) => (
-                    <col key={`col-${wk}`} style={{ width: 26 }} />
-                  ))}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th
-                      style={{
-                        textAlign: 'left',
-                        padding: '4px 6px',
-                        position: 'sticky',
-                        top: 0,
-                        background: 'var(--card)',
-                        zIndex: 1,
-                        fontSize: '12px'
-                      }}
-                    >
-                      Person
-                    </th>
-                    {heatData[0].weekKeys.map((wk) => (
-                      <th
-                        key={`head-${wk}`}
-                        style={{
-                          textAlign: 'center',
-                          padding: '2px',
-                          whiteSpace: 'nowrap',
-                          fontWeight: 600,
-                          position: 'sticky',
-                          top: 0,
-                          background: 'var(--card)',
-                          fontSize: '12px'
-                        }}
-                      >
-                        {wk.slice(5)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {heatData.map((row) => (
-                    <tr key={row.id}>
-                      <td style={{ padding: '4px 6px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</td>
-                      {row.weekKeys.map((wk) => {
-                        const h = row.weekTotals[wk] || 0;
-                        const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
-                        let bg = '#10b981';
-                        if (pct > 100) bg = '#ef4444';
-                        else if (pct > 85) bg = '#f59e0b';
-                        else if (pct > 70) bg = '#3b82f6';
-                        return (
-                          <td key={`cell-${row.id}-${wk}`} title={`${wk} - ${Math.round(h)}h`} style={{ padding: 3, textAlign: 'center' }}>
-                            <div style={{ width: 20, height: 20, background: bg, opacity: 0.9, borderRadius: 3, border: '1px solid var(--border)', margin: '0 auto' }} />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="mt-2 flex items-center gap-3 text-[11px] text-[var(--muted)]">
-                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#10b981' }}></span> 0-70%</div>
-                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#3b82f6' }}></span> 70-85%</div>
-                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }}></span> 85-100%</div>
-                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444' }}></span> 100%+</div>
-                <span
-                  className="ml-2 inline-flex items-center gap-1 text-[#7a7a7a]"
-                  title="When available, heatmap tooltips show available hours instead of allocated hours."
-                >
-                  <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[var(--surface)] text-[var(--muted)] text-[10px]">i</span>
-                  Tooltips show available hours when provided
-                </span>
-                {heatFetching && <span className="ml-2 text-[#7a7a7a]">Refreshing…</span>}
-              </div>
-            </div>
-          ) : (
-            <div className="text-[var(--muted)]">{heatLoading ? 'Loading…' : 'No data'}</div>
-          )}
-        </Card>
-        )}
 
         {mobileDashboardEnabled ? renderAnalyticsCarousel(SECONDARY_ANALYTICS_CARDS, 'Timeline analytics') : null}
         {SECONDARY_ANALYTICS_CARDS.map((card) => (
@@ -1060,6 +854,99 @@ function renderAnalyticsCarousel(cards: DashboardAnalyticsCardSpec[], ariaLabel:
     </div>
   );
 }
+
+export const TeamCapacityCalendarCard: React.FC<{
+  rows: DashboardHeatmapRow[];
+  loading: boolean;
+  deliverables: DeliverableCalendarUnion[];
+  deliverablesLoading: boolean;
+  onRangeChange: (range: CalendarRange) => void;
+}> = ({ rows, loading, deliverables, deliverablesLoading, onRangeChange }) => {
+  const capacityEvents = React.useMemo(() => mapCapacityHeatmapToEvents(rows as any[], { clampWeeks: 12 }), [rows]);
+  const deliverableEvents = React.useMemo(
+    () => mapDeliverableCalendarToEvents(deliverables, { includePreDeliverables: true }),
+    [deliverables]
+  );
+  const events = React.useMemo(() => [...capacityEvents, ...deliverableEvents], [capacityEvents, deliverableEvents]);
+  const combinedLoading = loading || deliverablesLoading;
+  const renderEventContent = React.useCallback((arg: EventContentArg) => {
+    const meta = arg.event.extendedProps as any;
+    if (meta?.kind === 'pre_deliverable_group') {
+      const titles = meta.preDeliverableTitles ?? [];
+      return (
+        <div className="flex flex-col text-xs leading-tight">
+          <span className="font-semibold truncate">{meta.projectName || meta.projectClient || arg.event.title}</span>
+          <ul className="list-disc pl-4 text-[var(--muted)] space-y-0.5">
+            {titles.map((label: string, idx: number) => (
+              <li key={`${arg.event.id}-group-${idx}`} className="truncate">
+                {label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+    if (meta?.kind === 'pre_deliverable') {
+      const subtitle = meta?.projectClient || meta?.projectName;
+      return (
+        <div className="flex flex-col text-xs leading-tight">
+          <span className="font-semibold truncate">{arg.event.title}</span>
+          {subtitle ? <span className="text-[var(--muted)] truncate">{subtitle}</span> : null}
+        </div>
+      );
+    }
+    if (meta?.kind === 'deliverable') {
+      const label = formatDeliverableInlineLabel(meta, arg.event.title);
+      return (
+        <span className="fc-deliverable-line" title={label}>
+          {label}
+        </span>
+      );
+    }
+    return (
+      <div className="flex flex-col text-xs leading-tight">
+        <span className="font-semibold truncate">{meta?.personName || arg.event.title}</span>
+        <span className="text-[var(--muted)] truncate">
+          {Math.round(meta?.allocatedHours ?? 0)}h / {meta?.weeklyCapacity ?? 0}h
+        </span>
+      </div>
+    );
+  }, []);
+  const handleDatesSet = React.useCallback(
+    (arg: DatesSetArg) => {
+      onRangeChange({
+        start: toIsoDate(arg.start),
+        end: toIsoDate(subtractOneDay(arg.end)),
+      });
+    },
+    [onRangeChange]
+  );
+
+  return (
+    <Card className="bg-[var(--card)] border-[var(--border)]">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-semibold text-[var(--text)]">Capacity & Deliverables Timeline</h3>
+        <span className="text-xs text-[var(--muted)] hidden sm:inline">List view available on mobile</span>
+      </div>
+      <FullCalendarWrapper
+        className="min-h-[520px]"
+        events={events}
+        loading={combinedLoading}
+        emptyState={
+          <div className="text-sm text-[var(--muted)]">
+            {combinedLoading ? 'Loading…' : 'No capacity or deliverable data for this window.'}
+          </div>
+        }
+        initialView="dayGridMonth"
+        responsiveViews={{ mobile: 'listWeek', desktop: 'dayGridMonth' }}
+        eventContent={renderEventContent}
+        onDatesSet={handleDatesSet}
+        height="auto"
+        eventOrder={['extendedProps.sortPriority', 'start']}
+      />
+    </Card>
+  );
+};
 
 const HeatmapSparkline: React.FC<{ row: DashboardHeatmapRow; weekKeys?: string[] }> = ({ row, weekKeys }) => {
   const keys = weekKeys && weekKeys.length > 0 ? weekKeys : row.weekKeys;

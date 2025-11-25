@@ -8,6 +8,7 @@ import MyScheduleStrip from '@/components/personal/MyScheduleStrip';
 import PersonalCalendarWidget from '@/components/personal/PersonalCalendarWidget';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersonalWork } from '@/hooks/usePersonalWork';
+import { emitGridRefresh } from '@/lib/gridRefreshBus';
 
 const PersonalDashboard: React.FC = () => {
   const auth = useAuth();
@@ -58,6 +59,11 @@ const PersonalDashboard: React.FC = () => {
       ))}
     </div>
   );
+
+  const handleRefresh = React.useCallback(async () => {
+    await refresh({ force: true });
+    emitGridRefresh({ reason: 'personal-calendar-refresh' });
+  }, [refresh]);
 
   return (
     <Layout>
@@ -114,20 +120,30 @@ const PersonalDashboard: React.FC = () => {
           <div className="text-sm text-[var(--muted)]">Loading assignments…</div>
         ) : null}
 
-        {/* Mobile swipe stack */}
+        {/* Mobile stack */}
         <div className="md:hidden space-y-4" aria-label="My work widgets">
-          <MyProjectsCard className="min-h-[220px]" projects={projects} />
-          <MyDeliverablesCard className="min-h-[220px]" deliverables={deliverables} />
+          <div>
+            <MyProjectsCard className="min-h-[220px]" projects={projects} />
+          </div>
+          <div>
+            <MyDeliverablesCard className="min-h-[220px]" deliverables={deliverables} />
+          </div>
           {schedule ? (
-            <MyScheduleStrip
-              className="min-h-[220px]"
-              weekKeys={schedule.weekKeys}
-              weeklyCapacity={schedule.weeklyCapacity}
-              weekTotals={schedule.weekTotals}
-            />
+            <div>
+              <MyScheduleStrip
+                className="min-h-[220px]"
+                weekKeys={schedule.weekKeys}
+                weeklyCapacity={schedule.weeklyCapacity}
+                weekTotals={schedule.weekTotals}
+              />
+            </div>
           ) : null}
-          <PersonalCalendarWidget className="min-h-[220px]" />
-          <UpcomingPreDeliverablesWidget className="min-h-[220px]" />
+          <div>
+            <PersonalCalendarWidget className="min-h-[220px]" />
+          </div>
+          <div>
+            <UpcomingPreDeliverablesWidget className="min-h-[220px]" />
+          </div>
         </div>
 
         {/* Desktop grid */}

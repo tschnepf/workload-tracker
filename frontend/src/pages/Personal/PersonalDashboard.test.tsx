@@ -1,7 +1,8 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, it, beforeEach, vi, expect } from 'vitest';
 import PersonalDashboard from './PersonalDashboard';
+import { renderWithProviders } from '@/test-utils';
 
 const mockSummary = {
   personId: 7,
@@ -80,13 +81,19 @@ describe('PersonalDashboard responsive layout', () => {
     });
   });
 
-  it('renders summary and swipe stack at 390px', () => {
-    render(<PersonalDashboard />);
+  const renderDashboard = () =>
+    renderWithProviders(<div />, { routes: [{ path: '/', element: <PersonalDashboard /> }], route: '/' });
+
+  it('renders summary, calendar, and schedule stack at 390px', () => {
+    renderDashboard();
     expect(screen.getByRole('heading', { name: /My Summary/i })).toBeVisible();
     const swipeRegion = screen.getByLabelText(/My work widgets/i);
     expect(swipeRegion).toBeVisible();
-    expect(screen.getByLabelText(/Upcoming weeks utilization/i)).toBeVisible();
-    expect(screen.getByText(/My Calendar/i)).toBeVisible();
+    const stack = within(swipeRegion);
+    expect(stack.getByRole('heading', { name: /My Projects/i })).toBeVisible();
+    expect(stack.getByRole('heading', { name: /My Schedule/i })).toBeVisible();
+    expect(stack.getByText(/My Calendar/i)).toBeVisible();
+    expect(stack.getByLabelText(/Upcoming weeks utilization/i)).toBeVisible();
   });
 
   it('shows mobile skeletons and retry on error', () => {
@@ -96,7 +103,7 @@ describe('PersonalDashboard responsive layout', () => {
       error: 'Server unavailable',
       refresh: refreshSpy,
     });
-    render(<PersonalDashboard />);
+    renderDashboard();
     expect(screen.getByText(/Server unavailable/i)).toBeVisible();
     expect(screen.getByLabelText(/Mobile fallback skeletons/i)).toBeVisible();
   });
