@@ -2,6 +2,11 @@ import React from 'react';
 import type { Project, Assignment, Person } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
+import { InlineText, InlineTextarea, InlineDate } from '@/components/ui/InlineEdit';
+import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';
+import ProjectNotesEditor from '@/components/projects/ProjectNotesEditor';
+import { useInlineProjectUpdate } from '@/hooks/useInlineProjectUpdate';
+import { useAuth } from '@/hooks/useAuth';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import AssignmentRow from './AssignmentRow';
@@ -11,6 +16,7 @@ import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
 import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeyboardNavigation';
 import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import { applyHoursToCellsOptimistic } from '@/assignments/updateHoursOptimistic';
+import { projectsApi } from '@/services/api';
 
 interface Props {
   project: Project;
@@ -249,9 +255,9 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   return (
     <>
       <div className="px-2 py-4 border-b border-[var(--border)]">
-        <div className="flex justify-between items-start mb-3">
-          <div>
-            <h2 className="text-xl font-bold text-[var(--text)] mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-bold text-[var(--text)] mb-1">
               <InlineText
                 value={localPatch.name ?? project.name}
                 onCommit={async (v) => { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,name:nv})); await commit('name', nv).catch((e:any)=>{ setFieldErrors(prev=>({...prev,name:e?.message||'Failed to update name'})); throw e }); clearFieldError('name'); }}
@@ -261,8 +267,62 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 disabled={!canEdit}
               />
             </h2>
-            {fieldErrors.name && (<div className="text-red-400 text-xs mt-1">{fieldErrors.name}</div>)}
-            <div className="grid grid-cols-2 gap-4 text-sm mt-1" style={{ gridTemplateColumns: 'minmax(320px,1fr) 1fr' }}>
+            {fieldErrors.name && (<div className="text-red-400 text-xs">{fieldErrors.name}</div>)}
+          </div>
+          <div className="flex flex-col items-start gap-2 w-full sm:w-auto sm:min-w-[180px]">
+            <div>
+              <div className="text-[var(--muted)] text-xs">Status:</div>
+              <ProjectStatusDropdown
+                status={project.status || ''}
+                isOpen={statusDropdownOpen}
+                setOpen={setStatusDropdownOpen}
+                onChange={(s) => onStatusChange(s)}
+              />
+            </div>
+            {onDeleteProject && (
+              confirmingDelete ? (
+                <div className="flex flex-col md:flex-row items-start gap-2">
+                  <button
+                    disabled={isDeleting}
+                    onClick={async () => {
+                      const ok = window.confirm('This will permanently delete the project and its data. Are you sure?');
+                      if (!ok) return;
+                      try {
+                        setIsDeleting(true);
+                        await onDeleteProject(project.id!);
+                      } finally {
+                        setIsDeleting(false);
+                        setConfirmingDelete(false);
+                      }
+                    }}
+                    className="px-2 py-0.5 text-xs rounded border bg-red-600/20 border-red-500/50 text-red-300 hover:bg-red-600/30 transition-colors disabled:opacity-50 self-start"
+                    aria-label="Confirm Delete Project"
+                    title="Permanently delete this project"
+                  >
+                    {isDeleting ? 'Deleting…' : 'Confirm Delete'}
+                  </button>
+                  <button
+                    disabled={isDeleting}
+                    onClick={() => setConfirmingDelete(false)}
+                    className="px-2 py-0.5 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors self-start"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmingDelete(true)}
+                  className="px-2 py-0.5 text-xs rounded border bg-transparent border-red-500/50 text-red-300 hover:bg-red-600/20 transition-colors self-start"
+                  aria-label="Delete Project"
+                  title="Delete this project"
+                >
+                  Delete
+                </button>
+              )
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4 text-sm" style={{ gridTemplateColumns: 'minmax(320px,1fr) 1fr' }}>
               <div>
                 <div className="text-[var(--muted)] text-xs">Client:</div>
                 <div className="text-[var(--text)] relative" ref={clientBoxRef}>
@@ -313,25 +373,14 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 {fieldErrors.client && (<div className="text-red-400 text-xs mt-1">{fieldErrors.client}</div>)}
               </div>
               <div>
-                <div className="text-[var(--muted)] text-xs">Status:</div>
-                <div>
-                  <ProjectStatusDropdown
-                    status={project.status || ''}
-                    isOpen={statusDropdownOpen}
-                    setOpen={setStatusDropdownOpen}
-                    onChange={(s) => onStatusChange(s)}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="text-[var(--muted)] text-xs">Project Number:</div>
+                <div className="text-[var(--muted)] text-xs">No:</div>
                 <div className="text-[var(--text)]">
                   <InlineText
                     value={(localPatch.projectNumber ?? project.projectNumber) || ''}
                     onCommit={async (v) => { try { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,projectNumber:nv})); await commit('projectNumber', nv); clearFieldError('projectNumber'); } catch (e:any) { setFieldErrors(prev=>({...prev,projectNumber:'Project Number must be unique'})); throw e; } }}
                     onStartEdit={() => clearFieldError('projectNumber')}
                     onDraftChange={() => clearFieldError('projectNumber')}
-                    placeholder="No Number"
+                    placeholder="-"
                     ariaLabel="Edit project number"
                     disabled={!canEdit}
                   />
@@ -356,7 +405,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               {fieldErrors.description && (<div className="text-red-400 text-xs mt-1">{fieldErrors.description}</div>)}
             </div>
             {/* Start Date & Estimated Hours */}
-            <div className="grid grid-cols-2 gap-4 mt-3" style={{ gridTemplateColumns: 'minmax(320px,1fr) 1fr' }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
               <div>
                 <div className="text-[var(--muted)] text-xs mb-1">Start Date:</div>
                 <InlineDate
@@ -391,52 +440,6 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 {fieldErrors.estimatedHours && (<div className="text-red-400 text-xs mt-1">{fieldErrors.estimatedHours}</div>)}
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {onDeleteProject && (
-              confirmingDelete ? (
-                <>
-                  <button
-                    disabled={isDeleting}
-                    onClick={async () => {
-                      // Second confirmation to avoid accidental deletion
-                      const ok = window.confirm('This will permanently delete the project and its data. Are you sure?');
-                      if (!ok) return;
-                      try {
-                        setIsDeleting(true);
-                        await onDeleteProject(project.id!);
-                      } finally {
-                        setIsDeleting(false);
-                        setConfirmingDelete(false);
-                      }
-                    }}
-                    className="px-2 py-0.5 text-xs rounded border bg-red-600/20 border-red-500/50 text-red-300 hover:bg-red-600/30 transition-colors disabled:opacity-50"
-                    aria-label="Confirm Delete Project"
-                    title="Permanently delete this project"
-                  >
-                    {isDeleting ? 'Deleting…' : 'Confirm Delete'}
-                  </button>
-                  <button
-                    disabled={isDeleting}
-                    onClick={() => setConfirmingDelete(false)}
-                    className="px-2 py-0.5 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setConfirmingDelete(true)}
-                  className="px-2 py-0.5 text-xs rounded border bg-transparent border-red-500/50 text-red-300 hover:bg-red-600/20 transition-colors"
-                  aria-label="Delete Project"
-                  title="Delete this project"
-                >
-                  Delete
-                </button>
-              )
-            )}
-          </div>
-        </div>
       </div>
 
       <div className="p-4">
@@ -638,9 +641,3 @@ const ProjectDetailsPanel: React.FC<Props> = ({
 };
 
 export default ProjectDetailsPanel;
-import { InlineText, InlineTextarea, InlineDate } from '@/components/ui/InlineEdit';
-import { useInlineProjectUpdate } from '@/hooks/useInlineProjectUpdate';
-import { useAuth } from '@/hooks/useAuth';
-import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';
-import { projectsApi } from '@/services/api';
-import ProjectNotesEditor from '@/components/projects/ProjectNotesEditor';

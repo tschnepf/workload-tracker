@@ -18,6 +18,7 @@ interface Props {
   nextDeliverables?: Map<number, Deliverable | null>;
   prevDeliverables?: Map<number, Deliverable | null>;
   onChangeStatus?: (projectId: number, newStatus: string) => void;
+  isMobileList?: boolean;
 }
 
 const ProjectsTable: React.FC<Props> = ({
@@ -31,8 +32,9 @@ const ProjectsTable: React.FC<Props> = ({
   nextDeliverables,
   prevDeliverables,
   onChangeStatus,
+  isMobileList = false,
 }) => {
-  const enableVirtual = getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
+  const enableVirtual = !isMobileList && getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
   const statusDropdown = useDropdownManager<string>();
   const projectStatus = useProjectStatus({
     onSuccess: (pid, newStatus) => {
@@ -43,7 +45,7 @@ const ProjectsTable: React.FC<Props> = ({
       return (p?.status as any) || 'active';
     }
   });
-  const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: 44, overscan: 6, enableVirtual });
+  const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: isMobileList ? 116 : 44, overscan: 6, enableVirtual });
   const groupClients = sortBy === 'client';
   const [openStatusFor, setOpenStatusFor] = useState<number | null>(null);
 
@@ -56,6 +58,17 @@ const ProjectsTable: React.FC<Props> = ({
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [openStatusFor]);
+
+  const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
+  const toggleExpanded = (projectId?: number | null) => {
+    if (!projectId) return;
+    setExpandedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  };
 
   const header = (
     <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
@@ -301,13 +314,77 @@ const ProjectsTable: React.FC<Props> = ({
     </div>
   );
 
+  const renderMobileCard = (project: Project, index: number) => {
+    const nextDeliverable = project.id != null && nextDeliverables ? nextDeliverables.get(project.id) : null;
+    const prevDeliverable = project.id != null && prevDeliverables ? prevDeliverables.get(project.id) : null;
+    const formatDate = (dateStr?: string | null) =>
+      dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const isExpanded = project.id != null && expandedCards.has(project.id);
+    return (
+      <div
+        key={project.id ?? index}
+        className={`p-4 border-b border-[var(--border)] bg-[var(--surface)] ${
+          selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
+        }`}
+      >
+        <button
+          type="button"
+          className="w-full text-left"
+          onClick={() => onSelect(project, index)}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                {project.client || 'No Client'}
+              </div>
+              <div className="text-base font-semibold text-[var(--text)] truncate">
+                {project.name}
+              </div>
+              <div className="text-xs text-[var(--muted)]">{project.projectNumber || '—'}</div>
+            </div>
+            <div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
+              <StatusBadge status={(project.status as any) || 'active'} />
+              <button
+                type="button"
+                className="text-[var(--primary)] text-xs font-medium"
+                onClick={() => toggleExpanded(project.id)}
+              >
+                {isExpanded ? 'Hide details' : 'Show details'}
+              </button>
+            </div>
+          </div>
+        </button>
+        {isExpanded && (
+          <div className="mt-3 space-y-2 text-xs text-[var(--muted)]">
+            <div>
+              <div className="font-semibold text-[var(--text)]">Next Deliverable</div>
+              <div>{nextDeliverable?.description || '—'}</div>
+              <div>{formatDate(nextDeliverable?.date)}</div>
+            </div>
+            <div>
+              <div className="font-semibold text-[var(--text)]">Last Deliverable</div>
+              <div>{prevDeliverable?.description || '—'}</div>
+              <div>{formatDate(prevDeliverable?.date)}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (isMobileList) {
+    return (
+      <div className="flex-1 overflow-y-auto divide-y divide-[var(--border)]">
+        {projects.map((project, index) => renderMobileCard(project, index))}
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-hidden">
       {header}
       {loading ? (
-        <div className="p-3">
-          {/* consumer provides skeletons; keep minimal here */}
-        </div>
+        <div className="p-3" />
       ) : enableVirtual ? virtualBody : nonVirtualBody}
     </div>
   );

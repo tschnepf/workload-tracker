@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link, useLocation } from 'react-router';
 import { Project, Person, Assignment } from '@/types/models';
@@ -15,8 +16,7 @@ import { trackPerformanceEvent } from '@/utils/monitoring';
 // PersonWithAvailability interface moved into usePersonSearch hook
 import Layout from '@/components/layout/Layout';
 import ProjectsSkeleton from '@/components/skeletons/ProjectsSkeleton';
-import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions, statusOptions } from '@/components/projects/StatusBadge';
-import Skeleton from '@/components/ui/Skeleton';
+import { statusOptions } from '@/components/projects/StatusBadge';
 import DeliverablesSectionLoaderComp from '@/pages/Projects/list/components/DeliverablesSectionLoader';
 import FiltersBar from '@/pages/Projects/list/components/FiltersBar';
 import ProjectsTable from '@/pages/Projects/list/components/ProjectsTable';
@@ -33,6 +33,7 @@ import { useProjectAssignmentAdd } from '@/pages/Projects/list/hooks/useProjectA
 import { useProjectStatusMutation } from '@/pages/Projects/list/hooks/useProjectStatusMutation';
 import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 import { useProjectDeliverablesBulk } from '@/pages/Projects/list/hooks/useProjectDeliverablesBulk';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -53,6 +54,9 @@ const ProjectsList: React.FC = () => {
   // Local UI state
   const [error, setError] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const isMobileLayout = useMediaQuery('(max-width: 1023px)');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   // Optimized filter metadata (assignment counts + hasFutureDeliverables)
   const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata();
@@ -91,6 +95,12 @@ const ProjectsList: React.FC = () => {
   // Selection (single source of truth)
   // Use the enhanced sortedProjects for selection and table
   const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects);
+  const handleResponsiveProjectClick = useCallback((project: Project, index: number) => {
+    handleProjectClick(project, index);
+    if (isMobileLayout) {
+      setMobileDetailOpen(true);
+    }
+  }, [handleProjectClick, isMobileLayout]);
 
   // Assignments + available roles
   const { assignments, availableRoles, reload: reloadAssignments } = useProjectAssignments({ projectId: selectedProject?.id, people });
@@ -414,6 +424,15 @@ const ProjectsList: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [statusDropdownOpen]);
 
+  useEffect(() => {
+    if (!isMobileLayout) {
+      setMobileFiltersOpen(false);
+      setMobileDetailOpen(false);
+    } else if (selectedProject) {
+      setMobileDetailOpen(true);
+    }
+  }, [isMobileLayout, selectedProject?.id]);
+
   if (loading) {
     return (
       <Layout>
@@ -422,150 +441,296 @@ const ProjectsList: React.FC = () => {
     );
   }
 
-  return (
-    <Layout>
-      <div className="h-full min-h-0 flex bg-[var(--bg)]">
-        {/* Left Panel - Projects List */}
-        <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto">
-          {/* Header */}
-          <div className="p-3 border-b border-[var(--border)]">
-            <div className="flex justify-between items-center mb-2">
-              <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
-              <Link to="/projects/new">
-                <button className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors">
-                  + New
-                </button>
-              </Link>
-            </div>
-            <FiltersBar
-              statusOptions={statusOptions}
-              selectedStatusFilters={selectedStatusFilters}
-              onToggleStatus={toggleStatusFilter}
-              searchTerm={searchTerm}
-              onSearchTerm={setSearchTerm}
-              formatFilterStatus={formatFilterStatus}
-              filterMetaLoading={filterMetaLoading}
-              filterMetaError={filterMetaError}
-              onRetryFilterMeta={() => refetchFilterMeta()}
-            />
+  const desktopLayout = (
+    <div className="h-full min-h-0 flex bg-[var(--bg)]">
+      <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto">
+        <div className="p-3 border-b border-[var(--border)]">
+          <div className="flex justify-between items-center mb-2">
+            <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
+            <Link to="/projects/new">
+              <button className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors">
+                + New
+              </button>
+            </Link>
           </div>
-
-          {/* Error Message */}
-          {error && (<ErrorBanner message={error} />)}
-
-          {/* Warnings */}
-          {warnings.length > 0 && (<WarningsBanner warnings={warnings} />)}
-
-          {/* Projects Table */}
-          <ProjectsTable
-            projects={sortedProjects}
-            selectedProjectId={selectedProject?.id ?? null}
-            onSelect={handleProjectClick}
-            sortBy={sortBy}
-            sortDirection={sortDirection}
-            onSort={onSort}
-            loading={loading}
-            nextDeliverables={nextDeliverablesMap}
-            prevDeliverables={prevDeliverablesMap}
-            onChangeStatus={handleTableStatusChange}
+          <FiltersBar
+            statusOptions={statusOptions}
+            selectedStatusFilters={selectedStatusFilters}
+            onToggleStatus={toggleStatusFilter}
+            searchTerm={searchTerm}
+            onSearchTerm={setSearchTerm}
+            formatFilterStatus={formatFilterStatus}
+            filterMetaLoading={filterMetaLoading}
+            filterMetaError={filterMetaError}
+            onRetryFilterMeta={() => refetchFilterMeta()}
           />
         </div>
-
-        {/* Right Panel - Project Details */}
-        <div className="w-1/2 flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto">
-          {loading ? (
-            <div className="p-4 space-y-3">
-              <Skeleton rows={6} className="h-5" />
-            </div>
-          ) : selectedProject ? (
-            <ProjectDetailsPanel
-              project={selectedProject}
-              statusDropdownOpen={statusDropdownOpen}
-              setStatusDropdownOpen={setStatusDropdownOpen}
-              onStatusChange={handleStatusChange}
-              onDeleteProject={handleDeleteProject}
-              assignments={assignments}
-              editingAssignmentId={editingAssignment}
-              editData={editData}
-              warnings={warnings}
-              onEditAssignment={handleEditAssignment}
-              onDeleteAssignment={handleDeleteAssignment}
-              onSaveEdit={handleSaveEdit}
-              onCancelEdit={handleCancelEdit}
-              onHoursChange={(h) => setEditData((prev) => ({ ...prev, currentWeekHours: h }))}
-              getCurrentWeekHours={getCurrentWeekHours}
-              currentWeekKey={currentWeekKey}
-              onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
-                try {
-                  await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
-                  if (selectedProject?.id) await reloadAssignments(selectedProject.id);
-                  await invalidateFilterMeta();
-                } catch (e) {
-                  console.error('Failed to update role on project', e);
-                }
-              }}
-              onUpdateWeekHours={async (assignmentId, weekKey, hours) => {
-                try {
-                  const asn = assignments.find(a => a.id === assignmentId);
-                  if (!asn) return;
-                  const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
-                  updatedWeeklyHours[weekKey] = hours;
-                  await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
-                } catch (e) {
-                  console.error('Failed to update hours', e);
-                }
-              }}
-              reloadAssignments={reloadAssignments}
-              invalidateFilterMeta={invalidateFilterMeta}
-              getPersonDepartmentId={(personId) => {
-                const p = people.find(pp => pp.id === personId);
-                return (p?.department ?? null) as any;
-              }}
-              getPersonDepartmentName={(personId) => {
-                const p = people.find(pp => pp.id === personId);
-                return p?.departmentName ?? null;
-              }}
-              showAddAssignment={showAddAssignment}
-              onAddAssignment={handleAddAssignment}
-              onSaveAssignment={handleSaveAssignment}
-              onCancelAddAssignment={handleCancelAddAssignment}
-              addAssignmentState={newAssignment as any}
-              onPersonSearch={(term) => { onPersonSearchChange(term); setNewAssignment(prev => ({ ...prev, personSearch: term })); }}
-              onPersonSearchFocus={() => onPersonSearchFocus()}
-              onPersonSearchKeyDown={onPersonSearchKeyDown}
-              srAnnouncement={srAnnouncement}
-              personSearchResults={personSearchResults as any}
-              selectedPersonIndex={selectedPersonIndex}
-              onPersonSelect={handlePersonSelect}
-              onRoleSelectNew={(roleId, roleName) => {
-                const name = roleName || '';
-                setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
-              }}
-              candidatesOnly={candidatesOnly}
-              setCandidatesOnly={setCandidatesOnly}
-              availabilityMap={availabilityMap}
-              deliverablesSlot={
-                <Suspense fallback={<DeliverablesSectionLoaderComp />}>
-                  <DeliverablesSection
-                    project={selectedProject}
-                    variant="embedded"
-                    onDeliverablesChanged={() => {
-                      try { if (selectedProject?.id) refreshDeliverablesFor(selectedProject.id); } catch {}
-                    }}
-                  />
-                </Suspense>
+        {error && (<ErrorBanner message={error} />)}
+        {warnings.length > 0 && (<WarningsBanner warnings={warnings} />)}
+        <ProjectsTable
+          projects={sortedProjects}
+          selectedProjectId={selectedProject?.id ?? null}
+          onSelect={handleResponsiveProjectClick}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSort={onSort}
+          loading={loading}
+          nextDeliverables={nextDeliverablesMap}
+          prevDeliverables={prevDeliverablesMap}
+          onChangeStatus={handleTableStatusChange}
+        />
+      </div>
+      <div className="w-1/2 flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto">
+        {selectedProject ? (
+          <ProjectDetailsPanel
+            project={selectedProject}
+            statusDropdownOpen={statusDropdownOpen}
+            setStatusDropdownOpen={setStatusDropdownOpen}
+            onStatusChange={handleStatusChange}
+            onDeleteProject={handleDeleteProject}
+            assignments={assignments}
+            editingAssignmentId={editingAssignment}
+            editData={editData}
+            warnings={warnings}
+            onEditAssignment={handleEditAssignment}
+            onDeleteAssignment={handleDeleteAssignment}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={handleCancelEdit}
+            onHoursChange={(h) => setEditData((prev) => ({ ...prev, currentWeekHours: h }))}
+            getCurrentWeekHours={getCurrentWeekHours}
+            currentWeekKey={currentWeekKey}
+            onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
+              try {
+                await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+                if (selectedProject?.id) await reloadAssignments(selectedProject.id);
+                await invalidateFilterMeta();
+              } catch (e) {
+                console.error('Failed to update role on project', e);
               }
-            />
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-[var(--muted)]">
-                <div className="text-lg mb-2">Select a project</div>
-                <div className="text-sm">Choose a project from the list to view details</div>
-              </div>
+            }}
+            onUpdateWeekHours={async (assignmentId, weekKey, hours) => {
+              try {
+                const asn = assignments.find(a => a.id === assignmentId);
+                if (!asn) return;
+                const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
+                updatedWeeklyHours[weekKey] = hours;
+                await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+              } catch (e) {
+                console.error('Failed to update hours', e);
+              }
+            }}
+            reloadAssignments={reloadAssignments}
+            invalidateFilterMeta={invalidateFilterMeta}
+            getPersonDepartmentId={(personId) => {
+              const p = people.find(pp => pp.id === personId);
+              return (p?.department ?? null) as any;
+            }}
+            getPersonDepartmentName={(personId) => {
+              const p = people.find(pp => pp.id === personId);
+              return p?.departmentName ?? null;
+            }}
+            showAddAssignment={showAddAssignment}
+            onAddAssignment={handleAddAssignment}
+            onSaveAssignment={handleSaveAssignment}
+            onCancelAddAssignment={handleCancelAddAssignment}
+            addAssignmentState={newAssignment as any}
+            onPersonSearch={(term) => { onPersonSearchChange(term); setNewAssignment(prev => ({ ...prev, personSearch: term })); }}
+            onPersonSearchFocus={() => onPersonSearchFocus()}
+            onPersonSearchKeyDown={onPersonSearchKeyDown}
+            srAnnouncement={srAnnouncement}
+            personSearchResults={personSearchResults as any}
+            selectedPersonIndex={selectedPersonIndex}
+            onPersonSelect={handlePersonSelect}
+            onRoleSelectNew={(roleId, roleName) => {
+              const name = roleName || '';
+              setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
+            }}
+            candidatesOnly={candidatesOnly}
+            setCandidatesOnly={setCandidatesOnly}
+            availabilityMap={availabilityMap}
+            deliverablesSlot={
+              <Suspense fallback={<DeliverablesSectionLoaderComp />}>
+                <DeliverablesSection
+                  project={selectedProject}
+                  variant="embedded"
+                  onDeliverablesChanged={() => {
+                    try { if (selectedProject?.id) refreshDeliverablesFor(selectedProject.id); } catch {}
+                  }}
+                />
+              </Suspense>
+            }
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center text-[var(--muted)]">
+              <div className="text-lg mb-2">Select a project</div>
+              <div className="text-sm">Choose a project from the list to view details</div>
             </div>
-          )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const mobileLayout = (
+    <div className="min-h-0 flex flex-col bg-[var(--bg)]">
+      <div className="p-3 border-b border-[var(--border)] bg-[var(--surface)] flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
+          <p className="text-xs text-[var(--muted)]">{sortedProjects.length} results</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
+            onClick={() => setMobileFiltersOpen(true)}
+          >
+            Filters
+          </button>
+          <Link to="/projects/new">
+            <button className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]">
+              + New
+            </button>
+          </Link>
         </div>
       </div>
+      {error && (<ErrorBanner message={error} />)}
+      {warnings.length > 0 && (<WarningsBanner warnings={warnings} />)}
+      <ProjectsTable
+        projects={sortedProjects}
+        selectedProjectId={selectedProject?.id ?? null}
+        onSelect={handleResponsiveProjectClick}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSort={onSort}
+        loading={loading}
+        nextDeliverables={nextDeliverablesMap}
+        prevDeliverables={prevDeliverablesMap}
+        onChangeStatus={handleTableStatusChange}
+        isMobileList
+      />
+    </div>
+  );
+
+  return (
+    <Layout>
+      {isMobileLayout ? mobileLayout : desktopLayout}
+      <MobileFiltersSheet open={isMobileLayout && mobileFiltersOpen} title="Project Filters" onClose={() => setMobileFiltersOpen(false)}>
+        <FiltersBar
+          statusOptions={statusOptions}
+          selectedStatusFilters={selectedStatusFilters}
+          onToggleStatus={toggleStatusFilter}
+          searchTerm={searchTerm}
+          onSearchTerm={setSearchTerm}
+          formatFilterStatus={formatFilterStatus}
+          filterMetaLoading={filterMetaLoading}
+          filterMetaError={filterMetaError}
+          onRetryFilterMeta={() => refetchFilterMeta()}
+        />
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            className="flex-1 px-3 py-2 rounded border border-[var(--border)] text-[var(--text)]"
+            onClick={() => {
+              forceShowAll();
+              setSearchTerm('');
+            }}
+          >
+            Reset Filters
+          </button>
+          <button
+            type="button"
+            className="flex-1 px-3 py-2 rounded bg-[var(--primary)] text-white"
+            onClick={() => setMobileFiltersOpen(false)}
+          >
+            Close
+          </button>
+        </div>
+      </MobileFiltersSheet>
+      <MobileDetailsDrawer open={isMobileLayout && mobileDetailOpen && !!selectedProject} title={selectedProject?.name || 'Project'} onClose={() => setMobileDetailOpen(false)}>
+        {selectedProject ? (
+          <ProjectDetailsPanel
+            project={selectedProject}
+            statusDropdownOpen={statusDropdownOpen}
+            setStatusDropdownOpen={setStatusDropdownOpen}
+            onStatusChange={handleStatusChange}
+            onDeleteProject={handleDeleteProject}
+            assignments={assignments}
+            editingAssignmentId={editingAssignment}
+            editData={editData}
+            warnings={warnings}
+            onEditAssignment={handleEditAssignment}
+            onDeleteAssignment={handleDeleteAssignment}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={handleCancelEdit}
+            onHoursChange={(h) => setEditData((prev) => ({ ...prev, currentWeekHours: h }))}
+            getCurrentWeekHours={getCurrentWeekHours}
+            currentWeekKey={currentWeekKey}
+            onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
+              try {
+                await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+                if (selectedProject?.id) await reloadAssignments(selectedProject.id);
+                await invalidateFilterMeta();
+              } catch (e) {
+                console.error('Failed to update role on project', e);
+              }
+            }}
+            onUpdateWeekHours={async (assignmentId, weekKey, hours) => {
+              try {
+                const asn = assignments.find(a => a.id === assignmentId);
+                if (!asn) return;
+                const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
+                updatedWeeklyHours[weekKey] = hours;
+                await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+              } catch (e) {
+                console.error('Failed to update hours', e);
+              }
+            }}
+            reloadAssignments={reloadAssignments}
+            invalidateFilterMeta={invalidateFilterMeta}
+            getPersonDepartmentId={(personId) => {
+              const p = people.find(pp => pp.id === personId);
+              return (p?.department ?? null) as any;
+            }}
+            getPersonDepartmentName={(personId) => {
+              const p = people.find(pp => pp.id === personId);
+              return p?.departmentName ?? null;
+            }}
+            showAddAssignment={showAddAssignment}
+            onAddAssignment={handleAddAssignment}
+            onSaveAssignment={handleSaveAssignment}
+            onCancelAddAssignment={handleCancelAddAssignment}
+            addAssignmentState={newAssignment as any}
+            onPersonSearch={(term) => { onPersonSearchChange(term); setNewAssignment(prev => ({ ...prev, personSearch: term })); }}
+            onPersonSearchFocus={() => onPersonSearchFocus()}
+            onPersonSearchKeyDown={onPersonSearchKeyDown}
+            srAnnouncement={srAnnouncement}
+            personSearchResults={personSearchResults as any}
+            selectedPersonIndex={selectedPersonIndex}
+            onPersonSelect={handlePersonSelect}
+            onRoleSelectNew={(roleId, roleName) => {
+              const name = roleName || '';
+              setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
+            }}
+            candidatesOnly={candidatesOnly}
+            setCandidatesOnly={setCandidatesOnly}
+            availabilityMap={availabilityMap}
+            deliverablesSlot={
+              <Suspense fallback={<DeliverablesSectionLoaderComp />}>
+                <DeliverablesSection
+                  project={selectedProject}
+                  variant="embedded"
+                  onDeliverablesChanged={() => {
+                    try { if (selectedProject?.id) refreshDeliverablesFor(selectedProject.id); } catch {}
+                  }}
+                />
+              </Suspense>
+            }
+          />
+        ) : (
+          <div className="p-4 text-sm text-[var(--muted)]">Select a project to view details</div>
+        )}
+      </MobileDetailsDrawer>
     </Layout>
   );
 };
@@ -573,3 +738,49 @@ const ProjectsList: React.FC = () => {
 export default ProjectsList;
 
 // VirtualizedProjectsList moved to list/components/ProjectsTable
+
+const MobileFiltersSheet: React.FC<{ open: boolean; title: string; onClose: () => void; children: React.ReactNode }> = ({ open, title, onClose, children }) => {
+  if (!open || typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1100] bg-black/60 flex items-end"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full bg-[var(--surface)] text-[var(--text)] rounded-t-2xl p-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+          <div className="text-base font-semibold">{title}</div>
+          <button type="button" className="text-xl text-[var(--muted)]" onClick={onClose} aria-label="Close filters">
+            ×
+          </button>
+        </div>
+        <div className="pt-3">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+const MobileDetailsDrawer: React.FC<{ open: boolean; title: string; onClose: () => void; children: React.ReactNode }> = ({ open, title, onClose, children }) => {
+  if (!open || typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1150] bg-black/60 flex justify-end"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-md h-full bg-[var(--surface)] text-[var(--text)] shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <div className="text-base font-semibold truncate">{title}</div>
+          <button type="button" className="text-xl text-[var(--muted)]" onClick={onClose} aria-label="Close details">
+            ×
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+};
