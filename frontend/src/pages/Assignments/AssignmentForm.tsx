@@ -25,6 +25,21 @@ interface AssignmentFormData {
   weeklyHours: WeeklyHours;
 }
 
+type StepId = 'person' | 'skills' | 'weeks' | 'review';
+
+interface StepDefinition {
+  id: StepId;
+  title: string;
+  description: string;
+}
+
+const STEP_SEQUENCE: StepDefinition[] = [
+  { id: 'person', title: 'Select Person', description: 'Choose a team member and target project' },
+  { id: 'skills', title: 'Match Skills', description: 'Capture required skills and review fit' },
+  { id: 'weeks', title: 'Allocate Weeks', description: 'Distribute hours across the 12-week horizon' },
+  { id: 'review', title: 'Review & Submit', description: 'Confirm details before saving' },
+];
+
 // Weeks are generated via UTC-safe helpers (Sunday keys)
 const getNext12Weeks = (): string[] => getSundaysFrom(new Date(), 12);
 
@@ -208,6 +223,9 @@ const AssignmentForm: React.FC = () => {
     weeklyHours: {},
   });
   const [skillsInput, setSkillsInput] = useState<string>('');  // Skills required input field
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const currentStep = STEP_SEQUENCE[currentStepIndex];
+  const isLastStep = currentStepIndex === STEP_SEQUENCE.length - 1;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -359,36 +377,13 @@ const AssignmentForm: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (!formData.person) {
-      errors.person = 'Please select a person';
-    }
-
-    if (!formData.project) {
-      errors.project = 'Please select a project';
-    }
-
-    // Validate weekly hours
-    const totalHours = Object.values(formData.weeklyHours).reduce((sum, hours) => sum + hours, 0);
-    if (totalHours === 0) {
-      errors.weeklyHours = 'Please allocate at least some hours per week';
-    }
-
-    // Check if any week exceeds person capacity
-    if (formData.person) {
-      const selectedPerson = people.find(p => p.id === formData.person);
-      if (selectedPerson) {
-        for (const [week, hours] of Object.entries(formData.weeklyHours)) {
-          if (hours > (selectedPerson.weeklyCapacity || 0)) {
-            errors[`week_${week}`] = `Hours for week ${formatWeekDisplay(week)} exceed capacity (${selectedPerson.weeklyCapacity || 0}h)`;
-          }
-        }
-      }
-    }
-
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+    const fieldErrors: Record<string, string> = {};
+    if (!formData.person) fieldErrors.person = 'Please select a person';
+    if (!formData.project) fieldErrors.project = 'Please select a project';
+    const weeklyErrors = buildWeeklyHourErrors();
+    const combined = { ...fieldErrors, ...weeklyErrors };
+    setValidationErrors(combined);
+    return Object.keys(combined).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -462,6 +457,82 @@ const AssignmentForm: React.FC = () => {
     }
   };
 
+  const buildWeeklyHourErrors = () => {
+    const weeklyErrors: Record<string, string> = {};
+    const totalHours = Object.values(formData.weeklyHours).reduce((sum, hours) => sum + hours, 0);
+    if (totalHours === 0) {
+      weeklyErrors.weeklyHours = 'Please allocate at least some hours per week';
+    }
+    if (formData.person) {
+      const selectedPerson = people.find(p => p.id === formData.person);
+      const capacity = selectedPerson?.weeklyCapacity || 0;
+      if (capacity > 0) {
+        for (const [weekKey, hours] of Object.entries(formData.weeklyHours)) {
+          if (hours > capacity) {
+            weeklyErrors[`week_${weekKey}`] = `Exceeds capacity (${capacity}h)`;
+          }
+        }
+      }
+    }
+    return weeklyErrors;
+  };
+
+  const clearWeeklyErrorState = (prevErrors: Record<string, string>) => {
+    const next = { ...prevErrors };
+    Object.keys(next).forEach((key) => {
+      if (key === 'weeklyHours' || key.startsWith('week_')) {
+        delete next[key];
+      }
+    });
+    return next;
+  };
+
+  const validateWeeklySection = () => {
+    const weeklyErrors = buildWeeklyHourErrors();
+    setValidationErrors(prev => {
+      const next = clearWeeklyErrorState(prev);
+      return Object.keys(weeklyErrors).length ? { ...next, ...weeklyErrors } : next;
+    });
+    return Object.keys(weeklyErrors).length === 0;
+  };
+
+  const validatePersonProjectSection = () => {
+    const personErrors: Record<string, string> = {};
+    if (!formData.person) personErrors.person = 'Please select a person';
+    if (!formData.project) personErrors.project = 'Please select a project';
+    setValidationErrors(prev => {
+      const next = { ...prev };
+      delete next.person;
+      delete next.project;
+      return Object.keys(personErrors).length ? { ...next, ...personErrors } : next;
+    });
+    return Object.keys(personErrors).length === 0;
+  };
+
+  const validateStep = (stepId: StepId) => {
+    if (stepId === 'person') {
+      return validatePersonProjectSection();
+    }
+    if (stepId === 'weeks') {
+      return validateWeeklySection();
+    }
+    return true;
+  };
+
+  const handleNextStep = () => {
+    if (!validateStep(currentStep.id)) return;
+    setCurrentStepIndex(prev => Math.min(prev + 1, STEP_SEQUENCE.length - 1));
+  };
+
+  const handlePreviousStep = () => {
+    setCurrentStepIndex(prev => Math.max(prev - 1, 0));
+  };
+
+  const jumpToStep = (targetIndex: number) => {
+    if (targetIndex < 0 || targetIndex > currentStepIndex) return;
+    setCurrentStepIndex(targetIndex);
+  };
+
   const getTotalHours = (): number => {
     return Object.values(formData.weeklyHours).reduce((sum, hours) => sum + hours, 0);
   };
@@ -518,10 +589,450 @@ const AssignmentForm: React.FC = () => {
     setFilteredPeople(sortPeopleByDepartmentAndSkills(people, person.id!, departments, peopleSkills, projectSkills));
   };
 
+  const renderPersonStep = () => (
+    <div className="space-y-6">
+      <div className="relative">
+        <label className="block text-sm font-medium text-[#cccccc] mb-2">
+          Person <span className="text-red-400">*</span>
+        </label>
+        {deptState.selectedDepartmentId != null && (
+          <div className="mb-2 flex items-center gap-2 text-xs text-[#cbd5e1]">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!showAllDepartments}
+                onChange={(e) => setShowAllDepartments(!e.target.checked)}
+                className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-1"
+              />
+              Limit to current department
+            </label>
+          </div>
+        )}
+        <input
+          type="text"
+          value={personSearchText}
+          onChange={(e) => handlePersonSearchChange(e.target.value)}
+          onFocus={() => setShowPersonDropdown(true)}
+          onBlur={() => {
+            setTimeout(() => setShowPersonDropdown(false), 200);
+          }}
+          placeholder="Type to search people..."
+          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+        />
+        {validationErrors.person && (
+          <p className="text-sm text-red-400 mt-1">{validationErrors.person}</p>
+        )}
+        {showPersonDropdown && filteredPeople.length > 0 && (
+          <div className="absolute z-50 w-full mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded-md shadow-lg max-h-60 overflow-auto">
+            {filteredPeople.map((person) => {
+              const isSelectedDepartment = formData.person &&
+                people.find(p => p.id === formData.person)?.department === person.department;
+              const departmentName = getDepartmentName(person, departments);
+              const personSkillsList = peopleSkills.get(person.id!) || [];
+              const skillScore = skillMatchScores.get(person.id!) || 0;
+
+              let prefix = '';
+              if (skillScore >= 80) prefix = '🎯 ';
+              else if (skillScore >= 50) prefix = '⭐ ';
+              else if (isSelectedDepartment) prefix = '🏢 ';
+
+              const skillInfo = skillScore > 0 ? ` (${skillScore}% skill match)` : '';
+
+              return (
+                <div
+                  key={person.id}
+                  className="px-3 py-2 cursor-pointer hover:bg-[#3e3e42] text-[#cccccc] text-sm"
+                  onClick={() => selectPerson(person)}
+                >
+                  <div className="font-medium">
+                    {prefix}{person.name}
+                  </div>
+                  <div className="text-xs text-[#969696]">
+                    {departmentName} • {person.weeklyCapacity}h capacity{skillInfo}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-[#cccccc] mb-2">
+          Project <span className="text-red-400">*</span>
+        </label>
+        <select
+          value={formData.project}
+          onChange={(e) => handleChange('project', e.target.value)}
+          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+        >
+          <option value="">Select a project...</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name} ({project.client})
+            </option>
+          ))}
+        </select>
+        {validationErrors.project && (
+          <p className="text-sm text-red-400 mt-1">{validationErrors.project}</p>
+        )}
+        <p className="text-[#969696] text-sm mt-1">
+          Select the project for this assignment
+        </p>
+        {formData.person && formData.project && (
+          <div className="mt-3 p-3 bg-blue-500/10 rounded border border-blue-500/30">
+            {(() => {
+              const selectedPerson = people.find(p => p.id === Number(formData.person));
+              const selectedProject = projects.find(p => p.id === Number(formData.project));
+              if (!selectedPerson || !selectedProject) return null;
+
+              const sameDeptPeople = people.filter(
+                p => p.department === selectedPerson.department && p.id !== selectedPerson.id
+              );
+
+              return (
+                <div className="text-sm">
+                  <div className="text-blue-400 font-medium mb-1">
+                    🤝 Collaboration Opportunity
+                  </div>
+                  <div className="text-[#969696]">
+                    Assigning <span className="text-[#cccccc]">{selectedPerson.name}</span> from{' '}
+                    <span className="text-[#cccccc]">{getDepartmentName(selectedPerson, departments)}</span> to{' '}
+                    <span className="text-[#cccccc]">{selectedProject.name}</span>
+                    {sameDeptPeople.length > 0 && (
+                      <div className="mt-1">
+                        Consider also involving: {sameDeptPeople.slice(0, 3).map(p => p.name).join(', ')}
+                        {sameDeptPeople.length > 3 && ` and ${sameDeptPeople.length - 3} others`}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderSkillsStep = () => (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium text-[#cccccc] mb-2">
+          Required Skills <span className="text-[#969696]">(optional)</span>
+        </label>
+        <input
+          type="text"
+          value={skillsInput}
+          onChange={(e) => setSkillsInput(e.target.value)}
+          placeholder="e.g., React, Python, Project Management, Heat Calculations"
+          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+        />
+        <p className="text-[#969696] text-sm mt-1">
+          Enter skills needed for this assignment (comma-separated). This helps match the best person for the job.
+        </p>
+        {projectSkills.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            <span className="text-xs text-[#969696]">Detected skills:</span>
+            {projectSkills.map((skill, idx) => (
+              <span key={idx} className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                {skill}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {formData.person && (
+        <div className="space-y-3">
+          {(() => {
+            const selectedPerson = people.find(p => p.id === Number(formData.person));
+            if (!selectedPerson) return null;
+
+            const personDept = getDepartmentName(selectedPerson, departments);
+            const sameDeptCount = people.filter(p => p.department === selectedPerson.department).length - 1;
+            const personSkillsList = peopleSkills.get(selectedPerson.id!) || [];
+            const skillScore = skillMatchScores.get(selectedPerson.id!) || 0;
+            const skillWarnings = getSkillWarnings(selectedPerson, personSkillsList, projectSkills);
+
+            return (
+              <>
+                <div className="p-3 bg-[#3e3e42]/30 rounded border border-[#3e3e42]">
+                  <div className="text-sm">
+                    <div className="text-[#cccccc] font-medium mb-1">
+                      📊 Assignment Insights
+                    </div>
+                    <div className="text-[#969696]">
+                      <div>Department: <span className="text-[#cccccc]">{personDept}</span></div>
+                      <div>Capacity: <span className="text-[#cccccc]">{selectedPerson.weeklyCapacity || 0}h/week</span></div>
+                      {projectSkills.length > 0 && (
+                        <div
+                          className={`mt-1 ${
+                            skillScore >= 80
+                              ? 'text-emerald-400'
+                              : skillScore >= 50
+                              ? 'text-blue-400'
+                              : skillScore > 0
+                              ? 'text-amber-400'
+                              : 'text-red-400'
+                          }`}
+                        >
+                          🎯 Skill match: {skillScore}%
+                        </div>
+                      )}
+                      {sameDeptCount > 0 && (
+                        <div className="mt-1 text-blue-400">
+                          💡 {sameDeptCount} other people available in {personDept}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {skillWarnings.length > 0 && (
+                  <div className="p-3 bg-amber-500/20 border border-amber-500/30 rounded">
+                    <div className="text-sm">
+                      <div className="text-amber-400 font-medium mb-1">
+                        ⚠️ Skills Assessment
+                      </div>
+                      <div className="space-y-1">
+                        {skillWarnings.map((warning, idx) => (
+                          <div key={idx} className="text-amber-300 text-xs">
+                            {warning}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {personSkillsList.length > 0 && (
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded">
+                    <div className="text-sm">
+                      <div className="text-blue-400 font-medium mb-2">
+                        💪 {selectedPerson.name}'s Skills
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {personSkillsList
+                          .filter(skill => skill.skillType === 'strength')
+                          .slice(0, 5)
+                          .map(skill => (
+                            <span key={skill.id} className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
+                              {skill.skillTagName}
+                            </span>
+                          ))}
+                        {personSkillsList.filter(skill => skill.skillType === 'strength').length > 5 && (
+                          <span className="px-2 py-1 bg-slate-500/20 text-slate-400 rounded text-xs">
+                            +{personSkillsList.filter(skill => skill.skillType === 'strength').length - 5} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderWeeksStep = () => (
+    <div className="space-y-5">
+      <div className="bg-[#3e3e42]/50 p-4 rounded-lg border border-[#3e3e42]">
+        <label className="block text-sm font-medium text-[#cccccc] mb-2">
+          Quick Set All Weeks
+        </label>
+        <div className="flex gap-2 items-center flex-wrap">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={bulkHours}
+            onChange={(e) => setBulkHours(Math.max(0, Math.ceil(parseFloat(e.target.value) || 0)))}
+            className="px-3 py-1 rounded border text-sm bg-slate-600 border-slate-500 text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none w-24"
+            placeholder="0"
+          />
+          <span className="text-slate-300 text-sm">hours per week</span>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleBulkSet}
+            className="text-blue-400 hover:text-blue-300 px-3 py-1"
+          >
+            Apply to All
+          </Button>
+        </div>
+        <p className="text-[#969696] text-xs mt-1">
+          Set the same hours for all 12 weeks, then fine-tune individual weeks as needed.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-[#cccccc] mb-3">
+          Weekly Hours Allocation <span className="text-red-400">*</span>
+        </label>
+        {validationErrors.weeklyHours && (
+          <p className="text-sm text-red-400 mb-3">{validationErrors.weeklyHours}</p>
+        )}
+        <div className="overflow-x-auto">
+          <div className="min-w-[720px]">
+            <div className="flex gap-3 pb-2">
+              {availableWeeks.map((weekKey) => {
+                const weekError = validationErrors[`week_${weekKey}`];
+                const currentHours = formData.weeklyHours[weekKey] || 0;
+                const capacity = getSelectedPersonCapacity();
+                const isOverCapacity = capacity > 0 && currentHours > capacity;
+                return (
+                  <div
+                    key={weekKey}
+                    className={`flex-shrink-0 w-36 p-3 rounded-xl border ${
+                      isOverCapacity ? 'bg-red-500/20 border-red-500/50' : 'bg-[#3e3e42] border-[#3e3e42]'
+                    }`}
+                  >
+                    <div className="text-xs font-medium text-slate-200 sticky top-0 bg-[#3e3e42] pb-1">
+                      {formatWeekDisplay(weekKey)}
+                    </div>
+                    <div className="mt-2 flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={currentHours}
+                        onChange={(e) => handleWeeklyHoursChange(weekKey, Math.ceil(parseFloat(e.target.value) || 0))}
+                        className={`w-full px-2 py-2 text-sm rounded border ${
+                          isOverCapacity
+                            ? 'bg-red-900/50 border-red-500 text-red-300'
+                            : 'bg-slate-600 border-slate-500 text-[#cccccc]'
+                        } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none`}
+                        placeholder="0"
+                      />
+                      <span className="text-xs text-[#969696]">h</span>
+                    </div>
+                    {weekError && (
+                      <p className="text-xs text-red-400 mt-1">{weekError}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <p className="text-[#969696] text-sm mt-2">
+          Drag horizontally to adjust all 12 weeks. Headers stay visible as you scroll so you always know which week you’re editing.
+        </p>
+      </div>
+    </div>
+  );
+
+  const renderReviewStep = () => {
+    const selectedPerson = people.find(p => p.id === Number(formData.person));
+    const selectedProject = projects.find(p => p.id === Number(formData.project));
+    return (
+      <div className="space-y-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="p-4 rounded-lg border border-[#3e3e42] bg-[#3e3e42]/40">
+            <div className="text-xs uppercase tracking-wide text-[#969696] mb-1">Person</div>
+            <div className="text-lg font-semibold text-[#cccccc]">
+              {selectedPerson ? selectedPerson.name : 'Not selected'}
+            </div>
+            {selectedPerson && (
+              <div className="text-sm text-[#969696] mt-1">
+                Department: {getDepartmentName(selectedPerson, departments)} • Capacity: {selectedPerson.weeklyCapacity || 0}h/wk
+              </div>
+            )}
+          </div>
+          <div className="p-4 rounded-lg border border-[#3e3e42] bg-[#3e3e42]/40">
+            <div className="text-xs uppercase tracking-wide text-[#969696] mb-1">Project</div>
+            <div className="text-lg font-semibold text-[#cccccc]">
+              {selectedProject ? selectedProject.name : 'Not selected'}
+            </div>
+            {selectedProject && (
+              <div className="text-sm text-[#969696] mt-1">
+                Client: {selectedProject.client || '—'}
+              </div>
+            )}
+            <div className="mt-3 text-sm text-blue-300">
+              Total planned hours: <span className="font-semibold text-blue-100">{getTotalHours()}h</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-[#3e3e42] bg-[#2d2d30]">
+          <div className="px-4 py-3 border-b border-[#3e3e42] text-sm font-medium text-[#cccccc]">
+            Weekly Breakdown
+          </div>
+          <div className="divide-y divide-[#3e3e42]">
+            {availableWeeks.map((weekKey) => (
+              <div key={weekKey} className="px-4 py-2 text-sm flex items-center justify-between text-[#cccccc]">
+                <span>{formatWeekDisplay(weekKey)}</span>
+                <span className="font-semibold">{formData.weeklyHours[weekKey] || 0}h</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCurrentStepContent = () => {
+    switch (currentStep.id) {
+      case 'person':
+        return renderPersonStep();
+      case 'skills':
+        return renderSkillsStep();
+      case 'weeks':
+        return renderWeeksStep();
+      case 'review':
+        return renderReviewStep();
+      default:
+        return null;
+    }
+  };
+
+  const renderStepperHeader = () => (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-4">
+        {STEP_SEQUENCE.map((step, index) => {
+          const isCompleted = index < currentStepIndex;
+          const isActive = index === currentStepIndex;
+          return (
+            <div key={step.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => jumpToStep(index)}
+                disabled={!isCompleted && !isActive}
+                className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-semibold ${
+                  isActive
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : isCompleted
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400'
+                    : 'bg-[#2d2d30] text-[#969696] border-[#3e3e42]'
+                }`}
+                aria-label={`Step ${index + 1}: ${step.title}`}
+              >
+                {index + 1}
+              </button>
+              <div className="min-w-[140px]">
+                <div className={`text-sm font-medium ${isActive ? 'text-[#f3f4f6]' : 'text-[#cbd5e1]'}`}>
+                  {step.title}
+                </div>
+                <div className="text-xs text-[#8b93a7]">{step.description}</div>
+              </div>
+              {index < STEP_SEQUENCE.length - 1 && (
+                <div className="hidden md:block w-8 h-px bg-[#3e3e42]" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-[#cccccc]">
             {isEditing ? 'Edit Assignment' : 'Create New Assignment'}
@@ -529,7 +1040,6 @@ const AssignmentForm: React.FC = () => {
           <p className="text-[#969696] mt-1">
             Assign a team member to a project with weekly hour allocations for the next 12 weeks
           </p>
-          {/* Global Department info pill */}
           {deptState.selectedDepartmentId != null && (
             <div className="mt-2 flex items-center gap-2 text-xs">
               <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-[#3e3e42] text-[#cbd5e1] border border-[#3e3e42]">
@@ -540,27 +1050,6 @@ const AssignmentForm: React.FC = () => {
                   })()}
                 </strong>
               </span>
-              <button
-                type="button"
-                className="px-2 py-1 rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]"
-                onClick={() => {
-                  const input = document.getElementById('global-dept-filter-input') as HTMLInputElement | null;
-                  input?.focus();
-                }}
-                title="Change department (Alt+Shift+D)"
-              >
-                Change
-              </button>
-              <button
-                type="button"
-                className="px-2 py-1 rounded border bg-transparent border-[#3e3e42] text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]"
-                onClick={async () => {
-                  try { await navigator.clipboard.writeText(window.location.href); } catch {}
-                }}
-                title="Copy link with current filter"
-              >
-                Copy link
-              </button>
             </div>
           )}
           {formData.person && (
@@ -572,356 +1061,17 @@ const AssignmentForm: React.FC = () => {
           )}
         </div>
 
-        {/* Error Message */}
         {error && (
           <Card className="bg-red-500/20 border-red-500/50 p-4 mb-6">
             <div className="text-red-400">{error}</div>
           </Card>
         )}
 
-        {/* Form */}
         <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* Person Selection - Smart Autocomplete */}
-            <div className="relative">
-              <label className="block text-sm font-medium text-[#cccccc] mb-2">
-                Person <span className="text-red-400">*</span>
-              </label>
-              {/* Local override to view all departments */}
-              {deptState.selectedDepartmentId != null && (
-                <div className="mb-2 flex items-center gap-2 text-xs text-[#cbd5e1]">
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!showAllDepartments}
-                      onChange={(e) => setShowAllDepartments(!e.target.checked)}
-                      className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[#3e3e42] rounded focus:ring-[#007acc] focus:ring-1"
-                    />
-                    Limit to current department
-                  </label>
-                </div>
-              )}
-              <input
-                type="text"
-                value={personSearchText}
-                onChange={(e) => handlePersonSearchChange(e.target.value)}
-                onFocus={() => setShowPersonDropdown(true)}
-                onBlur={() => {
-                  // Delay hiding to allow for click selection
-                  setTimeout(() => setShowPersonDropdown(false), 200);
-                }}
-                placeholder="Type to search people..."
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-              />
-              {validationErrors.person && (
-                <p className="text-sm text-red-400 mt-1">{validationErrors.person}</p>
-              )}
-              
-              {/* Dropdown */}
-              {showPersonDropdown && filteredPeople.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded-md shadow-lg max-h-60 overflow-auto">
-                  {filteredPeople.map((person) => {
-                    const isSelectedDepartment = formData.person && 
-                      people.find(p => p.id === formData.person)?.department === person.department;
-                    const departmentName = getDepartmentName(person, departments);
-                    const personSkillsList = peopleSkills.get(person.id!) || [];
-                    const skillScore = skillMatchScores.get(person.id!) || 0;
-                    
-                    let prefix = '';
-                    if (skillScore >= 80) prefix = '🎯 ';  // Perfect match
-                    else if (skillScore >= 50) prefix = '⭐ ';  // Good match
-                    else if (isSelectedDepartment) prefix = '🏢 ';  // Same department
-                    
-                    const skillInfo = skillScore > 0 ? ` (${skillScore}% skill match)` : '';
-                    
-                    return (
-                      <div
-                        key={person.id}
-                        className="px-3 py-2 cursor-pointer hover:bg-[#3e3e42] text-[#cccccc] text-sm"
-                        onClick={() => selectPerson(person)}
-                      >
-                        <div className="font-medium">
-                          {prefix}{person.name}
-                        </div>
-                        <div className="text-xs text-[#969696]">
-                          {departmentName} • {person.weeklyCapacity}h capacity{skillInfo}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              
-              {/* Skills-Enhanced Assignment Insights */}
-              {formData.person && (
-                <div className="mt-3 space-y-3">
-                  {(() => {
-                    const selectedPerson = people.find(p => p.id === Number(formData.person));
-                    if (!selectedPerson) return null;
-                    
-                    const personDept = getDepartmentName(selectedPerson, departments);
-                    const sameDeptCount = people.filter(p => p.department === selectedPerson.department).length - 1;
-                    const personSkillsList = peopleSkills.get(selectedPerson.id!) || [];
-                    const skillScore = skillMatchScores.get(selectedPerson.id!) || 0;
-                    const skillWarnings = getSkillWarnings(selectedPerson, personSkillsList, projectSkills);
-                    
-                    return (
-                      <>
-                        {/* Basic Info Panel */}
-                        <div className="p-3 bg-[#3e3e42]/30 rounded border border-[#3e3e42]">
-                          <div className="text-sm">
-                            <div className="text-[#cccccc] font-medium mb-1">
-                              📊 Assignment Insights
-                            </div>
-                            <div className="text-[#969696]">
-                              <div>Department: <span className="text-[#cccccc]">{personDept}</span></div>
-                              <div>Capacity: <span className="text-[#cccccc]">{selectedPerson.weeklyCapacity || 0}h/week</span></div>
-                              {projectSkills.length > 0 && (
-                                <div className={`mt-1 ${
-                                  skillScore >= 80 ? 'text-emerald-400' : 
-                                  skillScore >= 50 ? 'text-blue-400' : 
-                                  skillScore > 0 ? 'text-amber-400' : 'text-red-400'
-                                }`}>
-                                  🎯 Skill match: {skillScore}%
-                                </div>
-                              )}
-                              {sameDeptCount > 0 && (
-                                <div className="mt-1 text-blue-400">
-                                  💡 {sameDeptCount} other people available in {personDept}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Skills Warnings */}
-                        {skillWarnings.length > 0 && (
-                          <div className="p-3 bg-amber-500/20 border border-amber-500/30 rounded">
-                            <div className="text-sm">
-                              <div className="text-amber-400 font-medium mb-1">
-                                ⚠️ Skills Assessment
-                              </div>
-                              <div className="space-y-1">
-                                {skillWarnings.map((warning, idx) => (
-                                  <div key={idx} className="text-amber-300 text-xs">
-                                    {warning}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Person's Skills Display */}
-                        {personSkillsList.length > 0 && (
-                          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded">
-                            <div className="text-sm">
-                              <div className="text-blue-400 font-medium mb-2">
-                                💪 {selectedPerson.name}'s Skills
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {personSkillsList
-                                  .filter(skill => skill.skillType === 'strength')
-                                  .slice(0, 5)
-                                  .map(skill => (
-                                    <span key={skill.id} className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
-                                      {skill.skillTagName}
-                                    </span>
-                                  ))
-                                }
-                                {personSkillsList.filter(skill => skill.skillType === 'strength').length > 5 && (
-                                  <span className="px-2 py-1 bg-slate-500/20 text-slate-400 rounded text-xs">
-                                    +{personSkillsList.filter(skill => skill.skillType === 'strength').length - 5} more
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-
-            {/* Skills Input Field */}
-            <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-2">
-                Required Skills <span className="text-[#969696]">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={skillsInput}
-                onChange={(e) => setSkillsInput(e.target.value)}
-                placeholder="e.g., React, Python, Project Management, Heat Calculations"
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-              />
-              <p className="text-[#969696] text-sm mt-1">
-                Enter skills needed for this assignment (comma-separated). This helps match the best person for the job.
-              </p>
-              {projectSkills.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  <span className="text-xs text-[#969696]">Detected skills:</span>
-                  {projectSkills.map((skill, idx) => (
-                    <span key={idx} className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Project Selection */}
-            <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-2">
-                Project <span className="text-red-400">*</span>
-              </label>
-              <select
-                value={formData.project}
-                onChange={(e) => handleChange('project', e.target.value)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
-              >
-                <option value="">Select a project...</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name} ({project.client})
-                  </option>
-                ))}
-              </select>
-              {validationErrors.project && (
-                <p className="text-sm text-red-400 mt-1">{validationErrors.project}</p>
-              )}
-              <p className="text-[#969696] text-sm mt-1">
-                Select the project for this assignment
-              </p>
-              
-              {/* Department Collaboration Insights */}
-              {formData.person && formData.project && (
-                <div className="mt-3 p-3 bg-blue-500/10 rounded border border-blue-500/30">
-                  {(() => {
-                    const selectedPerson = people.find(p => p.id === Number(formData.person));
-                    const selectedProject = projects.find(p => p.id === Number(formData.project));
-                    if (!selectedPerson || !selectedProject) return null;
-                    
-                    const sameDeptPeople = people.filter(p => 
-                      p.department === selectedPerson.department && p.id !== selectedPerson.id
-                    );
-                    
-                    return (
-                      <div className="text-sm">
-                        <div className="text-blue-400 font-medium mb-1">
-                          🤝 Collaboration Opportunity
-                        </div>
-                        <div className="text-[#969696]">
-                          Assigning <span className="text-[#cccccc]">{selectedPerson.name}</span> from{' '}
-                          <span className="text-[#cccccc]">{getDepartmentName(selectedPerson, departments)}</span> to{' '}
-                          <span className="text-[#cccccc]">{selectedProject.name}</span>
-                          {sameDeptPeople.length > 0 && (
-                            <div className="mt-1">
-                              Consider also involving: {sameDeptPeople.slice(0, 3).map(p => p.name).join(', ')}
-                              {sameDeptPeople.length > 3 && ` and ${sameDeptPeople.length - 3} others`}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-
-            {/* Bulk Hours Setter */}
-            <div className="bg-[#3e3e42]/50 p-4 rounded-lg border border-[#3e3e42]">
-              <label className="block text-sm font-medium text-[#cccccc] mb-2">
-                Quick Set All Weeks
-              </label>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={bulkHours}
-                  onChange={(e) => setBulkHours(Math.max(0, Math.ceil(parseFloat(e.target.value) || 0)))}
-                  className="px-3 py-1 rounded border text-sm bg-slate-600 border-slate-500 text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none w-20"
-                  placeholder="0"
-                />
-                <span className="text-slate-300 text-sm">hours per week</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={handleBulkSet}
-                  className="text-blue-400 hover:text-blue-300 px-3 py-1"
-                >
-                  Apply to All
-                </Button>
-              </div>
-              <p className="text-[#969696] text-xs mt-1">
-                Set the same hours for all 12 weeks, then adjust individual weeks as needed
-              </p>
-            </div>
-
-            {/* Weekly Hours Grid */}
-            <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-3">
-                Weekly Hours Allocation <span className="text-red-400">*</span>
-              </label>
-              
-              {validationErrors.weeklyHours && (
-                <p className="text-sm text-red-400 mb-3">{validationErrors.weeklyHours}</p>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {availableWeeks.map((weekKey) => {
-                  const weekError = validationErrors[`week_${weekKey}`];
-                  const currentHours = formData.weeklyHours[weekKey] || 0;
-                  const capacity = getSelectedPersonCapacity();
-                  const isOverCapacity = capacity > 0 && currentHours > capacity;
-                  
-                  return (
-                    <div
-                      key={weekKey}
-                      className={`p-3 rounded-lg border ${
-                        isOverCapacity 
-                          ? 'bg-red-500/20 border-red-500/50' 
-                          : 'bg-[#3e3e42] border-[#3e3e42]'
-                      }`}
-                    >
-                      <div className="text-xs text-slate-300 mb-1">
-                        {formatWeekDisplay(weekKey)}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={currentHours}
-                          onChange={(e) => handleWeeklyHoursChange(weekKey, Math.ceil(parseFloat(e.target.value) || 0))}
-                          className={`w-full px-2 py-1 text-sm rounded border ${
-                            isOverCapacity
-                              ? 'bg-red-900/50 border-red-500 text-red-300'
-                              : 'bg-slate-600 border-slate-500 text-[#cccccc]'
-                          } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none`}
-                          placeholder="0"
-                        />
-                        <span className="text-xs text-[#969696]">h</span>
-                      </div>
-                      {weekError && (
-                        <p className="text-xs text-red-400 mt-1">{weekError}</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              
-              <p className="text-[#969696] text-sm mt-2">
-                Enter hours per week for each of the next 12 weeks. Red highlighting indicates hours exceed the person's capacity.
-              </p>
-            </div>
-
-            {/* Form Actions */}
-            <div className="flex justify-between pt-4">
+            {renderStepperHeader()}
+            <div className="pt-4">{renderCurrentStepContent()}</div>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-6">
               <Button
                 type="button"
                 variant="ghost"
@@ -930,16 +1080,26 @@ const AssignmentForm: React.FC = () => {
               >
                 Cancel
               </Button>
-              
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : (isEditing ? 'Update Assignment' : 'Create Assignment')}
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handlePreviousStep}
+                  disabled={currentStepIndex === 0}
+                >
+                  Back
+                </Button>
+                {isLastStep ? (
+                  <Button type="submit" variant="primary" disabled={loading}>
+                    {loading ? 'Saving...' : (isEditing ? 'Update Assignment' : 'Create Assignment')}
+                  </Button>
+                ) : (
+                  <Button type="button" variant="primary" onClick={handleNextStep}>
+                    Next
+                  </Button>
+                )}
+              </div>
             </div>
-
           </form>
         </Card>
       </div>
@@ -948,5 +1108,3 @@ const AssignmentForm: React.FC = () => {
 };
 
 export default AssignmentForm;
-
-
