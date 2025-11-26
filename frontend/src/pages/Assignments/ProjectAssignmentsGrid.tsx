@@ -846,7 +846,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       </MobileSheet>
       <MobileSheet
         open={!!mobileDeliverableDetail}
-        title={mobileDeliverableDetail ? `Deliverables – ${mobileDeliverableDetail.weekLabel}` : 'Deliverable Details'}
+        title={mobileDeliverableDetail ? 'Deliverables' : 'Deliverable Details'}
         onClose={() => setMobileDeliverableDetail(null)}
       >
         {mobileDeliverableDetail ? (
