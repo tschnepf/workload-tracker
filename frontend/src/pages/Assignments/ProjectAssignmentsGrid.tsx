@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router';
 import Layout from '@/components/layout/Layout';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
@@ -25,7 +26,6 @@ import RoleDropdown from '@/roles/components/RoleDropdown';
 import { listProjectRoles, type ProjectRole } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
 import { getFlag } from '@/lib/flags';
-import { useTopBarSlots } from '@/components/layout/TopBarSlots';
 import { useLayoutDensity } from '@/components/layout/useLayoutDensity';
 import WeeksSelector from '@/components/compact/WeeksSelector';
 import StatusFilterChips from '@/components/compact/StatusFilterChips';
@@ -34,6 +34,7 @@ import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import { useProjectQuickViewPopover } from '@/components/projects/quickview';
 import { useQueryClient } from '@tanstack/react-query';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   buildFutureDeliverableLookupFromSet,
   projectMatchesActiveWithDates,
@@ -78,6 +79,7 @@ const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.
 const ProjectAssignmentsGrid: React.FC = () => {
   const { state: deptState } = useDepartmentFilter();
   const [weeks, setWeeks] = useState<WeekHeader[]>([]);
+  const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   // Manual sorting state
   const [sortBy, setSortBy] = useState<'client' | 'project' | 'deliverable'>('client');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -86,6 +88,19 @@ const ProjectAssignmentsGrid: React.FC = () => {
   // Projects state must be defined before any hook closures that read it
   type ProjectWithAssignments = Project & { assignments: Assignment[]; isExpanded: boolean };
   const [projects, setProjects] = useState<ProjectWithAssignments[]>([]);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [mobileStatusProjectId, setMobileStatusProjectId] = useState<number | null>(null);
+  const mobileStatusProject = useMemo(
+    () => (mobileStatusProjectId ? projects.find(p => p.id === mobileStatusProjectId) ?? null : null),
+    [projects, mobileStatusProjectId]
+  );
+  const [mobileRoleState, setMobileRoleState] = useState<{
+    projectId: number;
+    assignmentId: number | null;
+    deptId: number | null;
+    currentId: number | null;
+    label: string | null;
+  } | null>(null);
   // Build row order for rectangular selection (assignment IDs in render order)
   const rowOrder = React.useMemo(() => {
     const arr: string[] = [];
@@ -160,6 +175,21 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
     return sortAssignmentsByProjectRole(rows, merged);
   }, [rolesByDept]);
+
+  useEffect(() => {
+    const deptId = mobileRoleState?.deptId;
+    if (!deptId || rolesByDept[deptId]) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const roles = await listProjectRoles(deptId);
+        if (!cancelled) {
+          setRolesByDept(prev => ({ ...prev, [deptId]: roles }));
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [mobileRoleState, rolesByDept]);
   // Quick View popover trigger lives in a child component below Layout's provider
   const queryClient = useQueryClient();
   // Reload trigger for Refresh All
@@ -249,7 +279,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [projectColumnWidth]);
 
   const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
-  const { setLeft, setRight, clearLeft, clearRight } = useTopBarSlots();
   const { setMainPadding } = useLayoutDensity();
   // Snap the sticky week header directly under the app top bar and
   // flush with the sidebar by removing main padding in compact mode.
@@ -359,6 +388,70 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
   };
 
+  const toggleProjectExpanded = React.useCallback(async (project: ProjectWithAssignments) => {
+    if (!project.id) return;
+    const willExpand = !project.isExpanded;
+    setProjects(prev => prev.map(x => (x.id === project.id ? { ...x, isExpanded: !x.isExpanded } : x)));
+    try {
+      const expandedIds = new Set<number>(projects.filter(x => x.isExpanded).map(x => x.id!).filter(Boolean));
+      if (willExpand) expandedIds.add(project.id); else expandedIds.delete(project.id);
+      url.set('expanded', expandedIds.size > 0 ? Array.from(expandedIds).join(',') : null);
+    } catch {}
+    if (willExpand && project.assignments.length === 0 && !loadingAssignments.has(project.id)) {
+      setLoadingAssignments(prev => new Set(prev).add(project.id));
+      try {
+        const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+        const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+        const resp = await assignmentsApi.list({ project: project.id, department: dept, include_children: inc } as any);
+        const rows = ((resp as any).results || []) as Assignment[];
+        const sorted = await sortRowsByDeptRoles(rows);
+        setProjects(prev => prev.map(x => (x.id === project.id ? { ...x, assignments: sorted } : x)));
+      } catch (error: any) {
+        showToast('Failed to load assignments', 'error');
+        setProjects(prev => prev.map(x => (x.id === project.id ? { ...x, isExpanded: false } : x)));
+      } finally {
+        setLoadingAssignments(prev => { const n = new Set(prev); n.delete(project.id); return n; });
+      }
+    }
+  }, [projects, url, deptState.selectedDepartmentId, deptState.includeChildren, loadingAssignments, assignmentsApi, sortRowsByDeptRoles, showToast]);
+
+  const handleMobileStatusChange = React.useCallback(async (projectId: number, newStatus: Project['status']) => {
+    try {
+      await projectStatus.updateStatus(projectId, newStatus);
+      setProjects(prev => prev.map(p => (p.id === projectId ? { ...p, status: newStatus } : p)));
+      showToast('Status updated', 'success');
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to update status', 'error');
+    }
+  }, [projectStatus, showToast]);
+
+  const handleMobileRoleChange = React.useCallback(async (params: {
+    projectId: number;
+    assignmentId: number;
+    roleId: number | null;
+    roleName: string | null;
+    previousId: number | null;
+    previousName: string | null;
+  }) => {
+    const { projectId, assignmentId, roleId, roleName, previousId, previousName } = params;
+    setProjects(prev => prev.map(project => {
+      if (project.id !== projectId) return project;
+      const updated = project.assignments.map(a => (a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName: roleName ?? undefined } : a));
+      return { ...project, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
+    }));
+    try {
+      await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+      showToast('Role updated', 'success');
+    } catch (error: any) {
+      setProjects(prev => prev.map(project => {
+        if (project.id !== projectId) return project;
+        const rolledBack = project.assignments.map(a => (a.id === assignmentId ? { ...a, roleOnProjectId: previousId, roleName: previousName ?? undefined } : a));
+        return { ...project, assignments: sortAssignmentsByProjectRole(rolledBack, rolesByDept) };
+      }));
+      showToast(error?.message || 'Failed to update role', 'error');
+    }
+  }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole]);
+
   // Compact header slot injection (after filter state is defined)
   const topBarHeader = (
     <div className="flex items-center gap-4 min-w-0">
@@ -386,6 +479,271 @@ const ProjectAssignmentsGrid: React.FC = () => {
         People View
       </a>
     </div>
+  );
+
+  const getNextDeliverableIndex = (projectId?: number | null) => {
+    if (!projectId) return Number.POSITIVE_INFINITY;
+    for (let i = 0; i < weeks.length; i++) {
+      const wk = weeks[i]?.date;
+      const entries = (deliverableTypesByProjectWeek[projectId] || {})[wk] || [];
+      if (entries && entries.length > 0) return i;
+    }
+    return Number.POSITIVE_INFINITY;
+  };
+
+  const sortedProjects = React.useMemo(() => {
+    const list = [...projects];
+    const factor = sortDir === 'asc' ? 1 : -1;
+    list.sort((a, b) => {
+      if (sortBy === 'client') {
+        const ac = (a.client || '').toString().trim().toLowerCase();
+        const bc = (b.client || '').toString().trim().toLowerCase();
+        if (ac !== bc) {
+          if (!ac && bc) return 1 * factor;
+          if (ac && !bc) return -1 * factor;
+          return ac.localeCompare(bc) * factor;
+        }
+        const an = (a.name || '').toString().trim().toLowerCase();
+        const bn = (b.name || '').toString().trim().toLowerCase();
+        return an.localeCompare(bn) * factor;
+      }
+      if (sortBy === 'project') {
+        const an = (a.name || '').toString().trim().toLowerCase();
+        const bn = (b.name || '').toString().trim().toLowerCase();
+        if (an !== bn) return an.localeCompare(bn) * factor;
+        const ac = (a.client || '').toString().trim().toLowerCase();
+        const bc = (b.client || '').toString().trim().toLowerCase();
+        return ac.localeCompare(bc) * factor;
+      }
+      const ai = getNextDeliverableIndex(a.id);
+      const bi = getNextDeliverableIndex(b.id);
+      if (ai !== bi) return (ai - bi) * factor;
+      const ac = (a.client || '').toString().trim().toLowerCase();
+      const bc = (b.client || '').toString().trim().toLowerCase();
+      if (ac !== bc) return ac.localeCompare(bc) * factor;
+      const an = (a.name || '').toString().trim().toLowerCase();
+      const bn = (b.name || '').toString().trim().toLowerCase();
+      return an.localeCompare(bn) * factor;
+    });
+    return list;
+  }, [projects, sortBy, sortDir, weeks, deliverableTypesByProjectWeek]);
+
+  const typeColors: Record<string, string> = {
+    bulletin: '#3b82f6',
+    cd: '#fb923c',
+    dd: '#818cf8',
+    ifc: '#06b6d4',
+    ifp: '#f472b6',
+    masterplan: '#a78bfa',
+    sd: '#f59e0b',
+    milestone: '#64748b',
+  };
+  const classifyDeliverable = (title?: string | null): string => {
+    const t = (title || '').toLowerCase();
+    if (/()bulletin()/.test(t)) return 'bulletin';
+    if (/()cd()/.test(t)) return 'cd';
+    if (/()dd()/.test(t)) return 'dd';
+    if (/()ifc()/.test(t)) return 'ifc';
+    if (/()ifp()/.test(t)) return 'ifp';
+    if (/(master ?plan)/.test(t)) return 'masterplan';
+    if (/()sd()/.test(t)) return 'sd';
+    return 'milestone';
+  };
+
+  const mobileView = (
+    <>
+      {compact && (
+        <TopBarPortal side="right">
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-full bg-[var(--primary)] text-white text-sm"
+            onClick={() => setMobileFilterOpen(true)}
+          >
+            Filters
+          </button>
+        </TopBarPortal>
+      )}
+      <div className="flex-1 flex flex-col gap-4 px-3 py-4">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-3 flex items-center justify-between">
+          <div>
+            <div className="text-xs text-[var(--muted)] uppercase tracking-wide">Project Assignments</div>
+            <div className="text-lg font-semibold text-[var(--text)]">{weeks.length} weeks</div>
+          </div>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-full border border-[var(--border)] text-[var(--text)] text-sm"
+            onClick={() => setMobileFilterOpen(true)}
+          >
+            Open Filters
+          </button>
+        </div>
+        <div className="flex flex-col gap-3">
+          {sortedProjects.map((project) => (
+            <div key={project.id || project.name} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-sm">
+              <div
+                role="button"
+                tabIndex={0}
+                className="w-full flex items-center justify-between px-4 py-3 text-left cursor-pointer"
+                onClick={() => void toggleProjectExpanded(project)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    void toggleProjectExpanded(project);
+                  }
+                }}
+              >
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase text-[var(--muted)] truncate">{project.client || '—'}</div>
+                  <div className="text-base font-semibold text-[var(--text)] truncate">
+                    {project.id ? (
+                      <ProjectNameQuickViewButton projectId={project.id}>{project.name}</ProjectNameQuickViewButton>
+                    ) : (
+                      project.name
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 ml-3" onClick={(e) => e.stopPropagation()}>
+                  <StatusBadge
+                    status={(project.status as any) || 'active'}
+                    variant="editable"
+                    onClick={() => {
+                      if (project.id) setMobileStatusProjectId(project.id);
+                    }}
+                    isUpdating={project.id ? projectStatus.isUpdating(project.id) : false}
+                  />
+                  <svg className={`w-4 h-4 transition-transform ${project.isExpanded ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M8 5l8 7-8 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              </div>
+              <div className="px-4 pb-4 space-y-3">
+                <div className="overflow-x-auto">
+                  <div className="flex gap-2 min-w-full">
+                    {weeks.map((week) => {
+                      const hours = (project.id ? (hoursByProject[project.id] || {})[week.date] : 0) || 0;
+                      const deliverables = project.id ? ((deliverableTypesByProjectWeek[project.id] || {})[week.date] || []) : [];
+                      return (
+                        <div key={week.date} className="flex flex-col items-center min-w-[64px]">
+                          <div className="text-[10px] text-[var(--muted)]">{formatDateWithWeekday(week.date).split(' ')[0]}</div>
+                          <div className="w-12 h-16 mt-1 rounded bg-[var(--card)] flex items-center justify-center text-[var(--text)] text-sm font-semibold">
+                            {hours ? hours : ''}
+                          </div>
+                          {deliverables.length > 0 && (
+                            <div className="mt-1 flex gap-1">
+                              {deliverables.slice(0, 3).map((d, idx) => (
+                                <span key={idx} className="w-2 h-2 rounded-full" style={{ background: typeColors[d.type] || 'var(--primary)' }} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {project.isExpanded && (
+                  <div className="space-y-2">
+                    {project.assignments.map((asn) => {
+                      const deptId = (asn as any).personDepartmentId as number | null | undefined;
+                      const label = (asn as any).roleName as string | null | undefined;
+                      const currentId = (asn as any).roleOnProjectId as number | null | undefined;
+                      return (
+                        <div key={asn.id} className="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+                          <div className="text-sm	font-medium text-[var(--text)]">{asn.personName || `Person #${asn.person}`}</div>
+                          <div className="mt-1 flex items-center justify-between text-xs text-[var(--muted)]">
+                            <span>{label || 'No role'}</span>
+                            <button
+                              type="button"
+                              className={`px-2 py-1 rounded-full border border-[var(--border)] text-[var(--text)] ${deptId ? '' : 'opacity-50 cursor-not-allowed'}`}
+                              onClick={() => {
+                                if (!project.id || !deptId) return;
+                                setMobileRoleState({
+                                  projectId: project.id,
+                                  assignmentId: asn.id!,
+                                  deptId,
+                                  currentId: currentId ?? null,
+                                  label: label ?? null,
+                                });
+                              }}
+                              disabled={!deptId}
+                            >
+                              Edit Role
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {project.assignments.length === 0 && (
+                      <div className="text-xs text-[var(--muted)] italic px-2">No assignments</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {sortedProjects.length === 0 && !loading && (
+            <div className="text-center text-[var(--muted)] text-sm py-6">No projects match the current filters.</div>
+          )}
+        </div>
+      </div>
+      <MobileSheet open={mobileFilterOpen} title="Project Filters" onClose={() => setMobileFilterOpen(false)}>
+        <div className="space-y-4">
+          <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+          <StatusFilterChips
+            options={statusFilterOptions}
+            selected={selectedStatusFilters as unknown as Set<string>}
+            format={(status) => formatStatusLabel(status as StatusFilter)}
+            onToggle={(status) => toggleStatusFilter(status as StatusFilter)}
+          />
+          <HeaderActions
+            onExpandAll={async () => { try { setProjects(prev => prev.map(p => ({ ...p, isExpanded: true }))); await refreshAllAssignments(); } catch {} }}
+            onCollapseAll={() => { setProjects(prev => prev.map(p => ({ ...p, isExpanded: false }))); url.set('expanded', null); }}
+            onRefreshAll={refreshAllAssignments}
+            disabled={loading || loadingAssignments.size > 0}
+          />
+        </div>
+      </MobileSheet>
+      <MobileSheet open={!!mobileStatusProject} title="Update Status" onClose={() => setMobileStatusProjectId(null)}>
+        <div className="space-y-2">
+          {statusFilterOptions.filter((s) => s !== 'Show All').map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              className={`w-full px-3 py-2 rounded border text-left ${mobileStatusProject?.status === opt ? 'border-[var(--primary)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--muted)]'}`}
+              onClick={async () => {
+                if (!mobileStatusProject?.id) return;
+                await handleMobileStatusChange(mobileStatusProject.id, opt as Project['status']);
+                setMobileStatusProjectId(null);
+              }}
+            >
+              {formatStatusLabel(opt as StatusFilter)}
+            </button>
+          ))}
+        </div>
+      </MobileSheet>
+      <MobileSheet open={!!mobileRoleState} title="Select Role" onClose={() => setMobileRoleState(null)}>
+        {mobileRoleState?.deptId ? (
+          <RoleDropdown
+            roles={rolesByDept[mobileRoleState.deptId] || []}
+            currentId={mobileRoleState.currentId ?? null}
+            onSelect={async (roleId, roleName) => {
+              if (!mobileRoleState?.projectId || !mobileRoleState.assignmentId) return;
+              await handleMobileRoleChange({
+                projectId: mobileRoleState.projectId,
+                assignmentId: mobileRoleState.assignmentId,
+                roleId,
+                roleName,
+                previousId: mobileRoleState.currentId ?? null,
+                previousName: mobileRoleState.label ?? null,
+              });
+              setMobileRoleState(null);
+            }}
+            onClose={() => setMobileRoleState(null)}
+          />
+        ) : (
+          <div className="text-sm text-[var(--muted)]">No role catalog available.</div>
+        )}
+      </MobileSheet>
+    </>
   );
 
   // Helper: refresh totals for project from server
@@ -431,7 +789,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   };
 
   // Refresh assignments for all projects (both expanded and collapsed)
-  const refreshAllAssignments = async () => {
+  async function refreshAllAssignments() {
     if (projects.length === 0) {
       showToast('No projects available to refresh', 'warning');
       return;
@@ -446,7 +804,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } catch (error) {
       showToast('Failed to refresh some project assignments', 'error');
     }
-  };
+  }
 
   // Initialize from URL params once
   React.useEffect(() => {
@@ -627,29 +985,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
     return unsub;
   }, []);
-
-  // --- Deliverable Coloring (reuse calendar colors) ---
-  const typeColors: Record<string, string> = {
-    bulletin: '#3b82f6',
-    cd: '#fb923c',
-    dd: '#818cf8',
-    ifc: '#06b6d4',
-    ifp: '#f472b6',
-    masterplan: '#a78bfa',
-    sd: '#f59e0b',
-    milestone: '#64748b',
-  };
-  const classifyDeliverable = (title?: string | null): string => {
-    const t = (title || '').toLowerCase();
-    if (/(\b)bulletin(\b)/.test(t)) return 'bulletin';
-    if (/(\b)cd(\b)/.test(t)) return 'cd';
-    if (/(\b)dd(\b)/.test(t)) return 'dd';
-    if (/(\b)ifc(\b)/.test(t)) return 'ifc';
-    if (/(\b)ifp(\b)/.test(t)) return 'ifp';
-    if (/(master ?plan)/.test(t)) return 'masterplan';
-    if (/(\b)sd(\b)/.test(t)) return 'sd';
-    return 'milestone';
-  };
 
   // Load deliverables for visible window and map to week keys per project
   useEffect(() => {
@@ -901,55 +1236,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
   };
 
-  const getNextDeliverableIndex = (projectId?: number | null) => {
-    if (!projectId) return Number.POSITIVE_INFINITY;
-    for (let i = 0; i < weeks.length; i++) {
-      const wk = weeks[i]?.date;
-      const entries = (deliverableTypesByProjectWeek[projectId] || {})[wk] || [];
-      if (entries && entries.length > 0) return i;
-    }
-    return Number.POSITIVE_INFINITY;
-  };
-
-  const sortedProjects = React.useMemo(() => {
-    const list = [...projects];
-    const factor = sortDir === 'asc' ? 1 : -1;
-    list.sort((a, b) => {
-      if (sortBy === 'client') {
-        const ac = (a.client || '').toString().trim().toLowerCase();
-        const bc = (b.client || '').toString().trim().toLowerCase();
-        if (ac !== bc) {
-          if (!ac && bc) return 1 * factor; // empty last in asc
-          if (ac && !bc) return -1 * factor;
-          return ac.localeCompare(bc) * factor;
-        }
-        const an = (a.name || '').toString().trim().toLowerCase();
-        const bn = (b.name || '').toString().trim().toLowerCase();
-        return an.localeCompare(bn) * factor;
-      }
-      if (sortBy === 'project') {
-        const an = (a.name || '').toString().trim().toLowerCase();
-        const bn = (b.name || '').toString().trim().toLowerCase();
-        if (an !== bn) return an.localeCompare(bn) * factor;
-        const ac = (a.client || '').toString().trim().toLowerCase();
-        const bc = (b.client || '').toString().trim().toLowerCase();
-        return ac.localeCompare(bc) * factor;
-      }
-      // deliverable: earliest next deliverable in visible window
-      const ai = getNextDeliverableIndex(a.id);
-      const bi = getNextDeliverableIndex(b.id);
-      if (ai !== bi) return (ai - bi) * factor;
-      // tie-breaker: client, then name
-      const ac = (a.client || '').toString().trim().toLowerCase();
-      const bc = (b.client || '').toString().trim().toLowerCase();
-      if (ac !== bc) return ac.localeCompare(bc) * factor;
-      const an = (a.name || '').toString().trim().toLowerCase();
-      const bn = (b.name || '').toString().trim().toLowerCase();
-      return an.localeCompare(bn) * factor;
-    });
-    return list;
-  }, [projects, sortBy, sortDir, weeks, deliverableTypesByProjectWeek]);
-
   // React to URL-expanded changes (back/forward) and sync expansions
   useEffect(() => {
     try {
@@ -981,8 +1267,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
       }
     } catch {}
   }, [location.search]);
-  return (
-    <Layout>
+  const desktopView = (
+    <>
       {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Sticky Header */}
@@ -1181,44 +1467,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
                   <div
                     className="grid items-stretch gap-px p-2 hover:bg-[var(--surfaceHover)] transition-colors cursor-pointer"
                     style={{ gridTemplateColumns: gridTemplate }}
-                    onClick={async () => {
-                      const willExpand = !p.isExpanded;
-                      setProjects(prev => prev.map(x => x.id === p.id ? { ...x, isExpanded: !x.isExpanded } : x));
-                      // Sync expanded ids to URL
-                      try {
-                        const current = new Set<number>(projects.filter(x => x.isExpanded).map(x => x.id!));
-                        if (p.id) {
-                          if (willExpand) current.add(p.id); else current.delete(p.id);
-                          url.set('expanded', Array.from(current).join(','));
-                        }
-                      } catch {}
-                      // Lazy-load assignments on expand
-                      if (willExpand && p.id && (p.assignments.length === 0) && !loadingAssignments.has(p.id)) {
-                        setLoadingAssignments(prev => new Set(prev).add(p.id!));
-                        try {
-                          const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-                          const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-                          const resp = await assignmentsApi.list({ project: p.id, department: dept, include_children: inc } as any);
-                          const rows = ((resp as any).results || []) as Assignment[];
-                          const sorted = await sortRowsByDeptRoles(rows);
-                          setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: sorted } : x));
-                        } catch (e:any) {
-                          showToast('Failed to load assignments', 'error');
-                          setProjects(prev => prev.map(x => x.id === p.id ? { ...x, isExpanded: false } : x));
-                        } finally {
-                          setLoadingAssignments(prev => { const n = new Set(prev); n.delete(p.id!); return n; });
-                        }
-                      }
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void toggleProjectExpanded(p);
                     }}
                     role="button"
                     aria-expanded={p.isExpanded}
                     tabIndex={0}
                     onKeyDown={(e) => {
-                      if (e.key === ' ' || e.key === 'Spacebar') {
+                      if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter') {
                         e.preventDefault();
-                        setProjects(prev => prev.map(x => x.id === p.id ? { ...x, isExpanded: !x.isExpanded } : x));
-                      } else if (e.key === 'Enter') {
-                        setProjects(prev => prev.map(x => x.id === p.id ? { ...x, isExpanded: !x.isExpanded } : x));
+                        void toggleProjectExpanded(p);
                       }
                     }}
                   >
@@ -1613,8 +1872,78 @@ const ProjectAssignmentsGrid: React.FC = () => {
           <div aria-live="polite" className="sr-only">{selection.selectionSummary}</div>
         </div>
       </div>
+    </>
+  );
+
+  let content: React.ReactNode;
+  if (error) {
+    content = (
+      <div className="flex-1 flex items-center justify-center px-6 py-8 text-[var(--muted)]">
+        <div>
+          <p className="text-center text-sm mb-4">{error}</p>
+          <div className="flex justify-center">
+            <button
+              type="button"
+              className="px-4 py-2 rounded bg-[var(--primary)] text-white text-sm"
+              onClick={() => setReloadCounter(c => c + 1)}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  } else if (loading && projects.length === 0) {
+    content = (
+      <div className="flex-1 flex items-center justify-center text-[var(--muted)] text-sm">
+        Loading project assignments…
+      </div>
+    );
+  } else {
+    content = isMobileLayout ? mobileView : desktopView;
+  }
+
+  return (
+    <Layout>
+      <div className="flex flex-col flex-1 min-h-0">
+        {content}
+      </div>
     </Layout>
   );
 };
-  
-  export default ProjectAssignmentsGrid;
+
+export default ProjectAssignmentsGrid;
+
+const MobileSheet: React.FC<{ open: boolean; title: string; onClose: () => void; children: React.ReactNode }> = ({ open, title, onClose, children }) => {
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    setTimeout(() => dialogRef.current?.focus(), 0);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-[1000] bg-black/60 flex items-end justify-center"
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-t-2xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] shadow-2xl max-h-[85vh] overflow-auto"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <div className="font-semibold">{title}</div>
+          <button type="button" onClick={onClose} aria-label="Close sheet" className="text-lg leading-none text-[var(--muted)]">×</button>
+        </div>
+        <div className="p-4">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+};
