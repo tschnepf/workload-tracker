@@ -21,7 +21,7 @@ import { useProjectStatusSubscription } from '@/components/projects/useProjectSt
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
-import { defaultUtilizationScheme } from '@/util/utilization';
+import { defaultUtilizationScheme, getUtilizationPill } from '@/util/utilization';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import { listProjectRoles, type ProjectRole } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
@@ -40,6 +40,15 @@ import {
   projectMatchesActiveWithDates,
   projectMatchesActiveWithoutDates,
 } from '@/components/projects/statusFilterUtils';
+
+type ProjectWithAssignments = Project & { assignments: Assignment[]; isExpanded: boolean };
+type DeliverableMarker = {
+  type: string;
+  percentage?: number;
+  dates?: string[];
+  description?: string | null;
+  note?: string | null;
+};
 
 // Local helper component: use the quick view hook inside a descendant of Layout's provider
 const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.ReactNode }> = ({ projectId, children }) => {
@@ -101,6 +110,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
     currentId: number | null;
     label: string | null;
   } | null>(null);
+  const [mobileDeliverableDetail, setMobileDeliverableDetail] = useState<{
+    projectName: string;
+    client?: string;
+    weekLabel: string;
+    entries: DeliverableMarker[];
+  } | null>(null);
   // Build row order for rectangular selection (assignment IDs in render order)
   const rowOrder = React.useMemo(() => {
     const arr: string[] = [];
@@ -131,8 +146,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
   });
   const { data: schemeData } = useUtilizationScheme();
+  const scheme = schemeData ?? defaultUtilizationScheme;
   const legendLabels = React.useMemo(() => {
-    const s = schemeData ?? defaultUtilizationScheme;
+    const s = scheme;
     if (s.mode === 'absolute_hours') {
       return {
         green: `${s.green_min}-${s.green_max}h`,
@@ -142,13 +158,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
       } as const;
     }
     return { green: '70-85%', blue: '=70%', orange: '85-100%', red: '>100%' } as const;
-  }, [schemeData]);
+  }, [scheme]);
 
   const [hoursByProject, setHoursByProject] = useState<Record<number, Record<string, number>>>({});
   const [loadingTotals, setLoadingTotals] = useState<Set<number>>(new Set());
   const [deliverablesByProjectWeek, setDeliverablesByProjectWeek] = useState<Record<number, Record<string, number>>>({});
   // Deliverable types per project/week for vertical bar rendering
-  const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, { type: string; percentage?: number; dates?: string[] }[]>>>({});
+  const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, DeliverableMarker[]>>>({});
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
   const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
@@ -540,29 +556,20 @@ const ProjectAssignmentsGrid: React.FC = () => {
   };
   const classifyDeliverable = (title?: string | null): string => {
     const t = (title || '').toLowerCase();
-    if (/()bulletin()/.test(t)) return 'bulletin';
-    if (/()cd()/.test(t)) return 'cd';
-    if (/()dd()/.test(t)) return 'dd';
-    if (/()ifc()/.test(t)) return 'ifc';
-    if (/()ifp()/.test(t)) return 'ifp';
+    if (/\bbulletin\b/.test(t)) return 'bulletin';
+    if (/\bcd\b/.test(t)) return 'cd';
+    if (/\bdd\b/.test(t)) return 'dd';
+    if (/\bifc\b/.test(t)) return 'ifc';
+    if (/\bifp\b/.test(t)) return 'ifp';
     if (/(master ?plan)/.test(t)) return 'masterplan';
-    if (/()sd()/.test(t)) return 'sd';
+    if (/\bsd\b/.test(t)) return 'sd';
     return 'milestone';
   };
 
+  const sparkWeeks = React.useMemo(() => weeks.slice(0, Math.min(6, weeks.length)), [weeks]);
+
   const mobileView = (
     <>
-      {compact && (
-        <TopBarPortal side="right">
-          <button
-            type="button"
-            className="px-3 py-1.5 rounded-full bg-[var(--primary)] text-white text-sm"
-            onClick={() => setMobileFilterOpen(true)}
-          >
-            Filters
-          </button>
-        </TopBarPortal>
-      )}
       <div className="flex-1 flex flex-col gap-4 px-3 py-4">
         <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-3 flex items-center justify-between">
           <div>
@@ -578,7 +585,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
           </button>
         </div>
         <div className="flex flex-col gap-3">
-          {sortedProjects.map((project) => (
+          {sortedProjects.map((project) => {
+            const weeklyHours = weeks.map((week) => (project.id ? (hoursByProject[project.id] || {})[week.date] : 0) || 0);
+            const maxWeeklyHours = Math.max(...weeklyHours, 1);
+            return (
             <div key={project.id || project.name} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-sm">
               <div
                 role="button"
@@ -618,24 +628,57 @@ const ProjectAssignmentsGrid: React.FC = () => {
               </div>
               <div className="px-4 pb-4 space-y-3">
                 <div className="overflow-x-auto">
-                  <div className="flex gap-2 min-w-full">
-                    {weeks.map((week) => {
-                      const hours = (project.id ? (hoursByProject[project.id] || {})[week.date] : 0) || 0;
+                  <div className="flex gap-1 min-w-full px-0.5">
+                    {weeks.map((week, index) => {
+                      const hours = weeklyHours[index];
                       const deliverables = project.id ? ((deliverableTypesByProjectWeek[project.id] || {})[week.date] || []) : [];
+                      const barHeight = Math.max(6, Math.round((hours / maxWeeklyHours) * 48));
+                      const deliverableTitle = deliverables.map((d) => `${d.percentage != null ? `${d.percentage}% ` : ''}${(d.type || '').toUpperCase()}`).join(', ');
+                      const weekLabelFull = formatDateWithWeekday(week.date);
+                      const handleDeliverableTap = () => {
+                        if (!deliverables.length) return;
+                        setMobileDeliverableDetail({
+                          projectName: project.name,
+                          client: project.client ?? undefined,
+                          weekLabel: weekLabelFull,
+                          entries: deliverables,
+                        });
+                      };
+                      const hasDeliverables = deliverables.length > 0;
+                      const ColumnTag: React.ElementType = hasDeliverables ? 'button' : 'div';
                       return (
-                        <div key={week.date} className="flex flex-col items-center min-w-[64px]">
-                          <div className="text-[10px] text-[var(--muted)]">{formatDateWithWeekday(week.date).split(' ')[0]}</div>
-                          <div className="w-12 h-16 mt-1 rounded bg-[var(--card)] flex items-center justify-center text-[var(--text)] text-sm font-semibold">
-                            {hours ? hours : ''}
+                        <ColumnTag
+                          key={week.date}
+                          type={hasDeliverables ? 'button' : undefined}
+                          className={`flex flex-col items-center min-w-[32px] ${hasDeliverables ? 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]' : ''}`}
+                          aria-label={`${weekLabelFull} • ${hours} hours${hasDeliverables ? ` • ${deliverableTitle}` : ''}`}
+                          onClick={hasDeliverables ? handleDeliverableTap : undefined}
+                        >
+                          <div className="text-[10px] text-[var(--muted)] truncate" title={formatDateWithWeekday(week.date)}>
+                            {(() => {
+                              const d = new Date(week.date);
+                              const month = String(d.getMonth() + 1).padStart(2, '0');
+                              const day = String(d.getDate()).padStart(2, '0');
+                              return `${month}/${day}`;
+                            })()}
                           </div>
-                          {deliverables.length > 0 && (
-                            <div className="mt-1 flex gap-1">
-                              {deliverables.slice(0, 3).map((d, idx) => (
-                                <span key={idx} className="w-2 h-2 rounded-full" style={{ background: typeColors[d.type] || 'var(--primary)' }} />
-                              ))}
+                          <div className="h-16 flex items-end justify-center w-full mt-1">
+                            <div
+                              className="w-[10px] rounded-full bg-emerald-500 transition-all"
+                              style={{ height: `${barHeight}px`, opacity: hours > 0 ? 1 : 0.25 }}
+                              title={`${formatDateWithWeekday(week.date)} — ${hours}h`}
+                            />
+                          </div>
+                          {hasDeliverables && (
+                            <div className="w-full mt-2">
+                              <div
+                                className="h-[5px] rounded-full"
+                                style={{ background: typeColors[deliverables[0].type] || 'var(--primary)' }}
+                                title={deliverableTitle}
+                              />
                             </div>
                           )}
-                        </div>
+                        </ColumnTag>
                       );
                     })}
                   </div>
@@ -646,29 +689,60 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       const deptId = (asn as any).personDepartmentId as number | null | undefined;
                       const label = (asn as any).roleName as string | null | undefined;
                       const currentId = (asn as any).roleOnProjectId as number | null | undefined;
+                      const personCapacity = (asn as any).personWeeklyCapacity as number | undefined;
+                      const assignmentSparkWeeks = sparkWeeks.length > 0 ? sparkWeeks : weeks;
+                      const weekHours = assignmentSparkWeeks.map((week) => Number(((asn.weeklyHours as any) || {})[week.date] || 0));
+                      const maxHour = Math.max(...weekHours, personCapacity || 0, 1);
                       return (
                         <div key={asn.id} className="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                          <div className="text-sm	font-medium text-[var(--text)]">{asn.personName || `Person #${asn.person}`}</div>
-                          <div className="mt-1 flex items-center justify-between text-xs text-[var(--muted)]">
-                            <span>{label || 'No role'}</span>
-                            <button
-                              type="button"
-                              className={`px-2 py-1 rounded-full border border-[var(--border)] text-[var(--text)] ${deptId ? '' : 'opacity-50 cursor-not-allowed'}`}
-                              onClick={() => {
-                                if (!project.id || !deptId) return;
-                                setMobileRoleState({
-                                  projectId: project.id,
-                                  assignmentId: asn.id!,
-                                  deptId,
-                                  currentId: currentId ?? null,
-                                  label: label ?? null,
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-medium text-[var(--text)]">{asn.personName || `Person #${asn.person}`}</div>
+                              <button
+                                type="button"
+                                className={`text-xs text-[var(--muted)] bg-transparent border-none p-0 ${
+                                  project.id && deptId
+                                    ? 'hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--primary)]'
+                                    : 'opacity-50 cursor-not-allowed'
+                                }`}
+                                onClick={() => {
+                                  if (!project.id || !deptId) return;
+                                  setMobileRoleState({
+                                    projectId: project.id,
+                                    assignmentId: asn.id!,
+                                    deptId,
+                                    currentId: currentId ?? null,
+                                    label: label ?? null,
+                                  });
+                                }}
+                                disabled={!project.id || !deptId}
+                              >
+                                {label || 'No role'}
+                              </button>
+                            </div>
+                            <div className="flex items-end gap-1 min-w-[56px]" aria-hidden="true">
+                              {assignmentSparkWeeks.map((week, idx) => {
+                                const value = weekHours[idx] || 0;
+                                const height = Math.max(4, Math.round((value / maxHour) * 32));
+                                const pill = getUtilizationPill({
+                                  hours: value,
+                                  capacity: personCapacity ?? null,
+                                  scheme,
+                                  output: 'token',
                                 });
-                              }}
-                              disabled={!deptId}
-                            >
-                              Edit Role
-                            </button>
+                                const color = pill.tokens?.bg || 'var(--primary)';
+                                return (
+                                  <div
+                                    key={`${asn.id}-spark-${week.date}`}
+                                    className="w-1.5 rounded-full transition-all"
+                                    style={{ height, background: color, opacity: value > 0 ? 1 : 0.2 }}
+                                    title={`${week.display}: ${value}h`}
+                                  />
+                                );
+                              })}
+                            </div>
                           </div>
+                          <div className="mt-2 text-xs text-[var(--muted)]">{personCapacity ? `Capacity ${personCapacity}h/wk` : 'Capacity unavailable'}</div>
                         </div>
                       );
                     })}
@@ -679,7 +753,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 )}
               </div>
             </div>
-          ))}
+          );})}
           {sortedProjects.length === 0 && !loading && (
             <div className="text-center text-[var(--muted)] text-sm py-6">No projects match the current filters.</div>
           )}
@@ -722,26 +796,83 @@ const ProjectAssignmentsGrid: React.FC = () => {
       </MobileSheet>
       <MobileSheet open={!!mobileRoleState} title="Select Role" onClose={() => setMobileRoleState(null)}>
         {mobileRoleState?.deptId ? (
-          <RoleDropdown
-            roles={rolesByDept[mobileRoleState.deptId] || []}
-            currentId={mobileRoleState.currentId ?? null}
-            onSelect={async (roleId, roleName) => {
-              if (!mobileRoleState?.projectId || !mobileRoleState.assignmentId) return;
-              await handleMobileRoleChange({
-                projectId: mobileRoleState.projectId,
-                assignmentId: mobileRoleState.assignmentId,
-                roleId,
-                roleName,
-                previousId: mobileRoleState.currentId ?? null,
-                previousName: mobileRoleState.label ?? null,
-              });
-              setMobileRoleState(null);
-            }}
-            onClose={() => setMobileRoleState(null)}
-          />
+          <div className="space-y-2">
+            <button
+              type="button"
+              className={`w-full px-3 py-2 rounded border text-left text-sm ${mobileRoleState.currentId == null ? 'border-[var(--primary)] text-[var(--text)] bg-[var(--surfaceOverlay)]' : 'border-[var(--border)] text-[var(--muted)]'}`}
+              onClick={async () => {
+                if (!mobileRoleState?.projectId || !mobileRoleState.assignmentId) return;
+                await handleMobileRoleChange({
+                  projectId: mobileRoleState.projectId,
+                  assignmentId: mobileRoleState.assignmentId,
+                  roleId: null,
+                  roleName: null,
+                  previousId: mobileRoleState.currentId ?? null,
+                  previousName: mobileRoleState.label ?? null,
+                });
+                setMobileRoleState(null);
+              }}
+            >
+              Clear role
+            </button>
+            {(rolesByDept[mobileRoleState.deptId] || []).map((role) => {
+              const selected = role.id === (mobileRoleState.currentId ?? undefined);
+              return (
+                <button
+                  key={role.id}
+                  type="button"
+                  className={`w-full px-3 py-2 rounded border text-left text-sm ${selected ? 'border-[var(--primary)] text-[var(--text)] bg-[var(--surfaceOverlay)]' : 'border-[var(--border)] text-[var(--muted)]'}`}
+                  onClick={async () => {
+                    if (!mobileRoleState?.projectId || !mobileRoleState.assignmentId) return;
+                    await handleMobileRoleChange({
+                      projectId: mobileRoleState.projectId,
+                      assignmentId: mobileRoleState.assignmentId,
+                      roleId: role.id,
+                      roleName: role.name,
+                      previousId: mobileRoleState.currentId ?? null,
+                      previousName: mobileRoleState.label ?? null,
+                    });
+                    setMobileRoleState(null);
+                  }}
+                >
+                  {role.name}
+                </button>
+              );
+            })}
+          </div>
         ) : (
           <div className="text-sm text-[var(--muted)]">No role catalog available.</div>
         )}
+      </MobileSheet>
+      <MobileSheet
+        open={!!mobileDeliverableDetail}
+        title={mobileDeliverableDetail ? `Deliverables – ${mobileDeliverableDetail.weekLabel}` : 'Deliverable Details'}
+        onClose={() => setMobileDeliverableDetail(null)}
+      >
+        {mobileDeliverableDetail ? (
+          <div className="space-y-3">
+            <div className="text-sm text-[var(--muted)]">
+              {mobileDeliverableDetail.projectName}
+              {mobileDeliverableDetail.client ? ` • ${mobileDeliverableDetail.client}` : ''}
+            </div>
+            {mobileDeliverableDetail.entries.map((entry, idx) => (
+              <div key={`${entry.type}-${idx}-${entry.description || ''}`} className="border border-[var(--border)] rounded-lg p-3 bg-[var(--card)]">
+                <div className="text-sm font-semibold">{entry.description || entry.type.toUpperCase()}</div>
+                {entry.percentage != null && (
+                  <div className="text-xs text-[var(--muted)] mt-1">{entry.percentage}% milestone</div>
+                )}
+                {entry.dates?.length ? (
+                  <div className="text-xs mt-1">
+                    Dates: {entry.dates.map((dateStr) => formatDateWithWeekday(dateStr)).join(', ')}
+                  </div>
+                ) : null}
+                {entry.note ? (
+                  <div className="text-xs mt-2 text-[var(--muted)] whitespace-pre-wrap">{entry.note}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </MobileSheet>
     </>
   );
@@ -996,22 +1127,41 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const weekRanges = weeks.map(w => { const s = new Date(w.date); const e = new Date(w.date); e.setDate(e.getDate() + 6); return { key: w.date, s, e }; });
 
         const pidList = projects.map(p => p.id!).filter(Boolean) as number[];
-        const map: Record<number, Record<string, { type: string; percentage?: number; dates?: string[] }[]>> = {};
+        const map: Record<number, Record<string, DeliverableMarker[]>> = {};
 
-        const addEntry = (pid: number, weekKey: string, type: string, percentage?: number, dateStr?: string) => {
+        const addEntry = ({ pid, weekKey, type, percentage, dateStr, description, note }: {
+          pid: number;
+          weekKey: string;
+          type: string;
+          percentage?: number;
+          dateStr?: string;
+          description?: string | null;
+          note?: string | null;
+        }) => {
           if (!map[pid]) map[pid] = {};
           if (!map[pid][weekKey]) map[pid][weekKey] = [];
           const arr = map[pid][weekKey];
           const numPct = (percentage == null || Number.isNaN(Number(percentage))) ? undefined : Number(percentage);
-          const existing = arr.find(e => e.type === type && (e.percentage ?? undefined) === (numPct ?? undefined));
+          const existing = arr.find(e =>
+            e.type === type &&
+            (e.percentage ?? undefined) === (numPct ?? undefined) &&
+            (e.description || '') === (description || '')
+          );
           if (existing) {
             if ((existing.percentage == null) && (numPct != null)) existing.percentage = numPct;
             if (dateStr) {
               existing.dates = Array.from(new Set([...(existing.dates || []), dateStr]));
             }
+            if (!existing.note && note) existing.note = note;
             return;
           }
-          const entry = { type, percentage: numPct, dates: dateStr ? [dateStr] : undefined } as { type: string; percentage?: number; dates?: string[] };
+          const entry: DeliverableMarker = {
+            type,
+            percentage: numPct,
+            dates: dateStr ? [dateStr] : undefined,
+            description: description ?? null,
+            note: note ?? null,
+          };
           arr.push(entry);
         };
 
@@ -1027,7 +1177,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
               const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
               const title = (it as any).title as string | undefined; const type = classifyDeliverable(title);
               let pct: number | undefined = undefined; if (title) { const m = title.match(/(\d{1,3})\s*%/); if (m) { const n = parseInt(m[1], 10); if (!Number.isNaN(n) && n >= 0 && n <= 100) pct = n; } }
-              addEntry(pid, wr.key, type, pct, dtStr);
+              addEntry({ pid, weekKey: wr.key, type, percentage: pct, dateStr: dtStr, description: title ?? null, note: (it as any)?.notes ?? null });
             }
             loadedViaCalendar = true;
           }
@@ -1044,7 +1194,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
               const dt = new Date(d.date);
               const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
               const type = classifyDeliverable((d.description || '').toString());
-              addEntry(pid, wr.key, type, d.percentage == null ? undefined : Number(d.percentage), (d as any).date as string | undefined);
+              addEntry({
+                pid,
+                weekKey: wr.key,
+                type,
+                percentage: d.percentage == null ? undefined : Number(d.percentage),
+                dateStr: (d as any).date as string | undefined,
+                description: (d as any).description ?? null,
+                note: (d as any).notes ?? null,
+              });
             }
           }
           if (Object.keys(map).length === 0) {
@@ -1058,7 +1216,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
                 const type = classifyDeliverable(((d as any).description || '').toString());
                 const pct = (d as any).percentage == null ? undefined : Number((d as any).percentage);
-                addEntry(pid, wr.key, type, pct, (d as any).date as string | undefined);
+                addEntry({
+                  pid,
+                  weekKey: wr.key,
+                  type,
+                  percentage: pct,
+                  dateStr: (d as any).date as string | undefined,
+                  description: (d as any).description ?? null,
+                  note: (d as any).notes ?? null,
+                });
               }
             } catch { /* ignore */ }
           }
@@ -1916,6 +2082,14 @@ export default ProjectAssignmentsGrid;
 
 const MobileSheet: React.FC<{ open: boolean; title: string; onClose: () => void; children: React.ReactNode }> = ({ open, title, onClose, children }) => {
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
+  const [supportsSVH, setSupportsSVH] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined' || typeof window.CSS === 'undefined') return false;
+    return window.CSS.supports('height: 100svh');
+  });
+  useEffect(() => {
+    if (supportsSVH || typeof window === 'undefined' || typeof window.CSS === 'undefined') return;
+    setSupportsSVH(window.CSS.supports('height: 100svh'));
+  }, [supportsSVH]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -1924,6 +2098,7 @@ const MobileSheet: React.FC<{ open: boolean; title: string; onClose: () => void;
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
   if (!open) return null;
+  const overlayStyle: React.CSSProperties = supportsSVH ? { minHeight: '100svh' } : undefined;
   return createPortal(
     <div
       role="dialog"
@@ -1931,11 +2106,15 @@ const MobileSheet: React.FC<{ open: boolean; title: string; onClose: () => void;
       aria-label={title}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 z-[1000] bg-black/60 flex items-end justify-center"
+      style={overlayStyle}
     >
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="w-full max-w-md rounded-t-2xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] shadow-2xl max-h-[85vh] overflow-auto"
+        className="w-full max-w-md rounded-t-2xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] shadow-2xl max-h-[85vh] overflow-auto px-4"
+        style={{
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
+        }}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
           <div className="font-semibold">{title}</div>

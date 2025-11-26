@@ -28,7 +28,14 @@ export function formatDateWithWeekday(
 ): string {
   if (!iso) return '';
   try {
-    const d = new Date(iso);
+    const trimmed = iso.trim();
+    let d: Date;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('-').map(Number);
+      d = new Date(year, (month || 1) - 1, day || 1);
+    } else {
+      d = new Date(trimmed);
+    }
     if (Number.isNaN(d.getTime())) return '';
     const opts: Intl.DateTimeFormatOptions = {
       weekday: 'short',

@@ -180,7 +180,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
   useEffect(() => {
     if (open && inputRef.current) {
       const rect = inputRef.current.getBoundingClientRect();
-      setDropdownRect({ left: rect.left, top: rect.bottom + 4, width: rect.width });
+      setDropdownRect({ left: rect.left, top: rect.bottom + 4, width: Math.max(rect.width, 220) });
     } else {
       setDropdownRect(null);
     }
@@ -209,7 +209,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
       )}
 
       {/* Combobox */}
-      <div className="relative w-[180px] max-w-[220px] shrink-0">
+      <div className={`relative ${expand ? 'min-w-[120px] flex-1 max-w-[240px]' : 'w-[80px] max-w-[120px] shrink-0 sm:w-[160px] sm:max-w-[200px]'}`}>
         <input
           id={INPUT_ID}
           ref={inputRef}
@@ -219,13 +219,13 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           aria-controls="global-dept-filter-listbox"
           aria-autocomplete="list"
           aria-label="Global department filter"
-          placeholder={loading ? 'Loading departments...' : 'Search departments'}
+          placeholder={loading ? 'Loading…' : 'Search'}
           disabled={loading}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          className="w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 py-1 text-base sm:text-sm min-w-[120px] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] relative z-50"
+          className={`w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 py-1 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--focus)] relative z-50 ${expand ? '' : 'min-w-[60px]'}`}
         />
         {open && dropdownRect &&
           createPortal(
