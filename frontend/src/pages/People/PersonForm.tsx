@@ -49,6 +49,7 @@ const PersonForm: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const updatePersonMutation = useUpdatePerson();
   const createPersonMutation = useCreatePerson();
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(!!id);
 
   useAuthenticatedEffect(() => {
     loadDepartments(); // Phase 2: Always load departments
@@ -147,7 +148,9 @@ const PersonForm: React.FC = () => {
       const roleId = parseInt(formData.role) || 1; // Fallback to role ID 1 if invalid
       const apiData = {
         ...formData,
-        role: roleId
+        name: formData.name.trim(),
+        location: formData.location.trim(),
+        role: roleId,
       };
       if (!isEditing || !id) {
         if (import.meta.env.DEV) console.log('dY"? [DEBUG] Creating new person with POST request');
@@ -194,6 +197,12 @@ const PersonForm: React.FC = () => {
       setValidationErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
+
+  const validationSummaryMessages = Object.values(validationErrors)
+    .map(msg => msg?.trim())
+    .filter((msg): msg is string => !!msg);
+
+  const hasValidationSummary = validationSummaryMessages.length > 0 || !!error;
 
   return (
     <Layout>
@@ -291,71 +300,108 @@ const PersonForm: React.FC = () => {
             </p>
           </div>
 
-          {/* Department Field - Phase 2 */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text)] mb-2">
-              Department
-            </label>
-            <select
-              value={formData.department || ''}
-              onChange={(e) => handleChange('department', e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
-              disabled={loading}
+          {/* Advanced fields – collapsible on mobile */}
+          <div className="border-t border-[var(--border)] pt-4 mt-2">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between gap-3 text-left text-sm text-[var(--text)]"
+              onClick={() => setAdvancedOpen((prev) => !prev)}
             >
-              <option value="">None Assigned</option>
-              {departments.map((dept) => (
-                <option key={dept.id} value={dept.id}>
-                  {dept.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-[var(--muted)] text-sm mt-1">
-              Assign this person to a department for organizational tracking
-            </p>
+              <span className="font-medium">Advanced details</span>
+              <span className="text-xs text-[var(--muted)]">{advancedOpen ? 'Hide' : 'Show'}</span>
+            </button>
+            {advancedOpen && (
+              <div className="mt-4 space-y-4">
+                {/* Department Field - Phase 2 */}
+                <div>
+                  <label
+                    htmlFor="department"
+                    className="block text-sm font-medium text-[var(--text)] mb-2"
+                  >
+                    Department
+                  </label>
+                  <select
+                    id="department"
+                    value={formData.department || ''}
+                    onChange={(e) => handleChange('department', e.target.value ? parseInt(e.target.value) : null)}
+                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
+                    disabled={loading}
+                  >
+                    <option value="">None Assigned</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[var(--muted)] text-sm mt-1">
+                    Assign this person to a department for organizational tracking
+                  </p>
+                </div>
+
+                {/* Hire Date */}
+                <div>
+                  <label
+                    htmlFor="hireDate"
+                    className="block text-sm font-medium text-[var(--text)] mb-2"
+                  >
+                    Hire Date
+                  </label>
+                  <input
+                    type="date"
+                    id="hireDate"
+                    value={formData.hireDate || ''}
+                    onChange={(e) => handleChange('hireDate', (e.target as HTMLInputElement).value)}
+                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
+                    disabled={loading}
+                  />
+                  <p className="text-[var(--muted)] text-sm mt-1">Optional start date (YYYY-MM-DD)</p>
+                </div>
+
+                {/* Active Status */}
+                <div>
+                  <label className="inline-flex items-center gap-2 text-[var(--text)] text-sm">
+                    <input
+                      id="isActive"
+                      type="checkbox"
+                      checked={!!formData.isActive}
+                      onChange={(e) => handleChange('isActive', (e.target as HTMLInputElement).checked)}
+                      className="w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
+                    />
+                    Active
+                  </label>
+                  <p className="text-[var(--muted)] text-sm mt-1">Uncheck to mark this person inactive</p>
+                </div>
+
+                {/* Location Field */}
+                <div>
+                  <Input
+                    label="Location"
+                    name="location"
+                    value={formData.location}
+                    onChange={(e) => handleChange('location', e.target.value)}
+                    placeholder="e.g., New York, NY or Remote"
+                    className="bg-[var(--surface)] border-[var(--border)] text-[var(--text)]"
+                  />
+                  <p className="text-[var(--muted)] text-sm mt-1">
+                    City and state, or indicate if remote. Leave blank if not specified.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Hire Date */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text)] mb-2">Hire Date</label>
-            <input
-              type="date"
-              value={formData.hireDate || ''}
-              onChange={(e) => handleChange('hireDate', (e.target as HTMLInputElement).value)}
-              className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
-              disabled={loading}
-            />
-            <p className="text-[var(--muted)] text-sm mt-1">Optional start date (YYYY-MM-DD)</p>
-          </div>
-
-          {/* Active Status */}
-          <div>
-            <label className="inline-flex items-center gap-2 text-[var(--text)] text-sm">
-              <input
-                id="isActive"
-                type="checkbox"
-                checked={!!formData.isActive}
-                onChange={(e) => handleChange('isActive', (e.target as HTMLInputElement).checked)}
-                className="w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
-              />
-              Active
-            </label>
-            <p className="text-[var(--muted)] text-sm mt-1">Uncheck to mark this person inactive</p>
-          </div>
-
-          {/* Location Field */}
-          <div>
-            <Input
-              label="Location"
-              name="location"
-              value={formData.location}
-              onChange={(e) => handleChange('location', e.target.value)}
-              placeholder="e.g., New York, NY or Remote"
-              className="bg-[var(--surface)] border-[var(--border)] text-[var(--text)]"
-            />
-            <p className="text-[var(--muted)] text-sm mt-1">
-              City and state, or indicate if remote. Leave blank if not specified.
-            </p>
-          </div>
+          {hasValidationSummary && (
+            <div className="border-t border-[var(--border)] pt-4 mt-2 text-sm">
+              <p className="font-medium text-[var(--text)] mb-1">Check before saving:</p>
+              <ul className="list-disc ml-5 space-y-1 text-[var(--muted)]">
+                {validationSummaryMessages.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+                {error && <li className="text-red-400">{error}</li>}
+              </ul>
+            </div>
+          )}
 
           {/* Form Actions */}
           <div className="flex justify-between pt-4">
@@ -388,10 +434,6 @@ const PersonForm: React.FC = () => {
 };
 
 export default PersonForm;
-
-
-
-
 
 
 

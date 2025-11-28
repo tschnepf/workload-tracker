@@ -133,10 +133,9 @@ The following plan enumerates every routed page/component under `frontend/src/pa
 ## Person Form – `frontend/src/pages/People/PersonForm.tsx`
 **Phase 1 – Form Audit**
 - Prompt 1: "Using lean programming best practices (no shortcuts or band-aid fixes), map every field group (name, weekly capacity, role select, department select, location, hire date, status) plus backend dependencies so mobile refactors keep `PersonFormData` serialization intact." 
+    • “Editing rules: Use apply_patch for all file changes. Preserve formatting and existing line endings. Do not use shell writes (Set‑Content/echo/sed) to modify code. Do not insert literal ‘\r\n’ sequences; let the patch handle newlines. Avoid bulk regex replacements; submit minimal, contextual patches. After edits, run the frontend type check/build to validate. When appropriate, refactor large or repetitive code into separate helper files, modules, services, or Hooks to improve readability, maintainability, and reuse. Ensure all such extractions follow standard TypeScript modularization best practices and preserve existing functionality.”
 
-**Phase 2 – Responsive Refactor**
-- Prompt 2a: "Using lean programming best practices (no shortcuts or band-aid fixes), reflow the form into single-column sections with expandable advanced fields, ensuring dropdowns span full width and touch targets respect mobile sizing." 
-- Prompt 2b: "Using lean programming best practices (no shortcuts or band-aid fixes), add persistent validation summaries at the bottom for easier mobile review, keeping backend validation errors surfaced verbatim." 
+Only use best practice programming, do not use any shortcuts
 
 **Phase 3 – Testing**
 - Prompt T1: "Using lean programming best practices (no shortcuts or band-aid fixes), extend form tests to emulate both create and edit flows on mobile widths, confirming `peopleApi` mocks receive correct payloads."

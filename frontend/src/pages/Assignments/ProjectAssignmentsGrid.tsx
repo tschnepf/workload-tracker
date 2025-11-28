@@ -1327,26 +1327,56 @@ const ProjectAssignmentsGrid: React.FC = () => {
       updatesMap.set(aid, { prev, next, weeks: weeksSet, personId: entry.personId, projectId: entry.projectId });
     }
 
-    // Fire conflict checks in background (parallel)
+    // Fire conflict checks in background (grouped per person/week to avoid spam)
     try {
-      const tasks: Promise<any>[] = [];
-      for (const [, info] of updatesMap.entries()) {
-        const personId = info.personId ?? null;
-        if (!personId) continue;
-        for (const wk of info.weeks) {
-          tasks.push(assignmentsApi.checkConflicts(personId, info.projectId, wk, v).catch(() => null));
-        }
-      }
-      Promise.allSettled(tasks).then(results => {
-        const warnings: string[] = [];
-        for (const r of results) {
-          if (r.status === 'fulfilled' && r.value && Array.isArray(r.value.warnings) && r.value.warnings.length) {
-            warnings.push(...r.value.warnings);
+      const payloadMap = new Map<string, { personId: number; projectId: number; weekKey: string; proposedHours: number }>();
+      updatesMap.forEach((info) => {
+        if (!info.personId) return;
+        info.weeks.forEach((weekKey) => {
+          const prevVal = Number(info.prev[weekKey] ?? 0) || 0;
+          const nextVal = Number(info.next[weekKey] ?? 0) || 0;
+          const delta = nextVal - prevVal;
+          if (delta === 0) return;
+          const key = `${info.personId}:${weekKey}`;
+          const existing = payloadMap.get(key);
+          if (existing) {
+            existing.proposedHours += delta;
+          } else {
+            payloadMap.set(key, {
+              personId: info.personId!,
+              projectId: info.projectId,
+              weekKey,
+              proposedHours: delta,
+            });
           }
-        }
-        if (warnings.length) showToast(warnings.join('\n'), 'warning');
+        });
       });
-    } catch {}
+      const conflictPayloads = Array.from(payloadMap.values());
+      if (conflictPayloads.length) {
+        Promise.allSettled(
+          conflictPayloads.map((payload) =>
+            assignmentsApi
+              .checkConflicts(payload.personId, payload.projectId, payload.weekKey, payload.proposedHours)
+              .then((response) => ({ response }))
+          )
+        ).then((results) => {
+          const warnings: string[] = [];
+          results.forEach((result) => {
+            if (result.status === 'fulfilled') {
+              const resp = result.value?.response;
+              if (resp && Array.isArray(resp.warnings) && resp.warnings.length) {
+                warnings.push(...resp.warnings);
+              }
+            } else {
+              console.warn('Conflict check failed', result.reason);
+            }
+          });
+          if (warnings.length) showToast(warnings.join('\n'), 'warning');
+        });
+      }
+    } catch (conflictErr) {
+      console.warn('Unable to evaluate overallocation risk', conflictErr);
+    }
 
     // Optimistic UI + saving flags
     const savingKeys: string[] = [];

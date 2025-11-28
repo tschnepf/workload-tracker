@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
 import { Person, Department, Role } from '@/types/models';
@@ -21,8 +22,10 @@ import { useBulkActions } from '@/pages/People/list/hooks/useBulkActions';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { usePeopleQueryPagination } from '@/pages/People/list/hooks/usePeopleQueryPagination';
 import { usePersonSelection } from '@/pages/People/list/hooks/usePersonSelection';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const PeopleList: React.FC = () => {
+  const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const [showInactive, setShowInactive] = useState(false);
   const { people, loading: listLoading, error: listError, fetchNextPage, hasNextPage } = usePeopleQueryPagination(showInactive);
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
@@ -43,6 +46,7 @@ const PeopleList: React.FC = () => {
   
   // Bulk actions state
   const { bulkMode, setBulkMode, selectedPeopleIds, setSelectedPeopleIds, bulkDepartment, setBulkDepartment } = useBulkActions();
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   
   // Role autocomplete state (reserved for future enhancement)
   const [showRoleAutocomplete, setShowRoleAutocomplete] = useState(false);
@@ -232,18 +236,13 @@ const PeopleList: React.FC = () => {
     }
   }, [filteredAndSortedPeople, selectedPerson]);
 
-  if (listLoading) {
-    return (
-      <Layout>
-        <div className="h-full min-h-0 flex items-center justify-center">
-          <div className="text-[var(--muted)]">Loading people...</div>
-        </div>
-      </Layout>
-    );
-  }
+  const loadingContent = (
+    <div className="h-full min-h-0 flex items-center justify-center">
+      <div className="text-[var(--muted)]">Loading people...</div>
+    </div>
+  );
 
-  return (
-    <Layout>
+  const desktopView = (
       <div className="h-full min-h-0 flex bg-[var(--bg)]">
         
         {/* Left Panel - People List */}
@@ -359,7 +358,7 @@ const PeopleList: React.FC = () => {
               <div className="w-full h-5 bg-[var(--surface)] animate-pulse rounded" />
               <div className="w-full h-5 bg-[var(--surface)] animate-pulse rounded" />
             </div>
-) : selectedPerson ? (
+          ) : selectedPerson ? (
             <>
             <PersonDetailsContainer person={selectedPerson} roles={roles} departments={departments} people={people} />
             </>
@@ -373,6 +372,157 @@ const PeopleList: React.FC = () => {
           )}
         </div>
       </div>
+  );
+
+  const mobileView = (
+      <div className="h-full min-h-0 flex flex-col bg-[var(--bg)]">
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+          {listLoading ? (
+            loadingContent
+          ) : (
+            <>
+              {/* Mobile header */}
+              <div className="p-3 border-b border-[var(--border)] bg-[var(--bg)]">
+                <div className="flex items-center justify-between mb-2">
+                  <h1 className="text-lg font-semibold text-[var(--text)]">People</h1>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="px-2 py-1 text-xs rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                      onClick={() => {
+                        setBulkMode(!bulkMode);
+                        if (!bulkMode) {
+                          setSelectedPeopleIds(new Set());
+                        }
+                      }}
+                    >
+                      {bulkMode ? 'Done' : 'Bulk'}
+                    </button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 text-xs rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                      onClick={() => setShowDepartmentDropdown(true)}
+                    >
+                      Filters
+                    </button>
+                    <Link to="/people/new">
+                      <button className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white">
+                        + New
+                      </button>
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Keep search + filter controls wired to same state; dropdowns already render as overlays */}
+                <FiltersPanel
+                  searchTerm={searchTerm}
+                  setSearchTerm={setSearchTerm}
+                  people={people}
+                  departments={departments}
+                  departmentFilter={departmentFilter}
+                  setDepartmentFilter={setDepartmentFilter}
+                  locationFilter={locationFilter}
+                  setLocationFilter={setLocationFilter}
+                  showDepartmentDropdown={showDepartmentDropdown}
+                  setShowDepartmentDropdown={setShowDepartmentDropdown}
+                  showLocationDropdown={showLocationDropdown}
+                  setShowLocationDropdown={setShowLocationDropdown}
+                  showInactive={showInactive}
+                  setShowInactive={setShowInactive}
+                />
+              </div>
+
+              {/* List as mobile-friendly cards */}
+              <div className="divide-y divide-[var(--border)]">
+                {filteredAndSortedPeople.map((person, index) => {
+                  const isSelected = selectedPerson?.id === person.id;
+                  const isChecked = selectedPeopleIds.has(person.id);
+                  return (
+                    <button
+                      key={person.id}
+                      type="button"
+                      className={`w-full text-left px-3 py-3 bg-[var(--card)] flex items-center justify-between gap-3 ${
+                        isSelected ? 'ring-1 ring-[var(--primary)]' : ''
+                      }`}
+                      onClick={() => {
+                        onRowClick(person, index);
+                        setMobileDetailOpen(true);
+                      }}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-[var(--text)] truncate">{person.name}</div>
+                        <div className="text-xs text-[var(--muted)] truncate">
+                          {person.roleName || 'No role'} · {person.departmentName || 'No department'}
+                        </div>
+                        {person.location && (
+                          <div className="text-xs text-[var(--muted)] truncate">{person.location}</div>
+                        )}
+                      </div>
+                      {bulkMode && (
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const next = new Set(selectedPeopleIds);
+                            if (e.target.checked) {
+                              next.add(person.id);
+                            } else {
+                              next.delete(person.id);
+                            }
+                            setSelectedPeopleIds(next);
+                          }}
+                          className="w-4 h-4"
+                          aria-label={`Select ${person.name}`}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {hasNextPage && (
+                <div className="p-3 flex justify-center">
+                  <button
+                    type="button"
+                    className="px-3 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface)]"
+                    onClick={() => fetchNextPage()}
+                  >
+                    Load more
+                  </button>
+                </div>
+              )}
+
+              {bulkMode && selectedPeopleIds.size > 0 && (
+                <BulkActionsBar
+                  visible={true}
+                  selectedCount={selectedPeopleIds.size}
+                  departments={departments}
+                  bulkDepartment={bulkDepartment}
+                  setBulkDepartment={setBulkDepartment}
+                  onApply={handleBulkAssignment}
+                  onClear={() => setSelectedPeopleIds(new Set())}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+  );
+
+  return (
+    <Layout>
+      {listLoading && !isMobileLayout ? loadingContent : isMobileLayout ? mobileView : desktopView}
+      {/* Mobile slide-over for person details */}
+      <MobilePersonDetailsDrawer
+        open={isMobileLayout && mobileDetailOpen && !!selectedPerson}
+        title={selectedPerson?.name || 'Person details'}
+        onClose={() => setMobileDetailOpen(false)}
+      >
+        {selectedPerson && (
+          <PersonDetailsContainer person={selectedPerson} roles={roles} departments={departments} people={people} />
+        )}
+      </MobilePersonDetailsDrawer>
       {/* Toasts are shown globally via ToastHost */}
     </Layout>
   );
@@ -380,6 +530,35 @@ const PeopleList: React.FC = () => {
 
 export default PeopleList;
 
-
-
-
+const MobilePersonDetailsDrawer: React.FC<{
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}> = ({ open, title, onClose, children }) => {
+  if (!open || typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1150] bg-black/60 flex justify-end"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-md h-full bg-[var(--surface)] text-[var(--text)] shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <div className="text-base font-semibold truncate">{title}</div>
+          <button
+            type="button"
+            className="text-xl text-[var(--muted)]"
+            onClick={onClose}
+            aria-label="Close person details"
+          >
+            ×
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+};
