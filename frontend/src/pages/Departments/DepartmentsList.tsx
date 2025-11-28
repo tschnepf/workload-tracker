@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Department, Person } from '@/types/models';
 import { departmentsApi, peopleApi } from '@/services/api';
@@ -13,8 +14,10 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import DepartmentForm from './DepartmentForm';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const DepartmentsList: React.FC = () => {
+  const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
@@ -25,6 +28,7 @@ const DepartmentsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasAutoSelected, setHasAutoSelected] = useState(false); // Track if we've auto-selected
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   useAuthenticatedEffect(() => {
     loadDepartments();
@@ -138,34 +142,23 @@ const DepartmentsList: React.FC = () => {
     return parent ? parent.name : 'Unknown';
   };
 
-  if (loading) {
-    return (
-      <Layout>
-        <DepartmentsSkeleton />
-      </Layout>
-    );
-  }
-
-  return (
-    <Layout>
-      <div className="h-full min-h-0 flex bg-[var(--bg)]">
-      
+  const desktopView = (
+    <div className="h-full min-h-0 flex bg-[var(--bg)]">
       <div className="flex-1 overflow-hidden">
         <div className="flex h-full min-h-0">
-          
           {/* Left Panel - Department List */}
           <div className="w-1/3 p-6 border-r border-[var(--border)] bg-[var(--surface)] min-h-0 overflow-y-auto">
             <div className="mb-6">
               <div className="flex justify-between items-center mb-4">
                 <h1 className="text-2xl font-bold text-[var(--text)]">Departments</h1>
-                <Button 
-                  variant="primary" 
+                <Button
+                  variant="primary"
                   onClick={handleCreateDepartment}
                 >
                   Add Department
                 </Button>
               </div>
-              
+
               <Input
                 placeholder="Search departments..."
                 value={searchTerm}
@@ -212,11 +205,13 @@ const DepartmentsList: React.FC = () => {
                       )}
                     </div>
                     <div className="ml-4">
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        department.isActive 
-                          ? 'bg-emerald-500/20 text-emerald-400' 
-                          : 'bg-gray-500/20 text-gray-400'
-                      }`}>
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${
+                          department.isActive
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-gray-500/20 text-gray-400'
+                        }`}
+                      >
                         {department.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
@@ -235,96 +230,12 @@ const DepartmentsList: React.FC = () => {
           {/* Right Panel - Department Details */}
           <div className="flex-1 p-6 bg-[var(--bg)] min-h-0 overflow-y-auto">
             {selectedDepartment ? (
-              <div>
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold text-[var(--text)] mb-2">
-                      {selectedDepartment.name}
-                    </h2>
-                    <div className="flex items-center space-x-4">
-                      <span className={`px-3 py-1 rounded text-sm ${
-                        selectedDepartment.isActive 
-                          ? 'bg-emerald-500/20 text-emerald-400' 
-                          : 'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {selectedDepartment.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button 
-                      variant="secondary" 
-                      onClick={() => handleEditDepartment(selectedDepartment)}
-                    >
-                      Edit
-                    </Button>
-                    <Button 
-                      variant="danger" 
-                      onClick={() => handleDeleteDepartment(selectedDepartment)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                  <Card className="p-6 bg-[var(--card)] border-[var(--border)]">
-                    <h3 className="font-semibold text-[var(--text)] mb-4">Department Info</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <span className="text-sm text-[var(--muted)]">Name:</span>
-                        <p className="text-[var(--text)]">{selectedDepartment.name}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm text-[var(--muted)]">Manager:</span>
-                        <p className="text-[var(--text)]">{selectedDepartment.managerName || 'None assigned'}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm text-[var(--muted)]">Parent Department:</span>
-                        <p className="text-[var(--text)]">
-                          {getParentDepartmentName(selectedDepartment.parentDepartment)}
-                        </p>
-                      </div>
-                      {selectedDepartment.description && (
-                        <div>
-                          <span className="text-sm text-[var(--muted)]">Description:</span>
-                          <p className="text-[var(--text)] mt-1">{selectedDepartment.description}</p>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-
-                  <Card className="p-6 bg-[var(--card)] border-[var(--border)]">
-                    <h3 className="font-semibold text-[var(--text)] mb-4">System Info</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <span className="text-sm text-[var(--muted)]">Created:</span>
-                        <p className="text-[var(--text)]">
-                          {selectedDepartment.createdAt ? 
-                            new Date(selectedDepartment.createdAt).toLocaleDateString() : 
-                            'Unknown'
-                          }
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-sm text-[var(--muted)]">Updated:</span>
-                        <p className="text-[var(--text)]">
-                          {selectedDepartment.updatedAt ? 
-                            new Date(selectedDepartment.updatedAt).toLocaleDateString() : 
-                            'Unknown'
-                          }
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-sm text-[var(--muted)]">Status:</span>
-                        <p className={selectedDepartment.isActive ? 'text-emerald-400' : 'text-gray-400'}>
-                          {selectedDepartment.isActive ? 'Active' : 'Inactive'}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-              </div>
+              <DepartmentDetails
+                department={selectedDepartment}
+                onEdit={() => handleEditDepartment(selectedDepartment)}
+                onDelete={() => handleDeleteDepartment(selectedDepartment)}
+                getParentDepartmentName={getParentDepartmentName}
+              />
             ) : (
               <div className="flex items-center justify-center h-full text-[var(--muted)]">
                 <div className="text-center">
@@ -336,8 +247,127 @@ const DepartmentsList: React.FC = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
 
-      {/* Department Form Modal */}
+  const mobileListView = (
+    <div className="h-full min-h-0 flex flex-col bg-[var(--bg)]">
+      {/* Sticky header with search + actions */}
+      <div className="sticky top-0 z-[10] bg-[var(--bg)] border-b border-[var(--border)] px-4 py-3">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-lg font-semibold text-[var(--text)]">Departments</h1>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleCreateDepartment}
+          >
+            Add
+          </Button>
+        </div>
+        <Input
+          placeholder="Search departments..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full"
+        />
+        {error && (
+          <div className="mt-2 p-2 bg-red-900/30 border border-red-600 rounded text-xs text-red-400">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Card list */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {filteredAndSortedDepartments.map((department, index) => {
+          const isSelected = selectedDepartment?.id === department.id;
+          return (
+            <button
+              key={department.id}
+              type="button"
+              className={`w-full text-left bg-[var(--card)] border border-[var(--border)] rounded-lg px-4 py-3 flex items-center justify-between gap-3 ${
+                isSelected ? 'ring-1 ring-[var(--focus)]' : ''
+              }`}
+              onClick={() => {
+                setSelectedDepartment(department);
+                setSelectedIndex(index);
+                setMobileDetailOpen(true);
+              }}
+            >
+              <div className="min-w-0">
+                <div className="font-medium text-[var(--text)] truncate">
+                  {department.name}
+                </div>
+                <div className="text-xs text-[var(--muted)] truncate">
+                  Manager: {department.managerName || 'None'}
+                </div>
+                {department.parentDepartment && (
+                  <div className="text-xs text-[var(--muted)] truncate">
+                    Parent: {getParentDepartmentName(department.parentDepartment)}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <span
+                  className={`px-2 py-1 rounded text-[10px] ${
+                    department.isActive
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'bg-gray-500/20 text-gray-400'
+                  }`}
+                >
+                  {department.isActive ? 'Active' : 'Inactive'}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditDepartment(department);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteDepartment(department);
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+
+        {filteredAndSortedDepartments.length === 0 && (
+          <div className="text-center py-8 text-[var(--muted)]">
+            {searchTerm ? 'No departments match your search.' : 'No departments found.'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <Layout>
+        <DepartmentsSkeleton />
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      {isMobileLayout ? mobileListView : desktopView}
+
+      {/* Department Form Modal / Drawer */}
       {showModal && (
         <DepartmentForm
           department={editingDepartment}
@@ -351,9 +381,156 @@ const DepartmentsList: React.FC = () => {
           }}
         />
       )}
-      </div>
+
+      {/* Mobile details drawer */}
+      <MobileDepartmentDetailsDrawer
+        open={isMobileLayout && mobileDetailOpen && !!selectedDepartment}
+        title={selectedDepartment?.name || 'Department details'}
+        onClose={() => setMobileDetailOpen(false)}
+      >
+        {selectedDepartment && (
+          <DepartmentDetails
+            department={selectedDepartment}
+            onEdit={() => handleEditDepartment(selectedDepartment)}
+            onDelete={() => handleDeleteDepartment(selectedDepartment)}
+            getParentDepartmentName={getParentDepartmentName}
+          />
+        )}
+      </MobileDepartmentDetailsDrawer>
     </Layout>
   );
 };
 
 export default DepartmentsList;
+
+const DepartmentDetails: React.FC<{
+  department: Department;
+  onEdit: () => void;
+  onDelete: () => void;
+  getParentDepartmentName: (parentId: number | null) => string;
+}> = ({ department, onEdit, onDelete, getParentDepartmentName }) => (
+  <div>
+    <div className="flex justify-between items-start mb-6">
+      <div>
+        <h2 className="text-2xl font-bold text-[var(--text)] mb-2">
+          {department.name}
+        </h2>
+        <div className="flex items-center space-x-4">
+          <span
+            className={`px-3 py-1 rounded text-sm ${
+              department.isActive
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-gray-500/20 text-gray-400'
+            }`}
+          >
+            {department.isActive ? 'Active' : 'Inactive'}
+          </span>
+        </div>
+      </div>
+      <div className="flex space-x-2">
+        <Button
+          variant="secondary"
+          onClick={onEdit}
+        >
+          Edit
+        </Button>
+        <Button
+          variant="danger"
+          onClick={onDelete}
+        >
+          Delete
+        </Button>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <Card className="p-6 bg-[var(--card)] border-[var(--border)]">
+        <h3 className="font-semibold text-[var(--text)] mb-4">Department Info</h3>
+        <div className="space-y-3">
+          <div>
+            <span className="text-sm text-[var(--muted)]">Name:</span>
+            <p className="text-[var(--text)]">{department.name}</p>
+          </div>
+          <div>
+            <span className="text-sm text-[var(--muted)]">Manager:</span>
+            <p className="text-[var(--text)]">{department.managerName || 'None assigned'}</p>
+          </div>
+          <div>
+            <span className="text-sm text-[var(--muted)]">Parent Department:</span>
+            <p className="text-[var(--text)]">
+              {getParentDepartmentName(department.parentDepartment)}
+            </p>
+          </div>
+          {department.description && (
+            <div>
+              <span className="text-sm text-[var(--muted)]">Description:</span>
+              <p className="text-[var(--text)] mt-1">{department.description}</p>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card className="p-6 bg-[var(--card)] border-[var(--border)]">
+        <h3 className="font-semibold text-[var(--text)] mb-4">System Info</h3>
+        <div className="space-y-3">
+          <div>
+            <span className="text-sm text-[var(--muted)]">Created:</span>
+            <p className="text-[var(--text)]">
+              {department.createdAt
+                ? new Date(department.createdAt).toLocaleDateString()
+                : 'Unknown'}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm text-[var(--muted)]">Updated:</span>
+            <p className="text-[var(--text)]">
+              {department.updatedAt
+                ? new Date(department.updatedAt).toLocaleDateString()
+                : 'Unknown'}
+            </p>
+          </div>
+          <div>
+            <span className="text-sm text-[var(--muted)]">Status:</span>
+            <p className={department.isActive ? 'text-emerald-400' : 'text-gray-400'}>
+              {department.isActive ? 'Active' : 'Inactive'}
+            </p>
+          </div>
+        </div>
+      </Card>
+    </div>
+  </div>
+);
+
+const MobileDepartmentDetailsDrawer: React.FC<{
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}> = ({ open, title, onClose, children }) => {
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1150] bg-black/60 flex justify-end"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-md h-full bg-[var(--surface)] text-[var(--text)] shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <div className="text-base font-semibold truncate">{title}</div>
+          <button
+            type="button"
+            className="text-xl text-[var(--muted)]"
+            onClick={onClose}
+            aria-label="Close department details"
+          >
+            ×
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+};

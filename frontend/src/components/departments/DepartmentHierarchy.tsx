@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Department, Person } from '@/types/models';
 import Card from '@/components/ui/Card';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface DepartmentNode extends Department {
   children: DepartmentNode[];
@@ -27,6 +28,8 @@ const DepartmentHierarchy: React.FC<DepartmentHierarchyProps> = ({
   selectedDepartmentId
 }) => {
   const [hierarchyTree, setHierarchyTree] = useState<DepartmentNode[]>([]);
+  const [zoom, setZoom] = useState(1);
+  const isMobileLayout = useMediaQuery('(max-width: 767px)');
 
   useEffect(() => {
     if (departments.length > 0) {
@@ -73,7 +76,7 @@ const DepartmentHierarchy: React.FC<DepartmentHierarchyProps> = ({
     setHierarchyTree(rootNodes);
   };
 
-  const DepartmentCard: React.FC<{ node: DepartmentNode }> = ({ node }) => {
+  const DepartmentCard: React.FC<{ node: DepartmentNode; showConnections?: boolean }> = ({ node, showConnections = true }) => {
     const isSelected = selectedDepartmentId === node.id;
     const hasChildren = node.children.length > 0;
     
@@ -150,8 +153,8 @@ const DepartmentHierarchy: React.FC<DepartmentHierarchyProps> = ({
           )}
         </Card>
         
-        {/* Connection Lines */}
-        {hasChildren && (
+        {/* Connection Lines (desktop canvas only) */}
+        {hasChildren && showConnections && (
           <>
             {/* Vertical line down */}
             <div className="absolute left-1/2 bottom-0 w-px h-6 bg-[var(--border)] transform -translate-x-0.5"></div>
@@ -210,30 +213,89 @@ const DepartmentHierarchy: React.FC<DepartmentHierarchyProps> = ({
     );
   }
 
+  const renderTextTree = (nodes: DepartmentNode[], depth: number = 0): React.ReactNode => {
+    return nodes.map((node) => (
+      <div key={node.id} className="mb-4" style={{ marginLeft: depth * 16 }}>
+        <DepartmentCard node={node} showConnections={false} />
+        {node.children.length > 0 && renderTextTree(node.children, depth + 1)}
+      </div>
+    ));
+  };
+
+  const legend = (
+    <div className="mb-6 p-4 bg-[var(--card)] border border-[var(--border)] rounded-lg">
+      <h4 className="text-sm font-medium text-[var(--text)] mb-2">Legend</h4>
+      <div className="flex flex-wrap gap-4 text-xs text-[var(--muted)]">
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 bg-blue-400 rounded"></div>
+          <span>Team members</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 bg-emerald-400 rounded"></div>
+          <span>Sub-departments</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 bg-[var(--primary)] rounded"></div>
+          <span>Selected department</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Mobile-first fallback: vertical tree list with collapsible-like indentation.
+  if (isMobileLayout) {
+    return (
+      <div className="w-full">
+        {legend}
+        <div className="space-y-2">
+          {renderTextTree(hierarchyTree)}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full">
-      {/* Legend */}
-      <div className="mb-6 p-4 bg-[var(--card)] border border-[var(--border)] rounded-lg">
-        <h4 className="text-sm font-medium text-[var(--text)] mb-2">Legend</h4>
-        <div className="flex flex-wrap gap-4 text-xs text-[var(--muted)]">
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-blue-400 rounded"></div>
-            <span>Team members</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-emerald-400 rounded"></div>
-            <span>Sub-departments</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-[var(--primary)] rounded"></div>
-            <span>Selected department</span>
-          </div>
+      {legend}
+
+      {/* Zoom controls */}
+      <div className="mb-3 flex items-center justify-between text-xs text-[var(--muted)]">
+        <div>Scroll to pan · Adjust zoom for large hierarchies</div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+            className="px-2 py-1 border border-[var(--border)] rounded bg-[var(--surface)] hover:bg-[var(--surfaceHover)]"
+          >
+            −
+          </button>
+          <span className="tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
+            className="px-2 py-1 border border-[var(--border)] rounded bg-[var(--surface)] hover:bg-[var(--surfaceHover)]"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            className="px-2 py-1 border border-[var(--border)] rounded bg-transparent hover:bg-[var(--surfaceHover)]"
+          >
+            Reset
+          </button>
         </div>
       </div>
 
       {/* Hierarchy Tree */}
-      <div className="overflow-x-auto pb-6">
-        <div className="min-w-max px-4">
+      <div className="overflow-auto pb-6">
+        <div
+          className="inline-block px-4"
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: '0 0',
+          }}
+        >
           {renderHierarchyLevel(hierarchyTree)}
         </div>
       </div>

@@ -4,12 +4,14 @@
  */
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import DepartmentHierarchy from '@/components/departments/DepartmentHierarchy';
 import { Department, Person } from '@/types/models';
 import { departmentsApi, peopleApi } from '@/services/api';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const HierarchyView: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -17,6 +19,8 @@ const HierarchyView: React.FC = () => {
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const isMobileLayout = useMediaQuery('(max-width: 767px)');
 
   useAuthenticatedEffect(() => {
     loadData();
@@ -43,6 +47,9 @@ const HierarchyView: React.FC = () => {
 
   const handleDepartmentClick = (department: Department) => {
     setSelectedDepartment(department);
+    if (isMobileLayout) {
+      setMobileDetailOpen(true);
+    }
   };
 
   const getDepartmentStats = (department: Department) => {
@@ -67,6 +74,101 @@ const HierarchyView: React.FC = () => {
       </Layout>
     );
   }
+
+  const DetailsPanel: React.FC = () => {
+    if (!selectedDepartment) {
+      return (
+        <Card className="bg-[#2d2d30] border-[#3e3e42] p-6 flex items-center justify-center">
+          <div className="text-center text-[#969696]">
+            <h3 className="text-lg mb-2">Select a Department</h3>
+            <p className="text-sm">Click on any department in the hierarchy to view details</p>
+          </div>
+        </Card>
+      );
+    }
+
+    const stats = getDepartmentStats(selectedDepartment);
+    const teamMembers = people.filter(p => p.department === selectedDepartment.id);
+
+    return (
+      <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
+        <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
+          Department Details
+        </h3>
+
+        <div className="space-y-4">
+          {/* Basic Info */}
+          <div>
+            <h4 className="font-medium text-[#cccccc] mb-2">
+              {selectedDepartment.name}
+            </h4>
+            <div className="space-y-1 text-sm">
+              <div className="text-[#969696]">
+                Manager:{' '}
+                <span className="text-[#cccccc]">
+                  {selectedDepartment.managerName || 'None assigned'}
+                </span>
+              </div>
+              <div className="text-[#969696]">
+                Status:{' '}
+                <span className={selectedDepartment.isActive ? 'text-emerald-400' : 'text-gray-400'}>
+                  {selectedDepartment.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Statistics */}
+          <div>
+            <h4 className="font-medium text-[#cccccc] mb-2">Statistics</h4>
+            <div className="space-y-1 text-sm">
+              <div className="text-[#969696]">
+                Direct reports:{' '}
+                <span className="text-[#cccccc]">{stats.directReports}</span>
+              </div>
+              <div className="text-[#969696]">
+                Sub-departments:{' '}
+                <span className="text-[#cccccc]">{stats.subDepartments}</span>
+              </div>
+              <div className="text-[#969696]">
+                Total team size:{' '}
+                <span className="text-[#cccccc]">{stats.totalTeamSize}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          {selectedDepartment.description && (
+            <div>
+              <h4 className="font-medium text-[#cccccc] mb-2">Description</h4>
+              <p className="text-sm text-[#969696]">
+                {selectedDepartment.description}
+              </p>
+            </div>
+          )}
+
+          {/* Team Members */}
+          <div>
+            <h4 className="font-medium text-[#cccccc] mb-2">Team Members</h4>
+            {teamMembers.length > 0 ? (
+              <div className="space-y-2">
+                {teamMembers.map(person => (
+                  <div key={person.id} className="text-sm">
+                    <div className="text-[#cccccc]">{person.name}</div>
+                    <div className="text-[#969696] text-xs">
+                      {person.weeklyCapacity}h capacity
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-[#969696]">No team members assigned</div>
+            )}
+          </div>
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <Layout>
@@ -128,101 +230,47 @@ const HierarchyView: React.FC = () => {
 
             {/* Department Details Panel */}
             <div className="xl:col-span-1">
-              <Card className="bg-[#2d2d30] border-[#3e3e42] p-6 sticky top-6">
-                {selectedDepartment ? (
-                  <div>
-                    <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
-                      Department Details
-                    </h3>
-                    
-                    <div className="space-y-4">
-                      {/* Basic Info */}
-                      <div>
-                        <h4 className="font-medium text-[#cccccc] mb-2">
-                          {selectedDepartment.name}
-                        </h4>
-                        <div className="space-y-1 text-sm">
-                          <div className="text-[#969696]">
-                            Manager: <span className="text-[#cccccc]">
-                              {selectedDepartment.managerName || 'None assigned'}
-                            </span>
-                          </div>
-                          <div className="text-[#969696]">
-                            Status: <span className={selectedDepartment.isActive ? 'text-emerald-400' : 'text-gray-400'}>
-                              {selectedDepartment.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Statistics */}
-                      <div>
-                        <h4 className="font-medium text-[#cccccc] mb-2">Statistics</h4>
-                        {(() => {
-                          const stats = getDepartmentStats(selectedDepartment);
-                          return (
-                            <div className="space-y-1 text-sm">
-                              <div className="text-[#969696]">
-                                Direct reports: <span className="text-[#cccccc]">{stats.directReports}</span>
-                              </div>
-                              <div className="text-[#969696]">
-                                Sub-departments: <span className="text-[#cccccc]">{stats.subDepartments}</span>
-                              </div>
-                              <div className="text-[#969696]">
-                                Total team size: <span className="text-[#cccccc]">{stats.totalTeamSize}</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Description */}
-                      {selectedDepartment.description && (
-                        <div>
-                          <h4 className="font-medium text-[#cccccc] mb-2">Description</h4>
-                          <p className="text-sm text-[#969696]">
-                            {selectedDepartment.description}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Team Members */}
-                      <div>
-                        <h4 className="font-medium text-[#cccccc] mb-2">Team Members</h4>
-                        {(() => {
-                          const teamMembers = people.filter(p => p.department === selectedDepartment.id);
-                          return teamMembers.length > 0 ? (
-                            <div className="space-y-2">
-                              {teamMembers.map(person => (
-                                <div key={person.id} className="text-sm">
-                                  <div className="text-[#cccccc]">{person.name}</div>
-                                  <div className="text-[#969696] text-xs">
-                                    {person.weeklyCapacity}h capacity
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-[#969696]">No team members assigned</div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center text-[#969696]">
-                    <h3 className="text-lg mb-2">Select a Department</h3>
-                    <p className="text-sm">Click on any department in the hierarchy to view details</p>
-                  </div>
-                )}
-              </Card>
+              <div className="sticky top-6">
+                <DetailsPanel />
+              </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Mobile details drawer */}
+      {isMobileLayout && mobileDetailOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[1150] bg-black/60 flex justify-end"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setMobileDetailOpen(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-md h-full bg-[#2d2d30] text-[#cccccc] shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#3e3e42]">
+              <div className="text-base font-semibold truncate">
+                {selectedDepartment?.name || 'Department details'}
+              </div>
+              <button
+                type="button"
+                className="text-xl text-[#969696]"
+                onClick={() => setMobileDetailOpen(false)}
+                aria-label="Close department details"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <DetailsPanel />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </Layout>
   );
 };
 
 export default HierarchyView;
-
