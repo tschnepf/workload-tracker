@@ -2,6 +2,7 @@ import React from 'react';
 import { useDebounce } from '@/utils/useDebounce';
 import { usePeopleAutocomplete } from '@/hooks/usePeople';
 import { usePersonExperienceProfile, usePersonProjectTimeline } from '@/hooks/useExperience';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 function addMonths(d: Date, months: number) {
   const copy = new Date(d.getTime());
@@ -45,13 +46,35 @@ export default function PersonExperienceReport() {
   const { loading, error, data } = usePersonExperienceProfile({ personId: selectedPersonId || 0, start, end });
 
   const avgScaleMax = 40;
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [filtersOpen, setFiltersOpen] = React.useState(true);
+
+  const filterBodyClassName = React.useMemo(() => {
+    if (!isMobile) {
+      return 'mt-3 grid grid-cols-1 md:grid-cols-3 gap-3';
+    }
+    return filtersOpen ? 'mt-3 space-y-3' : 'mt-3 hidden';
+  }, [isMobile, filtersOpen]);
 
   return (
     <div className="p-4 space-y-4">
       <div className="text-xl font-semibold">Person Experience Report</div>
 
       <section className="bg-[#111314] border border-[#2a2d2f] rounded p-3 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold text-[#e5e7eb]">Filters</div>
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((open) => !open)}
+              className="text-xs px-2 py-1 rounded border border-[#2a2d2f] bg-[#0c0e0f] text-[#e5e7eb] hover:bg-[#1a1d1f]"
+              aria-expanded={filtersOpen}
+            >
+              {filtersOpen ? 'Hide' : 'Show'}
+            </button>
+          )}
+        </div>
+        <div className={filterBodyClassName}>
           <div>
             <label className="block text-sm mb-1">Search Person</label>
             <input
@@ -181,25 +204,36 @@ export default function PersonExperienceReport() {
 
 function ProjectHoursSparkline({ personId, projectId, start, end }: { personId: number; projectId: number; start: string; end: string; }) {
   const { data, loading, error } = usePersonProjectTimeline({ personId, projectId, start, end });
-  const width = 220; const height = 36; const pad = 4;
+  const baseWidth = 220; const height = 36; const pad = 4;
   const weeks = React.useMemo(() => Object.keys(data?.weeklyHours || {}).sort(), [data]);
   const values = weeks.map(w => (data?.weeklyHours as any)?.[w] || 0);
   const max = Math.max(1, ...values);
-  const points = values.map((v, i) => {
-    const x = pad + (i * (width - 2*pad)) / Math.max(1, values.length - 1);
-    const y = height - pad - ((v / max) * (height - 2*pad));
-    return `${x},${y}`;
-  }).join(' ');
   if (loading) return <div className="mt-2 text-xs text-[#9aa0a6]">Loading series...</div>;
   if (error) return null;
   if (!values.length) return null;
+  const step = 24;
+  const width = Math.max(baseWidth, values.length > 1 ? pad * 2 + (values.length - 1) * step : baseWidth);
+  const points = values.map((v, i) => {
+    const inner = width - 2 * pad;
+    const x = values.length <= 1 ? pad + inner / 2 : pad + (i * inner) / (values.length - 1);
+    const y = height - pad - ((v / max) * (height - 2 * pad));
+    return `${x},${y}`;
+  }).join(' ');
+  const ariaLabel = weeks.length
+    ? `Weekly hours from ${weeks[0]} to ${weeks[weeks.length - 1]}`
+    : 'Weekly hours timeline';
   return (
-    <div className="mt-2">
+    <div className="mt-2 overflow-x-auto">
       <div className="text-[#9aa0a6] text-xs mb-1">Weekly hours</div>
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={ariaLabel}
+      >
         <polyline fill="none" stroke="#3b82f6" strokeWidth="2" points={points} />
       </svg>
     </div>
   );
 }
-

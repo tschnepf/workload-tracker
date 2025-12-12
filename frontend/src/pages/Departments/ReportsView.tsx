@@ -3,7 +3,7 @@
  * Provides detailed department performance metrics and insights
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
@@ -14,6 +14,7 @@ import UtilizationBadge from '@/components/ui/UtilizationBadge';
 import { resolveUtilizationLevel, defaultUtilizationScheme } from '@/util/utilization';
 import { dashboardApi, departmentsApi, peopleApi, personSkillsApi } from '@/services/api';
 import { DashboardData, Department, Person, PersonSkill } from '@/types/models';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface DepartmentReport {
   department: Department;
@@ -53,6 +54,66 @@ const getUtilizationColor = (percentage: number): string => {
   }
 };
 
+const ComparativeBadge: React.FC<{ value: number; baseline: number }> = ({ value, baseline }) => {
+  if (!Number.isFinite(baseline) || baseline === 0) {
+    return null;
+  }
+
+  const delta = value - baseline;
+  const absDelta = Math.abs(delta);
+
+  if (absDelta < 1) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)]">
+        Near portfolio avg
+      </span>
+    );
+  }
+
+  const directionLabel = delta > 0 ? 'above' : 'below';
+  const sign = delta > 0 ? '+' : '−';
+  const colorClass =
+    delta > 0
+      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+      : 'bg-amber-500/15 text-amber-300 border-amber-500/40';
+
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border ${colorClass}`}
+    >
+      {sign}
+      {absDelta.toFixed(0)} pts {directionLabel} avg
+    </span>
+  );
+};
+
+const AccordionSection: React.FC<{
+  title: string;
+  description?: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}> = ({ title, description, isOpen, onToggle, children }) => (
+  <Card className="bg-[#2d2d30] border-[#3e3e42]">
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full flex justify-between items-center px-6 py-4 text-left"
+    >
+      <div>
+        <div className="text-sm font-semibold text-[#cccccc]">{title}</div>
+        {description && (
+          <div className="text-xs text-[#969696] mt-1">{description}</div>
+        )}
+      </div>
+      <span className="text-[#969696] text-lg" aria-hidden="true">
+        {isOpen ? '−' : '+'}
+      </span>
+    </button>
+    {isOpen && <div className="px-6 pb-6">{children}</div>}
+  </Card>
+);
+
 const ReportsView: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [reports, setReports] = useState<DepartmentReport[]>([]);
@@ -60,6 +121,13 @@ const ReportsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
+  const isMobileLayout = useMediaQuery('(max-width: 767px)');
+  const [assignedAnalyticsOpen, setAssignedAnalyticsOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Default open on desktop/tablet; collapsed on mobile to defer chart mounts.
+    setAssignedAnalyticsOpen(!isMobileLayout);
+  }, [isMobileLayout]);
 
   useAuthenticatedEffect(() => {
     loadData();
@@ -278,16 +346,21 @@ const ReportsView: React.FC = () => {
           </Card>
         </div>
 
-        {/* Assigned Hours Breakdown */}
-        <div className="flex flex-wrap gap-4">
-          <AssignedHoursBreakdownCard />
-          <AssignedHoursByClientCard />
-        </div>
-
-        {/* Assigned Hours Timeline */}
-        <div className="mt-4">
-          <AssignedHoursTimelineCard />
-        </div>
+        {/* Assigned Hours Analytics */}
+        <AccordionSection
+          title="Assigned Hours Analytics"
+          description="Breakdown, by-client distribution, and timeline for the selected timeframe."
+          isOpen={assignedAnalyticsOpen}
+          onToggle={() => setAssignedAnalyticsOpen((open) => !open)}
+        >
+          <div className={isMobileLayout ? 'space-y-4' : 'flex flex-wrap gap-4'}>
+            <AssignedHoursBreakdownCard />
+            <AssignedHoursByClientCard />
+          </div>
+          <div className="mt-4">
+            <AssignedHoursTimelineCard />
+          </div>
+        </AccordionSection>
 
         {/* Person Experience (link) */}
         <Card className="bg-[#2d2d30] border-[#3e3e42]">
@@ -344,7 +417,13 @@ const ReportsView: React.FC = () => {
                           {report.metrics.teamSize}
                         </td>
                         <td className="py-3">
-                          <UtilizationBadge percentage={report.metrics.avgUtilization} />
+                          <div className="flex flex-col items-start gap-1">
+                            <UtilizationBadge percentage={report.metrics.avgUtilization} />
+                            <ComparativeBadge
+                              value={report.metrics.avgUtilization}
+                              baseline={avgUtilization}
+                            />
+                          </div>
                         </td>
                         <td className="py-3">
                           <UtilizationBadge percentage={report.metrics.peakUtilization} />

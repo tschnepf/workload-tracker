@@ -230,4 +230,43 @@ const LegendDot: React.FC<{ color: string; label: string; box?: boolean }> = ({ 
   </div>
 );
 
+export const CapacityTimelineCompact: React.FC<CapacityTimelineProps> = ({ weeklyData, scale }) => {
+  const data = useMemo(() => aggregate(weeklyData, scale), [weeklyData, scale]);
+
+  if (!data.length) return <div className="text-[var(--muted)]">No data</div>;
+
+  const maxCapacity = Math.max(10, ...data.map((d) => d.totalCapacity));
+  const maxBarHeight = 40;
+
+  return (
+    <div className="flex gap-3 overflow-x-auto py-2">
+      {data.map((point, idx) => {
+        const ratio = point.totalCapacity ? point.utilized / point.totalCapacity : 0;
+        const barHeight = Math.max(
+          4,
+          Math.min(maxBarHeight, Math.round((point.utilized / maxCapacity) * maxBarHeight))
+        );
+        const utilizationPct = Math.round(ratio * 100);
+        return (
+          <div key={idx} className="flex flex-col items-center min-w-[48px]">
+            <div className="w-3 h-10 rounded-full bg-[var(--border)] flex items-end justify-center">
+              <div
+                className="w-full rounded-full bg-[#22c55e]"
+                style={{ height: `${barHeight}px` }}
+                aria-hidden
+              />
+            </div>
+            <div className="mt-1 text-[10px] text-[var(--muted)] truncate max-w-[56px] text-center">
+              {point.label}
+            </div>
+            <div className="text-[10px] text-[var(--muted)]">
+              {utilizationPct}%
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export default CapacityTimeline;

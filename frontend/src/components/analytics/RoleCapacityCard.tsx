@@ -5,6 +5,7 @@ import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { rolesApi, departmentsApi } from '@/services/api';
 import { getRoleCapacityTimeline } from '@/services/analyticsApi';
 import type { Department } from '@/types/models';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 type HideControls = {
   timeframe?: boolean;
@@ -38,6 +39,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   responsive = false,
 }) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const { state: globalDept } = useDepartmentFilter();
   const effectiveDeptId = (departmentId ?? globalDept.selectedDepartmentId) ?? null;
 
@@ -134,11 +136,18 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
       return width;
     } catch { return undefined; }
   })();
-  const autoHeight = React.useMemo(() => {
+  const baseHeight = React.useMemo(() => {
     if (!responsive || !containerWidth) return dynamicHeight;
     const h = Math.floor(containerWidth * 0.5);
     return Math.max(280, Math.min(560, h));
   }, [responsive, containerWidth, dynamicHeight]);
+
+  const chartHeight = React.useMemo(() => {
+    if (!isMobile) return baseHeight;
+    const min = 240;
+    const max = 420;
+    return Math.max(min, Math.min(max, baseHeight));
+  }, [baseHeight, isMobile]);
 
   return (
     <Card className={className ?? 'bg-[var(--card)] border-[var(--border)]'}>
@@ -193,7 +202,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
           <h2 className="text-lg font-semibold text-[var(--text)] mb-2">{title}</h2>
           {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
           <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-6 lg:items-start">
-            <div className="flex-1 overflow-visible">
+            <div className="flex-1 overflow-x-auto md:overflow-visible max-h-[70vh]">
               {!error && (
                 <MultiRoleCapacityChart
                   weekKeys={weekKeys}
@@ -201,7 +210,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
                   mode={mode}
                   tension={tension}
                   hideLegend
-                  height={autoHeight}
+                  height={chartHeight}
                 />
               )}
             </div>

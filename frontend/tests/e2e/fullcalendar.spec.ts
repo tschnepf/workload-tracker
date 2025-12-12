@@ -117,10 +117,17 @@ const projectsPayload = [
   { id: 2, name: 'Switch', status: 'planning', client: 'ADC' },
 ];
 
-async function mockDeliverablesCalendar(page: any) {
-  await page.route('**/api/deliverables/calendar_with_pre_items/**', (route) =>
-    route.fulfill(jsonResponse(deliverablesCalendarPayload))
-  );
+async function mockDeliverablesCalendar(
+  page: any,
+  onCalendarRequest?: (url: URL) => void
+) {
+  await page.route('**/api/deliverables/calendar_with_pre_items/**', (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (onCalendarRequest) {
+      onCalendarRequest(requestUrl);
+    }
+    return route.fulfill(jsonResponse(deliverablesCalendarPayload));
+  });
   await page.route('**/api/deliverables/pre_deliverable_items/**', (route) =>
     route.fulfill(jsonResponse([]))
   );
@@ -183,5 +190,53 @@ test.describe('FullCalendar responsive snapshots', () => {
     await expect(page.getByRole('heading', { name: 'Capacity & Deliverables Timeline' })).toBeVisible();
     await expect(page.getByText('Specification TOC')).toBeVisible();
     await expect(page).toHaveScreenshot('fullcalendar-dashboard-1280.png', { fullPage: true });
+  });
+
+  test('Deliverables calendar uses agenda list on mobile and respects weeks range', async ({ page }) => {
+    await primeAuth(page);
+    const requests: Array<{ start: string; end: string }> = [];
+
+    await mockDeliverablesCalendar(page, (url) => {
+      const start = url.searchParams.get('start') ?? '';
+      const end = url.searchParams.get('end') ?? '';
+      if (start && end) {
+        requests.push({ start, end });
+      }
+    });
+
+    await page.route('**/api/**', (route) => route.fulfill(jsonResponse({})));
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/deliverables/calendar');
+
+    await expect(page.getByRole('heading', { name: /Deliverables Calendar/i })).toBeVisible();
+    await expect(page.getByText('Specification TOC')).toBeVisible();
+
+    await expect(page.locator('.fc-listWeek-view')).toBeVisible();
+    await expect(page.locator('.fc-deliverablesMultiWeek-view')).toHaveCount(0);
+
+    expect(requests.length).toBeGreaterThan(0);
+    const initial = requests[0];
+    const initialStart = new Date(initial.start);
+    const initialEnd = new Date(initial.end);
+    const initialDays = Math.round(
+      (initialEnd.getTime() - initialStart.getTime()) / (1000 * 60 * 60 * 24)
+    ) + 1;
+
+    expect(initialDays).toBe(56);
+
+    await page.getByRole('button', { name: '4w' }).click();
+
+    await page.waitForTimeout(50);
+
+    const latest = requests[requests.length - 1];
+    const latestStart = new Date(latest.start);
+    const latestEnd = new Date(latest.end);
+    const latestDays = Math.round(
+      (latestEnd.getTime() - latestStart.getTime()) / (1000 * 60 * 60 * 24)
+    ) + 1;
+
+    expect(latestDays).toBe(28);
+    expect(latestStart.getTime()).toBe(initialStart.getTime());
   });
 });

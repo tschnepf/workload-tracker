@@ -1,11 +1,12 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
 import { peopleApi, projectsApi, assignmentsApi, deliverablesApi, departmentsApi } from '../../services/api';
 import { WorkloadForecastItem, Project, Assignment, Deliverable, Department } from '../../types/models';
-import CapacityTimeline from '@/components/charts/CapacityTimeline';
+import CapacityTimeline, { CapacityTimelineCompact } from '@/components/charts/CapacityTimeline';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 function fmt(date: Date): string { return date.toISOString().slice(0,10); }
 
@@ -13,6 +14,7 @@ const TeamForecastPage: React.FC = () => {
   const [weeks, setWeeks] = useState<number>(12);
   const [scale, setScale] = useState<'week'|'month'|'quarter'|'year'>('month');
   const { state: deptState, setDepartment } = useDepartmentFilter();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [forecast, setForecast] = useState<WorkloadForecastItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +26,17 @@ const TeamForecastPage: React.FC = () => {
   const [projAssignments, setProjAssignments] = useState<Assignment[]>([]);
   const [projDeliverables, setProjDeliverables] = useState<Deliverable[]>([]);
   const [projLoading, setProjLoading] = useState<boolean>(false);
+
+  const [pendingDeptId, setPendingDeptId] = useState<number | null>(null);
+  const [pendingProjectId, setPendingProjectId] = useState<number | ''>('');
+
+  useEffect(() => {
+    setPendingDeptId(deptState.selectedDepartmentId ?? null);
+  }, [deptState.selectedDepartmentId]);
+
+  useEffect(() => {
+    setPendingProjectId(selectedProject);
+  }, [selectedProject]);
 
   useAuthenticatedEffect(() => {
     let active = true;
@@ -90,6 +103,12 @@ const TeamForecastPage: React.FC = () => {
     return totals;
   }, [projAssignments, weekStarts]);
 
+  const handleApplyMobileFilters = () => {
+    if (!isMobile) return;
+    setDepartment(pendingDeptId != null ? pendingDeptId : null);
+    setSelectedProject(pendingProjectId || '');
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -113,11 +132,56 @@ const TeamForecastPage: React.FC = () => {
           </div>
         </div>
 
+        {isMobile && (
+          <div className="-mx-4 px-4 py-3 bg-[var(--bg)] border-y border-[var(--border)] sticky top-0 z-[10] space-y-3 md:hidden">
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs font-semibold text-[var(--muted)]">Department</div>
+                <select
+                  value={pendingDeptId ?? ''}
+                  onChange={(e)=> {
+                    const value = e.target.value ? Number(e.target.value) : null;
+                    setPendingDeptId(value);
+                  }}
+                  className="mt-1 w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+                >
+                  <option value="">All Departments</option>
+                  {depts.map(d => (
+                    <option key={d.id} value={d.id as number}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-[var(--muted)]">Project</div>
+                <select
+                  value={pendingProjectId}
+                  onChange={(e)=> setPendingProjectId(e.target.value ? Number(e.target.value) : '')}
+                  className="mt-1 w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+                >
+                  <option value="">All projects</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id as number}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleApplyMobileFilters}
+                className="inline-flex items-center rounded px-3 py-1 text-xs bg-[var(--primary)] text-white shadow-sm"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        )}
+
         <Card className="bg-[var(--card)] border-[var(--border)]">
           <div className="p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
               <div className="text-[var(--text)] font-semibold">Capacity Timeline</div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 md:justify-end">
                 {/* Scale toggles */}
                 {(['week','month','quarter','year'] as const).map(s => (
                   <button key={s} onClick={()=> setScale(s)} aria-pressed={scale===s}
@@ -127,9 +191,12 @@ const TeamForecastPage: React.FC = () => {
                         : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'
                     }`}>{s[0].toUpperCase()+s.slice(1)}</button>
                 ))}
-                {/* Department filter (bound to global) */}
-                <select value={deptState.selectedDepartmentId ?? ''} onChange={(e)=> setDepartment(e.target.value ? Number(e.target.value) : null)}
-                  className="ml-3 px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)]">
+                {/* Department filter (desktop) */}
+                <select
+                  value={deptState.selectedDepartmentId ?? ''}
+                  onChange={(e)=> setDepartment(e.target.value ? Number(e.target.value) : null)}
+                  className="hidden md:block ml-3 px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)]"
+                >
                   <option value="">All Departments</option>
                   {depts.map(d => <option key={d.id} value={d.id as number}>{d.name}</option>)}
                 </select>
@@ -140,22 +207,34 @@ const TeamForecastPage: React.FC = () => {
             ) : error ? (
               <div className="text-red-400">{error}</div>
             ) : (
-              <CapacityTimeline weeklyData={forecast} scale={scale} />
+              isMobile ? (
+                <CapacityTimelineCompact weeklyData={forecast} scale={scale} />
+              ) : (
+                <CapacityTimeline weeklyData={forecast} scale={scale} />
+              )
             )}
           </div>
         </Card>
 
         <Card className="bg-[var(--card)] border-[var(--border)]">
           <div className="p-4 space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
               <div className="text-[var(--text)] font-semibold">Project Timeline</div>
-              <select value={selectedProject} onChange={(e)=> setSelectedProject(e.target.value? Number(e.target.value):'')}
-                className="px-2 py-1 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none min-w-[220px]">
+              <select
+                value={selectedProject}
+                onChange={(e)=> setSelectedProject(e.target.value? Number(e.target.value):'')}
+                className="hidden md:inline-block px-2 py-1 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none min-w-[220px]"
+              >
                 <option value="">Select a project...</option>
                 {projects.map(p => (
                   <option key={p.id} value={p.id as number}>{p.name}</option>
                 ))}
               </select>
+              {isMobile && selectedProject && (
+                <div className="text-xs text-[var(--muted)]">
+                  Project: {projects.find((p) => p.id === selectedProject)?.name ?? 'Selected project'}
+                </div>
+              )}
             </div>
             {selectedProject === '' ? (
               <div className="text-[var(--muted)]">Choose a project to view its weekly assignment timeline and deliverable markers.</div>
@@ -199,5 +278,4 @@ const ProjectTimeline: React.FC<{ weeks:number; weekStarts:string[]; weeklyTotal
 }
 
 export default TeamForecastPage;
-
 
