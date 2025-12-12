@@ -598,14 +598,49 @@ const AssignmentGrid: React.FC = () => {
 
   // (subscribeGridRefresh is handled inside useAssignmentsSnapshot)
 
-  // Load a person's assignments once when expanding
+  // Load a person's assignments once when expanding.
+  // Prefer already-loaded assignments from state to avoid redundant network calls.
   const ensureAssignmentsLoaded = async (personId: number) => {
+    const person = people.find(p => p.id === personId);
     if (loadedAssignmentIds.has(personId) || loadingAssignments.has(personId)) return;
+    if (person && Array.isArray(person.assignments) && person.assignments.length > 0) {
+      setLoadedAssignmentIds(prev => {
+        const next = new Set(prev);
+        next.add(personId);
+        return next;
+      });
+      return;
+    }
     setLoadingAssignments(prev => new Set(prev).add(personId));
     try {
       const rows = await assignmentsApi.byPerson(personId);
       setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
-      setLoadedAssignmentIds(prev => new Set(prev).add(personId));
+      setLoadedAssignmentIds(prev => {
+        const next = new Set(prev);
+        next.add(personId);
+        return next;
+      });
+      // Keep hoursByPerson in sync for this person using the refreshed rows
+      try {
+        const weekKeys = weeks.map(w => w.date);
+        setHoursByPerson(prev => {
+          const next = { ...prev } as Record<number, Record<string, number>>;
+          const totals: Record<string, number> = {};
+          for (const wk of weekKeys) {
+            let sum = 0;
+            for (const a of rows) {
+              const wh = (a as any).weeklyHours || {};
+              const v = parseFloat((wh[wk] ?? 0).toString()) || 0;
+              sum += v;
+            }
+            if (sum !== 0) totals[wk] = sum;
+          }
+          if (Object.keys(totals).length > 0) {
+            next[personId] = { ...(next[personId] || {}), ...totals };
+          }
+          return next;
+        });
+      } catch {}
     } catch (e: any) {
       showToast('Failed to load assignments: ' + (e?.message || 'Unknown error'), 'error');
       setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: false } : p)));
@@ -620,13 +655,18 @@ const AssignmentGrid: React.FC = () => {
     try {
       const rows = await assignmentsApi.byPerson(personId);
       setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
-      setLoadedAssignmentIds(prev => new Set(prev).add(personId));
-      // Optional: recompute aggregated totals for this person from refreshed rows
+      setLoadedAssignmentIds(prev => {
+        const next = new Set(prev);
+        next.add(personId);
+        return next;
+      });
+      // Recompute aggregated totals for this person from refreshed rows
       try {
+        const weekKeys = weeks.map(w => w.date);
         setHoursByPerson(prev => {
           const next = { ...prev } as Record<number, Record<string, number>>;
           const totals: Record<string, number> = {};
-          for (const wk of weeks.map(w => w.date)) {
+          for (const wk of weekKeys) {
             let sum = 0;
             for (const a of rows) {
               const wh = (a as any).weeklyHours || {};
@@ -635,7 +675,9 @@ const AssignmentGrid: React.FC = () => {
             }
             if (sum !== 0) totals[wk] = sum;
           }
-          next[personId] = { ...(next[personId] || {}), ...totals };
+          if (Object.keys(totals).length > 0) {
+            next[personId] = { ...(next[personId] || {}), ...totals };
+          }
           return next;
         });
       } catch {}
@@ -647,21 +689,79 @@ const AssignmentGrid: React.FC = () => {
     }
   };
 
-  // Refresh assignments for all people (both expanded and collapsed)
+  // Refresh assignments for all people (both expanded and collapsed) using a single bulk call
   const refreshAllAssignments = async () => {
     if (people.length === 0) {
       showToast('No people available to refresh', 'warning');
       return;
     }
 
+    const personIds = people.map(p => p.id!).filter((id): id is number => typeof id === 'number');
+    if (personIds.length === 0) {
+      showToast('No people available to refresh', 'warning');
+      return;
+    }
+
+    setLoadingAssignments(prev => {
+      const next = new Set(prev);
+      personIds.forEach(id => next.add(id));
+      return next;
+    });
+
     try {
-      // Refresh assignments for all people in parallel
-      await Promise.all(
-        people.map(person => refreshPersonAssignments(person.id!))
-      );
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const bulk = await assignmentsApi.listAll({ department: dept, include_children: dept != null ? inc : undefined });
+      const allAssignments = Array.isArray(bulk) ? bulk : [];
+
+      const byPerson = new Map<number, Assignment[]>();
+      for (const a of allAssignments) {
+        const pid = (a as any).person as number | undefined;
+        if (!pid) continue;
+        const current = byPerson.get(pid) || [];
+        current.push(a);
+        byPerson.set(pid, current);
+      }
+
+      setPeople(prev => prev.map(person => {
+        const id = person.id!;
+        const rows = byPerson.get(id) || [];
+        return { ...person, assignments: rows };
+      }));
+
+      setAssignmentsData(allAssignments);
+
+      try {
+        const weekKeys = weeks.map(w => w.date);
+        setHoursByPerson(() => {
+          const next: Record<number, Record<string, number>> = {};
+          for (const [pid, rows] of byPerson.entries()) {
+            const totals: Record<string, number> = {};
+            for (const wk of weekKeys) {
+              let sum = 0;
+              for (const a of rows) {
+                const wh = (a as any).weeklyHours || {};
+                const v = parseFloat((wh[wk] ?? 0).toString()) || 0;
+                sum += v;
+              }
+              if (sum !== 0) totals[wk] = sum;
+            }
+            next[pid] = totals;
+          }
+          return next;
+        });
+      } catch {}
+
+      setLoadedAssignmentIds(() => new Set(personIds));
       showToast(`Refreshed assignments for all ${people.length} people`, 'success');
     } catch (error) {
       showToast('Failed to refresh some assignments', 'error');
+    } finally {
+      setLoadingAssignments(prev => {
+        const next = new Set(prev);
+        personIds.forEach(id => next.delete(id));
+        return next;
+      });
     }
   };
 
