@@ -212,6 +212,27 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 })),
                 'hoursByProject': serializers.DictField(child=serializers.DictField(child=serializers.FloatField())),
                 'deliverablesByProjectWeek': serializers.DictField(child=serializers.DictField(child=serializers.IntegerField())),
+                'deliverableMarkersByProjectWeek': serializers.DictField(
+                    child=serializers.DictField(
+                        child=serializers.ListField(
+                            child=inline_serializer(
+                                name='DeliverableMarkerLite',
+                                fields={
+                                    'type': serializers.CharField(),
+                                    'percentage': serializers.IntegerField(required=False, allow_null=True),
+                                    'dates': serializers.ListField(
+                                        child=serializers.CharField(),
+                                        required=False,
+                                        allow_empty=True
+                                    ),
+                                    'description': serializers.CharField(required=False, allow_null=True),
+                                    'note': serializers.CharField(required=False, allow_null=True),
+                                },
+                            )
+                        )
+                    ),
+                    required=False,
+                ),
                 'hasFutureDeliverablesByProject': serializers.DictField(child=serializers.BooleanField()),
                 'metrics': inline_serializer(name='ProjectSnapshotMetrics', fields={
                     'projectsCount': serializers.IntegerField(),
@@ -338,13 +359,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Candidate project ids
         project_ids = list(project_hours.keys()) if project_hours else []
 
-        # Deliverables aggregates (for shading and filters)
+        # Deliverables aggregates (for shading, filters, and per-week markers)
         deliverables_by_week = {}
         has_future_deliverables = {}
+        deliverable_markers_by_week = {}
         try:
             deliv_qs = Deliverable.objects.filter(project_id__in=project_ids)
             now = date.today()
-            for d in deliv_qs.only('project_id', 'date'):
+            for d in deliv_qs.only('project_id', 'date', 'description', 'percentage', 'notes'):
                 pid = d.project_id
                 dt = None
                 try:
@@ -357,11 +379,38 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 if dt >= now:
                     has_future_deliverables[pid] = True
                 # Map deliverable date to Sunday-of-week key
-                from core.week_utils import sunday_of_week
                 wk = sunday_of_week(dt).isoformat()
                 if wk in week_keys:
                     deliverables_by_week.setdefault(pid, {})
                     deliverables_by_week[pid][wk] = deliverables_by_week[pid].get(wk, 0) + 1
+                    # Build markers payload with basic type classification and metadata
+                    deliverable_markers_by_week.setdefault(pid, {})
+                    markers_for_week = deliverable_markers_by_week[pid].setdefault(wk, [])
+                    title = (d.description or "").lower()
+                    if "bulletin" in title:
+                        marker_type = "bulletin"
+                    elif " cd" in f" {title}" or title.startswith("cd "):
+                        marker_type = "cd"
+                    elif " dd" in f" {title}" or title.startswith("dd "):
+                        marker_type = "dd"
+                    elif " ifc" in f" {title}" or title.startswith("ifc "):
+                        marker_type = "ifc"
+                    elif " ifp" in f" {title}" or title.startswith("ifp "):
+                        marker_type = "ifp"
+                    elif "master" in title and "plan" in title:
+                        marker_type = "masterplan"
+                    elif " sd" in f" {title}" or title.startswith("sd "):
+                        marker_type = "sd"
+                    else:
+                        marker_type = "milestone"
+                    marker = {
+                        "type": marker_type,
+                        "percentage": d.percentage,
+                        "dates": [dt.isoformat()],
+                        "description": d.description or None,
+                        "note": d.notes or None,
+                    }
+                    markers_for_week.append(marker)
         except Exception:
             pass
 
@@ -398,6 +447,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'projects': projects,
             'hoursByProject': project_hours,
             'deliverablesByProjectWeek': deliverables_by_week,
+            'deliverableMarkersByProjectWeek': deliverable_markers_by_week,
             'hasFutureDeliverablesByProject': { str(pid): True for pid in has_future_deliverables.keys() },
             'metrics': {
                 'projectsCount': projects_count,

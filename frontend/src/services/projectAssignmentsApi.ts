@@ -25,6 +25,13 @@ export async function getProjectGridSnapshot(opts?: GridSnapshotOpts) {
     projects: Array<{ id: number; name: string; client?: string | null; status?: string | null }>;
     hoursByProject: Record<string, Record<string, number>>;
     deliverablesByProjectWeek: Record<string, Record<string, number>>;
+    deliverableMarkersByProjectWeek?: Record<string, Record<string, Array<{
+      type: string;
+      percentage?: number | null;
+      dates?: string[];
+      description?: string | null;
+      note?: string | null;
+    }>>>;
     hasFutureDeliverablesByProject: Record<string, boolean>;
     metrics: { projectsCount: number; peopleAssignedCount: number; totalHours: number };
   };
@@ -41,4 +48,3 @@ export async function getProjectTotals(projectIds: number[], opts?: { weeks?: nu
   if (!res.data) throw new Error(`HTTP ${res.response?.status ?? 500}`);
   return res.data as unknown as { hoursByProject: Record<string, Record<string, number>> };
 }
-

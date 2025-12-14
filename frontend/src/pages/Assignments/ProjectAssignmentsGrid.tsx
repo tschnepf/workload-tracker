@@ -11,7 +11,7 @@ import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
 import type { Project, Assignment, Person } from '@/types/models';
 import { showToast } from '@/lib/toastBus';
 import { useAbortManager } from '@/utils/useAbortManager';
-import { assignmentsApi, peopleApi, deliverablesApi, projectsApi } from '@/services/api';
+import { assignmentsApi, peopleApi, projectsApi } from '@/services/api';
 import { formatDateWithWeekday } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
@@ -554,17 +554,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     sd: '#f59e0b',
     milestone: '#64748b',
   };
-  const classifyDeliverable = (title?: string | null): string => {
-    const t = (title || '').toLowerCase();
-    if (/\bbulletin\b/.test(t)) return 'bulletin';
-    if (/\bcd\b/.test(t)) return 'cd';
-    if (/\bdd\b/.test(t)) return 'dd';
-    if (/\bifc\b/.test(t)) return 'ifc';
-    if (/\bifp\b/.test(t)) return 'ifp';
-    if (/(master ?plan)/.test(t)) return 'masterplan';
-    if (/\bsd\b/.test(t)) return 'sd';
-    return 'milestone';
-  };
 
   const sparkWeeks = React.useMemo(() => weeks.slice(0, Math.min(6, weeks.length)), [weeks]);
 
@@ -927,13 +916,43 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
 
     try {
-      // Refresh assignments for all projects in parallel
-      await Promise.all(
-        projects.map(project => refreshProjectAssignments(project.id!))
+      const projectIds = projects.map(p => p.id!).filter((id): id is number => typeof id === 'number');
+      if (projectIds.length === 0) {
+        showToast('No projects available to refresh', 'warning');
+        return;
+      }
+
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const bulk = await assignmentsApi.listAll({ department: dept, include_children: dept != null ? inc : undefined } as any);
+      const allAssignments = Array.isArray(bulk) ? bulk : [];
+
+      const byProject = new Map<number, Assignment[]>();
+      for (const a of allAssignments) {
+        const pid = (a.project as number | undefined) ?? ((a as any).projectId as number | undefined);
+        if (!pid) continue;
+        const current = byProject.get(pid) || [];
+        current.push(a);
+        byProject.set(pid, current);
+      }
+
+      const updates: Array<{ projectId: number; assignments: Assignment[] }> = [];
+      for (const projectId of projectIds) {
+        const rows = byProject.get(projectId) || [];
+        const sorted = rows.length > 0 ? await sortRowsByDeptRoles(rows) : [];
+        updates.push({ projectId, assignments: sorted });
+      }
+
+      setProjects(prev =>
+        prev.map(p => {
+          const update = updates.find(u => u.projectId === p.id);
+          return update ? { ...p, assignments: update.assignments } : p;
+        })
       );
+
       showToast(`Refreshed assignments for all ${projects.length} projects`, 'success');
-    } catch (error) {
-      showToast('Failed to refresh some project assignments', 'error');
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to refresh some project assignments', 'error');
     }
   }
 
@@ -1061,10 +1080,34 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const hb: Record<number, Record<string, number>> = {};
         Object.entries(snap.hoursByProject || {}).forEach(([pid, wk]) => { hb[Number(pid)] = wk; });
         setHoursByProject(hb);
-        // Deliverables maps
+        // Deliverables maps (counts + typed markers from snapshot)
         const dbw: Record<number, Record<string, number>> = {};
         Object.entries(snap.deliverablesByProjectWeek || {}).forEach(([pid, wk]) => { dbw[Number(pid)] = wk; });
         setDeliverablesByProjectWeek(dbw);
+        const markersByProject: Record<number, Record<string, DeliverableMarker[]>> = {};
+        if (snap.deliverableMarkersByProjectWeek) {
+          Object.entries(snap.deliverableMarkersByProjectWeek).forEach(([pid, weeksMap]) => {
+            const projectId = Number(pid);
+            if (!projectId || !weeksMap) return;
+            const weekMarkers: Record<string, DeliverableMarker[]> = {};
+            Object.entries(weeksMap || {}).forEach(([weekKey, markers]) => {
+              const normalized = (markers || []).map((m: any) => ({
+                type: String(m.type || '').toLowerCase(),
+                percentage: m.percentage == null || Number.isNaN(Number(m.percentage)) ? undefined : Number(m.percentage),
+                dates: Array.isArray(m.dates) && m.dates.length > 0 ? [...m.dates] : undefined,
+                description: m.description ?? null,
+                note: m.note ?? null,
+              })) as DeliverableMarker[];
+              if (normalized.length > 0) {
+                weekMarkers[weekKey] = normalized;
+              }
+            });
+            if (Object.keys(weekMarkers).length > 0) {
+              markersByProject[projectId] = weekMarkers;
+            }
+          });
+        }
+        setDeliverableTypesByProjectWeek(markersByProject);
         // Expand projects from URL param and lazy-load their assignments
         try {
           const expandedParam = url.get('expanded');
@@ -1117,124 +1160,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return unsub;
   }, []);
 
-  // Load deliverables for visible window and map to week keys per project
-  useEffect(() => {
-    const run = async () => {
-      try {
-        if (!weeks || weeks.length === 0 || !projects || projects.length === 0) return;
-        const last = weeks[weeks.length - 1].date;
-        const endDate = new Date(last); endDate.setDate(endDate.getDate() + 6);
-        const weekRanges = weeks.map(w => { const s = new Date(w.date); const e = new Date(w.date); e.setDate(e.getDate() + 6); return { key: w.date, s, e }; });
-
-        const pidList = projects.map(p => p.id!).filter(Boolean) as number[];
-        const map: Record<number, Record<string, DeliverableMarker[]>> = {};
-
-        const addEntry = ({ pid, weekKey, type, percentage, dateStr, description, note }: {
-          pid: number;
-          weekKey: string;
-          type: string;
-          percentage?: number;
-          dateStr?: string;
-          description?: string | null;
-          note?: string | null;
-        }) => {
-          if (!map[pid]) map[pid] = {};
-          if (!map[pid][weekKey]) map[pid][weekKey] = [];
-          const arr = map[pid][weekKey];
-          const numPct = (percentage == null || Number.isNaN(Number(percentage))) ? undefined : Number(percentage);
-          const existing = arr.find(e =>
-            e.type === type &&
-            (e.percentage ?? undefined) === (numPct ?? undefined) &&
-            (e.description || '') === (description || '')
-          );
-          if (existing) {
-            if ((existing.percentage == null) && (numPct != null)) existing.percentage = numPct;
-            if (dateStr) {
-              existing.dates = Array.from(new Set([...(existing.dates || []), dateStr]));
-            }
-            if (!existing.note && note) existing.note = note;
-            return;
-          }
-          const entry: DeliverableMarker = {
-            type,
-            percentage: numPct,
-            dates: dateStr ? [dateStr] : undefined,
-            description: description ?? null,
-            note: note ?? null,
-          };
-          arr.push(entry);
-        };
-
-        // Prefer the authoritative calendar API for the visible window
-        const start = weeks[0].date; const end = endDate.toISOString().slice(0, 10);
-        let loadedViaCalendar = false;
-        try {
-          const items = await deliverablesApi.calendar(start, end);
-          if (Array.isArray(items)) {
-            for (const it of items) {
-              const pid = (it as any).project as number | undefined; const dtStr = (it as any).date as string | undefined;
-              if (!pid || !dtStr) continue; const dt = new Date(dtStr);
-              const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
-              const title = (it as any).title as string | undefined; const type = classifyDeliverable(title);
-              let pct: number | undefined = undefined; if (title) { const m = title.match(/(\d{1,3})\s*%/); if (m) { const n = parseInt(m[1], 10); if (!Number.isNaN(n) && n >= 0 && n <= 100) pct = n; } }
-              addEntry({ pid, weekKey: wr.key, type, percentage: pct, dateStr: dtStr, description: title ?? null, note: (it as any)?.notes ?? null });
-            }
-            loadedViaCalendar = true;
-          }
-        } catch { /* fall back below */ }
-
-        if (!loadedViaCalendar) {
-          // Fallback path: prefer a single bulk request; if empty, a single all-deliverables request
-          let bulk: Record<string, any[]> = {};
-          try { bulk = await deliverablesApi.bulkList(pidList); } catch { bulk = {}; }
-          for (const [pidStr, list] of Object.entries(bulk || {})) {
-            const pid = Number(pidStr);
-            for (const d of (list || [])) {
-              if (!d?.date) continue;
-              const dt = new Date(d.date);
-              const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
-              const type = classifyDeliverable((d.description || '').toString());
-              addEntry({
-                pid,
-                weekKey: wr.key,
-                type,
-                percentage: d.percentage == null ? undefined : Number(d.percentage),
-                dateStr: (d as any).date as string | undefined,
-                description: (d as any).description ?? null,
-                note: (d as any).notes ?? null,
-              });
-            }
-          }
-          if (Object.keys(map).length === 0) {
-            try {
-              const all = await deliverablesApi.listAll();
-              for (const d of (all || [])) {
-                const pid = (d as any)?.project as number | undefined;
-                if (!pid || !pidList.includes(pid)) continue;
-                if (!d?.date) continue;
-                const dt = new Date((d as any).date as string);
-                const wr = weekRanges.find(r => dt >= r.s && dt <= r.e); if (!wr) continue;
-                const type = classifyDeliverable(((d as any).description || '').toString());
-                const pct = (d as any).percentage == null ? undefined : Number((d as any).percentage);
-                addEntry({
-                  pid,
-                  weekKey: wr.key,
-                  type,
-                  percentage: pct,
-                  dateStr: (d as any).date as string | undefined,
-                  description: (d as any).description ?? null,
-                  note: (d as any).notes ?? null,
-                });
-              }
-            } catch { /* ignore */ }
-          }
-        }
-
-        setDeliverableTypesByProjectWeek(map);
-      } catch { /* ignore */ }
-    };
-    run();
-  }, [weeks, projects]);
 
   // Global mouse events for column resizing
   useEffect(() => {

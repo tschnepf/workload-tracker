@@ -80,15 +80,25 @@ export const apiClient = {
 
 async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any, opts?: any) {
   await waitForAuthReady();
-  const keyPath = ensureTrailingSlash(materializePath(typeof path === 'string' ? path : String(path), opts));
+  const rawPath = typeof path === 'string' ? path : String(path);
+  const materializedPath = materializePath(rawPath, opts);
+  const keyPath = ensureTrailingSlash(materializedPath);
   let headers = withAuth(opts?.headers);
   // Inject If-Match for detail mutations when we have a strong ETag.
   // If missing, seed via GET. Never use weak ETags (W/..) for If-Match.
   if (method === 'PATCH' || method === 'PUT' || method === 'DELETE') {
+    // Heuristic: only attempt ETag seeding GETs for detail resources,
+    // not for bulk/action endpoints like /assignments/bulk_update_hours/.
+    const isDetailResource = (() => {
+      const [pathOnly] = materializedPath.split('?');
+      if (/{[^}]+}/.test(rawPath)) return true;
+      return /\/\d+\/?$/.test(pathOnly);
+    })();
+
     let etag = etagStore.get(keyPath);
     const isWeak = (t?: string) => !!t && /^\s*W\//.test(t);
     if (isWeak(etag)) etag = undefined; // avoid weak etags for If-Match
-    if (!headers['If-Match'] && !etag) {
+    if (!headers['If-Match'] && !etag && isDetailResource) {
       try {
         // Seed ETag by retrieving the latest representation for this detail resource
         const getOpts: any = { ...opts, headers: withAuth(opts?.headers) };

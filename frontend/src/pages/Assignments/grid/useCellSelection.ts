@@ -28,6 +28,8 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
   const [selectedCell, setSelectedCell] = useState<CellKey | null>(null);
   const [selectionStart, setSelectionStart] = useState<CellKey | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const selectionStartRef = useRef<CellKey | null>(null);
+  const isDraggingRef = useRef(false);
 
   // Index maps
   const weekIndex = useMemo(() => {
@@ -71,7 +73,7 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
   const lastHoverRef = useRef<{ rowKey: string; weekKey: string } | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const onCellMouseEnter = useCallback((rowKey: string, weekKey: string) => {
-    if (!isDragging || !selectionStart) return;
+    if (!isDraggingRef.current || !selectionStartRef.current) return;
     const last = lastHoverRef.current;
     if (last && last.rowKey === rowKey && last.weekKey === weekKey) return;
     lastHoverRef.current = { rowKey, weekKey };
@@ -82,17 +84,17 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
       if (!next) return;
       setSelectedCell({ rowKey: next.rowKey, weekKey: next.weekKey });
     });
-  }, [isDragging, selectionStart]);
+  }, []);
 
   const onCellSelect = useCallback((rowKey: string, weekKey: string, isShiftClick?: boolean) => {
-    if (isShiftClick && selectionStart) {
+    if (isShiftClick && selectionStartRef.current) {
       setSelectedCell({ rowKey, weekKey });
       return;
     }
     const single: CellKey = { rowKey, weekKey };
     setSelectionStart(single);
     setSelectedCell(single);
-  }, [selectionStart]);
+  }, []);
 
   const clearSelection = useCallback(() => {
     setSelectedCell(null);
@@ -103,6 +105,8 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
   // End drag on global mouseup
   const draggingRef = useRef(isDragging);
   useEffect(() => { draggingRef.current = isDragging; }, [isDragging]);
+  useEffect(() => { selectionStartRef.current = selectionStart; }, [selectionStart]);
+  useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
   useEffect(() => {
     const onUp = () => { if (draggingRef.current) setIsDragging(false); };
     window.addEventListener('mouseup', onUp);
@@ -173,4 +177,3 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
     selectionSummary,
   };
 }
-
