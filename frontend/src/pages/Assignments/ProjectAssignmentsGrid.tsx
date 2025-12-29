@@ -51,6 +51,14 @@ export type DeliverableMarker = {
   note?: string | null;
 };
 
+type AssignmentUpdateInfo = {
+  prev: Record<string, number>;
+  next: Record<string, number>;
+  weeks: Set<string>;
+  personId: number | null;
+  projectId: number;
+};
+
 // Local helper component: use the quick view hook inside a descendant of Layout's provider
 const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.ReactNode }> = ({ projectId, children }) => {
   const { open } = useProjectQuickViewPopover();
@@ -1221,40 +1229,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
     url.set('status', val || null);
   }, [selectedStatusFilters]);
 
-  // Apply a numeric value to the current selection (or active cell)
-  const applyValueToSelection = React.useCallback(async (anchorAssignmentId: number, anchorWeekKey: string, value: number) => {
-    const v = value;
-    if (Number.isNaN(v) || v < 0) { showToast('Enter a valid non-negative number', 'warning'); return; }
-
-    // Determine target cells
-    const selectedCells = selection.getSelectedCells();
-    const selected = selectedCells.length > 0
-      ? selectedCells
-      : [{ rowKey: String(anchorAssignmentId), weekKey: anchorWeekKey }];
-
-    // Build assignments map
-    const assignmentsById = new Map<number, { projectId: number, assignment: Assignment, personId: number | null }>();
-    projects.forEach(pr => {
-      pr.assignments.forEach(a => { if (a?.id != null) assignmentsById.set(a.id, { projectId: pr.id!, assignment: a, personId: (a.person as any) ?? null }); });
-    });
-
-    // Prepare updates
-    const updatesMap = new Map<number, { prev: Record<string, number>, next: Record<string, number>, weeks: Set<string>, personId: number | null, projectId: number }>();
-    const touchedProjects = new Set<number>();
-    for (const c of selected) {
-      const aid = parseInt(c.rowKey, 10);
-      if (Number.isNaN(aid)) continue;
-      const entry = assignmentsById.get(aid);
-      if (!entry) continue;
-      touchedProjects.add(entry.projectId);
-      const prev = updatesMap.get(aid)?.prev || { ...(entry.assignment.weeklyHours || {}) };
-      const next = updatesMap.get(aid)?.next || { ...(entry.assignment.weeklyHours || {}) };
-      next[c.weekKey] = v;
-      const weeksSet = updatesMap.get(aid)?.weeks || new Set<string>();
-      weeksSet.add(c.weekKey);
-      updatesMap.set(aid, { prev, next, weeks: weeksSet, personId: entry.personId, projectId: entry.projectId });
-    }
-
+  const runApplyBatch = React.useCallback(async (
+    updatesMap: Map<number, AssignmentUpdateInfo>,
+    touchedProjects: Set<number>,
+    savingKeys: string[],
+  ) => {
     // Fire conflict checks in background (grouped per person/week to avoid spam)
     try {
       const payloadMap = new Map<string, { personId: number; projectId: number; weekKey: string; proposedHours: number }>();
@@ -1306,15 +1285,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
       console.warn('Unable to evaluate overallocation risk', conflictErr);
     }
 
-    // Optimistic UI + saving flags
-    const savingKeys: string[] = [];
-    updatesMap.forEach((info, aid) => { info.weeks.forEach(wk => savingKeys.push(`${aid}-${wk}`)); });
-    setSavingCells(prevSet => { const s = new Set(prevSet); savingKeys.forEach(k => s.add(k)); return s; });
-    setProjects(prevState => prevState.map(x => {
-      if (!touchedProjects.has(x.id!)) return x;
-      return { ...x, assignments: x.assignments.map(a => { if (!a.id || !updatesMap.has(a.id)) return a; const info = updatesMap.get(a.id)!; return { ...a, weeklyHours: info.next }; }) };
-    }));
-
     // Persist updates
     try {
       const updatesArray = Array.from(updatesMap.entries()).map(([aid, info]) => ({ assignmentId: aid, weeklyHours: info.next }));
@@ -1339,15 +1309,73 @@ const ProjectAssignmentsGrid: React.FC = () => {
       // Rollback
       setProjects(prevState => prevState.map(x => {
         if (!touchedProjects.has(x.id!)) return x;
-        return { ...x, assignments: x.assignments.map(a => { if (!a.id || !updatesMap.has(a.id)) return a; const info = updatesMap.get(a.id)!; return { ...a, weeklyHours: info.prev }; }) };
+        return {
+          ...x,
+          assignments: x.assignments.map(a => {
+            if (!a.id || !updatesMap.has(a.id)) return a;
+            const info = updatesMap.get(a.id)!;
+            return { ...a, weeklyHours: info.prev };
+          }),
+        };
       }));
       showToast(err?.message || 'Failed to update hours', 'error');
     } finally {
-      setSavingCells(prevSet => { const s = new Set(prevSet); savingKeys.forEach(k => s.delete(k)); return s; });
-      setEditingCell(null);
-      setEditingSeed(null);
+      setSavingCells(prevSet => {
+        const s = new Set(prevSet);
+        savingKeys.forEach(k => s.delete(k));
+        return s;
+      });
     }
-  }, [selection.getSelectedCells, projects, deptState.selectedDepartmentId, deptState.includeChildren, weeks, assignmentsApi, getProjectTotals]);
+  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, weeks, getProjectTotals, setHoursByProject, setProjects]);
+
+  // Apply a numeric value to the current selection (or active cell)
+  const applyValueToSelection = React.useCallback((anchorAssignmentId: number, anchorWeekKey: string, value: number) => {
+    const v = value;
+    if (Number.isNaN(v) || v < 0) { showToast('Enter a valid non-negative number', 'warning'); return; }
+
+    // Determine target cells
+    const selectedCells = selection.getSelectedCells();
+    const selected = selectedCells.length > 0
+      ? selectedCells
+      : [{ rowKey: String(anchorAssignmentId), weekKey: anchorWeekKey }];
+
+    // Build assignments map
+    const assignmentsById = new Map<number, { projectId: number, assignment: Assignment, personId: number | null }>();
+    projects.forEach(pr => {
+      pr.assignments.forEach(a => { if (a?.id != null) assignmentsById.set(a.id, { projectId: pr.id!, assignment: a, personId: (a.person as any) ?? null }); });
+    });
+
+    // Prepare updates
+    const updatesMap = new Map<number, AssignmentUpdateInfo>();
+    const touchedProjects = new Set<number>();
+    for (const c of selected) {
+      const aid = parseInt(c.rowKey, 10);
+      if (Number.isNaN(aid)) continue;
+      const entry = assignmentsById.get(aid);
+      if (!entry) continue;
+      touchedProjects.add(entry.projectId);
+      const prev = updatesMap.get(aid)?.prev || { ...(entry.assignment.weeklyHours || {}) };
+      const next = updatesMap.get(aid)?.next || { ...(entry.assignment.weeklyHours || {}) };
+      next[c.weekKey] = v;
+      const weeksSet = updatesMap.get(aid)?.weeks || new Set<string>();
+      weeksSet.add(c.weekKey);
+      updatesMap.set(aid, { prev, next, weeks: weeksSet, personId: entry.personId, projectId: entry.projectId });
+    }
+
+    // Optimistic UI + saving flags
+    const savingKeys: string[] = [];
+    updatesMap.forEach((info, aid) => { info.weeks.forEach(wk => savingKeys.push(`${aid}-${wk}`)); });
+    setSavingCells(prevSet => { const s = new Set(prevSet); savingKeys.forEach(k => s.add(k)); return s; });
+    setProjects(prevState => prevState.map(x => {
+      if (!touchedProjects.has(x.id!)) return x;
+      return { ...x, assignments: x.assignments.map(a => { if (!a.id || !updatesMap.has(a.id)) return a; const info = updatesMap.get(a.id)!; return { ...a, weeklyHours: info.next }; }) };
+    }));
+    setEditingCell(null);
+    setEditingSeed(null);
+
+    // Kick off heavy work asynchronously
+    void runApplyBatch(updatesMap, touchedProjects, savingKeys);
+  }, [selection.getSelectedCells, projects, runApplyBatch]);
 
   // Sorting helpers
   const toggleSort = (key: 'client' | 'project' | 'deliverable') => {
@@ -1873,7 +1901,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                             const markers = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || [];
                             const rowIdx = rowOrder.indexOf(String(asn.id));
                             return (
-                              <WeekCell
+                          <WeekCell
                                 key={key}
                                 projectId={p.id!}
                                 assignmentId={asn.id!}
@@ -1891,8 +1919,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                   setEditingCell({ rowKey: String(assignmentId), weekKey });
                                   setEditingSeed(seed ?? null);
                                 }}
-                                onCommitEditing={async (assignmentId, weekKey, value) => {
-                                  await applyValueToSelection(assignmentId, weekKey, value);
+                                onCommitEditing={(assignmentId, weekKey, value) => {
+                                  applyValueToSelection(assignmentId, weekKey, value);
                                 }}
                                 onCancelEditing={() => {
                                   setEditingCell(null);

@@ -59,12 +59,12 @@ export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
     }
   }, [isEditing, editingSeed, hours]);
 
-  const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement | HTMLInputElement> = async (e) => {
+  const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement | HTMLInputElement> = (e) => {
     if (e.currentTarget instanceof HTMLInputElement) {
       if (e.key === 'Enter') {
         e.preventDefault();
         const v = parseFloat(value);
-        await onCommitEditing(assignmentId, weekKey, v);
+        onCommitEditing(assignmentId, weekKey, v);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onCancelEditing();
