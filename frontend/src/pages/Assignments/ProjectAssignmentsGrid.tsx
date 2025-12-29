@@ -40,9 +40,10 @@ import {
   projectMatchesActiveWithDates,
   projectMatchesActiveWithoutDates,
 } from '@/components/projects/statusFilterUtils';
+import { WeekCell } from '@/pages/Assignments/grid/WeekCell';
 
 type ProjectWithAssignments = Project & { assignments: Assignment[]; isExpanded: boolean };
-type DeliverableMarker = {
+export type DeliverableMarker = {
   type: string;
   percentage?: number;
   dates?: string[];
@@ -168,7 +169,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
   const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
-  const [editingValue, setEditingValue] = useState<string>('');
+  const [editingSeed, setEditingSeed] = useState<string | null>(null);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
   // Role dropdown state
   const [openRoleFor, setOpenRoleFor] = useState<number | null>(null);
@@ -1203,8 +1204,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
       if (!active) return;
       if (/^[0-9.]$/.test(e.key)) {
         e.preventDefault();
+        const seed = e.key === '.' ? '0.' : e.key;
         setEditingCell({ rowKey: String(active.rowKey), weekKey: active.weekKey });
-        setEditingValue(e.key);
+        setEditingSeed(seed);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -1225,8 +1227,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
     if (Number.isNaN(v) || v < 0) { showToast('Enter a valid non-negative number', 'warning'); return; }
 
     // Determine target cells
-    const selected = selection.selectedCells.length > 0
-      ? selection.selectedCells
+    const selectedCells = selection.getSelectedCells();
+    const selected = selectedCells.length > 0
+      ? selectedCells
       : [{ rowKey: String(anchorAssignmentId), weekKey: anchorWeekKey }];
 
     // Build assignments map
@@ -1342,8 +1345,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } finally {
       setSavingCells(prevSet => { const s = new Set(prevSet); savingKeys.forEach(k => s.delete(k)); return s; });
       setEditingCell(null);
+      setEditingSeed(null);
     }
-  }, [selection.selectedCells, projects, deptState.selectedDepartmentId, deptState.includeChildren, weeks, assignmentsApi, getProjectTotals]);
+  }, [selection.getSelectedCells, projects, deptState.selectedDepartmentId, deptState.includeChildren, weeks, assignmentsApi, getProjectTotals]);
 
   // Sorting helpers
   const toggleSort = (key: 'client' | 'project' | 'deliverable') => {
@@ -1861,84 +1865,49 @@ const ProjectAssignmentsGrid: React.FC = () => {
                               </svg>
                             </button>
                           </div>
-                          {weeks.map(w => {
+                          {weeks.map((w, weekIndex) => {
                             const hours = Number((asn.weeklyHours || {})[w.date] || 0) || 0;
                             const key = `${asn.id}-${w.date}`;
-                            const isEditing = editingCell && editingCell.rowKey === String(asn.id) && editingCell.weekKey === w.date;
+                            const isEditing = !!editingCell && editingCell.rowKey === String(asn.id) && editingCell.weekKey === w.date;
                             const isSaving = savingCells.has(key);
+                            const markers = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || [];
+                            const rowIdx = rowOrder.indexOf(String(asn.id));
                             return (
-                              <div
+                              <WeekCell
                                 key={key}
-                                className={`relative cursor-pointer transition-colors border-l border-[var(--border)] ${selection.isCellSelected(String(asn.id), w.date) ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : 'hover:bg-[var(--surfaceHover)]'}`}
-                                onMouseDown={(e) => { e.preventDefault(); selection.onCellMouseDown(String(asn.id), w.date, e as any); }}
-                                onMouseEnter={() => selection.onCellMouseEnter(String(asn.id), w.date)}
-                                onClick={(e) => selection.onCellSelect(String(asn.id), w.date, (e as any).shiftKey)}
-                                onDoubleClick={() => { setEditingCell({ rowKey: String(asn.id), weekKey: w.date }); setEditingValue(hours ? String(hours) : ''); }}
-                                aria-selected={selection.isCellSelected(String(asn.id), w.date)}
-                                title={(() => { const entries = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || []; const dtHeader = formatDateWithWeekday(w.date); return entries.length ? entries.flatMap(e => { const ds = (e as any).dates as string[] | undefined; const base = `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`; if (ds && ds.length) { return ds.map(d => `${formatDateWithWeekday(d)} — ${base}`); } return [`${dtHeader} — ${base}`]; }).join('\n') : undefined; })()}
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                  if (isEditing) return;
-                                  // Start editing when user types a number
-                                  if (/^[0-9]$/.test(e.key)) {
-                                    e.preventDefault();
-                                    setEditingCell({ rowKey: String(asn.id), weekKey: w.date });
-                                    setEditingValue(e.key);
-                                    return;
-                                  }
-                                  if (e.key === '.' || e.key === 'Decimal') {
-                                    e.preventDefault();
-                                    setEditingCell({ rowKey: String(asn.id), weekKey: w.date });
-                                    setEditingValue('0.');
-                                    return;
-                                  }
-                                  const idx = weeks.findIndex(xx => xx.date === w.date);
-                                  if (e.key === 'ArrowLeft' && idx > 0) {
-                                    selection.onCellSelect(String(asn.id), weeks[idx-1].date);
-                                  } else if (e.key === 'ArrowRight' && idx < weeks.length - 1) {
-                                    selection.onCellSelect(String(asn.id), weeks[idx+1].date);
-                                  } else if (e.key === 'Enter') {
-                                    setEditingCell({ rowKey: String(asn.id), weekKey: w.date }); setEditingValue(hours ? String(hours) : '');
-                                  } else if (e.key === 'Escape') {
-                                    selection.clearSelection();
-                                  }
+                                projectId={p.id!}
+                                assignmentId={asn.id!}
+                                weekKey={w.date}
+                                rowIndex={rowIdx}
+                                weekIndex={weekIndex}
+                                hours={hours}
+                                isSelected={selection.isCellSelected(String(asn.id), w.date)}
+                                isSaving={isSaving}
+                                deliverableMarkers={markers}
+                                typeColors={typeColors}
+                                isEditing={isEditing}
+                                editingSeed={isEditing ? editingSeed : null}
+                                onBeginEditing={(assignmentId, weekKey, seed) => {
+                                  setEditingCell({ rowKey: String(assignmentId), weekKey });
+                                  setEditingSeed(seed ?? null);
                                 }}
-                              >
-                                {isEditing ? (
-                                  <input
-                                    autoFocus
-                                    value={editingValue}
-                                    onChange={(e) => setEditingValue(e.target.value)}
-                                    onKeyDown={async (e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        const v = parseFloat(editingValue);
-                                        await applyValueToSelection(asn.id!, w.date, v);
-                                      } else if (e.key === 'Escape') {
-                                        e.preventDefault();
-                                        setEditingCell(null);
-                                      }
-                                    }}
-                                    className="w-full h-8 px-1 text-xs bg-[var(--bg)] text-[var(--text)] font-medium border border-[var(--primary)] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield] text-center"
-                                  />
-                                ) : (
-                                  <div className="h-8 flex items-center justify-center text-xs text-[var(--text)] font-medium">
-                                    {hours > 0 ? hours : ''}
-                                  </div>
-                                )}
-                                {((deliverableTypesByProjectWeek[p.id!] || {})[w.date] || []).length > 0 && (
-                                  <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px] pointer-events-none">
-                                    {((deliverableTypesByProjectWeek[p.id!] || {})[w.date] || []).slice(0,3).map((e, idx) => (
-                                      <div key={idx} className="w-[3px] rounded" style={{ background: typeColors[e.type] || 'var(--primary)' }} />
-                                    ))}
-                                  </div>
-                                )}
-                                {isSaving && (
-                                  <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <span className="inline-block w-3 h-3 border-2 border-[var(--muted)] border-t-transparent rounded-full animate-spin" />
-                                  </span>
-                                )}
-                              </div>
+                                onCommitEditing={async (assignmentId, weekKey, value) => {
+                                  await applyValueToSelection(assignmentId, weekKey, value);
+                                }}
+                                onCancelEditing={() => {
+                                  setEditingCell(null);
+                                  setEditingSeed(null);
+                                }}
+                                onMouseDown={(assignmentId, weekKey, e) => {
+                                  selection.onCellMouseDown(String(assignmentId), weekKey, e as any);
+                                }}
+                                onMouseEnter={(assignmentId, weekKey) => {
+                                  selection.onCellMouseEnter(String(assignmentId), weekKey);
+                                }}
+                                onSelect={(assignmentId, weekKey, isShiftClick) => {
+                                  selection.onCellSelect(String(assignmentId), weekKey, isShiftClick);
+                                }}
+                              />
                             );
                           })}
                         </div>

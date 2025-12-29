@@ -1,6 +1,6 @@
 # API Bulk Consolidation Tracker
 
-_Last updated: November 27, 2025_
+_Last updated: December 14, 2025_
 
 ## Change Log
 - **2025-11-27** – Initial scaffold seeded with Assignments, Projects, People, Dashboard, Reports, and Settings candidates per Phase 0 prep.
@@ -75,3 +75,28 @@ _Last updated: November 27, 2025_
 - Phase 0 owners: confirm backend feasibility for Assignments + Dashboard aggregators.
 - Phase 1 kickoff: fill in metrics (call counts, payload sizes) for Assignments rows and mark priority order.
 - Keep this tracker in sync with `API_Call_Audit_Plan.md` after each phase concludes.
+
+---
+
+## Performance Baseline – Project Assignments Grid (Dev)
+
+- **Current feel (pre‑Phase 1 refactor)**  
+  - Clicking a single cell or dragging to select many cells often feels delayed before the highlight appears.  
+  - Typing into a cell shows noticeable input lag, especially when many projects / weeks are visible.  
+  - Applying a value to a multi‑cell selection can briefly “freeze” the grid before spinners and updated totals appear.
+
+- **DevTools observations (Chrome, local dev)**  
+  - Console shows long input/interaction handlers while working in the grid, for example:  
+    - `[Violation] 'mousedown' handler took ~1300–2200ms`  
+    - `[Violation] 'mouseup' handler took ~1300ms`  
+  - These violations appear most frequently when:
+    - Selecting a large range of cells by dragging.  
+    - Editing values across many cells and pressing Enter to apply.
+
+- **Manual interaction checklist after each optimization phase**  
+  - Click a single cell to select it.  
+  - Drag across multiple cells (same row and multiple rows).  
+  - Type into a single cell and confirm input responsiveness.  
+  - Apply a new value to a large multi‑cell selection and observe:  
+    - Time until UI highlights/saving indicators appear.  
+    - Presence/absence of new DevTools “long handler” violations.

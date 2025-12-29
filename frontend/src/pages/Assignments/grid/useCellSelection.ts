@@ -5,7 +5,7 @@ export type CellKey = { rowKey: string; weekKey: string };
 
 export type UseCellSelection = {
   // Lazily computed (for apply actions). Rendering uses O(1) checks.
-  selectedCells: CellKey[];
+  getSelectedCells: () => CellKey[];
   selectedCell: CellKey | null;
   selectionStart: CellKey | null;
   isDragging: boolean;
@@ -145,7 +145,7 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
   }, [selectionStart, selectedCell, getWeekBounds, getRowBounds, rowOrder]);
 
   // Lazily compute cells for actions (e.g., when user presses Enter to apply value)
-  const selectedCells = useMemo<CellKey[]>(() => {
+  const getSelectedCells = useCallback((): CellKey[] => {
     if (!selectionStart || !selectedCell) return [];
     const out: CellKey[] = [];
     const { lo: wl, hi: wh } = getWeekBounds(selectionStart.weekKey, selectedCell.weekKey);
@@ -165,7 +165,7 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
   }, [selectionStart, selectedCell, getWeekBounds, getRowBounds, weeks, rowOrder]);
 
   return {
-    selectedCells,
+    getSelectedCells,
     selectedCell,
     selectionStart,
     isDragging,

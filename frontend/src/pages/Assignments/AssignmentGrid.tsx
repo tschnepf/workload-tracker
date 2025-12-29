@@ -202,7 +202,6 @@ const AssignmentGrid: React.FC = () => {
   const {
     selection: {
       selectedCell: selCell,
-      selectedCells: selCells,
       selectionStart: selStart,
       isDragging: isDraggingSel,
       onCellMouseDown: csMouseDown,
@@ -211,6 +210,7 @@ const AssignmentGrid: React.FC = () => {
       clearSelection: csClear,
       isCellSelected: csIsSelected,
       selectionSummary,
+      getSelectedCells,
     },
     scroll: { headerRef: headerScrollRef, bodyRef: bodyScrollRef, onHeaderScroll, onBodyScroll },
     density: { setMainPadding },
@@ -249,7 +249,13 @@ const AssignmentGrid: React.FC = () => {
   }, [compact, setMainPadding]);
   // topBarHeader is defined later after handlers
   const selectedCell = useMemo(() => selCell ? (() => { const [p,a] = selCell.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: selCell.weekKey }; })() : null, [selCell]);
-  const selectedCells = useMemo(() => selCells.map(k => { const [p,a] = k.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: k.weekKey }; }), [selCells]);
+  const selectedCells = useMemo(() => {
+    const cells = getSelectedCells();
+    return cells.map(k => {
+      const [p, a] = k.rowKey.split(':');
+      return { personId: Number(p), assignmentId: Number(a), week: k.weekKey };
+    });
+  }, [getSelectedCells]);
   const selectionStart = useMemo(() => selStart ? (() => { const [p,a] = selStart.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: selStart.weekKey }; })() : null, [selStart]);
   const url = useGridUrlState();
 

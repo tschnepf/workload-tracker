@@ -183,8 +183,9 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     if (!editingCell) return;
     const value = parseFloat(editingValue);
     if (Number.isNaN(value)) { setEditingCell(null); return; }
-    const cells = selection.selectedCells.length > 0
-      ? selection.selectedCells.map(c => ({ assignmentId: Number(c.rowKey), weekKey: c.weekKey }))
+    const selectedCells = selection.getSelectedCells();
+    const cells = selectedCells.length > 0
+      ? selectedCells.map(c => ({ assignmentId: Number(c.rowKey), weekKey: c.weekKey }))
       : [{ assignmentId: editingCell.assignmentId, weekKey: editingCell.week }];
 
     // Local optimistic snapshot maps for current visible assignments
