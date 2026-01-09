@@ -125,6 +125,22 @@ const ProjectAssignmentsGrid: React.FC = () => {
     weekLabel: string;
     entries: DeliverableMarker[];
   } | null>(null);
+  // Lookup map to avoid rescanning all projects/assignments during apply
+  const assignmentById = React.useMemo(() => {
+    const map = new Map<number, { projectId: number; assignment: Assignment; personId: number | null }>();
+    for (const p of projects) {
+      if (!p?.assignments?.length || !p.id) continue;
+      for (const a of p.assignments) {
+        if (!a?.id) continue;
+        map.set(a.id, {
+          projectId: p.id,
+          assignment: a,
+          personId: (a.person as any) ?? null,
+        });
+      }
+    }
+    return map;
+  }, [projects]);
   // Build row order for rectangular selection (assignment IDs in render order)
   const rowOrder = React.useMemo(() => {
     const arr: string[] = [];
@@ -136,6 +152,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
     return arr;
   }, [projects]);
+  const rowIndexByKey = React.useMemo(() => {
+    const map = new Map<string, number>();
+    rowOrder.forEach((rk, idx) => { map.set(rk, idx); });
+    return map;
+  }, [rowOrder]);
   const selection = useCellSelection(weeks.map(w => w.date), rowOrder);
   const aborts = useAbortManager();
   const caps = useCapabilities();
@@ -179,6 +200,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
   const [editingSeed, setEditingSeed] = useState<string | null>(null);
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
+  const applyBatchInFlightRef = useRef(false);
   // Role dropdown state
   const [openRoleFor, setOpenRoleFor] = useState<number | null>(null);
   const roleAnchorRef = useRef<HTMLElement | null>(null);
@@ -1234,6 +1256,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     touchedProjects: Set<number>,
     savingKeys: string[],
   ) => {
+    applyBatchInFlightRef.current = true;
     // Fire conflict checks in background (grouped per person/week to avoid spam)
     try {
       const payloadMap = new Map<string, { personId: number; projectId: number; weekKey: string; proposedHours: number }>();
@@ -1325,13 +1348,20 @@ const ProjectAssignmentsGrid: React.FC = () => {
         savingKeys.forEach(k => s.delete(k));
         return s;
       });
+      applyBatchInFlightRef.current = false;
     }
-  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, weeks, getProjectTotals, setHoursByProject, setProjects]);
+  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, weeks, getProjectTotals]);
 
   // Apply a numeric value to the current selection (or active cell)
   const applyValueToSelection = React.useCallback((anchorAssignmentId: number, anchorWeekKey: string, value: number) => {
     const v = value;
     if (Number.isNaN(v) || v < 0) { showToast('Enter a valid non-negative number', 'warning'); return; }
+
+    // Avoid overlapping heavy batches; keep UX predictable
+    if (applyBatchInFlightRef.current) {
+      showToast('Updates are still being applied. Please wait a moment and try again.', 'warning');
+      return;
+    }
 
     // Determine target cells
     const selectedCells = selection.getSelectedCells();
@@ -1339,19 +1369,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
       ? selectedCells
       : [{ rowKey: String(anchorAssignmentId), weekKey: anchorWeekKey }];
 
-    // Build assignments map
-    const assignmentsById = new Map<number, { projectId: number, assignment: Assignment, personId: number | null }>();
-    projects.forEach(pr => {
-      pr.assignments.forEach(a => { if (a?.id != null) assignmentsById.set(a.id, { projectId: pr.id!, assignment: a, personId: (a.person as any) ?? null }); });
-    });
-
     // Prepare updates
     const updatesMap = new Map<number, AssignmentUpdateInfo>();
     const touchedProjects = new Set<number>();
     for (const c of selected) {
       const aid = parseInt(c.rowKey, 10);
       if (Number.isNaN(aid)) continue;
-      const entry = assignmentsById.get(aid);
+      const entry = assignmentById.get(aid);
       if (!entry) continue;
       touchedProjects.add(entry.projectId);
       const prev = updatesMap.get(aid)?.prev || { ...(entry.assignment.weeklyHours || {}) };
@@ -1802,7 +1826,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
                         </>
                       )}
                       {/* Render rows */}
-                      {!loadingAssignments.has(p.id!) && p.assignments.map(asn => (
+                      {!loadingAssignments.has(p.id!) && p.assignments.map(asn => {
+                        const rowKey = String(asn.id);
+                        const rowIdx = rowIndexByKey.get(rowKey) ?? null;
+                        return (
                         <div key={asn.id} className="grid gap-px py-1 bg-[var(--surface)] hover:bg-[var(--cardHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
                           <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={asn.personName || String(asn.person)}>
                             {asn.personName || `Person #${asn.person}`}
@@ -1899,9 +1926,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
                             const isEditing = !!editingCell && editingCell.rowKey === String(asn.id) && editingCell.weekKey === w.date;
                             const isSaving = savingCells.has(key);
                             const markers = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || [];
-                            const rowIdx = rowOrder.indexOf(String(asn.id));
                             return (
-                          <WeekCell
+                              <WeekCell
                                 key={key}
                                 projectId={p.id!}
                                 assignmentId={asn.id!}
@@ -1909,7 +1935,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                 rowIndex={rowIdx}
                                 weekIndex={weekIndex}
                                 hours={hours}
-                                isSelected={selection.isCellSelected(String(asn.id), w.date)}
+                                isSelected={selection.isIndexSelected(rowIdx, weekIndex)}
                                 isSaving={isSaving}
                                 deliverableMarkers={markers}
                                 typeColors={typeColors}
@@ -1939,7 +1965,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                             );
                           })}
                         </div>
-                      ))}
+                      ); })}
                       {/* Empty state */}
                       {!loadingAssignments.has(p.id!) && p.assignments.length === 0 && (
                         <div className="grid gap-px py-1 bg-[var(--surface)]" style={{ gridTemplateColumns: gridTemplate }}>

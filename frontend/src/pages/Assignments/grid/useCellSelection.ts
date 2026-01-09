@@ -15,6 +15,9 @@ export type UseCellSelection = {
   clearSelection: () => void;
   // O(1) index-based selection check
   isCellSelected: (rowKey: string, weekKey: string) => boolean;
+  // Index-based selection helpers for large grids
+  selectionBounds: { weekLo: number; weekHi: number; rowLo: number | null; rowHi: number | null } | null;
+  isIndexSelected: (rowIndex: number | null, weekIndex: number) => boolean;
   selectionSummary: string;
 };
 
@@ -144,6 +147,20 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
     return `${rowsCount} row${rowsCount !== 1 ? 's' : ''} × ${weeksCount} week${weeksCount !== 1 ? 's' : ''} = ${cells} cell${cells !== 1 ? 's' : ''}`;
   }, [selectionStart, selectedCell, getWeekBounds, getRowBounds, rowOrder]);
 
+  const selectionBounds = useMemo(() => {
+    if (!selectionStart || !selectedCell) return null;
+    const { lo: wl, hi: wh } = getWeekBounds(selectionStart.weekKey, selectedCell.weekKey);
+    if (wl === -1 || wh === -1) return null;
+    let rowLo: number | null = null;
+    let rowHi: number | null = null;
+    if (rowOrder && rowOrder.length > 0) {
+      const { lo: rl, hi: rh } = getRowBounds(selectionStart.rowKey, selectedCell.rowKey);
+      rowLo = rl;
+      rowHi = rh;
+    }
+    return { weekLo: wl, weekHi: wh, rowLo, rowHi };
+  }, [selectionStart, selectedCell, getWeekBounds, getRowBounds, rowOrder]);
+
   // Lazily compute cells for actions (e.g., when user presses Enter to apply value)
   const getSelectedCells = useCallback((): CellKey[] => {
     if (!selectionStart || !selectedCell) return [];
@@ -164,6 +181,18 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
     return out;
   }, [selectionStart, selectedCell, getWeekBounds, getRowBounds, weeks, rowOrder]);
 
+  const isIndexSelected = useCallback((rowIdx: number | null, wIdx: number) => {
+    if (!selectionBounds) return false;
+    const { weekLo, weekHi, rowLo, rowHi } = selectionBounds;
+    if (wIdx < weekLo || wIdx > weekHi) return false;
+    if (rowOrder && rowOrder.length > 0) {
+      if (rowIdx == null || rowLo == null || rowHi == null) return false;
+      return rowIdx >= rowLo && rowIdx <= rowHi;
+    }
+    // No rowOrder means single-row mode; any row index is effectively selected if week matches.
+    return true;
+  }, [selectionBounds, rowOrder]);
+
   return {
     getSelectedCells,
     selectedCell,
@@ -174,6 +203,8 @@ export function useCellSelection(weeks: string[], rowOrder?: string[]): UseCellS
     onCellSelect,
     clearSelection,
     isCellSelected,
+    selectionBounds,
+    isIndexSelected,
     selectionSummary,
   };
 }
