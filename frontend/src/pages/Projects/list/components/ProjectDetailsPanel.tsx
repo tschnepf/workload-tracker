@@ -521,41 +521,78 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 <div className="text-[var(--muted)] text-xs mt-1">Click "Add Assignment" to get started</div>
               </div>
             ) : null}
-          </div>
-        </div>
-
-          {showAddAssignment && (
-            <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)] mt-2">
-              <div className="grid grid-cols-3 gap-4 mb-3">
-                <div className="text-[var(--muted)] text-xs uppercase font-medium">PERSON</div>
-                <div className="text-[var(--muted)] text-xs uppercase font-medium">ROLE</div>
-                <div className="text-[var(--muted)] text-xs uppercase font-medium">ACTIONS</div>
-              </div>
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Start typing name or click to see all..."
-                    value={addAssignmentState.personSearch}
-                    onChange={(e) => onPersonSearch(e.target.value)}
-                    onFocus={onPersonSearchFocus}
-                    onKeyDown={onPersonSearchKeyDown}
-                    role="combobox"
-                    aria-expanded={personSearchResults.length > 0}
-                    aria-haspopup="listbox"
-                    aria-owns="person-search-results"
-                    aria-describedby="person-search-help"
-                    className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                    autoFocus
-                  />
-                  <div id="person-search-help" className="sr-only">
-                    Search for people to assign to this project. Use arrow keys to navigate results.
+            {showAddAssignment && (
+              <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-3">
+                <div className="grid grid-cols-3 gap-4 mb-3">
+                  <div className="text-[var(--muted)] text-xs uppercase font-medium">PERSON</div>
+                  <div className="text-[var(--muted)] text-xs uppercase font-medium">ROLE</div>
+                  <div className="text-[var(--muted)] text-xs uppercase font-medium">ACTIONS</div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 items-center">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Start typing name or click to see all..."
+                      value={addAssignmentState.personSearch}
+                      onChange={(e) => onPersonSearch(e.target.value)}
+                      onFocus={onPersonSearchFocus}
+                      onKeyDown={onPersonSearchKeyDown}
+                      role="combobox"
+                      aria-expanded={addAssignmentState.personSearch.trim().length > 0 && personSearchResults.length > 0}
+                      aria-haspopup="listbox"
+                      aria-owns="person-search-results"
+                      aria-describedby="person-search-help"
+                      className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                      autoFocus
+                    />
+                    <div id="person-search-help" className="sr-only">
+                      Search for people to assign to this project. Use arrow keys to navigate results.
+                    </div>
+                    <div aria-live="polite" aria-atomic="true" className="sr-only">
+                      {srAnnouncement}
+                    </div>
                   </div>
-                  <div aria-live="polite" aria-atomic="true" className="sr-only">
-                    {srAnnouncement}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setOpenAddRole((v) => !v)}
+                      className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-left text-[var(--text)] hover:bg-[var(--cardHover)]"
+                      aria-haspopup="listbox"
+                      aria-expanded={openAddRole}
+                      ref={addRoleBtnRef}
+                    >
+                      {addAssignmentState.roleOnProject || 'Set role'}
+                    </button>
+                    {openAddRole && (
+                      <RoleDropdown
+                        roles={addRoles as any}
+                        currentId={null}
+                        onSelect={(id, name) => { onRoleSelectNew(id, name); }}
+                        onClose={() => setOpenAddRole(false)}
+                        labelledById={undefined}
+                        anchorRef={addRoleBtnRef}
+                      />
+                    )}
                   </div>
-                  {personSearchResults.length > 0 && (
-                    <div id="person-search-results" role="listbox" className="absolute top-full left-0 right-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
+                  <div className="flex gap-1">
+                    <button
+                      onClick={onSaveAssignment}
+                      disabled={!addAssignmentState.selectedPerson}
+                      className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={onCancelAddAssignment}
+                      className="px-2 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+                {addAssignmentState.personSearch.trim().length > 0 && personSearchResults.length > 0 && (
+                  <div className="relative col-span-3">
+                    <div id="person-search-results" role="listbox" className="mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-56 overflow-y-auto">
                       {personSearchResults.map((person: any, index: number) => (
                         <button
                           key={person.id}
@@ -592,48 +629,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                         </button>
                       ))}
                     </div>
-                  )}
-                </div>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setOpenAddRole((v) => !v)}
-                    className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-left text-[var(--text)] hover:bg-[var(--cardHover)]"
-                    aria-haspopup="listbox"
-                    aria-expanded={openAddRole}
-                    ref={addRoleBtnRef}
-                  >
-                    {addAssignmentState.roleOnProject || 'Set role'}
-                  </button>
-                  {openAddRole && (
-                    <RoleDropdown
-                      roles={addRoles as any}
-                      currentId={null}
-                      onSelect={(id, name) => { onRoleSelectNew(id, name); }}
-                      onClose={() => setOpenAddRole(false)}
-                      labelledById={undefined}
-                      anchorRef={addRoleBtnRef}
-                    />
-                  )}
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={onSaveAssignment}
-                    disabled={!addAssignmentState.selectedPerson}
-                    className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={onCancelAddAssignment}
-                    className="px-2 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
         </div>
         
       

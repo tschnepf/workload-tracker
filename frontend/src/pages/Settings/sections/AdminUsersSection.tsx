@@ -26,6 +26,8 @@ type PersonOption = {
   roleName?: string | null;
 };
 
+type UserSortKey = 'linkedPerson' | 'personRole' | 'username' | 'email' | 'department' | 'userRole' | 'accountStatus';
+
 export const ADMIN_USERS_SECTION_ID = 'admin-users';
 
 const AdminUsersSection: React.FC = () => {
@@ -44,6 +46,10 @@ const AdminUsersSection: React.FC = () => {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersMsg, setUsersMsg] = useState<string | null>(null);
   const [usersFilter, setUsersFilter] = useState('');
+  const [usersSort, setUsersSort] = useState<{ key: UserSortKey; direction: 'asc' | 'desc' }>({
+    key: 'linkedPerson',
+    direction: 'asc',
+  });
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'manager' | 'user'>('user');
   const [invitePersonId, setInvitePersonId] = useState<number | ''>('');
@@ -160,6 +166,28 @@ const AdminUsersSection: React.FC = () => {
     return compareText(aVal, bVal);
   };
 
+  const getSortValue = useCallback((user: AdminUser, key: UserSortKey) => {
+    const personMeta = user.person?.id ? peopleById.get(user.person.id) : null;
+    switch (key) {
+      case 'linkedPerson':
+        return personMeta?.name || user.person?.name || '';
+      case 'personRole':
+        return personMeta?.roleName || '';
+      case 'username':
+        return user.username || '';
+      case 'email':
+        return user.email || '';
+      case 'department':
+        return personMeta?.departmentName || '';
+      case 'userRole':
+        return user.role || '';
+      case 'accountStatus':
+        return (user.accountSetup ?? true) ? 'Active' : 'Invite pending';
+      default:
+        return '';
+    }
+  }, [peopleById]);
+
   const { assignedUsers, unassignedUsers } = useMemo(() => {
     const query = usersFilter.trim().toLowerCase();
     const tokens = query ? query.split(/\s+/).filter(Boolean) : [];
@@ -192,18 +220,20 @@ const AdminUsersSection: React.FC = () => {
     const sortUsers = (list: AdminUser[]) => {
       const copy = [...list];
       copy.sort((a, b) => {
-        const aPerson = a.person?.id ? peopleById.get(a.person.id) : null;
-        const bPerson = b.person?.id ? peopleById.get(b.person.id) : null;
-        const nameCmp = compareNullableText(aPerson?.name || a.person?.name, bPerson?.name || b.person?.name);
-        if (nameCmp !== 0) return nameCmp;
-        const roleCmp = compareNullableText(aPerson?.roleName, bPerson?.roleName);
-        if (roleCmp !== 0) return roleCmp;
+        const primaryCmp = compareNullableText(
+          getSortValue(a, usersSort.key),
+          getSortValue(b, usersSort.key),
+        );
+        if (primaryCmp !== 0) {
+          return usersSort.direction === 'asc' ? primaryCmp : -primaryCmp;
+        }
+        const linkedPersonCmp = compareNullableText(
+          getSortValue(a, 'linkedPerson'),
+          getSortValue(b, 'linkedPerson'),
+        );
+        if (linkedPersonCmp !== 0) return linkedPersonCmp;
         const usernameCmp = compareNullableText(a.username, b.username);
         if (usernameCmp !== 0) return usernameCmp;
-        const emailCmp = compareNullableText(a.email, b.email);
-        if (emailCmp !== 0) return emailCmp;
-        const deptCmp = compareNullableText(aPerson?.departmentName, bPerson?.departmentName);
-        if (deptCmp !== 0) return deptCmp;
         return a.id - b.id;
       });
       return copy;
@@ -212,7 +242,7 @@ const AdminUsersSection: React.FC = () => {
       assignedUsers: sortUsers(assigned),
       unassignedUsers: sortUsers(unassigned),
     };
-  }, [users, peopleById, usersFilter]);
+  }, [users, peopleById, usersFilter, usersSort, getSortValue]);
 
   const userTableColumnWidths = [
     '240px', // Linked Person
@@ -225,6 +255,34 @@ const AdminUsersSection: React.FC = () => {
     '180px', // Actions
   ];
 
+  const sortableHeaders: Array<{ key: UserSortKey; label: string }> = [
+    { key: 'linkedPerson', label: 'Linked Person' },
+    { key: 'personRole', label: 'Person Role' },
+    { key: 'username', label: 'Username' },
+    { key: 'email', label: 'Email' },
+    { key: 'department', label: 'Department' },
+    { key: 'userRole', label: 'User Role' },
+    { key: 'accountStatus', label: 'Account Status' },
+  ];
+
+  const toggleSort = (key: UserSortKey) => {
+    setUsersSort((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const renderSortChevron = (key: UserSortKey) => {
+    if (usersSort.key !== key) return null;
+    return (
+      <span className="text-xs ml-1">
+        {usersSort.direction === 'asc' ? '▲' : '▼'}
+      </span>
+    );
+  };
+
   const renderUsersTable = (list: AdminUser[]) => (
     <div className="overflow-auto">
       <table className="min-w-full text-sm text-left whitespace-nowrap table-fixed">
@@ -235,13 +293,19 @@ const AdminUsersSection: React.FC = () => {
         </colgroup>
         <thead className="text-[var(--muted)]">
           <tr>
-            <th className="py-2 pr-4">Linked Person</th>
-            <th className="py-2 pr-4">Person Role</th>
-            <th className="py-2 pr-4">Username</th>
-            <th className="py-2 pr-4">Email</th>
-            <th className="py-2 pr-4">Department</th>
-            <th className="py-2 pr-4">User Role</th>
-            <th className="py-2 pr-4">Account Status</th>
+            {sortableHeaders.map((header) => (
+              <th key={header.key} className="py-2 pr-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center text-[var(--muted)] hover:text-[var(--text)]"
+                  onClick={() => toggleSort(header.key)}
+                  aria-label={`Sort by ${header.label}`}
+                >
+                  {header.label}
+                  {renderSortChevron(header.key)}
+                </button>
+              </th>
+            ))}
             <th className="py-2 pr-4">Actions</th>
           </tr>
         </thead>

@@ -2,10 +2,10 @@
  * Deliverables Section - STANDARDS COMPLIANT
  * Follows R2-REBUILD-STANDARDS.md and R2-REBUILD-DELIVERABLES.md
  * Integrates into existing Projects page split-panel layout
- * Features drag-and-drop reordering with grab handles
+ * Sorted by date/percentage with null dates first; manual reordering disabled
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Project, Deliverable } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
@@ -35,11 +35,31 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingFocusField, setEditingFocusField] = useState<'percentage'|'description'|'date'|'notes'|null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const sortedDeliverables = useMemo(() => {
+    const getDateValue = (date?: string | null) => {
+      if (!date) return null;
+      const normalized = date.length <= 10 ? `${date}T00:00:00` : date;
+      const ts = Date.parse(normalized);
+      return Number.isNaN(ts) ? null : ts;
+    };
+    const getPercentageValue = (percentage?: number | null) =>
+      percentage == null ? Number.POSITIVE_INFINITY : percentage;
+    return [...deliverables].sort((a, b) => {
+      const aDate = getDateValue(a.date);
+      const bDate = getDateValue(b.date);
+      if (aDate == null && bDate != null) return 1;
+      if (aDate != null && bDate == null) return -1;
+      if (aDate != null && bDate != null && aDate !== bDate) return aDate - bDate;
+      const aPct = getPercentageValue(a.percentage);
+      const bPct = getPercentageValue(b.percentage);
+      if (aPct !== bPct) return aPct - bPct;
+      const aId = a.id ?? 0;
+      const bId = b.id ?? 0;
+      return aId - bId;
+    });
+  }, [deliverables]);
 
   useAuthenticatedEffect(() => {
     if (project.id) {
@@ -126,56 +146,6 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
     }
   };
 
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index);
-  };
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    setDragOverIndex(index);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
-
-  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    
-    if (draggedIndex === null || draggedIndex === dropIndex) {
-      setDraggedIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
-
-    const newDeliverables = [...deliverables];
-    const [draggedItem] = newDeliverables.splice(draggedIndex, 1);
-    newDeliverables.splice(dropIndex, 0, draggedItem);
-
-    // Optimistically update UI
-    setDeliverables(newDeliverables);
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-
-    // Update sort order on backend
-    try {
-      const deliverableIds = newDeliverables.map(d => d.id!);
-      await deliverablesApi.reorder(project.id!, deliverableIds);
-      await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
-    } catch (err: any) {
-      setError('Failed to reorder deliverables');
-      // Reload on error to get correct order
-      await loadDeliverables();
-    }
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  
-
   const containerClass = variant === 'embedded' ? '' : 'border-t border-[var(--border)] pt-4';
 
   return (
@@ -194,8 +164,6 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       {/* Column Headers */}
       {deliverables.length > 0 && (
         <div className="flex items-center text-[var(--muted)] text-xs mb-1">
-          {/* Space for drag handle */}
-          <div className="w-4 mr-2" />
           <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
             <div className="font-medium">%</div>
             <div className="font-medium">Description</div>
@@ -220,25 +188,15 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
         </div>
       ) : (
         <div className="space-y-1">
-          {deliverables.map((deliverable, index) => (
+          {sortedDeliverables.map((deliverable) => (
             <DeliverableRow
               key={deliverable.id}
               deliverable={deliverable}
-              index={index}
               editing={editingId === deliverable.id}
-              isDragged={draggedIndex === index}
-              isDraggedOver={dragOverIndex === index}
-              onEdit={() => { setEditingId(deliverable.id!); setEditingFocusField(null); }}
-              onEditField={(field) => { setEditingId(deliverable.id!); setEditingFocusField(field); }}
               onSave={(data) => handleUpdateDeliverable(deliverable.id!, data)}
               onCancel={() => setEditingId(null)}
               onDelete={() => handleDeleteDeliverable(deliverable.id!)}
-              focusField={editingId === deliverable.id ? editingFocusField : null}
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
+              focusField={null}
             />
           ))}
         </div>
@@ -256,39 +214,19 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
 
 interface DeliverableRowProps {
   deliverable: Deliverable;
-  index: number;
   editing: boolean;
-  isDragged: boolean;
-  isDraggedOver: boolean;
-  onEdit: () => void;
-  onEditField: (field: 'percentage'|'description'|'date'|'notes') => void;
   onSave: (data: Partial<Deliverable>) => void;
   onCancel: () => void;
   onDelete: () => void;
-  onDragStart: () => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: () => void;
-  onDrop: (e: React.DragEvent) => void;
-  onDragEnd: () => void;
   focusField: 'percentage'|'description'|'date'|'notes'|null;
 }
 
 const DeliverableRow: React.FC<DeliverableRowProps> = ({
   deliverable,
-  index,
   editing,
-  isDragged,
-  isDraggedOver,
-  onEdit,
-  onEditField,
   onSave,
   onCancel,
   onDelete,
-  onDragStart,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDragEnd,
   focusField,
 }) => {
   const [editData, setEditData] = useState({
@@ -349,23 +287,10 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
     }
   }, [deliverable, editing]);
 
-  // Create the drag handle component (3-line horizontal grabber)
-  const DragHandle = () => (
-    <div 
-      className="cursor-grab active:cursor-grabbing flex flex-col justify-center items-center w-4 h-4 mr-2"
-      onMouseDown={onDragStart}
-    >
-      <div className="w-3 h-0.5 bg-[var(--muted)] mb-0.5"></div>
-      <div className="w-3 h-0.5 bg-[var(--muted)] mb-0.5"></div>
-      <div className="w-3 h-0.5 bg-[var(--muted)]"></div>
-    </div>
-  );
-
   if (editing) {
     return (
       <div className="p-2 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]" data-testid={`deliverable-row-${deliverable.id}`}>
-        <div className="grid grid-cols-6 gap-2 items-center text-xs mb-2">
-          <div className="text-[var(--muted)] font-medium w-4"></div> {/* Drag handle space */}
+        <div className="grid grid-cols-5 gap-2 items-center text-xs mb-2">
           <div className="text-[var(--muted)] font-medium">%</div>
           <div className="text-[var(--muted)] font-medium">DESCRIPTION</div>
           <div className="text-[var(--muted)] font-medium">DATE</div>
@@ -373,9 +298,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
           <div className="text-[var(--muted)] font-medium">ACTIONS</div>
         </div>
         
-        <div className="grid grid-cols-6 gap-2 items-start">
-          {/* Drag Handle - disabled during edit */}
-          <div className="w-4"></div>
+        <div className="grid grid-cols-5 gap-2 items-start">
 
           {/* Percentage Input */}
           <input
@@ -449,7 +372,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
         </div>
 
         {/* Completion Checkbox */}
-        <div className="mt-2 flex items-center gap-2 ml-6">
+        <div className="mt-2 flex items-center gap-2 ml-2">
           <input
             type="checkbox"
             id={`completed-${deliverable.id}`}
@@ -468,24 +391,11 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
   return (
     <div 
       className={`flex items-center p-2 rounded text-xs transition-all ${
-        isDragged 
-          ? 'opacity-50 transform scale-95' 
-          : isDraggedOver 
-            ? 'bg-[var(--surfaceOverlay)] border border-[var(--primary)]' 
-            : deliverable.isCompleted 
-              ? 'bg-[var(--surfaceOverlay)] border border-[var(--border)]' 
-              : 'bg-[var(--card)] border border-[var(--border)]'
+        deliverable.isCompleted 
+          ? 'bg-[var(--surfaceOverlay)] border border-[var(--border)]' 
+          : 'bg-[var(--card)] border border-[var(--border)]'
       }`}
-      draggable={!editing}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
     >
-      {/* Drag Handle */}
-      <DragHandle />
-
         {/* Content Grid – per-cell inline editing */}
         <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
           <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
