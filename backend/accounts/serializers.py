@@ -211,6 +211,7 @@ class UserListItemSerializer(serializers.Serializer):
     groups = serializers.ListField(child=serializers.CharField())
     role = serializers.CharField()
     person = UserListPersonSerializer(allow_null=True, required=False)
+    accountSetup = serializers.BooleanField()
 
 
 class SetUserRoleRequestSerializer(serializers.Serializer):

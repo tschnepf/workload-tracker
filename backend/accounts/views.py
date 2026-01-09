@@ -295,6 +295,7 @@ class ListUsersView(APIView):
                 'groups': sorted(list(group_names)),
                 'role': role,
                 'person': person,
+                'accountSetup': u.has_usable_password(),
             })
 
         return Response(results)
