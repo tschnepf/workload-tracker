@@ -245,7 +245,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const isSnapshotMode = true;
   // Column widths + resizing (parity with person grid)
   const [clientColumnWidth, setClientColumnWidth] = useState(210);
-  const [projectColumnWidth, setProjectColumnWidth] = useState(340);
+  const [projectColumnWidth, setProjectColumnWidth] = useState(353);
   const [isResizing, setIsResizing] = useState<null | 'client' | 'project'>(null);
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartWidth, setResizeStartWidth] = useState(0);
@@ -308,13 +308,23 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Increase project column default to 340px to avoid status button wrapping (one-time)
+  // Increase project column width by another 8% to ease truncation (one-time)
   useEffect(() => {
     try {
-      const mig3 = localStorage.getItem('projGrid:widthsFix_increase_project_340');
+      const mig3 = localStorage.getItem('projGrid:widthsFix_increase_project_8pct_3_2026_01');
       if (!mig3) {
-        setProjectColumnWidth(w => (w < 340 ? 340 : w));
-        localStorage.setItem('projGrid:widthsFix_increase_project_340', '1');
+        setProjectColumnWidth(w => Math.max(80, Math.round(w * 1.08)));
+        localStorage.setItem('projGrid:widthsFix_increase_project_8pct_3_2026_01', '1');
+      }
+    } catch {}
+  }, []);
+  // Reduce client column width by ~1/3 to reclaim space (one-time)
+  useEffect(() => {
+    try {
+      const mig4 = localStorage.getItem('projGrid:widthsFix_reduce_client_33pct_2026_01');
+      if (!mig4) {
+        setClientColumnWidth(w => Math.max(80, Math.round((w * 2) / 3)));
+        localStorage.setItem('projGrid:widthsFix_reduce_client_33pct_2026_01', '1');
       }
     } catch {}
   }, []);
