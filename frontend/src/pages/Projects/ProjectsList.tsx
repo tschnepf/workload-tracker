@@ -478,6 +478,7 @@ const ProjectsList: React.FC = () => {
           nextDeliverables={nextDeliverablesMap}
           prevDeliverables={prevDeliverablesMap}
           onChangeStatus={handleTableStatusChange}
+          onRefreshDeliverables={refreshDeliverablesFor}
         />
       </div>
       <div className="w-1/2 flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto">
@@ -607,6 +608,7 @@ const ProjectsList: React.FC = () => {
         nextDeliverables={nextDeliverablesMap}
         prevDeliverables={prevDeliverablesMap}
         onChangeStatus={handleTableStatusChange}
+        onRefreshDeliverables={refreshDeliverablesFor}
         isMobileList
       />
     </div>
