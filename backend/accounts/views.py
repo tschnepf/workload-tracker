@@ -8,6 +8,7 @@ from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .models import UserProfile, AdminAuditLog
+from .permissions import IsAdminOrManager, is_admin_user
 from .serializers import (
     UserProfileSerializer,
     AdminAuditLogSerializer,
@@ -144,7 +145,7 @@ class ChangePasswordView(APIView):
 
 
 class CreateUserView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [UserRateThrottle, HotEndpointThrottle]
 
     @extend_schema(request=CreateUserRequestSerializer, responses=UserProfileSerializer)
@@ -156,6 +157,8 @@ class CreateUserView(APIView):
         password = request.data.get("password")
         person_id = request.data.get("personId")
         role = (request.data.get("role") or "user").strip().lower()
+        if role == 'admin' and not is_admin_user(request.user):
+            return Response({"detail": "Only admins may assign admin role."}, status=status.HTTP_403_FORBIDDEN)
 
         if not username or not password:
             return Response({"detail": "username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -226,7 +229,7 @@ class CreateUserView(APIView):
 
 
 class SetPasswordView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [UserRateThrottle, HotEndpointThrottle]
 
     @extend_schema(request=SetPasswordRequestSerializer, responses={204: None})
@@ -252,7 +255,7 @@ class SetPasswordView(APIView):
 
 
 class ListUsersView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [UserRateThrottle]
 
     @extend_schema(responses=UserListItemSerializer(many=True))
@@ -302,7 +305,7 @@ class ListUsersView(APIView):
 
 
 class DeleteUserView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [UserRateThrottle, HotEndpointThrottle]
 
     @extend_schema(
@@ -334,7 +337,7 @@ class DeleteUserView(APIView):
 
 
 class UpdateUserRoleView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [UserRateThrottle, HotEndpointThrottle]
 
     @extend_schema(
@@ -357,6 +360,8 @@ class UpdateUserRoleView(APIView):
         ser = SetUserRoleRequestSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         role = ser.validated_data['role']
+        if role == 'admin' and not is_admin_user(request.user):
+            return Response({"detail": "Only admins may assign admin role."}, status=status.HTTP_403_FORBIDDEN)
 
         # Prevent demoting the last admin (no remaining is_staff or superuser)
         if role != 'admin':
@@ -562,7 +567,7 @@ class PasswordResetConfirmView(APIView):
 
 
 class InviteUserView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [UserRateThrottle, HotEndpointThrottle]
 
     @extend_schema(request=InviteUserRequestSerializer, responses={204: None})
@@ -579,6 +584,8 @@ class InviteUserView(APIView):
         username = (data.validated_data.get('username') or '').strip()
         person_id = data.validated_data.get('personId')
         role = (data.validated_data.get('role') or 'user').strip().lower()
+        if role == 'admin' and not is_admin_user(request.user):
+            return Response({"detail": "Only admins may assign admin role."}, status=status.HTTP_403_FORBIDDEN)
 
         User = get_user_model()
         created = False
@@ -720,7 +727,7 @@ class InviteUserView(APIView):
 
 
 class LinkUserPersonAdminView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [UserRateThrottle]
 
     @extend_schema(

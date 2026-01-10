@@ -2,12 +2,14 @@ import React from 'react';
 import DepartmentProjectRolesSection from '@/components/settings/DepartmentProjectRolesSection';
 import { useSettingsData } from '../SettingsDataContext';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 export const DEPARTMENT_ROLES_SECTION_ID = 'department-project-roles';
 
 const DepartmentRolesSection: React.FC = () => {
   const { auth, caps } = useSettingsData();
-  if (!auth.user?.is_staff) return null;
+  const canManageDeptRoles = isAdminOrManager(auth.user);
+  if (!canManageDeptRoles) return null;
 
   return (
     <SettingsSectionFrame
@@ -18,7 +20,7 @@ const DepartmentRolesSection: React.FC = () => {
     >
       <DepartmentProjectRolesSection
         enabled={!!caps?.projectRolesByDepartment}
-        isAdmin={!!auth.user?.is_staff}
+        isAdmin={canManageDeptRoles}
       />
     </SettingsSectionFrame>
   );

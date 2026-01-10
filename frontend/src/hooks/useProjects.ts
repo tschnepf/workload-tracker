@@ -25,12 +25,14 @@ export function useProjects() {
   });
 
   const projects = (query.data?.pages || []).flatMap(p => p?.results || []);
-  const loading = query.isLoading || query.isFetching;
+  const loading = query.isLoading;
+  const refreshing = query.isFetching && !query.isLoading;
   const error = query.error ? (query.error as any).message : null;
 
   return {
     projects,
     loading,
+    refreshing,
     error,
     fetchNextPage: query.fetchNextPage,
     hasNextPage: query.hasNextPage,

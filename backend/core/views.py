@@ -15,6 +15,7 @@ from .serializers import (
     CalendarFeedSettingsSerializer,
 )
 from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole, CalendarFeedSettings
+from accounts.permissions import IsAdminOrManager
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
 from assignments.models import Assignment  # type: ignore
@@ -354,7 +355,7 @@ class DepartmentProjectRolesView(APIView):
 
     def get_permissions(self):
         if self.request.method.upper() == 'POST':
-            return [IsAuthenticated(), IsAdminUser()]
+            return [IsAuthenticated(), IsAdminOrManager()]
         return [IsAuthenticated()]
 
     def get_throttles(self):
@@ -431,7 +432,7 @@ class DepartmentProjectRolesView(APIView):
 
 
 class DepartmentProjectRoleDeleteView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'department_roles_mutate'
 

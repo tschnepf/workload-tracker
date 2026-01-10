@@ -71,7 +71,7 @@ const ProjectsTable: React.FC<Props> = ({
   };
 
   const header = (
-    <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
+    <div className="grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('client')}>
         CLIENT<SortIcon column="client" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
@@ -89,6 +89,9 @@ const ProjectsTable: React.FC<Props> = ({
       </div>
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('nextDue')}>
         NEXT DELIVERABLE<SortIcon column="nextDue" sortBy={sortBy} sortDirection={sortDirection} />
+      </div>
+      <div className="col-span-2 flex items-center">
+        NOTES
       </div>
     </div>
   );
@@ -131,7 +134,7 @@ const ProjectsTable: React.FC<Props> = ({
           <div
             key={project.id}
             onClick={() => onSelect(project, index)}
-            className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+            className={`grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
               selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
             } ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
             tabIndex={0}
@@ -196,8 +199,11 @@ const ProjectsTable: React.FC<Props> = ({
                 <div className="text-[var(--muted)] text-xs">-</div>
               )}
             </div>
+            <div className="col-span-2 text-[var(--muted)] text-xs whitespace-normal break-words">
+              {nextDeliverable?.notes || ''}
+            </div>
             {showRowBottomDivider && (
-              <div className={`col-start-3 col-end-13 h-0 border-b ${dividerBorder} pointer-events-none`} />
+              <div className={`col-start-3 col-end-[15] h-0 border-b ${dividerBorder} pointer-events-none`} />
             )}
           </div>
         );
@@ -241,7 +247,7 @@ const ProjectsTable: React.FC<Props> = ({
               key={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => onSelect(project, v.index)}
-              className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
+              className={`grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
                 selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
               } ${groupClients && v.index !== 0 && (!prev || (prev.client || '') !== (project.client || '')) ? 'border-t border-[var(--border)]' : ''}`}
               tabIndex={0}
@@ -304,8 +310,11 @@ const ProjectsTable: React.FC<Props> = ({
                   <div className="text-[var(--muted)] text-xs">-</div>
                 )}
               </div>
+              <div className="col-span-2 text-[var(--muted)] text-xs whitespace-normal break-words">
+                {nextDeliverable?.notes || ''}
+              </div>
               {(!groupClients || (projects[v.index + 1] && (projects[v.index + 1].client || '') === (project.client || ''))) && (
-                <div className={`col-start-3 col-end-13 h-0 border-b ${selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]'} pointer-events-none`} />
+                <div className={`col-start-3 col-end-[15] h-0 border-b ${selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]'} pointer-events-none`} />
               )}
             </div>
           );

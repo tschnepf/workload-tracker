@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
@@ -15,12 +15,13 @@ from projects.roles_serializers import (
 )
 from projects.roles_selectors import list_roles_by_department, last_updated_timestamp_for_department
 from projects.models import ProjectRole
+from accounts.permissions import IsAdminOrManager
 
 
 class ProjectRoleListCreateView(APIView):
     def get_permissions(self):
         if self.request.method.upper() == 'POST':
-            return [IsAuthenticated(), IsAdminUser()]
+            return [IsAuthenticated(), IsAdminOrManager()]
         return [IsAuthenticated()]
 
     @extend_schema(responses=ProjectRoleItemSerializer(many=True))
@@ -74,7 +75,7 @@ class ProjectRoleListCreateView(APIView):
 
 
 class ProjectRoleDetailView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
 
     @extend_schema(request=ProjectRoleUpdateSerializer, responses=ProjectRoleItemSerializer)
     def patch(self, request, id: int):
@@ -130,7 +131,7 @@ class ProjectRoleDetailView(APIView):
 
 
 class ProjectRoleReorderView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
 
     @extend_schema(
         request=inline_serializer(name='ProjectRoleReorderRequest', fields={

@@ -3,6 +3,38 @@ from django.contrib.auth.models import Group
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
+def _get_group_names(user) -> set[str]:
+    try:
+        return set(user.groups.values_list('name', flat=True))
+    except Exception:
+        return set()
+
+
+def is_admin_user(user) -> bool:
+    return bool(user and (getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False)))
+
+
+def is_manager_user(user) -> bool:
+    if not user:
+        return False
+    group_names = _get_group_names(user)
+    return 'Manager' in group_names
+
+
+def is_admin_or_manager(user) -> bool:
+    return is_admin_user(user) or is_manager_user(user)
+
+
+class IsAdminOrManager(BasePermission):
+    message = "You do not have permission to perform this action."
+
+    def has_permission(self, request, view: Any) -> bool:
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return False
+        return is_admin_or_manager(user)
+
+
 class RoleBasedAccessPermission(BasePermission):
     """Global role-based guard.
 
@@ -21,16 +53,11 @@ class RoleBasedAccessPermission(BasePermission):
             return False
 
         # Admins always allowed
-        if user.is_staff or user.is_superuser:
+        if is_admin_user(user):
             return True
 
         # Determine group membership
-        try:
-            group_names = set(user.groups.values_list('name', flat=True))
-        except Exception:
-            group_names = set()
-
-        if 'Manager' in group_names:
+        if is_manager_user(user):
             return True
 
         # Default/User
@@ -69,13 +96,9 @@ class RoleBasedAccessPermission(BasePermission):
             return False
 
         # Admins always allowed; Managers group allowed
-        if getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False):
+        if is_admin_user(user):
             return True
-        try:
-            group_names = set(user.groups.values_list('name', flat=True))
-        except Exception:
-            group_names = set()
-        if 'Manager' in group_names:
+        if is_manager_user(user):
             return True
 
         # Read-only for others

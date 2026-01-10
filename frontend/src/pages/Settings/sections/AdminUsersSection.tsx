@@ -6,6 +6,7 @@ import { useSettingsData } from '../SettingsDataContext';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { showToast } from '@/lib/toastBus';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
+import { isAdminOrManager, isAdminUser } from '@/utils/roleAccess';
 
 type AdminUser = {
   id: number;
@@ -32,7 +33,8 @@ export const ADMIN_USERS_SECTION_ID = 'admin-users';
 
 const AdminUsersSection: React.FC = () => {
   const { auth } = useSettingsData();
-  const isAdmin = !!auth.user?.is_staff;
+  const canManageUsers = isAdminOrManager(auth.user);
+  const isAdmin = isAdminUser(auth.user);
 
   const [peopleOptions, setPeopleOptions] = useState<PersonOption[]>([]);
   const [newUsername, setNewUsername] = useState('');
@@ -54,6 +56,10 @@ const AdminUsersSection: React.FC = () => {
   const [inviteRole, setInviteRole] = useState<'admin' | 'manager' | 'user'>('user');
   const [invitePersonId, setInvitePersonId] = useState<number | ''>('');
   const [inviteBusy, setInviteBusy] = useState(false);
+  React.useEffect(() => {
+    if (!isAdmin && newUserRole === 'admin') setNewUserRole('user');
+    if (!isAdmin && inviteRole === 'admin') setInviteRole('user');
+  }, [isAdmin, newUserRole, inviteRole]);
 
   const loadPeopleOptions = useCallback(async () => {
     try {
@@ -75,7 +81,7 @@ const AdminUsersSection: React.FC = () => {
   }, []);
 
   const loadUsers = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!canManageUsers) return;
     try {
       setUsersLoading(true);
       const data = await authApi.listUsers();
@@ -85,15 +91,15 @@ const AdminUsersSection: React.FC = () => {
     } finally {
       setUsersLoading(false);
     }
-  }, [isAdmin]);
+  }, [canManageUsers]);
 
   useAuthenticatedEffect(() => {
-    if (!auth.accessToken || !isAdmin) return;
+    if (!auth.accessToken || !canManageUsers) return;
     void loadPeopleOptions();
     void loadUsers();
-  }, [auth.accessToken, isAdmin, loadPeopleOptions, loadUsers]);
+  }, [auth.accessToken, canManageUsers, loadPeopleOptions, loadUsers]);
 
-  if (!isAdmin) return null;
+  if (!canManageUsers) return null;
 
   const resetCreateForm = () => {
     setNewUsername('');
@@ -352,6 +358,11 @@ const AdminUsersSection: React.FC = () => {
                       const nextRole = e.target.value as 'admin'|'manager'|'user';
                       if (nextRole === u.role) return;
                       if (u.id === auth.user?.id) return;
+                      if (!isAdmin && nextRole === 'admin') {
+                        setUsersMsg('Only admins may assign the admin role.');
+                        (e.target as HTMLSelectElement).value = u.role;
+                        return;
+                      }
                       if (u.role === 'admin' && nextRole !== 'admin' && adminCount <= 1) {
                         setUsersMsg('At least one admin must remain. Promote another user first.');
                         (e.target as HTMLSelectElement).value = u.role;
@@ -370,7 +381,7 @@ const AdminUsersSection: React.FC = () => {
                   >
                     <option value="user">User</option>
                     <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
+                    <option value="admin" disabled={!isAdmin}>Admin</option>
                   </select>
                 </td>
                 <td className="py-2 pr-4">
@@ -442,7 +453,7 @@ const AdminUsersSection: React.FC = () => {
           <select className="w-full bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[44px] focus:border-[var(--primary)]" value={newUserRole} onChange={e => setNewUserRole(e.target.value as any)}>
             <option value="user">User</option>
             <option value="manager">Manager</option>
-            <option value="admin">Admin</option>
+            {isAdmin && <option value="admin">Admin</option>}
           </select>
         </div>
         <div>
@@ -477,7 +488,7 @@ const AdminUsersSection: React.FC = () => {
             <select className="w-full bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[44px] focus:border-[var(--primary)]" value={inviteRole} onChange={e => setInviteRole(e.target.value as any)}>
               <option value="user">User</option>
               <option value="manager">Manager</option>
-              <option value="admin">Admin</option>
+              {isAdmin && <option value="admin">Admin</option>}
             </select>
           </div>
           <div>

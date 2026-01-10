@@ -3,6 +3,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { projectSettingsApi, type ProjectTypeSetting } from '@/services/projectsSettings';
 import { useAuth } from '@/hooks/useAuth';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 type Props = { projectId: number | null };
 
@@ -13,7 +14,7 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const auth = useAuth();
-  const canSave = !!auth?.user?.is_staff;
+  const canSave = isAdminOrManager(auth?.user);
 
   const load = useCallback(async () => {
     if (!projectId) return;

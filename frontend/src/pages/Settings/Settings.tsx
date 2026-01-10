@@ -5,6 +5,7 @@ import { settingsSections } from './sections';
 import SettingsSplitPane from './layout/SettingsSplitPane';
 import Layout from '@/components/layout/Layout';
 import { useMobileUiFlag } from '@/mobile/mobileFlags';
+import { isAdminUser, isManagerUser } from '@/utils/roleAccess';
 
 const SettingsContent: React.FC = () => {
   const { auth, capsQuery } = useSettingsData();
@@ -12,12 +13,14 @@ const SettingsContent: React.FC = () => {
   const mobileSettingsEnabled = useMobileUiFlag('settings');
 
   const visibleSections = useMemo(() => {
+    const isAdmin = isAdminUser(auth.user);
+    const isManager = isManagerUser(auth.user);
     return settingsSections.filter(section => {
-      if (section.requiresAdmin && !auth.user?.is_staff) return false;
+      if (section.requiresAdmin && !isAdmin && !(section.allowManager && isManager)) return false;
       if (section.featureFlag && !section.featureFlag(capsQuery.data)) return false;
       return true;
     });
-  }, [auth.user?.is_staff, capsQuery.data]);
+  }, [auth.user, capsQuery.data]);
 
   if (capsQuery.isLoading) {
     return (

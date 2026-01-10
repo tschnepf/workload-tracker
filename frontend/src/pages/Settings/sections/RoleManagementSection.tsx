@@ -9,11 +9,13 @@ import { showToast } from '@/lib/toastBus';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useSettingsData } from '../SettingsDataContext';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 export const ROLE_MANAGEMENT_SECTION_ID = 'role-management';
 
 const RoleManagementSection: React.FC = () => {
   const { auth } = useSettingsData();
+  const canReorder = isAdminOrManager(auth.user);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +127,7 @@ const RoleManagementSection: React.FC = () => {
         onEditRole={handleEditRole}
         onDeleteRole={handleDeleteRole}
         loading={loading}
-        onReorder={auth.user?.is_staff && reorderMode ? handleReorderRoles : undefined}
+        onReorder={canReorder && reorderMode ? handleReorderRoles : undefined}
       />
 
       {showRoleForm && (

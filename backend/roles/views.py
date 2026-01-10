@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from .models import Role
 from .serializers import RoleSerializer
 from drf_spectacular.utils import extend_schema, OpenApiParameter
+from accounts.permissions import is_admin_or_manager
 
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -46,7 +47,7 @@ class RoleViewSet(viewsets.ModelViewSet):
         Requires staff privileges.
         """
         user = getattr(request, 'user', None)
-        if not getattr(user, 'is_staff', False):
+        if not is_admin_or_manager(user):
             return Response({'detail': 'forbidden'}, status=status.HTTP_403_FORBIDDEN)
         ids = request.data.get('ids')
         if not isinstance(ids, list) or not all(isinstance(x, int) for x in ids):

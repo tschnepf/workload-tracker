@@ -14,6 +14,7 @@ export type SettingsSectionDefinition = {
   id: string;
   title: string;
   requiresAdmin: boolean;
+  allowManager?: boolean;
   featureFlag?: (caps?: Capabilities) => boolean;
   component: React.ComponentType;
 };
@@ -29,6 +30,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
     id: DEPARTMENT_ROLES_SECTION_ID,
     title: 'Department Project Roles',
     requiresAdmin: true,
+    allowManager: true,
     component: DepartmentRolesSection,
   },
   {
@@ -53,6 +55,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
     id: ADMIN_USERS_SECTION_ID,
     title: 'Create User & Admin Users',
     requiresAdmin: true,
+    allowManager: true,
     component: AdminUsersSection,
   },
   {

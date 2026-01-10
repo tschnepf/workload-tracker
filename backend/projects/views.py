@@ -7,6 +7,7 @@ from django.db.models import Max, Count, Exists, OuterRef, Q, Prefetch
 from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date, parse_http_date
 from django.conf import settings
+from accounts.permissions import is_admin_or_manager
 from django.core.cache import cache
 from django.utils import timezone
 from .models import Project
@@ -147,8 +148,8 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return Response({'projectId': project.id, 'settings': items})
 
         # PUT
-        if not request.user.is_staff:
-            return Response({'detail': 'Only admins may update project pre-deliverable settings'}, status=status.HTTP_403_FORBIDDEN)
+        if not is_admin_or_manager(getattr(request, 'user', None)):
+            return Response({'detail': 'Only admins or managers may update project pre-deliverable settings'}, status=status.HTTP_403_FORBIDDEN)
         payload = request.data or {}
         settings_list = payload.get('settings') or []
         if not isinstance(settings_list, list):
