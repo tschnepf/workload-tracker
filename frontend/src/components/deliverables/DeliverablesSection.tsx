@@ -624,7 +624,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
           <div className="text-[var(--muted)] whitespace-nowrap">
             <button
               type="button"
-              className="hover:underline"
+              className="hover:underline cursor-pointer"
               onClick={(e) => onOpenDatePicker(e.currentTarget as HTMLElement)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {

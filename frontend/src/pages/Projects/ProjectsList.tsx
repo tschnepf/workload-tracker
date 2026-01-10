@@ -449,7 +449,7 @@ const ProjectsList: React.FC = () => {
 
   const desktopLayout = (
     <div className="h-full min-h-0 flex bg-[var(--bg)]">
-      <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-dark">
+      <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-theme">
         <div className="p-3 border-b border-[var(--border)]">
           <div className="flex justify-between items-center mb-2">
             <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>

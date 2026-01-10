@@ -38,22 +38,50 @@
     scrollbar-width: thin;
     scrollbar-color: #475569 #1e293b;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-track {
     background: #1e293b;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-thumb {
     background: #475569;
     border-radius: 3px;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-thumb:hover {
     background: #64748b;
+  }
+
+  /* Theme-aware scrollbar (use CSS variables) */
+  .scrollbar-theme {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) var(--card);
+  }
+
+  .scrollbar-theme::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-theme::-webkit-scrollbar-track {
+    background: var(--card);
+  }
+
+  .scrollbar-theme::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+
+  .scrollbar-theme::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+  }
+
+  /* Subtle row hover that stays neutral (less saturated than selection). */
+  .row-hover-subtle:hover {
+    background-color: color-mix(in srgb, var(--border) 25%, var(--card));
   }
 }
 

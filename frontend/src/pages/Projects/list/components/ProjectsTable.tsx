@@ -54,6 +54,7 @@ const ProjectsTable: React.FC<Props> = ({
   const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: isMobileList ? 116 : 44, overscan: 6, enableVirtual });
   const groupClients = sortBy === 'client';
   const [openStatusFor, setOpenStatusFor] = useState<number | null>(null);
+  const [hoverEnabled, setHoverEnabled] = useState(true);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -64,6 +65,30 @@ const ProjectsTable: React.FC<Props> = ({
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [openStatusFor]);
+
+  useEffect(() => {
+    if (hoverEnabled) return;
+    const onMove = () => setHoverEnabled(true);
+    window.addEventListener('mousemove', onMove, { once: true });
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [hoverEnabled]);
+
+  useEffect(() => {
+    const disableHover = () => setHoverEnabled(false);
+    window.addEventListener('mousedown', disableHover);
+    window.addEventListener('mouseup', disableHover);
+    window.addEventListener('keydown', disableHover);
+    return () => {
+      window.removeEventListener('mousedown', disableHover);
+      window.removeEventListener('mouseup', disableHover);
+      window.removeEventListener('keydown', disableHover);
+    };
+  }, []);
+
+  const handleRowClick = (project: Project, index: number) => {
+    setHoverEnabled(false);
+    onSelect(project, index);
+  };
 
   const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
   const [deliverableOverrides, setDeliverableOverrides] = useState<Map<number, Partial<Deliverable>>>(new Map());
@@ -348,15 +373,17 @@ const ProjectsTable: React.FC<Props> = ({
   }, [datePicker]);
 
   const nonVirtualBody = (
-    <div className="overflow-y-auto h-full scrollbar-dark">
+    <div className="overflow-y-auto h-full pb-12 scrollbar-theme">
       {projects.map((project, index) => {
         const prev = index > 0 ? projects[index - 1] : null;
         const next = index < projects.length - 1 ? projects[index + 1] : null;
         const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
         const sameClientAsNext = groupClients && next && (next.client || '') === (project.client || '');
         const isGroupStart = groupClients && !sameClientAsPrev && index !== 0;
+        const hasTopDivider = isGroupStart;
         const showRowBottomDivider = !groupClients || sameClientAsNext;
-        const dividerBorder = selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]';
+        const isSelected = selectedProjectId === project.id;
+        const highlightInsetTop = hasTopDivider ? 'top-px' : 'top-0';
         const nextDeliverableRaw = (project.id != null && typeof project.id === 'number' && nextDeliverables)
           ? nextDeliverables.get(project.id)
           : null;
@@ -390,12 +417,13 @@ const ProjectsTable: React.FC<Props> = ({
         return (
           <div
             key={project.id}
-            onClick={() => onSelect(project, index)}
-            className={`grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
-              selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
-            } ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
+            onClick={() => handleRowClick(project, index)}
+            className={`relative grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
             tabIndex={0}
           >
+            {isSelected && (
+              <div className={`absolute inset-x-0 ${highlightInsetTop} bottom-px bg-[var(--surfaceOverlay)] pointer-events-none`} />
+            )}
             <div className="col-span-2 text-[var(--muted)] text-xs">
               {sameClientAsPrev ? '' : (project.client || 'No Client')}
             </div>
@@ -551,7 +579,7 @@ const ProjectsTable: React.FC<Props> = ({
                   </div>
                   <div className={nextBottomClass}>
                     <span
-                      className="cursor-text"
+                      className="cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
                         openDatePicker(project.id!, nextDeliverable, e.currentTarget as HTMLElement);
@@ -620,7 +648,12 @@ const ProjectsTable: React.FC<Props> = ({
               )}
             </div>
             {showRowBottomDivider && (
-              <div className={`col-start-3 col-end-[15] h-0 border-b ${dividerBorder} pointer-events-none`} />
+              <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
+                <div className="grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2">
+                  <div className="col-span-2" />
+                  <div className="col-span-12 h-px bg-[var(--border)]" />
+                </div>
+              </div>
             )}
           </div>
         );
@@ -629,13 +662,17 @@ const ProjectsTable: React.FC<Props> = ({
   );
 
   const virtualBody = (
-    <div ref={parentRef} className="overflow-y-auto h-full relative scrollbar-dark">
+    <div ref={parentRef} className="overflow-y-auto h-full relative pb-12 scrollbar-theme">
       <div style={{ height: totalSize, position: 'relative' }}>
         {items.map((v) => {
           const project = projects[v.index];
           if (!project) return null;
           const prev = v.index > 0 ? projects[v.index - 1] : null;
           const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
+          const isSelected = selectedProjectId === project.id;
+          const isGroupStart = groupClients && v.index !== 0 && (!prev || (prev.client || '') !== (project.client || ''));
+          const hasTopDivider = isGroupStart;
+          const highlightInsetTop = hasTopDivider ? 'top-px' : 'top-0';
           const nextDeliverableRaw = (project.id != null && typeof project.id === 'number' && nextDeliverables)
             ? nextDeliverables.get(project.id)
             : null;
@@ -669,12 +706,13 @@ const ProjectsTable: React.FC<Props> = ({
             <div
               key={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
-              onClick={() => onSelect(project, v.index)}
-              className={`grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-[var(--surfaceHover)] transition-colors focus:outline-none ${
-                selectedProjectId === project.id ? 'bg-[var(--surfaceOverlay)]' : ''
-              } ${groupClients && v.index !== 0 && (!prev || (prev.client || '') !== (project.client || '')) ? 'border-t border-[var(--border)]' : ''}`}
+              onClick={() => handleRowClick(project, v.index)}
+              className={`relative grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
               tabIndex={0}
             >
+              {isSelected && (
+                <div className={`absolute inset-x-0 ${highlightInsetTop} bottom-px bg-[var(--surfaceOverlay)] pointer-events-none`} />
+              )}
               <div className="col-span-2 text-[var(--muted)] text-xs">{sameClientAsPrev ? '' : (project.client || 'No Client')}</div>
               <div className="col-span-3">
                 <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
@@ -828,7 +866,7 @@ const ProjectsTable: React.FC<Props> = ({
                     </div>
                     <div className={nextBottomClass2}>
                       <span
-                        className="cursor-text"
+                        className="cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           openDatePicker(project.id!, nextDeliverable, e.currentTarget as HTMLElement);
@@ -897,7 +935,12 @@ const ProjectsTable: React.FC<Props> = ({
                 )}
               </div>
               {(!groupClients || (projects[v.index + 1] && (projects[v.index + 1].client || '') === (project.client || ''))) && (
-                <div className={`col-start-3 col-end-[15] h-0 border-b ${selectedProjectId === project.id ? 'border-[var(--primary)]' : 'border-[var(--border)]'} pointer-events-none`} />
+                <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
+                  <div className="grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2">
+                    <div className="col-span-2" />
+                    <div className="col-span-12 h-px bg-[var(--border)]" />
+                  </div>
+                </div>
               )}
             </div>
           );
@@ -1070,7 +1113,7 @@ const ProjectsTable: React.FC<Props> = ({
 
   if (isMobileList) {
     return (
-      <div className="flex-1 overflow-y-auto divide-y divide-[var(--border)] scrollbar-dark">
+      <div className="flex-1 overflow-y-auto divide-y divide-[var(--border)] pb-12 scrollbar-theme">
         {projects.map((project, index) => renderMobileCard(project, index))}
         {datePickerPopover}
       </div>
