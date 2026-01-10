@@ -219,7 +219,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           aria-controls="global-dept-filter-listbox"
           aria-autocomplete="list"
           aria-label="Global department filter"
-          placeholder={loading ? 'Loading…' : 'Search'}
+          placeholder={loading ? 'Loading…' : 'Dept. Filter'}
           disabled={loading}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
