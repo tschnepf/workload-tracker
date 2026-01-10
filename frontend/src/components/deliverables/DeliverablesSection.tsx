@@ -5,7 +5,8 @@
  * Sorted by date/percentage with null dates first; manual reordering disabled
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Project, Deliverable } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
@@ -28,15 +29,24 @@ interface DeliverablesSectionProps {
   project: Project;
   variant?: 'default' | 'embedded';
   onDeliverablesChanged?: () => void;
+  refreshToken?: number;
 }
 
-const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, variant = 'default', onDeliverablesChanged }) => {
+const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, variant = 'default', onDeliverablesChanged, refreshToken }) => {
   const queryClient = useQueryClient();
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [datePicker, setDatePicker] = useState<{
+    deliverableId: number;
+    value: string;
+    month: number;
+    year: number;
+    anchorRect: { top: number; left: number; right: number; bottom: number; width: number; height: number };
+  } | null>(null);
+  const datePopoverRef = useRef<HTMLDivElement | null>(null);
   const sortedDeliverables = useMemo(() => {
     const getDateValue = (date?: string | null) => {
       if (!date) return null;
@@ -65,7 +75,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
     if (project.id) {
       loadDeliverables();
     }
-  }, [project.id]);
+  }, [project.id, refreshToken]);
 
   const loadDeliverables = async () => {
     if (!project.id) return;
@@ -82,6 +92,77 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       setLoading(false);
     }
   };
+
+  const parseYmd = (value: string): { year: number; month: number; day: number } | null => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const [yy, mm, dd] = value.split('-').map(Number);
+    if (!yy || !mm || !dd) return null;
+    return { year: yy, month: mm - 1, day: dd };
+  };
+
+  const formatYmd = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const openDatePicker = (deliverable: Deliverable, anchorEl: HTMLElement) => {
+    if (!deliverable?.id) return;
+    const parsed = deliverable.date ? parseYmd(deliverable.date) : null;
+    const baseDate = parsed ? new Date(parsed.year, parsed.month, parsed.day) : new Date();
+    const rect = anchorEl.getBoundingClientRect();
+    setDatePicker({
+      deliverableId: deliverable.id,
+      value: deliverable.date || '',
+      month: baseDate.getMonth(),
+      year: baseDate.getFullYear(),
+      anchorRect: {
+        top: rect.top,
+        left: rect.left,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      },
+    });
+  };
+
+  const handleDatePicked = async (nextValue: string) => {
+    if (!datePicker) return;
+    const prevValue = datePicker.value || '';
+    const value = nextValue || '';
+    if (value === prevValue) {
+      setDatePicker(null);
+      return;
+    }
+    try {
+      await handleUpdateDeliverable(datePicker.deliverableId, { date: value || null });
+    } finally {
+      setDatePicker(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!datePicker) return;
+    const handleDocClick = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (datePopoverRef.current && target && datePopoverRef.current.contains(target)) return;
+      setDatePicker(null);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDatePicker(null);
+    };
+    const handleScroll = () => setDatePicker(null);
+    document.addEventListener('mousedown', handleDocClick);
+    document.addEventListener('keydown', handleKey);
+    document.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleDocClick);
+      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [datePicker]);
 
   const handleAddDeliverable = () => {
     setShowAddForm(true);
@@ -148,6 +229,108 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
 
   const containerClass = variant === 'embedded' ? '' : 'border-t border-[var(--border)] pt-4';
 
+  const datePickerPopover = datePicker && typeof document !== 'undefined' ? (() => {
+    const { anchorRect, month, year, value } = datePicker;
+    const popoverWidth = 244;
+    const popoverHeight = 260;
+    const margin = 8;
+    const viewportW = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const viewportH = typeof window !== 'undefined' ? window.innerHeight : 0;
+    const spaceBelow = viewportH - anchorRect.bottom;
+    const placeBelow = spaceBelow >= popoverHeight || anchorRect.top < popoverHeight;
+    const top = placeBelow ? anchorRect.bottom + 6 : anchorRect.top - popoverHeight - 6;
+    const left = Math.min(Math.max(anchorRect.left, margin), Math.max(margin, viewportW - popoverWidth - margin));
+    const monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(year, month, 1));
+    const selected = value ? parseYmd(value) : null;
+    const today = new Date();
+    const todayYmd = formatYmd(today);
+    const start = new Date(year, month, 1);
+    const startDay = start.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+    const cells = Array.from({ length: 42 }).map((_, idx) => {
+      const offset = idx - startDay + 1;
+      let d: Date;
+      let inMonth = true;
+      if (offset <= 0) {
+        d = new Date(year, month - 1, daysInPrevMonth + offset);
+        inMonth = false;
+      } else if (offset > daysInMonth) {
+        d = new Date(year, month + 1, offset - daysInMonth);
+        inMonth = false;
+      } else {
+        d = new Date(year, month, offset);
+      }
+      const ymd = formatYmd(d);
+      const isSelected = !!(selected && selected.year === d.getFullYear() && selected.month === d.getMonth() && selected.day === d.getDate());
+      const isToday = ymd === todayYmd;
+      return { date: d, inMonth, isSelected, isToday, ymd };
+    });
+    const moveMonth = (delta: number) => {
+      setDatePicker(prev => {
+        if (!prev) return prev;
+        const next = new Date(prev.year, prev.month + delta, 1);
+        return { ...prev, month: next.getMonth(), year: next.getFullYear() };
+      });
+    };
+    return createPortal(
+      <div
+        ref={datePopoverRef}
+        className="fixed z-50"
+        style={{ top, left, width: popoverWidth }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-lg p-2">
+          <div className="flex items-center justify-between mb-2">
+            <button
+              type="button"
+              className="px-2 py-1 text-sm text-[var(--muted)] hover:text-[var(--text)]"
+              onClick={() => moveMonth(-1)}
+              aria-label="Previous month"
+            >
+              ‹
+            </button>
+            <div className="text-sm font-medium text-[var(--text)]">{monthLabel}</div>
+            <button
+              type="button"
+              className="px-2 py-1 text-sm text-[var(--muted)] hover:text-[var(--text)]"
+              onClick={() => moveMonth(1)}
+              aria-label="Next month"
+            >
+              ›
+            </button>
+          </div>
+          <div className="grid grid-cols-7 text-[10px] text-[var(--muted)] mb-1">
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => (
+              <div key={d} className="text-center">{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((cell) => (
+              <button
+                key={cell.ymd}
+                type="button"
+                className={`h-7 w-7 text-xs rounded-full mx-auto flex items-center justify-center transition-colors ${
+                  cell.isSelected
+                    ? 'bg-[var(--primary)] text-white'
+                    : cell.isToday
+                      ? 'border border-[var(--primary)] text-[var(--text)]'
+                      : cell.inMonth
+                        ? 'text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+                        : 'text-[var(--muted)]'
+                }`}
+                onClick={() => handleDatePicked(cell.ymd)}
+              >
+                {cell.date.getDate()}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  })() : null;
+
   return (
     <div className={containerClass}>
       <div className="flex justify-between items-center mb-2">
@@ -196,6 +379,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
               onSave={(data) => handleUpdateDeliverable(deliverable.id!, data)}
               onCancel={() => setEditingId(null)}
               onDelete={() => handleDeleteDeliverable(deliverable.id!)}
+              onOpenDatePicker={(anchorEl) => openDatePicker(deliverable, anchorEl)}
               focusField={null}
             />
           ))}
@@ -208,6 +392,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
           onCancel={() => setShowAddForm(false)}
         />
       )}
+      {datePickerPopover}
     </div>
   );
 };
@@ -218,6 +403,7 @@ interface DeliverableRowProps {
   onSave: (data: Partial<Deliverable>) => void;
   onCancel: () => void;
   onDelete: () => void;
+  onOpenDatePicker: (anchorEl: HTMLElement) => void;
   focusField: 'percentage'|'description'|'date'|'notes'|null;
 }
 
@@ -227,6 +413,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
   onSave,
   onCancel,
   onDelete,
+  onOpenDatePicker,
   focusField,
 }) => {
   const [editData, setEditData] = useState({
@@ -404,7 +591,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
                 type="number"
                 min={0}
                 max={100}
-                className="px-1 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] text-xs w-16 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                className="w-12 bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}
@@ -421,7 +608,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             {inlineField === 'description' ? (
               <input
                 type="text"
-                className="w-full px-1 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] text-xs"
+                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}
@@ -435,27 +622,25 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             )}
           </div>
           <div className="text-[var(--muted)] whitespace-nowrap">
-            {inlineField === 'date' ? (
-              <input
-                type="date"
-                className="px-1 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] text-xs"
-                value={inlineDraft}
-                onChange={(e) => setInlineDraft(e.currentTarget.value)}
-                onBlur={commitInline}
-                onKeyDown={(e) => { if (e.key==='Enter'){ e.preventDefault(); commitInline(); } else if (e.key==='Escape'){ e.preventDefault(); setInlineField(null); } }}
-                autoFocus
-              />
-            ) : (
-              <button type="button" className="hover:underline" onClick={() => startInline('date')}>
-                {deliverable.date ? formatDateNoYear(deliverable.date) : '-'}
-              </button>
-            )}
+            <button
+              type="button"
+              className="hover:underline"
+              onClick={(e) => onOpenDatePicker(e.currentTarget as HTMLElement)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onOpenDatePicker(e.currentTarget as HTMLElement);
+                }
+              }}
+            >
+              {deliverable.date ? formatDateNoYear(deliverable.date) : '-'}
+            </button>
           </div>
           <div className="text-[var(--muted)] truncate min-w-0">
             {inlineField === 'notes' ? (
               <input
                 type="text"
-                className="w-full px-1 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] text-xs"
+                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}

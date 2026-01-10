@@ -21,6 +21,7 @@ interface Props {
   prevDeliverables?: Map<number, Deliverable | null>;
   onChangeStatus?: (projectId: number, newStatus: string) => void;
   onRefreshDeliverables?: (projectId: number) => void;
+  onDeliverableEdited?: (projectId: number) => void;
   isMobileList?: boolean;
 }
 
@@ -36,6 +37,7 @@ const ProjectsTable: React.FC<Props> = ({
   prevDeliverables,
   onChangeStatus,
   onRefreshDeliverables,
+  onDeliverableEdited,
   isMobileList = false,
 }) => {
   const enableVirtual = !isMobileList && getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
@@ -180,6 +182,7 @@ const ProjectsTable: React.FC<Props> = ({
         return next;
       });
       onRefreshDeliverables?.(notesEditor.projectId);
+      onDeliverableEdited?.(notesEditor.projectId);
       setNotesEditor(null);
     } catch (e: any) {
       const msg = e?.message || 'Failed to update notes';
@@ -252,6 +255,7 @@ const ProjectsTable: React.FC<Props> = ({
         return next;
       });
       onRefreshDeliverables?.(nextEditor.projectId);
+      onDeliverableEdited?.(nextEditor.projectId);
       setNextEditor(null);
     } catch (e: any) {
       const msg = e?.message || 'Failed to update deliverable';
@@ -314,6 +318,7 @@ const ProjectsTable: React.FC<Props> = ({
         return next;
       });
       onRefreshDeliverables?.(datePicker.projectId);
+      onDeliverableEdited?.(datePicker.projectId);
     } catch (e) {
       console.error('Failed to update deliverable date', e);
     } finally {
@@ -343,7 +348,7 @@ const ProjectsTable: React.FC<Props> = ({
   }, [datePicker]);
 
   const nonVirtualBody = (
-    <div className="overflow-y-auto h-full">
+    <div className="overflow-y-auto h-full scrollbar-dark">
       {projects.map((project, index) => {
         const prev = index > 0 ? projects[index - 1] : null;
         const next = index < projects.length - 1 ? projects[index + 1] : null;
@@ -624,7 +629,7 @@ const ProjectsTable: React.FC<Props> = ({
   );
 
   const virtualBody = (
-    <div ref={parentRef} className="overflow-y-auto h-full relative">
+    <div ref={parentRef} className="overflow-y-auto h-full relative scrollbar-dark">
       <div style={{ height: totalSize, position: 'relative' }}>
         {items.map((v) => {
           const project = projects[v.index];
@@ -1065,7 +1070,7 @@ const ProjectsTable: React.FC<Props> = ({
 
   if (isMobileList) {
     return (
-      <div className="flex-1 overflow-y-auto divide-y divide-[var(--border)]">
+      <div className="flex-1 overflow-y-auto divide-y divide-[var(--border)] scrollbar-dark">
         {projects.map((project, index) => renderMobileCard(project, index))}
         {datePickerPopover}
       </div>

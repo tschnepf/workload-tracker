@@ -348,6 +348,12 @@ const ProjectsList: React.FC = () => {
   } as any);
 
   const { updateStatus } = useUpdateProjectStatus();
+  const [deliverablesRefreshTick, setDeliverablesRefreshTick] = useState(0);
+  const bumpDeliverablesRefresh = useCallback((projectId: number) => {
+    if (selectedProject?.id === projectId) {
+      setDeliverablesRefreshTick(t => t + 1);
+    }
+  }, [selectedProject?.id]);
 
   // Table-level status update for any project row
   const handleTableStatusChange = useCallback(async (projectId: number, newStatus: string) => {
@@ -443,7 +449,7 @@ const ProjectsList: React.FC = () => {
 
   const desktopLayout = (
     <div className="h-full min-h-0 flex bg-[var(--bg)]">
-      <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto">
+      <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-dark">
         <div className="p-3 border-b border-[var(--border)]">
           <div className="flex justify-between items-center mb-2">
             <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
@@ -479,6 +485,7 @@ const ProjectsList: React.FC = () => {
           prevDeliverables={prevDeliverablesMap}
           onChangeStatus={handleTableStatusChange}
           onRefreshDeliverables={refreshDeliverablesFor}
+          onDeliverableEdited={bumpDeliverablesRefresh}
         />
       </div>
       <div className="w-1/2 flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto">
@@ -554,6 +561,7 @@ const ProjectsList: React.FC = () => {
                 <DeliverablesSection
                   project={selectedProject}
                   variant="embedded"
+                  refreshToken={deliverablesRefreshTick}
                   onDeliverablesChanged={() => {
                     try { if (selectedProject?.id) refreshDeliverablesFor(selectedProject.id); } catch {}
                   }}
@@ -609,6 +617,7 @@ const ProjectsList: React.FC = () => {
         prevDeliverables={prevDeliverablesMap}
         onChangeStatus={handleTableStatusChange}
         onRefreshDeliverables={refreshDeliverablesFor}
+        onDeliverableEdited={bumpDeliverablesRefresh}
         isMobileList
       />
     </div>
