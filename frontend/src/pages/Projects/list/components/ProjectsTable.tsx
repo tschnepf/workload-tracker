@@ -500,7 +500,7 @@ const ProjectsTable: React.FC<Props> = ({
                     ) : (
                       nextPercentText && (
                         <span
-                          className="cursor-text"
+                          className="cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
                             startEditingNextDeliverable(project.id!, nextDeliverable, 'percentage', String(nextDeliverable.percentage ?? ''));
@@ -537,7 +537,7 @@ const ProjectsTable: React.FC<Props> = ({
                       <>
                         {nextDescriptionText ? (
                           <span
-                            className="cursor-text"
+                            className="cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
                               startEditingNextDeliverable(project.id!, nextDeliverable, 'description', nextDescriptionText);
@@ -557,7 +557,7 @@ const ProjectsTable: React.FC<Props> = ({
                           <span className="text-[var(--muted)] text-xs">-</span>
                         ) : (
                           <span
-                            className="cursor-text text-transparent select-none"
+                            className="cursor-pointer text-transparent select-none"
                             onClick={(e) => {
                               e.stopPropagation();
                               startEditingNextDeliverable(project.id!, nextDeliverable, 'description', '');
@@ -602,7 +602,7 @@ const ProjectsTable: React.FC<Props> = ({
               )}
             </div>
             <div
-              className={`col-span-2 text-[var(--muted)] text-xs whitespace-normal break-words ${nextDeliverable?.id ? 'cursor-text' : ''}`}
+              className={`col-span-2 text-[var(--muted)] text-xs whitespace-normal break-words ${nextDeliverable?.id ? 'cursor-pointer' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 if (nextDeliverable?.id) startEditingNotes(project.id!, nextDeliverable);
@@ -787,7 +787,7 @@ const ProjectsTable: React.FC<Props> = ({
                       ) : (
                         nextPercentText && (
                           <span
-                            className="cursor-text"
+                            className="cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
                               startEditingNextDeliverable(project.id!, nextDeliverable, 'percentage', String(nextDeliverable.percentage ?? ''));
@@ -824,7 +824,7 @@ const ProjectsTable: React.FC<Props> = ({
                         <>
                           {nextDescriptionText ? (
                             <span
-                              className="cursor-text"
+                            className="cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 startEditingNextDeliverable(project.id!, nextDeliverable, 'description', nextDescriptionText);
@@ -844,7 +844,7 @@ const ProjectsTable: React.FC<Props> = ({
                             <span className="text-[var(--muted)] text-xs">-</span>
                           ) : (
                             <span
-                              className="cursor-text text-transparent select-none"
+                              className="cursor-pointer text-transparent select-none"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 startEditingNextDeliverable(project.id!, nextDeliverable, 'description', '');
@@ -889,7 +889,7 @@ const ProjectsTable: React.FC<Props> = ({
                 )}
               </div>
               <div
-                className={`col-span-2 text-[var(--muted)] text-xs whitespace-normal break-words ${nextDeliverable?.id ? 'cursor-text' : ''}`}
+                className={`col-span-2 text-[var(--muted)] text-xs whitespace-normal break-words ${nextDeliverable?.id ? 'cursor-pointer' : ''}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (nextDeliverable?.id) startEditingNotes(project.id!, nextDeliverable);
