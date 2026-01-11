@@ -7,7 +7,7 @@ import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { getFlag } from '@/lib/flags';
 import { useVirtualRows } from '../hooks/useVirtualRows';
-import { deliverablesApi } from '@/services/api';
+import { deliverablesApi, projectsApi } from '@/services/api';
 
 interface Props {
   projects: Project[];
@@ -101,6 +101,14 @@ const ProjectsTable: React.FC<Props> = ({
     saving: boolean;
     error: string | null;
   } | null>(null);
+  const [projectNumberOverrides, setProjectNumberOverrides] = useState<Map<number, string>>(new Map());
+  const [projectNumberEditor, setProjectNumberEditor] = useState<{
+    projectId: number;
+    value: string;
+    initialValue: string;
+    saving: boolean;
+    error: string | null;
+  } | null>(null);
   const [nextEditor, setNextEditor] = useState<{
     projectId: number;
     deliverableId: number;
@@ -130,7 +138,7 @@ const ProjectsTable: React.FC<Props> = ({
   };
 
   const header = (
-    <div className="grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
+    <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('client')}>
         CLIENT<SortIcon column="client" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
@@ -179,6 +187,7 @@ const ProjectsTable: React.FC<Props> = ({
 
   const startEditingNotes = (projectId: number, deliverable: Deliverable) => {
     if (!deliverable?.id) return;
+    if (projectNumberEditor) setProjectNumberEditor(null);
     if (nextEditor) setNextEditor(null);
     const initialValue = deliverable.notes || '';
     setNotesEditor({
@@ -214,6 +223,44 @@ const ProjectsTable: React.FC<Props> = ({
       setNotesEditor(prev => (prev ? { ...prev, saving: false, error: msg } : prev));
     }
   };
+
+  const startEditingProjectNumber = (projectId: number, currentValue: string | null | undefined) => {
+    setProjectNumberEditor({
+      projectId,
+      value: currentValue ?? '',
+      initialValue: currentValue ?? '',
+      saving: false,
+      error: null,
+    });
+  };
+
+  const saveEditingProjectNumber = async () => {
+    if (!projectNumberEditor) return;
+    if (projectNumberEditor.value === projectNumberEditor.initialValue) {
+      setProjectNumberEditor(null);
+      return;
+    }
+    setProjectNumberEditor(prev => (prev ? { ...prev, saving: true, error: null } : prev));
+    try {
+      await projectsApi.update(projectNumberEditor.projectId, { projectNumber: projectNumberEditor.value || '' });
+      setProjectNumberOverrides(prev => {
+        const next = new Map(prev);
+        next.set(projectNumberEditor.projectId, projectNumberEditor.value || '');
+        return next;
+      });
+      setProjectNumberEditor(null);
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to update project number';
+      setProjectNumberEditor(prev => (prev ? { ...prev, saving: false, error: msg } : prev));
+    }
+  };
+
+  const getProjectNumber = useMemo(() => {
+    return (project: Project) => {
+      if (!project?.id) return project?.projectNumber ?? '';
+      return projectNumberOverrides.get(project.id) ?? project.projectNumber ?? '';
+    };
+  }, [projectNumberOverrides]);
 
   const startEditingNextDeliverable = (
     projectId: number,
@@ -412,13 +459,15 @@ const ProjectsTable: React.FC<Props> = ({
         const prevTopClass = isRecentPrev ? 'text-[#d2691e] text-xs font-semibold italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         const prevBottomClass = isRecentPrev ? 'text-[#d2691e] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         const isEditingNotes = notesEditor?.projectId === project.id && notesEditor?.deliverableId === nextDeliverable?.id;
+        const isEditingProjectNumber = projectNumberEditor?.projectId === project.id;
+        const projectNumberDisplay = getProjectNumber(project);
         const isEditingNextPercent = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'percentage';
         const isEditingNextDescription = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'description';
         return (
           <div
             key={project.id}
             onClick={() => handleRowClick(project, index)}
-            className={`relative grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
+            className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
             tabIndex={0}
           >
             {isSelected && (
@@ -430,7 +479,44 @@ const ProjectsTable: React.FC<Props> = ({
             <div className="col-span-3">
               <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
             </div>
-            <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
+            <div
+              className={`col-span-1 text-[var(--muted)] text-xs ${project.id ? 'cursor-pointer' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (project.id) startEditingProjectNumber(project.id, project.projectNumber ?? '');
+              }}
+              role={project.id ? 'button' : undefined}
+              tabIndex={project.id ? 0 : undefined}
+              aria-label={project.id ? 'Edit project number' : undefined}
+              onKeyDown={(e) => {
+                if (!project.id) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  startEditingProjectNumber(project.id, project.projectNumber ?? '');
+                }
+              }}
+              title={project.id ? 'Click to edit project number' : undefined}
+            >
+              {isEditingProjectNumber ? (
+                <input
+                  autoFocus
+                  type="text"
+                  className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0"
+                  value={projectNumberEditor?.value ?? ''}
+                  onChange={(e) => setProjectNumberEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
+                  onClick={(e) => e.stopPropagation()}
+                  onBlur={() => { void saveEditingProjectNumber(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === 'NumpadEnter') {
+                      e.preventDefault();
+                      void saveEditingProjectNumber();
+                    }
+                  }}
+                />
+              ) : (
+                projectNumberDisplay
+              )}
+            </div>
             <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
               <div className="relative" data-dropdown>
                 <button
@@ -649,7 +735,7 @@ const ProjectsTable: React.FC<Props> = ({
             </div>
             {showRowBottomDivider && (
               <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
-                <div className="grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2">
+                <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2">
                   <div className="col-span-2" />
                   <div className="col-span-12 h-px bg-[var(--border)]" />
                 </div>
@@ -700,6 +786,8 @@ const ProjectsTable: React.FC<Props> = ({
           const prevTopClass2 = isRecentPrev2 ? 'text-[#d2691e] text-xs font-semibold italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           const prevBottomClass2 = isRecentPrev2 ? 'text-[#d2691e] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           const isEditingNotes2 = notesEditor?.projectId === project.id && notesEditor?.deliverableId === nextDeliverable?.id;
+          const isEditingProjectNumber2 = projectNumberEditor?.projectId === project.id;
+          const projectNumberDisplay2 = getProjectNumber(project);
           const isEditingNextPercent2 = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'percentage';
           const isEditingNextDescription2 = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'description';
           return (
@@ -707,7 +795,7 @@ const ProjectsTable: React.FC<Props> = ({
               key={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => handleRowClick(project, v.index)}
-              className={`relative grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
+              className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
               tabIndex={0}
             >
               {isSelected && (
@@ -717,7 +805,44 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="col-span-3">
                 <div className="text-[var(--text)] font-medium leading-tight">{project.name}</div>
               </div>
-              <div className="col-span-1 text-[var(--muted)] text-xs">{project.projectNumber ?? ''}</div>
+              <div
+                className={`col-span-1 text-[var(--muted)] text-xs ${project.id ? 'cursor-pointer' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (project.id) startEditingProjectNumber(project.id, project.projectNumber ?? '');
+                }}
+                role={project.id ? 'button' : undefined}
+                tabIndex={project.id ? 0 : undefined}
+                aria-label={project.id ? 'Edit project number' : undefined}
+                onKeyDown={(e) => {
+                  if (!project.id) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    startEditingProjectNumber(project.id, project.projectNumber ?? '');
+                  }
+                }}
+                title={project.id ? 'Click to edit project number' : undefined}
+              >
+                {isEditingProjectNumber2 ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0"
+                    value={projectNumberEditor?.value ?? ''}
+                    onChange={(e) => setProjectNumberEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={() => { void saveEditingProjectNumber(); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === 'NumpadEnter') {
+                        e.preventDefault();
+                        void saveEditingProjectNumber();
+                      }
+                    }}
+                  />
+                ) : (
+                  projectNumberDisplay2
+                )}
+              </div>
               <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
                 <div className="relative" data-dropdown>
                   <button
@@ -936,7 +1061,7 @@ const ProjectsTable: React.FC<Props> = ({
               </div>
               {(!groupClients || (projects[v.index + 1] && (projects[v.index + 1].client || '') === (project.client || ''))) && (
                 <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
-                  <div className="grid grid-cols-[repeat(6,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2">
+                  <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2">
                     <div className="col-span-2" />
                     <div className="col-span-12 h-px bg-[var(--border)]" />
                   </div>
