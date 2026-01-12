@@ -598,60 +598,6 @@ export const projectsApi = {
 
 };
 
-// (Removed legacy ProjectRoles catalog API) Use /api/projects/project-roles/ via roles/api.ts
-
-// Department ↔ Project Roles API
-export type DeptProjectRole = { id: number; name: string };
-export const deptProjectRolesApi = {
-  // Batched map: department_ids=1,2,3 → { [deptId]: Array<{ id, name }> }
-  map: async (departmentIds: number[]): Promise<Record<string, DeptProjectRole[]>> => {
-    const ids = Array.from(new Set((departmentIds || []).map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0))) as number[];
-    if (ids.length === 0) return {};
-    const sp = new URLSearchParams();
-    sp.set('department_ids', ids.join(','));
-    const qs = `?${sp.toString()}`;
-    const res = await apiClient.GET(('/core/department_project_roles/map/' + qs) as any, { headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-    return res.data as unknown as Record<string, DeptProjectRole[]>;
-  },
-
-  // List roles for a single department
-  list: async (departmentId: number): Promise<DeptProjectRole[]> => {
-    const sp = new URLSearchParams();
-    sp.set('department', String(departmentId));
-    const qs = `?${sp.toString()}`;
-    const res = await apiClient.GET(('/core/department_project_roles/' + qs) as any, { headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-    return res.data as unknown as DeptProjectRole[];
-  },
-
-  // Add a role mapping (admin)
-  add: async (departmentId: number, name: string): Promise<DeptProjectRole> => {
-    const body = { department: departmentId, name } as any;
-    const res = await apiClient.POST('/core/department_project_roles/' as any, { body, headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-    return res.data as unknown as DeptProjectRole;
-  },
-
-  // Remove a role mapping (admin)
-  remove: async (departmentId: number, roleId: number): Promise<void> => {
-    const res = await apiClient.DELETE('/core/department_project_roles/{department}/{role_id}/' as any, { params: { path: { department: departmentId, role_id: roleId } }, headers: authHeaders() });
-    if (res.error) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-  },
-};
-
 // Departments API
 export const departmentsApi = {
   // Get all departments with pagination support

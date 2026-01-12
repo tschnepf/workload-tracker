@@ -8,11 +8,23 @@ export type ProjectRole = {
   department_id: number;
 };
 
+export type ProjectRoleUsage = {
+  count: number;
+  assignments: Array<{
+    id: number;
+    person: { id: number | null; name: string };
+    project: { id: number | null; name: string };
+  }>;
+};
+
 export async function listProjectRoles(departmentId: number, includeInactive = false): Promise<ProjectRole[]> {
   const sp = new URLSearchParams();
   sp.set('department', String(departmentId));
   if (includeInactive) sp.set('include_inactive', 'true');
-  const res = await apiClient.GET('/projects/project-roles/', { params: { query: Object.fromEntries(sp) as any } });
+  const res = await apiClient.GET('/projects/project-roles/', {
+    params: { query: Object.fromEntries(sp) as any },
+    headers: { 'Cache-Control': 'no-cache' },
+  });
   return res.data as ProjectRole[];
 }
 
@@ -37,4 +49,14 @@ export async function reorderProjectRoles(departmentId: number, ids: number[]): 
     const status = res.response?.status ?? 500;
     throw new Error(`Reorder failed: HTTP ${status}`);
   }
+}
+
+export async function getProjectRoleUsage(id: number): Promise<ProjectRoleUsage> {
+  const res = await apiClient.GET('/projects/project-roles/{id}/usage/' as any, { params: { path: { id } } });
+  return res.data as ProjectRoleUsage;
+}
+
+export async function clearProjectRoleAssignments(id: number): Promise<{ cleared: number }> {
+  const res = await apiClient.POST('/projects/project-roles/{id}/clear-assignments/' as any, { params: { path: { id } } });
+  return res.data as { cleared: number };
 }

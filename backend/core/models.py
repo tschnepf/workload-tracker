@@ -198,38 +198,6 @@ class ProjectRole(models.Model):
         return f"ProjectRole({self.name})"
 
 
-class DepartmentProjectRole(models.Model):
-    """Mapping between a Department and a ProjectRole.
-
-    Enforces uniqueness per (department, project_role) pair and keeps a minimal
-    activation flag with timestamps. Query patterns rely on DB indexes on
-    department and the (department, project_role) pair for efficient lookups.
-    """
-
-    department = models.ForeignKey(
-        'departments.Department', on_delete=models.CASCADE, related_name='project_roles'
-    )
-    project_role = models.ForeignKey(
-        'core.ProjectRole', on_delete=models.CASCADE, related_name='departments'
-    )
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['department', 'project_role'], name='uniq_department_projectrole')
-        ]
-        indexes = [
-            models.Index(fields=['department'], name='idx_dpr_department'),
-            models.Index(fields=['department', 'project_role'], name='idx_dpr_dept_role'),
-        ]
-        ordering = ['department_id', 'project_role_id']
-
-    def __str__(self) -> str:  # pragma: no cover
-        return f"DPR(dept={self.department_id}, role={self.project_role_id})"
-
-
 class CalendarFeedSettings(models.Model):
     """Singleton storing tokens for public read-only calendar feeds.
 
