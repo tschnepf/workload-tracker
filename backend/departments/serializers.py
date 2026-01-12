@@ -10,6 +10,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
         required=False, 
         allow_null=True
     )
+    shortName = serializers.CharField(source='short_name', required=False, allow_blank=True)
     managerName = serializers.CharField(source='manager.name', read_only=True)
     isActive = serializers.BooleanField(source='is_active')
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
@@ -20,6 +21,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 
             'name', 
+            'shortName',
             'parentDepartment',    
             'manager',
             'managerName',         

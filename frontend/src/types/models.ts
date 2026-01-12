@@ -95,6 +95,7 @@ export interface ProjectAssignmentCounts {
 export interface Department {
   id?: number;
   name: string;
+  shortName?: string;
   parentDepartment?: number | null; // Department ID
   manager?: number | null; // Person ID
   managerName?: string; // Read-only manager name

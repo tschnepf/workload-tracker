@@ -11,6 +11,7 @@ import Card from '@/components/ui/Card';
 
 interface DepartmentFormData {
   name: string;
+  shortName: string;
   parentDepartment: number | null;
   manager: number | null;
   description: string;
@@ -36,6 +37,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
 
   const [formData, setFormData] = useState<DepartmentFormData>({
     name: '',
+    shortName: '',
     parentDepartment: null,
     manager: null,
     description: '',
@@ -50,6 +52,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
     if (department) {
       setFormData({
         name: department.name,
+        shortName: department.shortName || '',
         parentDepartment: department.parentDepartment,
         manager: department.manager,
         description: department.description || '',
@@ -58,6 +61,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
     } else {
       setFormData({
         name: '',
+        shortName: '',
         parentDepartment: null,
         manager: null,
         description: '',
@@ -71,6 +75,9 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
 
     if (!formData.name.trim()) {
       errors.name = 'Department name is required';
+    }
+    if (formData.shortName && formData.shortName.length > 32) {
+      errors.shortName = 'Short name must be 32 characters or less';
     }
 
     // Enhanced circular parent department validation
@@ -112,6 +119,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
     try {
       const updateData = {
         name: formData.name.trim(),
+        shortName: formData.shortName.trim(),
         parentDepartment: formData.parentDepartment,
         manager: formData.manager,
         description: formData.description.trim(),
@@ -180,6 +188,21 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
               />
               {validationErrors.name && (
                 <p className="mt-1 text-sm text-red-400">{validationErrors.name}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--text)] mb-1">
+                Short Name / Alias
+              </label>
+              <Input
+                value={formData.shortName}
+                onChange={(e) => handleInputChange('shortName', e.target.value)}
+                placeholder="e.g. Elec"
+                className={`w-full ${validationErrors.shortName ? 'border-red-600' : ''}`}
+                disabled={loading}
+              />
+              {validationErrors.shortName && (
+                <p className="mt-1 text-sm text-red-400">{validationErrors.shortName}</p>
               )}
             </div>
 

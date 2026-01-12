@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } fr
 import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link, useLocation } from 'react-router';
-import { Project, Person, Assignment } from '@/types/models';
+import { Project, Person, Assignment, Department } from '@/types/models';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePeople } from '@/hooks/usePeople';
-import { assignmentsApi } from '@/services/api';
+import { assignmentsApi, departmentsApi } from '@/services/api';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useProjectFilterMetadata } from '@/hooks/useProjectFilterMetadata';
@@ -196,19 +196,26 @@ const ProjectsList: React.FC = () => {
     enabled: projects.length > 0,
     staleTime: 30_000,
   });
+  const { data: departments = [] } = useQuery<Department[], Error>({
+    queryKey: ['departmentsAll'],
+    queryFn: () => departmentsApi.listAll(),
+    staleTime: 60_000,
+  });
 
   const projectLeadsMap = useMemo(() => {
     const map = new Map<number, string>();
     if (!leadAssignments.length) return map;
     const peopleById = new Map<number, { name: string; departmentId?: number | null; departmentName?: string | null }>();
-    const deptNameById = new Map<number, string>();
+    const deptById = new Map<number, { name?: string; shortName?: string }>();
     people.forEach(p => {
-      if (p.department != null && p.departmentName) deptNameById.set(p.department, p.departmentName);
       if (p.id != null) {
         peopleById.set(p.id, { name: p.name, departmentId: p.department ?? null, departmentName: p.departmentName ?? null });
       }
     });
-    const leadsByProject = new Map<number, Map<string, string>>();
+    departments.forEach(d => {
+      if (d.id != null) deptById.set(d.id, { name: d.name, shortName: d.shortName });
+    });
+    const leadsByProject = new Map<number, Map<number | string, { name: string; deptLabel: string }>>();
     leadAssignments.forEach((assignment) => {
       if (!assignment.project) return;
       const roleName = (assignment.roleName || '').toLowerCase();
@@ -217,26 +224,30 @@ const ProjectsList: React.FC = () => {
       const personName = assignment.personName || personMeta?.name;
       if (!personName) return;
       const deptId = assignment.personDepartmentId ?? personMeta?.departmentId ?? null;
-      const deptName = deptId != null ? (deptNameById.get(deptId) ?? null) : personMeta?.departmentName ?? null;
-      const deptLabel = deptName || (deptId != null ? `Dept ${deptId}` : '');
-      const perProject = leadsByProject.get(assignment.project) ?? new Map<string, string>();
-      perProject.set(personName, deptLabel);
+      const deptMeta = deptId != null ? deptById.get(deptId) : undefined;
+      const deptLabel =
+        deptMeta?.shortName ||
+        deptMeta?.name ||
+        personMeta?.departmentName ||
+        (deptId != null ? `Dept ${deptId}` : '');
+      const perProject = leadsByProject.get(assignment.project) ?? new Map<number | string, { name: string; deptLabel: string }>();
+      const personKey = assignment.person ?? personName;
+      perProject.set(personKey, { name: personName, deptLabel });
       leadsByProject.set(assignment.project, perProject);
     });
-    leadsByProject.forEach((names, projectId) => {
-      const sorted = Array.from(names.entries())
-        .map(([name, deptLabel]) => ({ name, deptLabel }))
+    leadsByProject.forEach((entries, projectId) => {
+      const sorted = Array.from(entries.values())
         .sort((a, b) => {
           const deptA = (a.deptLabel || 'zzzz').toLowerCase();
           const deptB = (b.deptLabel || 'zzzz').toLowerCase();
           if (deptA !== deptB) return deptA.localeCompare(deptB);
           return a.name.localeCompare(b.name);
         })
-        .map(item => item.name);
+        .map(item => (item.deptLabel ? `${item.name} (${item.deptLabel})` : item.name));
       map.set(projectId, sorted.join('\n'));
     });
     return map;
-  }, [leadAssignments, people]);
+  }, [leadAssignments, people, departments]);
 
   // Conflict checker for add-assignment flow
   const checkAssignmentConflicts = useCallback(async (

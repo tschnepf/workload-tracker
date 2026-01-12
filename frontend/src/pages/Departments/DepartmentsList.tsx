@@ -39,6 +39,7 @@ const DepartmentsList: React.FC = () => {
   const filteredAndSortedDepartments = useMemo(() => {
     const filtered = departments.filter(dept =>
       dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (dept.shortName && dept.shortName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (dept.description && dept.description.toLowerCase().includes(searchTerm.toLowerCase()))
     );
     return filtered.sort((a, b) => a.name.localeCompare(b.name));
@@ -190,6 +191,11 @@ const DepartmentsList: React.FC = () => {
                       <h3 className="font-semibold text-[var(--text)] mb-1">
                         {department.name}
                       </h3>
+                      {department.shortName && (
+                        <p className="text-xs text-[var(--muted)] mb-1">
+                          Alias: {department.shortName}
+                        </p>
+                      )}
                       <p className="text-sm text-[var(--muted)] mb-2">
                         Manager: {department.managerName || 'None'}
                       </p>
@@ -298,6 +304,11 @@ const DepartmentsList: React.FC = () => {
                 <div className="font-medium text-[var(--text)] truncate">
                   {department.name}
                 </div>
+                {department.shortName && (
+                  <div className="text-[10px] text-[var(--muted)] truncate">
+                    Alias: {department.shortName}
+                  </div>
+                )}
                 <div className="text-xs text-[var(--muted)] truncate">
                   Manager: {department.managerName || 'None'}
                 </div>
@@ -450,6 +461,10 @@ const DepartmentDetails: React.FC<{
           <div>
             <span className="text-sm text-[var(--muted)]">Name:</span>
             <p className="text-[var(--text)]">{department.name}</p>
+          </div>
+          <div>
+            <span className="text-sm text-[var(--muted)]">Alias:</span>
+            <p className="text-[var(--text)]">{department.shortName || '—'}</p>
           </div>
           <div>
             <span className="text-sm text-[var(--muted)]">Manager:</span>

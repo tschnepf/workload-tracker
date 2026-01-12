@@ -140,7 +140,7 @@ const ProjectsTable: React.FC<Props> = ({
   };
 
   const header = (
-    <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
+    <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))] gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('client')}>
         CLIENT<SortIcon column="client" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
@@ -471,7 +471,7 @@ const ProjectsTable: React.FC<Props> = ({
           <div
             key={project.id}
             onClick={() => handleRowClick(project, index)}
-            className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
+            className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
             tabIndex={0}
           >
             {isSelected && (
@@ -742,7 +742,7 @@ const ProjectsTable: React.FC<Props> = ({
             </div>
             {showRowBottomDivider && (
               <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
-                <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2">
+                <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))] gap-2">
                   <div
                     className="h-px bg-[var(--border)]"
                     style={{ gridColumn: (groupClients && !sameClientAsNext) ? '1 / -1' : '3 / -1' }}
@@ -806,7 +806,7 @@ const ProjectsTable: React.FC<Props> = ({
               key={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => handleRowClick(project, v.index)}
-              className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
+              className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
               tabIndex={0}
             >
               {isSelected && (
@@ -1075,7 +1075,7 @@ const ProjectsTable: React.FC<Props> = ({
               </div>
               {showRowBottomDivider && (
                 <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
-                  <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2">
+                  <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))] gap-2">
                     <div
                       className="h-px bg-[var(--border)]"
                       style={{ gridColumn: (groupClients && !sameClientAsNext) ? '1 / -1' : '3 / -1' }}

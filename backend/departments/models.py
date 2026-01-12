@@ -9,6 +9,7 @@ class Department(models.Model):
     """Department model - create Day 1, populate Chunk 6"""
     
     name = models.CharField(max_length=100, unique=True)
+    short_name = models.CharField(max_length=32, blank=True, default='')
     parent_department = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
     manager = models.ForeignKey('people.Person', on_delete=models.SET_NULL, blank=True, null=True, related_name='managed_departments')
     description = models.TextField(blank=True)
