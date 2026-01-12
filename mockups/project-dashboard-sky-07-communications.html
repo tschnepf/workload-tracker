@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Communications</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#0F83C5}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.grid{display:grid;gap:16px;grid-template-columns:2fr 1fr}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.list{margin:0;padding-left:16px}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:20px;font-weight:700">Communications - CMH04</div>
+        <div class="muted">Meetings, decisions, and client touchpoints</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn">Log Decision</button>
+        <button class="btn ghost">Share Update</button>
+      </div>
+    </div>
+
+    <section class="grid" style="margin-top:12px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Meeting Schedule</h3>
+        <table class="table">
+          <thead><tr><th>Meeting</th><th>Cadence</th><th>Next</th></tr></thead>
+          <tbody>
+            <tr><td>Client Review</td><td>Weekly</td><td>2026-01-15</td></tr>
+            <tr><td>Internal Standup</td><td>Twice weekly</td><td>2026-01-12</td></tr>
+            <tr><td>Executive Sync</td><td>Monthly</td><td>2026-01-22</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Decision Log</h3>
+        <ul class="list">
+          <li>Approved alternate HVAC approach (2026-01-08)</li>
+          <li>Scope locked through IFP (2026-01-05)</li>
+          <li>Vendor list finalized (2025-12-28)</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Document Hub</h3>
+        <table class="table">
+          <thead><tr><th>Document</th><th>Owner</th><th>Updated</th></tr></thead>
+          <tbody>
+            <tr><td>IFP Outline</td><td>Jordan</td><td>2026-01-09</td></tr>
+            <tr><td>Risk Register</td><td>Alex</td><td>2026-01-08</td></tr>
+            <tr><td>Budget Tracker</td><td>Priya</td><td>2026-01-07</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Client Messages</h3>
+        <div class="muted">"Please confirm the revised footprint" - 2026-01-10</div>
+        <div class="muted" style="margin-top:8px">"Can we move the review to Thursday?" - 2026-01-08</div>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

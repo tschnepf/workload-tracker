@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Aggregate Systems</title>
+<style>
+:root{--bg:#0B0F14;--surface:#111824;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#9BB0C5;--primary:#7EC4F5;--accent:#61D0A8;--warn:#F3C969;--danger:#F07B72}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,#0b121a 0%, #0B0F14 60%);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:2fr 1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.muted{color:var(--muted)}
+.matrix{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.cell{height:28px;border-radius:6px;background:#152131;border:1px solid #1d2b3d}
+.cell.l{background:rgba(97,208,168,.2);border-color:rgba(97,208,168,.4)}
+.cell.m{background:rgba(243,201,105,.2);border-color:rgba(243,201,105,.4)}
+.cell.h{background:rgba(240,123,114,.2);border-color:rgba(240,123,114,.4)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.legend span{display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%}
+.list{margin:0;padding-left:16px}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">Aggregate Systems Map</div>
+        <div class="muted">Cross-project dependencies and shared systems</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn">Add Dependency</button>
+        <button class="btn ghost">View by discipline</button>
+        <button class="btn ghost">Snapshot</button>
+      </div>
+    </div>
+
+    <section class="grid">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Dependency Matrix</h3>
+        <div class="muted">Projects (rows) x Systems (columns)</div>
+        <div class="matrix" style="margin-top:10px">
+          <div class="cell l"></div><div class="cell"></div><div class="cell m"></div><div class="cell"></div><div class="cell"></div><div class="cell h"></div>
+          <div class="cell"></div><div class="cell l"></div><div class="cell"></div><div class="cell"></div><div class="cell m"></div><div class="cell"></div>
+          <div class="cell m"></div><div class="cell"></div><div class="cell l"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell l"></div><div class="cell m"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell m"></div><div class="cell"></div><div class="cell"></div><div class="cell l"></div><div class="cell"></div>
+          <div class="cell h"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell l"></div>
+        </div>
+        <div class="legend">
+          <span><span class="dot" style="background:rgba(97,208,168,.6)"></span><span class="muted">Shared system</span></span>
+          <span><span class="dot" style="background:rgba(243,201,105,.6)"></span><span class="muted">Coordination needed</span></span>
+          <span><span class="dot" style="background:rgba(240,123,114,.6)"></span><span class="muted">Critical collision</span></span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Coordination Hotspots</h3>
+        <ul class="list">
+          <li>HVAC spec alignment across 3 projects</li>
+          <li>Shared structural review for IFP sets</li>
+          <li>Utility coordination overlaps in W4-W6</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Shared Vendors</h3>
+        <table class="table">
+          <thead><tr><th>Vendor</th><th>Projects</th><th>Load</th></tr></thead>
+          <tbody>
+            <tr><td>SurveyCo</td><td>4</td><td>High</td></tr>
+            <tr><td>Permit Advisors</td><td>3</td><td>Medium</td></tr>
+            <tr><td>QA Partners</td><td>2</td><td>Low</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Upcoming Collision Windows</h3>
+        <ul class="list">
+          <li>W2: Dual client review slots</li>
+          <li>W3: HVAC submittal overlap</li>
+          <li>W5: Permit review sync</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

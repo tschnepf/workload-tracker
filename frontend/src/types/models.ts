@@ -52,6 +52,7 @@ export interface Assignment {
   person: number; // Person ID
   personName?: string; // Read-only person name
   personWeeklyCapacity?: number; // Read-only person capacity
+  personDepartmentId?: number | null; // Read-only person department ID
   personSkills?: PersonSkill[]; // Read-only person skills for display
   projectName?: string; // Legacy field - keep for migration compatibility
   project?: number; // Project ID (FK)

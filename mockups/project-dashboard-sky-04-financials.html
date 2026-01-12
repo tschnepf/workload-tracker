@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Financials</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#0F83C5;--danger:#F07B72;--success:#7FE0B0;--warn:#F3C969}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(4,1fr)}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+.tile .k{font-size:22px;font-weight:700}
+.grid{display:grid;gap:16px;grid-template-columns:2fr 1fr;margin-top:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.muted{color:var(--muted)}
+.bar{height:10px;background:#1d2833;border-radius:999px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--primary)}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;background:rgba(126,196,245,.15);color:var(--primary);border:1px solid rgba(126,196,245,.4)}
+.pill.warn{color:var(--warn);border-color:rgba(243,201,105,.45);background:rgba(243,201,105,.12)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:20px;font-weight:700">Financials - CMH04</div>
+        <div class="muted">Budget, burn, invoices, and change orders</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pill">FY2026</button>
+        <button class="pill">Monthly view</button>
+      </div>
+    </div>
+
+    <section class="tiles" style="margin-top:12px">
+      <div class="tile"><div class="muted">Total Budget</div><div class="k">$500k</div></div>
+      <div class="tile"><div class="muted">Burn to Date</div><div class="k">$312k</div></div>
+      <div class="tile"><div class="muted">Remaining</div><div class="k">$188k</div></div>
+      <div class="tile"><div class="muted">Projected Margin</div><div class="k">18%</div></div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Burn vs Budget</h3>
+        <div class="muted">Week 1-12</div>
+        <div style="display:grid;gap:8px;margin-top:10px">
+          <div>Design <div class="bar"><span style="width:70%"></span></div></div>
+          <div>Engineering <div class="bar"><span style="width:62%"></span></div></div>
+          <div>PM <div class="bar"><span style="width:55%"></span></div></div>
+          <div>QA <div class="bar"><span style="width:35%"></span></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Alerts</h3>
+        <div class="pill warn">Change order CO-03 pending approval</div>
+        <div class="pill" style="margin-top:6px">Invoice #0416 scheduled 2026-01-20</div>
+        <div class="muted" style="margin-top:10px">Spend rate trending +6%</div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Invoices</h3>
+        <table class="table">
+          <thead><tr><th>Invoice</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>#0413</td><td>2025-12-15</td><td>$82k</td><td>Paid</td></tr>
+            <tr><td>#0414</td><td>2025-12-30</td><td>$64k</td><td>Paid</td></tr>
+            <tr><td>#0415</td><td>2026-01-05</td><td>$48k</td><td>Sent</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Change Orders</h3>
+        <table class="table">
+          <thead><tr><th>ID</th><th>Impact</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>CO-02</td><td>+$24k</td><td>Approved</td></tr>
+            <tr><td>CO-03</td><td>+$38k</td><td>Submitted</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

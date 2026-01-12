@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Schedule Core</title>
+<style>
+:root{--bg:#0C1016;--surface:#121824;--card:#121A24;--border:#243142;--text:#EAF4FF;--muted:#9BB0C5;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#61D0A8;--warn:#F3C969;--danger:#F07B72}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:radial-gradient(1200px 700px at 20% -10%, #1a2a3a, #0C1016 60%),var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.badge{padding:3px 8px;border-radius:999px;font-size:12px;background:rgba(126,196,245,.15);color:var(--primary);border:1px solid rgba(126,196,245,.45)}
+.badge.warn{background:rgba(243,201,105,.15);color:var(--warn);border-color:rgba(243,201,105,.45)}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(4,1fr)}
+.tile{background:rgba(18,26,36,.9);border:1px solid var(--border);border-radius:12px;padding:12px}
+.tile .k{font-size:20px;font-weight:700}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:2fr 1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.muted{color:var(--muted)}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.pill.ok{color:var(--accent);border-color:rgba(97,208,168,.4)}
+.pill.warn{color:var(--warn);border-color:rgba(243,201,105,.4)}
+.pill.risk{color:var(--danger);border-color:rgba(240,123,114,.4)}
+.bar{height:8px;background:#1a2a3a;border-radius:999px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--primary)}
+.list{margin:0;padding-left:16px}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">CMH04 - Riverview Clinic</div>
+        <div class="muted">Client: County Health | PM: Alex Green | Start: 2026-01-06</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="badge">Active</span>
+        <span class="badge warn">Schedule +2 weeks</span>
+        <button class="btn">Update Schedule</button>
+        <button class="btn ghost">Share</button>
+      </div>
+    </div>
+
+    <section class="tiles">
+      <div class="tile"><div class="muted">Next Deliverable</div><div class="k">IFP</div><div class="muted">Due 2026-02-14</div></div>
+      <div class="tile"><div class="muted">Assignments</div><div class="k">16</div><div class="muted">4 depts</div></div>
+      <div class="tile"><div class="muted">QA Tasks</div><div class="k">9</div><div class="pill warn" style="margin-top:6px">3 overdue</div></div>
+      <div class="tile"><div class="muted">Risks</div><div class="k">3</div><div class="muted">2 schedule, 1 cost</div></div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Current Scheduled Deliverables</h3>
+        <table class="table">
+          <thead><tr><th>Deliverable</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>IFP Package</td><td>Jordan Lee</td><td>2026-02-14</td><td><span class="pill warn">In review</span></td></tr>
+            <tr><td>IFC Package</td><td>Priya Shah</td><td>2026-03-28</td><td><span class="pill">Planned</span></td></tr>
+            <tr><td>ADC Package</td><td>Omar Diaz</td><td>2026-04-18</td><td><span class="pill">Planned</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Schedule Health</h3>
+        <div class="muted">Milestones achieved</div>
+        <div class="bar" style="margin-top:6px"><span style="width:62%"></span></div>
+        <div class="muted" style="margin-top:8px">2 tasks blocked by survey data</div>
+        <ul class="list" style="margin-top:8px">
+          <li>Client review window: 2026-01-15</li>
+          <li>Permit submittal: 2026-02-01</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Current Assignments</h3>
+        <table class="table">
+          <thead><tr><th>Person</th><th>Role</th><th>Focus</th><th>Load</th></tr></thead>
+          <tbody>
+            <tr><td>Alex Green</td><td>PM</td><td>Coordination</td><td>0.7 FTE</td></tr>
+            <tr><td>Jordan Lee</td><td>Design</td><td>IFP drawings</td><td>0.8 FTE</td></tr>
+            <tr><td>Chris Gomez</td><td>Engineering</td><td>Systems layout</td><td>0.9 FTE</td></tr>
+            <tr><td>Kim Tran</td><td>QA</td><td>Checklist pass</td><td>0.4 FTE</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Project Info</h3>
+        <div class="muted">Client: County Health</div>
+        <div class="muted">Location: Riverview Campus</div>
+        <div class="muted">Contract: $500k | Phase: Design</div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:12px 0">
+        <h4 style="margin:0 0 6px">Assigned Team</h4>
+        <ul class="list"><li>PM: Alex Green</li><li>Design Lead: Jordan Lee</li><li>Eng Lead: Chris Gomez</li><li>QA Lead: Kim Tran</li></ul>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Department Tasks</h3>
+        <table class="table">
+          <thead><tr><th>Dept</th><th>Deliverable Tasks</th><th>QA Tasks</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Architecture</td><td>12</td><td>4</td><td><span class="pill ok">On track</span></td></tr>
+            <tr><td>Engineering</td><td>10</td><td>3</td><td><span class="pill warn">At risk</span></td></tr>
+            <tr><td>Interiors</td><td>6</td><td>2</td><td><span class="pill">Planned</span></td></tr>
+            <tr><td>QA</td><td>0</td><td>9</td><td><span class="pill warn">In progress</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Risks to Schedule & Cost</h3>
+        <ul class="list">
+          <li><span class="pill risk">Schedule</span> Utility survey delay (ETA 2026-01-19)</li>
+          <li><span class="pill warn">Cost</span> Steel escalation pending vendor quote</li>
+          <li><span class="pill warn">Schedule</span> Client review backlog (2 weeks)</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

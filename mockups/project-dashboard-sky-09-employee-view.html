@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Employee View</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--success:#7FE0B0;--warn:#F3C969}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;background:rgba(126,196,245,.15);color:var(--primary);border:1px solid rgba(126,196,245,.4)}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:20px;font-weight:700">My Work - CMH04</div>
+        <div class="muted">Assigned tasks and upcoming deliverables</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn">Log Time</button>
+        <button class="btn ghost">Request Help</button>
+      </div>
+    </div>
+
+    <section class="grid" style="margin-top:12px">
+      <div class="card" style="grid-column:span 2">
+        <h3 style="margin:0 0 8px">This Week</h3>
+        <table class="table">
+          <thead><tr><th>Task</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Update IFP drawings</td><td>2026-01-14</td><td><span class="pill">In progress</span></td></tr>
+            <tr><td>QA review notes</td><td>2026-01-15</td><td><span class="pill">Planned</span></td></tr>
+            <tr><td>Client comments response</td><td>2026-01-16</td><td><span class="pill">Planned</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Hours</h3>
+        <div class="muted">Allocated: 28h</div>
+        <div class="muted">Logged: 16h</div>
+        <div class="pill" style="margin-top:8px">On track</div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Upcoming Deliverables</h3>
+        <ul style="margin:0;padding-left:16px">
+          <li>IFP Package - 2026-02-14</li>
+          <li>IFC Package - 2026-03-28</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Team Updates</h3>
+        <div class="muted">"QA checklist updated" - 2026-01-10</div>
+        <div class="muted" style="margin-top:8px">"Design freeze moved to 2026-01-20"</div>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

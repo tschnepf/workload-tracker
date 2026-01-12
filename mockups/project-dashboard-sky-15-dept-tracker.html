@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Department Tracker</title>
+<style>
+:root{--bg:#0B0F14;--surface:#111824;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#9BB0C5;--primary:#7EC4F5;--accent:#61D0A8;--warn:#F3C969;--danger:#F07B72}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,#0b121a 0%, #0B0F14 60%);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.badge{padding:3px 8px;border-radius:999px;font-size:12px;background:rgba(126,196,245,.15);color:var(--primary);border:1px solid rgba(126,196,245,.45)}
+.layout{display:grid;gap:16px}@media(min-width:1200px){.layout{grid-template-columns:2fr 1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.muted{color:var(--muted)}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.pill.ok{color:var(--accent);border-color:rgba(97,208,168,.4)}
+.pill.warn{color:var(--warn);border-color:rgba(243,201,105,.4)}
+.pill.risk{color:var(--danger);border-color:rgba(240,123,114,.4)}
+.list{margin:0;padding-left:16px}
+.dept-block{border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:10px;background:#0f1722}
+.dept-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.stack{display:grid;gap:12px}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">Department Tracker - CMH04</div>
+        <div class="muted">Keep each department aligned to schedule and QA tasks</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="badge">IFP cycle</span>
+        <button class="btn">Add Task</button>
+        <button class="btn ghost">Notify Team</button>
+      </div>
+    </div>
+
+    <section class="layout">
+      <div class="stack">
+        <div class="card">
+          <h3 style="margin:0 0 8px">Project Info</h3>
+          <div class="muted">Client: County Health</div>
+          <div class="muted">Location: Riverview Campus</div>
+          <div class="muted">Phase: Design | Code: DPW028</div>
+          <div class="muted">Start: 2026-01-06 | Next gate: 2026-01-15</div>
+          <div class="muted">PM: Alex Green | Design Lead: Jordan Lee</div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 8px">Assignments (by Department)</h3>
+          <div class="dept-block">
+            <div class="dept-title"><strong>Design</strong><span class="pill ok">On track</span></div>
+            <table class="table">
+              <thead><tr><th>Name</th><th>Project Role</th></tr></thead>
+              <tbody>
+                <tr><td>Jordan Lee</td><td>Design Lead</td></tr>
+                <tr><td>Priya Shah</td><td>Designer</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="dept-block">
+            <div class="dept-title"><strong>Engineering</strong><span class="pill warn">At risk</span></div>
+            <table class="table">
+              <thead><tr><th>Name</th><th>Project Role</th></tr></thead>
+              <tbody>
+                <tr><td>Chris Gomez</td><td>Engineer</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="dept-block">
+            <div class="dept-title"><strong>Mechanical</strong><span class="pill">Planned</span></div>
+            <table class="table">
+              <thead><tr><th>Name</th><th>Project Role</th></tr></thead>
+              <tbody>
+                <tr><td>Brendan Kisseback</td><td>Mechanical Lead</td></tr>
+                <tr><td>Emma Reitano</td><td>Mechanical Support</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="dept-block">
+            <div class="dept-title"><strong>Electrical</strong><span class="pill">Planned</span></div>
+            <table class="table">
+              <thead><tr><th>Name</th><th>Project Role</th></tr></thead>
+              <tbody>
+                <tr><td>Carl Weatherford</td><td>Electrical Support</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="dept-block">
+            <div class="dept-title"><strong>Fire</strong><span class="pill">Planned</span></div>
+            <table class="table">
+              <thead><tr><th>Name</th><th>Project Role</th></tr></thead>
+              <tbody>
+                <tr><td>Andrew Searcho</td><td>Fire Protection Lead</td></tr>
+                <tr><td>James Juren</td><td>Fire Protection Support</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 8px">Current Scheduled Deliverables</h3>
+          <table class="table">
+            <thead><tr><th>Deliverable</th><th>Due</th><th>Owner</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>IFP Package</td><td>2026-02-14</td><td>Jordan Lee</td><td><span class="pill warn">In review</span></td></tr>
+              <tr><td>IFC Package</td><td>2026-03-28</td><td>Priya Shah</td><td><span class="pill">Planned</span></td></tr>
+              <tr><td>ADC Package</td><td>2026-04-18</td><td>Omar Diaz</td><td><span class="pill">Planned</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 8px">Risks to Schedule & Cost</h3>
+          <ul class="list">
+            <li><span class="pill risk">Schedule</span> Survey data late (ETA 2026-01-19)</li>
+            <li><span class="pill warn">Cost</span> Spec change in HVAC</li>
+            <li><span class="pill warn">Schedule</span> Client review backlog</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card">
+          <h3 style="margin:0 0 8px">Mechanical Tasks</h3>
+          <div class="muted">Deliverable tasks</div>
+          <ul class="list"><li>Equipment sizing</li><li>Distribution diagrams</li></ul>
+          <div class="muted" style="margin-top:8px">QA tasks</div>
+          <ul class="list"><li>Load calc validation</li></ul>
+          <div style="margin-top:8px"><span class="pill">Planned</span></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 8px">Electrical Tasks</h3>
+          <div class="muted">Deliverable tasks</div>
+          <ul class="list"><li>Lighting plan updates</li><li>Panel schedules</li></ul>
+          <div class="muted" style="margin-top:8px">QA tasks</div>
+          <ul class="list"><li>Load calcs review</li></ul>
+          <div style="margin-top:8px"><span class="pill">Planned</span></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 8px">Fire Protection Tasks</h3>
+          <div class="muted">Deliverable tasks</div>
+          <ul class="list"><li>Sprinkler layout</li><li>Hydraulic calcs</li></ul>
+          <div class="muted" style="margin-top:8px">QA tasks</div>
+          <ul class="list"><li>Code compliance check</li></ul>
+          <div style="margin-top:8px"><span class="pill">Planned</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

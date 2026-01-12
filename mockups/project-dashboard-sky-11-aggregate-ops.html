@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Aggregate Ops</title>
+<style>
+:root{--bg:#0C1016;--surface:#121824;--card:#121A24;--border:#243142;--text:#EAF4FF;--muted:#9BB0C5;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#61D0A8;--warn:#F3C969;--danger:#F07B72}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:radial-gradient(1200px 700px at 20% -10%, #1a2a3a, #0C1016 60%),var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(5,1fr)}
+.tile{background:rgba(18,26,36,.9);border:1px solid var(--border);border-radius:12px;padding:12px;backdrop-filter:blur(6px)}
+.tile .k{font-size:20px;font-weight:700}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:2fr 1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.muted{color:var(--muted)}
+.ring{width:92px;height:92px;border-radius:50%;border:10px solid #1d2a3a;position:relative}
+.ring span{position:absolute;inset:0;border-radius:50%;border:10px solid var(--primary);clip-path:polygon(50% 50%, 100% 0, 100% 65%, 50% 50%)}
+.ring.warn span{border-color:var(--warn)}
+.ring.danger span{border-color:var(--danger)}
+.legend{display:flex;gap:8px;flex-wrap:wrap}
+.legend .dot{width:8px;height:8px;border-radius:50%}
+.flow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.flow .col{background:#0f1722;border:1px dashed var(--border);border-radius:8px;padding:8px;min-height:120px}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.pill.ok{color:var(--accent);border-color:rgba(97,208,168,.45)}
+.pill.warn{color:var(--warn);border-color:rgba(243,201,105,.45)}
+.pill.risk{color:var(--danger);border-color:rgba(240,123,114,.45)}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">Aggregate Ops View</div>
+        <div class="muted">Cross-project health and bottleneck indicators</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn">Create Alert</button>
+        <button class="btn ghost">Filters</button>
+        <button class="btn ghost">Export Summary</button>
+      </div>
+    </div>
+
+    <section class="tiles">
+      <div class="tile"><div class="muted">Active Projects</div><div class="k">18</div><div class="muted">+2 this month</div></div>
+      <div class="tile"><div class="muted">Avg Schedule Drift</div><div class="k">+6.5%</div><div class="pill warn" style="margin-top:6px">Trending up</div></div>
+      <div class="tile"><div class="muted">Risk Exposure</div><div class="k">Moderate</div><div class="pill">12 open</div></div>
+      <div class="tile"><div class="muted">Capacity Pressure</div><div class="k">83%</div><div class="pill ok" style="margin-top:6px">Stable</div></div>
+      <div class="tile"><div class="muted">Deliverables Due (30d)</div><div class="k">21</div><div class="pill warn" style="margin-top:6px">3 at risk</div></div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Project Health Rings</h3>
+        <div style="display:flex;gap:18px;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;align-items:center"><div class="ring"><span></span></div><div><strong>Schedule</strong><div class="muted">68% on track</div></div></div>
+          <div style="display:flex;gap:8px;align-items:center"><div class="ring warn"><span></span></div><div><strong>Deliverables</strong><div class="muted">5 slipping</div></div></div>
+          <div style="display:flex;gap:8px;align-items:center"><div class="ring danger"><span></span></div><div><strong>Risks</strong><div class="muted">2 high impact</div></div></div>
+        </div>
+        <div class="legend" style="margin-top:10px">
+          <span class="dot" style="background:var(--primary)"></span><span class="muted">On track</span>
+          <span class="dot" style="background:var(--warn)"></span><span class="muted">At risk</span>
+          <span class="dot" style="background:var(--danger)"></span><span class="muted">Critical</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Cross-Project Alerts</h3>
+        <div class="pill risk">3 projects missing client review windows</div>
+        <div class="pill warn" style="margin-top:6px">2 projects waiting on the same survey vendor</div>
+        <div class="pill" style="margin-top:6px">Portfolio average response time: 3.2 days</div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h3 style="margin:0 0 8px">Delivery Pipeline (by stage)</h3>
+      <div class="flow">
+        <div class="col"><strong>Discovery</strong><div class="muted">4 projects</div></div>
+        <div class="col"><strong>Design</strong><div class="muted">6 projects</div></div>
+        <div class="col"><strong>IFP</strong><div class="muted">3 projects</div></div>
+        <div class="col"><strong>IFC</strong><div class="muted">2 projects</div></div>
+        <div class="col"><strong>ADC</strong><div class="muted">2 projects</div></div>
+        <div class="col"><strong>Closeout</strong><div class="muted">1 project</div></div>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Top Bottlenecks</h3>
+        <table class="table">
+          <thead><tr><th>Blocker</th><th>Projects</th><th>ETA</th></tr></thead>
+          <tbody>
+            <tr><td>Utility survey vendor</td><td>2</td><td>2026-01-19</td></tr>
+            <tr><td>Client approvals</td><td>4</td><td>2026-01-16</td></tr>
+            <tr><td>Permit reviews</td><td>3</td><td>2026-02-01</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Now / Next</h3>
+        <div class="muted">Focus areas for the next 2 weeks</div>
+        <ul style="margin:8px 0 0;padding-left:16px">
+          <li>Stabilize IFP review cycle</li>
+          <li>Backfill QA coverage for ADC packages</li>
+          <li>Resolve shared vendor delays</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

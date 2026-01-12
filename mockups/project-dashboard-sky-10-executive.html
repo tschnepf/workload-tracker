@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Executive Summary</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--success:#7FE0B0;--warn:#F3C969;--danger:#F07B72}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(4,1fr)}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+.tile .k{font-size:22px;font-weight:700}
+.grid{display:grid;gap:16px;grid-template-columns:2fr 1fr;margin-top:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.pill.ok{color:var(--success);border-color:rgba(127,224,176,.4);background:rgba(127,224,176,.12)}
+.pill.warn{color:var(--warn);border-color:rgba(243,201,105,.45);background:rgba(243,201,105,.12)}
+.pill.risk{color:var(--danger);border-color:rgba(240,123,114,.5);background:rgba(240,123,114,.12)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:20px;font-weight:700">Executive Summary - CMH04</div>
+        <div class="muted">High-level project health and outcomes</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pill">Quarterly view</button>
+        <button class="pill">PDF Snapshot</button>
+      </div>
+    </div>
+
+    <section class="tiles" style="margin-top:12px">
+      <div class="tile"><div class="muted">Overall Health</div><div class="k">Yellow</div><div class="pill warn" style="margin-top:6px">Schedule risk</div></div>
+      <div class="tile"><div class="muted">Budget</div><div class="k">62%</div><div class="muted">Burn to date</div></div>
+      <div class="tile"><div class="muted">Client Satisfaction</div><div class="k">4.3</div><div class="muted">Out of 5</div></div>
+      <div class="tile"><div class="muted">Scope Changes</div><div class="k">3</div><div class="muted">Approved</div></div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Key Outcomes</h3>
+        <table class="table">
+          <thead><tr><th>Metric</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Design Phase</td><td><span class="pill ok">On track</span></td><td>70% complete</td></tr>
+            <tr><td>IFP Delivery</td><td><span class="pill warn">At risk</span></td><td>Client feedback pending</td></tr>
+            <tr><td>IFC Delivery</td><td><span class="pill">Planned</span></td><td>Starts 2026-02-10</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Executive Risks</h3>
+        <ul style="margin:0;padding-left:16px">
+          <li>Utility survey delay (impact: schedule)</li>
+          <li>Potential scope expansion in imaging wing</li>
+          <li>Permit review timeline unconfirmed</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Upcoming Decisions</h3>
+        <table class="table">
+          <thead><tr><th>Decision</th><th>Owner</th><th>Due</th></tr></thead>
+          <tbody>
+            <tr><td>Program signoff</td><td>County Health</td><td>2026-01-18</td></tr>
+            <tr><td>Budget increase CO-03</td><td>Finance</td><td>2026-01-20</td></tr>
+            <tr><td>Vendor shortlist</td><td>Procurement</td><td>2026-01-22</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Stakeholders</h3>
+        <div class="muted">Sponsor: Dana Carter</div>
+        <div class="muted">PM: Alex Green</div>
+        <div class="muted">Lead Designer: Jordan Lee</div>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

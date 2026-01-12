@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Deliverables</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#0F83C5;--danger:#F07B72;--success:#7FE0B0}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.board{display:grid;gap:16px;grid-template-columns:repeat(4,1fr)}
+.column{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;min-height:300px}
+.card{background:#0F1722;border:1px solid var(--border);border-radius:8px;padding:10px;margin:8px 0}
+.muted{color:var(--muted)}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;background:rgba(126,196,245,.15);color:var(--primary);border:1px solid rgba(126,196,245,.4)}
+.pill.due{color:var(--danger);border-color:rgba(240,123,114,.5);background:rgba(240,123,114,.12)}
+.list{margin:0;padding-left:16px}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">Deliverables - CMH04</div>
+        <div class="muted">Track approvals and package readiness</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn">New Deliverable</button>
+        <button class="btn ghost">Filter: IFP</button>
+        <button class="btn ghost">Export Log</button>
+      </div>
+    </div>
+
+    <section class="board">
+      <div class="column">
+        <h3 style="margin:0 0 8px">Planned</h3>
+        <div class="card">
+          <strong>IFC Package</strong>
+          <div class="muted">Owner: Alex Green</div>
+          <div class="pill" style="margin-top:6px">Due 2026-03-28</div>
+        </div>
+        <div class="card">
+          <strong>ADC Package</strong>
+          <div class="muted">Owner: Priya Shah</div>
+          <div class="pill" style="margin-top:6px">Due 2026-04-18</div>
+        </div>
+      </div>
+      <div class="column">
+        <h3 style="margin:0 0 8px">In Progress</h3>
+        <div class="card">
+          <strong>IFP Package</strong>
+          <div class="muted">Owner: Jordan Lee</div>
+          <div class="pill" style="margin-top:6px">Draft 65%</div>
+        </div>
+        <div class="card">
+          <strong>Pre-Deliverable Set</strong>
+          <div class="muted">Owner: Kim Tran</div>
+          <div class="pill" style="margin-top:6px">QA 40%</div>
+        </div>
+      </div>
+      <div class="column">
+        <h3 style="margin:0 0 8px">In Review</h3>
+        <div class="card">
+          <strong>IFP Outline</strong>
+          <div class="muted">Reviewer: County Health</div>
+          <div class="pill due" style="margin-top:6px">Feedback due 2026-01-16</div>
+        </div>
+      </div>
+      <div class="column">
+        <h3 style="margin:0 0 8px">Approved / Issued</h3>
+        <div class="card">
+          <strong>Concept Package</strong>
+          <div class="muted">Issued 2026-01-05</div>
+          <div class="pill" style="margin-top:6px">Approved</div>
+        </div>
+      </div>
+    </section>
+
+    <section style="margin-top:16px;display:grid;gap:16px;grid-template-columns:2fr 1fr">
+      <div class="column" style="min-height:unset">
+        <h3 style="margin:0 0 8px">Approval Checklist</h3>
+        <ul class="list">
+          <li>Scope review complete</li>
+          <li>QA signoff pending</li>
+          <li>Cost impacts documented</li>
+          <li>Client approval recorded</li>
+        </ul>
+      </div>
+      <div class="column" style="min-height:unset">
+        <h3 style="margin:0 0 8px">Recent Comments</h3>
+        <div class="muted">"Please add clarifying notes on sheet A-103" - 2026-01-09</div>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

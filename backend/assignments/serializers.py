@@ -22,7 +22,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
     personSkills = PersonSkillSummarySerializer(source='person.skills', many=True, read_only=True)
     # Department-scoped Project Role fields (FK-based)
     roleOnProjectId = serializers.IntegerField(source='role_on_project_ref_id', required=False, allow_null=True)
-    roleName = serializers.CharField(source='role_on_project_ref.name', read_only=True, allow_null=True)
+    roleName = serializers.SerializerMethodField()
     
     # Calculated fields removed for performance - not used on projects page
     
@@ -52,6 +52,16 @@ class AssignmentSerializer(serializers.ModelSerializer):
             'createdAt': {'source': 'created_at', 'read_only': True},
             'updatedAt': {'source': 'updated_at', 'read_only': True},
         }
+
+    def get_roleName(self, obj):
+        """Prefer FK role name; fallback to legacy role_on_project string."""
+        try:
+            if getattr(obj, 'role_on_project_ref', None) and obj.role_on_project_ref.name:
+                return obj.role_on_project_ref.name
+        except Exception:
+            pass
+        legacy = getattr(obj, 'role_on_project', None)
+        return legacy or None
     
     def validate_weeklyHours(self, value):
         """Validate weekly hours data structure and values.

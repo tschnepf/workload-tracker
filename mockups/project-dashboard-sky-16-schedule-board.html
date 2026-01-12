@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Schedule Board</title>
+<style>
+:root{--bg:#0C1016;--surface:#121824;--card:#121A24;--border:#243142;--text:#EAF4FF;--muted:#9BB0C5;--primary:#7EC4F5;--accent:#61D0A8;--warn:#F3C969;--danger:#F07B72}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:radial-gradient(900px 600px at 85% -10%, #1b2b3d, #0C1016 60%),var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:2fr 1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.muted{color:var(--muted)}
+.rail{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}
+.stage{background:#0f1722;border:1px solid var(--border);border-radius:8px;padding:10px;min-height:110px}
+.tag{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.tag.ok{color:var(--accent);border-color:rgba(97,208,168,.4)}
+.tag.warn{color:var(--warn);border-color:rgba(243,201,105,.4)}
+.tag.risk{color:var(--danger);border-color:rgba(240,123,114,.4)}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.list{margin:0;padding-left:16px}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">Schedule Board - CMH04</div>
+        <div class="muted">Make schedule and assignments visible to everyone</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn">Add Deliverable</button>
+        <button class="btn ghost">Publish Update</button>
+      </div>
+    </div>
+
+    <section class="card">
+      <h3 style="margin:0 0 8px">Deliverable Rail</h3>
+      <div class="rail">
+        <div class="stage"><strong>Discovery</strong><div class="muted">Done</div><div class="tag ok" style="margin-top:6px">Complete</div></div>
+        <div class="stage"><strong>Design</strong><div class="muted">In progress</div><div class="tag warn" style="margin-top:6px">Slip +4d</div></div>
+        <div class="stage"><strong>IFP</strong><div class="muted">Due 2026-02-14</div><div class="tag warn" style="margin-top:6px">Review pending</div></div>
+        <div class="stage"><strong>IFC</strong><div class="muted">Due 2026-03-28</div><div class="tag">Planned</div></div>
+        <div class="stage"><strong>ADC</strong><div class="muted">Due 2026-04-18</div><div class="tag">Planned</div></div>
+        <div class="stage"><strong>Permitting</strong><div class="muted">Starts 2026-02-01</div></div>
+        <div class="stage"><strong>Bidding</strong><div class="muted">Q2 2026</div></div>
+        <div class="stage"><strong>Closeout</strong><div class="muted">Q3 2026</div></div>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Assignments and Visibility</h3>
+        <table class="table">
+          <thead><tr><th>Name</th><th>Dept</th><th>Current Focus</th><th>Upcoming Deliverable</th></tr></thead>
+          <tbody>
+            <tr><td>Alex Green</td><td>PMO</td><td>Client coordination</td><td>IFP review</td></tr>
+            <tr><td>Jordan Lee</td><td>Architecture</td><td>IFP set updates</td><td>IFP package</td></tr>
+            <tr><td>Chris Gomez</td><td>Engineering</td><td>System layouts</td><td>IFP package</td></tr>
+            <tr><td>Kim Tran</td><td>QA</td><td>Checklist pass</td><td>IFP QA gate</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Project Info</h3>
+        <div class="muted">Client: County Health</div>
+        <div class="muted">Location: Riverview Campus</div>
+        <div class="muted">Contract: $500k | Phase: Design</div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:12px 0">
+        <h4 style="margin:0 0 6px">Team on Project</h4>
+        <ul class="list"><li>PM: Alex Green</li><li>Design: Jordan Lee, Priya Shah</li><li>Engineering: Chris Gomez</li><li>QA: Kim Tran</li></ul>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Department QA Gates</h3>
+        <table class="table">
+          <thead><tr><th>Dept</th><th>Gate</th><th>Owner</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Architecture</td><td>Sheet set QA</td><td>Jordan</td><td><span class="tag warn">In progress</span></td></tr>
+            <tr><td>Engineering</td><td>Systems check</td><td>Chris</td><td><span class="tag">Planned</span></td></tr>
+            <tr><td>Interiors</td><td>Finish review</td><td>Priya</td><td><span class="tag">Planned</span></td></tr>
+            <tr><td>QA</td><td>Final package audit</td><td>Kim</td><td><span class="tag">Planned</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Risks to Schedule and Cost</h3>
+        <ul class="list">
+          <li><span class="tag risk">Schedule</span> Survey data late (ETA 2026-01-19)</li>
+          <li><span class="tag warn">Cost</span> Steel escalation pending vendor quote</li>
+          <li><span class="tag warn">Schedule</span> Client review backlog</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

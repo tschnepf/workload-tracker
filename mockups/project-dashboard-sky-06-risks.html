@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Risks</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--danger:#F07B72;--warn:#F3C969;--success:#7FE0B0}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.grid{display:grid;gap:16px;grid-template-columns:2fr 1fr}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.pill.high{color:var(--danger);border-color:rgba(240,123,114,.5);background:rgba(240,123,114,.12)}
+.pill.med{color:var(--warn);border-color:rgba(243,201,105,.45);background:rgba(243,201,105,.12)}
+.pill.low{color:var(--success);border-color:rgba(127,224,176,.4);background:rgba(127,224,176,.12)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:20px;font-weight:700">Risks and Issues - CMH04</div>
+        <div class="muted">Monitor risk register and blockers</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pill">New Risk</button>
+        <button class="pill">Filter: Open</button>
+      </div>
+    </div>
+
+    <section class="grid" style="margin-top:12px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Risk Register</h3>
+        <table class="table">
+          <thead><tr><th>Risk</th><th>Owner</th><th>Impact</th><th>Mitigation</th></tr></thead>
+          <tbody>
+            <tr><td>Utility survey delay</td><td>Omar</td><td><span class="pill high">High</span></td><td>Expedite permit request</td></tr>
+            <tr><td>Client review backlog</td><td>Alex</td><td><span class="pill med">Medium</span></td><td>Add weekly review slot</td></tr>
+            <tr><td>Vendor lead times</td><td>Priya</td><td><span class="pill med">Medium</span></td><td>Pre-approve alternates</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Risk Summary</h3>
+        <div class="muted">Open: 3</div>
+        <div class="muted">High: 1 | Medium: 2 | Low: 0</div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:12px 0">
+        <h4 style="margin:0 0 6px">Next Reviews</h4>
+        <ul style="margin:0;padding-left:16px">
+          <li>Risk review meeting: 2026-01-15</li>
+          <li>Executive update: 2026-01-22</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Issues Log</h3>
+        <table class="table">
+          <thead><tr><th>Issue</th><th>Status</th><th>Owner</th></tr></thead>
+          <tbody>
+            <tr><td>Program scope clarification needed</td><td>Open</td><td>Alex</td></tr>
+            <tr><td>Survey file mismatch in CAD</td><td>In progress</td><td>Jordan</td></tr>
+            <tr><td>Vendor RFI #12</td><td>Resolved</td><td>Priya</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Mitigation Tasks</h3>
+        <ul style="margin:0;padding-left:16px">
+          <li>Confirm utility survey ETA by 2026-01-12</li>
+          <li>Publish revised review calendar</li>
+          <li>QA audit for CAD mismatch</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

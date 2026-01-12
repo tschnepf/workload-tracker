@@ -4,7 +4,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link, useLocation } from 'react-router';
 import { Project, Person, Assignment } from '@/types/models';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePeople } from '@/hooks/usePeople';
 import { assignmentsApi } from '@/services/api';
 import { useCapabilities } from '@/hooks/useCapabilities';
@@ -181,7 +181,7 @@ const ProjectsList: React.FC = () => {
   }, [assignments, precomputePersonSkills]);
 
   // Availability snapshot via hook (preserves Monday anchor)
-  const { state: deptState } = useDepartmentFilter();
+  const { state: deptState, backendParams } = useDepartmentFilter();
   const caps = useCapabilities();
   const { availabilityMap } = useProjectAvailability({
     projectId: selectedProject?.id,
@@ -189,6 +189,54 @@ const ProjectsList: React.FC = () => {
     includeChildren: deptState?.includeChildren,
     candidatesOnly,
   });
+
+  const { data: leadAssignments = [] } = useQuery<Assignment[], Error>({
+    queryKey: ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null],
+    queryFn: () => assignmentsApi.listAll(backendParams),
+    enabled: projects.length > 0,
+    staleTime: 30_000,
+  });
+
+  const projectLeadsMap = useMemo(() => {
+    const map = new Map<number, string>();
+    if (!leadAssignments.length) return map;
+    const peopleById = new Map<number, { name: string; departmentId?: number | null; departmentName?: string | null }>();
+    const deptNameById = new Map<number, string>();
+    people.forEach(p => {
+      if (p.department != null && p.departmentName) deptNameById.set(p.department, p.departmentName);
+      if (p.id != null) {
+        peopleById.set(p.id, { name: p.name, departmentId: p.department ?? null, departmentName: p.departmentName ?? null });
+      }
+    });
+    const leadsByProject = new Map<number, Map<string, string>>();
+    leadAssignments.forEach((assignment) => {
+      if (!assignment.project) return;
+      const roleName = (assignment.roleName || '').toLowerCase();
+      if (!roleName.includes('lead')) return;
+      const personMeta = assignment.person != null ? peopleById.get(assignment.person) : undefined;
+      const personName = assignment.personName || personMeta?.name;
+      if (!personName) return;
+      const deptId = assignment.personDepartmentId ?? personMeta?.departmentId ?? null;
+      const deptName = deptId != null ? (deptNameById.get(deptId) ?? null) : personMeta?.departmentName ?? null;
+      const deptLabel = deptName || (deptId != null ? `Dept ${deptId}` : '');
+      const perProject = leadsByProject.get(assignment.project) ?? new Map<string, string>();
+      perProject.set(personName, deptLabel);
+      leadsByProject.set(assignment.project, perProject);
+    });
+    leadsByProject.forEach((names, projectId) => {
+      const sorted = Array.from(names.entries())
+        .map(([name, deptLabel]) => ({ name, deptLabel }))
+        .sort((a, b) => {
+          const deptA = (a.deptLabel || 'zzzz').toLowerCase();
+          const deptB = (b.deptLabel || 'zzzz').toLowerCase();
+          if (deptA !== deptB) return deptA.localeCompare(deptB);
+          return a.name.localeCompare(b.name);
+        })
+        .map(item => item.name);
+      map.set(projectId, sorted.join('\n'));
+    });
+    return map;
+  }, [leadAssignments, people]);
 
   // Conflict checker for add-assignment flow
   const checkAssignmentConflicts = useCallback(async (
@@ -483,6 +531,7 @@ const ProjectsList: React.FC = () => {
           loading={loading}
           nextDeliverables={nextDeliverablesMap}
           prevDeliverables={prevDeliverablesMap}
+          projectLeads={projectLeadsMap}
           onChangeStatus={handleTableStatusChange}
           onRefreshDeliverables={refreshDeliverablesFor}
           onDeliverableEdited={bumpDeliverablesRefresh}
@@ -615,6 +664,7 @@ const ProjectsList: React.FC = () => {
         loading={loading}
         nextDeliverables={nextDeliverablesMap}
         prevDeliverables={prevDeliverablesMap}
+        projectLeads={projectLeadsMap}
         onChangeStatus={handleTableStatusChange}
         onRefreshDeliverables={refreshDeliverablesFor}
         onDeliverableEdited={bumpDeliverablesRefresh}

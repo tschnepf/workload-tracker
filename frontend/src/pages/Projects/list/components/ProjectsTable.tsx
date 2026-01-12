@@ -19,6 +19,7 @@ interface Props {
   loading?: boolean;
   nextDeliverables?: Map<number, Deliverable | null>;
   prevDeliverables?: Map<number, Deliverable | null>;
+  projectLeads?: Map<number, string>;
   onChangeStatus?: (projectId: number, newStatus: string) => void;
   onRefreshDeliverables?: (projectId: number) => void;
   onDeliverableEdited?: (projectId: number) => void;
@@ -35,6 +36,7 @@ const ProjectsTable: React.FC<Props> = ({
   loading,
   nextDeliverables,
   prevDeliverables,
+  projectLeads,
   onChangeStatus,
   onRefreshDeliverables,
   onDeliverableEdited,
@@ -138,7 +140,7 @@ const ProjectsTable: React.FC<Props> = ({
   };
 
   const header = (
-    <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
+    <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-xs text-[var(--muted)] font-medium border-b border-[var(--border)] bg-[var(--card)]">
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('client')}>
         CLIENT<SortIcon column="client" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
@@ -159,6 +161,9 @@ const ProjectsTable: React.FC<Props> = ({
       </div>
       <div className="col-span-2 flex items-center">
         NOTES
+      </div>
+      <div className="col-span-2 flex items-center">
+        PROJECT LEAD
       </div>
     </div>
   );
@@ -423,14 +428,12 @@ const ProjectsTable: React.FC<Props> = ({
     <div className="overflow-y-auto h-full pb-12 scrollbar-theme">
       {projects.map((project, index) => {
         const prev = index > 0 ? projects[index - 1] : null;
-        const next = index < projects.length - 1 ? projects[index + 1] : null;
         const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
+        const next = index < projects.length - 1 ? projects[index + 1] : null;
         const sameClientAsNext = groupClients && next && (next.client || '') === (project.client || '');
-        const isGroupStart = groupClients && !sameClientAsPrev && index !== 0;
-        const hasTopDivider = isGroupStart;
-        const showRowBottomDivider = !groupClients || sameClientAsNext;
+        const showRowBottomDivider = index < projects.length - 1;
         const isSelected = selectedProjectId === project.id;
-        const highlightInsetTop = hasTopDivider ? 'top-px' : 'top-0';
+        const highlightInsetTop = 'top-0';
         const nextDeliverableRaw = (project.id != null && typeof project.id === 'number' && nextDeliverables)
           ? nextDeliverables.get(project.id)
           : null;
@@ -439,6 +442,7 @@ const ProjectsTable: React.FC<Props> = ({
           : null;
         const nextDeliverable = mergeDeliverable(nextDeliverableRaw);
         const prevDeliverable = mergeDeliverable(prevDeliverableRaw);
+        const projectLead = project.id != null ? projectLeads?.get(project.id) : '';
         const nextPercentText = nextDeliverable?.percentage != null ? `${nextDeliverable.percentage}%` : '';
         const nextDescriptionText = nextDeliverable?.description || '';
         const showNextTopPlaceholder = !!nextDeliverable && !nextPercentText && !nextDescriptionText;
@@ -467,7 +471,7 @@ const ProjectsTable: React.FC<Props> = ({
           <div
             key={project.id}
             onClick={() => handleRowClick(project, index)}
-            className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
+            className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
             tabIndex={0}
           >
             {isSelected && (
@@ -733,11 +737,16 @@ const ProjectsTable: React.FC<Props> = ({
                 getNotesValue(nextDeliverable)
               )}
             </div>
+            <div className="col-span-2 text-[var(--muted)] text-xs whitespace-pre-line break-words">
+              {projectLead || ''}
+            </div>
             {showRowBottomDivider && (
               <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
-                <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2">
-                  <div className="col-span-2" />
-                  <div className="col-span-12 h-px bg-[var(--border)]" />
+                <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2">
+                  <div
+                    className="h-px bg-[var(--border)]"
+                    style={{ gridColumn: (groupClients && !sameClientAsNext) ? '1 / -1' : '3 / -1' }}
+                  />
                 </div>
               </div>
             )}
@@ -755,10 +764,11 @@ const ProjectsTable: React.FC<Props> = ({
           if (!project) return null;
           const prev = v.index > 0 ? projects[v.index - 1] : null;
           const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
+          const next = v.index < projects.length - 1 ? projects[v.index + 1] : null;
+          const sameClientAsNext = groupClients && next && (next.client || '') === (project.client || '');
           const isSelected = selectedProjectId === project.id;
-          const isGroupStart = groupClients && v.index !== 0 && (!prev || (prev.client || '') !== (project.client || ''));
-          const hasTopDivider = isGroupStart;
-          const highlightInsetTop = hasTopDivider ? 'top-px' : 'top-0';
+          const showRowBottomDivider = v.index < projects.length - 1;
+          const highlightInsetTop = 'top-0';
           const nextDeliverableRaw = (project.id != null && typeof project.id === 'number' && nextDeliverables)
             ? nextDeliverables.get(project.id)
             : null;
@@ -767,6 +777,7 @@ const ProjectsTable: React.FC<Props> = ({
             : null;
           const nextDeliverable = mergeDeliverable(nextDeliverableRaw);
           const prevDeliverable = mergeDeliverable(prevDeliverableRaw);
+          const projectLead = project.id != null ? projectLeads?.get(project.id) : '';
           const nextPercentText = nextDeliverable?.percentage != null ? `${nextDeliverable.percentage}%` : '';
           const nextDescriptionText = nextDeliverable?.description || '';
           const showNextTopPlaceholder = !!nextDeliverable && !nextPercentText && !nextDescriptionText;
@@ -795,7 +806,7 @@ const ProjectsTable: React.FC<Props> = ({
               key={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => handleRowClick(project, v.index)}
-              className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none ${isGroupStart ? 'border-t border-[var(--border)]' : ''}`}
+              className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
               tabIndex={0}
             >
               {isSelected && (
@@ -1059,11 +1070,16 @@ const ProjectsTable: React.FC<Props> = ({
                   getNotesValue(nextDeliverable)
                 )}
               </div>
-              {(!groupClients || (projects[v.index + 1] && (projects[v.index + 1].client || '') === (project.client || ''))) && (
+              <div className="col-span-2 text-[var(--muted)] text-xs whitespace-pre-line break-words">
+                {projectLead || ''}
+              </div>
+              {showRowBottomDivider && (
                 <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
-                  <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))] gap-2">
-                    <div className="col-span-2" />
-                    <div className="col-span-12 h-px bg-[var(--border)]" />
+                  <div className="grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,0.6fr))] gap-2">
+                    <div
+                      className="h-px bg-[var(--border)]"
+                      style={{ gridColumn: (groupClients && !sameClientAsNext) ? '1 / -1' : '3 / -1' }}
+                    />
                   </div>
                 </div>
               )}

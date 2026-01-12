@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Overview</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#0F83C5;--danger:#F07B72;--warn:#F3C969;--success:#7FE0B0}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.nav{padding:12px 0;overflow:auto}.nav .icon{height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted)}.nav .icon.active{color:var(--primary);background:rgba(126,196,245,.18);border-left:2px solid var(--primary)}
+.main{padding:16px 20px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.meta{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.badge{padding:3px 8px;border-radius:999px;font-size:12px;background:rgba(126,196,245,.15);color:var(--primary);border:1px solid rgba(126,196,245,.45)}
+.badge.warn{background:rgba(243,201,105,.15);color:var(--warn);border-color:rgba(243,201,105,.4)}
+.btn{background:var(--primary);color:#0E131A;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(4,1fr)}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+.tile .k{font-size:22px;font-weight:700}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.muted{color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.bar{height:8px;background:#1d2833;border-radius:999px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--primary)}
+.list{margin:0;padding-left:16px}
+.tag{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.tag.ok{color:var(--success);border-color:rgba(127,224,176,.4)}
+.tag.risk{color:var(--danger);border-color:rgba(240,123,114,.5)}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div><div class="nav"><div class="icon active">▥</div><div class="icon">👤</div><div class="icon">📊</div></div></aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="meta">
+        <div>
+          <div style="font-size:20px;font-weight:700">CMH04 - Riverview Clinic</div>
+          <div class="muted">Client: County Health | PM: Alex Green | Code: DPW028</div>
+        </div>
+        <span class="badge">Active</span>
+        <span class="badge warn">Schedule +2 weeks</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn">New Assignment</button>
+        <button class="btn ghost">Add Deliverable</button>
+        <button class="btn ghost">Export</button>
+      </div>
+    </div>
+
+    <section class="tiles">
+      <div class="tile"><div class="muted">Budget Used</div><div class="k">62%</div><div class="muted">$312k of $500k</div></div>
+      <div class="tile"><div class="muted">Schedule Health</div><div class="k">Yellow</div><div class="muted">2 milestones at risk</div></div>
+      <div class="tile"><div class="muted">Avg Utilization</div><div class="k">78%</div><div class="muted">Last 4 weeks</div></div>
+      <div class="tile"><div class="muted">Open Risks</div><div class="k">2</div><div class="muted">1 high, 1 med</div></div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card" style="grid-column:span 2">
+        <div class="row"><h3 style="margin:0">Timeline</h3><span class="muted">Jan 6 - Jun 30, 2026</span></div>
+        <div style="margin-top:10px">
+          <div class="row"><div>Discovery</div><div class="tag ok">Done</div></div>
+          <div class="bar" style="margin:6px 0 12px"><span style="width:100%"></span></div>
+          <div class="row"><div>Design</div><div class="tag ok">On track</div></div>
+          <div class="bar" style="margin:6px 0 12px"><span style="width:70%"></span></div>
+          <div class="row"><div>IFP Package</div><div class="tag risk">At risk</div></div>
+          <div class="bar" style="margin:6px 0 12px"><span style="width:45%"></span></div>
+          <div class="row"><div>IFC Package</div><div class="tag">Planned</div></div>
+          <div class="bar" style="margin:6px 0 4px"><span style="width:10%"></span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Deliverables</h3>
+        <table class="table">
+          <thead><tr><th>Type</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>IFP</td><td>2026-02-14</td><td>In review</td></tr>
+            <tr><td>IFC</td><td>2026-03-28</td><td>Planned</td></tr>
+            <tr><td>ADC</td><td>2026-04-18</td><td>Planned</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Staffing Snapshot</h3>
+        <table class="table">
+          <thead><tr><th>Role</th><th>Assigned</th><th>Open</th></tr></thead>
+          <tbody>
+            <tr><td>PM</td><td>1</td><td>0</td></tr>
+            <tr><td>Designer</td><td>2</td><td>1</td></tr>
+            <tr><td>Engineer</td><td>3</td><td>0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Recent Activity</h3>
+        <ul class="list">
+          <li>IFP outline approved by client</li>
+          <li>Added Jordan Lee to design tasks</li>
+          <li>Change order CO-03 submitted</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Notes and Decisions</h3>
+        <div class="muted">Decision log updated 2026-01-09</div>
+        <ul class="list">
+          <li>Scope locked through IFP package</li>
+          <li>Weekly client reviews on Thursdays</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

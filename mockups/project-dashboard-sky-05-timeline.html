@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Timeline</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#0F83C5;--success:#7FE0B0}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.muted{color:var(--muted)}
+.gantt{display:grid;grid-template-columns:180px 1fr;gap:8px}
+.gantt-head{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-left:188px;color:var(--muted)}
+.row{display:grid;grid-template-columns:180px 1fr;gap:8px;align-items:center}
+.bar{height:12px;background:#1d2833;border-radius:999px;position:relative;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--primary)}
+.milestone{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--success);margin-left:6px}
+.list{margin:0;padding-left:16px}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:20px;font-weight:700">Timeline - CMH04</div>
+        <div class="muted">Jan to Jun 2026 schedule and dependencies</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="card" style="padding:6px 10px;border-radius:6px">Monthly</button>
+        <button class="card" style="padding:6px 10px;border-radius:6px">Weekly</button>
+      </div>
+    </div>
+
+    <section class="card" style="margin-top:12px">
+      <div class="gantt-head">
+        <div>W1</div><div>W2</div><div>W3</div><div>W4</div><div>W5</div><div>W6</div><div>W7</div><div>W8</div><div>W9</div><div>W10</div>
+      </div>
+      <div class="gantt" style="margin-top:8px">
+        <div class="row"><div>Discovery</div><div class="bar"><span style="width:100%"></span></div></div>
+        <div class="row"><div>Design</div><div class="bar"><span style="width:70%"></span></div></div>
+        <div class="row"><div>IFP Package</div><div class="bar"><span style="width:45%"></span></div></div>
+        <div class="row"><div>IFC Package</div><div class="bar"><span style="width:20%"></span></div></div>
+        <div class="row"><div>ADC Package</div><div class="bar"><span style="width:10%"></span></div></div>
+      </div>
+      <div class="muted" style="margin-top:10px">Milestones: <span class="milestone"></span> Concept approved (W2) <span class="milestone"></span> IFP review (W6)</div>
+    </section>
+
+    <section style="margin-top:16px;display:grid;gap:16px;grid-template-columns:2fr 1fr">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Dependencies</h3>
+        <ul class="list">
+          <li>IFP package depends on client program signoff (target 2026-01-18)</li>
+          <li>IFC package depends on utility survey completion</li>
+          <li>ADC package starts after permitting review</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Upcoming Milestones</h3>
+        <ul class="list">
+          <li>IFP review: 2026-02-14</li>
+          <li>IFC issue: 2026-03-28</li>
+          <li>ADC issue: 2026-04-18</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Quality</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--success:#7FE0B0;--warn:#F3C969}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.main{padding:16px 20px;overflow:auto}
+.grid{display:grid;gap:16px;grid-template-columns:2fr 1fr}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;background:rgba(126,196,245,.15);color:var(--primary);border:1px solid rgba(126,196,245,.4)}
+.pill.warn{color:var(--warn);border-color:rgba(243,201,105,.45);background:rgba(243,201,105,.12)}
+.pill.ok{color:var(--success);border-color:rgba(127,224,176,.4);background:rgba(127,224,176,.12)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div></aside>
+  <main class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:20px;font-weight:700">Quality and Approvals - CMH04</div>
+        <div class="muted">Review cycles, QA checks, and approvals</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pill">New QA Check</button>
+        <button class="pill">Request Review</button>
+      </div>
+    </div>
+
+    <section class="grid" style="margin-top:12px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Review Cycle</h3>
+        <table class="table">
+          <thead><tr><th>Package</th><th>Stage</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>IFP</td><td>Internal QA</td><td><span class="pill warn">In progress</span></td></tr>
+            <tr><td>IFC</td><td>Peer Review</td><td><span class="pill">Scheduled</span></td></tr>
+            <tr><td>ADC</td><td>Client Review</td><td><span class="pill">Planned</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Approval Status</h3>
+        <div class="muted">Latest: IFP outline awaiting client signoff</div>
+        <div style="margin-top:10px" class="pill">Due 2026-01-16</div>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">QA Checklist</h3>
+        <ul style="margin:0;padding-left:16px">
+          <li>Sheet index verified</li>
+          <li>Code compliance review</li>
+          <li>Cost estimate cross-check</li>
+          <li>Peer review comments logged</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Open QA Items</h3>
+        <ul style="margin:0;padding-left:16px">
+          <li>Resolve HVAC conflicts</li>
+          <li>Update ADA notes</li>
+          <li>Confirm site plan labels</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>

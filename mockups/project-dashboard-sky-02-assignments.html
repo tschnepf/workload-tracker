@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Dashboard - Assignments</title>
+<style>
+:root{--bg:#0E131A;--surface:#121A24;--card:#121A24;--border:#253243;--text:#EAF4FF;--muted:#A9C1D8;--primary:#7EC4F5;--primaryHover:#97D5FF;--accent:#0F83C5;--danger:#F07B72;--success:#7FE0B0}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:64px 1fr;height:100%}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{height:64px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border)}
+.logo img{width:28px;height:28px;object-fit:contain;position:relative;left:3px}
+.nav{padding:12px 0;overflow:auto}.nav .icon{height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted)}.nav .icon.active{color:var(--primary);background:rgba(126,196,245,.18);border-left:2px solid var(--primary)}
+.main{padding:16px 20px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.chip{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px}
+.chip.primary{background:var(--primary);border-color:var(--primary);color:#0E131A}
+.grid{display:grid;gap:16px}@media(min-width:1200px){.grid{grid-template-columns:2fr 1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
+.table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left}th{color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.pill{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;background:rgba(126,196,245,.15);color:var(--primary);border:1px solid rgba(126,196,245,.4)}
+.pill.over{color:var(--danger);border-color:rgba(240,123,114,.5);background:rgba(240,123,114,.12)}
+</style></head>
+<body>
+<div class="app">
+  <aside class="sidebar"><div class="logo"><img src="../frontend/public/brand/SMC-TRIANGLE.png" alt="SMC"></div><div class="nav"><div class="icon">▥</div><div class="icon active">👥</div><div class="icon">📅</div></div></aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">Assignments - CMH04</div>
+        <div class="muted">Last updated 2026-01-10</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="chip">All departments</button>
+        <button class="chip">Next 8 weeks</button>
+        <button class="chip primary">Add assignment</button>
+      </div>
+    </div>
+
+    <section class="grid">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Team Allocation by Week</h3>
+        <table class="table">
+          <thead>
+            <tr><th>Person</th><th>Role</th><th>W1</th><th>W2</th><th>W3</th><th>W4</th><th>W5</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Jordan Lee</td><td>Designer</td><td>18h</td><td>20h</td><td>22h</td><td>14h</td><td>12h</td></tr>
+            <tr><td>Priya Shah</td><td>PM</td><td>16h</td><td>18h</td><td>16h</td><td>12h</td><td>10h</td></tr>
+            <tr><td>Chris Gomez</td><td>Engineer</td><td>24h</td><td>30h</td><td>32h</td><td>28h</td><td>20h</td></tr>
+            <tr><td>Kim Tran</td><td>QA</td><td>0h</td><td>6h</td><td>10h</td><td>12h</td><td>14h</td></tr>
+          </tbody>
+        </table>
+        <div class="muted" style="margin-top:8px">Tip: drag to multi-edit weeks or copy last week forward.</div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 8px">Staffing Alerts</h3>
+        <div class="pill over">Designer over 95% in W3</div>
+        <div class="pill" style="margin-top:6px">PM below 60% in W5</div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:12px 0">
+        <h4 style="margin:0 0 6px">Open Requests</h4>
+        <ul style="margin:0;padding-left:16px">
+          <li>1x Designer for 20h/week (W2-W4)</li>
+          <li>1x QA for 10h/week (W3-W5)</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px">Role Mix</h3>
+        <table class="table">
+          <thead><tr><th>Role</th><th>Assigned</th><th>Capacity</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>PM</td><td>0.6 FTE</td><td>0.8 FTE</td><td><span class="pill">Healthy</span></td></tr>
+            <tr><td>Design</td><td>1.2 FTE</td><td>1.0 FTE</td><td><span class="pill over">Over</span></td></tr>
+            <tr><td>Engineering</td><td>1.4 FTE</td><td>1.6 FTE</td><td><span class="pill">Healthy</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Quick Actions</h3>
+        <button class="chip primary">Request Role</button>
+        <button class="chip">Approve Time</button>
+        <button class="chip">Sync from Timesheets</button>
+        <div class="muted" style="margin-top:10px">Next refresh: 2026-01-11 08:00</div>
+      </div>
+    </section>
+  </main>
+</div>
+</body></html>
