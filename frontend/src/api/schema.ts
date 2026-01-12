@@ -284,6 +284,16 @@ export interface paths {
      */
     patch: operations["core_calendar_feeds_partial_update"];
   };
+  "/api/core/department_project_roles/": {
+    get: operations["core_department_project_roles_retrieve"];
+    post: operations["core_department_project_roles_create"];
+  };
+  "/api/core/department_project_roles/{department}/{role_id}/": {
+    delete: operations["core_department_project_roles_destroy"];
+  };
+  "/api/core/department_project_roles/map/": {
+    get: operations["core_department_project_roles_map_retrieve"];
+  };
   "/api/core/pre-deliverable-global-settings/": {
     get: operations["core_pre_deliverable_global_settings_list"];
     put: operations["core_pre_deliverable_global_settings_update"];
@@ -311,6 +321,7 @@ export interface paths {
      * - Accepts role name via query param (?name=...) or JSON body { name }.
      * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
      * - If a catalog ProjectRole exists for that normalized name, it is deleted.
+     * - DepartmentProjectRole mappings cascade-delete via FK on ProjectRole.
      */
     delete: operations["core_project_roles_destroy"];
   };
@@ -3419,8 +3430,21 @@ export interface operations {
       };
     };
   };
+  core_department_project_roles_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
     };
   };
+  core_department_project_roles_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeptProjectRoleCreateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeptProjectRoleCreateRequest"];
+        "multipart/form-data": components["schemas"]["DeptProjectRoleCreateRequest"];
+      };
     };
     responses: {
       200: {
@@ -3430,6 +3454,12 @@ export interface operations {
       };
     };
   };
+  core_department_project_roles_destroy: {
+    parameters: {
+      path: {
+        department: number;
+        role_id: number;
+      };
     };
     responses: {
       /** @description No response body */
@@ -3438,6 +3468,12 @@ export interface operations {
       };
     };
   };
+  core_department_project_roles_map_retrieve: {
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
     };
   };
   core_pre_deliverable_global_settings_list: {
@@ -3501,6 +3537,7 @@ export interface operations {
    * - Accepts role name via query param (?name=...) or JSON body { name }.
    * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
    * - If a catalog ProjectRole exists for that normalized name, it is deleted.
+   * - DepartmentProjectRole mappings cascade-delete via FK on ProjectRole.
    */
   core_project_roles_destroy: {
     responses: {
