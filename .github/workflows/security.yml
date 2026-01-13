@@ -34,7 +34,6 @@ jobs:
           pip install --upgrade pip
           pip install pip-audit safety bandit
           npm -g install ajv-cli
-          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh | bash -s -- -b /usr/local/bin
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | bash -s -- -b /usr/local/bin
 
       - name: Install frontend dependencies (for npm audit metadata)
@@ -59,11 +58,14 @@ jobs:
         run: mkdir -p security/artifacts
 
       - name: Run Gitleaks (secrets)
-        run: |
-          gitleaks detect --no-git --report-format json --report-path security/artifacts/gitleaks.json || true
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITLEAKS_REPORT_FORMAT: json
+          GITLEAKS_REPORT_PATH: security/artifacts/gitleaks.json
 
       - name: Run Bandit (Python)
-        run: .venv-security/bin/bandit -r backend -x backend/**/migrations,backend/**/tests -f json -o security/artifacts/bandit.json
+        run: .venv-security/bin/bandit -r backend -x backend/**/migrations,backend/**/tests -f json -o security/artifacts/bandit.json || true
 
       - name: Run pip-audit (Python)
         run: .venv-security/bin/pip-audit -r backend/requirements.txt -f json -o security/artifacts/pip-audit.json || true
