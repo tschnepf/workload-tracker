@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Department, Person, PersonSkill, Role } from '@/types/models';
 import { personSkillsApi, jobsApi } from '@/services/api';
 import { useUpdatePerson, useDeletePerson } from '@/hooks/usePeople';
@@ -25,6 +25,8 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
   const [editingName, setEditingName] = useState(false);
   const [editingPersonData, setEditingPersonData] = useState<Person | null>(null);
   const [isUpdatingPerson, setIsUpdatingPerson] = useState(false);
+  const pendingUpdateRef = useRef<Partial<Person> | null>(null);
+  const isFlushingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const [personSkills, setPersonSkills] = useState<PersonSkill[]>([]);
@@ -97,17 +99,29 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
     setEditingPersonData((prev) => ({ ...prev!, [field]: value }));
   };
 
-  const onSaveField = async (field: keyof Person, overrideValue?: any) => {
-    if (!person?.id || !editingPersonData || isUpdatingPerson) return;
+  const flushPendingUpdates = async () => {
+    if (isFlushingRef.current || !person?.id) return;
+    isFlushingRef.current = true;
+    try {
+      while (pendingUpdateRef.current) {
+        const next = pendingUpdateRef.current;
+        pendingUpdateRef.current = null;
+        await applyUpdate(next);
+      }
+    } finally {
+      isFlushingRef.current = false;
+    }
+  };
+
+  const applyUpdate = async (updateData: Partial<Person>) => {
+    if (!person?.id) return;
     try {
       setIsUpdatingPerson(true);
       setError(null);
-      const fieldValue = overrideValue !== undefined ? overrideValue : (editingPersonData as any)[field];
-      const updateData = { [field]: fieldValue } as Partial<Person>;
       const result = await updatePersonMutation.mutateAsync({ id: person.id, data: updateData }) as any;
       showToast('Saved changes', 'success');
       // If marking inactive, surface background cleanup job start + completion
-      if (field === 'isActive' && fieldValue === false) {
+      if ('isActive' in updateData && updateData.isActive === false) {
         try { showToast('Deactivation cleanup started in background', 'info'); } catch {}
         const jobId: string | undefined = result?._jobId;
         if (jobId) {
@@ -134,7 +148,30 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
       showToast('Failed to update', 'error');
     } finally {
       setIsUpdatingPerson(false);
+      if (pendingUpdateRef.current) {
+        await flushPendingUpdates();
+      }
     }
+  };
+
+  const queueOrRunUpdate = async (updateData: Partial<Person>) => {
+    if (isUpdatingPerson || isFlushingRef.current) {
+      pendingUpdateRef.current = { ...(pendingUpdateRef.current || {}), ...updateData };
+      return;
+    }
+    await applyUpdate(updateData);
+  };
+
+  const onSaveField = async (field: keyof Person, overrideValue?: any) => {
+    if (!person?.id || !editingPersonData) return;
+    const fieldValue = overrideValue !== undefined ? overrideValue : (editingPersonData as any)[field];
+    const updateData = { [field]: fieldValue } as Partial<Person>;
+    if (field === 'department') {
+      const deptId = fieldValue ? Number(fieldValue) : null;
+      const deptName = deptId ? (departments.find((d) => d.id === deptId)?.name || '') : '';
+      updateData.departmentName = deptName;
+    }
+    await queueOrRunUpdate(updateData);
   };
 
   const onEditName = () => {
@@ -226,23 +263,14 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
     onSaveField('location', location);
   };
 
-  const selectRole = (role: Role) => {
+  const selectRole = async (role: Role) => {
     setRoleInputValue(role.name);
     onFieldChange('role', role.id);
     onFieldChange('roleName', role.name);
     setShowRoleAutocomplete(false);
     // Persist role with both id and name for optimistic UI; backend ignores roleName
     if (person?.id) {
-      try {
-        setIsUpdatingPerson(true);
-        updatePersonMutation.mutate({ id: person.id, data: { role: role.id, roleName: role.name } as any });
-        showToast('Saved changes', 'success');
-      } catch (err: any) {
-        setError(err?.message || 'Failed to update');
-        showToast('Failed to update', 'error');
-      } finally {
-        setIsUpdatingPerson(false);
-      }
+      await queueOrRunUpdate({ role: role.id, roleName: role.name } as any);
     }
   };
 

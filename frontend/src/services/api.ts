@@ -355,7 +355,10 @@ export const peopleApi = {
       dataJSON: JSON.stringify(data, null, 2),
       endpoint: `/people/${id}/`
     });
-    const res = await apiClient.PATCH('/people/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    const res = await apiClient.PATCH(
+      '/people/{id}/' as any,
+      { params: { path: { id } }, body: data as any, headers: authHeaders(), skipIfMatch: true } as any
+    );
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);

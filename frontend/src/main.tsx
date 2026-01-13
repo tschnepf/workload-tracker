@@ -6,6 +6,7 @@ import { initializePerformanceMonitoring } from './utils/monitoring'
 import { createBrowserRouter, RouterProvider, Navigate, useParams } from 'react-router'
 import App from './App'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import { RequireAdmin } from '@/components/auth/RequireAdmin'
 import { getFlag } from '@/lib/flags'
 import { bootFromDevQuery, boot as bootTheme } from './theme/themeManager'
  
@@ -84,8 +85,8 @@ const router = createBrowserRouter([
       { path: 'performance', element: <RequireAuth><PerformanceDashboard /></RequireAuth> },
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
       { path: 'deliverables/calendar', element: <RequireAuth><MilestoneCalendar /></RequireAuth> },
-      { path: 'reports/forecast', element: <RequireAuth><TeamForecastPage /></RequireAuth> },
-      { path: 'reports/person-experience', element: <RequireAuth><PersonExperiencePage /></RequireAuth> },
+      { path: 'reports/forecast', element: <RequireAdmin><TeamForecastPage /></RequireAdmin> },
+      { path: 'reports/person-experience', element: <RequireAdmin><PersonExperiencePage /></RequireAdmin> },
       { path: 'help', element: <RequireAuth><ComingSoon /></RequireAuth> },
       { path: 'my-work', element: (getFlag('PERSONAL_DASHBOARD', true) ? (
         <RequireAuth><PersonalDashboard /></RequireAuth>

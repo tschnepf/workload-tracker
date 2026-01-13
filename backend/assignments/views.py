@@ -4,6 +4,7 @@ Uses AutoMapped serializers for naming prevention
 """
 
 from rest_framework import viewsets, status
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from core.etag import ETagConditionalMixin
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
@@ -821,7 +822,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             }
         )
     )
-    @action(detail=False, methods=['get'], url_path='person_experience_profile', throttle_classes=[SnapshotsThrottle])
+    @action(detail=False, methods=['get'], url_path='person_experience_profile', throttle_classes=[SnapshotsThrottle], permission_classes=[IsAuthenticated, IsAdminUser])
     def person_experience_profile(self, request):
         from .models import WeeklyAssignmentSnapshot as WAS, AssignmentMembershipEvent as AME
         from projects.models import ProjectRole as PR
@@ -998,7 +999,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             }
         )
     )
-    @action(detail=False, methods=['get'], url_path='person_project_timeline', throttle_classes=[SnapshotsThrottle])
+    @action(detail=False, methods=['get'], url_path='person_project_timeline', throttle_classes=[SnapshotsThrottle], permission_classes=[IsAuthenticated, IsAdminUser])
     def person_project_timeline(self, request):
         from .models import WeeklyAssignmentSnapshot as WAS, AssignmentMembershipEvent as AME
         try:

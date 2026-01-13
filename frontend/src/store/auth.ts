@@ -57,6 +57,8 @@ let state: AuthState = {
   person: null,
   settings: {},
 };
+let refreshInFlight: Promise<string | null> | null = null;
+let refreshCooldownUntil = 0;
 const authReadyResolvers = new Set<() => void>();
 
 function beginAuthHydration() {
@@ -200,12 +202,22 @@ export async function logout(): Promise<void> {
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight;
+  if (refreshCooldownUntil && Date.now() < refreshCooldownUntil) {
+    return state.accessToken;
+  }
+  refreshInFlight = (async () => {
   if (COOKIE_REFRESH) {
     try {
       const data = await http<{ access: string }>(`/token/refresh/`, { method: 'POST', credentials: 'include' });
       setState({ accessToken: data.access });
       return data.access;
     } catch (e) {
+      const status = (e as any)?.status;
+      if (status === 429) {
+        refreshCooldownUntil = Date.now() + 30000;
+        return state.accessToken;
+      }
       setState({ accessToken: null, user: null, person: null, settings: {} });
       etagStore.clear();
       return null;
@@ -218,7 +230,12 @@ export async function refreshAccessToken(): Promise<string | null> {
         const data = await http<{ access: string }>(`/token/refresh/`, { method: 'POST', credentials: 'include' });
         setState({ accessToken: data.access });
         return data.access;
-      } catch {
+      } catch (e) {
+        const status = (e as any)?.status;
+        if (status === 429) {
+          refreshCooldownUntil = Date.now() + 30000;
+          return state.accessToken;
+        }
         return null;
       }
     }
@@ -233,12 +250,23 @@ export async function refreshAccessToken(): Promise<string | null> {
       setState({ accessToken: data.access });
       return data.access;
     } catch (e) {
+      const status = (e as any)?.status;
+      if (status === 429) {
+        refreshCooldownUntil = Date.now() + 30000;
+        return state.accessToken;
+      }
       // If refresh fails (expired/invalid), clear auth state
       writeRefreshToStorage(null);
       setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
       etagStore.clear();
       return null;
     }
+  }
+  })();
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
   }
 }
 
@@ -343,5 +371,4 @@ if (typeof window !== 'undefined') {
 export async function reloadProfile(): Promise<void> {
   await hydrateProfile();
 }
-
 

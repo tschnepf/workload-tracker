@@ -49,7 +49,7 @@ const PersonForm: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const updatePersonMutation = useUpdatePerson();
   const createPersonMutation = useCreatePerson();
-  const [advancedOpen, setAdvancedOpen] = useState<boolean>(!!id);
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(true);
 
   useAuthenticatedEffect(() => {
     loadDepartments(); // Phase 2: Always load departments
@@ -146,10 +146,12 @@ const PersonForm: React.FC = () => {
 
       // Convert form data to API format (role: string → role: number)
       const roleId = parseInt(formData.role) || 1; // Fallback to role ID 1 if invalid
+      const normalizedHireDate = formData.hireDate?.trim() ? formData.hireDate : null;
       const apiData = {
         ...formData,
         name: formData.name.trim(),
         location: formData.location.trim(),
+        hireDate: normalizedHireDate,
         role: roleId,
       };
       if (!isEditing || !id) {
@@ -434,7 +436,5 @@ const PersonForm: React.FC = () => {
 };
 
 export default PersonForm;
-
-
 
 

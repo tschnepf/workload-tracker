@@ -14,6 +14,7 @@ import { prefetchDataForRoute } from '@/routes/prefetchData';
 import { startViewTransition, supportsViewTransitions } from '@/utils/viewTransitions';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { setPendingPath, useNavFeedback } from '@/lib/navFeedback';
+import { isAdminUser } from '@/utils/roleAccess';
 
 // Reusable Icon Component for navigation
 const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type: string, className?: string, isActive?: boolean }) => {
@@ -138,6 +139,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
   const { pendingPath: localPendingPath } = useNavFeedback();
   const navigate = useNavigate();
   const auth = useAuth();
+  const isAdmin = isAdminUser(auth.user);
   const [logoError, setLogoError] = React.useState(false);
 
   const menuItems = [
@@ -184,18 +186,20 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       description: 'Project tracking'
     },
     
-    {
-      path: '/reports/forecast',
-      icon: 'reports',
-      label: 'Forecast',
-      description: 'Team forecast & timeline'
-    },
-    {
-      path: '/reports/person-experience',
-      icon: 'reports',
-      label: 'Person Experience',
-      description: 'Per-person projects & hours'
-    },
+    ...(isAdmin ? [
+      {
+        path: '/reports/forecast',
+        icon: 'reports',
+        label: 'Forecast',
+        description: 'Team forecast & timeline'
+      },
+      {
+        path: '/reports/person-experience',
+        icon: 'reports',
+        label: 'Person Experience',
+        description: 'Per-person projects & hours'
+      },
+    ] : []),
     { 
       path: '/deliverables/calendar', 
       icon: 'calendar', 
@@ -523,6 +527,5 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
 };
 
 export default Sidebar;
-
 
 

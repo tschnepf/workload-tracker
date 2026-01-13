@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { peopleApi } from '@/services/api';
 import { Person } from '@/types/models';
 
@@ -27,7 +27,28 @@ export function usePeople(includeInactive = false) {
 
   // Stabilize array identity so downstream effects don't fire on every render
   const pages = query.data?.pages || [];
-  const people = useMemo(() => pages.flatMap(p => p?.results || []), [pages]);
+  const rawPeople = useMemo(() => pages.flatMap(p => p?.results || []), [pages]);
+  const latestByIdRef = useRef<Map<number, Person>>(new Map());
+  const people = useMemo(() => {
+    const latestById = latestByIdRef.current;
+    return rawPeople.map((p) => {
+      if (!p?.id) return p;
+      const prev = latestById.get(p.id);
+      if (!prev) {
+        latestById.set(p.id, p);
+        return p;
+      }
+      const prevParsed = prev.updatedAt ? Date.parse(prev.updatedAt) : 0;
+      const nextParsed = p.updatedAt ? Date.parse(p.updatedAt) : 0;
+      const prevUpdated = Number.isFinite(prevParsed) ? prevParsed : 0;
+      const nextUpdated = Number.isFinite(nextParsed) ? nextParsed : 0;
+      if (nextUpdated >= prevUpdated) {
+        latestById.set(p.id, p);
+        return p;
+      }
+      return prev;
+    });
+  }, [rawPeople]);
   // Provide a lightweight, stable change indicator
   const peopleVersion = people.length; // changes only when count changes
   const loading = query.isLoading || query.isFetching;
@@ -111,6 +132,7 @@ export function useCreatePerson() {
 // Person update mutation
 export function useUpdatePerson() {
   const queryClient = useQueryClient();
+  const refetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<Person> }) => 
@@ -121,21 +143,27 @@ export function useUpdatePerson() {
       await queryClient.cancelQueries({ queryKey: ['people', id] });
 
       const prevDetail = queryClient.getQueryData<Person>(['people', id]);
-      const prevPages = queryClient.getQueryData<any>(['people']);
+      const prevPages = queryClient.getQueriesData({ queryKey: ['people'] })
+        .filter(([, value]) => value && Array.isArray((value as any).pages));
+      const optimisticStamp = new Date().toISOString();
+      const dataWithTimestamp = {
+        ...data,
+        updatedAt: (data as any)?.updatedAt ?? optimisticStamp,
+      } as Partial<Person>;
 
       if (prevDetail) {
-        queryClient.setQueryData<Person>(['people', id], { ...prevDetail, ...data });
+        queryClient.setQueryData<Person>(['people', id], { ...prevDetail, ...dataWithTimestamp });
       }
-      if (prevPages && Array.isArray(prevPages.pages)) {
-        const nextPages = {
-          ...prevPages,
-          pages: prevPages.pages.map((page: any) => ({
+      queryClient.setQueriesData({ queryKey: ['people'] }, (old: any) => {
+        if (!old || !Array.isArray(old.pages)) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
             ...page,
-            results: (page?.results || []).map((p: Person) => (p.id === id ? { ...p, ...data } : p))
+            results: (page?.results || []).map((p: Person) => (p.id === id ? { ...p, ...dataWithTimestamp } : p))
           }))
         };
-        queryClient.setQueryData(['people'], nextPages);
-      }
+      });
 
       return { prevDetail, prevPages };
     },
@@ -144,7 +172,9 @@ export function useUpdatePerson() {
         queryClient.setQueryData(['people', variables.id], context.prevDetail);
       }
       if (context?.prevPages) {
-        queryClient.setQueryData(['people'], context.prevPages);
+        context.prevPages.forEach(([key, value]) => {
+          queryClient.setQueryData(key, value);
+        });
       }
     },
     onSuccess: (updatedPerson, variables) => {
@@ -152,22 +182,27 @@ export function useUpdatePerson() {
       const merged = { ...(updatedPerson as Person), ...(variables?.data || {}) } as Person;
       queryClient.setQueryData(['people', variables.id], merged);
       // Also update in paginated list cache if present
-      const prevPages = queryClient.getQueryData<any>(['people']);
-      if (prevPages && Array.isArray(prevPages.pages)) {
-        const nextPages = {
-          ...prevPages,
-          pages: prevPages.pages.map((page: any) => ({
+      queryClient.setQueriesData({ queryKey: ['people'] }, (old: any) => {
+        if (!old || !Array.isArray(old.pages)) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
             ...page,
             results: (page?.results || []).map((p: Person) => (p.id === variables.id ? { ...p, ...merged } : p))
           }))
         };
-        queryClient.setQueryData(['people'], nextPages);
-      }
+      });
     },
     onSettled: (_data, _err, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['people'] });
-      queryClient.invalidateQueries({ queryKey: ['people-autocomplete'] });
-      queryClient.invalidateQueries({ queryKey: ['person-utilization', variables.id] });
+      // Avoid immediate refetch that can overwrite optimistic updates with stale data.
+      if (refetchTimeoutRef.current) {
+        clearTimeout(refetchTimeoutRef.current);
+      }
+      refetchTimeoutRef.current = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['people'] });
+        queryClient.invalidateQueries({ queryKey: ['people-autocomplete'] });
+        queryClient.invalidateQueries({ queryKey: ['person-utilization', variables.id] });
+      }, 1200);
     },
   });
 }

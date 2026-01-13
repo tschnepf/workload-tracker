@@ -123,6 +123,27 @@ describe('PersonForm mobile flows', () => {
     );
   });
 
+  it('submits null hireDate when left blank', async () => {
+    mockedPeopleApi.create.mockResolvedValueOnce({ id: 8 } as any);
+
+    renderRoute('/people/new');
+
+    await waitFor(() => expect(mockedRolesApi.list).toHaveBeenCalledTimes(1));
+
+    await userEvent.type(screen.getByPlaceholderText(/Enter full name/i), '  Alan Turing  ');
+    await userEvent.selectOptions(screen.getByText(/Role\/Title/i).nextElementSibling as HTMLSelectElement, '10');
+
+    await userEvent.click(screen.getByRole('button', { name: /Add Person/i }));
+
+    await waitFor(() => expect(mockedPeopleApi.create).toHaveBeenCalledTimes(1));
+    expect(mockedPeopleApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Alan Turing',
+        hireDate: null,
+      }),
+    );
+  });
+
   it('loads person data and submits correct payload for edit flow', async () => {
     mockedPeopleApi.get.mockResolvedValueOnce({
       id: 5,

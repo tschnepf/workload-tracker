@@ -3,6 +3,7 @@ People API Views - Using AutoMapped serializers for naming prevention
 """
 
 from rest_framework import viewsets, status
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
@@ -149,6 +150,17 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 pass
         return resp
+
+    def partial_update(self, request, *args, **kwargs):  # type: ignore[override]
+        # Reuse update logic (including deactivation cleanup), but avoid ETag precondition checks
+        kwargs['partial'] = True
+        response = self.update(request, *args, **kwargs)
+        try:
+            instance = self.get_object()
+            self._attach_etag_headers(response, instance)
+        except Exception:
+            pass
+        return response
     
     @extend_schema(
         parameters=[
@@ -1315,7 +1327,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         ],
         responses=WorkloadForecastItemSerializer(many=True)
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, IsAdminUser])
     def workload_forecast(self, request):
         """Aggregate team capacity vs allocated for N weeks ahead (default 8).
 

@@ -109,10 +109,15 @@ const PeopleList: React.FC = () => {
 
     try {
       setError(null);
+      const departmentName =
+        bulkDepartment === 'unassigned'
+          ? ''
+          : departments.find((d) => d.id?.toString() === bulkDepartment)?.name || '';
 
       const updatePromises = Array.from(selectedPeopleIds).map((personId) => {
         const updateData = {
           department: bulkDepartment === 'unassigned' ? null : parseInt(bulkDepartment),
+          departmentName,
         } as Partial<Person>;
         return updatePersonMutation.mutateAsync({ id: personId, data: updateData });
       });
@@ -124,12 +129,12 @@ const PeopleList: React.FC = () => {
       setSelectedPeopleIds(new Set());
       setBulkDepartment('');
 
-      const departmentName =
+      const departmentLabel =
         bulkDepartment === 'unassigned'
           ? 'removed from departments'
-          : departments.find((d) => d.id?.toString() === bulkDepartment)?.name || 'unknown department';
+          : departmentName || 'unknown department';
 
-      showToast(`Updated ${count} people (${departmentName})`, 'success');
+      showToast(`Updated ${count} people (${departmentLabel})`, 'success');
     } catch (err: any) {
       setError(`Failed to update department assignments: ${err.message}`);
       showToast('Failed to update assignments', 'error');

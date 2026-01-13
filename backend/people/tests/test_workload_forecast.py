@@ -23,7 +23,7 @@ class WorkloadForecastApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         User = get_user_model()
-        self.user = User.objects.create_user(username='user_forecast', password='pw')
+        self.user = User.objects.create_user(username='user_forecast', password='pw', is_staff=True)
         self.client.force_authenticate(user=self.user)
         self.p1 = Person.objects.create(name='Alice', weekly_capacity=40)
         self.p2 = Person.objects.create(name='Bob', weekly_capacity=30)
@@ -82,7 +82,7 @@ class WorkloadForecastDepartmentFilterTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         User = get_user_model()
-        self.user = User.objects.create_user(username='user_forecast2', password='pw')
+        self.user = User.objects.create_user(username='user_forecast2', password='pw', is_staff=True)
         self.client.force_authenticate(user=self.user)
         # Departments: Root A -> Child B, Sibling C
         self.dept_a = Department.objects.create(name='A')

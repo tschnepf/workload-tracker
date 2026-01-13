@@ -15,6 +15,8 @@ import { resolveUtilizationLevel, defaultUtilizationScheme } from '@/util/utiliz
 import { dashboardApi, departmentsApi, peopleApi, personSkillsApi } from '@/services/api';
 import { DashboardData, Department, Person, PersonSkill } from '@/types/models';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useAuth } from '@/hooks/useAuth';
+import { isAdminUser } from '@/utils/roleAccess';
 
 interface DepartmentReport {
   department: Department;
@@ -115,6 +117,8 @@ const AccordionSection: React.FC<{
 );
 
 const ReportsView: React.FC = () => {
+  const auth = useAuth();
+  const isAdmin = isAdminUser(auth.user);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [reports, setReports] = useState<DepartmentReport[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState<number>(4); // weeks
@@ -362,21 +366,22 @@ const ReportsView: React.FC = () => {
           </div>
         </AccordionSection>
 
-        {/* Person Experience (link) */}
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
-          <div className="p-6 flex items-center justify-between gap-4">
-            <div>
-              <div className="text-lg font-semibold text-[#cccccc] mb-1">Person Experience Report</div>
-              <div className="text-[#969696] text-sm">Search by person and see projects, roles, phases, avg hours, and a weekly sparkline over an adjustable window.</div>
+        {isAdmin && (
+          <Card className="bg-[#2d2d30] border-[#3e3e42]">
+            <div className="p-6 flex items-center justify-between gap-4">
+              <div>
+                <div className="text-lg font-semibold text-[#cccccc] mb-1">Person Experience Report</div>
+                <div className="text-[#969696] text-sm">Search by person and see projects, roles, phases, avg hours, and a weekly sparkline over an adjustable window.</div>
+              </div>
+              <a
+                href="/reports/person-experience"
+                className="px-3 py-2 rounded bg-[var(--primary)] text-white text-sm border border-[var(--primary)] hover:opacity-90"
+              >
+                Open Report
+              </a>
             </div>
-            <a
-              href="/reports/person-experience"
-              className="px-3 py-2 rounded bg-[var(--primary)] text-white text-sm border border-[var(--primary)] hover:opacity-90"
-            >
-              Open Report
-            </a>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {/* Department Reports Table */}
         <Card className="bg-[#2d2d30] border-[#3e3e42]">
