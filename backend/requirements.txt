@@ -43,4 +43,4 @@ requests==2.32.3
 drf-spectacular==0.28.0
 
 # Offsite sync (S3)
-boto3==1.40.30
+boto3==1.42.27
