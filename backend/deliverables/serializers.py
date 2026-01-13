@@ -52,6 +52,7 @@ class DeliverableSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Percentage must be between 0 and 100")
         return value
 
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_preItems(self, obj):
         include = bool(self.context.get('include_pre_items'))
         if not include:
@@ -129,6 +130,22 @@ class DeliverableCalendarItemSerializer(serializers.Serializer):
         return 'Milestone'
 
 
+class PreDeliverableCompletedBySerializer(serializers.Serializer):
+    id = serializers.IntegerField(allow_null=True)
+    username = serializers.CharField(allow_null=True, required=False)
+
+
+class PreDeliverableParentSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    description = serializers.CharField(allow_blank=True, allow_null=True, required=False)
+    date = serializers.DateField(allow_null=True, required=False)
+
+
+class PreDeliverableAssignedPersonSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
 class PreDeliverableItemSerializer(serializers.ModelSerializer):
     preDeliverableTypeId = serializers.IntegerField(source='pre_deliverable_type_id')
     typeName = serializers.CharField(source='pre_deliverable_type.name', read_only=True)
@@ -158,25 +175,31 @@ class PreDeliverableItemSerializer(serializers.ModelSerializer):
             'notes': {'required': False, 'allow_blank': True},
         }
 
-    def get_completedBy(self, obj):
+    @extend_schema_field(PreDeliverableCompletedBySerializer)
+    def get_completedBy(self, obj) -> dict | None:
         u = getattr(obj, 'completed_by', None)
         if not u:
             return None
         return {'id': u.id, 'username': getattr(u, 'username', None)}
 
-    def get_displayName(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_displayName(self, obj) -> str:
         return obj.display_name
 
-    def get_isOverdue(self, obj):
+    @extend_schema_field(serializers.BooleanField())
+    def get_isOverdue(self, obj) -> bool:
         return obj.is_overdue
 
-    def get_parentDeliverable(self, obj):
+    @extend_schema_field(PreDeliverableParentSerializer)
+    def get_parentDeliverable(self, obj) -> dict:
         d = obj.deliverable
         return {'id': d.id, 'description': d.description, 'date': d.date.isoformat() if d.date else None}
 
-    def get_assignedPeople(self, obj):
+    @extend_schema_field(PreDeliverableAssignedPersonSerializer(many=True))
+    def get_assignedPeople(self, obj) -> list[dict]:
         people = obj.get_assigned_people().only('id', 'name')
         return [{'id': p.id, 'name': p.name} for p in people]
 
-    def get_itemType(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_itemType(self, obj) -> str:
         return 'pre_deliverable'

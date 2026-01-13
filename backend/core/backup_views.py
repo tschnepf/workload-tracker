@@ -5,15 +5,81 @@ from typing import Optional
 
 from django.http import FileResponse
 from django.urls import reverse
-from rest_framework.views import APIView
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import IsAdminUser
 from rest_framework.throttling import ScopedRateThrottle
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse, OpenApiTypes
 
 from django.conf import settings
 
 from .backup_service import BackupService
+
+
+class BackupInfoSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    filename = serializers.CharField()
+    size = serializers.IntegerField()
+    createdAt = serializers.CharField()
+    description = serializers.CharField(allow_null=True, required=False)
+    sha256 = serializers.CharField(allow_null=True, required=False)
+    format = serializers.CharField()
+
+
+class BackupListResponseSerializer(serializers.Serializer):
+    items = BackupInfoSerializer(many=True)
+
+BackupCreateRequestSerializer = inline_serializer(
+    name='BackupCreateRequest',
+    fields={'description': serializers.CharField(required=False, allow_blank=True)},
+)
+
+BackupJobResponseSerializer = inline_serializer(
+    name='BackupJobResponse',
+    fields={
+        'jobId': serializers.CharField(),
+        'statusUrl': serializers.CharField(),
+    },
+)
+
+BackupStatusSerializer = inline_serializer(
+    name='BackupStatusResponse',
+    fields={
+        'lastBackupAt': serializers.CharField(allow_null=True, required=False),
+        'lastBackupSize': serializers.IntegerField(allow_null=True, required=False),
+        'retentionOk': serializers.BooleanField(),
+        'offsiteEnabled': serializers.BooleanField(),
+        'offsiteLastSyncAt': serializers.CharField(allow_null=True, required=False),
+        'policy': serializers.CharField(),
+        'encryptionEnabled': serializers.BooleanField(),
+        'encryptionProvider': serializers.CharField(allow_null=True, required=False),
+    },
+)
+
+BackupRestoreRequestSerializer = inline_serializer(
+    name='BackupRestoreRequest',
+    fields={
+        'confirm': serializers.CharField(),
+        'jobs': serializers.IntegerField(required=False),
+        'migrate': serializers.BooleanField(required=False),
+    },
+)
+
+BackupUploadRestoreRequestSerializer = inline_serializer(
+    name='BackupUploadRestoreRequest',
+    fields={
+        'confirm': serializers.CharField(),
+        'jobs': serializers.IntegerField(required=False),
+        'migrate': serializers.BooleanField(required=False),
+        'file': serializers.FileField(),
+    },
+)
+
+BackupDeleteResponseSerializer = inline_serializer(
+    name='BackupDeleteResponse',
+    fields={'deleted': serializers.BooleanField()},
+)
 
 # Celery availability check
 try:  # pragma: no cover - defensive import
@@ -40,7 +106,7 @@ def _celery_has_workers(timeout: float = 1.0) -> bool:
         return False
 
 
-class BackupListCreateView(APIView):
+class BackupListCreateView(GenericAPIView):
     permission_classes = [IsAdminUser]
 
     # Use ScopedRateThrottle only for POST
@@ -54,10 +120,12 @@ class BackupListCreateView(APIView):
             self.throttle_scope = None
         return super().get_throttles()
 
+    @extend_schema(responses=BackupListResponseSerializer)
     def get(self, request):
         svc = BackupService()
         return Response({"items": svc.list_backups(include_hash=False)})
 
+    @extend_schema(request=BackupCreateRequestSerializer, responses=BackupJobResponseSerializer)
     def post(self, request):
         if not _celery_has_workers():
             return Response({"detail": "Async jobs unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -79,21 +147,28 @@ class BackupListCreateView(APIView):
         return Response({"jobId": task.id, "statusUrl": status_url}, status=status.HTTP_202_ACCEPTED)
 
 
-class BackupStatusView(APIView):
+class BackupStatusView(GenericAPIView):
     permission_classes = [IsAdminUser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'backup_status'
 
+    @extend_schema(responses=BackupStatusSerializer)
     def get(self, request):
         svc = BackupService()
         return Response(svc.get_status())
 
 
-class BackupDownloadView(APIView):
+class BackupDownloadView(GenericAPIView):
     permission_classes = [IsAdminUser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'backup_download'
 
+    @extend_schema(
+        responses=OpenApiResponse(
+            response=OpenApiTypes.BINARY,
+            description='Backup archive download.',
+        )
+    )
     def get(self, request, id: str):
         svc = BackupService()
         # id is the filename (validated by service)
@@ -123,11 +198,12 @@ class BackupDownloadView(APIView):
         return resp
 
 
-class BackupDeleteView(APIView):
+class BackupDeleteView(GenericAPIView):
     permission_classes = [IsAdminUser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'backup_delete'
 
+    @extend_schema(responses=BackupDeleteResponseSerializer)
     def delete(self, request, id: str):
         svc = BackupService()
         filename = os.path.basename(id)
@@ -147,12 +223,13 @@ class BackupDeleteView(APIView):
         return Response({"deleted": True})
 
 
-class BackupRestoreView(APIView):
+class BackupRestoreView(GenericAPIView):
     permission_classes = [IsAdminUser]
     throttle_classes = [ScopedRateThrottle]
     # Separate throttle scope to tune restores independently
     throttle_scope = 'backup_restore'
 
+    @extend_schema(request=BackupRestoreRequestSerializer, responses=BackupJobResponseSerializer)
     def post(self, request, id: str):
         if not _celery_has_workers() or restore_backup_task is None:
             return Response({"detail": "Async jobs unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -191,12 +268,13 @@ class BackupRestoreView(APIView):
         return Response({"jobId": task.id, "statusUrl": status_url}, status=status.HTTP_202_ACCEPTED)
 
 
-class UploadAndRestoreView(APIView):
+class UploadAndRestoreView(GenericAPIView):
     permission_classes = [IsAdminUser]
     throttle_classes = [ScopedRateThrottle]
     # Heavier path: allow separate rate control
     throttle_scope = 'backup_upload_restore'
 
+    @extend_schema(request=BackupUploadRestoreRequestSerializer, responses=BackupJobResponseSerializer)
     def post(self, request):
         if not _celery_has_workers() or restore_backup_task is None:
             return Response({"detail": "Async jobs unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)

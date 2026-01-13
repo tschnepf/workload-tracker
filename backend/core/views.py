@@ -169,6 +169,12 @@ class ProjectRoleView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses=inline_serializer(
+            name='ProjectRoleListResponse',
+            fields={'roles': serializers.ListField(child=serializers.CharField())},
+        )
+    )
     def get(self, request):
         # Legacy union: catalog + existing assignments
         names = set()
@@ -188,6 +194,13 @@ class ProjectRoleView(APIView):
         out = sorted(names, key=lambda s: s.lower())
         return Response({'roles': out})
 
+    @extend_schema(
+        request=inline_serializer(
+            name='ProjectRoleCreateRequest',
+            fields={'name': serializers.CharField()},
+        ),
+        responses=ProjectRoleSerializer,
+    )
     def post(self, request):
         if not request.user or not request.user.is_staff:
             return Response({'detail': 'Admin required'}, status=status.HTTP_403_FORBIDDEN)

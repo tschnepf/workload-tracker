@@ -203,6 +203,7 @@ class ProjectRoleClearAssignmentsView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
 
     @extend_schema(
+        request=None,
         responses=inline_serializer(
             name='ProjectRoleClearAssignmentsResponse',
             fields={'cleared': serializers.IntegerField()},

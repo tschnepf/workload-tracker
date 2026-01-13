@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.utils import timezone
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from .models import IntegrationConnection, IntegrationProvider, IntegrationRule, IntegrationJob
 from .registry import get_registry
@@ -141,7 +142,8 @@ class IntegrationJobSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_connectionCompany(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_connectionCompany(self, obj) -> str:
         if obj.connection_id:
             return f"{obj.connection.provider.display_name} ({obj.connection.environment})"
         return ''

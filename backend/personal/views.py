@@ -11,6 +11,7 @@ from django.utils.http import http_date
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from accounts.models import UserProfile
 from assignments.models import Assignment
@@ -25,6 +26,7 @@ from .serializers import PersonalWorkSerializer
 class PersonalWorkView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses=PersonalWorkSerializer)
     def get(self, request):
         # Resolve person for authenticated user
         try:
@@ -200,4 +202,3 @@ class PersonalWorkView(APIView):
                 pass
 
         return resp
-

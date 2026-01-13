@@ -4,12 +4,49 @@ from django.db.models import Count, Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, inline_serializer
 from deliverables.models import PreDeliverableItem
 
 
 class PreDeliverableCompletionView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses=inline_serializer(
+            name='PreDeliverableCompletionResponse',
+            fields={
+                'total': serializers.IntegerField(),
+                'completed': serializers.IntegerField(),
+                'overdue': serializers.IntegerField(),
+                'completionRate': serializers.FloatField(),
+                'byProject': inline_serializer(
+                    name='PreDeliverableCompletionByProject',
+                    fields={
+                        'projectId': serializers.IntegerField(allow_null=True),
+                        'projectName': serializers.CharField(allow_null=True, required=False),
+                        'total': serializers.IntegerField(),
+                        'completed': serializers.IntegerField(),
+                        'overdue': serializers.IntegerField(),
+                        'completionRate': serializers.FloatField(),
+                    },
+                    many=True,
+                ),
+                'byType': inline_serializer(
+                    name='PreDeliverableCompletionByType',
+                    fields={
+                        'typeId': serializers.IntegerField(allow_null=True),
+                        'typeName': serializers.CharField(allow_null=True, required=False),
+                        'total': serializers.IntegerField(),
+                        'completed': serializers.IntegerField(),
+                        'overdue': serializers.IntegerField(),
+                        'completionRate': serializers.FloatField(),
+                    },
+                    many=True,
+                ),
+            },
+        )
+    )
     def get(self, request):
         start = request.query_params.get('date_from')
         end = request.query_params.get('date_to')
@@ -107,6 +144,25 @@ class PreDeliverableCompletionView(APIView):
 class PreDeliverableTeamPerformanceView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    @extend_schema(
+        responses=inline_serializer(
+            name='PreDeliverableTeamPerformanceResponse',
+            fields={
+                'people': inline_serializer(
+                    name='PreDeliverableTeamPerformancePerson',
+                    fields={
+                        'personId': serializers.IntegerField(allow_null=True),
+                        'personName': serializers.CharField(allow_null=True, required=False),
+                        'assignedItems': serializers.IntegerField(),
+                        'completedItems': serializers.IntegerField(),
+                        'overdueItems': serializers.IntegerField(),
+                        'completionRate': serializers.FloatField(),
+                    },
+                    many=True,
+                ),
+            },
+        )
+    )
     def get(self, request):
         start = request.query_params.get('date_from')
         end = request.query_params.get('date_to')

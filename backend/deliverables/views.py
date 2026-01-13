@@ -5,7 +5,7 @@ Follows R2-REBUILD-STANDARDS.md naming conventions
 
 from rest_framework import viewsets, permissions, status
 from core.etag import ETagConditionalMixin
-from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer, OpenApiResponse, OpenApiTypes
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -246,7 +246,10 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         parameters=[
             OpenApiParameter(name='project_ids', type=str, required=True, description='Comma-separated project IDs'),
         ],
-        responses=serializers.DictField(child=DeliverableSerializer(many=True)),
+        responses=OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description='Map of project_id to list of deliverables.',
+        ),
     )
     @action(detail=False, methods=['get'])
     def bulk(self, request):
@@ -897,4 +900,3 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             else:
                 created += len(PreDeliverableService.generate_pre_deliverables(d))
         return Response({'enqueued': False, 'result': {'processed': total, 'created': created, 'deleted': deleted, 'preservedCompleted': preserved}})
-

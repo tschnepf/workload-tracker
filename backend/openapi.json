@@ -2003,7 +2003,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BackupListResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             },
@@ -2012,6 +2019,25 @@
                 "tags": [
                     "backups"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupCreateRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupCreateRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupCreateRequestRequest"
+                            }
+                        }
+                    }
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -2022,7 +2048,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BackupJobResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -2084,7 +2117,15 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": "Backup archive download."
                     }
                 }
             }
@@ -2105,6 +2146,26 @@
                 "tags": [
                     "backups"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupRestoreRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupRestoreRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupRestoreRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -2115,7 +2176,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BackupJobResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -2136,7 +2204,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BackupStatusResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -2147,6 +2222,26 @@
                 "tags": [
                     "backups"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupUploadRestoreRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupUploadRestoreRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BackupUploadRestoreRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -2157,7 +2252,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BackupJobResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -2179,7 +2281,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CapabilitiesResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -2255,133 +2364,6 @@
                             }
                         },
                         "description": ""
-                    }
-                }
-            }
-        },
-        "/api/core/department_project_roles/": {
-            "get": {
-                "operationId": "core_department_project_roles_retrieve",
-                "tags": [
-                    "core"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "No response body"
-                    }
-                }
-            },
-            "post": {
-                "operationId": "core_department_project_roles_create",
-                "tags": [
-                    "core"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DeptProjectRoleCreateRequest"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DeptProjectRoleCreateRequest"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DeptProjectRoleCreateRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "security": [
-                    {
-                        "jwtAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/DeptProjectRoleCreateResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/api/core/department_project_roles/{department}/{role_id}/": {
-            "delete": {
-                "operationId": "core_department_project_roles_destroy",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "department",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "path",
-                        "name": "role_id",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "core"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No response body"
-                    }
-                }
-            }
-        },
-        "/api/core/department_project_roles/map/": {
-            "get": {
-                "operationId": "core_department_project_roles_map_retrieve",
-                "tags": [
-                    "core"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "No response body"
                     }
                 }
             }
@@ -2483,7 +2465,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectRoleListResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             },
@@ -2493,6 +2482,26 @@
                 "tags": [
                     "core"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -2503,13 +2512,20 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectRole"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             },
             "delete": {
                 "operationId": "core_project_roles_destroy",
-                "description": "Remove a project role from the catalog and clear assignments using it.\n\nBehavior:\n- Admin only.\n- Accepts role name via query param (?name=...) or JSON body { name }.\n- Clears `Assignment.role_on_project` wherever it matches (case-insensitive).\n- If a catalog ProjectRole exists for that normalized name, it is deleted.\n- DepartmentProjectRole mappings cascade-delete via FK on ProjectRole.",
+                "description": "Remove a project role from the catalog and clear assignments using it.\n\nBehavior:\n- Admin only.\n- Accepts role name via query param (?name=...) or JSON body { name }.\n- Clears `Assignment.role_on_project` wherever it matches (case-insensitive).\n- If a catalog ProjectRole exists for that normalized name, it is deleted.",
                 "tags": [
                     "core"
                 ],
@@ -3372,12 +3388,11 @@
                             "application/json": {
                                 "schema": {
                                     "type": "object",
-                                    "additionalProperties": {},
-                                    "description": "Unspecified response body"
+                                    "additionalProperties": {}
                                 }
                             }
                         },
-                        "description": ""
+                        "description": "Map of project_id to list of deliverables."
                     }
                 }
             }
@@ -4597,7 +4612,52 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationTestResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/integrations/connections/{id}/test-activity/": {
+            "post": {
+                "operationId": "integrations_connections_test_activity_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationTestResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -4618,7 +4678,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationHealthResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -4649,14 +4716,21 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationJobRetryResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
         },
         "/api/integrations/providers/": {
             "get": {
-                "operationId": "integrations_providers_retrieve",
+                "operationId": "integrations_providers_list",
                 "tags": [
                     "integrations"
                 ],
@@ -4670,14 +4744,24 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Provider"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
         },
         "/api/integrations/providers/{key}/": {
             "get": {
-                "operationId": "integrations_providers_retrieve_2",
+                "operationId": "integrations_providers_detail",
                 "parameters": [
                     {
                         "in": "path",
@@ -4701,7 +4785,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Provider"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -4732,7 +4823,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProviderCatalog"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -4764,7 +4862,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "description": "OAuth callback HTML response."
                     }
                 }
             }
@@ -4785,6 +4890,26 @@
                 "tags": [
                     "integrations"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderConnectStartRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderConnectStartRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderConnectStartRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -4795,7 +4920,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProviderConnectStartResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -4826,7 +4958,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProviderCredential"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             },
@@ -4845,6 +4984,26 @@
                 "tags": [
                     "integrations"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderCredentialRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderCredentialRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderCredentialRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -4855,7 +5014,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProviderCredential"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -4886,7 +5052,15 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "List of provider object definitions."
                     }
                 }
             }
@@ -4907,6 +5081,26 @@
                 "tags": [
                     "integrations"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderResetRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderResetRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderResetRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -4917,7 +5111,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProviderResetResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -4926,6 +5127,14 @@
             "get": {
                 "operationId": "integrations_providers_mapping_defaults_retrieve",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "connectionId",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Optional connection id"
+                    },
                     {
                         "in": "path",
                         "name": "object_key",
@@ -4956,7 +5165,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MappingDefaultsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             },
@@ -4983,6 +5199,26 @@
                 "tags": [
                     "integrations"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MappingDefaultsRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MappingDefaultsRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MappingDefaultsRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -4993,7 +5229,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MappingDefaultsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5003,12 +5246,41 @@
                 "operationId": "integrations_providers_jobs_retrieve",
                 "parameters": [
                     {
+                        "in": "query",
+                        "name": "connection",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "object",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
                         "in": "path",
                         "name": "provider_key",
                         "schema": {
                             "type": "string"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Comma-separated status values"
                     }
                 ],
                 "tags": [
@@ -5024,7 +5296,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationJobListResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5045,6 +5324,26 @@
                 "tags": [
                     "integrations"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectMatchingConfirmRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectMatchingConfirmRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectMatchingConfirmRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -5055,7 +5354,15 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5064,6 +5371,14 @@
             "get": {
                 "operationId": "integrations_providers_projects_matching_suggestions_retrieve",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "connectionId",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    },
                     {
                         "in": "path",
                         "name": "provider_key",
@@ -5086,7 +5401,15 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5374,6 +5697,25 @@
                 "tags": [
                     "integrations"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IntegrationRuleResyncRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IntegrationRuleResyncRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IntegrationRuleResyncRequestRequest"
+                            }
+                        }
+                    }
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -5384,7 +5726,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationRuleResyncResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -5405,7 +5754,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationSecretKeyResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             },
@@ -5414,6 +5770,26 @@
                 "tags": [
                     "integrations"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IntegrationSecretKeyRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IntegrationSecretKeyRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IntegrationSecretKeyRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -5424,7 +5800,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationSecretKeyResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -6512,7 +6895,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PersonalWork"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -7268,6 +7658,82 @@
                 }
             }
         },
+        "/api/projects/project-roles/{id}/clear-assignments/": {
+            "post": {
+                "operationId": "projects_project_roles_clear_assignments_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectRoleClearAssignmentsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/project-roles/{id}/usage/": {
+            "get": {
+                "operationId": "projects_project_roles_usage_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectRoleUsageResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/projects/project-roles/reorder/": {
             "post": {
                 "operationId": "projects_project_roles_reorder_create",
@@ -7332,7 +7798,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PreDeliverableCompletionResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -7353,7 +7826,14 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PreDeliverableTeamPerformanceResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -8665,8 +9145,8 @@
                     },
                     "roleName": {
                         "type": "string",
-                        "readOnly": true,
-                        "nullable": true
+                        "nullable": true,
+                        "readOnly": true
                     },
                     "weeklyHours": {},
                     "allocationPercentage": {
@@ -8770,6 +9250,158 @@
                     "utilization_percent"
                 ]
             },
+            "BackupCreateRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            },
+            "BackupInfo": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "filename": {
+                        "type": "string"
+                    },
+                    "size": {
+                        "type": "integer"
+                    },
+                    "createdAt": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "sha256": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "format": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "filename",
+                    "format",
+                    "id",
+                    "size"
+                ]
+            },
+            "BackupJobResponse": {
+                "type": "object",
+                "properties": {
+                    "jobId": {
+                        "type": "string"
+                    },
+                    "statusUrl": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "jobId",
+                    "statusUrl"
+                ]
+            },
+            "BackupListResponse": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/BackupInfo"
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            },
+            "BackupRestoreRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "confirm": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "jobs": {
+                        "type": "integer"
+                    },
+                    "migrate": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "confirm"
+                ]
+            },
+            "BackupStatusResponse": {
+                "type": "object",
+                "properties": {
+                    "lastBackupAt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "lastBackupSize": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "retentionOk": {
+                        "type": "boolean"
+                    },
+                    "offsiteEnabled": {
+                        "type": "boolean"
+                    },
+                    "offsiteLastSyncAt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "policy": {
+                        "type": "string"
+                    },
+                    "encryptionEnabled": {
+                        "type": "boolean"
+                    },
+                    "encryptionProvider": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "encryptionEnabled",
+                    "offsiteEnabled",
+                    "policy",
+                    "retentionOk"
+                ]
+            },
+            "BackupUploadRestoreRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "confirm": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "jobs": {
+                        "type": "integer"
+                    },
+                    "migrate": {
+                        "type": "boolean"
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary"
+                    }
+                },
+                "required": [
+                    "confirm",
+                    "file"
+                ]
+            },
             "BulkCompleteRequestRequest": {
                 "type": "object",
                 "properties": {
@@ -8859,6 +9491,90 @@
                 "required": [
                     "deliverables_token",
                     "updated_at"
+                ]
+            },
+            "CapabilitiesAggregates": {
+                "type": "object",
+                "properties": {
+                    "capacityHeatmap": {
+                        "type": "boolean"
+                    },
+                    "projectAvailability": {
+                        "type": "boolean"
+                    },
+                    "findAvailable": {
+                        "type": "boolean"
+                    },
+                    "gridSnapshot": {
+                        "type": "boolean"
+                    },
+                    "skillMatch": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "capacityHeatmap",
+                    "findAvailable",
+                    "gridSnapshot",
+                    "projectAvailability",
+                    "skillMatch"
+                ]
+            },
+            "CapabilitiesCache": {
+                "type": "object",
+                "properties": {
+                    "shortTtlAggregates": {
+                        "type": "boolean"
+                    },
+                    "aggregateTtlSeconds": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "aggregateTtlSeconds",
+                    "shortTtlAggregates"
+                ]
+            },
+            "CapabilitiesIntegrations": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "enabled"
+                ]
+            },
+            "CapabilitiesResponse": {
+                "type": "object",
+                "properties": {
+                    "asyncJobs": {
+                        "type": "boolean"
+                    },
+                    "aggregates": {
+                        "$ref": "#/components/schemas/CapabilitiesAggregates"
+                    },
+                    "cache": {
+                        "$ref": "#/components/schemas/CapabilitiesCache"
+                    },
+                    "personalDashboard": {
+                        "type": "boolean"
+                    },
+                    "projectRolesByDepartment": {
+                        "type": "boolean"
+                    },
+                    "integrations": {
+                        "$ref": "#/components/schemas/CapabilitiesIntegrations"
+                    }
+                },
+                "required": [
+                    "aggregates",
+                    "asyncJobs",
+                    "cache",
+                    "integrations",
+                    "personalDashboard",
+                    "projectRolesByDepartment"
                 ]
             },
             "ChangePasswordRequestRequest": {
@@ -9072,7 +9788,11 @@
                         "readOnly": true
                     },
                     "preItems": {
-                        "type": "string",
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        },
                         "readOnly": true
                     }
                 },
@@ -9199,6 +9919,35 @@
                     "project",
                     "projectName",
                     "title"
+                ]
+            },
+            "DeliverableMarkerLite": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string"
+                    },
+                    "percentage": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "dates": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "note": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "type"
                 ]
             },
             "DeliverablePhaseEnum": {
@@ -9395,6 +10144,9 @@
                         "type": "string",
                         "maxLength": 100
                     },
+                    "shortName": {
+                        "type": "string"
+                    },
                     "parentDepartment": {
                         "type": "integer",
                         "nullable": true
@@ -9442,6 +10194,9 @@
                         "minLength": 1,
                         "maxLength": 100
                     },
+                    "shortName": {
+                        "type": "string"
+                    },
                     "parentDepartment": {
                         "type": "integer",
                         "nullable": true
@@ -9459,37 +10214,6 @@
                 },
                 "required": [
                     "isActive",
-                    "name"
-                ]
-            },
-            "DeptProjectRoleCreateRequest": {
-                "type": "object",
-                "properties": {
-                    "department": {
-                        "type": "integer"
-                    },
-                    "name": {
-                        "type": "string",
-                        "minLength": 1
-                    }
-                },
-                "required": [
-                    "department",
-                    "name"
-                ]
-            },
-            "DeptProjectRoleCreateResponse": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "integer"
-                    },
-                    "name": {
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "id",
                     "name"
                 ]
             },
@@ -9724,6 +10448,15 @@
                     "is_disabled": {
                         "type": "boolean"
                     },
+                    "utc_offset_minutes": {
+                        "type": "integer",
+                        "maximum": 840,
+                        "minimum": -720
+                    },
+                    "hasToken": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -9738,6 +10471,7 @@
                 "required": [
                     "created_at",
                     "environment",
+                    "hasToken",
                     "id",
                     "provider",
                     "providerDisplayName",
@@ -9766,12 +10500,232 @@
                     },
                     "extra_headers": {
                         "writeOnly": true
+                    },
+                    "utc_offset_minutes": {
+                        "type": "integer",
+                        "maximum": 840,
+                        "minimum": -720
                     }
                 },
                 "required": [
                     "environment",
                     "providerKey"
                 ]
+            },
+            "IntegrationHealthResponse": {
+                "type": "object",
+                "properties": {
+                    "healthy": {
+                        "type": "boolean"
+                    },
+                    "workersAvailable": {
+                        "type": "boolean"
+                    },
+                    "cacheAvailable": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "schedulerPaused": {
+                        "type": "boolean"
+                    },
+                    "jobs": {
+                        "$ref": "#/components/schemas/IntegrationJobHealthSummary"
+                    }
+                },
+                "required": [
+                    "cacheAvailable",
+                    "healthy",
+                    "jobs",
+                    "schedulerPaused",
+                    "workersAvailable"
+                ]
+            },
+            "IntegrationJob": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "connection": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "provider": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "providerDisplayName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "connectionCompany": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "connectionEnvironment": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "object_key": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/IntegrationJobStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "payload": {
+                        "readOnly": true
+                    },
+                    "logs": {
+                        "readOnly": true
+                    },
+                    "metrics": {
+                        "readOnly": true
+                    },
+                    "celery_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "finished_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "celery_id",
+                    "connection",
+                    "connectionCompany",
+                    "connectionEnvironment",
+                    "created_at",
+                    "finished_at",
+                    "id",
+                    "logs",
+                    "metrics",
+                    "object_key",
+                    "payload",
+                    "provider",
+                    "providerDisplayName",
+                    "started_at",
+                    "status",
+                    "updated_at"
+                ]
+            },
+            "IntegrationJobHealthRecent": {
+                "type": "object",
+                "properties": {
+                    "windowHours": {
+                        "type": "integer"
+                    },
+                    "total": {
+                        "type": "integer"
+                    },
+                    "succeeded": {
+                        "type": "integer"
+                    },
+                    "failed": {
+                        "type": "integer"
+                    },
+                    "successRate": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "itemsProcessed": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "failed",
+                    "itemsProcessed",
+                    "succeeded",
+                    "total",
+                    "windowHours"
+                ]
+            },
+            "IntegrationJobHealthSummary": {
+                "type": "object",
+                "properties": {
+                    "running": {
+                        "type": "integer"
+                    },
+                    "lastJobAt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "lastFailureAt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "recent": {
+                        "$ref": "#/components/schemas/IntegrationJobHealthRecent"
+                    }
+                },
+                "required": [
+                    "recent",
+                    "running"
+                ]
+            },
+            "IntegrationJobListResponse": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/IntegrationJob"
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            },
+            "IntegrationJobRetryResponse": {
+                "type": "object",
+                "properties": {
+                    "queued": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "queued"
+                ]
+            },
+            "IntegrationJobStatusEnum": {
+                "enum": [
+                    "pending",
+                    "running",
+                    "succeeded",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `pending` - Pending\n* `running` - Running\n* `succeeded` - Succeeded\n* `failed` - Failed"
             },
             "IntegrationRule": {
                 "type": "object",
@@ -9869,6 +10823,84 @@
                     "object_key"
                 ]
             },
+            "IntegrationRuleResyncRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "scope": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                }
+            },
+            "IntegrationRuleResyncResponse": {
+                "type": "object",
+                "properties": {
+                    "rule": {
+                        "$ref": "#/components/schemas/IntegrationRule"
+                    },
+                    "state": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": [
+                    "rule",
+                    "state"
+                ]
+            },
+            "IntegrationSecretKeyRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "secretKey": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "secretKey"
+                ]
+            },
+            "IntegrationSecretKeyResponse": {
+                "type": "object",
+                "properties": {
+                    "configured": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "configured"
+                ]
+            },
+            "IntegrationTestResponse": {
+                "type": "object",
+                "properties": {
+                    "ok": {
+                        "type": "boolean"
+                    },
+                    "provider": {
+                        "type": "string"
+                    },
+                    "environment": {
+                        "type": "string"
+                    },
+                    "checkedAt": {
+                        "type": "string"
+                    },
+                    "sampleCount": {
+                        "type": "integer"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "checkedAt",
+                    "environment",
+                    "ok",
+                    "provider",
+                    "sampleCount"
+                ]
+            },
             "InviteUserRequestRequest": {
                 "type": "object",
                 "properties": {
@@ -9900,6 +10932,60 @@
                         "nullable": true
                     }
                 }
+            },
+            "MappingDefaultsRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "connectionId": {
+                        "type": "integer"
+                    },
+                    "version": {
+                        "type": "string"
+                    },
+                    "mappings": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    }
+                },
+                "required": [
+                    "connectionId",
+                    "mappings"
+                ]
+            },
+            "MappingDefaultsResponse": {
+                "type": "object",
+                "properties": {
+                    "schemaVersion": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "defaults": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    },
+                    "fieldSignatureHash": {
+                        "type": "string"
+                    },
+                    "overrides": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                    },
+                    "stale": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "defaults",
+                    "fieldSignatureHash",
+                    "stale"
+                ]
             },
             "MembershipEvent": {
                 "type": "object",
@@ -10016,7 +11102,7 @@
                 "type": "object",
                 "properties": {
                     "phase": {
-                        "$ref": "#/components/schemas/PhaseEnum"
+                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
                     },
                     "weeks": {
                         "type": "integer"
@@ -10098,7 +11184,7 @@
                 "type": "object",
                 "properties": {
                     "phase": {
-                        "$ref": "#/components/schemas/PhaseEnum"
+                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
                     },
                     "weeks": {
                         "type": "integer"
@@ -10901,6 +11987,9 @@
                         "minLength": 1,
                         "maxLength": 100
                     },
+                    "shortName": {
+                        "type": "string"
+                    },
                     "parentDepartment": {
                         "type": "integer",
                         "nullable": true
@@ -10939,6 +12028,11 @@
                     },
                     "extra_headers": {
                         "writeOnly": true
+                    },
+                    "utc_offset_minutes": {
+                        "type": "integer",
+                        "maximum": 840,
+                        "minimum": -720
                     }
                 }
             },
@@ -11069,7 +12163,7 @@
                         "maxLength": 200
                     },
                     "status": {
-                        "$ref": "#/components/schemas/StatusEnum"
+                        "$ref": "#/components/schemas/ProjectStatusEnum"
                     },
                     "client": {
                         "type": "string",
@@ -11597,18 +12691,318 @@
                     "strengths"
                 ]
             },
-            "PhaseEnum": {
-                "enum": [
-                    "sd",
-                    "dd",
-                    "ifp",
-                    "masterplan",
-                    "bulletins",
-                    "ca",
-                    "other"
-                ],
-                "type": "string",
-                "description": "* `sd` - SD\n* `dd` - DD\n* `ifp` - IFP\n* `masterplan` - Masterplan\n* `bulletins` - Bulletins\n* `ca` - CA\n* `other` - Other"
+            "PersonalAlerts": {
+                "type": "object",
+                "properties": {
+                    "overallocatedNextWeek": {
+                        "type": "boolean"
+                    },
+                    "underutilizedNext4Weeks": {
+                        "type": "boolean"
+                    },
+                    "overduePreItems": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "overallocatedNextWeek",
+                    "overduePreItems",
+                    "underutilizedNext4Weeks"
+                ]
+            },
+            "PersonalDeliverableItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "project": {
+                        "type": "integer"
+                    },
+                    "projectName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "isCompleted": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "date",
+                    "id",
+                    "isCompleted",
+                    "project",
+                    "projectName",
+                    "title"
+                ]
+            },
+            "PersonalProjectItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "client": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "nextDeliverableDate": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
+                ]
+            },
+            "PersonalSchedule": {
+                "type": "object",
+                "properties": {
+                    "weekKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "weekTotals": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "weeklyCapacity": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "weekKeys",
+                    "weekTotals",
+                    "weeklyCapacity"
+                ]
+            },
+            "PersonalSummary": {
+                "type": "object",
+                "properties": {
+                    "personId": {
+                        "type": "integer"
+                    },
+                    "currentWeekKey": {
+                        "type": "string"
+                    },
+                    "utilizationPercent": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "allocatedHours": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "availableHours": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "required": [
+                    "allocatedHours",
+                    "availableHours",
+                    "currentWeekKey",
+                    "personId",
+                    "utilizationPercent"
+                ]
+            },
+            "PersonalWork": {
+                "type": "object",
+                "properties": {
+                    "summary": {
+                        "$ref": "#/components/schemas/PersonalSummary"
+                    },
+                    "alerts": {
+                        "$ref": "#/components/schemas/PersonalAlerts"
+                    },
+                    "projects": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PersonalProjectItem"
+                        }
+                    },
+                    "deliverables": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PersonalDeliverableItem"
+                        }
+                    },
+                    "preItems": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PreDeliverableItem"
+                        }
+                    },
+                    "schedule": {
+                        "$ref": "#/components/schemas/PersonalSchedule"
+                    }
+                },
+                "required": [
+                    "alerts",
+                    "deliverables",
+                    "preItems",
+                    "projects",
+                    "schedule",
+                    "summary"
+                ]
+            },
+            "PreDeliverableAssignedPerson": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
+                ]
+            },
+            "PreDeliverableCompletedBy": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "username": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "id"
+                ]
+            },
+            "PreDeliverableCompletionByProject": {
+                "type": "object",
+                "properties": {
+                    "projectId": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "projectName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "total": {
+                        "type": "integer"
+                    },
+                    "completed": {
+                        "type": "integer"
+                    },
+                    "overdue": {
+                        "type": "integer"
+                    },
+                    "completionRate": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "required": [
+                    "completed",
+                    "completionRate",
+                    "overdue",
+                    "projectId",
+                    "total"
+                ]
+            },
+            "PreDeliverableCompletionByType": {
+                "type": "object",
+                "properties": {
+                    "typeId": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "typeName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "total": {
+                        "type": "integer"
+                    },
+                    "completed": {
+                        "type": "integer"
+                    },
+                    "overdue": {
+                        "type": "integer"
+                    },
+                    "completionRate": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "required": [
+                    "completed",
+                    "completionRate",
+                    "overdue",
+                    "total",
+                    "typeId"
+                ]
+            },
+            "PreDeliverableCompletionResponse": {
+                "type": "object",
+                "properties": {
+                    "total": {
+                        "type": "integer"
+                    },
+                    "completed": {
+                        "type": "integer"
+                    },
+                    "overdue": {
+                        "type": "integer"
+                    },
+                    "completionRate": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "byProject": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PreDeliverableCompletionByProject"
+                        }
+                    },
+                    "byType": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PreDeliverableCompletionByType"
+                        }
+                    }
+                },
+                "required": [
+                    "byProject",
+                    "byType",
+                    "completed",
+                    "completionRate",
+                    "overdue",
+                    "total"
+                ]
             },
             "PreDeliverableGlobalSettingsItem": {
                 "type": "object",
@@ -11692,7 +13086,11 @@
                         "nullable": true
                     },
                     "completedBy": {
-                        "type": "string",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PreDeliverableCompletedBy"
+                            }
+                        ],
                         "readOnly": true
                     },
                     "notes": {
@@ -11716,15 +13114,22 @@
                         "readOnly": true
                     },
                     "isOverdue": {
-                        "type": "string",
+                        "type": "boolean",
                         "readOnly": true
                     },
                     "parentDeliverable": {
-                        "type": "string",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PreDeliverableParent"
+                            }
+                        ],
                         "readOnly": true
                     },
                     "assignedPeople": {
-                        "type": "string",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PreDeliverableAssignedPerson"
+                        },
                         "readOnly": true
                     },
                     "itemType": {
@@ -11791,6 +13196,73 @@
                     "preDeliverableTypeId"
                 ]
             },
+            "PreDeliverableParent": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "id"
+                ]
+            },
+            "PreDeliverableTeamPerformancePerson": {
+                "type": "object",
+                "properties": {
+                    "personId": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "personName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "assignedItems": {
+                        "type": "integer"
+                    },
+                    "completedItems": {
+                        "type": "integer"
+                    },
+                    "overdueItems": {
+                        "type": "integer"
+                    },
+                    "completionRate": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "required": [
+                    "assignedItems",
+                    "completedItems",
+                    "completionRate",
+                    "overdueItems",
+                    "personId"
+                ]
+            },
+            "PreDeliverableTeamPerformanceResponse": {
+                "type": "object",
+                "properties": {
+                    "people": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PreDeliverableTeamPerformancePerson"
+                        }
+                    }
+                },
+                "required": [
+                    "people"
+                ]
+            },
             "PreItemsBackfillRequestRequest": {
                 "type": "object",
                 "properties": {
@@ -11843,7 +13315,7 @@
                         "maxLength": 200
                     },
                     "status": {
-                        "$ref": "#/components/schemas/StatusEnum"
+                        "$ref": "#/components/schemas/ProjectStatusEnum"
                     },
                     "client": {
                         "type": "string",
@@ -12017,6 +13489,18 @@
                             }
                         }
                     },
+                    "deliverableMarkersByProjectWeek": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/DeliverableMarkerLite"
+                                }
+                            }
+                        }
+                    },
                     "hasFutureDeliverablesByProject": {
                         "type": "object",
                         "additionalProperties": {
@@ -12059,6 +13543,27 @@
                     "name"
                 ]
             },
+            "ProjectMatchingConfirmRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "connectionId": {
+                        "type": "integer"
+                    },
+                    "matches": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    },
+                    "enableRule": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "connectionId"
+                ]
+            },
             "ProjectPreDeliverableSettingsResponse": {
                 "type": "object",
                 "properties": {
@@ -12086,7 +13591,7 @@
                         "maxLength": 200
                     },
                     "status": {
-                        "$ref": "#/components/schemas/StatusEnum"
+                        "$ref": "#/components/schemas/ProjectStatusEnum"
                     },
                     "client": {
                         "type": "string",
@@ -12129,6 +13634,46 @@
                     "name"
                 ]
             },
+            "ProjectRole": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "name",
+                    "updated_at"
+                ]
+            },
+            "ProjectRoleClearAssignmentsResponse": {
+                "type": "object",
+                "properties": {
+                    "cleared": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "cleared"
+                ]
+            },
             "ProjectRoleCreateRequest": {
                 "type": "object",
                 "properties": {
@@ -12147,6 +13692,18 @@
                 },
                 "required": [
                     "department",
+                    "name"
+                ]
+            },
+            "ProjectRoleCreateRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
                     "name"
                 ]
             },
@@ -12178,6 +13735,20 @@
                     "department_id",
                     "id",
                     "name"
+                ]
+            },
+            "ProjectRoleListResponse": {
+                "type": "object",
+                "properties": {
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "roles"
                 ]
             },
             "ProjectRoleLite": {
@@ -12220,6 +13791,75 @@
                     "detail"
                 ]
             },
+            "ProjectRoleUsageAssignment": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "person": {
+                        "$ref": "#/components/schemas/ProjectRoleUsagePerson"
+                    },
+                    "project": {
+                        "$ref": "#/components/schemas/ProjectRoleUsageProject"
+                    }
+                },
+                "required": [
+                    "id",
+                    "person",
+                    "project"
+                ]
+            },
+            "ProjectRoleUsagePerson": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
+                ]
+            },
+            "ProjectRoleUsageProject": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
+                ]
+            },
+            "ProjectRoleUsageResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "assignments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProjectRoleUsageAssignment"
+                        }
+                    }
+                },
+                "required": [
+                    "assignments",
+                    "count"
+                ]
+            },
             "ProjectSnapshotMetrics": {
                 "type": "object",
                 "properties": {
@@ -12260,6 +13900,19 @@
                     "people",
                     "roleAggregates"
                 ]
+            },
+            "ProjectStatusEnum": {
+                "enum": [
+                    "planning",
+                    "active",
+                    "active_ca",
+                    "on_hold",
+                    "completed",
+                    "cancelled",
+                    "inactive"
+                ],
+                "type": "string",
+                "description": "* `planning` - Planning\n* `active` - Active\n* `active_ca` - Active CA\n* `on_hold` - On Hold\n* `completed` - Completed\n* `cancelled` - Cancelled\n* `inactive` - Inactive"
             },
             "ProjectTotal": {
                 "type": "object",
@@ -12325,6 +13978,153 @@
                     "source",
                     "typeId",
                     "typeName"
+                ]
+            },
+            "Provider": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string"
+                    },
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "schemaVersion": {
+                        "type": "string"
+                    },
+                    "metadata": {}
+                },
+                "required": [
+                    "displayName",
+                    "key",
+                    "metadata",
+                    "schemaVersion"
+                ]
+            },
+            "ProviderCatalog": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string"
+                    },
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "schemaVersion": {
+                        "type": "string"
+                    },
+                    "rateLimits": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "baseUrlVariants": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "objects": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    }
+                },
+                "required": [
+                    "displayName",
+                    "key",
+                    "objects",
+                    "schemaVersion"
+                ]
+            },
+            "ProviderConnectStartRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "connectionId": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "connectionId"
+                ]
+            },
+            "ProviderConnectStartResponse": {
+                "type": "object",
+                "properties": {
+                    "authorizeUrl": {
+                        "type": "string"
+                    },
+                    "state": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "authorizeUrl",
+                    "state"
+                ]
+            },
+            "ProviderCredential": {
+                "type": "object",
+                "properties": {
+                    "clientId": {
+                        "type": "string"
+                    },
+                    "redirectUri": {
+                        "type": "string"
+                    },
+                    "hasClientSecret": {
+                        "type": "boolean"
+                    },
+                    "configured": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "clientId",
+                    "configured",
+                    "hasClientSecret",
+                    "redirectUri"
+                ]
+            },
+            "ProviderCredentialRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "clientId": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "redirectUri": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "clientSecret": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "clientId",
+                    "redirectUri"
+                ]
+            },
+            "ProviderResetRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "confirm": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "confirm"
+                ]
+            },
+            "ProviderResetResponse": {
+                "type": "object",
+                "properties": {
+                    "reset": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "reset"
                 ]
             },
             "RecentAssignment": {
@@ -12699,19 +14499,6 @@
                 "type": "string",
                 "description": "* `project` - project\n* `global` - global\n* `default` - default"
             },
-            "StatusEnum": {
-                "enum": [
-                    "planning",
-                    "active",
-                    "active_ca",
-                    "on_hold",
-                    "completed",
-                    "cancelled",
-                    "inactive"
-                ],
-                "type": "string",
-                "description": "* `planning` - Planning\n* `active` - Active\n* `active_ca` - Active CA\n* `on_hold` - On Hold\n* `completed` - Completed\n* `cancelled` - Cancelled\n* `inactive` - Inactive"
-            },
             "StatusSeries": {
                 "type": "object",
                 "properties": {
@@ -12868,9 +14655,13 @@
                             }
                         ],
                         "nullable": true
+                    },
+                    "accountSetup": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
+                    "accountSetup",
                     "groups",
                     "id",
                     "is_staff",

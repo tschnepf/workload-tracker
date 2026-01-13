@@ -284,16 +284,6 @@ export interface paths {
      */
     patch: operations["core_calendar_feeds_partial_update"];
   };
-  "/api/core/department_project_roles/": {
-    get: operations["core_department_project_roles_retrieve"];
-    post: operations["core_department_project_roles_create"];
-  };
-  "/api/core/department_project_roles/{department}/{role_id}/": {
-    delete: operations["core_department_project_roles_destroy"];
-  };
-  "/api/core/department_project_roles/map/": {
-    get: operations["core_department_project_roles_map_retrieve"];
-  };
   "/api/core/pre-deliverable-global-settings/": {
     get: operations["core_pre_deliverable_global_settings_list"];
     put: operations["core_pre_deliverable_global_settings_update"];
@@ -321,7 +311,6 @@ export interface paths {
      * - Accepts role name via query param (?name=...) or JSON body { name }.
      * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
      * - If a catalog ProjectRole exists for that normalized name, it is deleted.
-     * - DepartmentProjectRole mappings cascade-delete via FK on ProjectRole.
      */
     delete: operations["core_project_roles_destroy"];
   };
@@ -576,6 +565,9 @@ export interface paths {
   "/api/integrations/connections/{id}/test/": {
     post: operations["integrations_connections_test_create"];
   };
+  "/api/integrations/connections/{id}/test-activity/": {
+    post: operations["integrations_connections_test_activity_create"];
+  };
   "/api/integrations/health/": {
     get: operations["integrations_health_retrieve"];
   };
@@ -583,10 +575,10 @@ export interface paths {
     post: operations["integrations_jobs_retry_create"];
   };
   "/api/integrations/providers/": {
-    get: operations["integrations_providers_retrieve"];
+    get: operations["integrations_providers_list"];
   };
   "/api/integrations/providers/{key}/": {
-    get: operations["integrations_providers_retrieve_2"];
+    get: operations["integrations_providers_detail"];
   };
   "/api/integrations/providers/{key}/catalog/": {
     get: operations["integrations_providers_catalog_retrieve"];
@@ -871,6 +863,12 @@ export interface paths {
     delete: operations["projects_project_roles_destroy"];
     patch: operations["projects_project_roles_partial_update"];
   };
+  "/api/projects/project-roles/{id}/clear-assignments/": {
+    post: operations["projects_project_roles_clear_assignments_create"];
+  };
+  "/api/projects/project-roles/{id}/usage/": {
+    get: operations["projects_project_roles_usage_retrieve"];
+  };
   "/api/projects/project-roles/reorder/": {
     post: operations["projects_project_roles_reorder_create"];
   };
@@ -1095,6 +1093,47 @@ export interface components {
       /** Format: double */
       utilization_percent: number;
     };
+    BackupCreateRequestRequest: {
+      description?: string;
+    };
+    BackupInfo: {
+      id: string;
+      filename: string;
+      size: number;
+      createdAt: string;
+      description?: string | null;
+      sha256?: string | null;
+      format: string;
+    };
+    BackupJobResponse: {
+      jobId: string;
+      statusUrl: string;
+    };
+    BackupListResponse: {
+      items: components["schemas"]["BackupInfo"][];
+    };
+    BackupRestoreRequestRequest: {
+      confirm: string;
+      jobs?: number;
+      migrate?: boolean;
+    };
+    BackupStatusResponse: {
+      lastBackupAt?: string | null;
+      lastBackupSize?: number | null;
+      retentionOk: boolean;
+      offsiteEnabled: boolean;
+      offsiteLastSyncAt?: string | null;
+      policy: string;
+      encryptionEnabled: boolean;
+      encryptionProvider?: string | null;
+    };
+    BackupUploadRestoreRequestRequest: {
+      confirm: string;
+      jobs?: number;
+      migrate?: boolean;
+      /** Format: binary */
+      file: string;
+    };
     BulkCompleteRequestRequest: {
       ids: number[];
     };
@@ -1116,6 +1155,28 @@ export interface components {
       deliverables_token: string;
       /** Format: date-time */
       updated_at: string;
+    };
+    CapabilitiesAggregates: {
+      capacityHeatmap: boolean;
+      projectAvailability: boolean;
+      findAvailable: boolean;
+      gridSnapshot: boolean;
+      skillMatch: boolean;
+    };
+    CapabilitiesCache: {
+      shortTtlAggregates: boolean;
+      aggregateTtlSeconds: number;
+    };
+    CapabilitiesIntegrations: {
+      enabled: boolean;
+    };
+    CapabilitiesResponse: {
+      asyncJobs: boolean;
+      aggregates: components["schemas"]["CapabilitiesAggregates"];
+      cache: components["schemas"]["CapabilitiesCache"];
+      personalDashboard: boolean;
+      projectRolesByDepartment: boolean;
+      integrations: components["schemas"]["CapabilitiesIntegrations"];
     };
     ChangePasswordRequestRequest: {
       currentPassword: string;
@@ -1178,7 +1239,9 @@ export interface components {
       createdAt: string;
       /** Format: date-time */
       updatedAt: string;
-      preItems: string;
+      preItems: readonly {
+          [key: string]: unknown;
+        }[];
     };
     /** @description Serializer for linking people to deliverables with weekly hours. */
     DeliverableAssignment: {
@@ -1216,6 +1279,13 @@ export interface components {
       date: string | null;
       isCompleted: boolean;
       assignmentCount: number;
+    };
+    DeliverableMarkerLite: {
+      type: string;
+      percentage?: number | null;
+      dates?: string[];
+      description?: string | null;
+      note?: string | null;
     };
     /**
      * @description * `sd` - SD
@@ -1275,6 +1345,7 @@ export interface components {
     Department: {
       id: number;
       name: string;
+      shortName?: string;
       parentDepartment?: number | null;
       manager?: number | null;
       managerName: string;
@@ -1288,18 +1359,11 @@ export interface components {
     /** @description Department serializer with explicit camelCase field mapping */
     DepartmentRequest: {
       name: string;
+      shortName?: string;
       parentDepartment?: number | null;
       manager?: number | null;
       description?: string;
       isActive: boolean;
-    };
-    DeptProjectRoleCreateRequest: {
-      department: number;
-      name: string;
-    };
-    DeptProjectRoleCreateResponse: {
-      id: number;
-      name: string;
     };
     EBCPRoleAgg: {
       roleId: number;
@@ -1371,6 +1435,8 @@ export interface components {
       is_active?: boolean;
       needs_reauth?: boolean;
       is_disabled?: boolean;
+      utc_offset_minutes?: number;
+      hasToken: boolean;
       /** Format: date-time */
       created_at: string;
       /** Format: date-time */
@@ -1383,7 +1449,67 @@ export interface components {
       needs_reauth?: boolean;
       is_disabled?: boolean;
       extra_headers?: unknown;
+      utc_offset_minutes?: number;
     };
+    IntegrationHealthResponse: {
+      healthy: boolean;
+      workersAvailable: boolean;
+      cacheAvailable: boolean;
+      message?: string | null;
+      schedulerPaused: boolean;
+      jobs: components["schemas"]["IntegrationJobHealthSummary"];
+    };
+    IntegrationJob: {
+      id: number;
+      connection: number;
+      provider: string;
+      providerDisplayName: string;
+      connectionCompany: string;
+      connectionEnvironment: string;
+      object_key: string;
+      status: components["schemas"]["IntegrationJobStatusEnum"];
+      payload: unknown;
+      logs: unknown;
+      metrics: unknown;
+      celery_id: string;
+      /** Format: date-time */
+      started_at: string | null;
+      /** Format: date-time */
+      finished_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    IntegrationJobHealthRecent: {
+      windowHours: number;
+      total: number;
+      succeeded: number;
+      failed: number;
+      /** Format: double */
+      successRate?: number | null;
+      itemsProcessed: number;
+    };
+    IntegrationJobHealthSummary: {
+      running: number;
+      lastJobAt?: string | null;
+      lastFailureAt?: string | null;
+      recent: components["schemas"]["IntegrationJobHealthRecent"];
+    };
+    IntegrationJobListResponse: {
+      items: components["schemas"]["IntegrationJob"][];
+    };
+    IntegrationJobRetryResponse: {
+      queued: boolean;
+    };
+    /**
+     * @description * `pending` - Pending
+     * * `running` - Running
+     * * `succeeded` - Succeeded
+     * * `failed` - Failed
+     * @enum {string}
+     */
+    IntegrationJobStatusEnum: "pending" | "running" | "succeeded" | "failed";
     IntegrationRule: {
       id: number;
       connection: number;
@@ -1410,6 +1536,29 @@ export interface components {
       config?: unknown;
       is_enabled?: boolean;
     };
+    IntegrationRuleResyncRequestRequest: {
+      scope?: string;
+    };
+    IntegrationRuleResyncResponse: {
+      rule: components["schemas"]["IntegrationRule"];
+      state: {
+        [key: string]: unknown;
+      };
+    };
+    IntegrationSecretKeyRequestRequest: {
+      secretKey: string;
+    };
+    IntegrationSecretKeyResponse: {
+      configured: boolean;
+    };
+    IntegrationTestResponse: {
+      ok: boolean;
+      provider: string;
+      environment: string;
+      checkedAt: string;
+      sampleCount: number;
+      message?: string;
+    };
     InviteUserRequestRequest: {
       /** Format: email */
       email: string;
@@ -1419,6 +1568,24 @@ export interface components {
     };
     LinkPersonRequestRequest: {
       person_id?: number | null;
+    };
+    MappingDefaultsRequestRequest: {
+      connectionId: number;
+      version?: string;
+      mappings: {
+          [key: string]: unknown;
+        }[];
+    };
+    MappingDefaultsResponse: {
+      schemaVersion?: string | null;
+      defaults: {
+          [key: string]: unknown;
+        }[];
+      fieldSignatureHash: string;
+      overrides?: {
+        [key: string]: unknown;
+      } | null;
+      stale: boolean;
     };
     MembershipEvent: {
       week_start: string;
@@ -1458,7 +1625,7 @@ export interface components {
       };
     };
     PEPClientPhase: {
-      phase: components["schemas"]["PhaseEnum"];
+      phase: components["schemas"]["DeliverablePhaseEnum"];
       weeks: number;
       /** Format: double */
       hours: number;
@@ -1484,7 +1651,7 @@ export interface components {
       };
     };
     PEPProjectPhase: {
-      phase: components["schemas"]["PhaseEnum"];
+      phase: components["schemas"]["DeliverablePhaseEnum"];
       weeks: number;
       /** Format: double */
       hours: number;
@@ -1823,6 +1990,7 @@ export interface components {
     /** @description Department serializer with explicit camelCase field mapping */
     PatchedDepartmentRequest: {
       name?: string;
+      shortName?: string;
       parentDepartment?: number | null;
       manager?: number | null;
       description?: string;
@@ -1835,6 +2003,7 @@ export interface components {
       needs_reauth?: boolean;
       is_disabled?: boolean;
       extra_headers?: unknown;
+      utc_offset_minutes?: number;
     };
     PatchedIntegrationRuleRequest: {
       connection_id?: number;
@@ -1880,7 +2049,7 @@ export interface components {
     };
     PatchedProjectRequest: {
       name?: string;
-      status?: components["schemas"]["StatusEnum"];
+      status?: components["schemas"]["ProjectStatusEnum"];
       client?: string;
       description?: string;
       notes?: string | null;
@@ -2038,17 +2207,88 @@ export interface components {
       development: components["schemas"]["PersonSkillSummary"][];
       learning: components["schemas"]["PersonSkillSummary"][];
     };
-    /**
-     * @description * `sd` - SD
-     * * `dd` - DD
-     * * `ifp` - IFP
-     * * `masterplan` - Masterplan
-     * * `bulletins` - Bulletins
-     * * `ca` - CA
-     * * `other` - Other
-     * @enum {string}
-     */
-    PhaseEnum: "sd" | "dd" | "ifp" | "masterplan" | "bulletins" | "ca" | "other";
+    PersonalAlerts: {
+      overallocatedNextWeek: boolean;
+      underutilizedNext4Weeks: boolean;
+      overduePreItems: number;
+    };
+    PersonalDeliverableItem: {
+      id: number;
+      project: number;
+      projectName: string | null;
+      title: string;
+      /** Format: date */
+      date: string | null;
+      isCompleted: boolean;
+    };
+    PersonalProjectItem: {
+      id: number;
+      name: string | null;
+      client?: string | null;
+      status?: string | null;
+      /** Format: date */
+      nextDeliverableDate?: string | null;
+    };
+    PersonalSchedule: {
+      weekKeys: string[];
+      weekTotals: {
+        [key: string]: number;
+      };
+      weeklyCapacity: number;
+    };
+    PersonalSummary: {
+      personId: number;
+      currentWeekKey: string;
+      /** Format: double */
+      utilizationPercent: number;
+      /** Format: double */
+      allocatedHours: number;
+      /** Format: double */
+      availableHours: number;
+    };
+    PersonalWork: {
+      summary: components["schemas"]["PersonalSummary"];
+      alerts: components["schemas"]["PersonalAlerts"];
+      projects: components["schemas"]["PersonalProjectItem"][];
+      deliverables: components["schemas"]["PersonalDeliverableItem"][];
+      preItems: components["schemas"]["PreDeliverableItem"][];
+      schedule: components["schemas"]["PersonalSchedule"];
+    };
+    PreDeliverableAssignedPerson: {
+      id: number;
+      name: string;
+    };
+    PreDeliverableCompletedBy: {
+      id: number | null;
+      username?: string | null;
+    };
+    PreDeliverableCompletionByProject: {
+      projectId: number | null;
+      projectName?: string | null;
+      total: number;
+      completed: number;
+      overdue: number;
+      /** Format: double */
+      completionRate: number;
+    };
+    PreDeliverableCompletionByType: {
+      typeId: number | null;
+      typeName?: string | null;
+      total: number;
+      completed: number;
+      overdue: number;
+      /** Format: double */
+      completionRate: number;
+    };
+    PreDeliverableCompletionResponse: {
+      total: number;
+      completed: number;
+      overdue: number;
+      /** Format: double */
+      completionRate: number;
+      byProject: components["schemas"]["PreDeliverableCompletionByProject"][];
+      byType: components["schemas"]["PreDeliverableCompletionByType"][];
+    };
     PreDeliverableGlobalSettingsItem: {
       typeId: number;
       typeName: string;
@@ -2073,7 +2313,7 @@ export interface components {
       isCompleted: boolean;
       /** Format: date */
       completedDate?: string | null;
-      completedBy: string;
+      completedBy: components["schemas"]["PreDeliverableCompletedBy"];
       notes?: string;
       isActive: boolean;
       /** Format: date-time */
@@ -2081,9 +2321,9 @@ export interface components {
       /** Format: date-time */
       updatedAt: string;
       displayName: string;
-      isOverdue: string;
-      parentDeliverable: string;
-      assignedPeople: string;
+      isOverdue: boolean;
+      parentDeliverable: components["schemas"]["PreDeliverableParent"];
+      assignedPeople: readonly components["schemas"]["PreDeliverableAssignedPerson"][];
       itemType: string;
     };
     PreDeliverableItemRequest: {
@@ -2097,6 +2337,24 @@ export interface components {
       completedDate?: string | null;
       notes?: string;
       isActive: boolean;
+    };
+    PreDeliverableParent: {
+      id: number;
+      description?: string | null;
+      /** Format: date */
+      date?: string | null;
+    };
+    PreDeliverableTeamPerformancePerson: {
+      personId: number | null;
+      personName?: string | null;
+      assignedItems: number;
+      completedItems: number;
+      overdueItems: number;
+      /** Format: double */
+      completionRate: number;
+    };
+    PreDeliverableTeamPerformanceResponse: {
+      people: components["schemas"]["PreDeliverableTeamPerformancePerson"][];
     };
     PreItemsBackfillRequestRequest: {
       projectId?: number;
@@ -2117,7 +2375,7 @@ export interface components {
     Project: {
       id: number;
       name: string;
-      status?: components["schemas"]["StatusEnum"];
+      status?: components["schemas"]["ProjectStatusEnum"];
       client?: string;
       description?: string;
       notes?: string | null;
@@ -2174,6 +2432,11 @@ export interface components {
           [key: string]: number;
         };
       };
+      deliverableMarkersByProjectWeek?: {
+        [key: string]: {
+          [key: string]: components["schemas"]["DeliverableMarkerLite"][];
+        };
+      };
       hasFutureDeliverablesByProject: {
         [key: string]: boolean;
       };
@@ -2185,13 +2448,20 @@ export interface components {
       client?: string | null;
       status?: string | null;
     };
+    ProjectMatchingConfirmRequestRequest: {
+      connectionId: number;
+      matches?: {
+          [key: string]: unknown;
+        }[];
+      enableRule?: boolean;
+    };
     ProjectPreDeliverableSettingsResponse: {
       projectId: number;
       settings: components["schemas"]["ProjectTypeSetting"][];
     };
     ProjectRequest: {
       name: string;
-      status?: components["schemas"]["StatusEnum"];
+      status?: components["schemas"]["ProjectStatusEnum"];
       client?: string;
       description?: string;
       notes?: string | null;
@@ -2205,10 +2475,24 @@ export interface components {
       /** @default true */
       isActive?: boolean;
     };
+    ProjectRole: {
+      id: number;
+      name: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    ProjectRoleClearAssignmentsResponse: {
+      cleared: number;
+    };
     ProjectRoleCreateRequest: {
       department: number;
       name: string;
       sortOrder?: number | null;
+    };
+    ProjectRoleCreateRequestRequest: {
+      name: string;
     };
     ProjectRoleItem: {
       id: number;
@@ -2216,6 +2500,9 @@ export interface components {
       is_active?: boolean;
       sort_order?: number;
       department_id: number;
+    };
+    ProjectRoleListResponse: {
+      roles: string[];
     };
     ProjectRoleLite: {
       id: number;
@@ -2227,6 +2514,23 @@ export interface components {
     ProjectRoleReorderResponse: {
       detail: string;
     };
+    ProjectRoleUsageAssignment: {
+      id: number;
+      person: components["schemas"]["ProjectRoleUsagePerson"];
+      project: components["schemas"]["ProjectRoleUsageProject"];
+    };
+    ProjectRoleUsagePerson: {
+      id: number | null;
+      name: string;
+    };
+    ProjectRoleUsageProject: {
+      id: number | null;
+      name: string;
+    };
+    ProjectRoleUsageResponse: {
+      count: number;
+      assignments: components["schemas"]["ProjectRoleUsageAssignment"][];
+    };
     ProjectSnapshotMetrics: {
       projectsCount: number;
       peopleAssignedCount: number;
@@ -2237,6 +2541,17 @@ export interface components {
       people: components["schemas"]["PSTPerson"][];
       roleAggregates: components["schemas"]["PSTRoleAgg"][];
     };
+    /**
+     * @description * `planning` - Planning
+     * * `active` - Active
+     * * `active_ca` - Active CA
+     * * `on_hold` - On Hold
+     * * `completed` - Completed
+     * * `cancelled` - Cancelled
+     * * `inactive` - Inactive
+     * @enum {string}
+     */
+    ProjectStatusEnum: "planning" | "active" | "active_ca" | "on_hold" | "completed" | "cancelled" | "inactive";
     ProjectTotal: {
       id: number;
       name: string;
@@ -2256,6 +2571,50 @@ export interface components {
       isEnabled: boolean;
       daysBefore: number | null;
       source: components["schemas"]["SourceEnum"];
+    };
+    Provider: {
+      key: string;
+      displayName: string;
+      schemaVersion: string;
+      metadata: unknown;
+    };
+    ProviderCatalog: {
+      key: string;
+      displayName: string;
+      schemaVersion: string;
+      rateLimits?: {
+        [key: string]: unknown;
+      };
+      baseUrlVariants?: {
+        [key: string]: unknown;
+      };
+      objects: {
+          [key: string]: unknown;
+        }[];
+    };
+    ProviderConnectStartRequestRequest: {
+      connectionId: number;
+    };
+    ProviderConnectStartResponse: {
+      authorizeUrl: string;
+      state: string;
+    };
+    ProviderCredential: {
+      clientId: string;
+      redirectUri: string;
+      hasClientSecret: boolean;
+      configured: boolean;
+    };
+    ProviderCredentialRequestRequest: {
+      clientId: string;
+      redirectUri: string;
+      clientSecret?: string;
+    };
+    ProviderResetRequestRequest: {
+      confirm: boolean;
+    };
+    ProviderResetResponse: {
+      reset: boolean;
     };
     RecentAssignment: {
       person: string;
@@ -2370,17 +2729,6 @@ export interface components {
      * @enum {string}
      */
     SourceEnum: "project" | "global" | "default";
-    /**
-     * @description * `planning` - Planning
-     * * `active` - Active
-     * * `active_ca` - Active CA
-     * * `on_hold` - On Hold
-     * * `completed` - Completed
-     * * `cancelled` - Cancelled
-     * * `inactive` - Inactive
-     * @enum {string}
-     */
-    StatusEnum: "planning" | "active" | "active_ca" | "on_hold" | "completed" | "cancelled" | "inactive";
     StatusSeries: {
       active: number[];
       active_ca: number[];
@@ -2420,6 +2768,7 @@ export interface components {
       groups: string[];
       role: string;
       person?: components["schemas"]["UserListPerson"] | null;
+      accountSetup: boolean;
     };
     UserListPerson: {
       id: number;
@@ -3311,17 +3660,26 @@ export interface operations {
   };
   backups_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["BackupListResponse"];
+        };
       };
     };
   };
   backups_create: {
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["BackupCreateRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["BackupCreateRequestRequest"];
+        "multipart/form-data": components["schemas"]["BackupCreateRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["BackupJobResponse"];
+        };
       };
     };
   };
@@ -3345,9 +3703,11 @@ export interface operations {
       };
     };
     responses: {
-      /** @description No response body */
+      /** @description Backup archive download. */
       200: {
-        content: never;
+        content: {
+          "application/json": string;
+        };
       };
     };
   };
@@ -3357,26 +3717,43 @@ export interface operations {
         id: string;
       };
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BackupRestoreRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["BackupRestoreRequestRequest"];
+        "multipart/form-data": components["schemas"]["BackupRestoreRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["BackupJobResponse"];
+        };
       };
     };
   };
   backups_status_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["BackupStatusResponse"];
+        };
       };
     };
   };
   backups_upload_restore_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BackupUploadRestoreRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["BackupUploadRestoreRequestRequest"];
+        "multipart/form-data": components["schemas"]["BackupUploadRestoreRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["BackupJobResponse"];
+        };
       };
     };
   };
@@ -3387,9 +3764,10 @@ export interface operations {
    */
   capabilities_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["CapabilitiesResponse"];
+        };
       };
     };
   };
@@ -3430,52 +3808,6 @@ export interface operations {
       };
     };
   };
-  core_department_project_roles_retrieve: {
-    responses: {
-      /** @description No response body */
-      200: {
-        content: never;
-      };
-    };
-  };
-  core_department_project_roles_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeptProjectRoleCreateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeptProjectRoleCreateRequest"];
-        "multipart/form-data": components["schemas"]["DeptProjectRoleCreateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeptProjectRoleCreateResponse"];
-        };
-      };
-    };
-  };
-  core_department_project_roles_destroy: {
-    parameters: {
-      path: {
-        department: number;
-        role_id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  core_department_project_roles_map_retrieve: {
-    responses: {
-      /** @description No response body */
-      200: {
-        content: never;
-      };
-    };
-  };
   core_pre_deliverable_global_settings_list: {
     responses: {
       200: {
@@ -3509,9 +3841,10 @@ export interface operations {
    */
   core_project_roles_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["ProjectRoleListResponse"];
+        };
       };
     };
   };
@@ -3522,10 +3855,18 @@ export interface operations {
    * - POST: admin-only; adds a role to the catalog.
    */
   core_project_roles_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectRoleCreateRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleCreateRequestRequest"];
+        "multipart/form-data": components["schemas"]["ProjectRoleCreateRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["ProjectRole"];
+        };
       };
     };
   };
@@ -3537,7 +3878,6 @@ export interface operations {
    * - Accepts role name via query param (?name=...) or JSON body { name }.
    * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
    * - If a catalog ProjectRole exists for that normalized name, it is deleted.
-   * - DepartmentProjectRole mappings cascade-delete via FK on ProjectRole.
    */
   core_project_roles_destroy: {
     responses: {
@@ -3917,6 +4257,7 @@ export interface operations {
       };
     };
     responses: {
+      /** @description Map of project_id to list of deliverables. */
       200: {
         content: {
           "application/json": {
@@ -4469,17 +4810,33 @@ export interface operations {
       };
     };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["IntegrationTestResponse"];
+        };
+      };
+    };
+  };
+  integrations_connections_test_activity_create: {
+    parameters: {
+      path: {
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["IntegrationTestResponse"];
+        };
       };
     };
   };
   integrations_health_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["IntegrationHealthResponse"];
+        };
       };
     };
   };
@@ -4490,30 +4847,33 @@ export interface operations {
       };
     };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["IntegrationJobRetryResponse"];
+        };
       };
     };
   };
-  integrations_providers_retrieve: {
+  integrations_providers_list: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["Provider"][];
+        };
       };
     };
   };
-  integrations_providers_retrieve_2: {
+  integrations_providers_detail: {
     parameters: {
       path: {
         key: string;
       };
     };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["Provider"];
+        };
       };
     };
   };
@@ -4524,9 +4884,10 @@ export interface operations {
       };
     };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["ProviderCatalog"];
+        };
       };
     };
   };
@@ -4537,9 +4898,11 @@ export interface operations {
       };
     };
     responses: {
-      /** @description No response body */
+      /** @description OAuth callback HTML response. */
       200: {
-        content: never;
+        content: {
+          "application/json": string;
+        };
       };
     };
   };
@@ -4549,10 +4912,18 @@ export interface operations {
         key: string;
       };
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProviderConnectStartRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProviderConnectStartRequestRequest"];
+        "multipart/form-data": components["schemas"]["ProviderConnectStartRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["ProviderConnectStartResponse"];
+        };
       };
     };
   };
@@ -4563,9 +4934,10 @@ export interface operations {
       };
     };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["ProviderCredential"];
+        };
       };
     };
   };
@@ -4575,10 +4947,18 @@ export interface operations {
         key: string;
       };
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProviderCredentialRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProviderCredentialRequestRequest"];
+        "multipart/form-data": components["schemas"]["ProviderCredentialRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["ProviderCredential"];
+        };
       };
     };
   };
@@ -4589,9 +4969,13 @@ export interface operations {
       };
     };
     responses: {
-      /** @description No response body */
+      /** @description List of provider object definitions. */
       200: {
-        content: never;
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
       };
     };
   };
@@ -4601,24 +4985,37 @@ export interface operations {
         key: string;
       };
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProviderResetRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProviderResetRequestRequest"];
+        "multipart/form-data": components["schemas"]["ProviderResetRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["ProviderResetResponse"];
+        };
       };
     };
   };
   integrations_providers_mapping_defaults_retrieve: {
     parameters: {
+      query?: {
+        /** @description Optional connection id */
+        connectionId?: number;
+      };
       path: {
         object_key: string;
         provider_key: string;
       };
     };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["MappingDefaultsResponse"];
+        };
       };
     };
   };
@@ -4629,23 +5026,39 @@ export interface operations {
         provider_key: string;
       };
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingDefaultsRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["MappingDefaultsRequestRequest"];
+        "multipart/form-data": components["schemas"]["MappingDefaultsRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["MappingDefaultsResponse"];
+        };
       };
     };
   };
   integrations_providers_jobs_retrieve: {
     parameters: {
+      query?: {
+        connection?: number;
+        limit?: number;
+        object?: string;
+        /** @description Comma-separated status values */
+        status?: string;
+      };
       path: {
         provider_key: string;
       };
     };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["IntegrationJobListResponse"];
+        };
       };
     };
   };
@@ -4655,23 +5068,39 @@ export interface operations {
         provider_key: string;
       };
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
+        "multipart/form-data": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
       };
     };
   };
   integrations_providers_projects_matching_suggestions_retrieve: {
     parameters: {
+      query: {
+        connectionId: number;
+      };
       path: {
         provider_key: string;
       };
     };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
       };
     };
   };
@@ -4785,26 +5214,43 @@ export interface operations {
         id: number;
       };
     };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["IntegrationRuleResyncRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleResyncRequestRequest"];
+        "multipart/form-data": components["schemas"]["IntegrationRuleResyncRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["IntegrationRuleResyncResponse"];
+        };
       };
     };
   };
   integrations_secret_key_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["IntegrationSecretKeyResponse"];
+        };
       };
     };
   };
   integrations_secret_key_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntegrationSecretKeyRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["IntegrationSecretKeyRequestRequest"];
+        "multipart/form-data": components["schemas"]["IntegrationSecretKeyRequestRequest"];
+      };
+    };
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["IntegrationSecretKeyResponse"];
+        };
       };
     };
   };
@@ -5251,9 +5697,10 @@ export interface operations {
   };
   personal_work_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["PersonalWork"];
+        };
       };
     };
   };
@@ -5593,6 +6040,34 @@ export interface operations {
       };
     };
   };
+  projects_project_roles_clear_assignments_create: {
+    parameters: {
+      path: {
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRoleClearAssignmentsResponse"];
+        };
+      };
+    };
+  };
+  projects_project_roles_usage_retrieve: {
+    parameters: {
+      path: {
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRoleUsageResponse"];
+        };
+      };
+    };
+  };
   projects_project_roles_reorder_create: {
     requestBody: {
       content: {
@@ -5611,17 +6086,19 @@ export interface operations {
   };
   reports_pre_deliverable_completion_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["PreDeliverableCompletionResponse"];
+        };
       };
     };
   };
   reports_pre_deliverable_team_performance_retrieve: {
     responses: {
-      /** @description No response body */
       200: {
-        content: never;
+        content: {
+          "application/json": components["schemas"]["PreDeliverableTeamPerformanceResponse"];
+        };
       };
     };
   };

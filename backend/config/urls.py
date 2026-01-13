@@ -24,6 +24,8 @@ from accounts.token_views import (
     ThrottledTokenLogoutView,
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -76,6 +78,37 @@ def readiness_check(request):
     return JsonResponse(data, status=200 if ok else 503)
 
 
+@extend_schema(
+    responses=inline_serializer(
+        name='CapabilitiesResponse',
+        fields={
+            'asyncJobs': serializers.BooleanField(),
+            'aggregates': inline_serializer(
+                name='CapabilitiesAggregates',
+                fields={
+                    'capacityHeatmap': serializers.BooleanField(),
+                    'projectAvailability': serializers.BooleanField(),
+                    'findAvailable': serializers.BooleanField(),
+                    'gridSnapshot': serializers.BooleanField(),
+                    'skillMatch': serializers.BooleanField(),
+                },
+            ),
+            'cache': inline_serializer(
+                name='CapabilitiesCache',
+                fields={
+                    'shortTtlAggregates': serializers.BooleanField(),
+                    'aggregateTtlSeconds': serializers.IntegerField(),
+                },
+            ),
+            'personalDashboard': serializers.BooleanField(),
+            'projectRolesByDepartment': serializers.BooleanField(),
+            'integrations': inline_serializer(
+                name='CapabilitiesIntegrations',
+                fields={'enabled': serializers.BooleanField()},
+            ),
+        },
+    )
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def capabilities_view(request):

@@ -8,10 +8,11 @@ from typing import Any
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, serializers
 from rest_framework.permissions import IsAdminUser, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter, OpenApiResponse, OpenApiTypes
 from cryptography.fernet import Fernet
 from requests import RequestException, HTTPError
 
@@ -53,6 +54,160 @@ from .oauth import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+ProviderCredentialSerializer = inline_serializer(
+    name='ProviderCredential',
+    fields={
+        'clientId': serializers.CharField(allow_blank=True),
+        'redirectUri': serializers.CharField(allow_blank=True),
+        'hasClientSecret': serializers.BooleanField(),
+        'configured': serializers.BooleanField(),
+    },
+)
+
+ProviderCredentialRequestSerializer = inline_serializer(
+    name='ProviderCredentialRequest',
+    fields={
+        'clientId': serializers.CharField(),
+        'redirectUri': serializers.CharField(),
+        'clientSecret': serializers.CharField(required=False, allow_blank=True),
+    },
+)
+
+ProviderResetRequestSerializer = inline_serializer(
+    name='ProviderResetRequest',
+    fields={'confirm': serializers.BooleanField()},
+)
+
+ProviderResetResponseSerializer = inline_serializer(
+    name='ProviderResetResponse',
+    fields={'reset': serializers.BooleanField()},
+)
+
+ProviderConnectStartRequestSerializer = inline_serializer(
+    name='ProviderConnectStartRequest',
+    fields={'connectionId': serializers.IntegerField()},
+)
+
+ProviderConnectStartResponseSerializer = inline_serializer(
+    name='ProviderConnectStartResponse',
+    fields={
+        'authorizeUrl': serializers.CharField(),
+        'state': serializers.CharField(),
+    },
+)
+
+ProviderCatalogSerializer = inline_serializer(
+    name='ProviderCatalog',
+    fields={
+        'key': serializers.CharField(),
+        'displayName': serializers.CharField(),
+        'schemaVersion': serializers.CharField(),
+        'rateLimits': serializers.DictField(required=False),
+        'baseUrlVariants': serializers.DictField(required=False),
+        'objects': serializers.ListField(child=serializers.DictField()),
+    },
+)
+
+MappingDefaultsRequestSerializer = inline_serializer(
+    name='MappingDefaultsRequest',
+    fields={
+        'connectionId': serializers.IntegerField(),
+        'version': serializers.CharField(required=False, allow_blank=True),
+        'mappings': serializers.ListField(child=serializers.DictField()),
+    },
+)
+
+MappingDefaultsResponseSerializer = inline_serializer(
+    name='MappingDefaultsResponse',
+    fields={
+        'schemaVersion': serializers.CharField(allow_null=True, required=False),
+        'defaults': serializers.ListField(child=serializers.DictField()),
+        'fieldSignatureHash': serializers.CharField(),
+        'overrides': serializers.DictField(required=False, allow_null=True),
+        'stale': serializers.BooleanField(),
+    },
+)
+
+IntegrationRuleResyncResponseSerializer = inline_serializer(
+    name='IntegrationRuleResyncResponse',
+    fields={
+        'rule': IntegrationRuleSerializer(),
+        'state': serializers.DictField(),
+    },
+)
+
+IntegrationJobListResponseSerializer = inline_serializer(
+    name='IntegrationJobListResponse',
+    fields={'items': IntegrationJobSerializer(many=True)},
+)
+
+IntegrationHealthResponseSerializer = inline_serializer(
+    name='IntegrationHealthResponse',
+    fields={
+        'healthy': serializers.BooleanField(),
+        'workersAvailable': serializers.BooleanField(),
+        'cacheAvailable': serializers.BooleanField(),
+        'message': serializers.CharField(allow_null=True, required=False),
+        'schedulerPaused': serializers.BooleanField(),
+        'jobs': inline_serializer(
+            name='IntegrationJobHealthSummary',
+            fields={
+                'running': serializers.IntegerField(),
+                'lastJobAt': serializers.CharField(allow_null=True, required=False),
+                'lastFailureAt': serializers.CharField(allow_null=True, required=False),
+                'recent': inline_serializer(
+                    name='IntegrationJobHealthRecent',
+                    fields={
+                        'windowHours': serializers.IntegerField(),
+                        'total': serializers.IntegerField(),
+                        'succeeded': serializers.IntegerField(),
+                        'failed': serializers.IntegerField(),
+                        'successRate': serializers.FloatField(allow_null=True, required=False),
+                        'itemsProcessed': serializers.IntegerField(),
+                    },
+                ),
+            },
+        ),
+    },
+)
+
+IntegrationJobRetryResponseSerializer = inline_serializer(
+    name='IntegrationJobRetryResponse',
+    fields={'queued': serializers.BooleanField()},
+)
+
+IntegrationTestResponseSerializer = inline_serializer(
+    name='IntegrationTestResponse',
+    fields={
+        'ok': serializers.BooleanField(),
+        'provider': serializers.CharField(),
+        'environment': serializers.CharField(),
+        'checkedAt': serializers.CharField(),
+        'sampleCount': serializers.IntegerField(),
+        'message': serializers.CharField(required=False, allow_blank=True),
+    },
+)
+
+IntegrationSecretKeyRequestSerializer = inline_serializer(
+    name='IntegrationSecretKeyRequest',
+    fields={'secretKey': serializers.CharField()},
+)
+
+IntegrationSecretKeyResponseSerializer = inline_serializer(
+    name='IntegrationSecretKeyResponse',
+    fields={'configured': serializers.BooleanField()},
+)
+
+ProjectMatchingConfirmRequestSerializer = inline_serializer(
+    name='ProjectMatchingConfirmRequest',
+    fields={
+        'connectionId': serializers.IntegerField(),
+        'matches': serializers.ListField(child=serializers.DictField(), required=False),
+        'enableRule': serializers.BooleanField(required=False),
+    },
+)
 
 
 def _job_health_summary() -> dict:
@@ -111,6 +266,10 @@ def _ensure_provider_model(key: str) -> IntegrationProvider | None:
 class ProviderListView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        operation_id='integrations_providers_list',
+        responses=ProviderSerializer(many=True),
+    )
     def get(self, request):
         registry = get_registry()
         providers = []
@@ -127,6 +286,10 @@ class ProviderListView(APIView):
 class ProviderDetailView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        operation_id='integrations_providers_detail',
+        responses=ProviderSerializer,
+    )
     def get(self, request, key: str):
         registry = get_registry()
         provider = registry.get_provider(key)
@@ -139,6 +302,12 @@ class ProviderDetailView(APIView):
 class ProviderObjectCatalogView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        responses=OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description='List of provider object definitions.',
+        )
+    )
     def get(self, request, key: str):
         registry = get_registry()
         provider = registry.get_provider(key)
@@ -150,6 +319,7 @@ class ProviderObjectCatalogView(APIView):
 class ProviderCatalogView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses=ProviderCatalogSerializer)
     def get(self, request, key: str):
         registry = get_registry()
         provider = registry.get_provider(key)
@@ -173,6 +343,7 @@ class ProviderCatalogView(APIView):
 class ProviderCredentialView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses=ProviderCredentialSerializer)
     def get(self, request, key: str):
         provider = _ensure_provider_model(key)
         if not provider:
@@ -186,6 +357,7 @@ class ProviderCredentialView(APIView):
         data['configured'] = bool(data['clientId'] and data['redirectUri'] and data['hasClientSecret'])
         return Response(data)
 
+    @extend_schema(request=ProviderCredentialRequestSerializer, responses=ProviderCredentialSerializer)
     def post(self, request, key: str):
         provider = _ensure_provider_model(key)
         if not provider:
@@ -218,6 +390,7 @@ class ProviderCredentialView(APIView):
 class ProviderResetView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(request=ProviderResetRequestSerializer, responses=ProviderResetResponseSerializer)
     def post(self, request, key: str):
         provider = _ensure_provider_model(key)
         if not provider:
@@ -233,6 +406,7 @@ class ProviderResetView(APIView):
 class ProviderConnectStartView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(request=ProviderConnectStartRequestSerializer, responses=ProviderConnectStartResponseSerializer)
     def post(self, request, key: str):
         connection_id = (request.data or {}).get('connectionId')
         if not connection_id:
@@ -272,6 +446,12 @@ def _oauth_callback_response(payload: dict[str, Any]) -> HttpResponse:
 class ProviderConnectCallbackView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        responses=OpenApiResponse(
+            response=OpenApiTypes.STR,
+            description='OAuth callback HTML response.',
+        )
+    )
     def get(self, request, key: str):
         error = request.query_params.get('error')
         state = request.query_params.get('state')
@@ -301,6 +481,12 @@ class ProviderConnectCallbackView(APIView):
 class MappingDefaultsView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='connectionId', type=int, required=False, description='Optional connection id'),
+        ],
+        responses=MappingDefaultsResponseSerializer,
+    )
     def get(self, request, provider_key: str, object_key: str):
         connection_id = request.query_params.get('connectionId')
         registry = get_registry()
@@ -333,6 +519,7 @@ class MappingDefaultsView(APIView):
                 )
         return Response(resp)
 
+    @extend_schema(request=MappingDefaultsRequestSerializer, responses=MappingDefaultsResponseSerializer)
     def post(self, request, provider_key: str, object_key: str):
         registry = get_registry()
         provider = registry.get_provider(provider_key)
@@ -429,6 +616,13 @@ class IntegrationRuleViewSet(viewsets.ModelViewSet):
 class IntegrationRuleResyncView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        request=inline_serializer(
+            name='IntegrationRuleResyncRequest',
+            fields={'scope': serializers.CharField(required=False)},
+        ),
+        responses=IntegrationRuleResyncResponseSerializer,
+    )
     def post(self, request, pk: int):
         scope = (request.data or {}).get('scope') if isinstance(request.data, dict) else None
         rule = get_object_or_404(
@@ -452,6 +646,15 @@ class IntegrationRuleResyncView(APIView):
 class IntegrationJobListView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='connection', type=int, required=False),
+            OpenApiParameter(name='object', type=str, required=False),
+            OpenApiParameter(name='status', type=str, required=False, description='Comma-separated status values'),
+            OpenApiParameter(name='limit', type=int, required=False),
+        ],
+        responses=IntegrationJobListResponseSerializer,
+    )
     def get(self, request, provider_key: str):
         qs = IntegrationJob.objects.select_related('connection', 'provider').filter(provider__key=provider_key).order_by('-created_at')
         connection_id = request.query_params.get('connection')
@@ -478,6 +681,7 @@ class IntegrationJobListView(APIView):
 class IntegrationHealthView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses=IntegrationHealthResponseSerializer)
     def get(self, request):
         health = scheduler_health()
         jobs = _job_health_summary()
@@ -491,6 +695,7 @@ class IntegrationHealthView(APIView):
 class IntegrationJobRetryView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(request=None, responses=IntegrationJobRetryResponseSerializer)
     def post(self, request, pk: int):
         job = get_object_or_404(
             IntegrationJob.objects.select_related('connection', 'connection__provider'),
@@ -573,6 +778,7 @@ def _test_connection(connection: IntegrationConnection) -> dict:
 class IntegrationConnectionTestView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(request=None, responses=IntegrationTestResponseSerializer)
     def post(self, request, pk: int):
         connection = get_object_or_404(
             IntegrationConnection.objects.select_related('provider'),
@@ -620,6 +826,7 @@ class IntegrationConnectionTestView(APIView):
 class IntegrationActivityTestView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(request=None, responses=IntegrationTestResponseSerializer)
     def post(self, request, pk: int):
         connection = get_object_or_404(
             IntegrationConnection.objects.select_related('provider'),
@@ -670,10 +877,12 @@ class IntegrationActivityTestView(APIView):
 class IntegrationSecretKeyView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses=IntegrationSecretKeyResponseSerializer)
     def get(self, request):
         configured = IntegrationSecretKey.configured()
         return Response({'configured': configured})
 
+    @extend_schema(request=IntegrationSecretKeyRequestSerializer, responses=IntegrationSecretKeyResponseSerializer)
     def post(self, request):
         secret = (request.data or {}).get('secretKey') if isinstance(request.data, dict) else None
         if not isinstance(secret, str) or not secret.strip():
@@ -692,6 +901,10 @@ class IntegrationSecretKeyView(APIView):
 class ProjectMatchingSuggestionView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        parameters=[OpenApiParameter(name='connectionId', type=int, required=True)],
+        responses=OpenApiResponse(response=OpenApiTypes.OBJECT),
+    )
     def get(self, request, provider_key: str):
         connection_id = request.query_params.get('connectionId')
         if not connection_id:
@@ -715,6 +928,10 @@ class ProjectMatchingSuggestionView(APIView):
 class ProjectMatchingConfirmView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(
+        request=ProjectMatchingConfirmRequestSerializer,
+        responses=OpenApiResponse(response=OpenApiTypes.OBJECT),
+    )
     def post(self, request, provider_key: str):
         connection_id = (request.data or {}).get('connectionId')
         if not connection_id:

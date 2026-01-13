@@ -294,6 +294,9 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,  # keep UI fast; the schema endpoint serves the document
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': r'/api',
+    'ENUM_NAME_OVERRIDES': {
+        'DeliverablePhaseEnum': 'core.choices.DeliverablePhase',
+    },
 }
 
 # Gate OpenAPI schema serving in production. Leave open in dev by default.

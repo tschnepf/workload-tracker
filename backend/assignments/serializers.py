@@ -4,6 +4,7 @@ RETROFIT: Support weekly hours for 12-week planning horizon
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import Assignment
 from projects.models import Project
 from skills.serializers import PersonSkillSummarySerializer
@@ -53,7 +54,8 @@ class AssignmentSerializer(serializers.ModelSerializer):
             'updatedAt': {'source': 'updated_at', 'read_only': True},
         }
 
-    def get_roleName(self, obj):
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_roleName(self, obj) -> str | None:
         """Prefer FK role name; fallback to legacy role_on_project string."""
         try:
             if getattr(obj, 'role_on_project_ref', None) and obj.role_on_project_ref.name:
