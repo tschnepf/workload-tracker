@@ -1,0 +1,20 @@
+{
+  "unauthenticated_endpoints": [
+    {"path": "/health", "desc": "nginx -> backend health", "evidence": "backend/config/urls.py:33"},
+    {"path": "/readiness", "desc": "nginx -> backend readiness", "evidence": "backend/config/urls.py:47"},
+    {"path": "/api/health/", "desc": "backend health", "evidence": "backend/config/urls.py:33"},
+    {"path": "/api/readiness/", "desc": "backend readiness", "evidence": "backend/config/urls.py:47"},
+    {"path": "/csp-report/", "desc": "CSP violation report sink", "evidence": "backend/config/urls.py:68"},
+    {"path": "/api/token/", "desc": "JWT obtain", "evidence": "backend/config/urls.py:73"},
+    {"path": "/api/token/refresh/", "desc": "JWT refresh", "evidence": "backend/config/urls.py:74"},
+    {"path": "/api/token/verify/", "desc": "JWT verify", "evidence": "backend/config/urls.py:75"},
+    {"path": "/api/token/logout/", "desc": "JWT blacklist/logout", "evidence": "backend/config/urls.py:76"},
+    {"path": "/api/schema/", "desc": "OpenAPI schema (currently open)", "evidence": "backend/config/urls.py:79"},
+    {"path": "/api/schema/swagger/", "desc": "Swagger UI (currently open)", "evidence": "backend/config/urls.py:80"}
+  ],
+  "notes": [
+    "Inventory only. Actual authentication policy for schema/Swagger should be verified in production.",
+    "JWT endpoints should remain public but rate-limited and monitored."
+  ]
+}
+

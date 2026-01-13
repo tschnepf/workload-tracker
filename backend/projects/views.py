@@ -73,7 +73,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if last_modified:
             # ETag simplification: base on max(updated_at) only (avoid count())
             etag_content = last_modified.isoformat()
-            etag = hashlib.md5(etag_content.encode()).hexdigest()
+            etag = hashlib.sha256(etag_content.encode()).hexdigest()
             
             # Check If-None-Match header (ETag)
             if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
@@ -291,7 +291,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         import hashlib
         etag_content = f"{cache_key}-" + (last_modified.isoformat() if last_modified else 'none')
-        etag = hashlib.md5(etag_content.encode()).hexdigest()
+        etag = hashlib.sha256(etag_content.encode()).hexdigest()
 
         if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
         if if_none_match and if_none_match.strip('"') == etag:
@@ -567,7 +567,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Build a stable ETag based on totals and last_modified
         etag_content = f"{proj_aggr.get('total', 0)}-{asn_aggr.get('total', 0)}-{del_aggr.get('total', 0)}-"
         etag_content += last_modified.isoformat() if last_modified else 'none'
-        etag = hashlib.md5(etag_content.encode()).hexdigest()
+        etag = hashlib.sha256(etag_content.encode()).hexdigest()
 
         # Conditional request handling
         if_none_match = request.META.get('HTTP_IF_NONE_MATCH')

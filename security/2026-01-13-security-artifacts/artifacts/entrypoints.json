@@ -1,0 +1,56 @@
+{
+  "entry_points": {
+    "public": [
+      {"path": "/health", "component": "backend via nginx", "auth": "none"},
+      {"path": "/readiness", "component": "backend via nginx", "auth": "none"},
+      {"path": "/api/health/", "component": "backend", "auth": "none"},
+      {"path": "/api/readiness/", "component": "backend", "auth": "none"},
+      {"path": "/csp-report/", "component": "backend", "auth": "none"},
+      {"path": "/api/token/", "component": "DRF SimpleJWT obtain", "auth": "none"},
+      {"path": "/api/token/refresh/", "component": "DRF SimpleJWT refresh", "auth": "none"},
+      {"path": "/api/token/verify/", "component": "DRF SimpleJWT verify", "auth": "none"},
+      {"path": "/api/token/logout/", "component": "token blacklist/logout", "auth": "none"},
+      {"path": "/api/schema/", "component": "drf-spectacular", "auth": "none (current)"},
+      {"path": "/api/schema/swagger/", "component": "Swagger UI", "auth": "none (current)"}
+    ],
+    "authenticated": [
+      {"path": "/admin/", "component": "Django admin", "auth": "Django session"},
+      {"path": "/api/capabilities/", "component": "feature flags", "auth": "IsAuthenticated"},
+      {"path": "/api/backups/*", "component": "backup management", "auth": "IsAdminUser"},
+      {"path": "/api/jobs/*", "component": "async job status/download", "auth": "varies"},
+      {"path": "/api/people/*", "component": "app endpoints", "auth": "app-level"},
+      {"path": "/api/projects/*", "component": "app endpoints", "auth": "app-level"},
+      {"path": "/api/assignments/*", "component": "app endpoints", "auth": "app-level"},
+      {"path": "/api/departments/*", "component": "app endpoints", "auth": "app-level"},
+      {"path": "/api/skills/*", "component": "app endpoints", "auth": "app-level"},
+      {"path": "/api/personal/*", "component": "app endpoints", "auth": "app-level"},
+      {"path": "/api/core/*", "component": "app endpoints", "auth": "app-level"},
+      {"path": "/api/reports/*", "component": "app endpoints", "auth": "app-level"},
+      {"path": "/api/roles/*", "component": "roles endpoints", "auth": "app-level"}
+    ]
+  },
+  "ports": {
+    "dev": [
+      {"service": "nginx", "listen": 80},
+      {"service": "frontend", "listen": 3000},
+      {"service": "backend", "listen": 8000}
+    ],
+    "prod": [
+      {"service": "nginx", "listen": 80},
+      {"service": "nginx", "listen": 443}
+    ]
+  },
+  "trust_boundaries": [
+    "Internet -> Nginx -> Backend API (Docker network)",
+    "Internet -> Nginx -> Frontend static (Node serve -> dist)",
+    "Backend/Workers -> Postgres (internal)",
+    "Backend/Workers -> Redis (internal)",
+    "Admin users -> Django Admin (session auth)"
+  ],
+  "notes": [
+    "OpenAPI schema and Swagger are accessible without auth (inventory only; verify prod policy in Phase 1).",
+    "JWT endpoints are necessarily public for token operations; rate-limited by nginx (auth_zone).",
+    "Health/readiness endpoints are public; ensure they do not leak sensitive config."
+  ]
+}
+

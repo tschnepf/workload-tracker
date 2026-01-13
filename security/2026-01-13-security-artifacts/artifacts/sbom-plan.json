@@ -1,0 +1,35 @@
+{
+  "sbom": {
+    "format": "CycloneDX JSON",
+    "tools": [
+      {
+        "name": "Syft",
+        "usage": "Repository-wide SBOM (container and source)",
+        "command": "syft . -o cyclonedx-json > security/artifacts/sbom.cdx.json"
+      },
+      {
+        "name": "pip-audit (as adjunct)",
+        "usage": "Python dependency vulnerability inventory",
+        "command": "pip-audit -r backend/requirements.txt -f json -o security/artifacts/pip-audit.json"
+      },
+      {
+        "name": "npm audit (prod only)",
+        "usage": "Node dependency vulnerability inventory",
+        "command": "npm --prefix frontend audit --omit=dev --json > security/artifacts/npm-audit.json"
+      }
+    ],
+    "ci": {
+      "workflow": ".github/workflows/security.yml",
+      "artifacts": [
+        "security/artifacts/sbom.cdx.json",
+        "security/artifacts/pip-audit.json",
+        "security/artifacts/npm-audit.json"
+      ]
+    },
+    "next_steps": [
+      "Optionally add cyclonedx-python and cyclonedx-npm for language-specific SBOMs",
+      "Publish SBOM to artifact repository or registry alongside images"
+    ]
+  }
+}
+

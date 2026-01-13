@@ -23,7 +23,7 @@ class ETagConditionalMixin:
                 payload = f"{getattr(instance, 'id', '')}"
         except Exception:
             payload = f"{getattr(instance, 'id', '')}"
-        return hashlib.md5(payload.encode()).hexdigest()
+        return hashlib.sha256(payload.encode()).hexdigest()
 
     def _attach_etag_headers(self, response: Response, instance):
         try:

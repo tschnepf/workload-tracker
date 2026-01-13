@@ -38,7 +38,7 @@ class ProjectRoleListCreateView(APIView):
         data = ProjectRoleItemSerializer(roles, many=True).data
         # ETag/Last-Modified hints
         lm = last_updated_timestamp_for_department(dept_id)
-        etag = hashlib.md5(('prlist-'+str(dept_id)+'-'+','.join(str(it['id']) for it in data)).encode('utf-8')).hexdigest()
+        etag = hashlib.sha256(('prlist-'+str(dept_id)+'-'+','.join(str(it['id']) for it in data)).encode('utf-8')).hexdigest()
         inm = request.META.get('HTTP_IF_NONE_MATCH')
         if inm and inm.strip('"') == etag:
             resp = Response(status=status.HTTP_304_NOT_MODIFIED)

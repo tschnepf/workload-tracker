@@ -175,7 +175,7 @@ class PersonalWorkView(APIView):
         counts_sig = f"{len(assignments)}-{len(deliv_items)}-{len(pre_items_data)}"
         lm_str = last_modified_dt.isoformat() if last_modified_dt else 'none'
         etag_raw = f"personal:{person.id}:{counts_sig}:{lm_str}"
-        etag = hashlib.md5(etag_raw.encode()).hexdigest()
+        etag = hashlib.sha256(etag_raw.encode()).hexdigest()
 
         inm = request.META.get('HTTP_IF_NONE_MATCH')
         if inm and inm.strip('"') == etag:

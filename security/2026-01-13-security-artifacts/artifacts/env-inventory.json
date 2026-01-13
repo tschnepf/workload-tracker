@@ -1,0 +1,92 @@
+{
+  "source": ".env.example",
+  "categories": {
+    "application": ["OFFSITE_SCHEDULE_CRON", "APP_NAME", "DEBUG", "SECRET_KEY", "ALLOWED_HOSTS"],
+    "database": ["POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "DATABASE_URL"],
+    "ports": ["BACKEND_PORT", "FRONTEND_PORT"],
+    "api": ["API_BASE_URL", "VITE_API_URL"],
+    "default_admin_dev_only": ["DJANGO_SUPERUSER_USERNAME", "DJANGO_SUPERUSER_EMAIL", "DJANGO_SUPERUSER_PASSWORD"],
+    "docker": ["COMPOSE_PROJECT_NAME", "DOCKER_BUILDKIT"],
+    "security_flags": ["COOKIE_REFRESH_AUTH", "LOGIN_PROTECTION"],
+    "login_protection_axes": [
+      "AXES_FAILURE_LIMIT",
+      "AXES_COOLOFF_TIME",
+      "AXES_NEVER_LOCKOUT_USERNAMES",
+      "AXES_ALLOWED_CIDR_NETS",
+      "AXES_ALERT_ADMINS"
+    ],
+    "cors_csrf": ["CORS_ALLOWED_ORIGINS", "CSRF_TRUSTED_ORIGINS"],
+    "frontend_flags": [
+      "VITE_COOKIE_REFRESH_AUTH",
+      "VITE_ROUTE_PREFETCH",
+      "VITE_VIEW_TRANSITIONS",
+      "VITE_PREFETCH_CONCURRENCY",
+      "VITE_NAV_PROGRESS",
+      "VITE_NAV_PENDING_OVERLAY"
+    ],
+    "sentry_frontend": [
+      "SENTRY_UPLOAD",
+      "VITE_SENTRY_ORG",
+      "VITE_SENTRY_PROJECT",
+      "VITE_SENTRY_AUTH_TOKEN",
+      "VITE_APP_VERSION"
+    ],
+    "csp": ["CSP_ENABLED", "CSP_REPORT_ONLY", "CSP_REPORT_URI"],
+    "celery": [
+      "ASYNC_JOBS",
+      "CELERY_BROKER_URL",
+      "CELERY_RESULT_BACKEND",
+      "CELERY_TASK_ALWAYS_EAGER"
+    ],
+    "performance": [
+      "DB_CONN_MAX_AGE",
+      "DB_CONN_HEALTH_CHECKS",
+      "SHORT_TTL_AGGREGATES",
+      "DRF_THROTTLE_HEATMAP",
+      "DRF_THROTTLE_SKILL_MATCH",
+      "DRF_THROTTLE_PROJECT_AVAILABILITY",
+      "DRF_THROTTLE_FIND_AVAILABLE",
+      "DRF_THROTTLE_GRID_SNAPSHOT",
+      "DEPT_DESC_CACHE_TTL",
+      "AGGREGATE_CACHE_TTL"
+    ],
+    "backups_throttles": [
+      "DRF_THROTTLE_BACKUP_CREATE",
+      "DRF_THROTTLE_BACKUP_DELETE",
+      "DRF_THROTTLE_BACKUP_DOWNLOAD",
+      "DRF_THROTTLE_BACKUP_STATUS",
+      "DRF_THROTTLE_BACKUP_RESTORE",
+      "DRF_THROTTLE_BACKUP_UPLOAD_RESTORE"
+    ],
+    "backup_encryption_offsite": [
+      "BACKUP_ENCRYPTION_ENABLED",
+      "BACKUP_ENCRYPTION_PROVIDER",
+      "BACKUP_ENCRYPTION_RECIPIENT",
+      "BACKUP_OFFSITE_ENABLED",
+      "BACKUP_OFFSITE_PROVIDER",
+      "BACKUP_OFFSITE_BUCKET",
+      "BACKUP_OFFSITE_PREFIX"
+    ],
+    "backup_maintenance": [
+      "BACKUPS_DIR",
+      "READ_ONLY_MODE",
+      "DB_ADMIN_URL",
+      "BACKUP_UPLOAD_MAX_BYTES",
+      "CELERY_BEAT_SCHEDULE_FILE",
+      "CELERY_BEAT_DIR"
+    ],
+    "jwt_blacklist_auto_repair": ["AUTO_FIX_JWT_BLACKLIST"],
+    "automation_retention": [
+      "ENABLE_AUTOMATION",
+      "BACKUP_SCHEDULE_CRON",
+      "CLEANUP_SCHEDULE_CRON",
+      "BACKUP_RETENTION_DAILY",
+      "BACKUP_RETENTION_WEEKLY",
+      "BACKUP_RETENTION_MONTHLY",
+      "RESTORE_TEST_ENABLED",
+      "RESTORE_TEST_SCHEDULE_CRON"
+    ]
+  },
+  "redaction": "Values intentionally omitted; variable names only"
+}
+

@@ -1,0 +1,32 @@
+{
+  "workflows": [
+    {
+      "name": "Security Scan",
+      "path": ".github/workflows/security.yml",
+      "tools": ["gitleaks", "bandit", "pip-audit", "safety", "npm audit", "semgrep", "trivy (config)", "syft SBOM"],
+      "outputs": ["security/artifacts/*.json", "security/security-findings.json"],
+      "gates": ["AJV schema validation", "fail on High/Critical"]
+    },
+    {
+      "name": "OpenAPI Schema and Client Check",
+      "path": ".github/workflows/openapi-ci.yml",
+      "purpose": "Ensure backend schema and frontend generated types are current"
+    },
+    {
+      "name": "Production Config Guard",
+      "path": ".github/workflows/prod-config-guard.yml",
+      "checks": ["DEBUG not enabled in docker-compose.prod.yml", "ALLOWED_HOSTS present in .env.example"]
+    },
+    {
+      "name": "E2E Tests",
+      "path": ".github/workflows/e2e.yml",
+      "stack": "compose dev: db, redis, backend, frontend; Playwright tests"
+    },
+    {
+      "name": "UTF-8 Encoding Check",
+      "path": ".github/workflows/utf8-check.yml",
+      "purpose": "Ensure files are UTF-8 encoded"
+    }
+  ]
+}
+

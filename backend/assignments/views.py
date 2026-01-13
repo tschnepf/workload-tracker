@@ -135,7 +135,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if last_modified:
             try:
                 import hashlib
-                etag = hashlib.md5(last_modified.isoformat().encode()).hexdigest()
+                etag = hashlib.sha256(last_modified.isoformat().encode()).hexdigest()
             except Exception:
                 etag = None
 
@@ -605,7 +605,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         etag = None
         if last_modified:
             try:
-                etag = hashlib.md5((str(client or '') + str(s0) + str(s1) + str(dept_param) + str(include_children)).encode()).hexdigest()
+                etag = hashlib.sha256((str(client or '') + str(s0) + str(s1) + str(dept_param) + str(include_children)).encode()).hexdigest()
             except Exception:
                 etag = None
         # Aggregate
@@ -852,7 +852,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             last_modified = None
         etag = None
         try:
-            etag = hashlib.md5((str(person_id) + str(s0) + str(s1)).encode()).hexdigest()
+            etag = hashlib.sha256((str(person_id) + str(s0) + str(s1)).encode()).hexdigest()
         except Exception:
             etag = None
 
@@ -1030,7 +1030,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             last_modified = None
         etag = None
         try:
-            etag = hashlib.md5((str(person_id) + ':' + str(project_id) + str(s0) + str(s1)).encode()).hexdigest()
+            etag = hashlib.sha256((str(person_id) + ':' + str(project_id) + str(s0) + str(s1)).encode()).hexdigest()
         except Exception:
             etag = None
 
@@ -1182,7 +1182,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             last_modified = None
         etag = None
         try:
-            etag = hashlib.md5((str(project_id) + str(s0) + str(s1)).encode()).hexdigest()
+            etag = hashlib.sha256((str(project_id) + str(s0) + str(s1)).encode()).hexdigest()
         except Exception:
             etag = None
 
@@ -2087,7 +2087,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         except Exception:
             active_count = 0
         etag_content = f"{weeks}-{cache_scope}-{active_count}-" + (last_modified.isoformat() if last_modified else 'none')
-        etag = hashlib.md5(etag_content.encode()).hexdigest()
+        etag = hashlib.sha256(etag_content.encode()).hexdigest()
 
         # Conditional request handling
         inm = request.META.get('HTTP_IF_NONE_MATCH')
@@ -2298,9 +2298,9 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             try:
                 lm = getattr(a, 'updated_at', None)
                 payload = lm.isoformat() if lm else str(a.id)
-                etag = hashlib.md5(payload.encode()).hexdigest()
+                etag = hashlib.sha256(payload.encode()).hexdigest()
             except Exception:
-                etag = hashlib.md5(str(a.id).encode()).hexdigest()
+                etag = hashlib.sha256(str(a.id).encode()).hexdigest()
             results.append({'assignmentId': a.id, 'status': 'ok', 'etag': etag})
 
         return Response({'success': True, 'results': results})

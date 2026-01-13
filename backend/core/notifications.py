@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 import os
-import urllib.request
 from urllib.parse import urlparse
 
+import requests
 
 def _is_allowed_slack_webhook(url: str) -> bool:
     try:
@@ -36,10 +35,7 @@ def notify_slack(text: str, *, timeout: float = 3.0) -> None:
             # Minimal, non-secret logging via print to avoid pulling in logging deps here
             # (Security logger exists, but this path must be extremely safe.)
             return
-        body = json.dumps({"text": text}).encode("utf-8")
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as _:
-            pass
+        requests.post(url, json={"text": text}, timeout=timeout)
     except Exception:
         # Never raise from notification path
         return

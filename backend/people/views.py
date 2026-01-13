@@ -231,7 +231,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if last_modified:
             # ETag simplification: base on max(updated_at) only (avoid count())
             etag_content = last_modified.isoformat()
-            etag = hashlib.md5(etag_content.encode()).hexdigest()
+            etag = hashlib.sha256(etag_content.encode()).hexdigest()
             
             # Check If-None-Match header (ETag)
             if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
@@ -621,7 +621,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         lm_candidates = [ps_lm, st_lm, asn_lm]
         last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
 
-        etag = hashlib.md5(f"{cache_key}-".encode() + (last_modified.isoformat().encode() if last_modified else b'none')).hexdigest()
+        etag = hashlib.sha256(f"{cache_key}-".encode() + (last_modified.isoformat().encode() if last_modified else b'none')).hexdigest()
 
         if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
         if if_none_match and if_none_match.strip('"') == etag:
@@ -845,7 +845,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
 
         etag_content = f"{cache_key}-" + (last_modified.isoformat() if last_modified else 'none')
-        etag = hashlib.md5(etag_content.encode()).hexdigest()
+        etag = hashlib.sha256(etag_content.encode()).hexdigest()
 
         # Conditional headers
         if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
@@ -1219,7 +1219,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         except Exception:
             active_count = 0
         etag_content = f"{weeks}-{cache_scope}-{active_count}-" + (last_modified.isoformat() if last_modified else 'none')
-        etag = hashlib.md5(etag_content.encode()).hexdigest()
+        etag = hashlib.sha256(etag_content.encode()).hexdigest()
 
         # Handle conditional request
         if_none_match = request.META.get('HTTP_IF_NONE_MATCH')

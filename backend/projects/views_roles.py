@@ -45,7 +45,7 @@ class ProjectRoleListCreateView(APIView):
             f"{r.id}:{r.sort_order}:{int(r.is_active)}:{int(r.updated_at.timestamp()) if r.updated_at else 0}"
             for r in roles_list
         )
-        etag = hashlib.md5(etag_payload.encode('utf-8')).hexdigest()
+        etag = hashlib.sha256(etag_payload.encode('utf-8')).hexdigest()
         inm = request.META.get('HTTP_IF_NONE_MATCH')
         if inm and inm.strip('"') == etag:
             resp = Response(status=status.HTTP_304_NOT_MODIFIED)

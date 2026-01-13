@@ -81,7 +81,7 @@ class UtilizationSchemeView(APIView):
 
     def _current_etag(self, obj: UtilizationScheme) -> str:
         payload = f"{obj.version}-{obj.updated_at.isoformat() if obj.updated_at else ''}"
-        return hashlib.md5(payload.encode()).hexdigest()
+        return hashlib.sha256(payload.encode()).hexdigest()
 
     @extend_schema(responses=UtilizationSchemeSerializer)
     def get(self, request):
