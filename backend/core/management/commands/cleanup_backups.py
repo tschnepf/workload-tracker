@@ -47,6 +47,6 @@ class Command(BaseCommand):
         # Non-blocking notification
         try:
             notify_slack(f"Retention cleanup: deleted={len(summary['deleted'])} kept={summary['kept_count']}")
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return ""

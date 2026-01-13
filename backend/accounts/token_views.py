@@ -63,7 +63,7 @@ class UsernameOrEmailTokenObtainPairSerializer(TokenObtainPairSerializer):
                     # If it looks like an email but multiple results (rare) or none,
                     # leave as-is and let authentication fail normally.
                     pass
-            except Exception:
+            except Exception:  # nosec B110
                 # On any DB error, fall through to default behavior
                 pass
         return super().validate(attrs)

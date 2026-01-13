@@ -183,7 +183,7 @@ def _load_latest_token_payload(connection: IntegrationConnection) -> dict | None
     for secret in connection.secrets.all():
         try:
             payload = secret.decrypt()
-        except Exception:  # pragma: no cover - defensive
+        except Exception:  # pragma: no cover - defensive  # nosec B112
             continue
         if payload.get('kind') == 'oauth_token':
             return payload

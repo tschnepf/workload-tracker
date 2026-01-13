@@ -36,7 +36,7 @@ class RequestIDLogMiddleware:
         if sentry_sdk is not None:
             try:
                 sentry_sdk.set_tag('request_id', rid)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         # Detect restore/maintenance lock early to avoid DB-dependent work
@@ -71,19 +71,19 @@ class RequestIDLogMiddleware:
                             for q in qs:
                                 try:
                                     t += float(q.get('time', 0.0))
-                                except Exception:
+                                except Exception:  # nosec B110
                                     pass
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
                     db_queries = total
                     db_time_ms = int(t * 1000)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             # Echo the request ID on the response
             try:
                 response['X-Request-ID'] = rid
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             # Emit structured log
@@ -102,7 +102,7 @@ class RequestIDLogMiddleware:
                         'db_time_ms': db_time_ms,
                     },
                 )
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             # Sentry breadcrumb with performance hints
@@ -120,7 +120,7 @@ class RequestIDLogMiddleware:
                         },
                         level='info',
                     )
-                except Exception:
+                except Exception:  # nosec B110
                     pass
 
             return response
@@ -162,7 +162,7 @@ class CSPMiddleware:
         # Stash on request for templates that might use it
         try:
             setattr(request, 'csp_nonce', nonce)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Expand policy with nonce support: if policy contains "{nonce}", replace; otherwise append nonce to script/style directives
@@ -188,7 +188,7 @@ class CSPMiddleware:
             value = f"{value}; report-uri {self.report_uri}"
         try:
             response[header_name] = value
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return response
 

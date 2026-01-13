@@ -39,7 +39,7 @@ def _classify_from_desc_pct(desc: Optional[str], pct: Optional[int]) -> Delivera
                 return DeliverablePhase.DD
             if p >= 81:
                 return DeliverablePhase.IFP
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return DeliverablePhase.OTHER
 

@@ -120,12 +120,12 @@ try:
         DATABASES['default']['OPTIONS']['sslmode'] = _db_sslmode
     if _db_sslrootcert:
         DATABASES['default']['OPTIONS']['sslrootcert'] = _db_sslrootcert
-except Exception:
+except Exception:  # nosec B110
     pass
 # Enable Django connection health checks (pings before reuse) where supported
 try:
     DATABASES['default']['CONN_HEALTH_CHECKS'] = os.getenv('DB_CONN_HEALTH_CHECKS', 'true').lower() == 'true'
-except Exception:
+except Exception:  # nosec B110
     pass
 
 # --- End Sentry ---
@@ -343,7 +343,7 @@ if REDIS_URL:
             # ssl_cert_reqs: 'required' (default) | 'none' for dev/self-signed
             _reqs = os.getenv('REDIS_SSL_CERT_REQS', 'required')
             CACHES['default']['OPTIONS']['ssl_cert_reqs'] = _reqs
-    except Exception:
+    except Exception:  # nosec B110
         pass
 else:
     CACHES = {

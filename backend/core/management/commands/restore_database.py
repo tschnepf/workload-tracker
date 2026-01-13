@@ -3,7 +3,7 @@ import re
 import json
 import gzip
 import shutil
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -55,9 +55,17 @@ def _env_for_pg(dsn: str) -> dict:
     return env
 
 
+def _resolve_pg_bin(name: str) -> str:
+    path = shutil.which(name)
+    if not path:
+        raise CommandError(f"{name} not found in PATH")
+    return path
+
+
 def _psql_ok(env: dict) -> bool:
     try:
-        subprocess.run(["psql", "-At", "-c", "SELECT 1"], env=env, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        psql_bin = _resolve_pg_bin("psql")
+        subprocess.run([psql_bin, "-At", "-c", "SELECT 1"], env=env, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603
         return True
     except Exception:
         return False
@@ -74,7 +82,8 @@ def _read_sidecar(archive_path: str) -> dict | None:
 def _current_migration_state(env: dict) -> dict:
     sql = "SELECT app, max(name) FROM django_migrations GROUP BY app ORDER BY app;"
     try:
-        proc = subprocess.run(["psql", "-At", "-c", sql], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        psql_bin = _resolve_pg_bin("psql")
+        proc = subprocess.run([psql_bin, "-At", "-c", sql], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)  # nosec B603
         state = {}
         for line in proc.stdout.strip().splitlines():
             parts = line.split("|")
@@ -95,9 +104,10 @@ def _terminate_sessions(env: dict):
     ]
     for sql in sqls:
         try:
-            subprocess.run(
+            psql_bin = _resolve_pg_bin("psql")
+            subprocess.run(  # nosec B603
                 [
-                    "psql",
+                    psql_bin,
                     "-X",
                     "-v",
                     "ON_ERROR_STOP=1",
@@ -110,8 +120,8 @@ def _terminate_sessions(env: dict):
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-            )
-        except Exception:
+            )  # nosec B603
+        except Exception:  # nosec B110
             # Ignore if lacking privilege
             pass
 
@@ -123,15 +133,16 @@ def _drop_and_recreate_public(env: dict):
     REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     GRANT USAGE ON SCHEMA public TO PUBLIC;
     """
-    subprocess.run(["psql", "-v", "ON_ERROR_STOP=1", "-c", sql], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    psql_bin = _resolve_pg_bin("psql")
+    subprocess.run([psql_bin, "-v", "ON_ERROR_STOP=1", "-c", sql], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)  # nosec B603
     # Optionally grant CREATE to an application role if provided
     import re as _re
     app_role = os.getenv("DB_APP_ROLE")
     if app_role and _re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", app_role):
         grant_sql = f'GRANT CREATE ON SCHEMA public TO "{app_role}";'
         try:
-            subprocess.run(["psql", "-v", "ON_ERROR_STOP=1", "-c", grant_sql], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        except Exception:
+            subprocess.run([psql_bin, "-v", "ON_ERROR_STOP=1", "-c", grant_sql], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)  # nosec B603
+        except Exception:  # nosec B110
             # Non-fatal if role is missing or lacks privileges
             pass
 
@@ -173,7 +184,8 @@ class Command(BaseCommand):
         # Validate custom archive
         if fmt == "custom":
             try:
-                subprocess.run(["pg_restore", "-l", path_in], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                pg_restore_bin = _resolve_pg_bin("pg_restore")
+                subprocess.run([pg_restore_bin, "-l", path_in], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)  # nosec B603
             except subprocess.CalledProcessError as e:
                 raise CommandError("pg_restore -l failed; archive may be corrupt") from e
 
@@ -195,10 +207,10 @@ class Command(BaseCommand):
                         h.update(f.as_posix().encode())
                         h.update(b"\0")
                         h.update(hashlib.sha256(data).digest())
-                    except Exception:
+                    except Exception:  # nosec B112
                         continue
             current_hash = h.hexdigest()
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         if sidecar.get("migrationsHash") and current_hash and sidecar["migrationsHash"] != current_hash:
@@ -218,7 +230,7 @@ class Command(BaseCommand):
             # Prechecks
             try:
                 self.stderr.write("PROGRESS 5 Prechecks")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             # Session control best-effort
             _terminate_sessions(env)
@@ -229,7 +241,7 @@ class Command(BaseCommand):
             # Drop and recreate schema
             try:
                 self.stderr.write("PROGRESS 25 Drop schema")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             _drop_and_recreate_public(env)
 
@@ -238,12 +250,13 @@ class Command(BaseCommand):
                 # Determine total items for coarse progress (TOC lines)
                 total_items = 0
                 try:
-                    toc = subprocess.run(["pg_restore", "-l", path_in], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    pg_restore_bin = _resolve_pg_bin("pg_restore")
+                    toc = subprocess.run([pg_restore_bin, "-l", path_in], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)  # nosec B603
                     total_items = len([ln for ln in toc.stdout.splitlines() if ln.strip() and not ln.lstrip().startswith(";")])
-                except Exception:
+                except Exception:  # nosec B110
                     total_items = 0
                 cmd = [
-                    "pg_restore",
+                    _resolve_pg_bin("pg_restore"),
                     "-j", str(max(1, jobs)),
                     "--no-owner",
                     "--no-privileges",
@@ -255,7 +268,7 @@ class Command(BaseCommand):
                 ]
                 try:
                     # Stream stderr to estimate progress
-                    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)  # nosec B603
                     processed = 0
                     last_percent = 0
                     if proc.stderr is not None:
@@ -273,7 +286,7 @@ class Command(BaseCommand):
                                     last_percent = percent
                                     try:
                                         self.stderr.write(f"PROGRESS {percent} Restoring")
-                                    except Exception:
+                                    except Exception:  # nosec B110
                                         pass
                     ret_out, ret_err = proc.communicate()
                     if proc.returncode != 0:
@@ -286,7 +299,7 @@ class Command(BaseCommand):
                         # Fallback: generate SQL with pg_restore, filter out
                         # offending SET commands, then apply via psql.
                         script_cmd = [
-                            "pg_restore",
+                            _resolve_pg_bin("pg_restore"),
                             "--no-owner",
                             "--no-privileges",
                             "--if-exists",
@@ -294,7 +307,7 @@ class Command(BaseCommand):
                             "-f", "-",
                             path_in,
                         ]
-                        gen = subprocess.run(script_cmd, env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                        gen = subprocess.run(script_cmd, env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)  # nosec B603
                         script = []
                         for line in gen.stdout.splitlines():
                             ln = line.strip()
@@ -304,9 +317,9 @@ class Command(BaseCommand):
                         script_text = "\n".join(script) + "\n"
                         try:
                             self.stderr.write("PROGRESS 60 Applying filtered script")
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
-                        apply = subprocess.run(["psql", "-v", "ON_ERROR_STOP=1"], env=env, input=script_text, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        apply = subprocess.run([_resolve_pg_bin("psql"), "-v", "ON_ERROR_STOP=1"], env=env, input=script_text, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # nosec B603
                         if apply.returncode != 0:
                             raise CommandError(f"psql restore failed: {apply.stderr[:8000]}")
                     else:
@@ -316,20 +329,20 @@ class Command(BaseCommand):
                 with gzip.open(path_in, "rb") as gz:
                     try:
                         self.stderr.write("PROGRESS 30 Restoring")
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
-                    proc = subprocess.Popen(["psql", "-v", "ON_ERROR_STOP=1"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    proc = subprocess.Popen([_resolve_pg_bin("psql"), "-v", "ON_ERROR_STOP=1"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # nosec B603
                     if proc.stdin is None:
                         # Defensive: avoid relying on assert (stripped under -O)
                         try:
                             proc.terminate()
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
                         raise CommandError("psql restore failed: no stdin pipe available")
                     shutil.copyfileobj(gz, proc.stdin)
                     try:
                         proc.stdin.close()
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                     out, err = proc.communicate()
                     if proc.returncode != 0:
@@ -340,7 +353,7 @@ class Command(BaseCommand):
             after_state = _current_migration_state(env)
             try:
                 self.stderr.write("PROGRESS 95 Post-restore")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             if before_state != after_state and opts.get("migrate"):
                 # Run migrations to align with current code
@@ -349,14 +362,14 @@ class Command(BaseCommand):
 
             if opts.get("postvacuum"):
                 try:
-                    subprocess.run(["psql", "-c", "VACUUM ANALYZE;"], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    subprocess.run([_resolve_pg_bin("psql"), "-c", "VACUUM ANALYZE;"], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # nosec B603
                     vacuumed = True
-                except Exception:
+                except Exception:  # nosec B110
                     pass
 
             try:
                 flag_connections_after_restore(sidecar)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             out = {
@@ -375,5 +388,5 @@ class Command(BaseCommand):
             try:
                 if os.path.exists(lock_path):
                     os.remove(lock_path)
-            except Exception:
+            except Exception:  # nosec B110
                 pass

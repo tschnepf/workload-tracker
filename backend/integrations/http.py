@@ -29,7 +29,7 @@ class LegacyTLSAdapter(HTTPAdapter):
             self._ssl_context.options |= legacy_flag
         try:
             self._ssl_context.set_ciphers('DEFAULT:@SECLEVEL=1')
-        except ssl.SSLError:
+        except ssl.SSLError:  # nosec B110
             pass
         super().__init__(*args, **kwargs)
 

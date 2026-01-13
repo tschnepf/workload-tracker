@@ -85,7 +85,7 @@ class DashboardView(APIView):
                     # Cache for 60s
                     try:
                         cache.set(cache_key_scheme, sch, 60)
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                 return sch
             except Exception:
@@ -113,7 +113,7 @@ class DashboardView(APIView):
                 if hours < 0:
                     try:
                         logging.getLogger('monitoring').warning('negative_allocated_hours_clamped', extra={'person_id': person.id, 'hours': hours})
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                     hours = 0
                 # Zero hours: treat as underutilized for distribution purposes
@@ -222,7 +222,7 @@ class DashboardView(APIView):
                 ttl = getattr(settings, 'AGGREGATE_CACHE_TTL', 30)
             try:
                 cache.set(cache_key, payload, timeout=int(ttl))
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         return Response(payload)

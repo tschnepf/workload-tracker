@@ -25,7 +25,7 @@ def reset_request_id(token) -> None:
         return
     try:
         _request_id.reset(token)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 

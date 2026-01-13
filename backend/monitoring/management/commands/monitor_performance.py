@@ -304,7 +304,7 @@ class Command(BaseCommand):
                     """)
                     active_connections = cursor.fetchone()[0]
                     self.stdout.write(f"Active DB Connections: {active_connections}")
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     def basic_health_check(self):

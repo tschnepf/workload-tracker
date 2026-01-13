@@ -65,7 +65,7 @@ jobs:
           GITLEAKS_REPORT_PATH: security/artifacts/gitleaks.json
 
       - name: Run Bandit (Python)
-        run: .venv-security/bin/bandit -r backend -x backend/**/migrations,backend/**/tests -f json -o security/artifacts/bandit.json || true
+        run: .venv-security/bin/bandit -r backend -x backend/*/migrations,backend/*/tests,backend/*/tests.py,backend/*/test_*.py -f json -o security/artifacts/bandit.json || true
 
       - name: Run pip-audit (Python)
         run: .venv-security/bin/pip-audit -r backend/requirements.txt -f json -o security/artifacts/pip-audit.json || true

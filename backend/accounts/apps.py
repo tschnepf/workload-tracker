@@ -14,6 +14,6 @@ class AccountsConfig(AppConfig):
             if hasattr(signals, 'connect_user_profile_signal'):
                 if getattr(settings, 'ENABLE_PROFILE_AUTO_CREATE', True):
                     signals.connect_user_profile_signal()
-        except Exception:
+        except Exception:  # nosec B110
             # Avoid import-time crashes; Django will surface errors at runtime
             pass

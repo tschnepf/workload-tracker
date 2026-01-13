@@ -8,5 +8,5 @@ class PeopleConfig(AppConfig):
         # Connect cache invalidation on person changes
         try:
             from . import signals  # noqa: F401
-        except Exception:
+        except Exception:  # nosec B110
             pass

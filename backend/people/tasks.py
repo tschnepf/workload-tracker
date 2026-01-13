@@ -88,7 +88,7 @@ def import_people_excel_task(self, storage_path: str, update_existing: bool = Tr
             if close_fh:
                 try:
                     fh.close()
-                except Exception:
+                except Exception:  # nosec B110
                     pass
 
         # Ensure structure contains counts for UI

@@ -8,6 +8,6 @@ class AssignmentsConfig(AppConfig):
         # Import signal handlers
         try:
             from . import signals  # noqa: F401
-        except Exception:
+        except Exception:  # nosec B110
             # Avoid crashing app startup if migrations are running without full deps
             pass

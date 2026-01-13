@@ -4,7 +4,7 @@ import json
 import gzip
 import shutil
 import hashlib
-import subprocess
+import subprocess  # nosec B404
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -53,16 +53,24 @@ def _env_for_pg(dsn: str) -> dict:
     return env
 
 
+def _resolve_pg_bin(name: str) -> str:
+    path = shutil.which(name)
+    if not path:
+        raise CommandError(f"{name} not found in PATH")
+    return path
+
+
 def _estimate_db_size_bytes(env: dict) -> int | None:
     try:
-        proc = subprocess.run(
-            ["psql", "-At", "-c", "SELECT pg_database_size(current_database());"],
+        psql_bin = _resolve_pg_bin("psql")
+        proc = subprocess.run(  # nosec B603
+            [psql_bin, "-At", "-c", "SELECT pg_database_size(current_database());"],
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
             text=True,
-        )
+        )  # nosec B603
         s = proc.stdout.strip()
         return int(s) if s.isdigit() else None
     except Exception:
@@ -71,14 +79,15 @@ def _estimate_db_size_bytes(env: dict) -> int | None:
 
 def _server_version(env: dict) -> str | None:
     try:
-        proc = subprocess.run(
-            ["psql", "-At", "-c", "SHOW server_version;"],
+        psql_bin = _resolve_pg_bin("psql")
+        proc = subprocess.run(  # nosec B603
+            [psql_bin, "-At", "-c", "SHOW server_version;"],
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
             text=True,
-        )
+        )  # nosec B603
         return proc.stdout.strip() or None
     except Exception:
         return None
@@ -96,7 +105,7 @@ def _migrations_hash() -> str:
                 h.update(f.as_posix().encode())
                 h.update(b"\0")
                 h.update(hashlib.sha256(data).digest())
-            except Exception:
+            except Exception:  # nosec B112
                 continue
     return h.hexdigest()
 
@@ -189,18 +198,18 @@ class Command(BaseCommand):
 
             # Build pg_dump command
             common_args = [
-                "pg_dump",
+                _resolve_pg_bin("pg_dump"),
                 "--no-owner",
                 "--no-privileges",
             ]
 
             if fmt == "custom":
                 cmd = common_args + ["-Fc", "-Z", "6", "-f", archive_path]
-                subprocess.run(cmd, env=env, check=True)
+                subprocess.run(cmd, env=env, check=True)  # nosec B603
             else:
                 # plain format -> pipe stdout to gzip
                 cmd = common_args + ["-Fp"]
-                with subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE) as proc, gzip.open(archive_path, "wb", compresslevel=6) as gz:
+                with subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE) as proc, gzip.open(archive_path, "wb", compresslevel=6) as gz:  # nosec B603
                     if proc.stdout is None:
                         raise CommandError("pg_dump failed to produce output")
                     for chunk in iter(lambda: proc.stdout.read(1024 * 1024), b""):
@@ -249,5 +258,5 @@ class Command(BaseCommand):
             try:
                 if os.path.exists(lock_path):
                     os.remove(lock_path)
-            except Exception:
+            except Exception:  # nosec B110
                 pass

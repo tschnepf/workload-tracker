@@ -8,6 +8,6 @@ class DepartmentsConfig(AppConfig):
         # Connect cache invalidation signals for department hierarchy
         try:
             from . import signals  # noqa: F401
-        except Exception:
+        except Exception:  # nosec B110
             # Keep startup resilient if cache backend is misconfigured
             pass

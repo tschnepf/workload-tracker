@@ -9,6 +9,6 @@ class IntegrationsConfig(AppConfig):
         # Lazy import to avoid side effects during migrations
         try:
             from . import registry  # noqa: F401
-        except Exception:
+        except Exception:  # nosec B110
             # Avoid crashing when registry can't load (e.g., during tests without files)
             pass

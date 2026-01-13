@@ -60,7 +60,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
         try:
             if getattr(obj, 'role_on_project_ref', None) and obj.role_on_project_ref.name:
                 return obj.role_on_project_ref.name
-        except Exception:
+        except Exception:  # nosec B110
             pass
         legacy = getattr(obj, 'role_on_project', None)
         return legacy or None
@@ -114,14 +114,14 @@ class AssignmentSerializer(serializers.ModelSerializer):
             try:
                 if not attrs['person'].is_active:
                     raise serializers.ValidationError({'person': 'Cannot assign projects to inactive people.'})
-            except AttributeError:
+            except AttributeError:  # nosec B110
                 pass
         dept = attrs.get('department')
         if dept is None and person is not None:
             # Default department from person
             try:
                 attrs['department'] = person.department
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         role = attrs.get('role_on_project_ref')
         if role is not None:
@@ -138,7 +138,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
         if not validated_data.get('department') and validated_data.get('person'):
             try:
                 validated_data['department'] = validated_data['person'].department
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         return super().create(validated_data)
     

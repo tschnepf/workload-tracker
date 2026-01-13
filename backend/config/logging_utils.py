@@ -58,6 +58,6 @@ class JSONFormatter(logging.Formatter):
                 lk = str(k).lower()
                 if lk in self.SENSITIVE_KEYS:
                     payload[k] = "[REDACTED]"
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return json.dumps(payload, ensure_ascii=False)

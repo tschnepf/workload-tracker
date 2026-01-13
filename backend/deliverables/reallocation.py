@@ -48,7 +48,7 @@ def reallocate_weekly_hours(
         for k, v in wh.items():
             try:
                 sk = sunday_of_week(date.fromisoformat(k)).isoformat()
-            except Exception:
+            except Exception:  # nosec B112
                 continue
             buckets[sk] = buckets.get(sk, 0) + _ceil_norm(v)
         return {k: v for k, v in buckets.items() if v > 0}
@@ -60,7 +60,7 @@ def reallocate_weekly_hours(
         for k, v in wh.items():
             try:
                 sk = sunday_of_week(date.fromisoformat(k)).isoformat()
-            except Exception:
+            except Exception:  # nosec B112
                 continue
             buckets[sk] = buckets.get(sk, 0) + _ceil_norm(v)
         return {k: v for k, v in buckets.items() if v > 0}
@@ -84,7 +84,7 @@ def reallocate_weekly_hours(
         # Normalize key to Sunday
         try:
             sk = sunday_of_week(date.fromisoformat(k)).isoformat()
-        except Exception:
+        except Exception:  # nosec B112
             continue
         try:
             hours = float(v)

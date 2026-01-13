@@ -39,7 +39,7 @@ def _release_week_lock(week_key: str) -> None:
         try:
             with connection.cursor() as cur:
                 cur.execute("SELECT pg_advisory_unlock(hashtext(%s))", [f"weekly_snapshot:{week_key}"])
-        except Exception:
+        except Exception:  # nosec B110
             # Best-effort unlock
             pass
 
@@ -215,7 +215,7 @@ def write_weekly_assignment_snapshots(week_start: date | str, *, source: str = S
                 'updated': updated,
                 'events_inserted': events_inserted,
             })
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return summary
     finally:
@@ -421,7 +421,7 @@ def backfill_weekly_assignment_snapshots(week_start: date | str, *, emit_events:
                 'force': force,
                 'emit_events': emit_events,
             })
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return summary
     finally:

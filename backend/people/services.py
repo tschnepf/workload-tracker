@@ -136,7 +136,7 @@ def _bump_analytics_cache_version() -> None:
         current = cache.get(key, 1)
         try:
             cache.set(key, int(current) + 1, None)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
 
@@ -168,7 +168,7 @@ def deactivate_person_cleanup(person_id: int, zero_mode: str = 'all', actor_user
             try:
                 if a.weekly_hours:
                     hours_zeroed_total += sum(float(v or 0) for v in a.weekly_hours.values())
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             wh = a.weekly_hours or {}

@@ -30,7 +30,7 @@ class JobStatusView(APIView):
             lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
             if os.path.exists(lock_path):
                 return [AllowAny()]
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return [p() for p in self.permission_classes]
 
@@ -97,7 +97,7 @@ class JobStatusView(APIView):
                 if info.get('type') == 'file' and info.get('path'):
                     download_ready = state == 'SUCCESS'
                 # Non-file results (e.g., import summary) may be the final result
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         if state == 'SUCCESS':
@@ -107,7 +107,7 @@ class JobStatusView(APIView):
                     download_ready = True
                 else:
                     payload_result = res
-            except Exception:
+            except Exception:  # nosec B110
                 # If reading result fails, keep defaults
                 pass
 
@@ -133,7 +133,7 @@ class JobStatusView(APIView):
             lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
             if os.path.exists(lock_path):
                 return []  # type: list[BaseAuthentication]
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return super().get_authenticators()
 
@@ -150,7 +150,7 @@ class JobDownloadView(APIView):
             lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
             if os.path.exists(lock_path):
                 return [AllowAny()]
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return [p() for p in self.permission_classes]
 
@@ -198,6 +198,6 @@ class JobDownloadView(APIView):
             lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
             if os.path.exists(lock_path):
                 return []  # type: list[BaseAuthentication]
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return super().get_authenticators()

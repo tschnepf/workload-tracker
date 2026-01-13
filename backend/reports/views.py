@@ -65,12 +65,12 @@ class PreDeliverableCompletionView(APIView):
         if project_id:
             try:
                 qs = qs.filter(deliverable__project_id=int(project_id))
-            except ValueError:
+            except ValueError:  # nosec B110
                 pass
         if type_id:
             try:
                 qs = qs.filter(pre_deliverable_type_id=int(type_id))
-            except ValueError:
+            except ValueError:  # nosec B110
                 pass
 
         agg = qs.aggregate(

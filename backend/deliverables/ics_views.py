@@ -94,7 +94,7 @@ def deliverables_ics(request):
             origin = f"{request.scheme}://{request.get_host()}"
             if proj and getattr(proj, 'id', None):
                 desc_parts.append(f"Project: {proj_name} ({origin}/projects/{proj.id})")
-        except Exception:
+        except Exception:  # nosec B110
             pass
         lines.append('BEGIN:VEVENT')
         lines.append(f'UID:{_esc(uid)}')

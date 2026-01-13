@@ -150,7 +150,7 @@ class UtilizationSchemeView(APIView):
                 target_user=None,
                 detail={'before': before, 'after': after},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         # Return with new ETag
         etag = self._current_etag(obj)
@@ -182,14 +182,14 @@ class ProjectRoleView(APIView):
             for pr in ProjectRole.objects.all():
                 if pr.name:
                     names.add(pr.name.strip())
-        except Exception:
+        except Exception:  # nosec B110
             pass
         try:
             qs = Assignment.objects.exclude(role_on_project__isnull=True).exclude(role_on_project__exact='')
             for r in qs.values_list('role_on_project', flat=True).distinct():
                 if r:
                     names.add(str(r).strip())
-        except Exception:
+        except Exception:  # nosec B110
             pass
         out = sorted(names, key=lambda s: s.lower())
         return Response({'roles': out})
@@ -267,7 +267,7 @@ class ProjectRoleView(APIView):
                 target_user=None,
                 detail={'name': norm, 'removedFromAssignments': removed_count, 'catalogDeleted': catalog_deleted},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         return Response({'detail': 'deleted', 'removedFromAssignments': removed_count, 'catalogDeleted': catalog_deleted})

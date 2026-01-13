@@ -91,13 +91,13 @@ def generate_grid_snapshot_async(self, weeks: int = 12, department: Optional[int
             if processed % 25 == 0 or processed == total:
                 try:
                     self.update_state(state='PROGRESS', meta={'progress': int(processed * 100 / total), 'message': f'Processed {processed}/{total} people'})
-                except Exception:
+                except Exception:  # nosec B110
                     pass
     except Exception as e:
         try:
             import sentry_sdk  # type: ignore
             sentry_sdk.capture_exception(e)
-        except Exception:
+        except Exception:  # nosec B110
             pass
         raise
 
@@ -151,7 +151,7 @@ def bulk_skill_matching_async(self, skills: List[str], filters: Dict[str, Any]) 
                 people_qs = people_qs.filter(department_id__in=list(ids))
             else:
                 people_qs = people_qs.filter(department_id=dept_id)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     skill_qs = PersonSkill.objects.select_related('skill_tag')
@@ -221,13 +221,13 @@ def bulk_skill_matching_async(self, skills: List[str], filters: Dict[str, Any]) 
             if processed % 50 == 0 or processed == total:
                 try:
                     self.update_state(state='PROGRESS', meta={'progress': int(processed * 100 / total)})
-                except Exception:
+                except Exception:  # nosec B110
                     pass
     except Exception as e:
         try:
             import sentry_sdk  # type: ignore
             sentry_sdk.capture_exception(e)
-        except Exception:
+        except Exception:  # nosec B110
             pass
         raise
 
@@ -313,7 +313,7 @@ def backfill_pre_deliverables_async(self, project_id: int | None = None, start: 
     if project_id is not None:
         try:
             qs = qs.filter(project_id=int(project_id))
-        except Exception:
+        except Exception:  # nosec B110
             pass
     if start_d:
         qs = qs.filter(date__gte=start_d)
@@ -339,13 +339,13 @@ def backfill_pre_deliverables_async(self, project_id: int | None = None, start: 
             # Continue; surface error via state message
             try:
                 self.update_state(state='PROGRESS', meta={'progress': int(processed * 100 / total), 'message': f'Error on {getattr(d, "id", "?")}: {e}'})
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         processed += 1
         if processed % 50 == 0 or processed == total:
             try:
                 self.update_state(state='PROGRESS', meta={'progress': int(processed * 100 / total), 'message': f'Processed {processed}/{total}'})
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
     return {

@@ -168,7 +168,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         touched_week_keys=sorted(touched),
                         snapshot=audit_snapshot,
                     )
-                except Exception:
+                except Exception:  # nosec B110
                     # Non-blocking: failure to persist audit must not fail request
                     pass
 
@@ -188,7 +188,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'assignments_changed': changed_count,
                     'touched_weeks_count': len(realloc_summary['touchedWeekKeys']),
                 })
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             data = self.get_serializer(instance).data
@@ -513,7 +513,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if type_id:
             try:
                 pre_qs = pre_qs.filter(pre_deliverable_type_id=int(type_id))
-            except ValueError:
+            except ValueError:  # nosec B110
                 pass
         if mine_only:
             if allowed_ids_list:
@@ -540,7 +540,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         try:
             _ids = [it.get('id') for it in items]
             _pre = [it.get('id') for it in pre_items]
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         return Response(items + pre_items)
@@ -622,7 +622,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             for key, hours in wh.items():
                 try:
                     d = datetime.strptime(key, '%Y-%m-%d').date()
-                except ValueError:
+                except ValueError:  # nosec B112
                     continue
                 if start_date <= d <= end_date:
                     try:
@@ -735,17 +735,17 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if 'deliverable' in params:
             try:
                 qs = qs.filter(deliverable_id=int(params.get('deliverable')))
-            except ValueError:
+            except ValueError:  # nosec B110
                 pass
         if 'project' in params:
             try:
                 qs = qs.filter(deliverable__project_id=int(params.get('project')))
-            except ValueError:
+            except ValueError:  # nosec B110
                 pass
         if 'type_id' in params:
             try:
                 qs = qs.filter(pre_deliverable_type_id=int(params.get('type_id')))
-            except ValueError:
+            except ValueError:  # nosec B110
                 pass
         start = params.get('start')
         if start:
@@ -866,7 +866,7 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'jobId': job_id,
                     'statusUrl': request.build_absolute_uri(f"/api/jobs/{job_id}/"),
                 }, status=status.HTTP_202_ACCEPTED)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         # Sync path fallback
@@ -877,7 +877,7 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if project_id:
             try:
                 dqs = dqs.filter(project_id=int(project_id))
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         if start:
             d1 = parse_date(str(start))

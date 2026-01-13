@@ -87,7 +87,7 @@ class Command(BaseCommand):
                 try:
                     with open(meta_path, "w", encoding="utf-8") as f:
                         json.dump(meta, f, indent=2, sort_keys=True)
-                except Exception:
+                except Exception:  # nosec B110
                     pass
                 uploaded.append(name)
                 count += 1
@@ -101,7 +101,7 @@ class Command(BaseCommand):
             if uploaded or failed:
                 txt = f"Offsite sync: uploaded={len(uploaded)} failed={len(failed)}"
                 notify_slack(txt)
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return ""
 

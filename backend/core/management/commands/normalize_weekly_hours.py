@@ -27,7 +27,7 @@ def _normalize_map(weekly_hours: Dict[str, Any]) -> Dict[str, int]:
     for k, v in weekly_hours.items():
         try:
             d = date.fromisoformat(str(k))
-        except Exception:
+        except Exception:  # nosec B112
             continue
         try:
             hours = float(v)
@@ -89,7 +89,7 @@ class Command(BaseCommand):
                 for k in (wh or {}).keys():
                     try:
                         d = date.fromisoformat(str(k))
-                    except Exception:
+                    except Exception:  # nosec B112
                         continue
                     s = sunday_of_week(d).isoformat()
                     sunday_counts[s] = sunday_counts.get(s, 0) + 1

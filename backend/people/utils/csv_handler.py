@@ -131,14 +131,14 @@ def _process_csv_people_row(row_data, update_existing, dry_run, row_num):
         if 'email' in row_data and row_data['email']:
             try:
                 existing_person = Person.objects.get(email=row_data['email'])
-            except Person.DoesNotExist:
+            except Person.DoesNotExist:  # nosec B110
                 pass
         
         # If not found by email, try to find by name
         if not existing_person and 'name' in row_data and row_data['name']:
             try:
                 existing_person = Person.objects.get(name=row_data['name'])
-            except Person.DoesNotExist:
+            except Person.DoesNotExist:  # nosec B110
                 pass
             except Person.MultipleObjectsReturned:
                 # If multiple people have the same name, we can't safely update

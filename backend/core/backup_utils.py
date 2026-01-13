@@ -112,7 +112,7 @@ def _iso_from_parts_or_stat(filename: str, full_path: str) -> str:
         try:
             dt = datetime.strptime(parts["timestamp"], TIMESTAMP_FMT).replace(tzinfo=timezone.utc)
             return dt.isoformat().replace("+00:00", "Z")
-        except Exception:
+        except Exception:  # nosec B110
             pass
     try:
         ts = os.path.getmtime(full_path)

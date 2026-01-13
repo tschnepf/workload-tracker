@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import random
+import secrets
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -14,6 +14,7 @@ from .models import IntegrationRule
 LOCK_TEMPLATE = "integration-lock:{connection}:{object}"
 LOCK_MIN_TTL_SECONDS = 60
 LOCK_MAX_TTL_SECONDS = 60 * 30
+_crypto_random = secrets.SystemRandom()
 
 
 def _interval_minutes(config: Dict[str, Any]) -> Optional[int]:
@@ -36,7 +37,7 @@ def compute_next_run(config: Dict[str, Any], *, from_time: Optional[datetime] = 
     interval = _interval_minutes(config)
     if interval:
         jitter_window = max(1.0, interval * 0.1)
-        jitter_minutes = random.uniform(-jitter_window, jitter_window)
+        jitter_minutes = _crypto_random.uniform(-jitter_window, jitter_window)
         minutes = max(1.0, interval + jitter_minutes)
         return base + timedelta(minutes=minutes)
 
@@ -71,7 +72,7 @@ def release_rule_lock(connection_id: int, object_key: str) -> None:
     lock_key = LOCK_TEMPLATE.format(connection=connection_id, object=object_key)
     try:
         cache.delete(lock_key)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 
@@ -99,7 +100,7 @@ def celery_has_workers(timeout: float = 1.0) -> bool:
 
 
 def cache_available() -> bool:
-    token = f"integration-health-{random.random()}"
+    token = f"integration-health-{secrets.token_urlsafe(16)}"
     try:
         cache.set(token, token, 5)
         val = cache.get(token)

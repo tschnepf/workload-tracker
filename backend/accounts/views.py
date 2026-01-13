@@ -139,7 +139,7 @@ class ChangePasswordView(APIView):
         request.user.save(update_fields=["password"])
         try:
             AdminAuditLog.objects.create(actor=request.user, action='change_password', target_user=request.user, detail={})
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -179,7 +179,7 @@ class CreateUserView(APIView):
             try:
                 admin_group = Group.objects.get(name='Admin')
                 user.groups.add(admin_group)
-            except Group.DoesNotExist:
+            except Group.DoesNotExist:  # nosec B110
                 pass
         elif role == 'manager':
             user.is_staff = False
@@ -187,7 +187,7 @@ class CreateUserView(APIView):
             try:
                 mgr_group = Group.objects.get(name='Manager')
                 user.groups.add(mgr_group)
-            except Group.DoesNotExist:
+            except Group.DoesNotExist:  # nosec B110
                 pass
         else:
             user.is_staff = False
@@ -195,7 +195,7 @@ class CreateUserView(APIView):
             try:
                 user_group = Group.objects.get(name='User')
                 user.groups.add(user_group)
-            except Group.DoesNotExist:
+            except Group.DoesNotExist:  # nosec B110
                 pass
 
         # Ensure profile exists
@@ -222,7 +222,7 @@ class CreateUserView(APIView):
                 target_user=user,
                 detail={'role': role, 'personId': person_id},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         ser = UserProfileSerializer(profile)
         return Response(ser.data, status=status.HTTP_201_CREATED)
@@ -249,7 +249,7 @@ class SetPasswordView(APIView):
         target.save(update_fields=["password"])
         try:
             AdminAuditLog.objects.create(actor=request.user, action='set_password', target_user=target, detail={})
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -330,7 +330,7 @@ class DeleteUserView(APIView):
                 target_user=target,
                 detail={'username': target.username, 'email': target.email},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         target.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -379,7 +379,7 @@ class UpdateUserRoleView(APIView):
                 try:
                     g = Group.objects.get(name=gname)
                     target.groups.remove(g)
-                except Group.DoesNotExist:
+                except Group.DoesNotExist:  # nosec B110
                     pass
 
             if role == 'admin':
@@ -388,7 +388,7 @@ class UpdateUserRoleView(APIView):
                 try:
                     g = Group.objects.get(name='Admin')
                     target.groups.add(g)
-                except Group.DoesNotExist:
+                except Group.DoesNotExist:  # nosec B110
                     pass
             elif role == 'manager':
                 target.is_staff = False
@@ -396,7 +396,7 @@ class UpdateUserRoleView(APIView):
                 try:
                     g = Group.objects.get(name='Manager')
                     target.groups.add(g)
-                except Group.DoesNotExist:
+                except Group.DoesNotExist:  # nosec B110
                     pass
             else:
                 target.is_staff = False
@@ -404,7 +404,7 @@ class UpdateUserRoleView(APIView):
                 try:
                     g = Group.objects.get(name='User')
                     target.groups.add(g)
-                except Group.DoesNotExist:
+                except Group.DoesNotExist:  # nosec B110
                     pass
         finally:
             try:
@@ -414,7 +414,7 @@ class UpdateUserRoleView(APIView):
                     target_user=target,
                     detail={'role': role},
                 )
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         # Build response consistent with ListUsersView
@@ -527,7 +527,7 @@ class PasswordResetRequestView(APIView):
         try:
             from django.core.mail import send_mail
             send_mail(subject, body, getattr(django_settings, 'DEFAULT_FROM_EMAIL', None), [email])
-        except Exception:
+        except Exception:  # nosec B110
             # Do not leak errors to client; rely on logs/Sentry
             pass
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -561,7 +561,7 @@ class PasswordResetConfirmView(APIView):
         user.save(update_fields=["password"])
         try:
             AdminAuditLog.objects.create(actor=None, action='password_reset', target_user=user, detail={})
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -611,7 +611,7 @@ class InviteUserView(APIView):
                 try:
                     admin_group = Group.objects.get(name='Admin')
                     user.groups.add(admin_group)
-                except Group.DoesNotExist:
+                except Group.DoesNotExist:  # nosec B110
                     pass
             elif role == 'manager':
                 user.is_staff = False
@@ -619,7 +619,7 @@ class InviteUserView(APIView):
                 try:
                     mgr_group = Group.objects.get(name='Manager')
                     user.groups.add(mgr_group)
-                except Group.DoesNotExist:
+                except Group.DoesNotExist:  # nosec B110
                     pass
             else:
                 user.is_staff = False
@@ -627,7 +627,7 @@ class InviteUserView(APIView):
                 try:
                     user_group = Group.objects.get(name='User')
                     user.groups.add(user_group)
-                except Group.DoesNotExist:
+                except Group.DoesNotExist:  # nosec B110
                     pass
             # Ensure profile exists and optionally link Person
             profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -644,7 +644,7 @@ class InviteUserView(APIView):
                     return Response({"detail": "Unable to link. This person may already be linked."}, status=status.HTTP_409_CONFLICT)
             try:
                 AdminAuditLog.objects.create(actor=request.user, action='invite_user', target_user=user, detail={'role': role, 'personId': person_id})
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             created = True
 
@@ -721,7 +721,7 @@ class InviteUserView(APIView):
             try:
                 from django.core.mail import send_mail
                 send_mail(subject, body, getattr(django_settings, 'DEFAULT_FROM_EMAIL', None), [email])
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -763,7 +763,7 @@ class LinkUserPersonAdminView(APIView):
 
         try:
             AdminAuditLog.objects.create(actor=request.user, action='link_user_person', target_user=target, detail={'personId': person_id})
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Return updated summary

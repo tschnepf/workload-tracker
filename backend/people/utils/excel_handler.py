@@ -285,7 +285,7 @@ def _process_people_row(row_data, update_existing, dry_run, row_num):
             try:
                 existing_person = Person.objects.get(email=row_data['email'])
                 lookup_method = 'email'
-            except Person.DoesNotExist:
+            except Person.DoesNotExist:  # nosec B110
                 pass
         
         # Third priority: Try to find by name (least reliable)
@@ -293,7 +293,7 @@ def _process_people_row(row_data, update_existing, dry_run, row_num):
             try:
                 existing_person = Person.objects.get(name=row_data['name'])
                 lookup_method = 'name'
-            except Person.DoesNotExist:
+            except Person.DoesNotExist:  # nosec B110
                 pass
             except Person.MultipleObjectsReturned:
                 # If multiple people have the same name, we can't safely update

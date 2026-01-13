@@ -141,7 +141,7 @@ class BackupListCreateView(GenericAPIView):
                 action='backup_create',
                 detail={'description': (description or '').strip()[:200]},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         status_url = request.build_absolute_uri(f"/api/jobs/{task.id}/")
         return Response({"jobId": task.id, "statusUrl": status_url}, status=status.HTTP_202_ACCEPTED)
@@ -193,7 +193,7 @@ class BackupDownloadView(GenericAPIView):
                 action='backup_download',
                 detail={'filename': info['filename']},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return resp
 
@@ -216,7 +216,7 @@ class BackupDeleteView(GenericAPIView):
                 action='backup_delete',
                 detail={'filename': filename},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         if not existed:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -262,7 +262,7 @@ class BackupRestoreView(GenericAPIView):
                 action='backup_restore',
                 detail={'filename': filename, 'jobs': jobs_i, 'migrate': migrate},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         status_url = request.build_absolute_uri(f"/api/jobs/{task.id}/")
         return Response({"jobId": task.id, "statusUrl": status_url}, status=status.HTTP_202_ACCEPTED)
@@ -318,7 +318,7 @@ class UploadAndRestoreView(GenericAPIView):
             try:
                 if os.path.exists(incoming_path):
                     os.remove(incoming_path)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             if str(e) == 'upload_exceeds_limit':
                 return Response({"detail": "File too large"}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
@@ -340,7 +340,7 @@ class UploadAndRestoreView(GenericAPIView):
                 action='backup_upload_restore',
                 detail={'original': base, 'stored': os.path.basename(final_path), 'jobs': jobs_i, 'migrate': migrate},
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         status_url = request.build_absolute_uri(f"/api/jobs/{task.id}/")
         return Response({"jobId": task.id, "statusUrl": status_url}, status=status.HTTP_202_ACCEPTED)

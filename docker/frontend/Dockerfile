@@ -12,6 +12,7 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget -q -O - http://localhost:3000/ >/dev/null 2>&1 || exit 1
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 
@@ -66,5 +67,6 @@ RUN npm install --omit=dev serve@14.2.5
 # Run as non-root user 'node'
 USER node
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget -q -O - http://localhost:3000/ >/dev/null 2>&1 || exit 1
 # Serve prebuilt static assets directly from the read-only path
 CMD ["npx", "serve", "-s", "/app/_built", "-l", "3000"]

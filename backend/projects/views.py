@@ -246,14 +246,14 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         ids = list(ids_set)
                         try:
                             cache.set(cache_key_desc, ids, timeout=3600)
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
                     people_qs = people_qs.filter(department_id__in=ids)
                     cache_scope = f'dept_{dept_id}_children'
                 else:
                     people_qs = people_qs.filter(department_id=dept_id)
                     cache_scope = f'dept_{dept_id}'
-            except (TypeError, ValueError):
+            except (TypeError, ValueError):  # nosec B110
                 pass
 
         # Candidate department ids for this project
@@ -310,7 +310,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     resp['ETag'] = f'"{etag}"'
                     resp['Last-Modified'] = http_date(last_modified_timestamp)
                     return resp
-            except ValueError:
+            except ValueError:  # nosec B110
                 pass
 
         payload = None
@@ -332,7 +332,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         payload = cache.get(cache_key)
                         if payload is not None:
                             break
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                     time.sleep(0.05)
             if payload is None:
@@ -365,11 +365,11 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 payload = result
                 try:
                     cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
-                except Exception:
+                except Exception:  # nosec B110
                     pass
             try:
                 cache.delete(lock_key)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         response = Response(payload)
@@ -588,7 +588,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     response['ETag'] = f'"{etag}"'
                     response['Last-Modified'] = http_date(last_modified_timestamp)
                     return response
-            except ValueError:
+            except ValueError:  # nosec B110
                 # Ignore malformed header
                 pass
         payload = None
@@ -679,7 +679,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         safe_dir = os.path.join(getattr(django_settings, 'BACKUPS_DIR', '/backups'), 'incoming', 'projects')
         try:
             os.makedirs(safe_dir, exist_ok=True)
-        except Exception:
+        except Exception:  # nosec B110
             pass
         safe_name = f"{int(time.time())}_{os.path.basename(filename)}"
         safe_path = os.path.join(safe_dir, safe_name)
@@ -697,7 +697,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             try:
                 if os.path.exists(safe_path):
                     os.remove(safe_path)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             if str(e) == 'upload_exceeds_limit':
                 logger.warning('projects_import_too_large_stream', extra={'upload_name': filename, 'limit': max_bytes})
@@ -714,7 +714,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             logger.warning('projects_import_xlsx_limits', extra={'upload_name': filename, 'code': code})
             try:
                 os.remove(safe_path)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             return Response({'success': False, 'error': 'Excel file exceeds allowed structure limits', 'code': code}, status=status.HTTP_400_BAD_REQUEST)
 

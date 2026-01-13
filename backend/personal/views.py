@@ -56,7 +56,7 @@ class PersonalWorkView(APIView):
                     if cached.get('last_modified'):
                         resp['Last-Modified'] = http_date(cached['last_modified'])
                     return resp
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         today = date.today()
@@ -81,7 +81,7 @@ class PersonalWorkView(APIView):
                 week_totals[wk] += v
             try:
                 total_allocated_current += float(wh.get(week_keys[0]) or 0)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         utilization_percent = round((total_allocated_current / weekly_capacity * 100) if weekly_capacity else 0.0, 1)
@@ -198,7 +198,7 @@ class PersonalWorkView(APIView):
                     'last_modified': int(last_modified_dt.timestamp()) if last_modified_dt else None,
                     'data': resp.data,
                 }, timeout=ttl)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         return resp

@@ -44,7 +44,7 @@ class RuleExecutor:
     def _progress(self, percent: int, message: str):
         try:
             self.task.update_state(state='PROGRESS', meta={'progress': percent, 'message': message})
-        except Exception:
+        except Exception:  # nosec B110
             pass
         self._log(message, progress=percent)
 

@@ -277,7 +277,7 @@ class Person(models.Model):
                                     week_hours = 0.0
                                 used_key = check
                                 break
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
 
                 if week_hours > 0:

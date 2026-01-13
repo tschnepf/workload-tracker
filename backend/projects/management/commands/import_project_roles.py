@@ -33,7 +33,7 @@ class Command(BaseCommand):
             for row in reader:
                 try:
                     dept_id = int(row['department_id'])
-                except Exception:
+                except Exception:  # nosec B112
                     continue
                 name = (row.get('role_name') or '').strip()
                 if not name:

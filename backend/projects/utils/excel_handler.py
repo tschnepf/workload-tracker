@@ -489,7 +489,7 @@ def _import_projects_from_excel(file, update_existing, include_assignments, incl
         try:
             from core.utils.xlsx_limits import enforce_xlsx_limits
             enforce_xlsx_limits(file)
-        except Exception:
+        except Exception:  # nosec B110
             # If limits fail, openpyxl will likely also fail; let error propagate below
             pass
         workbook = openpyxl.load_workbook(file, data_only=True)

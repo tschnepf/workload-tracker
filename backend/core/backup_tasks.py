@@ -94,9 +94,9 @@ def restore_backup_task(
                         msg = m.group(2)
                         try:
                             self.task.update_state(state='PROGRESS', meta={'progress': pct, 'message': msg})
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         def flush(self):

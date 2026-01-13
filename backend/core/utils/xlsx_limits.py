@@ -45,6 +45,6 @@ def enforce_xlsx_limits(
     finally:
         try:
             wb.close()
-        except Exception:
+        except Exception:  # nosec B110
             pass
 

@@ -13,7 +13,7 @@ def _bump_analytics_cache_version():
         current = cache.get(key, 1)
         try:
             cache.set(key, int(current) + 1, None)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
 

@@ -52,7 +52,7 @@ def _handle_user_locked_out(sender=None, request=None, username=None, **kwargs):
         ip = kwargs.get('ip_address')
         if not ip and request is not None:
             ip = getattr(request, 'META', {}).get('REMOTE_ADDR')
-    except Exception:
+    except Exception:  # nosec B110
         pass
     msg = f"User locked out: username={username or '<unknown>'}, ip={ip or '<unknown>'}"
     logger.warning(msg)

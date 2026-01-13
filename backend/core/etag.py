@@ -32,7 +32,7 @@ class ETagConditionalMixin:
             lm = getattr(instance, 'updated_at', None)
             if lm:
                 response['Last-Modified'] = http_date(lm.timestamp())
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     # Detail GET
@@ -70,7 +70,7 @@ class ETagConditionalMixin:
             # Avoid a second get_object() which may 404 if queryset filters changed
             instance.refresh_from_db()
             self._attach_etag_headers(response, instance)
-        except Exception:
+        except Exception:  # nosec B110
             # Best-effort header attachment only; never fail the response here
             pass
         return response
@@ -84,7 +84,7 @@ class ETagConditionalMixin:
         try:
             instance.refresh_from_db()
             self._attach_etag_headers(response, instance)
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return response
 

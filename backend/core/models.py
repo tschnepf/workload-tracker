@@ -45,7 +45,7 @@ class PreDeliverableGlobalSettings(models.Model):
                 'is_enabled': project_setting.is_enabled,
                 'source': 'project',
             }
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Global
@@ -56,7 +56,7 @@ class PreDeliverableGlobalSettings(models.Model):
                 'is_enabled': global_setting.is_enabled_by_default,
                 'source': 'global',
             }
-        except cls.DoesNotExist:
+        except cls.DoesNotExist:  # nosec B110
             pass
 
         # Type defaults

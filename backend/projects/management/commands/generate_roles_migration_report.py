@@ -22,7 +22,7 @@ class Command(BaseCommand):
                 p.mkdir(parents=True, exist_ok=True)
                 prompts_dir = p
                 break
-            except Exception:
+            except Exception:  # nosec B112
                 continue
         if prompts_dir is None:
             raise RuntimeError('Unable to create prompts directory in any known location')

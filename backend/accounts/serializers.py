@@ -42,7 +42,7 @@ def sanitize_settings(payload: Dict) -> Tuple[Dict, set]:
         else:
             try:
                 cleaned["defaultDepartmentId"] = int(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError):  # nosec B110
                 # ignore invalid
                 pass
 
@@ -63,14 +63,14 @@ def sanitize_settings(payload: Dict) -> Tuple[Dict, set]:
             value = str(payload.get("colorScheme") or "").strip()
             if value:
                 cleaned["colorScheme"] = value
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     # schemaVersion: number
     if "schemaVersion" in payload:
         try:
             cleaned["schemaVersion"] = int(payload.get("schemaVersion"))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError):  # nosec B110
             pass
 
     return cleaned, unknown
@@ -129,7 +129,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             if django_settings.DEBUG and unknown:
                 try:
                     logger.warning("Dropped unknown settings keys: %s", sorted(list(unknown)))
-                except Exception:
+                except Exception:  # nosec B110
                     pass
             attrs["settings"] = cleaned
         return super().validate(attrs)

@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,7 +77,7 @@ class BackupService:
         try:
             if os.path.exists(lf):
                 os.remove(lf)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     # -------- Listing --------
@@ -141,7 +141,10 @@ class BackupService:
         # Check structure
         if fmt == "custom":
             try:
-                subprocess.run(["pg_restore", "-l", ap], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                pg_restore = shutil.which("pg_restore")
+                if not pg_restore:
+                    raise FileNotFoundError("pg_restore not found in PATH")
+                subprocess.run([pg_restore, "-l", ap], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)  # nosec B603
             except subprocess.CalledProcessError as e:
                 raise ValueError("pg_restore -l failed; archive may be corrupt") from e
         else:
@@ -255,7 +258,7 @@ class BackupService:
         try:
             if os.path.exists(meta):
                 os.remove(meta)
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return True
 

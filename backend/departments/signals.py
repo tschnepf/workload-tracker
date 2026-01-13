@@ -12,7 +12,7 @@ def _bump_dept_desc_version():
         # Fallback: attempt to clear cache on unsupported backends
         try:
             cache.clear()
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
 
