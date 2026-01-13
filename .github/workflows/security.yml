@@ -29,6 +29,9 @@ jobs:
 
       - name: Install security tooling
         run: |
+          python -m venv .venv-security
+          . .venv-security/bin/activate
+          pip install --upgrade pip
           pip install pip-audit safety bandit semgrep
           npm -g install ajv-cli
           curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh | bash -s -- -b /usr/local/bin
@@ -60,21 +63,21 @@ jobs:
           gitleaks detect --no-git --report-format json --report-path security/artifacts/gitleaks.json || true
 
       - name: Run Bandit (Python)
-        run: bandit -r backend -x backend/**/migrations,backend/**/tests -f json -o security/artifacts/bandit.json
+        run: .venv-security/bin/bandit -r backend -x backend/**/migrations,backend/**/tests -f json -o security/artifacts/bandit.json
 
       - name: Run pip-audit (Python)
-        run: pip-audit -r backend/requirements.txt -f json -o security/artifacts/pip-audit.json || true
+        run: .venv-security/bin/pip-audit -r backend/requirements.txt -f json -o security/artifacts/pip-audit.json || true
 
       - name: Run Safety (Python)
-        run: safety check -r backend/requirements.txt --json > security/artifacts/safety.json || true
+        run: .venv-security/bin/safety check -r backend/requirements.txt --json > security/artifacts/safety.json || true
 
       - name: Run npm audit (prod only)
         run: npm --prefix frontend audit --omit=dev --json > security/artifacts/npm-audit.json || true
 
       - name: Run Semgrep (multi-pack)
         run: |
-          semgrep --version
-          semgrep --error --json \
+          .venv-security/bin/semgrep --version
+          .venv-security/bin/semgrep --error --json \
             --config p/ci --config p/react --config p/ts --config p/python --config p/django --config p/security-audit --config p/secrets \
             > security/artifacts/semgrep.json || true
 
