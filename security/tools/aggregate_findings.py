@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 from typing import Any, Dict, List
 
 
@@ -52,9 +53,32 @@ def fingerprint(path: str, line: int, snippet: str | None) -> str:
     return h.hexdigest()
 
 
+def _is_uri(value: str | None) -> bool:
+    if not value or not isinstance(value, str):
+        return False
+    try:
+        parsed = urlparse(value)
+    except Exception:
+        return False
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+def _normalize_refs(refs: List[str] | None) -> List[str]:
+    out: List[str] = []
+    for ref in (refs or []):
+        if not isinstance(ref, str):
+            continue
+        if not _is_uri(ref):
+            continue
+        if ref not in out:
+            out.append(ref)
+    return out
+
+
 def finding(rule_id: str, title: str, severity: str, path: str, line: int,
             *, category: str, evidence: str | None = None, cwe: str | None = None,
-            end_line: int | None = None, refs: List[str] | None = None) -> Dict[str, Any]:
+            end_line: int | None = None, refs: List[str] | None = None,
+            fix: str | None = None, fix_prereqs: List[str] | None = None) -> Dict[str, Any]:
     sev = sev_to_text(severity)
     fac = default_factors(sev)
     return {
@@ -78,9 +102,9 @@ def finding(rule_id: str, title: str, severity: str, path: str, line: int,
         "attack_vector": "",
         "business_impact": "",
         "technical_impact": "",
-        "fix": "",
-        "fix_prereqs": [],
-        "references": refs or [],
+        "fix": fix or "",
+        "fix_prereqs": fix_prereqs or [],
+        "references": _normalize_refs(refs),
         "first_seen": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
     }
 
@@ -180,11 +204,26 @@ def from_pip_audit(data: Any) -> List[Dict[str, Any]]:
             sev = (v.get('severity') or 'Medium')
             title = f"{name} vulnerable: {rid}"
             refs = []
+            for key in ('advisory', 'url', 'link'):
+                val = v.get(key)
+                if isinstance(val, str):
+                    refs.append(val)
             fvs = v.get('fix_versions') or []
+            fix_versions: List[str] = []
             if isinstance(fvs, list):
-                refs = [str(x) for x in fvs]
+                fix_versions = [str(x) for x in fvs]
             out.append(
-                finding(rule_id=str(rid), title=title, severity=str(sev), path='backend/requirements.txt', line=1, category='supply-chain', refs=refs)
+                finding(
+                    rule_id=str(rid),
+                    title=title,
+                    severity=str(sev),
+                    path='backend/requirements.txt',
+                    line=1,
+                    category='supply-chain',
+                    refs=refs,
+                    fix_prereqs=fix_versions,
+                    fix=f"Upgrade to: {', '.join(fix_versions)}" if fix_versions else "",
+                )
             )
     return out
 
@@ -205,8 +244,17 @@ def from_npm_audit(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         return out
     # Older format
     for v in (data or {}).get('advisories', {}).values():
+        ref = v.get('url')
         out.append(
-            finding(rule_id=str(v.get('id') or 'NPM-AUDIT'), title=v.get('title') or 'npm advisory', severity=v.get('severity') or 'Medium', path='frontend/package.json', line=1, category='supply-chain', refs=[v.get('url') or ''])
+            finding(
+                rule_id=str(v.get('id') or 'NPM-AUDIT'),
+                title=v.get('title') or 'npm advisory',
+                severity=v.get('severity') or 'Medium',
+                path='frontend/package.json',
+                line=1,
+                category='supply-chain',
+                refs=[ref] if isinstance(ref, str) else [],
+            )
         )
     return out
 
