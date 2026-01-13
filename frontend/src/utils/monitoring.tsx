@@ -56,6 +56,17 @@ let sessionId = generateSessionId();
 let performanceMetrics: EnhancedPerformanceData[] = [];
 
 function generateSessionId(): string {
+  // Prefer cryptographically secure randomness for session identifiers
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const randomHex = Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    return `session_${Date.now()}_${randomHex}`;
+  }
+
+  // Fallback: use Math.random only if crypto is not available
   return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
