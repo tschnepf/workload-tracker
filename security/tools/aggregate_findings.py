@@ -13,7 +13,7 @@ import argparse
 import hashlib
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 
@@ -81,7 +81,7 @@ def finding(rule_id: str, title: str, severity: str, path: str, line: int,
         "fix": "",
         "fix_prereqs": [],
         "references": refs or [],
-        "first_seen": datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+        "first_seen": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
     }
 
 

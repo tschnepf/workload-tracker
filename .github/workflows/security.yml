@@ -33,11 +33,11 @@ jobs:
           . .venv-security/bin/activate
           pip install --upgrade pip
           pip install pip-audit safety bandit
-          npm -g install ajv-cli
+          npm -g install ajv-cli@5
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | bash -s -- -b /usr/local/bin
 
       - name: Install frontend dependencies (for npm audit metadata)
-        run: npm ci --prefix frontend
+        run: HUSKY=0 npm ci --prefix frontend
 
       - name: Enforce pinned frontend dependencies
         run: |
@@ -81,6 +81,7 @@ jobs:
         continue-on-error: true
         with:
           args: >-
+            semgrep
             --config p/ci
             --config p/react
             --config p/ts
@@ -106,12 +107,14 @@ jobs:
       - name: Django deploy checks
         run: |
           python backend/manage.py check --deploy > security/artifacts/django-check-deploy.txt || true
+        env:
+          SECRET_KEY: "ci-secret-key-please-override-this-with-a-secure-value-1234567890"
 
       - name: Aggregate findings
         run: python security/tools/aggregate_findings.py --artifacts security/artifacts --out security/security-findings.json
 
       - name: Validate findings schema
-        run: npx ajv validate -s security/schema/security-findings.schema.json -d security/security-findings.json
+        run: ajv validate --spec=draft2020 -s security/schema/security-findings.schema.json -d security/security-findings.json
 
       - name: Enforce severity threshold (fail on High/Critical)
         run: |

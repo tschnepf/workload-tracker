@@ -14,6 +14,14 @@ const CFG_BASE = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
 // - Otherwise, use relative '/api' so the dev proxy (vite.config.ts) forwards to backend.
 const API_BASE_URL = (CFG_BASE && /^(https?:)?\/\//i.test(CFG_BASE)) ? CFG_BASE : '/api';
 
+type ApiRequestOptions = {
+  headers?: Record<string, string>;
+  params?: any;
+  body?: any;
+  signal?: AbortSignal;
+  [key: string]: any;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -58,7 +66,7 @@ export const rawClient = createClient<paths>({ baseUrl: API_BASE_URL });
 
 // Thin wrapper maintaining parity with legacy error semantics and ETag behavior
 export const apiClient = {
-  async GET(path: any, opts?: any) {
+  async GET(path: any, opts?: ApiRequestOptions) {
     await waitForAuthReady();
     const keyPath = ensureTrailingSlash(materializePath(typeof path === 'string' ? path : String(path), opts));
     const headers = withAuth(opts?.headers);
@@ -72,15 +80,15 @@ export const apiClient = {
     return res;
   },
 
-  async POST(path: any, opts?: any) { return baseWrite('POST', path, opts); },
-  async PUT(path: any, opts?: any) { return baseWrite('PUT', path, opts); },
-  async PATCH(path: any, opts?: any) { return baseWrite('PATCH', path, opts); },
-  async DELETE(path: any, opts?: any) { return baseWrite('DELETE', path, opts); },
+  async POST(path: any, opts?: ApiRequestOptions) { return baseWrite('POST', path, opts); },
+  async PUT(path: any, opts?: ApiRequestOptions) { return baseWrite('PUT', path, opts); },
+  async PATCH(path: any, opts?: ApiRequestOptions) { return baseWrite('PATCH', path, opts); },
+  async DELETE(path: any, opts?: ApiRequestOptions) { return baseWrite('DELETE', path, opts); },
 };
 
-async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any, opts?: any) {
+async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any, opts?: ApiRequestOptions) {
   await waitForAuthReady();
-  const { skipIfMatch, ...restOpts } = (opts || {}) as { skipIfMatch?: boolean };
+  const { skipIfMatch, ...restOpts } = (opts || {}) as ApiRequestOptions & { skipIfMatch?: boolean };
   const rawPath = typeof path === 'string' ? path : String(path);
   const materializedPath = materializePath(rawPath, restOpts);
   const keyPath = ensureTrailingSlash(materializedPath);
