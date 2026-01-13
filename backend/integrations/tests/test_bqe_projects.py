@@ -9,6 +9,7 @@ from django.test import TestCase
 
 from django.utils import timezone
 
+from cryptography.fernet import Fernet
 from requests import HTTPError
 
 from integrations.models import (
@@ -27,12 +28,9 @@ from integrations.encryption import reset_key_cache
 from integrations.exceptions import IntegrationProviderError
 from integrations.views import _test_bqe_connection
 
-TEST_SECRET_KEY = 'XvDOvRMNzSVskLFaPrEMHcKXqswNyptPVJ0cDIe8x5g='
-
-
 def _seed_connection_token(connection):
     reset_key_cache()
-    IntegrationSecretKey.set_plaintext(TEST_SECRET_KEY)
+    IntegrationSecretKey.set_plaintext(Fernet.generate_key().decode('utf-8'))
     reset_key_cache()
     expires_at = (timezone.now() + timedelta(hours=1)).isoformat()
     EncryptedSecret.store(connection, {

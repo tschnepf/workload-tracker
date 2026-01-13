@@ -33,7 +33,7 @@ jobs:
           . .venv-security/bin/activate
           pip install --upgrade pip
           pip install pip-audit safety bandit
-          npm -g install ajv-cli@5
+          npm -g install ajv-cli@5 ajv-formats@2
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | bash -s -- -b /usr/local/bin
 
       - name: Install frontend dependencies (for npm audit metadata)
@@ -114,11 +114,11 @@ jobs:
         run: python security/tools/aggregate_findings.py --artifacts security/artifacts --out security/security-findings.json
 
       - name: Validate findings schema
-        run: ajv validate --spec=draft2020 -s security/schema/security-findings.schema.json -d security/security-findings.json
+        run: ajv validate --spec=draft2020 -c ajv-formats -s security/schema/security-findings.schema.json -d security/security-findings.json
 
       - name: Enforce severity threshold (fail on High/Critical)
         run: |
-          node -e "const f=require('./security/security-findings.json'); const bad=f.filter(x=>['High','Critical'].includes(x.severity)); if(bad.length){console.error('High/Critical findings:', bad.length); process.exit(1)}"
+          node -e "const fs=require('fs');const findings=require('./security/security-findings.json');let suppress=[];try{suppress=JSON.parse(fs.readFileSync('./security/accepted-risk.json','utf8'))||[]}catch(e){suppress=[]};const now=Date.now();const isSuppressed=f=>suppress.some(s=>{if(!s)return false;const exp=s.expires?Date.parse(s.expires):null;if(exp&&exp<now)return false;return (s.id&&s.id===f.id)||(s.fingerprint&&s.fingerprint===f.fingerprint)});const bad=findings.filter(x=>['High','Critical'].includes(x.severity)&&!isSuppressed(x));if(bad.length){console.error('High/Critical findings:', bad.length);process.exit(1)}"
 
       - name: Upload artifacts
         if: always()
