@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import PreDeliverableGlobalSettings, CalendarFeedSettings
+from .models import PreDeliverableGlobalSettings, CalendarFeedSettings, RiskAttachmentSettings
 
 
 @admin.register(PreDeliverableGlobalSettings)
@@ -19,4 +19,10 @@ class PreDeliverableGlobalSettingsAdmin(admin.ModelAdmin):
 @admin.register(CalendarFeedSettings)
 class CalendarFeedSettingsAdmin(admin.ModelAdmin):
     list_display = ('key', 'deliverables_token', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(RiskAttachmentSettings)
+class RiskAttachmentSettingsAdmin(admin.ModelAdmin):
+    list_display = ('key', 'base_path', 'updated_at')
     readonly_fields = ('created_at', 'updated_at')

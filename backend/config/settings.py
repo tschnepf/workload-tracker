@@ -159,6 +159,11 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Protected risk attachments (outside MEDIA_ROOT by default)
+RISK_ATTACHMENTS_DIR = os.getenv('RISK_ATTACHMENTS_DIR', str(BASE_DIR / 'risk_attachments'))
+# Max upload size for risk attachments (bytes). Default 100 MiB.
+RISK_UPLOAD_MAX_BYTES = int(os.getenv('RISK_UPLOAD_MAX_BYTES', str(100 * 1024 * 1024)))
+
 # Backups configuration (Phase 0: Step 0.1)
 # Use a non-public directory for database backups; never place under MEDIA_ROOT
 BACKUPS_DIR = os.getenv('BACKUPS_DIR', '/backups')

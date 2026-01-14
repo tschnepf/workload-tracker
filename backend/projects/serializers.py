@@ -1,5 +1,10 @@
 from rest_framework import serializers
-from .models import Project
+from drf_spectacular.utils import extend_schema_field, OpenApiTypes
+from django.http import QueryDict
+from django.urls import reverse
+import json
+from .models import Project, ProjectRisk
+from departments.models import Department
 
 
 class ProjectFilterEntrySerializer(serializers.Serializer):
@@ -76,3 +81,114 @@ class ProjectAvailabilityItemSerializer(serializers.Serializer):
     capacity = serializers.FloatField()
     availableHours = serializers.FloatField()
     utilizationPercent = serializers.FloatField()
+
+
+class ProjectRiskSerializer(serializers.ModelSerializer):
+    departments = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Department.objects.all(),
+        required=False,
+    )
+    departmentNames = serializers.SerializerMethodField()
+    createdBy = serializers.PrimaryKeyRelatedField(source='created_by', read_only=True)
+    createdByName = serializers.SerializerMethodField()
+    updatedBy = serializers.PrimaryKeyRelatedField(source='updated_by', read_only=True)
+    updatedByName = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    attachmentUrl = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectRisk
+        fields = [
+            'id',
+            'project',
+            'description',
+            'departments',
+            'departmentNames',
+            'createdBy',
+            'createdByName',
+            'createdAt',
+            'updatedBy',
+            'updatedByName',
+            'updatedAt',
+            'attachment',
+            'attachmentUrl',
+        ]
+        read_only_fields = [
+            'id',
+            'project',
+            'createdBy',
+            'createdByName',
+            'createdAt',
+            'updatedBy',
+            'updatedByName',
+            'updatedAt',
+            'attachmentUrl',
+        ]
+
+    def to_internal_value(self, data):
+        is_querydict = isinstance(data, QueryDict)
+        if is_querydict:
+            data = data.copy()
+        if isinstance(data, dict) and 'departments' in data:
+            raw = data.get('departments')
+            if isinstance(raw, str):
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    parsed = None
+                if isinstance(parsed, list):
+                    if is_querydict and isinstance(data, QueryDict):
+                        data.setlist('departments', [str(v) for v in parsed])
+                    else:
+                        data['departments'] = parsed
+                elif raw.strip() == '':
+                    if is_querydict and isinstance(data, QueryDict):
+                        data.setlist('departments', [])
+                    else:
+                        data['departments'] = []
+        return super().to_internal_value(data)
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_departmentNames(self, obj):
+        try:
+            return [d.name for d in obj.departments.all()]
+        except Exception:
+            return []
+
+    def _user_display_name(self, user):
+        if not user:
+            return None
+        try:
+            person = getattr(getattr(user, 'profile', None), 'person', None)
+            if person and getattr(person, 'name', None):
+                return person.name
+        except Exception:
+            pass
+        try:
+            name = user.get_full_name()
+            if name:
+                return name
+        except Exception:
+            pass
+        return getattr(user, 'username', None) or str(user)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_createdByName(self, obj):
+        return self._user_display_name(getattr(obj, 'created_by', None))
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_updatedByName(self, obj):
+        return self._user_display_name(getattr(obj, 'updated_by', None))
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_attachmentUrl(self, obj):
+        if not getattr(obj, 'attachment', None):
+            return None
+        request = self.context.get('request')
+        if not request:
+            return None
+        return request.build_absolute_uri(
+            reverse('project_risk_attachment', kwargs={'project_id': obj.project_id, 'risk_id': obj.id})
+        )

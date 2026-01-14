@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.conf import settings
 import secrets
 
 
@@ -231,3 +232,27 @@ class CalendarFeedSettings(models.Model):
     def rotate_deliverables_token(self) -> None:
         self.deliverables_token = self._random_token()
         self.save(update_fields=['deliverables_token', 'updated_at'])
+
+
+class RiskAttachmentSettings(models.Model):
+    """Singleton storing the base path for protected risk attachments."""
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    base_path = models.CharField(max_length=512, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"RiskAttachmentSettings({self.key})"
+
+    @classmethod
+    def get_active(cls):
+        default_path = str(getattr(settings, 'RISK_ATTACHMENTS_DIR', '') or '')
+        obj, _ = cls.objects.get_or_create(
+            key='default',
+            defaults={'base_path': default_path},
+        )
+        return obj

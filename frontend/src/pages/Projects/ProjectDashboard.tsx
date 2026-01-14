@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import { useProject } from '@/hooks/useProjects';
-import { assignmentsApi, departmentsApi } from '@/services/api';
+import { assignmentsApi, departmentsApi, projectRisksApi } from '@/services/api';
 import { formatUtcToLocal } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
 import DeliverablesSection, { type DeliverablesSectionHandle } from '@/components/deliverables/DeliverablesSection';
@@ -15,7 +15,7 @@ import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import { listProjectRoles } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
-import type { Department, Person, Project } from '@/types/models';
+import type { Department, Person, Project, ProjectRisk } from '@/types/models';
 
 const ProjectDashboard: React.FC = () => {
   const params = useParams<{ id?: string }>();
@@ -44,6 +44,12 @@ const ProjectDashboard: React.FC = () => {
     queryFn: () => departmentsApi.listAll(),
     enabled: hasValidId,
     staleTime: 5 * 60_000,
+  });
+  const risksQuery = useQuery({
+    queryKey: ['project-risks', projectId],
+    queryFn: () => projectRisksApi.list(projectId),
+    enabled: hasValidId,
+    staleTime: 30_000,
   });
   const departmentIds = useMemo(() => {
     const ids = new Set<number>();
@@ -78,17 +84,6 @@ const ProjectDashboard: React.FC = () => {
   const formattedEndDate = project?.endDate
     ? (formatUtcToLocal(project.endDate, { dateStyle: 'medium' }) || project.endDate)
     : '-';
-  const assignmentsSummary = useMemo(() => {
-    const people = new Set<number>();
-    assignments.forEach((assignment) => {
-      if (Number.isFinite(assignment.person)) {
-        people.add(assignment.person);
-      }
-    });
-    return {
-      peopleCount: people.size,
-    };
-  }, [assignments]);
   const [showAddAssignment, setShowAddAssignment] = React.useState(false);
   const [personSearch, setPersonSearch] = React.useState('');
   const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(null);
@@ -102,6 +97,16 @@ const ProjectDashboard: React.FC = () => {
   const [savingAssignment, setSavingAssignment] = React.useState(false);
   const [deletingAssignmentId, setDeletingAssignmentId] = React.useState<number | null>(null);
   const deliverablesRef = React.useRef<DeliverablesSectionHandle | null>(null);
+  const [showAddRisk, setShowAddRisk] = React.useState(false);
+  const [riskDescription, setRiskDescription] = React.useState('');
+  const [riskDepartments, setRiskDepartments] = React.useState<number[]>([]);
+  const [riskFile, setRiskFile] = React.useState<File | null>(null);
+  const [editingRiskId, setEditingRiskId] = React.useState<number | null>(null);
+  const [riskEditDescription, setRiskEditDescription] = React.useState('');
+  const [riskEditDepartments, setRiskEditDepartments] = React.useState<number[]>([]);
+  const [riskEditFile, setRiskEditFile] = React.useState<File | null>(null);
+  const [savingRisk, setSavingRisk] = React.useState(false);
+  const [deletingRiskId, setDeletingRiskId] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -114,9 +119,6 @@ const ProjectDashboard: React.FC = () => {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
   const assignmentsCountLabel = assignmentsQuery.isLoading ? '-' : String(assignmentsTotal);
-  const assignmentsSummaryLabel = assignmentsQuery.isLoading
-    ? '—'
-    : `${assignmentsSummary.peopleCount} people`;
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
     (departmentsQuery.data ?? []).forEach((dept: Department) => {
@@ -185,6 +187,95 @@ const ProjectDashboard: React.FC = () => {
     } finally {
       setDeletingAssignmentId(null);
     }
+  };
+
+  const risks = (risksQuery.data?.results || []) as ProjectRisk[];
+
+  const toggleDepartment = (deptId: number, current: number[], setNext: (v: number[]) => void) => {
+    if (current.includes(deptId)) {
+      setNext(current.filter((id) => id !== deptId));
+    } else {
+      setNext([...current, deptId]);
+    }
+  };
+
+  const resetRiskForm = () => {
+    setRiskDescription('');
+    setRiskDepartments([]);
+    setRiskFile(null);
+  };
+
+  const resetRiskEdit = () => {
+    setEditingRiskId(null);
+    setRiskEditDescription('');
+    setRiskEditDepartments([]);
+    setRiskEditFile(null);
+  };
+
+  const handleAddRisk = async () => {
+    if (!projectId || savingRisk || !riskDescription.trim()) return;
+    try {
+      setSavingRisk(true);
+      const formData = new FormData();
+      formData.append('description', riskDescription.trim());
+      formData.append('departments', JSON.stringify(riskDepartments));
+      if (riskFile) formData.append('attachment', riskFile);
+      await projectRisksApi.create(projectId, formData);
+      await queryClient.invalidateQueries({ queryKey: ['project-risks', projectId] });
+      resetRiskForm();
+      setShowAddRisk(false);
+    } finally {
+      setSavingRisk(false);
+    }
+  };
+
+  const handleEditRisk = (risk: ProjectRisk) => {
+    setEditingRiskId(risk.id ?? null);
+    setRiskEditDescription(risk.description || '');
+    setRiskEditDepartments(risk.departments ? [...risk.departments] : []);
+    setRiskEditFile(null);
+  };
+
+  const handleUpdateRisk = async (riskId: number) => {
+    if (!projectId || savingRisk) return;
+    try {
+      setSavingRisk(true);
+      const formData = new FormData();
+      formData.append('description', riskEditDescription.trim());
+      formData.append('departments', JSON.stringify(riskEditDepartments));
+      if (riskEditFile) formData.append('attachment', riskEditFile);
+      await projectRisksApi.update(projectId, riskId, formData);
+      await queryClient.invalidateQueries({ queryKey: ['project-risks', projectId] });
+      resetRiskEdit();
+    } finally {
+      setSavingRisk(false);
+    }
+  };
+
+  const handleDeleteRisk = async (riskId: number) => {
+    if (!projectId || deletingRiskId) return;
+    const ok = window.confirm('Delete this risk?');
+    if (!ok) return;
+    try {
+      setDeletingRiskId(riskId);
+      await projectRisksApi.delete(projectId, riskId);
+      await queryClient.invalidateQueries({ queryKey: ['project-risks', projectId] });
+    } finally {
+      setDeletingRiskId(null);
+    }
+  };
+
+  const handleDownloadAttachment = async (risk: ProjectRisk) => {
+    if (!projectId || !risk.id) return;
+    const blob = await projectRisksApi.downloadAttachment(projectId, risk.id);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = (risk.attachmentUrl?.split('/').pop() || 'attachment');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -442,6 +533,167 @@ const ProjectDashboard: React.FC = () => {
                 />
               ) : null}
             </div>
+
+            <Card className="p-3 xl:col-span-12">
+              <div className="relative flex items-center justify-center mb-2">
+                <div className="text-sm font-semibold text-[var(--text)] text-center">Risk Log</div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddRisk((prev) => !prev)}
+                  className="absolute right-0 text-[11px] w-6 h-6 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)] flex items-center justify-center"
+                  aria-label={showAddRisk ? 'Close add risk' : 'Add risk'}
+                >
+                  {showAddRisk ? '×' : '+'}
+                </button>
+              </div>
+              <div className="border-t border-[#4a4f57]/60 mb-2" />
+
+              {showAddRisk && (
+                <div className="mb-3 rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/40 p-2 space-y-2">
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">New Risk</div>
+                  <div className="space-y-2">
+                    <textarea
+                      value={riskDescription}
+                      onChange={(e) => setRiskDescription(e.target.value)}
+                      placeholder="Describe the risk..."
+                      className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                      rows={2}
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="text-[11px] text-[var(--muted)]">Affected Departments</div>
+                      <div className="flex flex-wrap gap-2">
+                        {(departmentsQuery.data ?? []).map((dept) => (
+                          <label key={dept.id} className="text-[11px] text-[var(--text)] flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              checked={riskDepartments.includes(dept.id!)}
+                              onChange={() => toggleDepartment(dept.id!, riskDepartments, setRiskDepartments)}
+                              className="w-3 h-3"
+                            />
+                            {dept.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <input
+                        type="file"
+                        onChange={(e) => setRiskFile(e.target.files?.[0] || null)}
+                        className="text-xs text-[var(--muted)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddRisk}
+                        disabled={!riskDescription.trim() || savingRisk}
+                        className="text-[11px] px-2 py-1 rounded border border-[var(--border)] bg-[var(--primary)] text-white disabled:opacity-50"
+                      >
+                        {savingRisk ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {risksQuery.isLoading ? (
+                <div className="text-xs text-[var(--muted)]">Loading risks...</div>
+              ) : risksQuery.isError ? (
+                <div className="text-xs text-red-300">Failed to load risks.</div>
+              ) : risks.length === 0 ? (
+                <div className="text-xs text-[var(--muted)]">No risks logged yet.</div>
+              ) : (
+                <div className="space-y-2">
+                  {risks.map((risk) => (
+                    <div key={risk.id} className="rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/20 p-2">
+                      {editingRiskId === risk.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={riskEditDescription}
+                            onChange={(e) => setRiskEditDescription(e.target.value)}
+                            className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)]"
+                            rows={2}
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            {(departmentsQuery.data ?? []).map((dept) => (
+                              <label key={dept.id} className="text-[11px] text-[var(--text)] flex items-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={riskEditDepartments.includes(dept.id!)}
+                                  onChange={() => toggleDepartment(dept.id!, riskEditDepartments, setRiskEditDepartments)}
+                                  className="w-3 h-3"
+                                />
+                                {dept.name}
+                              </label>
+                            ))}
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <input
+                              type="file"
+                              onChange={(e) => setRiskEditFile(e.target.files?.[0] || null)}
+                              className="text-xs text-[var(--muted)]"
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => risk.id && handleUpdateRisk(risk.id)}
+                                disabled={!riskEditDescription.trim() || savingRisk}
+                                className="text-[11px] px-2 py-1 rounded border border-[var(--border)] bg-[var(--primary)] text-white disabled:opacity-50"
+                              >
+                                {savingRisk ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={resetRiskEdit}
+                                className="text-[11px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="text-xs text-[var(--text)]">{risk.description}</div>
+                            <div className="flex items-center gap-2">
+                              {risk.attachmentUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadAttachment(risk)}
+                                  className="text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+                                >
+                                  Download
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleEditRisk(risk)}
+                                className="text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => risk.id && handleDeleteRisk(risk.id)}
+                                disabled={deletingRiskId === risk.id}
+                                className="text-[11px] text-red-300 hover:text-red-200 disabled:opacity-50"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-[11px] text-[var(--muted)]">
+                            {(risk.departmentNames || []).join(', ') || 'No departments'}
+                          </div>
+                          <div className="text-[11px] text-[var(--muted)]">
+                            {risk.createdByName || 'Unknown'} · {formatUtcToLocal(risk.createdAt)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
         )}
       </div>

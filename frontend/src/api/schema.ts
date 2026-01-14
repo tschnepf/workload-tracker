@@ -826,6 +826,19 @@ export interface paths {
      */
     put: operations["projects_pre_deliverable_settings_update"];
   };
+  "/api/projects/{project_id}/risks/": {
+    get: operations["projects_risks_list"];
+    post: operations["projects_risks_create"];
+  };
+  "/api/projects/{project_id}/risks/{risk_id}/": {
+    get: operations["projects_risks_retrieve"];
+    put: operations["projects_risks_update"];
+    delete: operations["projects_risks_destroy"];
+    patch: operations["projects_risks_partial_update"];
+  };
+  "/api/projects/{project_id}/risks/{risk_id}/attachment/": {
+    get: operations["projects_risks_attachment_retrieve"];
+  };
   "/api/projects/export_excel/": {
     /** @description Export projects to Excel with streaming response for large datasets */
     get: operations["projects_export_excel_retrieve"];
@@ -1880,6 +1893,21 @@ export interface components {
       previous?: string | null;
       results: components["schemas"]["Project"][];
     };
+    PaginatedProjectRiskList: {
+      /** @example 123 */
+      count: number;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=4
+       */
+      next?: string | null;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=2
+       */
+      previous?: string | null;
+      results: components["schemas"]["ProjectRisk"][];
+    };
     PaginatedRoleList: {
       /** @example 123 */
       count: number;
@@ -2062,6 +2090,12 @@ export interface components {
       estimatedHours?: number | null;
       /** @default true */
       isActive?: boolean;
+    };
+    PatchedProjectRiskRequest: {
+      description?: string;
+      departments?: number[];
+      /** Format: binary */
+      attachment?: string | null;
     };
     PatchedProjectRoleUpdateRequest: {
       name?: string;
@@ -2474,6 +2508,30 @@ export interface components {
       estimatedHours?: number | null;
       /** @default true */
       isActive?: boolean;
+    };
+    ProjectRisk: {
+      id: number;
+      project: number;
+      description: string;
+      departments?: number[];
+      departmentNames: readonly string[];
+      createdBy: number;
+      createdByName: string;
+      /** Format: date-time */
+      createdAt: string;
+      updatedBy: number;
+      updatedByName: string;
+      /** Format: date-time */
+      updatedAt: string;
+      /** Format: uri */
+      attachment?: string | null;
+      attachmentUrl: string;
+    };
+    ProjectRiskRequest: {
+      description: string;
+      departments?: number[];
+      /** Format: binary */
+      attachment?: string | null;
     };
     ProjectRole: {
       id: number;
@@ -5918,6 +5976,138 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["ProjectPreDeliverableSettingsResponse"];
         };
+      };
+    };
+  };
+  projects_risks_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+      path: {
+        project_id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedProjectRiskList"];
+        };
+      };
+    };
+  };
+  projects_risks_create: {
+    parameters: {
+      path: {
+        project_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["ProjectRiskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectRiskRequest"];
+        "application/json": components["schemas"]["ProjectRiskRequest"];
+      };
+    };
+    responses: {
+      201: {
+        content: {
+          "application/json": components["schemas"]["ProjectRisk"];
+        };
+      };
+    };
+  };
+  projects_risks_retrieve: {
+    parameters: {
+      path: {
+        project_id: number;
+        risk_id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRisk"];
+        };
+      };
+    };
+  };
+  projects_risks_update: {
+    parameters: {
+      path: {
+        project_id: number;
+        risk_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["ProjectRiskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectRiskRequest"];
+        "application/json": components["schemas"]["ProjectRiskRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRisk"];
+        };
+      };
+    };
+  };
+  projects_risks_destroy: {
+    parameters: {
+      path: {
+        project_id: number;
+        risk_id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  projects_risks_partial_update: {
+    parameters: {
+      path: {
+        project_id: number;
+        risk_id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "multipart/form-data": components["schemas"]["PatchedProjectRiskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRiskRequest"];
+        "application/json": components["schemas"]["PatchedProjectRiskRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRisk"];
+        };
+      };
+    };
+  };
+  projects_risks_attachment_retrieve: {
+    parameters: {
+      path: {
+        project_id: number;
+        risk_id: number;
+      };
+    };
+    responses: {
+      /** @description Risk attachment file */
+      200: {
+        content: {
+          "application/json": string;
+        };
+      };
+      /** @description No attachment found */
+      404: {
+        content: never;
       };
     };
   };

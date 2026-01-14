@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ProjectRole
+from .models import ProjectRole, ProjectRisk
 
 
 @admin.register(ProjectRole)
@@ -9,3 +9,10 @@ class ProjectRoleAdmin(admin.ModelAdmin):
     search_fields = ('name', 'normalized_name')
     ordering = ('department', 'sort_order', 'name')
 
+
+@admin.register(ProjectRisk)
+class ProjectRiskAdmin(admin.ModelAdmin):
+    list_display = ('project', 'description', 'created_by', 'created_at')
+    list_filter = ('project', 'departments')
+    search_fields = ('description', 'project__name')
+    ordering = ('-created_at',)

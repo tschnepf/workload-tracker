@@ -3,7 +3,7 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse, JobStatus } from '@/types/models';
+import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse, JobStatus, ProjectRisk } from '@/types/models';
 import type { BackupListResponse, BackupStatus } from '@/types/backup';
 import { getAccessToken } from '@/utils/auth';
 import { resolveApiBase } from '@/utils/apiBase';
@@ -599,6 +599,62 @@ export const projectsApi = {
     }
   },
 
+};
+
+// Project Risks API
+export const projectRisksApi = {
+  list: async (projectId: number): Promise<PaginatedResponse<ProjectRisk>> => {
+    const res = await fetchApi<PaginatedResponse<ProjectRisk>>(`/projects/${projectId}/risks/`, { headers: authHeaders() });
+    return res as PaginatedResponse<ProjectRisk>;
+  },
+  create: async (projectId: number, formData: FormData): Promise<ProjectRisk> => {
+    const url = `${API_BASE_URL}/projects/${projectId}/risks/`;
+    const token = getAccessToken();
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+    if (!res.ok) {
+      const status = res.status || 500;
+      let data: any = null;
+      try { data = await res.json(); } catch {}
+      throw new ApiError(friendlyErrorMessage(status, data, `HTTP ${status}`), status, data);
+    }
+    return (await res.json()) as ProjectRisk;
+  },
+  update: async (projectId: number, riskId: number, formData: FormData): Promise<ProjectRisk> => {
+    const url = `${API_BASE_URL}/projects/${projectId}/risks/${riskId}/`;
+    const token = getAccessToken();
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+    if (!res.ok) {
+      const status = res.status || 500;
+      let data: any = null;
+      try { data = await res.json(); } catch {}
+      throw new ApiError(friendlyErrorMessage(status, data, `HTTP ${status}`), status, data);
+    }
+    return (await res.json()) as ProjectRisk;
+  },
+  delete: async (projectId: number, riskId: number) => {
+    const res = await fetchApi<void>(`/projects/${projectId}/risks/${riskId}/`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    return res;
+  },
+  downloadAttachment: async (projectId: number, riskId: number): Promise<Blob> => {
+    const url = `${API_BASE_URL}/projects/${projectId}/risks/${riskId}/attachment/`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) {
+      const status = res.status || 500;
+      throw new ApiError(`Failed to download attachment (HTTP ${status})`, status);
+    }
+    return res.blob();
+  },
 };
 
 // Departments API

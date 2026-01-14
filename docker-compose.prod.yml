@@ -25,12 +25,14 @@ services:
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - BACKUPS_DIR=/backups
+      - RISK_ATTACHMENTS_DIR=${RISK_ATTACHMENTS_DIR:-/app/risk_attachments}
       - COOKIE_REFRESH_AUTH=true
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
     volumes:
       - ./backend:/app:ro  # Read-only mount for security
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - risk_attachments_volume:/app/risk_attachments
       - ./backups:/backups:rw
     restart: unless-stopped
     read_only: true
@@ -171,11 +173,13 @@ services:
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - BACKUPS_DIR=/backups
+      - RISK_ATTACHMENTS_DIR=${RISK_ATTACHMENTS_DIR:-/app/risk_attachments}
       - COLLECT_STATIC=false
     volumes:
       - ./backend:/app:ro
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - risk_attachments_volume:/app/risk_attachments
       - ./backups:/backups
     depends_on:
       migrator:
@@ -207,10 +211,12 @@ services:
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - BACKUPS_DIR=/backups
+      - RISK_ATTACHMENTS_DIR=${RISK_ATTACHMENTS_DIR:-/app/risk_attachments}
       - COLLECT_STATIC=false
     volumes:
       - ./backend:/app:ro
       - ./backups:/backups
+      - risk_attachments_volume:/app/risk_attachments
     depends_on:
       migrator:
         condition: service_completed_successfully
@@ -240,12 +246,14 @@ services:
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - BACKUPS_DIR=/backups
+      - RISK_ATTACHMENTS_DIR=${RISK_ATTACHMENTS_DIR:-/app/risk_attachments}
       - COLLECT_STATIC=false
       # Optional: explicit schedule file (defaults to /tmp/celerybeat-schedule)
       # - CELERY_BEAT_SCHEDULE_FILE=/tmp/celerybeat-schedule
     volumes:
       - ./backend:/app:ro
       - ./backups:/backups
+      - risk_attachments_volume:/app/risk_attachments
     depends_on:
       migrator:
         condition: service_completed_successfully
@@ -260,6 +268,8 @@ volumes:
   static_volume:
     driver: local
   media_volume:
+    driver: local
+  risk_attachments_volume:
     driver: local
   frontend_build:
     driver: local

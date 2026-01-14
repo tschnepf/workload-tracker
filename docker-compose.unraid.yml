@@ -68,6 +68,7 @@ services:
       - /mnt/user/appdata/workload-tracker/backups:/backups:rw
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - risk_attachments_volume:/app/risk_attachments
     read_only: true
     tmpfs:
       - /tmp
@@ -112,6 +113,7 @@ services:
       - /mnt/user/appdata/workload-tracker/backups:/backups
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - risk_attachments_volume:/app/risk_attachments
     read_only: true
     tmpfs:
       - /tmp
@@ -144,6 +146,7 @@ services:
     command: celery -A config worker -l info --concurrency=1 -Q db_maintenance
     volumes:
       - /mnt/user/appdata/workload-tracker/backups:/backups
+      - risk_attachments_volume:/app/risk_attachments
     read_only: true
     tmpfs:
       - /tmp
@@ -179,6 +182,7 @@ services:
     command: ["celery", "-A", "config", "beat", "-l", "INFO"]
     volumes:
       - /mnt/user/appdata/workload-tracker/backups:/backups
+      - risk_attachments_volume:/app/risk_attachments
     read_only: true
     tmpfs:
       - /tmp
@@ -225,3 +229,4 @@ volumes:
   media_volume:
   frontend_build:
   beat_state:
+  risk_attachments_volume:

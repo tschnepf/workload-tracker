@@ -53,6 +53,7 @@ services:
       - ./backend:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - risk_attachments_volume:/app/risk_attachments
       - ./backups:/backups:rw
     ports:
       - "${BACKEND_PORT}:8000"
@@ -119,6 +120,7 @@ services:
       - ./backend:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - risk_attachments_volume:/app/risk_attachments
       - ./backups:/backups:rw
     depends_on:
       redis:
@@ -162,6 +164,7 @@ services:
       - ./backend:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - risk_attachments_volume:/app/risk_attachments
       - ./backups:/backups:rw
     depends_on:
       redis:
@@ -224,6 +227,7 @@ services:
     volumes:
       - ./backend:/app:ro
       - ./backups:/backups:rw
+      - risk_attachments_volume:/app/risk_attachments
     depends_on:
       redis:
         condition: service_healthy
@@ -260,6 +264,7 @@ volumes:
   postgres_data_v17:
   static_volume:
   media_volume:
+  risk_attachments_volume:
 
 networks:
   tracker-network:

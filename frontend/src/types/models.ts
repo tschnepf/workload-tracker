@@ -119,6 +119,22 @@ export interface Deliverable {
   updatedAt?: string;
 }
 
+export interface ProjectRisk {
+  id?: number;
+  project: number;
+  description: string;
+  departments?: number[];
+  departmentNames?: string[];
+  createdBy?: number | null;
+  createdByName?: string | null;
+  createdAt?: string;
+  updatedBy?: number | null;
+  updatedByName?: string | null;
+  updatedAt?: string;
+  attachment?: string | null;
+  attachmentUrl?: string | null;
+}
+
 export interface SkillTag {
   id?: number;
   name: string;

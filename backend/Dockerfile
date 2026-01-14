@@ -40,6 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p /app/risk_attachments
+
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
 COPY entrypoint.sh /entrypoint.sh
@@ -69,7 +71,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create non-root user and writable dirs
 RUN groupadd -r app && useradd -r -g app app \
- && mkdir -p /app/staticfiles /app/media \
+ && mkdir -p /app/staticfiles /app/media /app/risk_attachments \
  && chown -R app:app /app
 
 COPY --from=builder /opt/venv /opt/venv

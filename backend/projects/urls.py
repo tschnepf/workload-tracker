@@ -10,5 +10,6 @@ urlpatterns = [
     # Register role endpoints before router URLs so specific subpaths
     # like 'project-roles/' are not shadowed by the project detail route.
     path('', include('projects.urls_roles')),
+    path('', include('projects.urls_risks')),
     path('', include(router.urls)),
 ]

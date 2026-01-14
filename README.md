@@ -201,6 +201,11 @@ See `docs/integrations/key-rotation.md` for the MultiFernet rotation runbook and
 **Coming Soon**
 - Placeholder page used for features that are being prepared and will appear in future updates.
 
+Storage Notes (Risk Attachments)
+- Risk log attachments are stored in a protected volume mounted at `/app/risk_attachments`.
+- In Docker, map a persistent volume to that path (the compose files include `risk_attachments_volume:/app/risk_attachments`).
+- You can override the path with `RISK_ATTACHMENTS_DIR` if you mount a different host path or volume.
+
 
 Helpful Concepts
 - Assignment: A person planned to work on a project, with weekly hours.

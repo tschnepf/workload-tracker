@@ -28,6 +28,10 @@ project_risks/<project_id>/<timestamp>_<filename>
 ```
 **Folder marker file:** on first attachment for a project, create a blank text file named  
 `client-projectnumber-projectname.txt` in that project’s attachment folder to identify the project.
+- **Filename sanitization:** slugify/clean the marker filename to avoid illegal filesystem characters.
+- **Idempotent creation:** create the marker file once and never overwrite it.
+- **Transactional behavior:** create the marker only after a successful attachment save (post-save hook).
+- **Folder persistence:** deleting a risk does **not** remove the project folder or marker file.
 
 ## Attachment access strategy (decide early)
 **Option B (protected)** — store attachments outside `MEDIA_ROOT` and expose a DRF download endpoint with auth checks.
@@ -36,6 +40,7 @@ project_risks/<project_id>/<timestamp>_<filename>
 - **Configurable path:** allow an admin (or env var) to set `RISK_ATTACHMENTS_DIR` in settings.
 - Add a download endpoint that checks permissions and streams the file.
 - Use the storage backend to open/stream files (avoid raw filesystem path usage).
+- **Permissions:** allow download for authenticated users (or project members if stricter rules are added).
 - This prevents public access and aligns with auth requirements.
 
 ## Upload validation
@@ -75,7 +80,7 @@ Add a **Risk Log** section to the Project Dashboard:
 - List risks with description, departments, created by, created at, attachment link
 - Add risk (description + department multi-select + file upload)
 - Edit risk (description, departments, attachment replace/remove)
-- Delete risk
+- Delete risk (removes the risk record; folder + marker file remain)
 - **Multipart handling:** send `departments` in `FormData` as JSON (e.g., `"[1,2]"`).
 
 API usage:

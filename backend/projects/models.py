@@ -3,6 +3,12 @@ Project model - Complete schema from Day 1, migrate to in Chunk 5.
 """
 
 from django.db import models
+from django.conf import settings
+from django.utils import timezone
+from django.utils.text import slugify
+import os
+
+from .storage import RiskAttachmentStorage
 
 class Project(models.Model):
     """Project model - create Day 1, migrate to in Chunk 5"""
@@ -130,3 +136,49 @@ class ProjectRole(models.Model):
         norm = ' '.join((self.name or '').strip().split()).lower()
         self.normalized_name = norm
         super().save(*args, **kwargs)
+
+
+def risk_attachment_upload_to(instance: 'ProjectRisk', filename: str) -> str:
+    base = os.path.basename(filename or '')
+    name, ext = os.path.splitext(base)
+    safe_base = slugify(name) or 'attachment'
+    safe_ext = (ext or '')[:10].lower()
+    ts = timezone.now().strftime('%Y%m%d_%H%M%S')
+    return f"project_risks/{instance.project_id}/{ts}_{safe_base}{safe_ext}"
+
+
+class ProjectRisk(models.Model):
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='risks')
+    description = models.TextField()
+    departments = models.ManyToManyField('departments.Department', related_name='risk_entries', blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_project_risks',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='updated_project_risks',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    attachment = models.FileField(
+        upload_to=risk_attachment_upload_to,
+        storage=RiskAttachmentStorage(),
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['project', 'created_at'], name='idx_prisk_proj_created'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"Risk({self.project_id}) {self.description[:50]}"
