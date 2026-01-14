@@ -3,7 +3,7 @@ from drf_spectacular.utils import extend_schema_field, OpenApiTypes
 from django.http import QueryDict
 from django.urls import reverse
 import json
-from .models import Project, ProjectRisk
+from .models import Project, ProjectRisk, ProjectRiskEdit
 from departments.models import Department
 
 
@@ -83,6 +83,42 @@ class ProjectAvailabilityItemSerializer(serializers.Serializer):
     utilizationPercent = serializers.FloatField()
 
 
+class ProjectRiskEditSerializer(serializers.ModelSerializer):
+    actor = serializers.PrimaryKeyRelatedField(read_only=True)
+    actorName = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = ProjectRiskEdit
+        fields = [
+            'id',
+            'action',
+            'changes',
+            'actor',
+            'actorName',
+            'createdAt',
+        ]
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_actorName(self, obj):
+        user = getattr(obj, 'actor', None)
+        if not user:
+            return None
+        try:
+            person = getattr(getattr(user, 'profile', None), 'person', None)
+            if person and getattr(person, 'name', None):
+                return person.name
+        except Exception:
+            pass
+        try:
+            name = user.get_full_name()
+            if name:
+                return name
+        except Exception:
+            pass
+        return getattr(user, 'username', None) or str(user)
+
+
 class ProjectRiskSerializer(serializers.ModelSerializer):
     departments = serializers.PrimaryKeyRelatedField(
         many=True,
@@ -97,6 +133,7 @@ class ProjectRiskSerializer(serializers.ModelSerializer):
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     attachmentUrl = serializers.SerializerMethodField()
+    edits = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectRisk
@@ -104,6 +141,8 @@ class ProjectRiskSerializer(serializers.ModelSerializer):
             'id',
             'project',
             'description',
+            'priority',
+            'status',
             'departments',
             'departmentNames',
             'createdBy',
@@ -114,6 +153,7 @@ class ProjectRiskSerializer(serializers.ModelSerializer):
             'updatedAt',
             'attachment',
             'attachmentUrl',
+            'edits',
         ]
         read_only_fields = [
             'id',
@@ -126,6 +166,13 @@ class ProjectRiskSerializer(serializers.ModelSerializer):
             'updatedAt',
             'attachmentUrl',
         ]
+
+    @extend_schema_field(ProjectRiskEditSerializer(many=True))
+    def get_edits(self, obj):
+        edits = getattr(obj, 'edits', None)
+        if edits is None:
+            return []
+        return ProjectRiskEditSerializer(edits.all(), many=True, context=self.context).data
 
     def to_internal_value(self, data):
         is_querydict = isinstance(data, QueryDict)

@@ -148,8 +148,19 @@ def risk_attachment_upload_to(instance: 'ProjectRisk', filename: str) -> str:
 
 
 class ProjectRisk(models.Model):
+    PRIORITY_CHOICES = [
+        ('high', 'High'),
+        ('medium', 'Medium'),
+        ('low', 'Low'),
+    ]
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('closed', 'Closed'),
+    ]
     project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='risks')
     description = models.TextField()
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='open')
     departments = models.ManyToManyField('departments.Department', related_name='risk_entries', blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -182,3 +193,30 @@ class ProjectRisk(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"Risk({self.project_id}) {self.description[:50]}"
+
+
+class ProjectRiskEdit(models.Model):
+    ACTION_CHOICES = [
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+    ]
+    risk = models.ForeignKey('projects.ProjectRisk', on_delete=models.CASCADE, related_name='edits')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='project_risk_edits',
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    changes = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['risk', 'created_at'], name='idx_priskedit_risk_created'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"RiskEdit({self.risk_id}, {self.action})"

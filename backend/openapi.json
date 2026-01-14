@@ -9322,6 +9322,14 @@
     },
     "components": {
         "schemas": {
+            "ActionEnum": {
+                "enum": [
+                    "created",
+                    "updated"
+                ],
+                "type": "string",
+                "description": "* `created` - Created\n* `updated` - Updated"
+            },
             "AdminAuditLog": {
                 "type": "object",
                 "properties": {
@@ -12604,6 +12612,12 @@
                         "type": "string",
                         "minLength": 1
                     },
+                    "priority": {
+                        "$ref": "#/components/schemas/PriorityEnum"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/ProjectRiskStatusEnum"
+                    },
                     "departments": {
                         "type": "array",
                         "items": {
@@ -13717,6 +13731,15 @@
                     "enqueued"
                 ]
             },
+            "PriorityEnum": {
+                "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                ],
+                "type": "string",
+                "description": "* `high` - High\n* `medium` - Medium\n* `low` - Low"
+            },
             "Project": {
                 "type": "object",
                 "properties": {
@@ -14062,6 +14085,12 @@
                     "description": {
                         "type": "string"
                     },
+                    "priority": {
+                        "$ref": "#/components/schemas/PriorityEnum"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/ProjectRiskStatusEnum"
+                    },
                     "departments": {
                         "type": "array",
                         "items": {
@@ -14109,6 +14138,13 @@
                     "attachmentUrl": {
                         "type": "string",
                         "readOnly": true
+                    },
+                    "edits": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProjectRiskEdit"
+                        },
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -14118,11 +14154,45 @@
                     "createdByName",
                     "departmentNames",
                     "description",
+                    "edits",
                     "id",
                     "project",
                     "updatedAt",
                     "updatedBy",
                     "updatedByName"
+                ]
+            },
+            "ProjectRiskEdit": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "action": {
+                        "$ref": "#/components/schemas/ActionEnum"
+                    },
+                    "changes": {},
+                    "actor": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "actorName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "action",
+                    "actor",
+                    "actorName",
+                    "createdAt",
+                    "id"
                 ]
             },
             "ProjectRiskRequest": {
@@ -14131,6 +14201,12 @@
                     "description": {
                         "type": "string",
                         "minLength": 1
+                    },
+                    "priority": {
+                        "$ref": "#/components/schemas/PriorityEnum"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/ProjectRiskStatusEnum"
                     },
                     "departments": {
                         "type": "array",
@@ -14147,6 +14223,14 @@
                 "required": [
                     "description"
                 ]
+            },
+            "ProjectRiskStatusEnum": {
+                "enum": [
+                    "open",
+                    "closed"
+                ],
+                "type": "string",
+                "description": "* `open` - Open\n* `closed` - Closed"
             },
             "ProjectRole": {
                 "type": "object",

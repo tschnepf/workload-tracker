@@ -1030,6 +1030,12 @@ export type webhooks = Record<string, never>;
 
 export interface components {
   schemas: {
+    /**
+     * @description * `created` - Created
+     * * `updated` - Updated
+     * @enum {string}
+     */
+    ActionEnum: "created" | "updated";
     AdminAuditLog: {
       id: number;
       action: string;
@@ -2093,6 +2099,8 @@ export interface components {
     };
     PatchedProjectRiskRequest: {
       description?: string;
+      priority?: components["schemas"]["PriorityEnum"];
+      status?: components["schemas"]["ProjectRiskStatusEnum"];
       departments?: number[];
       /** Format: binary */
       attachment?: string | null;
@@ -2406,6 +2414,13 @@ export interface components {
         [key: string]: unknown;
       };
     };
+    /**
+     * @description * `high` - High
+     * * `medium` - Medium
+     * * `low` - Low
+     * @enum {string}
+     */
+    PriorityEnum: "high" | "medium" | "low";
     Project: {
       id: number;
       name: string;
@@ -2513,6 +2528,8 @@ export interface components {
       id: number;
       project: number;
       description: string;
+      priority?: components["schemas"]["PriorityEnum"];
+      status?: components["schemas"]["ProjectRiskStatusEnum"];
       departments?: number[];
       departmentNames: readonly string[];
       createdBy: number;
@@ -2526,13 +2543,31 @@ export interface components {
       /** Format: uri */
       attachment?: string | null;
       attachmentUrl: string;
+      edits: readonly components["schemas"]["ProjectRiskEdit"][];
+    };
+    ProjectRiskEdit: {
+      id: number;
+      action: components["schemas"]["ActionEnum"];
+      changes?: unknown;
+      actor: number;
+      actorName: string;
+      /** Format: date-time */
+      createdAt: string;
     };
     ProjectRiskRequest: {
       description: string;
+      priority?: components["schemas"]["PriorityEnum"];
+      status?: components["schemas"]["ProjectRiskStatusEnum"];
       departments?: number[];
       /** Format: binary */
       attachment?: string | null;
     };
+    /**
+     * @description * `open` - Open
+     * * `closed` - Closed
+     * @enum {string}
+     */
+    ProjectRiskStatusEnum: "open" | "closed";
     ProjectRole: {
       id: number;
       name: string;

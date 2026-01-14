@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage, Storage
+from django.utils.deconstruct import deconstructible
 
 from core.models import RiskAttachmentSettings
 
@@ -16,6 +17,7 @@ def get_risk_attachments_dir() -> str:
     return str(getattr(settings, 'RISK_ATTACHMENTS_DIR', '') or '')
 
 
+@deconstructible
 class RiskAttachmentStorage(Storage):
     """Dynamic storage that resolves its base path from RiskAttachmentSettings."""
 

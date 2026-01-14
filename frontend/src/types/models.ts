@@ -123,8 +123,11 @@ export interface ProjectRisk {
   id?: number;
   project: number;
   description: string;
+  priority?: 'high' | 'medium' | 'low';
+  status?: 'open' | 'closed';
   departments?: number[];
   departmentNames?: string[];
+  edits?: ProjectRiskEdit[];
   createdBy?: number | null;
   createdByName?: string | null;
   createdAt?: string;
@@ -133,6 +136,15 @@ export interface ProjectRisk {
   updatedAt?: string;
   attachment?: string | null;
   attachmentUrl?: string | null;
+}
+
+export interface ProjectRiskEdit {
+  id?: number;
+  action: 'created' | 'updated';
+  changes?: Record<string, any>;
+  actor?: number | null;
+  actorName?: string | null;
+  createdAt?: string;
 }
 
 export interface SkillTag {

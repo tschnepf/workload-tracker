@@ -99,14 +99,23 @@ const ProjectDashboard: React.FC = () => {
   const deliverablesRef = React.useRef<DeliverablesSectionHandle | null>(null);
   const [showAddRisk, setShowAddRisk] = React.useState(false);
   const [riskDescription, setRiskDescription] = React.useState('');
+  const [riskPriority, setRiskPriority] = React.useState<'high' | 'medium' | 'low'>('medium');
+  const [riskStatus, setRiskStatus] = React.useState<'open' | 'closed'>('open');
   const [riskDepartments, setRiskDepartments] = React.useState<number[]>([]);
   const [riskFile, setRiskFile] = React.useState<File | null>(null);
   const [editingRiskId, setEditingRiskId] = React.useState<number | null>(null);
   const [riskEditDescription, setRiskEditDescription] = React.useState('');
+  const [riskEditPriority, setRiskEditPriority] = React.useState<'high' | 'medium' | 'low'>('medium');
+  const [riskEditStatus, setRiskEditStatus] = React.useState<'open' | 'closed'>('open');
   const [riskEditDepartments, setRiskEditDepartments] = React.useState<number[]>([]);
   const [riskEditFile, setRiskEditFile] = React.useState<File | null>(null);
+  const riskFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const riskEditFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [savingRisk, setSavingRisk] = React.useState(false);
   const [deletingRiskId, setDeletingRiskId] = React.useState<number | null>(null);
+  const [expandedRiskIds, setExpandedRiskIds] = React.useState<Set<number>>(new Set());
+  const [openAttachmentMenuId, setOpenAttachmentMenuId] = React.useState<number | null>(null);
+  const attachmentMenuRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -114,10 +123,13 @@ const ProjectDashboard: React.FC = () => {
       if (personBoxRef.current && !personBoxRef.current.contains(target)) {
         setPersonDropdownOpen(false);
       }
+      if (openAttachmentMenuId && attachmentMenuRef.current && !attachmentMenuRef.current.contains(target)) {
+        setOpenAttachmentMenuId(null);
+      }
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, []);
+  }, [openAttachmentMenuId]);
   const assignmentsCountLabel = assignmentsQuery.isLoading ? '-' : String(assignmentsTotal);
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -201,6 +213,8 @@ const ProjectDashboard: React.FC = () => {
 
   const resetRiskForm = () => {
     setRiskDescription('');
+    setRiskPriority('medium');
+    setRiskStatus('open');
     setRiskDepartments([]);
     setRiskFile(null);
   };
@@ -208,6 +222,8 @@ const ProjectDashboard: React.FC = () => {
   const resetRiskEdit = () => {
     setEditingRiskId(null);
     setRiskEditDescription('');
+    setRiskEditPriority('medium');
+    setRiskEditStatus('open');
     setRiskEditDepartments([]);
     setRiskEditFile(null);
   };
@@ -218,6 +234,8 @@ const ProjectDashboard: React.FC = () => {
       setSavingRisk(true);
       const formData = new FormData();
       formData.append('description', riskDescription.trim());
+      formData.append('priority', riskPriority);
+      formData.append('status', riskStatus);
       formData.append('departments', JSON.stringify(riskDepartments));
       if (riskFile) formData.append('attachment', riskFile);
       await projectRisksApi.create(projectId, formData);
@@ -232,6 +250,8 @@ const ProjectDashboard: React.FC = () => {
   const handleEditRisk = (risk: ProjectRisk) => {
     setEditingRiskId(risk.id ?? null);
     setRiskEditDescription(risk.description || '');
+    setRiskEditPriority((risk.priority as 'high' | 'medium' | 'low') || 'medium');
+    setRiskEditStatus((risk.status as 'open' | 'closed') || 'open');
     setRiskEditDepartments(risk.departments ? [...risk.departments] : []);
     setRiskEditFile(null);
   };
@@ -242,11 +262,30 @@ const ProjectDashboard: React.FC = () => {
       setSavingRisk(true);
       const formData = new FormData();
       formData.append('description', riskEditDescription.trim());
+      formData.append('priority', riskEditPriority);
+      formData.append('status', riskEditStatus);
       formData.append('departments', JSON.stringify(riskEditDepartments));
       if (riskEditFile) formData.append('attachment', riskEditFile);
       await projectRisksApi.update(projectId, riskId, formData);
       await queryClient.invalidateQueries({ queryKey: ['project-risks', projectId] });
       resetRiskEdit();
+    } finally {
+      setSavingRisk(false);
+    }
+  };
+
+  const handleInlineRiskUpdate = async (
+    riskId: number,
+    field: 'priority' | 'status',
+    value: 'high' | 'medium' | 'low' | 'open' | 'closed'
+  ) => {
+    if (!projectId || savingRisk) return;
+    try {
+      setSavingRisk(true);
+      const formData = new FormData();
+      formData.append(field, value);
+      await projectRisksApi.update(projectId, riskId, formData);
+      await queryClient.invalidateQueries({ queryKey: ['project-risks', projectId] });
     } finally {
       setSavingRisk(false);
     }
@@ -265,6 +304,73 @@ const ProjectDashboard: React.FC = () => {
     }
   };
 
+  const handleInlineRiskAttachment = async (riskId: number, file: File | null) => {
+    if (!projectId || savingRisk || !file) return;
+    try {
+      setSavingRisk(true);
+      const formData = new FormData();
+      formData.append('attachment', file);
+      await projectRisksApi.update(projectId, riskId, formData);
+      await queryClient.invalidateQueries({ queryKey: ['project-risks', projectId] });
+    } finally {
+      setSavingRisk(false);
+    }
+  };
+
+  const toggleRiskExpanded = (riskId: number) => {
+    setExpandedRiskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(riskId)) {
+        next.delete(riskId);
+      } else {
+        next.add(riskId);
+      }
+      return next;
+    });
+  };
+
+  const formatRiskEditLines = (
+    edit?: ProjectRisk['edits'] extends Array<infer T> ? T : any
+  ): Array<{ key: string; text: string }> => {
+    if (!edit) return [];
+    if (edit.action === 'created') {
+      return [{ key: `${edit.id}-created`, text: 'Created risk' }];
+    }
+    const changes = edit.changes || {};
+    const fields = Object.keys(changes || {}).filter((k) => k !== 'fields');
+    const titleCase = (value?: string | null) => {
+      if (!value) return '';
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    };
+    const formatValue = (field: string, value: any) => {
+      if (field === 'priority' || field === 'status') {
+        return titleCase(String(value || '').toLowerCase()) || '—';
+      }
+      if (field === 'departments') {
+        const ids = Array.isArray(value) ? value : [];
+        const names = ids.map((id: number) => departmentNameById.get(id) || `Dept #${id}`);
+        return names.join(', ') || 'None';
+      }
+      if (field === 'attachment') {
+        if (!value) return 'None';
+        const parts = String(value).split('/');
+        return parts[parts.length - 1] || value;
+      }
+      if (value === null || value === undefined || value === '') return '—';
+      return String(value);
+    };
+    return fields.map((field: string) => {
+      const label = field === 'departments' ? 'Disciplines' : titleCase(field) || field;
+      const entry = changes[field] || {};
+      const from = formatValue(field, entry.from);
+      const to = formatValue(field, entry.to);
+      return {
+        key: `${edit.id}-${field}`,
+        text: `Updated ${label} from ${from} to ${to}`,
+      };
+    });
+  };
+
   const handleDownloadAttachment = async (risk: ProjectRisk) => {
     if (!projectId || !risk.id) return;
     const blob = await projectRisksApi.downloadAttachment(projectId, risk.id);
@@ -272,6 +378,19 @@ const ProjectDashboard: React.FC = () => {
     const link = document.createElement('a');
     link.href = url;
     link.download = (risk.attachmentUrl?.split('/').pop() || 'attachment');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleViewAttachment = async (risk: ProjectRisk) => {
+    if (!projectId || !risk.id) return;
+    const blob = await projectRisksApi.downloadAttachment(projectId, risk.id);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -560,6 +679,29 @@ const ProjectDashboard: React.FC = () => {
                       rows={2}
                     />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="text-[11px] text-[var(--muted)]">Priority</div>
+                      <select
+                        value={riskPriority}
+                        onChange={(e) => setRiskPriority(e.target.value as 'high' | 'medium' | 'low')}
+                        className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none ${
+                          riskPriority === 'high' ? 'text-red-300' : riskPriority === 'low' ? 'text-emerald-300' : 'text-amber-300'
+                        }`}
+                      >
+                        <option value="high" style={{ color: '#fca5a5' }}>High</option>
+                        <option value="medium" style={{ color: '#fcd34d' }}>Medium</option>
+                        <option value="low" style={{ color: '#6ee7b7' }}>Low</option>
+                      </select>
+                      <div className="text-[11px] text-[var(--muted)]">Status</div>
+                      <select
+                        value={riskStatus}
+                        onChange={(e) => setRiskStatus(e.target.value as 'open' | 'closed')}
+                        className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none ${
+                          riskStatus === 'open' ? 'text-red-300' : 'text-[var(--muted)]'
+                        }`}
+                      >
+                        <option value="open" style={{ color: '#fca5a5' }}>Open</option>
+                        <option value="closed" style={{ color: 'var(--muted)' }}>Closed</option>
+                      </select>
                       <div className="text-[11px] text-[var(--muted)]">Affected Departments</div>
                       <div className="flex flex-wrap gap-2">
                         {(departmentsQuery.data ?? []).map((dept) => (
@@ -577,10 +719,24 @@ const ProjectDashboard: React.FC = () => {
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <input
+                        ref={riskFileInputRef}
                         type="file"
                         onChange={(e) => setRiskFile(e.target.files?.[0] || null)}
-                        className="text-xs text-[var(--muted)]"
+                        className="hidden"
                       />
+                      <button
+                        type="button"
+                        onClick={() => riskFileInputRef.current?.click()}
+                        className="text-[11px] px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                        aria-label="Attach file"
+                      >
+                        📎
+                      </button>
+                      {riskFile ? (
+                        <div className="text-[11px] text-[var(--muted)] truncate">{riskFile.name}</div>
+                      ) : (
+                        <div className="text-[11px] text-[var(--muted)]">No attachment</div>
+                      )}
                       <button
                         type="button"
                         onClick={handleAddRisk}
@@ -602,93 +758,303 @@ const ProjectDashboard: React.FC = () => {
                 <div className="text-xs text-[var(--muted)]">No risks logged yet.</div>
               ) : (
                 <div className="space-y-2">
+                  <div className="text-[11px] text-[var(--muted)] grid grid-cols-[1.25rem_minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_8rem] gap-2 px-2 text-left border border-transparent rounded">
+                    <div aria-hidden="true" />
+                    <div>Description</div>
+                    <div>Disciplines</div>
+                    <div>Priority</div>
+                    <div>Status</div>
+                    <div>By</div>
+                    <div>Date</div>
+                    <div aria-hidden="true" />
+                  </div>
                   {risks.map((risk) => (
                     <div key={risk.id} className="rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/20 p-2">
-                      {editingRiskId === risk.id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={riskEditDescription}
-                            onChange={(e) => setRiskEditDescription(e.target.value)}
-                            className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)]"
-                            rows={2}
-                          />
-                          <div className="flex flex-wrap gap-2">
-                            {(departmentsQuery.data ?? []).map((dept) => (
-                              <label key={dept.id} className="text-[11px] text-[var(--text)] flex items-center gap-1">
-                                <input
-                                  type="checkbox"
-                                  checked={riskEditDepartments.includes(dept.id!)}
-                                  onChange={() => toggleDepartment(dept.id!, riskEditDepartments, setRiskEditDepartments)}
-                                  className="w-3 h-3"
-                                />
-                                {dept.name}
-                              </label>
-                            ))}
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <input
-                              type="file"
-                              onChange={(e) => setRiskEditFile(e.target.files?.[0] || null)}
-                              className="text-xs text-[var(--muted)]"
-                            />
-                            <div className="flex items-center gap-2">
+                      {(() => {
+                        const edits = risk.edits || [];
+                        const latestEdit = edits.length > 0 ? edits[0] : null;
+                        const byLabel = latestEdit?.actorName || risk.updatedByName || risk.createdByName || 'Unknown';
+                        const dateLabel = formatUtcToLocal(latestEdit?.createdAt || risk.updatedAt || risk.createdAt, { dateStyle: 'medium' });
+                        const isExpanded = !!(risk.id && expandedRiskIds.has(risk.id));
+                        const attachmentName = risk.attachment ? String(risk.attachment).split('/').pop() : 'Attachment';
+                        return editingRiskId === risk.id ? (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-[1.25rem_minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_8rem] gap-2 items-start text-left">
                               <button
                                 type="button"
-                                onClick={() => risk.id && handleUpdateRisk(risk.id)}
-                                disabled={!riskEditDescription.trim() || savingRisk}
-                                className="text-[11px] px-2 py-1 rounded border border-[var(--border)] bg-[var(--primary)] text-white disabled:opacity-50"
+                                onClick={() => risk.id && toggleRiskExpanded(risk.id)}
+                                className="text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+                                aria-label={isExpanded ? 'Collapse risk edits' : 'Expand risk edits'}
                               >
-                                {savingRisk ? 'Saving…' : 'Save'}
+                                {isExpanded ? '▾' : '▸'}
                               </button>
-                              <button
-                                type="button"
-                                onClick={resetRiskEdit}
-                                className="text-[11px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                              <textarea
+                                value={riskEditDescription}
+                                onChange={(e) => setRiskEditDescription(e.target.value)}
+                                className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)]"
+                                rows={2}
+                              />
+                              <select
+                                multiple
+                                value={riskEditDepartments.map(String)}
+                                onChange={(e) => {
+                                  const selected = Array.from(e.target.selectedOptions).map((opt) => Number(opt.value));
+                                  setRiskEditDepartments(selected);
+                                }}
+                                className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+                                size={Math.min(4, (departmentsQuery.data ?? []).length || 1)}
                               >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="text-xs text-[var(--text)]">{risk.description}</div>
-                            <div className="flex items-center gap-2">
-                              {risk.attachmentUrl && (
+                                {(departmentsQuery.data ?? []).map((dept) => (
+                                  <option key={dept.id} value={dept.id}>
+                                    {dept.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={riskEditPriority}
+                                onChange={(e) => setRiskEditPriority(e.target.value as 'high' | 'medium' | 'low')}
+                                className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none ${
+                                  riskEditPriority === 'high' ? 'text-red-300' : riskEditPriority === 'low' ? 'text-emerald-300' : 'text-amber-300'
+                                }`}
+                              >
+                                <option value="high" style={{ color: '#fca5a5' }}>High</option>
+                                <option value="medium" style={{ color: '#fcd34d' }}>Medium</option>
+                                <option value="low" style={{ color: '#6ee7b7' }}>Low</option>
+                              </select>
+                              <select
+                                value={riskEditStatus}
+                                onChange={(e) => setRiskEditStatus(e.target.value as 'open' | 'closed')}
+                                className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none ${
+                                  riskEditStatus === 'open' ? 'text-red-300' : 'text-[var(--muted)]'
+                                }`}
+                              >
+                                <option value="open" style={{ color: '#fca5a5' }}>Open</option>
+                                <option value="closed" style={{ color: 'var(--muted)' }}>Closed</option>
+                              </select>
+                              <div className="text-[11px] text-[var(--muted)]">{byLabel}</div>
+                              <div className="text-[11px] text-[var(--muted)]">{dateLabel}</div>
+                              <div className="flex items-center gap-2 justify-start">
                                 <button
                                   type="button"
-                                  onClick={() => handleDownloadAttachment(risk)}
-                                  className="text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+                                  onClick={() => risk.id && handleUpdateRisk(risk.id)}
+                                  disabled={!riskEditDescription.trim() || savingRisk}
+                                  className="text-[11px] px-2 py-1 rounded border border-[var(--border)] bg-[var(--primary)] text-white disabled:opacity-50"
                                 >
-                                  Download
+                                  {savingRisk ? 'Saving…' : 'Save'}
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={resetRiskEdit}
+                                  className="text-[11px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <input
+                                ref={riskEditFileInputRef}
+                                type="file"
+                                onChange={(e) => setRiskEditFile(e.target.files?.[0] || null)}
+                                className="hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => riskEditFileInputRef.current?.click()}
+                                className="text-[11px] px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                                aria-label="Attach file"
+                              >
+                                📎
+                              </button>
+                              {riskEditFile ? (
+                                <div className="text-[11px] text-[var(--muted)] truncate">{riskEditFile.name}</div>
+                              ) : (
+                                <div className="text-[11px] text-[var(--muted)]">No attachment</div>
                               )}
+                            </div>
+                            {isExpanded && edits.length > 0 && (
+                              <div className="mt-1 border-t border-[var(--border)] pt-2 pl-6 space-y-1 text-[11px] text-[var(--muted)]">
+                                {edits.flatMap((edit: any) =>
+                                  formatRiskEditLines(edit).map((line) => (
+                                    <div key={line.key} className="flex flex-wrap gap-2">
+                                      <span className="font-medium">{line.text}</span>
+                                      <span>· {edit.actorName || 'Unknown'}</span>
+                                      <span>· {formatUtcToLocal(edit.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className={`grid grid-cols-[1.25rem_minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_8rem] gap-2 items-center text-xs text-left ${
+                              risk.status === 'closed' ? 'text-[var(--muted)]' : ''
+                            }`}>
+                              <button
+                                type="button"
+                                onClick={() => risk.id && toggleRiskExpanded(risk.id)}
+                                className="text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+                                aria-label={isExpanded ? 'Collapse risk edits' : 'Expand risk edits'}
+                              >
+                                {isExpanded ? '▾' : '▸'}
+                              </button>
+                              <div className="truncate">{risk.description}</div>
+                              <div className="text-[11px] truncate">
+                                {(risk.departmentNames || []).join(', ') || 'No disciplines'}
+                              </div>
+                              <div className="text-[11px]">
+                                <select
+                                  value={risk.priority || 'medium'}
+                                  onChange={(e) =>
+                                    risk.id &&
+                                    handleInlineRiskUpdate(risk.id, 'priority', e.target.value as 'high' | 'medium' | 'low')
+                                  }
+                                  disabled={savingRisk}
+                                  className={`w-full bg-transparent border border-transparent text-[11px] focus:border-[var(--border)] focus:bg-[var(--card)] rounded px-0 py-0 appearance-none cursor-pointer ${
+                                    risk.status === 'closed'
+                                      ? 'text-[var(--muted)]'
+                                      : risk.priority === 'high'
+                                        ? 'text-red-300'
+                                        : risk.priority === 'low'
+                                          ? 'text-emerald-300'
+                                          : 'text-amber-300'
+                                  }`}
+                                >
+                                  <option value="high" style={{ color: '#fca5a5' }}>High</option>
+                                  <option value="medium" style={{ color: '#fcd34d' }}>Medium</option>
+                                  <option value="low" style={{ color: '#6ee7b7' }}>Low</option>
+                                </select>
+                              </div>
+                              <div className="text-[11px]">
+                                <select
+                                  value={risk.status || 'open'}
+                                  onChange={(e) =>
+                                    risk.id &&
+                                    handleInlineRiskUpdate(risk.id, 'status', e.target.value as 'open' | 'closed')
+                                  }
+                                  disabled={savingRisk}
+                                  className={`w-full bg-transparent border border-transparent text-[11px] focus:border-[var(--border)] focus:bg-[var(--card)] rounded px-0 py-0 appearance-none cursor-pointer ${
+                                    risk.status === 'closed' ? 'text-[var(--muted)]' : 'text-red-300'
+                                  }`}
+                                >
+                                  <option value="open" style={{ color: '#fca5a5' }}>Open</option>
+                                  <option value="closed" style={{ color: 'var(--muted)' }}>Closed</option>
+                                </select>
+                              </div>
+                              <div className="text-[11px] truncate">{byLabel}</div>
+                              <div className="text-[11px]">{dateLabel}</div>
+                            <div className="flex items-center gap-2 justify-start">
+                              {(() => {
+                                const inlineInputId = risk.id ? `risk-inline-attachment-${risk.id}` : undefined;
+                                return (
+                                  <>
+                                    {risk.attachmentUrl && (
+                                      <div
+                                        ref={openAttachmentMenuId === risk.id ? attachmentMenuRef : null}
+                                        className="relative"
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setOpenAttachmentMenuId((prev) => (prev === risk.id ? null : risk.id || null))
+                                          }
+                                          className="text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+                                          aria-label="View attachment"
+                                        >
+                                          👁
+                                        </button>
+                                        {openAttachmentMenuId === risk.id && (
+                                          <div className="absolute right-0 mt-1 w-44 rounded border border-[var(--border)] bg-[var(--card)] shadow-lg p-2 text-[11px] text-[var(--text)] z-20">
+                                            <div className="text-[11px] text-[var(--muted)] truncate mb-2">
+                                              {attachmentName || 'Attachment'}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenAttachmentMenuId(null);
+                                                  handleViewAttachment(risk);
+                                                }}
+                                                className="text-[11px] px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--surfaceHover)]"
+                                              >
+                                                View
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenAttachmentMenuId(null);
+                                                  handleDownloadAttachment(risk);
+                                                }}
+                                                className="text-[11px] px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--surfaceHover)]"
+                                              >
+                                                Download
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    {inlineInputId && (
+                                      <input
+                                        id={inlineInputId}
+                                        type="file"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0] || null;
+                                          if (risk.id && file) handleInlineRiskAttachment(risk.id, file);
+                                          if (e.currentTarget) e.currentTarget.value = '';
+                                        }}
+                                        className="hidden"
+                                      />
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!inlineInputId) return;
+                                        const el = document.getElementById(inlineInputId) as HTMLInputElement | null;
+                                        el?.click();
+                                      }}
+                                      className="text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+                                      aria-label="Attach file"
+                                    >
+                                      📎
+                                    </button>
+                                  </>
+                                );
+                              })()}
                               <button
                                 type="button"
                                 onClick={() => handleEditRisk(risk)}
                                 className="text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
                               >
                                 Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => risk.id && handleDeleteRisk(risk.id)}
-                                disabled={deletingRiskId === risk.id}
-                                className="text-[11px] text-red-300 hover:text-red-200 disabled:opacity-50"
-                              >
-                                ×
-                              </button>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => risk.id && handleDeleteRisk(risk.id)}
+                                  disabled={deletingRiskId === risk.id}
+                                  className="text-[11px] text-red-300 hover:text-red-200 disabled:opacity-50"
+                                >
+                                  ×
+                                </button>
+                              </div>
                             </div>
+                            {isExpanded && edits.length > 0 && (
+                              <div className="mt-1 border-t border-[var(--border)] pt-2 pl-6 space-y-1 text-[11px] text-[var(--muted)]">
+                                {edits.flatMap((edit: any) =>
+                                  formatRiskEditLines(edit).map((line) => (
+                                    <div key={line.key} className="flex flex-wrap gap-2">
+                                      <span className="font-medium">{line.text}</span>
+                                      <span>· {edit.actorName || 'Unknown'}</span>
+                                      <span>· {formatUtcToLocal(edit.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-[11px] text-[var(--muted)]">
-                            {(risk.departmentNames || []).join(', ') || 'No departments'}
-                          </div>
-                          <div className="text-[11px] text-[var(--muted)]">
-                            {risk.createdByName || 'Unknown'} · {formatUtcToLocal(risk.createdAt)}
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
