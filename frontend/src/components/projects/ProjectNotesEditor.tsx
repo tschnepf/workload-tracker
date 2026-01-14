@@ -13,9 +13,10 @@ type Props = {
   initialJson?: any | null;
   initialHtml?: string | null | undefined;
   canEdit?: boolean;
+  compact?: boolean;
 };
 
-export default function ProjectNotesEditor({ projectId, initialJson, initialHtml, canEdit = true }: Props) {
+export default function ProjectNotesEditor({ projectId, initialJson, initialHtml, canEdit = true, compact = false }: Props) {
   const [saving, setSaving] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
   const lastSavedRef = React.useRef<string>('');
@@ -67,26 +68,34 @@ export default function ProjectNotesEditor({ projectId, initialJson, initialHtml
     finally { setSaving(false); }
   };
 
+  const wrapperClass = compact ? 'mt-2' : 'mt-4';
+  const headerClass = compact ? 'px-2 py-1.5' : 'px-3 py-2';
+  const toolbarButtonClass = compact
+    ? 'text-[11px] px-1.5 py-0.5'
+    : 'text-xs px-2 py-0.5';
+  const editorWrapClass = compact ? 'p-2' : 'p-3';
+  const editorClass = compact ? 'min-h-[120px] p-2 text-sm' : 'min-h-[160px] p-2';
+
   return (
-    <div className="mt-4 bg-[var(--card)] border border-[var(--border)] rounded">
-      <div className="px-3 py-2 border-b border-[var(--border)] flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+    <div className={`${wrapperClass} bg-[var(--card)] border border-[var(--border)] rounded`}>
+      <div className={`${headerClass} border-b border-[var(--border)] flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between`}>
         <div className="text-[var(--text)] font-semibold">Project Notes</div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <button className="text-xs px-2 py-0.5 rounded border border-[var(--border)]" onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleBold().run())} disabled={!canEdit}>B</button>
-          <button className="text-xs px-2 py-0.5 rounded border border-[var(--border)] italic" onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleItalic().run())} disabled={!canEdit}>I</button>
-          <button className="text-xs px-2 py-0.5 rounded border border-[var(--border)] underline" onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleUnderline().run())} disabled={!canEdit}>U</button>
+          <button className={`${toolbarButtonClass} rounded border border-[var(--border)]`} onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleBold().run())} disabled={!canEdit}>B</button>
+          <button className={`${toolbarButtonClass} rounded border border-[var(--border)] italic`} onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleItalic().run())} disabled={!canEdit}>I</button>
+          <button className={`${toolbarButtonClass} rounded border border-[var(--border)] underline`} onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleUnderline().run())} disabled={!canEdit}>U</button>
           <span className="mx-1" />
-          <button className="text-xs px-2 py-0.5 rounded border border-[var(--border)]" onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleBulletList().run())} disabled={!canEdit}>• List</button>
-          <button className="text-xs px-2 py-0.5 rounded border border-[var(--border)]" onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleOrderedList().run())} disabled={!canEdit}>1. List</button>
+          <button className={`${toolbarButtonClass} rounded border border-[var(--border)]`} onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleBulletList().run())} disabled={!canEdit}>• List</button>
+          <button className={`${toolbarButtonClass} rounded border border-[var(--border)]`} onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().toggleOrderedList().run())} disabled={!canEdit}>1. List</button>
           <span className="mx-1" />
-          <button className="text-xs px-2 py-0.5 rounded border border-[var(--border)]" onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().undo().run())} disabled={!canEdit}>Undo</button>
-          <button className="text-xs px-2 py-0.5 rounded border border-[var(--border)]" onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().redo().run())} disabled={!canEdit}>Redo</button>
+          <button className={`${toolbarButtonClass} rounded border border-[var(--border)]`} onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().undo().run())} disabled={!canEdit}>Undo</button>
+          <button className={`${toolbarButtonClass} rounded border border-[var(--border)]`} onMouseDown={(e)=>e.preventDefault()} onClick={run(()=>editor?.chain().focus().redo().run())} disabled={!canEdit}>Redo</button>
           <span className="mx-1" />
-          <button className={`text-xs px-3 py-1 rounded ${dirty ? 'bg-[var(--primary)] text-white border border-[var(--primary)]' : 'border border-[var(--border)] text-[var(--muted)]'}`} onClick={onSave} disabled={!canEdit || saving || !dirty}>{saving ? 'Saving…' : 'Save'}</button>
+          <button className={`${toolbarButtonClass} rounded ${dirty ? 'bg-[var(--primary)] text-white border border-[var(--primary)]' : 'border border-[var(--border)] text-[var(--muted)]'}`} onClick={onSave} disabled={!canEdit || saving || !dirty}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
-      <div className="p-3">
-        <div className="pm-editor min-h-[160px] bg-[var(--surface)] border border-[var(--border)] rounded p-2 text-[var(--text)]" onKeyDown={(e)=>{e.stopPropagation();}}>
+      <div className={editorWrapClass}>
+        <div className={`pm-editor ${editorClass} bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)]`} onKeyDown={(e)=>{e.stopPropagation();}}>
           {editor && <EditorContent editor={editor} />}
         </div>
       </div>

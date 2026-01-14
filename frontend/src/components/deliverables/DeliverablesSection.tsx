@@ -25,15 +25,23 @@ const formatDateNoYear = (dateStr: string) => {
   }
 };
 
+export interface DeliverablesSectionHandle {
+  openAdd: () => void;
+}
+
 interface DeliverablesSectionProps {
   project: Project;
   variant?: 'default' | 'embedded';
+  appearance?: 'default' | 'presentation';
+  showHeader?: boolean;
   onDeliverablesChanged?: () => void;
   refreshToken?: number;
 }
 
-const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, variant = 'default', onDeliverablesChanged, refreshToken }) => {
+const DeliverablesSection = React.forwardRef<DeliverablesSectionHandle, DeliverablesSectionProps>(
+  ({ project, variant = 'default', appearance = 'default', showHeader = true, onDeliverablesChanged, refreshToken }, ref) => {
   const queryClient = useQueryClient();
+  const isPresentation = appearance === 'presentation';
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -47,6 +55,9 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
     anchorRect: { top: number; left: number; right: number; bottom: number; width: number; height: number };
   } | null>(null);
   const datePopoverRef = useRef<HTMLDivElement | null>(null);
+  React.useImperativeHandle(ref, () => ({
+    openAdd: () => setShowAddForm(true),
+  }));
   const sortedDeliverables = useMemo(() => {
     const getDateValue = (date?: string | null) => {
       if (!date) return null;
@@ -333,25 +344,29 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
 
   return (
     <div className={containerClass}>
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="text-base font-semibold text-[var(--text)]">Deliverables</h3>
-        <button
-          data-testid="add-deliverable-btn"
-          onClick={handleAddDeliverable}
-          className="px-2 py-0.5 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors"
-        >
-          + Add Deliverable
-        </button>
-      </div>
+      {showHeader && (
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-base font-semibold text-[var(--text)]">Deliverables</h3>
+          <button
+            data-testid="add-deliverable-btn"
+            onClick={handleAddDeliverable}
+            className="w-6 h-6 text-xs rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors flex items-center justify-center"
+            aria-label="Add deliverable"
+          >
+            +
+          </button>
+        </div>
+      )}
 
       {/* Column Headers */}
       {deliverables.length > 0 && (
         <div className="flex items-center text-[var(--muted)] text-xs mb-1">
-          <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
-            <div className="font-medium">%</div>
-            <div className="font-medium">Description</div>
-            <div className="font-medium">Date</div>
-            <div className="font-medium">Notes</div>
+          <div className="grid grid-cols-[6ch_1fr_1fr_1fr_1.5rem] gap-4 flex-1 min-w-0">
+            <div className="font-medium text-center">%</div>
+            <div className="font-medium text-center">Description</div>
+            <div className="font-medium text-center">Date</div>
+            <div className="font-medium text-center">Notes</div>
+            <div aria-hidden="true" />
           </div>
         </div>
       )}
@@ -370,7 +385,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
           <div className="text-[var(--muted)] text-xs mt-1">Click "Add Deliverable" to get started</div>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className={isPresentation ? 'space-y-0.5' : 'space-y-1'}>
           {sortedDeliverables.map((deliverable) => (
             <DeliverableRow
               key={deliverable.id}
@@ -381,6 +396,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
               onDelete={() => handleDeleteDeliverable(deliverable.id!)}
               onOpenDatePicker={(anchorEl) => openDatePicker(deliverable, anchorEl)}
               focusField={null}
+              appearance={appearance}
             />
           ))}
         </div>
@@ -395,7 +411,7 @@ const DeliverablesSection: React.FC<DeliverablesSectionProps> = ({ project, vari
       {datePickerPopover}
     </div>
   );
-};
+});
 
 interface DeliverableRowProps {
   deliverable: Deliverable;
@@ -405,6 +421,7 @@ interface DeliverableRowProps {
   onDelete: () => void;
   onOpenDatePicker: (anchorEl: HTMLElement) => void;
   focusField: 'percentage'|'description'|'date'|'notes'|null;
+  appearance: 'default' | 'presentation';
 }
 
 const DeliverableRow: React.FC<DeliverableRowProps> = ({
@@ -415,6 +432,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
   onDelete,
   onOpenDatePicker,
   focusField,
+  appearance,
 }) => {
   const [editData, setEditData] = useState({
     percentage: deliverable.percentage,
@@ -575,23 +593,41 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
     );
   }
 
+  const rowBaseClass = appearance === 'presentation'
+    ? 'bg-transparent border border-transparent hover:bg-[var(--surfaceOverlay)]/40'
+    : (deliverable.isCompleted
+      ? 'bg-[var(--surfaceOverlay)] border border-[var(--border)]'
+      : 'bg-[var(--card)] border border-[var(--border)]');
+  const parseLocalDate = (value?: string | null) => {
+    if (!value) return null;
+    return new Date(value.slice(0, 10) + 'T00:00:00');
+  };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const deliverableDate = parseLocalDate(deliverable.date);
+  const soonEnd = new Date(today.getTime() + 13 * 24 * 60 * 60 * 1000);
+  const isSoon = !!(deliverableDate && deliverableDate >= today && deliverableDate <= soonEnd);
+  const isRecent = !!(deliverableDate && deliverableDate <= today && (today.getTime() - deliverableDate.getTime()) <= 8 * 24 * 60 * 60 * 1000);
+  const dateClass = isSoon
+    ? 'text-[#b22222] font-semibold'
+    : isRecent
+      ? 'text-[#d2691e] italic'
+      : 'text-[var(--muted)]';
+
+  const rowPaddingClass = appearance === 'presentation' ? 'py-1.5 px-0' : 'p-2';
   return (
     <div 
-      className={`flex items-center p-2 rounded text-xs transition-all ${
-        deliverable.isCompleted 
-          ? 'bg-[var(--surfaceOverlay)] border border-[var(--border)]' 
-          : 'bg-[var(--card)] border border-[var(--border)]'
-      }`}
+      className={`flex items-center rounded text-xs transition-all ${rowPaddingClass} ${rowBaseClass}`}
     >
         {/* Content Grid – per-cell inline editing */}
-        <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
-          <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'}`}>
+        <div className="grid grid-cols-[6ch_1fr_1fr_1fr_1.5rem] gap-4 flex-1 min-w-0">
+          <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'} text-center`}>
             {inlineField === 'percentage' ? (
               <input
                 type="number"
                 min={0}
                 max={100}
-                className="w-12 bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                className="w-12 bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0 text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}
@@ -604,11 +640,11 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
               </button>
             )}
           </div>
-          <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'} truncate min-w-0`}>
+          <div className={`${deliverable.isCompleted ? 'text-[var(--muted)] line-through' : 'text-[var(--text)]'} truncate min-w-0 text-center`}>
             {inlineField === 'description' ? (
               <input
                 type="text"
-                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0"
+                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0 text-center"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}
@@ -616,15 +652,15 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
                 autoFocus
               />
             ) : (
-              <button type="button" className="truncate hover:underline text-left w-full" onClick={() => startInline('description')}>
+              <button type="button" className="truncate hover:underline text-center w-full" onClick={() => startInline('description')}>
                 {deliverable.description || '-'}
               </button>
             )}
           </div>
-          <div className="text-[var(--muted)] whitespace-nowrap">
+          <div className={`${dateClass} whitespace-nowrap text-center`}>
             <button
               type="button"
-              className="hover:underline cursor-pointer"
+              className="hover:underline cursor-pointer w-full text-center"
               onClick={(e) => onOpenDatePicker(e.currentTarget as HTMLElement)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -636,11 +672,11 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
               {deliverable.date ? formatDateNoYear(deliverable.date) : '-'}
             </button>
           </div>
-          <div className="text-[var(--muted)] truncate min-w-0">
+          <div className="text-[var(--muted)] truncate min-w-0 text-center">
             {inlineField === 'notes' ? (
               <input
                 type="text"
-                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0"
+                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0 text-center"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}
@@ -648,30 +684,25 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
                 autoFocus
               />
             ) : (
-              <button type="button" className="truncate hover:underline text-left w-full" onClick={() => startInline('notes')}>
+              <button type="button" className="truncate hover:underline text-center w-full" onClick={() => startInline('notes')}>
                 {deliverable.notes || '-'}
               </button>
             )}
           </div>
+          <div className="flex items-center justify-center">
+            {deliverable.isCompleted && (
+              <span className="text-emerald-400 text-xs mr-1">✓</span>
+            )}
+            <button
+              onClick={onDelete}
+              className="w-4 h-4 flex items-center justify-center text-red-300 hover:text-red-200 rounded transition-colors"
+              title="Delete deliverable"
+              aria-label="Delete deliverable"
+            >
+              ×
+            </button>
+          </div>
         </div>
-      
-      {/* Action Buttons */}
-      <div className="flex gap-1 items-center ml-2">
-        {deliverable.isCompleted && (
-          <span className="text-emerald-400 text-xs mr-1">✓</span>
-        )}
-        
-        <button
-          onClick={onDelete}
-          className="w-4 h-4 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded transition-colors"
-          title="Delete deliverable"
-          aria-label="Delete deliverable"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
     </div>
   );
 };

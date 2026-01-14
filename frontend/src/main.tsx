@@ -34,6 +34,7 @@ const ReportsView = React.lazy(() => import('./pages/Departments').then(m => ({ 
 const RoleCapacityReport = React.lazy(() => import('./pages/Reports/RoleCapacity'))
 const Projects = React.lazy(() => import('./pages/Projects'))
 const ProjectForm = React.lazy(() => import('./pages/Projects/ProjectForm'))
+const ProjectDashboard = React.lazy(() => import('./pages/Projects/ProjectDashboard'))
 const SkillsDashboard = React.lazy(() => import('./pages/Skills').then(m => ({ default: m.SkillsDashboard })))
 const PerformanceDashboard = React.lazy(() => import('./pages/Performance/PerformanceDashboard'))
 const Settings = React.lazy(() => import('./pages/Settings/Settings'))
@@ -80,6 +81,7 @@ const router = createBrowserRouter([
       { path: 'assignments/:id/edit', element: <RequireAuth><AssignmentForm /></RequireAuth> },
       { path: 'projects', element: <RequireAuth><Projects /></RequireAuth> },
       { path: 'projects/new', element: <RequireAuth><ProjectForm /></RequireAuth> },
+      { path: 'projects/:id/dashboard', element: <RequireAuth><ProjectDashboard /></RequireAuth> },
       { path: 'projects/:id/edit', element: <RequireAuth><LegacyProjectEditRedirect /></RequireAuth> },
       { path: 'skills', element: <RequireAuth><SkillsDashboard /></RequireAuth> },
       { path: 'performance', element: <RequireAuth><PerformanceDashboard /></RequireAuth> },

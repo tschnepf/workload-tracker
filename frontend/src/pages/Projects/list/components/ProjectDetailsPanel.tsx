@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router';
 import type { Project, Assignment, Person } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
@@ -271,6 +272,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             {fieldErrors.name && (<div className="text-red-400 text-xs">{fieldErrors.name}</div>)}
           </div>
           <div className="flex flex-col items-start gap-2 w-full sm:w-auto sm:min-w-[180px]">
+            <Link
+              to={`/projects/${project.id}/dashboard`}
+              className="inline-flex items-center text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
+            >
+              Open Dashboard
+            </Link>
             <div>
               <div className="text-[var(--muted)] text-xs">Status:</div>
               <ProjectStatusDropdown

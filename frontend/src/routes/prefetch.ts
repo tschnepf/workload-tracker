@@ -37,6 +37,9 @@ function importerFor(path: string): (() => Promise<any>) | null {
   if (p.startsWith('/projects/') && p.endsWith('/new')) {
     return () => import('@/pages/Projects/ProjectForm');
   }
+  if (p.startsWith('/projects/') && p.endsWith('/dashboard')) {
+    return () => import('@/pages/Projects/ProjectDashboard');
+  }
   if (p.startsWith('/projects/') && (/\/\d+\/(edit|update)$/.test(p) || p.endsWith('/edit'))) {
     // Legacy edit paths now redirect to Projects with deep-link selection
     return () => import('@/pages/Projects');
