@@ -109,6 +109,8 @@ const ProjectDashboard: React.FC = () => {
   const [riskEditStatus, setRiskEditStatus] = React.useState<'open' | 'closed'>('open');
   const [riskEditDepartments, setRiskEditDepartments] = React.useState<number[]>([]);
   const [riskEditFile, setRiskEditFile] = React.useState<File | null>(null);
+  const [riskEditDeptOpen, setRiskEditDeptOpen] = React.useState(false);
+  const riskEditDeptRef = React.useRef<HTMLDivElement | null>(null);
   const riskFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const riskEditFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [savingRisk, setSavingRisk] = React.useState(false);
@@ -123,13 +125,16 @@ const ProjectDashboard: React.FC = () => {
       if (personBoxRef.current && !personBoxRef.current.contains(target)) {
         setPersonDropdownOpen(false);
       }
+      if (riskEditDeptOpen && riskEditDeptRef.current && !riskEditDeptRef.current.contains(target)) {
+        setRiskEditDeptOpen(false);
+      }
       if (openAttachmentMenuId && attachmentMenuRef.current && !attachmentMenuRef.current.contains(target)) {
         setOpenAttachmentMenuId(null);
       }
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, [openAttachmentMenuId]);
+  }, [openAttachmentMenuId, riskEditDeptOpen]);
   const assignmentsCountLabel = assignmentsQuery.isLoading ? '-' : String(assignmentsTotal);
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -641,7 +646,7 @@ const ProjectDashboard: React.FC = () => {
               )}
             </Card>
 
-            <div className="xl:col-span-5">
+            <div className="xl:col-span-5 space-y-4">
               {project?.id ? (
                 <ProjectNotesEditor
                   projectId={project.id}
@@ -651,24 +656,23 @@ const ProjectDashboard: React.FC = () => {
                   compact
                 />
               ) : null}
-            </div>
 
-            <Card className="p-3 xl:col-span-12">
+              <Card className="p-2">
               <div className="relative flex items-center justify-center mb-2">
-                <div className="text-sm font-semibold text-[var(--text)] text-center">Risk Log</div>
+                <div className="text-[13px] font-semibold text-[var(--text)] text-center">Risk Log</div>
                 <button
                   type="button"
                   onClick={() => setShowAddRisk((prev) => !prev)}
-                  className="absolute right-0 text-[11px] w-6 h-6 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)] flex items-center justify-center"
+                  className="absolute right-0 text-[11px] w-5 h-5 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)] flex items-center justify-center"
                   aria-label={showAddRisk ? 'Close add risk' : 'Add risk'}
                 >
                   {showAddRisk ? '×' : '+'}
                 </button>
               </div>
-              <div className="border-t border-[#4a4f57]/60 mb-2" />
+              <div className="border-t border-[#4a4f57]/60 mb-1" />
 
               {showAddRisk && (
-                <div className="mb-3 rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/40 p-2 space-y-2">
+                <div className="mb-2 rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/40 p-2 space-y-2">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">New Risk</div>
                   <div className="space-y-2">
                     <textarea
@@ -757,8 +761,8 @@ const ProjectDashboard: React.FC = () => {
               ) : risks.length === 0 ? (
                 <div className="text-xs text-[var(--muted)]">No risks logged yet.</div>
               ) : (
-                <div className="space-y-2">
-                  <div className="text-[11px] text-[var(--muted)] grid grid-cols-[1.25rem_minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_8rem] gap-2 px-2 text-left border border-transparent rounded">
+                <div className="space-y-1">
+                  <div className="text-[10px] text-[var(--muted)] grid grid-cols-[1.1rem_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_7rem] gap-2 px-2 text-left border border-transparent rounded">
                     <div aria-hidden="true" />
                     <div>Description</div>
                     <div>Disciplines</div>
@@ -769,7 +773,7 @@ const ProjectDashboard: React.FC = () => {
                     <div aria-hidden="true" />
                   </div>
                   {risks.map((risk) => (
-                    <div key={risk.id} className="rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/20 p-2">
+                    <div key={risk.id} className="rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/20 p-1.5">
                       {(() => {
                         const edits = risk.edits || [];
                         const latestEdit = edits.length > 0 ? edits[0] : null;
@@ -779,7 +783,7 @@ const ProjectDashboard: React.FC = () => {
                         const attachmentName = risk.attachment ? String(risk.attachment).split('/').pop() : 'Attachment';
                         return editingRiskId === risk.id ? (
                           <div className="space-y-2">
-                            <div className="grid grid-cols-[1.25rem_minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_8rem] gap-2 items-start text-left">
+                            <div className="grid grid-cols-[1.1rem_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_7rem] gap-2 items-start text-left">
                               <button
                                 type="button"
                                 onClick={() => risk.id && toggleRiskExpanded(risk.id)}
@@ -794,22 +798,35 @@ const ProjectDashboard: React.FC = () => {
                                 className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)]"
                                 rows={2}
                               />
-                              <select
-                                multiple
-                                value={riskEditDepartments.map(String)}
-                                onChange={(e) => {
-                                  const selected = Array.from(e.target.selectedOptions).map((opt) => Number(opt.value));
-                                  setRiskEditDepartments(selected);
-                                }}
-                                className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
-                                size={Math.min(4, (departmentsQuery.data ?? []).length || 1)}
-                              >
-                                {(departmentsQuery.data ?? []).map((dept) => (
-                                  <option key={dept.id} value={dept.id}>
-                                    {dept.name}
-                                  </option>
-                                ))}
-                              </select>
+                              <div className="relative" ref={riskEditDeptRef}>
+                                <button
+                                  type="button"
+                                  onClick={() => setRiskEditDeptOpen((prev) => !prev)}
+                                  className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-left text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                                  aria-label="Select disciplines"
+                                >
+                                  {riskEditDepartments.length > 0
+                                    ? riskEditDepartments
+                                        .map((id) => departmentNameById.get(id) || `Dept #${id}`)
+                                        .join(', ')
+                                    : 'Select disciplines'}
+                                </button>
+                                {riskEditDeptOpen && (
+                                  <div className="absolute z-20 mt-1 w-full rounded border border-[var(--border)] bg-[var(--card)] shadow-lg p-2 max-h-40 overflow-auto">
+                                    {(departmentsQuery.data ?? []).map((dept) => (
+                                      <label key={dept.id} className="flex items-center gap-2 text-[11px] text-[var(--text)] py-1">
+                                        <input
+                                          type="checkbox"
+                                          checked={riskEditDepartments.includes(dept.id!)}
+                                          onChange={() => toggleDepartment(dept.id!, riskEditDepartments, setRiskEditDepartments)}
+                                          className="w-3 h-3"
+                                        />
+                                        <span className="truncate">{dept.name}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                               <select
                                 value={riskEditPriority}
                                 onChange={(e) => setRiskEditPriority(e.target.value as 'high' | 'medium' | 'low')}
@@ -833,7 +850,7 @@ const ProjectDashboard: React.FC = () => {
                               </select>
                               <div className="text-[11px] text-[var(--muted)]">{byLabel}</div>
                               <div className="text-[11px] text-[var(--muted)]">{dateLabel}</div>
-                              <div className="flex items-center gap-2 justify-start">
+                              <div className="flex items-center gap-1.5 justify-start">
                                 <button
                                   type="button"
                                   onClick={() => risk.id && handleUpdateRisk(risk.id)}
@@ -888,7 +905,7 @@ const ProjectDashboard: React.FC = () => {
                           </div>
                         ) : (
                           <div className="space-y-1">
-                            <div className={`grid grid-cols-[1.25rem_minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_8rem] gap-2 items-center text-xs text-left ${
+                            <div className={`grid grid-cols-[1.1rem_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_7rem] gap-2 items-center text-[11px] text-left ${
                               risk.status === 'closed' ? 'text-[var(--muted)]' : ''
                             }`}>
                               <button
@@ -900,8 +917,16 @@ const ProjectDashboard: React.FC = () => {
                                 {isExpanded ? '▾' : '▸'}
                               </button>
                               <div className="truncate">{risk.description}</div>
-                              <div className="text-[11px] truncate">
-                                {(risk.departmentNames || []).join(', ') || 'No disciplines'}
+                              <div className="text-[11px] leading-tight">
+                                {risk.departmentNames && risk.departmentNames.length > 0 ? (
+                                  <div className="space-y-0.5">
+                                    {risk.departmentNames.map((name) => (
+                                      <div key={name} className="truncate">{name}</div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-[var(--muted)]">No disciplines</div>
+                                )}
                               </div>
                               <div className="text-[11px]">
                                 <select
@@ -944,7 +969,7 @@ const ProjectDashboard: React.FC = () => {
                               </div>
                               <div className="text-[11px] truncate">{byLabel}</div>
                               <div className="text-[11px]">{dateLabel}</div>
-                            <div className="flex items-center gap-2 justify-start">
+                              <div className="flex items-center gap-1.5 justify-start">
                               {(() => {
                                 const inlineInputId = risk.id ? `risk-inline-attachment-${risk.id}` : undefined;
                                 return (
@@ -1040,7 +1065,7 @@ const ProjectDashboard: React.FC = () => {
                               </div>
                             </div>
                             {isExpanded && edits.length > 0 && (
-                              <div className="mt-1 border-t border-[var(--border)] pt-2 pl-6 space-y-1 text-[11px] text-[var(--muted)]">
+                              <div className="mt-1 border-t border-[var(--border)] pt-2 pl-5 space-y-1 text-[11px] text-[var(--muted)]">
                                 {edits.flatMap((edit: any) =>
                                   formatRiskEditLines(edit).map((line) => (
                                     <div key={line.key} className="flex flex-wrap gap-2">
@@ -1059,7 +1084,8 @@ const ProjectDashboard: React.FC = () => {
                   ))}
                 </div>
               )}
-            </Card>
+              </Card>
+            </div>
           </div>
         )}
       </div>
