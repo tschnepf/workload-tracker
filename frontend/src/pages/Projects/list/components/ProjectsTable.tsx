@@ -7,7 +7,8 @@ import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { getFlag } from '@/lib/flags';
 import { useVirtualRows } from '../hooks/useVirtualRows';
-import { deliverablesApi, projectsApi } from '@/services/api';
+import { deliverablesApi } from '@/services/api';
+import { useUpdateProject } from '@/hooks/useProjects';
 
 interface Props {
   projects: Project[];
@@ -103,7 +104,7 @@ const ProjectsTable: React.FC<Props> = ({
     saving: boolean;
     error: string | null;
   } | null>(null);
-  const [projectNumberOverrides, setProjectNumberOverrides] = useState<Map<number, string>>(new Map());
+  const updateProjectMutation = useUpdateProject();
   const [projectNumberEditor, setProjectNumberEditor] = useState<{
     projectId: number;
     value: string;
@@ -247,11 +248,9 @@ const ProjectsTable: React.FC<Props> = ({
     }
     setProjectNumberEditor(prev => (prev ? { ...prev, saving: true, error: null } : prev));
     try {
-      await projectsApi.update(projectNumberEditor.projectId, { projectNumber: projectNumberEditor.value || '' });
-      setProjectNumberOverrides(prev => {
-        const next = new Map(prev);
-        next.set(projectNumberEditor.projectId, projectNumberEditor.value || '');
-        return next;
+      await updateProjectMutation.mutateAsync({
+        id: projectNumberEditor.projectId,
+        data: { projectNumber: projectNumberEditor.value || '' },
       });
       setProjectNumberEditor(null);
     } catch (e: any) {
@@ -259,13 +258,6 @@ const ProjectsTable: React.FC<Props> = ({
       setProjectNumberEditor(prev => (prev ? { ...prev, saving: false, error: msg } : prev));
     }
   };
-
-  const getProjectNumber = useMemo(() => {
-    return (project: Project) => {
-      if (!project?.id) return project?.projectNumber ?? '';
-      return projectNumberOverrides.get(project.id) ?? project.projectNumber ?? '';
-    };
-  }, [projectNumberOverrides]);
 
   const startEditingNextDeliverable = (
     projectId: number,
@@ -464,7 +456,7 @@ const ProjectsTable: React.FC<Props> = ({
         const prevBottomClass = isRecentPrev ? 'text-[#d2691e] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         const isEditingNotes = notesEditor?.projectId === project.id && notesEditor?.deliverableId === nextDeliverable?.id;
         const isEditingProjectNumber = projectNumberEditor?.projectId === project.id;
-        const projectNumberDisplay = getProjectNumber(project);
+        const projectNumberDisplay = project.projectNumber ?? '';
         const isEditingNextPercent = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'percentage';
         const isEditingNextDescription = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'description';
         return (
@@ -798,7 +790,7 @@ const ProjectsTable: React.FC<Props> = ({
           const prevBottomClass2 = isRecentPrev2 ? 'text-[#d2691e] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           const isEditingNotes2 = notesEditor?.projectId === project.id && notesEditor?.deliverableId === nextDeliverable?.id;
           const isEditingProjectNumber2 = projectNumberEditor?.projectId === project.id;
-          const projectNumberDisplay2 = getProjectNumber(project);
+          const projectNumberDisplay2 = project.projectNumber ?? '';
           const isEditingNextPercent2 = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'percentage';
           const isEditingNextDescription2 = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'description';
           return (
