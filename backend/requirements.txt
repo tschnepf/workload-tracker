@@ -36,7 +36,7 @@ celery[redis]==5.5.3
 # Integrations
 cryptography==46.0.3
 jsonschema==4.23.0
-croniter==2.0.3
+croniter==6.0.0
 requests==2.32.5
 
 # OpenAPI schema generation
