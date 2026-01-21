@@ -4,7 +4,6 @@ import type { Project, Deliverable } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus } from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
-import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { getFlag } from '@/lib/flags';
 import { useVirtualRows } from '../hooks/useVirtualRows';
 import { deliverablesApi } from '@/services/api';
@@ -45,29 +44,18 @@ const ProjectsTable: React.FC<Props> = ({
 }) => {
   const enableVirtual = !isMobileList && getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
   const statusDropdown = useDropdownManager<string>();
-  const projectStatus = useProjectStatus({
-    onSuccess: (pid, newStatus) => {
-      onChangeStatus?.(pid, newStatus);
-    },
-    getCurrentStatus: (pid) => {
-      const p = projects.find(x => x.id === pid);
-      return (p?.status as any) || 'active';
-    }
-  });
   const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: isMobileList ? 116 : 44, overscan: 6, enableVirtual });
   const groupClients = sortBy === 'client';
-  const [openStatusFor, setOpenStatusFor] = useState<number | null>(null);
   const [hoverEnabled, setHoverEnabled] = useState(true);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       const target = e.target as Element;
       if (target.closest('.status-dropdown-container')) return;
-      if (openStatusFor != null) setOpenStatusFor(null);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, [openStatusFor]);
+  }, []);
 
   useEffect(() => {
     if (hoverEnabled) return;
@@ -105,6 +93,7 @@ const ProjectsTable: React.FC<Props> = ({
     error: string | null;
   } | null>(null);
   const updateProjectMutation = useUpdateProject();
+  const [statusUpdatingIds, setStatusUpdatingIds] = useState<Set<number>>(new Set());
   const [projectNumberEditor, setProjectNumberEditor] = useState<{
     projectId: number;
     value: string;
@@ -237,6 +226,15 @@ const ProjectsTable: React.FC<Props> = ({
       initialValue: currentValue ?? '',
       saving: false,
       error: null,
+    });
+  };
+
+  const setStatusUpdating = (projectId: number, isUpdating: boolean) => {
+    setStatusUpdatingIds(prev => {
+      const next = new Set(prev);
+      if (isUpdating) next.add(projectId);
+      else next.delete(projectId);
+      return next;
     });
   };
 
@@ -459,6 +457,7 @@ const ProjectsTable: React.FC<Props> = ({
         const projectNumberDisplay = project.projectNumber ?? '';
         const isEditingNextPercent = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'percentage';
         const isEditingNextDescription = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'description';
+        const isStatusUpdating = project.id != null && statusUpdatingIds.has(project.id);
         return (
           <div
             key={project.id}
@@ -517,12 +516,14 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="relative" data-dropdown>
                 <button
                   type="button"
-                  className={`${getStatusColor(project.status || '')} whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)]`}
-                  onClick={() => project.id && statusDropdown.toggle(String(project.id))}
+                  className={`${getStatusColor(project.status || '')} whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)] ${isStatusUpdating ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  onClick={() => !isStatusUpdating && project.id && statusDropdown.toggle(String(project.id))}
                   aria-haspopup="listbox"
                   aria-expanded={statusDropdown.isOpen(String(project.id))}
+                  disabled={isStatusUpdating}
                 >
                   {formatStatus(project.status || '')}
+                  {isStatusUpdating && <span className="text-[10px] opacity-70">Updating…</span>}
                   <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -534,13 +535,16 @@ const ProjectsTable: React.FC<Props> = ({
                     onSelect={async (newStatus) => {
                       if (!project.id) return;
                       try {
-                        await projectStatus.updateStatus(project.id, newStatus);
+                        setStatusUpdating(project.id, true);
+                        await Promise.resolve(onChangeStatus?.(project.id, newStatus));
                         statusDropdown.close();
-                      } catch {}
+                      } catch {} finally {
+                        setStatusUpdating(project.id, false);
+                      }
                     }}
                     onClose={statusDropdown.close}
                     projectId={project.id}
-                    disabled={projectStatus.isUpdating(project.id)}
+                    disabled={statusUpdatingIds.has(project.id)}
                     closeOnSelect={false}
                   />
                 )}
@@ -793,6 +797,7 @@ const ProjectsTable: React.FC<Props> = ({
           const projectNumberDisplay2 = project.projectNumber ?? '';
           const isEditingNextPercent2 = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'percentage';
           const isEditingNextDescription2 = nextEditor?.projectId === project.id && nextEditor?.deliverableId === nextDeliverable?.id && nextEditor.field === 'description';
+          const isStatusUpdating2 = project.id != null && statusUpdatingIds.has(project.id);
           return (
             <div
               key={project.id}
@@ -850,12 +855,14 @@ const ProjectsTable: React.FC<Props> = ({
                 <div className="relative" data-dropdown>
                   <button
                     type="button"
-                    className={`${getStatusColor(project.status || '')} whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)]`}
-                    onClick={() => project.id && statusDropdown.toggle(String(project.id))}
+                    className={`${getStatusColor(project.status || '')} whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)] ${isStatusUpdating2 ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    onClick={() => !isStatusUpdating2 && project.id && statusDropdown.toggle(String(project.id))}
                     aria-haspopup="listbox"
                     aria-expanded={statusDropdown.isOpen(String(project.id))}
+                    disabled={isStatusUpdating2}
                   >
                     {formatStatus(project.status || '')}
+                    {isStatusUpdating2 && <span className="text-[10px] opacity-70">Updating…</span>}
                     <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
@@ -867,13 +874,16 @@ const ProjectsTable: React.FC<Props> = ({
                       onSelect={async (newStatus) => {
                         if (!project.id) return;
                         try {
-                          await projectStatus.updateStatus(project.id, newStatus);
+                          setStatusUpdating(project.id, true);
+                          await Promise.resolve(onChangeStatus?.(project.id, newStatus));
                           statusDropdown.close();
-                        } catch {}
+                        } catch {} finally {
+                          setStatusUpdating(project.id, false);
+                        }
                       }}
                       onClose={statusDropdown.close}
                       projectId={project.id}
-                      disabled={projectStatus.isUpdating(project.id)}
+                      disabled={statusUpdatingIds.has(project.id)}
                       closeOnSelect={false}
                     />
                   )}

@@ -6,7 +6,7 @@ import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
-import { projectsApi } from '@/services/api';
+import { useUpdateProject } from '@/hooks/useProjects';
 
 type Props = {
   projectId: number;
@@ -20,6 +20,7 @@ export default function ProjectNotesEditor({ projectId, initialJson, initialHtml
   const [saving, setSaving] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
   const lastSavedRef = React.useRef<string>('');
+  const updateProjectMutation = useUpdateProject();
 
   const editor = useEditor({
     editable: canEdit,
@@ -61,7 +62,10 @@ export default function ProjectNotesEditor({ projectId, initialJson, initialHtml
       setSaving(true);
       const json = editor.getJSON();
       const html = DOMPurify.sanitize(editor.getHTML());
-      await projectsApi.update(projectId, { notesJson: json as any, notes: html as any });
+      await updateProjectMutation.mutateAsync({
+        id: projectId,
+        data: { notesJson: json as any, notes: html as any },
+      });
       lastSavedRef.current = html;
       setDirty(false);
     } catch {/* handled upstream */}
