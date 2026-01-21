@@ -54,11 +54,11 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   const statusData = useAssignedHoursTimelineData({ weeks, departmentId, includeChildren });
   const deliverableData = useAssignedHoursDeliverableTimelineData({ weeks, departmentId, includeChildren, includeActiveCa: true });
 
-  // Category expansion (SD/DD/IFP/Masterplan/Bulletins/CA)
-  const [openCategory, setOpenCategory] = React.useState<null | 'sd' | 'dd' | 'ifp' | 'masterplan' | 'bulletins' | 'ca'>(null);
+  // Category expansion (SD/DD/IFP/IFC/Masterplan/Bulletins/CA)
+  const [openCategory, setOpenCategory] = React.useState<null | 'sd' | 'dd' | 'ifp' | 'ifc' | 'masterplan' | 'bulletins' | 'ca'>(null);
   const [categoryDetails, setCategoryDetails] = React.useState<Record<string, { loading: boolean; error: string | null; projects: Array<{ projectId: number; projectName: string; hours: number }> }>>({});
 
-  const loadCategoryDetails = React.useCallback(async (cat: 'sd'|'dd'|'ifp'|'masterplan'|'bulletins'|'ca') => {
+  const loadCategoryDetails = React.useCallback(async (cat: 'sd'|'dd'|'ifp'|'ifc'|'masterplan'|'bulletins'|'ca') => {
     setCategoryDetails(prev => ({ ...prev, [cat]: { loading: true, error: null, projects: prev[cat]?.projects || [] } }));
     try {
       const res = await getAssignedHoursDeliverableTimeline({
@@ -163,6 +163,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   let yTopE: number[] = [];
   let yTopF: number[] = [];
   let yTopG: number[] = [];
+  let yTopH: number[] = [];
 
   if (mode === 'status') {
     const s = statusData.series;
@@ -177,17 +178,19 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
     const cum1 = s.sd.map((v: number) => v);
     const cum2 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0));
     const cum3 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0));
-    const cum4 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.masterplan?.[i] || 0));
-    const cum5 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0));
-    const cum6 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0) + (s.ca[i] || 0));
-    const cum7 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0) + (s.ca[i] || 0) + ((s.other?.[i] || 0)));
+    const cum4 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.ifc?.[i] || 0));
+    const cum5 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.ifc?.[i] || 0) + (s.masterplan?.[i] || 0));
+    const cum6 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.ifc?.[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0));
+    const cum7 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.ifc?.[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0) + (s.ca[i] || 0));
+    const cum8 = s.sd.map((v: number, i: number) => v + (s.dd[i] || 0) + (s.ifp[i] || 0) + (s.ifc?.[i] || 0) + (s.masterplan?.[i] || 0) + (s.bulletins[i] || 0) + (s.ca[i] || 0) + ((s.other?.[i] || 0)));
     yTopA = cum1.map(scaleY); // sd
     yTopB = cum2.map(scaleY); // sd+dd
     yTopC = cum3.map(scaleY); // +ifp
-    yTopD = cum4.map(scaleY); // +masterplan
-    yTopE = cum5.map(scaleY); // +bulletins
-    yTopF = cum6.map(scaleY); // +ca
-    yTopG = cum7.map(scaleY); // +other
+    yTopD = cum4.map(scaleY); // +ifc
+    yTopE = cum5.map(scaleY); // +masterplan
+    yTopF = cum6.map(scaleY); // +bulletins
+    yTopG = cum7.map(scaleY); // +ca
+    yTopH = cum8.map(scaleY); // +other
   }
 
   const baseLine = new Array(n).fill(PAD_TOP + innerH);
@@ -201,6 +204,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   const D_SD = '#f59e0b';
   const D_DD = '#818cf8';
   const D_IFP = '#f472b6';
+  const D_IFC = '#06b6d4';
   const D_MASTERPLAN = '#a78bfa';
   const D_BULLETIN = '#3b82f6';
   const D_CA = '#06b6d4';
@@ -308,18 +312,21 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                   {/* IFP */}
                   <path d={buildAreaPath(xs, yTopC, yTopB)} fill={D_IFP} fillOpacity={0.28} />
                   <path d={buildLinePath(xs, yTopC)} stroke={D_IFP} strokeWidth={2} fill="none" />
+                  {/* IFC */}
+                  <path d={buildAreaPath(xs, yTopD, yTopC)} fill={D_IFC} fillOpacity={0.28} />
+                  <path d={buildLinePath(xs, yTopD)} stroke={D_IFC} strokeWidth={2} fill="none" />
                   {/* Masterplan */}
-                  <path d={buildAreaPath(xs, yTopD, yTopC)} fill={D_MASTERPLAN} fillOpacity={0.28} />
-                  <path d={buildLinePath(xs, yTopD)} stroke={D_MASTERPLAN} strokeWidth={2} fill="none" />
+                  <path d={buildAreaPath(xs, yTopE, yTopD)} fill={D_MASTERPLAN} fillOpacity={0.28} />
+                  <path d={buildLinePath(xs, yTopE)} stroke={D_MASTERPLAN} strokeWidth={2} fill="none" />
                   {/* Bulletins */}
-                  <path d={buildAreaPath(xs, yTopE, yTopD)} fill={D_BULLETIN} fillOpacity={0.28} />
-                  <path d={buildLinePath(xs, yTopE)} stroke={D_BULLETIN} strokeWidth={2} fill="none" />
+                  <path d={buildAreaPath(xs, yTopF, yTopE)} fill={D_BULLETIN} fillOpacity={0.28} />
+                  <path d={buildLinePath(xs, yTopF)} stroke={D_BULLETIN} strokeWidth={2} fill="none" />
                   {/* CA */}
-                  <path d={buildAreaPath(xs, yTopF, yTopE)} fill={D_CA} fillOpacity={0.24} />
-                  <path d={buildLinePath(xs, yTopF)} stroke={D_CA} strokeWidth={2} fill="none" />
+                  <path d={buildAreaPath(xs, yTopG, yTopF)} fill={D_CA} fillOpacity={0.24} />
+                  <path d={buildLinePath(xs, yTopG)} stroke={D_CA} strokeWidth={2} fill="none" />
                   {/* Other */}
-                  <path d={buildAreaPath(xs, yTopG, yTopF)} fill={C_GRAY} fillOpacity={0.22} />
-                  <path d={buildLinePath(xs, yTopG)} stroke={C_GRAY} strokeWidth={2} fill="none" />
+                  <path d={buildAreaPath(xs, yTopH, yTopG)} fill={C_GRAY} fillOpacity={0.22} />
+                  <path d={buildLinePath(xs, yTopH)} stroke={C_GRAY} strokeWidth={2} fill="none" />
                 </>
               )}
             </svg>
@@ -334,9 +341,10 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                 </>
               ) : (
                 <>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_SD }} /> <span className="text-[var(--text)]">SD (0ΓÇô39%)</span></div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_DD }} /> <span className="text-[var(--text)]">DD (40ΓÇô80%)</span></div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_IFP }} /> <span className="text-[var(--text)]">IFP (81ΓÇô100%)</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_SD }} /> <span className="text-[var(--text)]">SD (1-40%)</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_DD }} /> <span className="text-[var(--text)]">DD (41-89%)</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_IFP }} /> <span className="text-[var(--text)]">IFP (90-99%)</span></div>
+                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_IFC }} /> <span className="text-[var(--text)]">IFC (100%)</span></div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_MASTERPLAN }} /> <span className="text-[var(--text)]">Masterplan</span></div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_BULLETIN }} /> <span className="text-[var(--text)]">Bulletins/Addendums</span></div>
                   <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_CA }} /> <span className="text-[var(--text)]">CA</span></div>
@@ -349,13 +357,16 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                 {/* Clickable deliverable categories (expand to see per-project totals) */}
                 <div className="mb-2 flex items-center gap-3 text-xs">
                   <button type="button" onClick={() => { const next = openCategory === 'sd' ? null : 'sd'; setOpenCategory(next); setOpenExtra(null); if (next && !categoryDetails['sd']) loadCategoryDetails('sd'); }} className="flex items-center gap-2 hover:opacity-80">
-                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_SD }} /> <span className="text-[var(--text)]">SD (0-39%)</span>
+                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_SD }} /> <span className="text-[var(--text)]">SD (1-40%)</span>
                   </button>
                   <button type="button" onClick={() => { const next = openCategory === 'dd' ? null : 'dd'; setOpenCategory(next); setOpenExtra(null); if (next && !categoryDetails['dd']) loadCategoryDetails('dd'); }} className="flex items-center gap-2 hover:opacity-80">
-                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_DD }} /> <span className="text-[var(--text)]">DD (40-80%)</span>
+                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_DD }} /> <span className="text-[var(--text)]">DD (41-89%)</span>
                   </button>
                   <button type="button" onClick={() => { const next = openCategory === 'ifp' ? null : 'ifp'; setOpenCategory(next); setOpenExtra(null); if (next && !categoryDetails['ifp']) loadCategoryDetails('ifp'); }} className="flex items-center gap-2 hover:opacity-80">
-                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_IFP }} /> <span className="text-[var(--text)]">IFP (81-100%)</span>
+                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_IFP }} /> <span className="text-[var(--text)]">IFP (90-99%)</span>
+                  </button>
+                  <button type="button" onClick={() => { const next = openCategory === 'ifc' ? null : 'ifc'; setOpenCategory(next); setOpenExtra(null); if (next && !categoryDetails['ifc']) loadCategoryDetails('ifc'); }} className="flex items-center gap-2 hover:opacity-80">
+                    <span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_IFC }} /> <span className="text-[var(--text)]">IFC (100%)</span>
                   </button>
                   <button type="button" onClick={() => { const next = openCategory === 'masterplan' ? null : 'masterplan'; setOpenCategory(next); setOpenExtra(null); if (next && !categoryDetails['masterplan']) loadCategoryDetails('masterplan'); }} className="flex items-center gap-2 hover:opacity-80">
                     <span className="inline-block w-3 h-3 rounded-sm" style={{ background: D_MASTERPLAN }} /> <span className="text-[var(--text)]">Masterplan</span>
@@ -488,5 +499,3 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
 };
 
 export default AssignedHoursTimelineCard;
-
-

@@ -26,6 +26,8 @@ No other repo references were found via `rg -n "#role" -g"*.md"`.
 | Utilization Scheme | `UtilizationSchemeEditor` | Editable only for admins | None | `useUtilizationScheme` (internal) | Read-only view for non-admins |
 | Department Project Roles | `DepartmentProjectRolesSection` | Yes | `caps.projectRolesByDepartment` | `deptProjectRolesApi` | Hidden when capability disabled |
 | Pre-Deliverables Backfill | `PreDeliverablesBackfill` | Yes | None | `deliverables` endpoints | Shares card with Calendar Feeds today |
+| Deliverable Phase Mapping | `DeliverablePhaseMappingSection` | Yes | None | `/api/core/deliverable_phase_mapping/` | Defines SD/DD/IFP/IFC token + percentage rules |
+| Deliverable Task Templates | `DeliverableTaskTemplatesSection` | Yes | None | `/api/deliverables/task_templates/`, departments list | Spreadsheet-style task template editor |
 | Calendar Feeds | `CalendarFeeds` | Yes | None | `/api/personal/calendar-feed` | Provides ICS tokens |
 | Create User & Admin User Table | Inline JSX + `authApi` calls | Yes | None | `authApi` (create user, invite, list, role/person updates, delete) | Includes invite resend, delete, linked person selection |
 | Backup & Restore | `BackupOverview`, `BackupManagement`, `RestoreManagement` | Yes | None | `/api/backups/*` endpoints | Anchor `#backup-restore` | 
@@ -38,22 +40,24 @@ No other repo references were found via `rg -n "#role" -g"*.md"`.
 2. Utilization scheme editing (admin) and read-only view for non-admins.
 3. Department Project Roles listing and CRUD (when capability flag enabled/disabled).
 4. Pre-Deliverables backfill trigger (admin-only) and its status messaging.
-5. Calendar feed generation/regeneration, copy link, and revoke actions.
-6. Create user form: username/email/password/role/person fields, success/error toasts, inputs reset.
-7. Admin user table:
+5. Deliverable Phase Mapping: load/save, validation errors, and persistence.
+6. Deliverable Task Templates: add/edit/remove rows, department dropdown, status dropdowns, save flow.
+7. Calendar feed generation/regeneration, copy link, and revoke actions.
+8. Create user form: username/email/password/role/person fields, success/error toasts, inputs reset.
+9. Admin user table:
    - Change role (guard minimum admin constraint).
    - Link/unlink person dropdown.
    - Resend invite button state.
    - Delete user and associated confirmation.
-8. Backup overview stats render and backup list interactions (download/delete).
-9. Backup creation, upload-restore, and status refresh flows.
-10. RestoreManagement action guardrails (warnings, disabled state when another restore runs).
-11. Admin audit log refresh, loading spinner, empty-state message.
-12. Quick navigation links (`#role-management`, `#backup-restore`) still deep link until redirects are in place.
-13. Integrations secret-key flow: locked state shows instructions, generate/save works, unlocking triggers provider fetch.
-14. Integrations provider/connection management: add connection modal, disable/enable toggle, “Mark tokens invalid” button, and the admin attention banner actions (revoke tokens, force reconnect, disable/enable).
-15. Mapping + rule config: field toggles, client sync policy select, save rule, save mapping, and initial matching wizard load/edit/save (including enable-rule toggle).
-16. Sync controls: worker outage banner, job metric cards, status/object filters, refresh button, job retry action, and Post-restore Resync modal.
+10. Backup overview stats render and backup list interactions (download/delete).
+11. Backup creation, upload-restore, and status refresh flows.
+12. RestoreManagement action guardrails (warnings, disabled state when another restore runs).
+13. Admin audit log refresh, loading spinner, empty-state message.
+14. Quick navigation links (`#role-management`, `#backup-restore`) still deep link until redirects are in place.
+15. Integrations secret-key flow: locked state shows instructions, generate/save works, unlocking triggers provider fetch.
+16. Integrations provider/connection management: add connection modal, disable/enable toggle, “Mark tokens invalid” button, and the admin attention banner actions (revoke tokens, force reconnect, disable/enable).
+17. Mapping + rule config: field toggles, client sync policy select, save rule, save mapping, and initial matching wizard load/edit/save (including enable-rule toggle).
+18. Sync controls: worker outage banner, job metric cards, status/object filters, refresh button, job retry action, and Post-restore Resync modal.
 
 ### Split-Pane Specific Checks
 

@@ -8,7 +8,7 @@ export function useAssignedHoursDeliverableTimelineData({ weeks, departmentId, i
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekKeys, setWeekKeys] = useState<string[]>([]);
-  const [series, setSeries] = useState<{ sd: number[]; dd: number[]; ifp: number[]; masterplan: number[]; bulletins: number[]; ca: number[]; other: number[] }>({ sd: [], dd: [], ifp: [], masterplan: [], bulletins: [], ca: [], other: [] });
+  const [series, setSeries] = useState<{ sd: number[]; dd: number[]; ifp: number[]; ifc: number[]; masterplan: number[]; bulletins: number[]; ca: number[]; other: number[] }>({ sd: [], dd: [], ifp: [], ifc: [], masterplan: [], bulletins: [], ca: [], other: [] });
   const [extras, setExtras] = useState<Array<{ label: string; values: number[] }>>([]);
 
   useAuthenticatedEffect(() => {
@@ -27,8 +27,8 @@ export function useAssignedHoursDeliverableTimelineData({ weeks, departmentId, i
         });
         if (!mounted) return;
         setWeekKeys(res.weekKeys || []);
-        const s = res.series || { sd: [], dd: [], ifp: [], masterplan: [], bulletins: [], ca: [], other: [] } as any;
-        setSeries({ sd: s.sd || [], dd: s.dd || [], ifp: s.ifp || [], masterplan: s.masterplan || [], bulletins: s.bulletins || [], ca: s.ca || [], other: s.other || [] });
+        const s = res.series || { sd: [], dd: [], ifp: [], ifc: [], masterplan: [], bulletins: [], ca: [], other: [] } as any;
+        setSeries({ sd: s.sd || [], dd: s.dd || [], ifp: s.ifp || [], ifc: s.ifc || [], masterplan: s.masterplan || [], bulletins: s.bulletins || [], ca: s.ca || [], other: s.other || [] });
         setExtras(res.extras || []);
         if (debugFlag && (res as any).unspecifiedDebug) {
           // eslint-disable-next-line no-console
@@ -57,7 +57,7 @@ export function useAssignedHoursDeliverableTimelineData({ weeks, departmentId, i
     }
     // Server now returns explicit 'other'; prefer that to extrasSum.
     const other = series.other?.[i] ?? 0;
-    return (series.sd[i] || 0) + (series.dd[i] || 0) + (series.ifp[i] || 0) + (series.masterplan[i] || 0) + (series.bulletins[i] || 0) + (series.ca[i] || 0) + (other || extraSum);
+    return (series.sd[i] || 0) + (series.dd[i] || 0) + (series.ifp[i] || 0) + (series.ifc[i] || 0) + (series.masterplan[i] || 0) + (series.bulletins[i] || 0) + (series.ca[i] || 0) + (other || extraSum);
   });
   const maxY = totalByWeek.reduce((m, v) => (v > m ? v : m), 0);
   return { loading, error, weekKeys, series, extras, totalByWeek, maxY };

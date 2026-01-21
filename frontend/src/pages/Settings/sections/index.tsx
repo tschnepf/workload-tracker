@@ -9,6 +9,8 @@ import AdminUsersSection, { ADMIN_USERS_SECTION_ID } from './AdminUsersSection';
 import BackupRestoreSection, { BACKUP_RESTORE_SECTION_ID } from './BackupRestoreSection';
 import AuditLogSection, { AUDIT_LOG_SECTION_ID } from './AuditLogSection';
 import IntegrationsSection, { INTEGRATIONS_SECTION_ID } from './IntegrationsSection';
+import DeliverablePhaseMappingSection, { DELIVERABLE_PHASE_MAPPING_SECTION_ID } from './DeliverablePhaseMappingSection';
+import DeliverableTaskTemplatesSection, { DELIVERABLE_TASK_TEMPLATES_SECTION_ID } from './DeliverableTaskTemplatesSection';
 
 export type SettingsSectionDefinition = {
   id: string;
@@ -41,9 +43,21 @@ export const settingsSections: SettingsSectionDefinition[] = [
   },
   {
     id: PRE_DELIVERABLES_SECTION_ID,
-    title: 'Pre-Deliverables Backfill',
+    title: 'Pre-Deliverables',
     requiresAdmin: true,
     component: PreDeliverablesSection,
+  },
+  {
+    id: DELIVERABLE_PHASE_MAPPING_SECTION_ID,
+    title: 'Deliverable Phase Mapping',
+    requiresAdmin: true,
+    component: DeliverablePhaseMappingSection,
+  },
+  {
+    id: DELIVERABLE_TASK_TEMPLATES_SECTION_ID,
+    title: 'Deliverable Task Templates',
+    requiresAdmin: true,
+    component: DeliverableTaskTemplatesSection,
   },
   {
     id: CALENDAR_FEEDS_SECTION_ID,

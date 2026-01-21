@@ -13,7 +13,6 @@ Add a new Deliverable Tasks feature that auto-generates standard tasks for SD (1
   - Scope description (free text)
   - Completion status (required)
   - QA status (required)
-  - Default assignee (optional; must be on project at generation time)
 - Task instances:
   - Can be assigned to a project member or left open.
   - Can be completed by any project member.
@@ -72,7 +71,6 @@ Add a new Deliverable Tasks feature that auto-generates standard tasks for SD (1
 - If description matches, skip percentage evaluation.
 - If no match, do nothing.
 - Generation should be idempotent and executed on `transaction.on_commit`.
-- If a template specifies a default assignee not on the project, generate as unassigned and log a warning in the response/telemetry.
 
 ## Backend Implementation Steps
 1. **Models & migrations**

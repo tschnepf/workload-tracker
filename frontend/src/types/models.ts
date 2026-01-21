@@ -119,6 +119,97 @@ export interface Deliverable {
   updatedAt?: string;
 }
 
+export type DeliverableTaskCompletionStatus = 'not_started' | 'in_progress' | 'complete';
+export type DeliverableTaskQaStatus = 'not_reviewed' | 'in_review' | 'approved' | 'changes_required';
+export type DeliverableQAReviewStatus = 'not_reviewed' | 'reviewed';
+
+export interface DeliverableTaskTemplate {
+  id?: number;
+  phase: 'sd' | 'dd' | 'ifp' | 'ifc';
+  departmentId: number;
+  departmentName?: string;
+  sheetNumber?: string | null;
+  sheetName?: string | null;
+  scopeDescription?: string;
+  defaultCompletionStatus: DeliverableTaskCompletionStatus;
+  defaultQaStatus: DeliverableTaskQaStatus;
+  sortOrder?: number;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DeliverableTask {
+  id?: number;
+  deliverable: number;
+  deliverableInfo?: {
+    id: number;
+    projectId: number;
+    description?: string | null;
+    date?: string | null;
+    percentage?: number | null;
+  };
+  templateId?: number | null;
+  departmentId: number;
+  departmentName?: string;
+  sheetNumber?: string | null;
+  sheetName?: string | null;
+  scopeDescription?: string;
+  completionStatus: DeliverableTaskCompletionStatus;
+  qaStatus: DeliverableTaskQaStatus;
+  qaAssignedTo?: number | null;
+  qaAssignedToName?: string | null;
+  assignedTo?: number | null;
+  assignedToName?: string | null;
+  completedBy?: number | null;
+  completedByName?: string | null;
+  completedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DeliverableQATask {
+  id?: number;
+  deliverable: number;
+  deliverableInfo?: {
+    id: number;
+    projectId: number;
+    description?: string | null;
+    date?: string | null;
+    percentage?: number | null;
+  };
+  departmentId: number;
+  departmentName?: string;
+  qaStatus: DeliverableQAReviewStatus;
+  qaAssignedTo?: number | null;
+  qaAssignedToName?: string | null;
+  reviewedAt?: string | null;
+  dueDate?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface QATaskSettings {
+  defaultDaysBefore: number;
+  updatedAt?: string;
+}
+
+export interface DeliverablePhaseMappingSettings {
+  useDescriptionMatch: boolean;
+  descSdTokens: string[];
+  descDdTokens: string[];
+  descIfpTokens: string[];
+  descIfcTokens: string[];
+  rangeSdMin: number;
+  rangeSdMax: number;
+  rangeDdMin: number;
+  rangeDdMax: number;
+  rangeIfpMin: number;
+  rangeIfpMax: number;
+  rangeIfcExact: number;
+  updatedAt?: string;
+}
+
 export interface ProjectRisk {
   id?: number;
   project: number;

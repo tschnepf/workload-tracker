@@ -13,8 +13,10 @@ from .serializers import (
     UtilizationSchemeSerializer,
     ProjectRoleSerializer,
     CalendarFeedSettingsSerializer,
+    DeliverablePhaseMappingSettingsSerializer,
+    QATaskSettingsSerializer,
 )
-from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole, CalendarFeedSettings
+from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole, CalendarFeedSettings, DeliverablePhaseMappingSettings, QATaskSettings
 from accounts.permissions import IsAdminOrManager
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
@@ -194,6 +196,29 @@ class ProjectRoleView(APIView):
         out = sorted(names, key=lambda s: s.lower())
         return Response({'roles': out})
 
+
+class DeliverablePhaseMappingSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(responses=DeliverablePhaseMappingSettingsSerializer)
+    def get(self, request):
+        obj = DeliverablePhaseMappingSettings.get_active()
+        return Response(DeliverablePhaseMappingSettingsSerializer(obj).data)
+
+    @extend_schema(request=DeliverablePhaseMappingSettingsSerializer, responses=DeliverablePhaseMappingSettingsSerializer)
+    def put(self, request):
+        obj = DeliverablePhaseMappingSettings.get_active()
+        ser = DeliverablePhaseMappingSettingsSerializer(instance=obj, data=request.data, partial=False)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        # Invalidate classifier cache
+        try:
+            from core.deliverable_phase import clear_phase_mapping_cache
+            clear_phase_mapping_cache()
+        except Exception:  # nosec B110
+            pass
+        return Response(DeliverablePhaseMappingSettingsSerializer(obj).data)
+
     @extend_schema(
         request=inline_serializer(
             name='ProjectRoleCreateRequest',
@@ -271,6 +296,23 @@ class ProjectRoleView(APIView):
             pass
 
         return Response({'detail': 'deleted', 'removedFromAssignments': removed_count, 'catalogDeleted': catalog_deleted})
+
+
+class QATaskSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(responses=QATaskSettingsSerializer)
+    def get(self, request):
+        obj = QATaskSettings.get_active()
+        return Response(QATaskSettingsSerializer(obj).data)
+
+    @extend_schema(request=QATaskSettingsSerializer, responses=QATaskSettingsSerializer)
+    def put(self, request):
+        obj = QATaskSettings.get_active()
+        ser = QATaskSettingsSerializer(instance=obj, data=request.data, partial=False)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(QATaskSettingsSerializer(obj).data)
 
 
 class CalendarFeedsView(APIView):

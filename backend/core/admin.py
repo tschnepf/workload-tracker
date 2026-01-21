@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import PreDeliverableGlobalSettings, CalendarFeedSettings, RiskAttachmentSettings
+from .models import PreDeliverableGlobalSettings, CalendarFeedSettings, RiskAttachmentSettings, QATaskSettings
 
 
 @admin.register(PreDeliverableGlobalSettings)
@@ -26,3 +26,9 @@ class CalendarFeedSettingsAdmin(admin.ModelAdmin):
 class RiskAttachmentSettingsAdmin(admin.ModelAdmin):
     list_display = ('key', 'base_path', 'updated_at')
     readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(QATaskSettings)
+class QATaskSettingsAdmin(admin.ModelAdmin):
+    list_display = ('key', 'default_days_before', 'updated_at')
+    list_editable = ('default_days_before',)

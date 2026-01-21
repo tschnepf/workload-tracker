@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.conf import settings
 import secrets
 
@@ -71,6 +72,130 @@ class PreDeliverableGlobalSettings(models.Model):
             }
         except PreDeliverableType.DoesNotExist:
             return None
+
+
+class DeliverablePhaseMappingSettings(models.Model):
+    """Singleton settings for deliverable phase classification.
+
+    Controls description token matching and percentage ranges used by analytics
+    and deliverable task generation.
+    """
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    use_description_match = models.BooleanField(default=True)
+
+    # Description token lists (lowercased)
+    desc_sd_tokens = models.JSONField(default=list)
+    desc_dd_tokens = models.JSONField(default=list)
+    desc_ifp_tokens = models.JSONField(default=list)
+    desc_ifc_tokens = models.JSONField(default=list)
+
+    # Percentage ranges (inclusive)
+    range_sd_min = models.IntegerField(default=1, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    range_sd_max = models.IntegerField(default=40, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    range_dd_min = models.IntegerField(default=41, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    range_dd_max = models.IntegerField(default=89, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    range_ifp_min = models.IntegerField(default=90, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    range_ifp_max = models.IntegerField(default=99, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    range_ifc_exact = models.IntegerField(default=100, validators=[MinValueValidator(0), MaxValueValidator(100)])
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Deliverable Phase Mapping Settings'
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"DeliverablePhaseMappingSettings({self.key})"
+
+    def clean(self):
+        # Normalize token lists
+        for field in ('desc_sd_tokens', 'desc_dd_tokens', 'desc_ifp_tokens', 'desc_ifc_tokens'):
+            raw = getattr(self, field, []) or []
+            if not isinstance(raw, list):
+                raise ValidationError({field: 'must be a list'})
+            normalized = []
+            for token in raw:
+                if token is None:
+                    continue
+                t = str(token).strip().lower()
+                if not t:
+                    continue
+                normalized.append(t)
+            # De-duplicate, preserve order
+            seen = set()
+            deduped = []
+            for t in normalized:
+                if t in seen:
+                    continue
+                seen.add(t)
+                deduped.append(t)
+            setattr(self, field, deduped)
+
+        # Range integrity
+        sd_min, sd_max = self.range_sd_min, self.range_sd_max
+        dd_min, dd_max = self.range_dd_min, self.range_dd_max
+        ifp_min, ifp_max = self.range_ifp_min, self.range_ifp_max
+        ifc_exact = self.range_ifc_exact
+
+        if not (sd_min <= sd_max <= 100):
+            raise ValidationError({'range_sd_max': 'SD range invalid'})
+        if not (dd_min <= dd_max <= 100):
+            raise ValidationError({'range_dd_max': 'DD range invalid'})
+        if not (ifp_min <= ifp_max <= 100):
+            raise ValidationError({'range_ifp_max': 'IFP range invalid'})
+        if not (0 <= ifc_exact <= 100):
+            raise ValidationError({'range_ifc_exact': 'IFC exact must be 0-100'})
+
+        # Contiguous, non-overlapping ranges
+        if dd_min != sd_max + 1:
+            raise ValidationError({'range_dd_min': 'DD min must equal SD max + 1'})
+        if ifp_min != dd_max + 1:
+            raise ValidationError({'range_ifp_min': 'IFP min must equal DD max + 1'})
+        if ifc_exact != ifp_max + 1:
+            raise ValidationError({'range_ifc_exact': 'IFC exact must equal IFP max + 1'})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_active(cls):
+        obj, _ = cls.objects.get_or_create(
+            key='default',
+            defaults=dict(
+                use_description_match=True,
+                desc_sd_tokens=['sd', 'schematic'],
+                desc_dd_tokens=['dd', 'design development'],
+                desc_ifp_tokens=['ifp'],
+                desc_ifc_tokens=['ifc'],
+                range_sd_min=1, range_sd_max=40,
+                range_dd_min=41, range_dd_max=89,
+                range_ifp_min=90, range_ifp_max=99,
+                range_ifc_exact=100,
+            ),
+        )
+        return obj
+
+
+class QATaskSettings(models.Model):
+    """Singleton settings for QA task defaults."""
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    default_days_before = models.PositiveIntegerField(default=7, validators=[MinValueValidator(0), MaxValueValidator(365)])
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'QA Task Settings'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"QATaskSettings({self.key})"
+
+    @classmethod
+    def get_active(cls):
+        obj, _ = cls.objects.get_or_create(key='default', defaults={'default_days_before': 7})
+        return obj
 
 
 class NotificationPreference(models.Model):

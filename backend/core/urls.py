@@ -4,6 +4,8 @@ from .views import (
     UtilizationSchemeView,
     ProjectRoleView,
     CalendarFeedsView,
+    DeliverablePhaseMappingSettingsView,
+    QATaskSettingsView,
 )
 
 urlpatterns = [
@@ -11,4 +13,6 @@ urlpatterns = [
     path('utilization_scheme/', UtilizationSchemeView.as_view(), name='utilization_scheme'),
     path('project_roles/', ProjectRoleView.as_view(), name='project_roles'),
     path('calendar_feeds/', CalendarFeedsView.as_view(), name='calendar_feeds'),
+    path('deliverable_phase_mapping/', DeliverablePhaseMappingSettingsView.as_view(), name='deliverable_phase_mapping'),
+    path('qa_task_settings/', QATaskSettingsView.as_view(), name='qa_task_settings'),
 ]

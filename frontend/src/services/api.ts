@@ -3,7 +3,34 @@
  * Uses naming prevention: frontend camelCase <-> backend snake_case
  */
 
-import { Person, Project, Assignment, Department, Deliverable, DeliverableAssignment, DeliverableCalendarItem, DeliverableStaffingSummaryItem, PersonCapacityHeatmapItem, WorkloadForecastItem, PersonUtilization, ApiResponse, PaginatedResponse, DashboardData, SkillTag, PersonSkill, AssignmentConflictResponse, Role, ProjectFilterMetadataResponse, JobStatus, ProjectRisk } from '@/types/models';
+import {
+  Person,
+  Project,
+  Assignment,
+  Department,
+  Deliverable,
+  DeliverableAssignment,
+  DeliverableCalendarItem,
+  DeliverableStaffingSummaryItem,
+  DeliverableTaskTemplate,
+  DeliverableTask,
+  DeliverableQATask,
+  DeliverablePhaseMappingSettings,
+  QATaskSettings,
+  PersonCapacityHeatmapItem,
+  WorkloadForecastItem,
+  PersonUtilization,
+  ApiResponse,
+  PaginatedResponse,
+  DashboardData,
+  SkillTag,
+  PersonSkill,
+  AssignmentConflictResponse,
+  Role,
+  ProjectFilterMetadataResponse,
+  JobStatus,
+  ProjectRisk,
+} from '@/types/models';
 import type { BackupListResponse, BackupStatus } from '@/types/backup';
 import { getAccessToken } from '@/utils/auth';
 import { resolveApiBase } from '@/utils/apiBase';
@@ -301,16 +328,20 @@ export const peopleApi = {
   },
 
   // Server-side search for people (typeahead)
-  search: async (q: string, limit = 20): Promise<Array<{ id: number; name: string; department?: number }>> => {
-    const sp = new URLSearchParams();
-    sp.set('q', q);
-    if (limit) sp.set('limit', String(limit));
-    const res = await apiClient.GET('/people/search/' as any, { params: { query: { q, limit } }, headers: authHeaders() });
+  search: async (
+    q: string,
+    limit = 20,
+    filters?: { department?: number }
+  ): Promise<Array<{ id: number; name: string; department?: number; roleName?: string | null }>> => {
+    const query: Record<string, any> = { q };
+    if (limit) query.limit = limit;
+    if (filters?.department != null) query.department = filters.department;
+    const res = await apiClient.GET('/people/search/' as any, { params: { query }, headers: authHeaders() });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
-    return res.data as unknown as Array<{ id: number; name: string; department?: number }>;
+    return res.data as unknown as Array<{ id: number; name: string; department?: number; roleName?: string | null }>;
   },
 
   // Autocomplete endpoint (Phase 3/4 wiring)
@@ -494,6 +525,44 @@ export const utilizationSchemeApi = {
   },
 };
 
+export const deliverablePhaseMappingApi = {
+  get: async (): Promise<DeliverablePhaseMappingSettings> => {
+    const res = await apiClient.GET('/core/deliverable_phase_mapping/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverablePhaseMappingSettings;
+  },
+  update: async (payload: DeliverablePhaseMappingSettings): Promise<DeliverablePhaseMappingSettings> => {
+    const res = await apiClient.PUT('/core/deliverable_phase_mapping/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverablePhaseMappingSettings;
+  },
+};
+
+export const qaTaskSettingsApi = {
+  get: async (): Promise<QATaskSettings> => {
+    const res = await apiClient.GET('/core/qa_task_settings/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as QATaskSettings;
+  },
+  update: async (payload: Pick<QATaskSettings, 'defaultDaysBefore'>): Promise<QATaskSettings> => {
+    const res = await apiClient.PUT('/core/qa_task_settings/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as QATaskSettings;
+  },
+};
+
 // Projects API
 export const projectsApi = {
   // Get all projects with pagination support
@@ -523,6 +592,26 @@ export const projectsApi = {
     if (opts?.candidates_only != null) sp.set('candidates_only', String(opts.candidates_only));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<Array<{ personId: number; personName: string; totalHours: number; capacity: number; availableHours: number; utilizationPercent: number }>>(`/projects/${projectId}/availability/${qs}`);
+  },
+
+  // Deliverable tasks for a project
+  deliverableTasks: async (projectId: number): Promise<DeliverableTask[]> => {
+    const res = await apiClient.GET('/projects/{id}/deliverable_tasks/' as any, { params: { path: { id: projectId } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableTask[];
+  },
+
+  // QA checklist tasks for a project
+  qaTasks: async (projectId: number): Promise<DeliverableQATask[]> => {
+    const res = await apiClient.GET('/projects/{id}/qa_tasks/' as any, { params: { path: { id: projectId } }, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableQATask[];
   },
 
   // Get all projects (bulk API - Phase 2 optimization)
@@ -960,6 +1049,81 @@ export const deliverablesApi = {
       throw new ApiError(friendlyErrorMessage(status, res.error, `HTTP ${status}`), status);
     }
     return res.data as unknown as { enqueued: boolean; jobId?: string; statusUrl?: string; result?: any };
+  },
+};
+
+export const deliverableTaskTemplatesApi = {
+  list: async (params?: { page?: number; page_size?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const res = await apiClient.GET(`/deliverables/task_templates/${queryString}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<DeliverableTaskTemplate>;
+  },
+  create: async (data: Omit<DeliverableTaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'departmentName'>) => {
+    const res = await apiClient.POST('/deliverables/task_templates/' as any, { body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableTaskTemplate;
+  },
+  update: async (id: number, data: Partial<DeliverableTaskTemplate>) => {
+    const res = await apiClient.PATCH('/deliverables/task_templates/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableTaskTemplate;
+  },
+  delete: async (id: number) => {
+    const res = await apiClient.DELETE('/deliverables/task_templates/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    if (res.error || (res.response && !res.response.ok)) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return;
+  },
+};
+
+export const deliverableTasksApi = {
+  list: async (params?: { project?: number; deliverable?: number; page?: number; page_size?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.project) queryParams.set('project', params.project.toString());
+    if (params?.deliverable) queryParams.set('deliverable', params.deliverable.toString());
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const res = await apiClient.GET(`/deliverables/tasks/${queryString}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<DeliverableTask>;
+  },
+  update: async (id: number, data: Partial<DeliverableTask>) => {
+    const res = await apiClient.PATCH('/deliverables/tasks/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableTask;
+  },
+};
+
+export const deliverableQaTasksApi = {
+  update: async (id: number, data: Partial<DeliverableQATask>) => {
+    const res = await apiClient.PATCH('/deliverables/qa_tasks/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as DeliverableQATask;
   },
 };
 

@@ -5,7 +5,7 @@ NEVER write manual field mappings - always use these base classes.
 
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
-from .models import UtilizationScheme, ProjectRole, CalendarFeedSettings
+from .models import UtilizationScheme, ProjectRole, CalendarFeedSettings, DeliverablePhaseMappingSettings, QATaskSettings
 
 
 class PreDeliverableGlobalSettingsItemSerializer(serializers.Serializer):
@@ -103,3 +103,50 @@ class CalendarFeedSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = CalendarFeedSettings
         fields = ['deliverables_token', 'updated_at']
+
+
+class DeliverablePhaseMappingSettingsSerializer(serializers.ModelSerializer):
+    useDescriptionMatch = serializers.BooleanField(source='use_description_match')
+    descSdTokens = serializers.JSONField(source='desc_sd_tokens')
+    descDdTokens = serializers.JSONField(source='desc_dd_tokens')
+    descIfpTokens = serializers.JSONField(source='desc_ifp_tokens')
+    descIfcTokens = serializers.JSONField(source='desc_ifc_tokens')
+    rangeSdMin = serializers.IntegerField(source='range_sd_min')
+    rangeSdMax = serializers.IntegerField(source='range_sd_max')
+    rangeDdMin = serializers.IntegerField(source='range_dd_min')
+    rangeDdMax = serializers.IntegerField(source='range_dd_max')
+    rangeIfpMin = serializers.IntegerField(source='range_ifp_min')
+    rangeIfpMax = serializers.IntegerField(source='range_ifp_max')
+    rangeIfcExact = serializers.IntegerField(source='range_ifc_exact')
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = DeliverablePhaseMappingSettings
+        fields = [
+            'useDescriptionMatch',
+            'descSdTokens', 'descDdTokens', 'descIfpTokens', 'descIfcTokens',
+            'rangeSdMin', 'rangeSdMax',
+            'rangeDdMin', 'rangeDdMax',
+            'rangeIfpMin', 'rangeIfpMax',
+            'rangeIfcExact',
+            'updatedAt',
+        ]
+
+    def validate(self, attrs):
+        inst = self.instance or DeliverablePhaseMappingSettings.get_active()
+        for k, v in attrs.items():
+            setattr(inst, k, v)
+        try:
+            inst.clean()
+        except Exception as e:
+            raise serializers.ValidationError({'detail': str(e)})
+        return attrs
+
+
+class QATaskSettingsSerializer(serializers.ModelSerializer):
+    defaultDaysBefore = serializers.IntegerField(source='default_days_before', min_value=0, max_value=365)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = QATaskSettings
+        fields = ['defaultDaysBefore', 'updatedAt']

@@ -398,7 +398,7 @@
         "/api/assignments/analytics_deliverable_timeline/": {
             "get": {
                 "operationId": "assignments_analytics_deliverable_timeline_retrieve",
-                "description": "Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.\n\nUses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.\nClassification rules: explicit phase in description (SD/DD/IFP) wins; otherwise map by percentage: 0-39%→SD, 40-80%→DD, 81-100%→IFP; unknown→other.\nAlso groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums. Non-matching items are returned in 'extras' by label (desc or percent). No generic 'other' bucket is included in the series.\nResponse: { weekKeys: [..], series: { sd, dd, ifp, bulletins }, extras: [{label, values[]}], totalByWeek }",
+                "description": "Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.\n\nUses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.\nClassification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.\nAlso groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.\nResponse: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }",
                 "parameters": [
                     {
                         "in": "query",
@@ -2368,6 +2368,146 @@
                 }
             }
         },
+        "/api/core/deliverable_phase_mapping/": {
+            "get": {
+                "operationId": "core_deliverable_phase_mapping_retrieve",
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverablePhaseMappingSettings"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "core_deliverable_phase_mapping_create",
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectRole"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "core_deliverable_phase_mapping_update",
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverablePhaseMappingSettingsRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverablePhaseMappingSettingsRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverablePhaseMappingSettingsRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverablePhaseMappingSettings"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "core_deliverable_phase_mapping_destroy",
+                "description": "Remove a project role from the catalog and clear assignments using it.\n\nBehavior:\n- Admin only.\n- Accepts role name via query param (?name=...) or JSON body { name }.\n- Clears `Assignment.role_on_project` wherever it matches (case-insensitive).\n- If a catalog ProjectRole exists for that normalized name, it is deleted.",
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/core/pre-deliverable-global-settings/": {
             "get": {
                 "operationId": "core_pre_deliverable_global_settings_list",
@@ -2473,73 +2613,6 @@
                             }
                         },
                         "description": ""
-                    }
-                }
-            },
-            "post": {
-                "operationId": "core_project_roles_create",
-                "description": "List/add project roles for suggestions/settings.\n\n- GET: returns union of catalog roles and distinct existing assignment roles.\n- POST: admin-only; adds a role to the catalog.",
-                "tags": [
-                    "core"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/ProjectRoleCreateRequestRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "security": [
-                    {
-                        "jwtAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ProjectRole"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            },
-            "delete": {
-                "operationId": "core_project_roles_destroy",
-                "description": "Remove a project role from the catalog and clear assignments using it.\n\nBehavior:\n- Admin only.\n- Accepts role name via query param (?name=...) or JSON body { name }.\n- Clears `Assignment.role_on_project` wherever it matches (case-insensitive).\n- If a catalog ProjectRole exists for that normalized name, it is deleted.",
-                "tags": [
-                    "core"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No response body"
                     }
                 }
             }
@@ -4047,6 +4120,540 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/task_templates/": {
+            "get": {
+                "operationId": "deliverables_task_templates_list",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedDeliverableTaskTemplateList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "deliverables_task_templates_create",
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskTemplateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskTemplateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskTemplateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableTaskTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/task_templates/{id}/": {
+            "get": {
+                "operationId": "deliverables_task_templates_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable Task Template.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableTaskTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "deliverables_task_templates_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable Task Template.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskTemplateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskTemplateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskTemplateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableTaskTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "deliverables_task_templates_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable Task Template.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableTaskTemplateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableTaskTemplateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableTaskTemplateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableTaskTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "deliverables_task_templates_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable Task Template.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/deliverables/tasks/": {
+            "get": {
+                "operationId": "deliverables_tasks_list",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedDeliverableTaskList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "deliverables_tasks_create",
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableTask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/tasks/{id}/": {
+            "get": {
+                "operationId": "deliverables_tasks_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable Task.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableTask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "deliverables_tasks_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable Task.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableTaskRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableTask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "deliverables_tasks_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable Task.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableTaskRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableTaskRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableTaskRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableTask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "deliverables_tasks_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable Task.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -7261,6 +7868,55 @@
                 }
             }
         },
+        "/api/projects/{id}/deliverable_tasks/": {
+            "get": {
+                "operationId": "projects_deliverable_tasks_list",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^\\d+$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedDeliverableTaskList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/projects/{id}/pre-deliverable-settings/": {
             "get": {
                 "operationId": "projects_pre_deliverable_settings_retrieve",
@@ -9981,6 +10637,15 @@
                     "label"
                 ]
             },
+            "CompletionStatusEnum": {
+                "enum": [
+                    "not_started",
+                    "in_progress",
+                    "complete"
+                ],
+                "type": "string",
+                "description": "* `not_started` - Not Started\n* `in_progress` - In Progress\n* `complete` - Complete"
+            },
             "CoverageBlock": {
                 "type": "object",
                 "properties": {
@@ -10104,6 +10769,25 @@
                     "total_assignments",
                     "total_people"
                 ]
+            },
+            "DefaultCompletionStatusEnum": {
+                "enum": [
+                    "not_started",
+                    "in_progress",
+                    "complete"
+                ],
+                "type": "string",
+                "description": "* `not_started` - Not Started\n* `in_progress` - In Progress\n* `complete` - Complete"
+            },
+            "DefaultQaStatusEnum": {
+                "enum": [
+                    "not_reviewed",
+                    "in_review",
+                    "approved",
+                    "changes_required"
+                ],
+                "type": "string",
+                "description": "* `not_reviewed` - Not Reviewed\n* `in_review` - In Review\n* `approved` - Approved\n* `changes_required` - Changes Required"
             },
             "Deliverable": {
                 "type": "object",
@@ -10326,13 +11010,114 @@
                     "sd",
                     "dd",
                     "ifp",
+                    "ifc",
                     "masterplan",
                     "bulletins",
                     "ca",
                     "other"
                 ],
                 "type": "string",
-                "description": "* `sd` - SD\n* `dd` - DD\n* `ifp` - IFP\n* `masterplan` - Masterplan\n* `bulletins` - Bulletins\n* `ca` - CA\n* `other` - Other"
+                "description": "* `sd` - SD\n* `dd` - DD\n* `ifp` - IFP\n* `ifc` - IFC\n* `masterplan` - Masterplan\n* `bulletins` - Bulletins\n* `ca` - CA\n* `other` - Other"
+            },
+            "DeliverablePhaseMappingSettings": {
+                "type": "object",
+                "properties": {
+                    "useDescriptionMatch": {
+                        "type": "boolean"
+                    },
+                    "descSdTokens": {},
+                    "descDdTokens": {},
+                    "descIfpTokens": {},
+                    "descIfcTokens": {},
+                    "rangeSdMin": {
+                        "type": "integer"
+                    },
+                    "rangeSdMax": {
+                        "type": "integer"
+                    },
+                    "rangeDdMin": {
+                        "type": "integer"
+                    },
+                    "rangeDdMax": {
+                        "type": "integer"
+                    },
+                    "rangeIfpMin": {
+                        "type": "integer"
+                    },
+                    "rangeIfpMax": {
+                        "type": "integer"
+                    },
+                    "rangeIfcExact": {
+                        "type": "integer"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "descDdTokens",
+                    "descIfcTokens",
+                    "descIfpTokens",
+                    "descSdTokens",
+                    "rangeDdMax",
+                    "rangeDdMin",
+                    "rangeIfcExact",
+                    "rangeIfpMax",
+                    "rangeIfpMin",
+                    "rangeSdMax",
+                    "rangeSdMin",
+                    "updatedAt",
+                    "useDescriptionMatch"
+                ]
+            },
+            "DeliverablePhaseMappingSettingsRequest": {
+                "type": "object",
+                "properties": {
+                    "useDescriptionMatch": {
+                        "type": "boolean"
+                    },
+                    "descSdTokens": {},
+                    "descDdTokens": {},
+                    "descIfpTokens": {},
+                    "descIfcTokens": {},
+                    "rangeSdMin": {
+                        "type": "integer"
+                    },
+                    "rangeSdMax": {
+                        "type": "integer"
+                    },
+                    "rangeDdMin": {
+                        "type": "integer"
+                    },
+                    "rangeDdMax": {
+                        "type": "integer"
+                    },
+                    "rangeIfpMin": {
+                        "type": "integer"
+                    },
+                    "rangeIfpMax": {
+                        "type": "integer"
+                    },
+                    "rangeIfcExact": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "descDdTokens",
+                    "descIfcTokens",
+                    "descIfpTokens",
+                    "descSdTokens",
+                    "rangeDdMax",
+                    "rangeDdMin",
+                    "rangeIfcExact",
+                    "rangeIfpMax",
+                    "rangeIfpMin",
+                    "rangeSdMax",
+                    "rangeSdMin",
+                    "useDescriptionMatch"
+                ]
             },
             "DeliverableReorderRequestRequest": {
                 "type": "object",
@@ -10431,6 +11216,13 @@
                             "format": "double"
                         }
                     },
+                    "ifc": {
+                        "type": "array",
+                        "items": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
                     "masterplan": {
                         "type": "array",
                         "items": {
@@ -10464,6 +11256,7 @@
                     "bulletins",
                     "ca",
                     "dd",
+                    "ifc",
                     "ifp",
                     "masterplan",
                     "other",
@@ -10501,6 +11294,243 @@
                     "personName",
                     "totalHours",
                     "weekBreakdown"
+                ]
+            },
+            "DeliverableTask": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "deliverableInfo": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "readOnly": true
+                    },
+                    "templateId": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "departmentName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "sheetNumber": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "sheetName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scopeDescription": {
+                        "type": "string"
+                    },
+                    "completionStatus": {
+                        "$ref": "#/components/schemas/CompletionStatusEnum"
+                    },
+                    "qaStatus": {
+                        "$ref": "#/components/schemas/QaStatusEnum"
+                    },
+                    "assignedTo": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "assignedToName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "completedBy": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "completedByName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "completedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "assignedToName",
+                    "completedAt",
+                    "completedBy",
+                    "completedByName",
+                    "completionStatus",
+                    "createdAt",
+                    "deliverable",
+                    "deliverableInfo",
+                    "departmentId",
+                    "departmentName",
+                    "id",
+                    "qaStatus",
+                    "updatedAt"
+                ]
+            },
+            "DeliverableTaskRequest": {
+                "type": "object",
+                "properties": {
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "templateId": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "sheetNumber": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "sheetName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scopeDescription": {
+                        "type": "string"
+                    },
+                    "completionStatus": {
+                        "$ref": "#/components/schemas/CompletionStatusEnum"
+                    },
+                    "qaStatus": {
+                        "$ref": "#/components/schemas/QaStatusEnum"
+                    },
+                    "assignedTo": {
+                        "type": "integer",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "completionStatus",
+                    "deliverable",
+                    "departmentId",
+                    "qaStatus"
+                ]
+            },
+            "DeliverableTaskTemplate": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "departmentName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "sheetNumber": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "sheetName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scopeDescription": {
+                        "type": "string"
+                    },
+                    "defaultCompletionStatus": {
+                        "$ref": "#/components/schemas/DefaultCompletionStatusEnum"
+                    },
+                    "defaultQaStatus": {
+                        "$ref": "#/components/schemas/DefaultQaStatusEnum"
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "defaultCompletionStatus",
+                    "defaultQaStatus",
+                    "departmentId",
+                    "departmentName",
+                    "id",
+                    "phase",
+                    "updatedAt"
+                ]
+            },
+            "DeliverableTaskTemplateRequest": {
+                "type": "object",
+                "properties": {
+                    "phase": {
+                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "sheetNumber": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "sheetName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scopeDescription": {
+                        "type": "string"
+                    },
+                    "defaultCompletionStatus": {
+                        "$ref": "#/components/schemas/DefaultCompletionStatusEnum"
+                    },
+                    "defaultQaStatus": {
+                        "$ref": "#/components/schemas/DefaultQaStatusEnum"
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "defaultCompletionStatus",
+                    "defaultQaStatus",
+                    "departmentId",
+                    "phase"
                 ]
             },
             "Department": {
@@ -11805,6 +12835,68 @@
                     }
                 }
             },
+            "PaginatedDeliverableTaskList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeliverableTask"
+                        }
+                    }
+                }
+            },
+            "PaginatedDeliverableTaskTemplateList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeliverableTaskTemplate"
+                        }
+                    }
+                }
+            },
             "PaginatedDepartmentList": {
                 "type": "object",
                 "required": [
@@ -12377,6 +13469,76 @@
                         "type": "string",
                         "format": "date",
                         "nullable": true
+                    }
+                }
+            },
+            "PatchedDeliverableTaskRequest": {
+                "type": "object",
+                "properties": {
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "templateId": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "sheetNumber": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "sheetName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scopeDescription": {
+                        "type": "string"
+                    },
+                    "completionStatus": {
+                        "$ref": "#/components/schemas/CompletionStatusEnum"
+                    },
+                    "qaStatus": {
+                        "$ref": "#/components/schemas/QaStatusEnum"
+                    },
+                    "assignedTo": {
+                        "type": "integer",
+                        "nullable": true
+                    }
+                }
+            },
+            "PatchedDeliverableTaskTemplateRequest": {
+                "type": "object",
+                "properties": {
+                    "phase": {
+                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "sheetNumber": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "sheetName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scopeDescription": {
+                        "type": "string"
+                    },
+                    "defaultCompletionStatus": {
+                        "$ref": "#/components/schemas/DefaultCompletionStatusEnum"
+                    },
+                    "defaultQaStatus": {
+                        "$ref": "#/components/schemas/DefaultQaStatusEnum"
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    },
+                    "isActive": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -14724,6 +15886,16 @@
                 "required": [
                     "reset"
                 ]
+            },
+            "QaStatusEnum": {
+                "enum": [
+                    "not_reviewed",
+                    "in_review",
+                    "approved",
+                    "changes_required"
+                ],
+                "type": "string",
+                "description": "* `not_reviewed` - Not Reviewed\n* `in_review` - In Review\n* `approved` - Approved\n* `changes_required` - Changes Required"
             },
             "RecentAssignment": {
                 "type": "object",

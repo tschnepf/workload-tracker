@@ -16,12 +16,15 @@ from django.utils.http import http_date
 from datetime import datetime
 from collections import defaultdict
 import logging
-from .models import Deliverable, DeliverableAssignment, ReallocationAudit
+from .models import Deliverable, DeliverableAssignment, ReallocationAudit, DeliverableTaskTemplate, DeliverableTask, DeliverableQATask
 from .serializers import (
     DeliverableSerializer,
     DeliverableAssignmentSerializer,
     DeliverableCalendarItemSerializer,
     PreDeliverableItemSerializer,
+    DeliverableTaskTemplateSerializer,
+    DeliverableTaskSerializer,
+    DeliverableQATaskSerializer,
 )
 from assignments.models import Assignment
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
@@ -33,6 +36,9 @@ from datetime import timedelta, date as _date
 from core.week_utils import sunday_of_week
 from .models import PreDeliverableItem
 from .services import PreDeliverableService
+from .permissions import DeliverableTaskPermission
+from accounts.permissions import is_admin_or_manager, IsAdminOrManager
+from assignments.utils.project_membership import current_project_ids
 from rest_framework.permissions import IsAdminUser
 try:
     from core.tasks import backfill_pre_deliverables_async  # type: ignore
@@ -900,3 +906,111 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             else:
                 created += len(PreDeliverableService.generate_pre_deliverables(d))
         return Response({'enqueued': False, 'result': {'processed': total, 'created': created, 'deleted': deleted, 'preservedCompleted': preserved}})
+
+
+class DeliverableTaskTemplateViewSet(viewsets.ModelViewSet):
+    serializer_class = DeliverableTaskTemplateSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrManager]
+
+    def get_queryset(self):
+        return DeliverableTaskTemplate.objects.select_related('department').order_by('sort_order', 'id')
+
+
+class DeliverableTaskViewSet(viewsets.ModelViewSet):
+    serializer_class = DeliverableTaskSerializer
+    permission_classes = [DeliverableTaskPermission]
+
+    def get_queryset(self):
+        qs = DeliverableTask.objects.select_related(
+            'deliverable',
+            'department',
+            'assigned_to',
+            'completed_by',
+            'template',
+        )
+        project_id = self.request.query_params.get('project')
+        deliverable_id = self.request.query_params.get('deliverable')
+        if project_id:
+            qs = qs.filter(deliverable__project_id=project_id)
+        if deliverable_id:
+            qs = qs.filter(deliverable_id=deliverable_id)
+
+        user = getattr(self.request, 'user', None)
+        if not is_admin_or_manager(user):
+            try:
+                person_id = getattr(getattr(user, 'profile', None), 'person_id', None)
+            except Exception:
+                person_id = None
+            if not person_id:
+                return qs.none()
+            qs = qs.filter(deliverable__project_id__in=current_project_ids(person_id))
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        if not is_admin_or_manager(request.user):
+            return Response({'detail': 'Admin or manager required'}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not is_admin_or_manager(request.user):
+            return Response({'detail': 'Admin or manager required'}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if not is_admin_or_manager(request.user):
+            data = request.data.copy()
+            allowed = {'completionStatus', 'qaStatus', 'assignedTo', 'qaAssignedTo'}
+            for k in list(data.keys()):
+                if k not in allowed:
+                    data.pop(k)
+            request._full_data = data  # type: ignore
+        return super().partial_update(request, *args, **kwargs)
+
+
+class DeliverableQATaskViewSet(viewsets.ModelViewSet):
+    serializer_class = DeliverableQATaskSerializer
+    permission_classes = [DeliverableTaskPermission]
+
+    def get_queryset(self):
+        qs = DeliverableQATask.objects.select_related(
+            'deliverable',
+            'department',
+            'qa_assigned_to',
+        )
+        project_id = self.request.query_params.get('project')
+        deliverable_id = self.request.query_params.get('deliverable')
+        if project_id:
+            qs = qs.filter(deliverable__project_id=project_id)
+        if deliverable_id:
+            qs = qs.filter(deliverable_id=deliverable_id)
+
+        user = getattr(self.request, 'user', None)
+        if not is_admin_or_manager(user):
+            try:
+                person_id = getattr(getattr(user, 'profile', None), 'person_id', None)
+            except Exception:
+                person_id = None
+            if not person_id:
+                return qs.none()
+            qs = qs.filter(deliverable__project_id__in=current_project_ids(person_id))
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        if not is_admin_or_manager(request.user):
+            return Response({'detail': 'Admin or manager required'}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not is_admin_or_manager(request.user):
+            return Response({'detail': 'Admin or manager required'}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if not is_admin_or_manager(request.user):
+            data = request.data.copy()
+            allowed = {'qaStatus', 'qaAssignedTo'}
+            for k in list(data.keys()):
+                if k not in allowed:
+                    data.pop(k)
+            request._full_data = data  # type: ignore
+        return super().partial_update(request, *args, **kwargs)

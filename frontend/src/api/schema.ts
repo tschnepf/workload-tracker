@@ -56,10 +56,10 @@ export interface paths {
     /**
      * @description Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.
      *
-     * Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
-     * Classification rules: explicit phase in description (SD/DD/IFP) wins; otherwise map by percentage: 0-39%→SD, 40-80%→DD, 81-100%→IFP; unknown→other.
-     * Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums. Non-matching items are returned in 'extras' by label (desc or percent). No generic 'other' bucket is included in the series.
-     * Response: { weekKeys: [..], series: { sd, dd, ifp, bulletins }, extras: [{label, values[]}], totalByWeek }
+     * Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
+     * Classification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.
+     * Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.
+     * Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }
      */
     get: operations["assignments_analytics_deliverable_timeline_retrieve"];
   };
@@ -284,6 +284,21 @@ export interface paths {
      */
     patch: operations["core_calendar_feeds_partial_update"];
   };
+  "/api/core/deliverable_phase_mapping/": {
+    get: operations["core_deliverable_phase_mapping_retrieve"];
+    put: operations["core_deliverable_phase_mapping_update"];
+    post: operations["core_deliverable_phase_mapping_create"];
+    /**
+     * @description Remove a project role from the catalog and clear assignments using it.
+     *
+     * Behavior:
+     * - Admin only.
+     * - Accepts role name via query param (?name=...) or JSON body { name }.
+     * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
+     * - If a catalog ProjectRole exists for that normalized name, it is deleted.
+     */
+    delete: operations["core_deliverable_phase_mapping_destroy"];
+  };
   "/api/core/pre-deliverable-global-settings/": {
     get: operations["core_pre_deliverable_global_settings_list"];
     put: operations["core_pre_deliverable_global_settings_update"];
@@ -296,23 +311,6 @@ export interface paths {
      * - POST: admin-only; adds a role to the catalog.
      */
     get: operations["core_project_roles_retrieve"];
-    /**
-     * @description List/add project roles for suggestions/settings.
-     *
-     * - GET: returns union of catalog roles and distinct existing assignment roles.
-     * - POST: admin-only; adds a role to the catalog.
-     */
-    post: operations["core_project_roles_create"];
-    /**
-     * @description Remove a project role from the catalog and clear assignments using it.
-     *
-     * Behavior:
-     * - Admin only.
-     * - Accepts role name via query param (?name=...) or JSON body { name }.
-     * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
-     * - If a catalog ProjectRole exists for that normalized name, it is deleted.
-     */
-    delete: operations["core_project_roles_destroy"];
   };
   "/api/core/utilization_scheme/": {
     /**
@@ -540,6 +538,26 @@ export interface paths {
      * }
      */
     post: operations["deliverables_reorder_create"];
+  };
+  "/api/deliverables/task_templates/": {
+    get: operations["deliverables_task_templates_list"];
+    post: operations["deliverables_task_templates_create"];
+  };
+  "/api/deliverables/task_templates/{id}/": {
+    get: operations["deliverables_task_templates_retrieve"];
+    put: operations["deliverables_task_templates_update"];
+    delete: operations["deliverables_task_templates_destroy"];
+    patch: operations["deliverables_task_templates_partial_update"];
+  };
+  "/api/deliverables/tasks/": {
+    get: operations["deliverables_tasks_list"];
+    post: operations["deliverables_tasks_create"];
+  };
+  "/api/deliverables/tasks/{id}/": {
+    get: operations["deliverables_tasks_retrieve"];
+    put: operations["deliverables_tasks_update"];
+    delete: operations["deliverables_tasks_destroy"];
+    patch: operations["deliverables_tasks_partial_update"];
   };
   "/api/departments/": {
     /** @description Get all departments with bulk loading support */
@@ -807,6 +825,16 @@ export interface paths {
      * Uses Sunday as canonical week key; exact JSON key lookup (no tolerance).
      */
     get: operations["projects_availability_list"];
+  };
+  "/api/projects/{id}/deliverable_tasks/": {
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    get: operations["projects_deliverable_tasks_list"];
   };
   "/api/projects/{id}/pre-deliverable-settings/": {
     /**
@@ -1206,6 +1234,13 @@ export interface components {
       /** Format: double */
       hours: number;
     };
+    /**
+     * @description * `not_started` - Not Started
+     * * `in_progress` - In Progress
+     * * `complete` - Complete
+     * @enum {string}
+     */
+    CompletionStatusEnum: "not_started" | "in_progress" | "complete";
     CoverageBlock: {
       roleId: number;
       start: string;
@@ -1238,6 +1273,21 @@ export interface components {
       total_assignments: number;
       overallocated_count: number;
     };
+    /**
+     * @description * `not_started` - Not Started
+     * * `in_progress` - In Progress
+     * * `complete` - Complete
+     * @enum {string}
+     */
+    DefaultCompletionStatusEnum: "not_started" | "in_progress" | "complete";
+    /**
+     * @description * `not_reviewed` - Not Reviewed
+     * * `in_review` - In Review
+     * * `approved` - Approved
+     * * `changes_required` - Changes Required
+     * @enum {string}
+     */
+    DefaultQaStatusEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
     /** @description Deliverable serializer with snake_case -> camelCase field mapping */
     Deliverable: {
       id: number;
@@ -1310,13 +1360,44 @@ export interface components {
      * @description * `sd` - SD
      * * `dd` - DD
      * * `ifp` - IFP
+     * * `ifc` - IFC
      * * `masterplan` - Masterplan
      * * `bulletins` - Bulletins
      * * `ca` - CA
      * * `other` - Other
      * @enum {string}
      */
-    DeliverablePhaseEnum: "sd" | "dd" | "ifp" | "masterplan" | "bulletins" | "ca" | "other";
+    DeliverablePhaseEnum: "sd" | "dd" | "ifp" | "ifc" | "masterplan" | "bulletins" | "ca" | "other";
+    DeliverablePhaseMappingSettings: {
+      useDescriptionMatch: boolean;
+      descSdTokens: unknown;
+      descDdTokens: unknown;
+      descIfpTokens: unknown;
+      descIfcTokens: unknown;
+      rangeSdMin: number;
+      rangeSdMax: number;
+      rangeDdMin: number;
+      rangeDdMax: number;
+      rangeIfpMin: number;
+      rangeIfpMax: number;
+      rangeIfcExact: number;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    DeliverablePhaseMappingSettingsRequest: {
+      useDescriptionMatch: boolean;
+      descSdTokens: unknown;
+      descDdTokens: unknown;
+      descIfpTokens: unknown;
+      descIfcTokens: unknown;
+      rangeSdMin: number;
+      rangeSdMax: number;
+      rangeDdMin: number;
+      rangeDdMax: number;
+      rangeIfpMin: number;
+      rangeIfpMax: number;
+      rangeIfcExact: number;
+    };
     DeliverableReorderRequestRequest: {
       project: number;
       deliverable_ids: number[];
@@ -1344,6 +1425,7 @@ export interface components {
       sd: number[];
       dd: number[];
       ifp: number[];
+      ifc: number[];
       masterplan: number[];
       bulletins: number[];
       ca: number[];
@@ -1359,6 +1441,70 @@ export interface components {
       weekBreakdown: {
         [key: string]: unknown;
       };
+    };
+    DeliverableTask: {
+      id: number;
+      deliverable: number;
+      deliverableInfo: {
+        [key: string]: unknown;
+      };
+      templateId?: number | null;
+      departmentId: number;
+      departmentName: string;
+      sheetNumber?: string | null;
+      sheetName?: string | null;
+      scopeDescription?: string;
+      completionStatus: components["schemas"]["CompletionStatusEnum"];
+      qaStatus: components["schemas"]["QaStatusEnum"];
+      assignedTo?: number | null;
+      assignedToName: string;
+      completedBy: number | null;
+      completedByName: string;
+      /** Format: date-time */
+      completedAt: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    DeliverableTaskRequest: {
+      deliverable: number;
+      templateId?: number | null;
+      departmentId: number;
+      sheetNumber?: string | null;
+      sheetName?: string | null;
+      scopeDescription?: string;
+      completionStatus: components["schemas"]["CompletionStatusEnum"];
+      qaStatus: components["schemas"]["QaStatusEnum"];
+      assignedTo?: number | null;
+    };
+    DeliverableTaskTemplate: {
+      id: number;
+      phase: components["schemas"]["DeliverablePhaseEnum"];
+      departmentId: number;
+      departmentName: string;
+      sheetNumber?: string | null;
+      sheetName?: string | null;
+      scopeDescription?: string;
+      defaultCompletionStatus: components["schemas"]["DefaultCompletionStatusEnum"];
+      defaultQaStatus: components["schemas"]["DefaultQaStatusEnum"];
+      sortOrder?: number;
+      isActive?: boolean;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    DeliverableTaskTemplateRequest: {
+      phase: components["schemas"]["DeliverablePhaseEnum"];
+      departmentId: number;
+      sheetNumber?: string | null;
+      sheetName?: string | null;
+      scopeDescription?: string;
+      defaultCompletionStatus: components["schemas"]["DefaultCompletionStatusEnum"];
+      defaultQaStatus: components["schemas"]["DefaultQaStatusEnum"];
+      sortOrder?: number;
+      isActive?: boolean;
     };
     /** @description Department serializer with explicit camelCase field mapping */
     Department: {
@@ -1764,6 +1910,36 @@ export interface components {
       previous?: string | null;
       results: components["schemas"]["Deliverable"][];
     };
+    PaginatedDeliverableTaskList: {
+      /** @example 123 */
+      count: number;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=4
+       */
+      next?: string | null;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=2
+       */
+      previous?: string | null;
+      results: components["schemas"]["DeliverableTask"][];
+    };
+    PaginatedDeliverableTaskTemplateList: {
+      /** @example 123 */
+      count: number;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=4
+       */
+      next?: string | null;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=2
+       */
+      previous?: string | null;
+      results: components["schemas"]["DeliverableTaskTemplate"][];
+    };
     PaginatedDepartmentList: {
       /** @example 123 */
       count: number;
@@ -2020,6 +2196,28 @@ export interface components {
       isCompleted?: boolean;
       /** Format: date */
       completedDate?: string | null;
+    };
+    PatchedDeliverableTaskRequest: {
+      deliverable?: number;
+      templateId?: number | null;
+      departmentId?: number;
+      sheetNumber?: string | null;
+      sheetName?: string | null;
+      scopeDescription?: string;
+      completionStatus?: components["schemas"]["CompletionStatusEnum"];
+      qaStatus?: components["schemas"]["QaStatusEnum"];
+      assignedTo?: number | null;
+    };
+    PatchedDeliverableTaskTemplateRequest: {
+      phase?: components["schemas"]["DeliverablePhaseEnum"];
+      departmentId?: number;
+      sheetNumber?: string | null;
+      sheetName?: string | null;
+      scopeDescription?: string;
+      defaultCompletionStatus?: components["schemas"]["DefaultCompletionStatusEnum"];
+      defaultQaStatus?: components["schemas"]["DefaultQaStatusEnum"];
+      sortOrder?: number;
+      isActive?: boolean;
     };
     /** @description Department serializer with explicit camelCase field mapping */
     PatchedDepartmentRequest: {
@@ -2709,6 +2907,14 @@ export interface components {
     ProviderResetResponse: {
       reset: boolean;
     };
+    /**
+     * @description * `not_reviewed` - Not Reviewed
+     * * `in_review` - In Review
+     * * `approved` - Approved
+     * * `changes_required` - Changes Required
+     * @enum {string}
+     */
+    QaStatusEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
     RecentAssignment: {
       person: string;
       project: string;
@@ -3132,10 +3338,10 @@ export interface operations {
   /**
    * @description Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.
    *
-   * Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
-   * Classification rules: explicit phase in description (SD/DD/IFP) wins; otherwise map by percentage: 0-39%→SD, 40-80%→DD, 81-100%→IFP; unknown→other.
-   * Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums. Non-matching items are returned in 'extras' by label (desc or percent). No generic 'other' bucket is included in the series.
-   * Response: { weekKeys: [..], series: { sd, dd, ifp, bulletins }, extras: [{label, values[]}], totalByWeek }
+   * Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
+   * Classification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.
+   * Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.
+   * Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }
    */
   assignments_analytics_deliverable_timeline_retrieve: {
     parameters: {
@@ -3901,6 +4107,64 @@ export interface operations {
       };
     };
   };
+  core_deliverable_phase_mapping_retrieve: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverablePhaseMappingSettings"];
+        };
+      };
+    };
+  };
+  core_deliverable_phase_mapping_update: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
+        "multipart/form-data": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverablePhaseMappingSettings"];
+        };
+      };
+    };
+  };
+  core_deliverable_phase_mapping_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectRoleCreateRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleCreateRequestRequest"];
+        "multipart/form-data": components["schemas"]["ProjectRoleCreateRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRole"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Remove a project role from the catalog and clear assignments using it.
+   *
+   * Behavior:
+   * - Admin only.
+   * - Accepts role name via query param (?name=...) or JSON body { name }.
+   * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
+   * - If a catalog ProjectRole exists for that normalized name, it is deleted.
+   */
+  core_deliverable_phase_mapping_destroy: {
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
   core_pre_deliverable_global_settings_list: {
     responses: {
       200: {
@@ -3938,45 +4202,6 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["ProjectRoleListResponse"];
         };
-      };
-    };
-  };
-  /**
-   * @description List/add project roles for suggestions/settings.
-   *
-   * - GET: returns union of catalog roles and distinct existing assignment roles.
-   * - POST: admin-only; adds a role to the catalog.
-   */
-  core_project_roles_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectRoleCreateRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleCreateRequestRequest"];
-        "multipart/form-data": components["schemas"]["ProjectRoleCreateRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRole"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Remove a project role from the catalog and clear assignments using it.
-   *
-   * Behavior:
-   * - Admin only.
-   * - Accepts role name via query param (?name=...) or JSON body { name }.
-   * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
-   * - If a catalog ProjectRole exists for that normalized name, it is deleted.
-   */
-  core_project_roles_destroy: {
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
       };
     };
   };
@@ -4683,6 +4908,214 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["DeliverableReorderResponse"];
+        };
+      };
+    };
+  };
+  deliverables_task_templates_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedDeliverableTaskTemplateList"];
+        };
+      };
+    };
+  };
+  deliverables_task_templates_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliverableTaskTemplateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskTemplateRequest"];
+        "multipart/form-data": components["schemas"]["DeliverableTaskTemplateRequest"];
+      };
+    };
+    responses: {
+      201: {
+        content: {
+          "application/json": components["schemas"]["DeliverableTaskTemplate"];
+        };
+      };
+    };
+  };
+  deliverables_task_templates_retrieve: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable Task Template. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableTaskTemplate"];
+        };
+      };
+    };
+  };
+  deliverables_task_templates_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable Task Template. */
+        id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliverableTaskTemplateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskTemplateRequest"];
+        "multipart/form-data": components["schemas"]["DeliverableTaskTemplateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableTaskTemplate"];
+        };
+      };
+    };
+  };
+  deliverables_task_templates_destroy: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable Task Template. */
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  deliverables_task_templates_partial_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable Task Template. */
+        id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
+        "multipart/form-data": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableTaskTemplate"];
+        };
+      };
+    };
+  };
+  deliverables_tasks_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedDeliverableTaskList"];
+        };
+      };
+    };
+  };
+  deliverables_tasks_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliverableTaskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskRequest"];
+        "multipart/form-data": components["schemas"]["DeliverableTaskRequest"];
+      };
+    };
+    responses: {
+      201: {
+        content: {
+          "application/json": components["schemas"]["DeliverableTask"];
+        };
+      };
+    };
+  };
+  deliverables_tasks_retrieve: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable Task. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableTask"];
+        };
+      };
+    };
+  };
+  deliverables_tasks_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable Task. */
+        id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliverableTaskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskRequest"];
+        "multipart/form-data": components["schemas"]["DeliverableTaskRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableTask"];
+        };
+      };
+    };
+  };
+  deliverables_tasks_destroy: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable Task. */
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  deliverables_tasks_partial_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable Task. */
+        id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PatchedDeliverableTaskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableTaskRequest"];
+        "multipart/form-data": components["schemas"]["PatchedDeliverableTaskRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableTask"];
         };
       };
     };
@@ -5961,6 +6394,31 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["PaginatedProjectAvailabilityItemList"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  projects_deliverable_tasks_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+      path: {
+        id: string;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedDeliverableTaskList"];
         };
       };
     };

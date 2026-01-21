@@ -1,5 +1,6 @@
 import React from 'react';
 import PreDeliverablesBackfill from '@/components/settings/PreDeliverablesBackfill';
+import QATaskDefaults from '@/components/settings/QATaskDefaults';
 import { useSettingsData } from '../SettingsDataContext';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
 
@@ -12,10 +13,11 @@ const PreDeliverablesSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={PRE_DELIVERABLES_SECTION_ID}
-      title="Pre-Deliverables Backfill"
-      description="Regenerate or backfill pre-deliverable reminders for existing milestones."
+      title="Pre-Deliverables"
+      description="Global pre-deliverable and QA checklist defaults."
       className="mt-6"
     >
+      <QATaskDefaults />
       <PreDeliverablesBackfill />
     </SettingsSectionFrame>
   );

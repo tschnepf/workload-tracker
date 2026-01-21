@@ -21,7 +21,9 @@ import time
 from django.conf import settings as django_settings
 from .utils.excel_handler import export_projects_to_excel, import_projects_from_file
 from core.utils.xlsx_limits import enforce_xlsx_limits
-from deliverables.models import Deliverable
+from deliverables.models import Deliverable, DeliverableTask, DeliverableQATask
+from deliverables.serializers import DeliverableTaskSerializer, DeliverableQATaskSerializer
+from assignments.utils.project_membership import is_current_project_assignee
 from assignments.models import Assignment
 from people.models import Person
 from departments.models import Department
@@ -177,6 +179,52 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             )
         # Return updated view
         return self.pre_deliverable_settings(request._request, pk=pk)  # type: ignore
+
+    @extend_schema(responses=DeliverableTaskSerializer(many=True))
+    @action(detail=True, methods=['get'], url_path='deliverable_tasks')
+    def deliverable_tasks(self, request, pk=None):
+        try:
+            project = Project.objects.get(pk=pk)
+        except Project.DoesNotExist:
+            return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        user = getattr(request, 'user', None)
+        if not is_admin_or_manager(user):
+            try:
+                person_id = getattr(getattr(user, 'profile', None), 'person_id', None)
+            except Exception:
+                person_id = None
+            if not person_id or not is_current_project_assignee(person_id, project.id):
+                return Response({'detail': 'Project access required'}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = DeliverableTask.objects.filter(deliverable__project_id=project.id).select_related(
+            'deliverable', 'department', 'assigned_to', 'completed_by', 'template'
+        )
+        serializer = DeliverableTaskSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(responses=DeliverableQATaskSerializer(many=True))
+    @action(detail=True, methods=['get'], url_path='qa_tasks')
+    def qa_tasks(self, request, pk=None):
+        try:
+            project = Project.objects.get(pk=pk)
+        except Project.DoesNotExist:
+            return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        user = getattr(request, 'user', None)
+        if not is_admin_or_manager(user):
+            try:
+                person_id = getattr(getattr(user, 'profile', None), 'person_id', None)
+            except Exception:
+                person_id = None
+            if not person_id or not is_current_project_assignee(person_id, project.id):
+                return Response({'detail': 'Project access required'}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = DeliverableQATask.objects.filter(deliverable__project_id=project.id).select_related(
+            'deliverable', 'department', 'qa_assigned_to'
+        )
+        serializer = DeliverableQATaskSerializer(qs, many=True)
+        return Response(serializer.data)
 
     @extend_schema(
         parameters=[

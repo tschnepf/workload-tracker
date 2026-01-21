@@ -1710,10 +1710,10 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @extend_schema(
         description=(
             "Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.\n\n"
-            "Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.\n"
-            "Classification rules: explicit phase in description (SD/DD/IFP) wins; otherwise map by percentage: 0-39%→SD, 40-80%→DD, 81-100%→IFP; unknown→other.\n"
-            "Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums. Non-matching items are returned in 'extras' by label (desc or percent). No generic 'other' bucket is included in the series.\n"
-            "Response: { weekKeys: [..], series: { sd, dd, ifp, bulletins }, extras: [{label, values[]}], totalByWeek }"
+            "Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.\n"
+            "Classification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.\n"
+            "Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.\n"
+            "Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }"
         ),
         parameters=[
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
@@ -1729,6 +1729,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'sd': serializers.ListField(child=serializers.FloatField()),
                     'dd': serializers.ListField(child=serializers.FloatField()),
                     'ifp': serializers.ListField(child=serializers.FloatField()),
+                    'ifc': serializers.ListField(child=serializers.FloatField()),
                     'masterplan': serializers.ListField(child=serializers.FloatField()),
                     'bulletins': serializers.ListField(child=serializers.FloatField()),
                     'ca': serializers.ListField(child=serializers.FloatField()),
@@ -1835,7 +1836,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         pids = list(by_project_week.keys())
         if not pids:
-            return Response({'weekKeys': week_keys, 'series': {'sd': [0]*weeks, 'dd': [0]*weeks, 'ifp': [0]*weeks, 'bulletins': [0]*weeks}, 'extras': [], 'totalByWeek': [0]*weeks})
+            return Response({'weekKeys': week_keys, 'series': {'sd': [0]*weeks, 'dd': [0]*weeks, 'ifp': [0]*weeks, 'ifc': [0]*weeks, 'bulletins': [0]*weeks}, 'extras': [], 'totalByWeek': [0]*weeks})
 
         # Project statuses and names (for debug context)
         status_map = {}
@@ -1852,7 +1853,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 filtered_pids.append(pid)
 
         if not filtered_pids:
-            return Response({'weekKeys': week_keys, 'series': {'sd': [0]*weeks, 'dd': [0]*weeks, 'ifp': [0]*weeks, 'bulletins': [0]*weeks}, 'extras': [], 'totalByWeek': [0]*weeks})
+            return Response({'weekKeys': week_keys, 'series': {'sd': [0]*weeks, 'dd': [0]*weeks, 'ifp': [0]*weeks, 'ifc': [0]*weeks, 'bulletins': [0]*weeks}, 'extras': [], 'totalByWeek': [0]*weeks})
 
         # Load deliverables for these projects
         deliv_rows = list(Deliverable.objects.filter(project_id__in=filtered_pids).values('project_id', 'percentage', 'description', 'date'))
@@ -1884,6 +1885,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         sums_sd = [0.0] * len(week_keys)
         sums_dd = [0.0] * len(week_keys)
         sums_ifp = [0.0] * len(week_keys)
+        sums_ifc = [0.0] * len(week_keys)
         sums_bulletins = [0.0] * len(week_keys)
         sums_masterplan = [0.0] * len(week_keys)
         sums_ca = [0.0] * len(week_keys)
@@ -1896,7 +1898,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         unspecified_debug: list[dict] = []
         extras_debug_map: dict[str, dict[int, float]] = {}
         cat_debug_map: dict[str, dict[int, float]] = {
-            'sd': {}, 'dd': {}, 'ifp': {}, 'masterplan': {}, 'bulletins': {}, 'ca': {}
+            'sd': {}, 'dd': {}, 'ifp': {}, 'ifc': {}, 'masterplan': {}, 'bulletins': {}, 'ca': {}
         }
         for pid in filtered_pids:
             wkmap = by_project_week.get(pid, {})
@@ -1922,6 +1924,10 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     sums_ifp[i] += val
                     if debug_flag:
                         cat_debug_map['ifp'][pid] = cat_debug_map['ifp'].get(pid, 0.0) + val
+                elif c == 'ifc':
+                    sums_ifc[i] += val
+                    if debug_flag:
+                        cat_debug_map['ifc'][pid] = cat_debug_map['ifc'].get(pid, 0.0) + val
                 elif c == 'bulletins':
                     sums_bulletins[i] += val
                     if debug_flag:
@@ -1943,7 +1949,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         total_by_week = []
         for i in range(len(week_keys)):
             total_by_week.append(round(
-                sums_sd[i] + sums_dd[i] + sums_ifp[i] + sums_masterplan[i] + sums_bulletins[i] + sums_ca[i] + other_series[i],
+                sums_sd[i] + sums_dd[i] + sums_ifp[i] + sums_ifc[i] + sums_masterplan[i] + sums_bulletins[i] + sums_ca[i] + other_series[i],
                 2
             ))
         extras = [
@@ -1956,6 +1962,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'sd': [round(x, 2) for x in sums_sd],
                 'dd': [round(x, 2) for x in sums_dd],
                 'ifp': [round(x, 2) for x in sums_ifp],
+                'ifc': [round(x, 2) for x in sums_ifc],
                 'masterplan': [round(x, 2) for x in sums_masterplan],
                 'bulletins': [round(x, 2) for x in sums_bulletins],
                 'ca': [round(x, 2) for x in sums_ca],

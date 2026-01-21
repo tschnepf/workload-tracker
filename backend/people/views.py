@@ -480,11 +480,13 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         parameters=[
             OpenApiParameter(name='q', type=str, required=True, description='Search query (min length 2)'),
             OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-50)'),
+            OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
         ],
         responses=inline_serializer(name='PeopleSearchItem', fields={
             'id': serializers.IntegerField(),
             'name': serializers.CharField(),
             'department': serializers.IntegerField(allow_null=True, required=False),
+            'roleName': serializers.CharField(allow_null=True, required=False),
         })
     )
     @action(detail=False, methods=['get'], url_path='search', throttle_classes=[HotEndpointThrottle])
@@ -504,20 +506,32 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         except Exception:
             limit = 20
         limit = max(1, min(50, limit))
+        dept_param = request.query_params.get('department')
+        dept_id = None
+        if dept_param not in (None, ''):
+            try:
+                dept_id = int(dept_param)
+            except Exception:
+                dept_id = None
 
         # Use a fresh base queryset without select_related to avoid
         # deferred-field conflicts with only().
         qs = (
             Person.objects.filter(is_active=True)
-            .only('id', 'name', 'department')
-            .filter(Q(name__icontains=q) | Q(email__icontains=q))
-            .order_by('name')[:limit]
+            .select_related('role')
+            .only('id', 'name', 'department', 'role__name')
+            .filter(Q(name__icontains=q) | Q(email__icontains=q) | Q(role__name__icontains=q))
+            .order_by('name')
         )
+        if dept_id is not None:
+            qs = qs.filter(department_id=dept_id)
+        qs = qs[:limit]
         results = [
             {
                 'id': p.id,
                 'name': p.name,
                 'department': p.department_id,
+                'roleName': getattr(getattr(p, 'role', None), 'name', None),
             }
             for p in qs
         ]

@@ -98,11 +98,11 @@ export function usePersonUtilization(personId: number, week?: string) {
 }
 
 // People for autocomplete - optimized with longer cache time
-export function usePeopleAutocomplete(search?: string) {
+export function usePeopleAutocomplete(search?: string, options?: { department?: number }) {
   const enabled = !!(search && search.trim().length >= 2);
   const { data, isLoading, error: queryError } = useQuery({
-    queryKey: ['people-autocomplete', search || ''],
-    queryFn: () => peopleApi.search(search!.trim(), 20),
+    queryKey: ['people-autocomplete', search || '', options?.department ?? null],
+    queryFn: () => peopleApi.search(search!.trim(), 20, options),
     enabled,
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,

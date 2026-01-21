@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import { useProject } from '@/hooks/useProjects';
-import { assignmentsApi, departmentsApi, projectRisksApi } from '@/services/api';
+import { assignmentsApi, departmentsApi, projectRisksApi, projectsApi, deliverableTasksApi, deliverableQaTasksApi, peopleApi } from '@/services/api';
 import { formatUtcToLocal } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
 import DeliverablesSection, { type DeliverablesSectionHandle } from '@/components/deliverables/DeliverablesSection';
@@ -15,7 +15,7 @@ import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import { listProjectRoles } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
-import type { Department, Person, Project, ProjectRisk } from '@/types/models';
+import type { Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
 
 const ProjectDashboard: React.FC = () => {
   const params = useParams<{ id?: string }>();
@@ -36,7 +36,21 @@ const ProjectDashboard: React.FC = () => {
     enabled: hasValidId,
     staleTime: 30_000,
   });
+  const deliverableTasksQuery = useQuery({
+    queryKey: ['project-dashboard', 'deliverable-tasks', projectId],
+    queryFn: () => projectsApi.deliverableTasks(projectId),
+    enabled: hasValidId,
+    staleTime: 30_000,
+  });
+  const qaTasksQuery = useQuery({
+    queryKey: ['project-dashboard', 'qa-tasks', projectId],
+    queryFn: () => projectsApi.qaTasks(projectId),
+    enabled: hasValidId,
+    staleTime: 30_000,
+  });
   const assignments = assignmentsQuery.data?.results ?? [];
+  const deliverableTasks = deliverableTasksQuery.data ?? [];
+  const qaTasks = qaTasksQuery.data ?? [];
   const assignmentsTotal = assignmentsQuery.data?.count ?? assignments.length;
   const hasMoreAssignments = !!assignmentsQuery.data?.next;
   const departmentsQuery = useQuery({
@@ -96,6 +110,8 @@ const ProjectDashboard: React.FC = () => {
   const personBoxRef = React.useRef<HTMLDivElement | null>(null);
   const [savingAssignment, setSavingAssignment] = React.useState(false);
   const [deletingAssignmentId, setDeletingAssignmentId] = React.useState<number | null>(null);
+  const [updatingTaskId, setUpdatingTaskId] = React.useState<number | null>(null);
+  const [updatingQaTaskId, setUpdatingQaTaskId] = React.useState<number | null>(null);
   const deliverablesRef = React.useRef<DeliverablesSectionHandle | null>(null);
   const [showAddRisk, setShowAddRisk] = React.useState(false);
   const [riskDescription, setRiskDescription] = React.useState('');
@@ -118,6 +134,9 @@ const ProjectDashboard: React.FC = () => {
   const [expandedRiskIds, setExpandedRiskIds] = React.useState<Set<number>>(new Set());
   const [openAttachmentMenuId, setOpenAttachmentMenuId] = React.useState<number | null>(null);
   const attachmentMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const [qaSearchByTaskId, setQaSearchByTaskId] = React.useState<Record<number, string>>({});
+  const [qaDropdownOpenId, setQaDropdownOpenId] = React.useState<number | null>(null);
+  const qaBoxRefs = React.useRef(new Map<number, HTMLDivElement | null>());
 
   React.useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -131,10 +150,22 @@ const ProjectDashboard: React.FC = () => {
       if (openAttachmentMenuId && attachmentMenuRef.current && !attachmentMenuRef.current.contains(target)) {
         setOpenAttachmentMenuId(null);
       }
+      if (qaDropdownOpenId != null) {
+        const qaBox = qaBoxRefs.current.get(qaDropdownOpenId);
+        if (qaBox && !qaBox.contains(target)) {
+          setQaDropdownOpenId(null);
+          setQaSearchByTaskId((prev) => {
+            const next = { ...prev };
+            delete next[qaDropdownOpenId];
+            return next;
+          });
+          setQaSearchState({ taskId: null, value: '', departmentId: null });
+        }
+      }
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, [openAttachmentMenuId, riskEditDeptOpen]);
+  }, [openAttachmentMenuId, riskEditDeptOpen, qaDropdownOpenId]);
   const assignmentsCountLabel = assignmentsQuery.isLoading ? '-' : String(assignmentsTotal);
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -158,6 +189,86 @@ const ProjectDashboard: React.FC = () => {
     });
     return entries.sort((a, b) => a.name.localeCompare(b.name));
   }, [assignments, departmentNameById, rolesByDeptQuery.data]);
+
+  const projectMembers = useMemo(() => {
+    const map = new Map<number, string>();
+    const today = new Date().toISOString().slice(0, 10);
+    assignments.forEach((assignment) => {
+      const startOk = !assignment.startDate || assignment.startDate <= today;
+      const endOk = !assignment.endDate || assignment.endDate >= today;
+      if (!startOk || !endOk) return;
+      if (assignment.person && assignment.personName) {
+        map.set(assignment.person, assignment.personName);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [assignments]);
+
+  const taskGroups = useMemo(() => {
+    const groups = new Map<number, { deliverable: DeliverableTask['deliverableInfo']; tasks: DeliverableTask[] }>();
+    deliverableTasks.forEach((task) => {
+      const info = task.deliverableInfo;
+      if (!info) return;
+      if (!groups.has(info.id)) {
+        groups.set(info.id, { deliverable: info, tasks: [] });
+      }
+      groups.get(info.id)!.tasks.push(task);
+    });
+    const entries = Array.from(groups.values());
+    entries.forEach((group) => {
+      group.tasks.sort((a, b) => (a.departmentName || '').localeCompare(b.departmentName || ''));
+    });
+    return entries.sort((a, b) => {
+      const aDate = a.deliverable?.date || '';
+      const bDate = b.deliverable?.date || '';
+      if (aDate && bDate) return aDate.localeCompare(bDate);
+      if (aDate) return -1;
+      if (bDate) return 1;
+      return (a.deliverable?.description || '').localeCompare(b.deliverable?.description || '');
+    });
+  }, [deliverableTasks]);
+
+  const qaTaskGroups = useMemo(() => {
+    const groups = new Map<number, { deliverable: DeliverableQATask['deliverableInfo']; tasks: DeliverableQATask[] }>();
+    qaTasks.forEach((task) => {
+      const info = task.deliverableInfo;
+      if (!info) return;
+      if (!groups.has(info.id)) {
+        groups.set(info.id, { deliverable: info, tasks: [] });
+      }
+      groups.get(info.id)!.tasks.push(task);
+    });
+    const entries = Array.from(groups.values());
+    entries.forEach((group) => {
+      group.tasks.sort((a, b) => (a.departmentName || '').localeCompare(b.departmentName || ''));
+    });
+    return entries.sort((a, b) => {
+      const aDate = a.deliverable?.date || '';
+      const bDate = b.deliverable?.date || '';
+      if (aDate && bDate) return aDate.localeCompare(bDate);
+      if (aDate) return -1;
+      if (bDate) return 1;
+      return (a.deliverable?.description || '').localeCompare(b.deliverable?.description || '');
+    });
+  }, [qaTasks]);
+
+  const completionOptions: DeliverableTaskCompletionStatus[] = ['not_started', 'in_progress', 'complete'];
+  const qaOptions: DeliverableTaskQaStatus[] = ['not_reviewed', 'in_review', 'approved', 'changes_required'];
+  const [qaSearchState, setQaSearchState] = React.useState<{ taskId: number | null; value: string; departmentId: number | null }>({
+    taskId: null,
+    value: '',
+    departmentId: null,
+  });
+  const qaPeopleQuery = useQuery({
+    queryKey: ['project-dashboard', 'qa-people-search', qaSearchState.value, qaSearchState.departmentId],
+    queryFn: () =>
+      peopleApi.search(qaSearchState.value.trim(), 20, qaSearchState.departmentId != null ? { department: qaSearchState.departmentId } : undefined),
+    enabled: qaSearchState.value.trim().length >= 2 && qaSearchState.departmentId != null,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
 
   const resetAddAssignment = () => {
     setPersonSearch('');
@@ -203,6 +314,32 @@ const ProjectDashboard: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
     } finally {
       setDeletingAssignmentId(null);
+    }
+  };
+
+  const handleTaskUpdate = async (taskId: number, patch: Partial<DeliverableTask>) => {
+    if (updatingTaskId) return;
+    try {
+      setUpdatingTaskId(taskId);
+      await deliverableTasksApi.update(taskId, patch);
+      await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'deliverable-tasks', projectId] });
+    } catch (e) {
+      console.error('Failed to update deliverable task', e);
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
+
+  const handleQaTaskUpdate = async (taskId: number, patch: Partial<DeliverableQATask>) => {
+    if (updatingQaTaskId) return;
+    try {
+      setUpdatingQaTaskId(taskId);
+      await deliverableQaTasksApi.update(taskId, patch);
+      await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'qa-tasks', projectId] });
+    } catch (e) {
+      console.error('Failed to update QA task', e);
+    } finally {
+      setUpdatingQaTaskId(null);
     }
   };
 
@@ -507,6 +644,265 @@ const ProjectDashboard: React.FC = () => {
                     showHeader={false}
                   />
                 ) : null}
+              </Card>
+
+              <Card className="p-3">
+                <div className="relative flex items-center justify-center">
+                  <div className="text-sm font-semibold text-[var(--text)] text-center">Deliverable Tasks</div>
+                </div>
+                <div className="border-t border-[#4a4f57]/60 mt-2 mb-2" />
+                {deliverableTasksQuery.isLoading ? (
+                  <div className="text-[11px] text-[var(--muted)]">Loading tasks…</div>
+                ) : taskGroups.length === 0 ? (
+                  <div className="text-[11px] text-[var(--muted)]">No tasks generated yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {taskGroups.map((group) => {
+                      const deliverableLabel = group.deliverable?.description
+                        || (group.deliverable?.percentage != null ? `${group.deliverable.percentage}%` : 'Milestone');
+                      const dateLabel = group.deliverable?.date
+                        ? formatUtcToLocal(group.deliverable.date, { dateStyle: 'medium' })
+                        : null;
+                      return (
+                        <div key={group.deliverable?.id} className="space-y-1">
+                          <div className="text-[11px] text-[var(--muted)]">
+                            {deliverableLabel}{dateLabel ? ` · ${dateLabel}` : ''}
+                          </div>
+                          <div className="grid grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_1fr] gap-2 text-[10px] text-[var(--muted)] mb-1">
+                            <div>Department</div>
+                            <div>Sheet</div>
+                            <div>Scope</div>
+                            <div>Completion</div>
+                            <div>QA</div>
+                            <div>Assignee</div>
+                          </div>
+                          <div className="space-y-1">
+                            {group.tasks.map((task) => (
+                              <div key={task.id} className="grid grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_1fr] gap-2 items-center text-[11px]">
+                                <div className="truncate">{task.departmentName || `Dept #${task.departmentId}`}</div>
+                                <div className="truncate">
+                                  {[task.sheetNumber, task.sheetName].filter(Boolean).join(' · ') || '—'}
+                                </div>
+                                <div className="truncate">{task.scopeDescription || '—'}</div>
+                                <div>
+                                  <select
+                                    value={task.completionStatus}
+                                    disabled={updatingTaskId === task.id}
+                                    onChange={(e) =>
+                                      task.id &&
+                                      handleTaskUpdate(task.id, { completionStatus: e.currentTarget.value as DeliverableTaskCompletionStatus })
+                                    }
+                                    className="w-full bg-transparent border border-transparent text-[11px] focus:border-[var(--border)] focus:bg-[var(--card)] rounded px-0 py-0 appearance-none cursor-pointer"
+                                  >
+                                    {completionOptions.map((opt) => (
+                                      <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <select
+                                    value={task.qaStatus}
+                                    disabled={updatingTaskId === task.id}
+                                    onChange={(e) =>
+                                      task.id &&
+                                      handleTaskUpdate(task.id, { qaStatus: e.currentTarget.value as DeliverableTaskQaStatus })
+                                    }
+                                    className="w-full bg-transparent border border-transparent text-[11px] focus:border-[var(--border)] focus:bg-[var(--card)] rounded px-0 py-0 appearance-none cursor-pointer"
+                                  >
+                                    {qaOptions.map((opt) => (
+                                      <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  {task.completionStatus === 'complete' ? (
+                                    <div className="truncate text-[11px] text-[var(--muted)]">{task.assignedToName || '—'}</div>
+                                  ) : (
+                                    <select
+                                      value={task.assignedTo ?? ''}
+                                      disabled={updatingTaskId === task.id}
+                                      onChange={(e) =>
+                                        task.id &&
+                                        handleTaskUpdate(task.id, { assignedTo: e.currentTarget.value ? Number(e.currentTarget.value) : null })
+                                      }
+                                      className="w-full bg-transparent border border-transparent text-[11px] focus:border-[var(--border)] focus:bg-[var(--card)] rounded px-0 py-0 appearance-none cursor-pointer"
+                                    >
+                                      <option value="">Unassigned</option>
+                                      {projectMembers.map((member) => (
+                                        <option key={member.id} value={member.id}>{member.name}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="p-3">
+                <div className="relative flex items-center justify-center">
+                  <div className="text-sm font-semibold text-[var(--text)] text-center">QA Check List</div>
+                </div>
+                <div className="border-t border-[#4a4f57]/60 mt-2 mb-2" />
+                {qaTasksQuery.isLoading ? (
+                  <div className="text-[11px] text-[var(--muted)]">Loading QA checklist…</div>
+                ) : qaTaskGroups.length === 0 ? (
+                  <div className="text-[11px] text-[var(--muted)]">No QA items yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {qaTaskGroups.map((group) => {
+                      const deliverableLabel = group.deliverable?.description
+                        || (group.deliverable?.percentage != null ? `${group.deliverable.percentage}%` : 'Milestone');
+                      const dateLabel = group.deliverable?.date
+                        ? formatUtcToLocal(group.deliverable.date, { dateStyle: 'medium' })
+                        : null;
+                      return (
+                        <div key={group.deliverable?.id} className="space-y-1">
+                          <div className="text-[11px] text-[var(--muted)]">
+                            {deliverableLabel}{dateLabel ? ` · ${dateLabel}` : ''}
+                          </div>
+                          <div className="grid grid-cols-[1.2fr_0.7fr_1.2fr_0.9fr_0.9fr] gap-2 text-[10px] text-[var(--muted)] mb-1">
+                            <div>Department</div>
+                            <div>Reviewed</div>
+                            <div>QA Assignee</div>
+                            <div>QA Due</div>
+                            <div>Reviewed On</div>
+                          </div>
+                          <div className="space-y-1">
+                            {group.tasks.map((task) => (
+                              <div key={task.id} className="grid grid-cols-[1.2fr_0.7fr_1.2fr_0.9fr_0.9fr] gap-2 items-center text-[11px]">
+                                <div className="truncate">{task.departmentName || `Dept #${task.departmentId}`}</div>
+                                <div>
+                                  <label className="inline-flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={task.qaStatus === 'reviewed'}
+                                      disabled={updatingQaTaskId === task.id}
+                                      onChange={(e) =>
+                                        task.id &&
+                                        handleQaTaskUpdate(task.id, { qaStatus: e.currentTarget.checked ? 'reviewed' : 'not_reviewed' })
+                                      }
+                                      className="h-3 w-3 accent-[var(--primary)]"
+                                    />
+                                    <span className="text-[11px] text-[var(--muted)]">Done</span>
+                                  </label>
+                                </div>
+                                <div>
+                                  {task.id ? (
+                                    <div className="relative" ref={(el) => {
+                                      if (el) {
+                                        qaBoxRefs.current.set(task.id as number, el);
+                                      } else {
+                                        qaBoxRefs.current.delete(task.id as number);
+                                      }
+                                    }}>
+                                      <input
+                                        type="text"
+                                        placeholder="Search Name/Role"
+                                        value={
+                                          Object.prototype.hasOwnProperty.call(qaSearchByTaskId, task.id)
+                                            ? qaSearchByTaskId[task.id]
+                                            : (task.qaAssignedToName || '')
+                                        }
+                                        disabled={updatingQaTaskId === task.id}
+                                        onChange={(e) => {
+                                          const nextValue = e.target.value;
+                                          setQaSearchByTaskId((prev) => ({ ...prev, [task.id as number]: nextValue }));
+                                          setQaDropdownOpenId(task.id as number);
+                                          setQaSearchState({
+                                            taskId: task.id as number,
+                                            value: nextValue,
+                                            departmentId: task.departmentId ?? null,
+                                          });
+                                        }}
+                                        onFocus={() => {
+                                          setQaDropdownOpenId(task.id as number);
+                                          const existingValue = Object.prototype.hasOwnProperty.call(qaSearchByTaskId, task.id)
+                                            ? qaSearchByTaskId[task.id]
+                                            : '';
+                                          setQaSearchState({
+                                            taskId: task.id as number,
+                                            value: existingValue,
+                                            departmentId: task.departmentId ?? null,
+                                          });
+                                        }}
+                                        className="w-full px-2 py-1 text-[11px] bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                                      />
+                                      {qaDropdownOpenId === task.id && (
+                                        <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
+                                          {(() => {
+                                            const typedValue = (qaSearchByTaskId[task.id] || '').trim().toLowerCase();
+                                            const matches =
+                                              qaSearchState.taskId === task.id ? (qaPeopleQuery.data || []) : [];
+                                            return (
+                                              <div className="py-1">
+                                                {task.qaAssignedTo ? (
+                                                  <button
+                                                    type="button"
+                                                    className="w-full text-left px-2 py-1 text-[11px] text-[var(--muted)] hover:bg-[var(--surfaceHover)]"
+                                                    onClick={() => {
+                                                      handleQaTaskUpdate(task.id as number, { qaAssignedTo: null });
+                                                      setQaSearchByTaskId((prev) => ({ ...prev, [task.id as number]: '' }));
+                                                      setQaDropdownOpenId(null);
+                                                      setQaSearchState({ taskId: null, value: '', departmentId: null });
+                                                    }}
+                                                  >
+                                                    Unassigned
+                                                  </button>
+                                                ) : null}
+                                                {typedValue.length < 2 ? (
+                                                  <div className="px-2 py-1 text-[11px] text-[var(--muted)]">Type at least 2 characters to search</div>
+                                                ) : qaPeopleQuery.isLoading ? (
+                                                  <div className="px-2 py-1 text-[11px] text-[var(--muted)]">Searching…</div>
+                                                ) : matches.length === 0 ? (
+                                                  <div className="px-2 py-1 text-[11px] text-[var(--muted)]">No matches</div>
+                                                ) : (
+                                                  matches.map((person) => (
+                                                    <button
+                                                      key={person.id}
+                                                      type="button"
+                                                      className="w-full text-left px-2 py-1 text-[11px] hover:bg-[var(--surfaceHover)]"
+                                                      onClick={() => {
+                                                        handleQaTaskUpdate(task.id as number, { qaAssignedTo: person.id ?? null });
+                                                        setQaSearchByTaskId((prev) => ({ ...prev, [task.id as number]: person.name }));
+                                                        setQaDropdownOpenId(null);
+                                                        setQaSearchState({ taskId: null, value: '', departmentId: null });
+                                                      }}
+                                                    >
+                                                      <div className="text-[var(--text)]">{person.name}</div>
+                                                      <div className="text-[10px] text-[var(--muted)]">{person.roleName || 'Role not set'}</div>
+                                                    </button>
+                                                  ))
+                                                )}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11px] text-[var(--muted)]">—</div>
+                                  )}
+                                </div>
+                                <div className="truncate text-[11px] text-[var(--muted)]">
+                                  {task.dueDate ? (formatUtcToLocal(task.dueDate, { dateStyle: 'medium' }) || task.dueDate) : '—'}
+                                </div>
+                                <div className="truncate text-[11px] text-[var(--muted)]">
+                                  {task.reviewedAt ? (formatUtcToLocal(task.reviewedAt, { dateStyle: 'medium' }) || task.reviewedAt) : '—'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </Card>
             </div>
 
