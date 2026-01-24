@@ -11,6 +11,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Project, Deliverable } from '@/types/models';
 import { deliverablesApi } from '@/services/api';
 import { emitGridRefresh } from '@/lib/gridRefreshBus';
+import { emitDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { showToast } from '@/lib/toastBus';
 import { useQueryClient } from '@tanstack/react-query';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
@@ -191,6 +192,7 @@ const DeliverablesSection = React.forwardRef<DeliverablesSectionHandle, Delivera
       // Invalidate project filter metadata (future deliverables flags)
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       try { onDeliverablesChanged?.(); } catch {}
+      try { emitDeliverablesRefresh({ projectId: project.id, reason: 'deliverable-created' }); } catch {}
       try { emitGridRefresh({ reason: 'deliverable-created' }); } catch {}
       setShowAddForm(false);
     } catch (err: any) {
@@ -215,6 +217,7 @@ const DeliverablesSection = React.forwardRef<DeliverablesSectionHandle, Delivera
       await loadDeliverables();
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       try { onDeliverablesChanged?.(); } catch {}
+      try { emitDeliverablesRefresh({ projectId: project.id, reason: 'deliverable-updated' }); } catch {}
       try { emitGridRefresh({ reason: 'deliverable-updated' }); } catch {}
       setEditingId(null);
     } catch (err: any) {
@@ -232,6 +235,7 @@ const DeliverablesSection = React.forwardRef<DeliverablesSectionHandle, Delivera
       await loadDeliverables();
       await queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
       try { onDeliverablesChanged?.(); } catch {}
+      try { emitDeliverablesRefresh({ projectId: project.id, reason: 'deliverable-deleted' }); } catch {}
       try { emitGridRefresh({ reason: 'deliverable-deleted' }); } catch {}
     } catch (err: any) {
       setError('Failed to delete deliverable');

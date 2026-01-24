@@ -45,7 +45,7 @@ const DeliverablesSection = React.lazy(() => import('@/components/deliverables/D
 
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
-  const { projects, loading, error: projectsError } = useProjects();
+  const { projects, loading, error: projectsError, refetch: refetchProjects } = useProjects();
   const queryClient = useQueryClient();
   const { people, peopleVersion } = usePeople();
   const deleteProjectMutation = useDeleteProject();
@@ -555,6 +555,7 @@ const ProjectsList: React.FC = () => {
             statusDropdownOpen={statusDropdownOpen}
             setStatusDropdownOpen={setStatusDropdownOpen}
             onStatusChange={handleStatusChange}
+            onProjectRefetch={refetchProjects}
             onDeleteProject={handleDeleteProject}
             assignments={assignments}
             editingAssignmentId={editingAssignment}
@@ -726,6 +727,7 @@ const ProjectsList: React.FC = () => {
             statusDropdownOpen={statusDropdownOpen}
             setStatusDropdownOpen={setStatusDropdownOpen}
             onStatusChange={handleStatusChange}
+            onProjectRefetch={refetchProjects}
             onDeleteProject={handleDeleteProject}
             assignments={assignments}
             editingAssignmentId={editingAssignment}

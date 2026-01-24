@@ -24,6 +24,7 @@ interface Props {
   statusDropdownOpen: boolean;
   setStatusDropdownOpen: (v: boolean) => void;
   onStatusChange: (status: string) => void;
+  onProjectRefetch?: () => Promise<void> | void;
   onDeleteProject?: (id: number) => Promise<void> | void;
 
   assignments: Assignment[];
@@ -77,6 +78,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   statusDropdownOpen,
   setStatusDropdownOpen,
   onStatusChange,
+  onProjectRefetch,
   assignments,
   editingAssignmentId,
   editData,
@@ -126,6 +128,39 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   // Local optimistic patch so values show immediately on commit
   const [localPatch, setLocalPatch] = React.useState<Partial<Project>>({});
   React.useEffect(() => { setLocalPatch({}); }, [project.id]);
+  const refetchProject = React.useCallback(async () => {
+    try { await onProjectRefetch?.(); } catch {}
+  }, [onProjectRefetch]);
+  const commitField = React.useCallback(async (
+    field: keyof Project,
+    value: any,
+    opts?: { onError?: (err: unknown) => void }
+  ) => {
+    const prevValue = (localPatch as any)[field] !== undefined ? (localPatch as any)[field] : (project as any)[field];
+    setLocalPatch(prev => ({ ...prev, [field]: value }));
+    try {
+      await commit(field, value);
+      clearFieldError(String(field));
+      setLocalPatch(prev => {
+        const next = { ...prev } as Partial<Project>;
+        delete (next as any)[field];
+        return next;
+      });
+    } catch (err) {
+      setLocalPatch(prev => {
+        const next = { ...prev } as Partial<Project>;
+        if (prevValue === undefined || prevValue === null) {
+          delete (next as any)[field];
+        } else {
+          (next as any)[field] = prevValue;
+        }
+        return next;
+      });
+      try { opts?.onError?.(err); } catch {}
+      await refetchProject();
+      throw err;
+    }
+  }, [commit, localPatch, project, refetchProject, clearFieldError]);
 
   // Client suggestions state
   const [clientOptions, setClientOptions] = React.useState<string[] | null>(null);
@@ -262,7 +297,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
             <h2 className="text-xl font-bold text-[var(--text)] mb-1">
               <InlineText
                 value={localPatch.name ?? project.name}
-                onCommit={async (v) => { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,name:nv})); await commit('name', nv).catch((e:any)=>{ setFieldErrors(prev=>({...prev,name:e?.message||'Failed to update name'})); throw e }); clearFieldError('name'); }}
+                onCommit={async (v) => {
+                  const nv = (v ?? '').toString();
+                  await commitField('name', nv, {
+                    onError: (e) => setFieldErrors(prev => ({ ...prev, name: (e as any)?.message || 'Failed to update name' }))
+                  });
+                }}
                 onStartEdit={() => clearFieldError('name')}
                 onDraftChange={() => clearFieldError('name')}
                 ariaLabel="Edit project name"
@@ -336,7 +376,11 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 <div className="text-[var(--text)] relative" ref={clientBoxRef}>
                   <InlineText
                     value={(localPatch.client ?? project.client) || ''}
-                    onCommit={async (v) => { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,client:nv})); await commit('client', nv); setClientOpen(false); clearFieldError('client'); }}
+                    onCommit={async (v) => {
+                      const nv = (v ?? '').toString();
+                      await commitField('client', nv);
+                      setClientOpen(false);
+                    }}
                     onStartEdit={async () => {
                       clearFieldError('client');
                       try {
@@ -370,7 +414,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                           type="button"
                           className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] text-[var(--text)]"
                           onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                          onClick={async () => { await commit('client', name); setClientOpen(false); }}
+                          onClick={async () => { await commitField('client', name); setClientOpen(false); }}
                         >
                           {name}
                         </button>
@@ -385,7 +429,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 <div className="text-[var(--text)]">
                   <InlineText
                     value={(localPatch.projectNumber ?? project.projectNumber) || ''}
-                    onCommit={async (v) => { try { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,projectNumber:nv})); await commit('projectNumber', nv); clearFieldError('projectNumber'); } catch (e:any) { setFieldErrors(prev=>({...prev,projectNumber:'Project Number must be unique'})); throw e; } }}
+                    onCommit={async (v) => {
+                      const nv = (v ?? '').toString();
+                      await commitField('projectNumber', nv, {
+                        onError: () => setFieldErrors(prev => ({ ...prev, projectNumber: 'Project Number must be unique' }))
+                      });
+                    }}
                     onStartEdit={() => clearFieldError('projectNumber')}
                     onDraftChange={() => clearFieldError('projectNumber')}
                     placeholder="-"
@@ -401,7 +450,10 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               <div className="text-[var(--muted)] text-xs mb-1">Description:</div>
               <InlineTextarea
                 value={(localPatch.description ?? project.description) || ''}
-                onCommit={async (v) => { const nv=(v ?? '').toString(); setLocalPatch(p=>({...p,description:nv})); await commit('description', nv); clearFieldError('description'); }}
+                onCommit={async (v) => {
+                  const nv = (v ?? '').toString();
+                  await commitField('description', nv);
+                }}
                 onStartEdit={() => clearFieldError('description')}
                 onDraftChange={() => clearFieldError('description')}
                 placeholder="Add a short description"
@@ -418,7 +470,9 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 <div className="text-[var(--muted)] text-xs mb-1">Start Date:</div>
                 <InlineDate
                   value={(localPatch.startDate ?? project.startDate) || null}
-                  onCommit={async (v) => { setLocalPatch(p=>({...p,startDate:v || null as any})); await commit('startDate', v); clearFieldError('startDate'); }}
+                  onCommit={async (v) => {
+                    await commitField('startDate', v || null);
+                  }}
                   onStartEdit={() => clearFieldError('startDate')}
                   onDraftChange={() => clearFieldError('startDate')}
                   placeholder="—"
@@ -435,9 +489,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                     const n = (v ?? '').toString().trim()
                     const parsed = n === '' ? undefined : Math.max(0, Math.floor(Number(n)))
                     if (n !== '' && Number.isNaN(parsed)) return
-                    setLocalPatch(p=>({...p,estimatedHours: parsed as any}))
-                    await commit('estimatedHours', parsed as any)
-                    clearFieldError('estimatedHours')
+                    await commitField('estimatedHours', parsed as any)
                   }}
                   onStartEdit={() => clearFieldError('estimatedHours')}
                   onDraftChange={() => clearFieldError('estimatedHours')}

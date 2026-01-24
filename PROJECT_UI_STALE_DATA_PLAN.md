@@ -37,6 +37,7 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 - **Broadcast refresh signals**: use event buses to tell other mounted views to refetch (no data payload).
 - **No optimistic shared updates**: local optimistic UI is allowed only within the active view and must be reconciled by refetch.
 - **No local overrides that persist**: temporary UI overlays must be cleared on refetch or error.
+- **No layout shifts on refetch**: loading UI should appear on initial load only; background refetches must not add/remove vertical space.
 
 ---
 
@@ -188,6 +189,9 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 4. **UI patch rules**
    - Local optimistic UI is allowed in the active view only.
    - Always reconcile by refetch after success/failure.
+5. **Consistent loading behavior**
+   - Use `isLoading` (initial load) to show skeletons/banners.
+   - Use `isFetching` (background refetch) for subtle inline indicators only.
 
 ---
 

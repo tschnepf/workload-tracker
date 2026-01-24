@@ -31,7 +31,7 @@ export function useProjectFilterMetadata() {
     networkMode: 'online',
   });
 
-  const loading = query.isLoading || query.isFetching;
+  const loading = query.isLoading;
   const error = query.error ? query.error.message : null;
 
   return {

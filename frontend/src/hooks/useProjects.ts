@@ -34,6 +34,7 @@ export function useProjects() {
     loading,
     refreshing,
     error,
+    refetch: query.refetch,
     fetchNextPage: query.fetchNextPage,
     hasNextPage: query.hasNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
@@ -114,10 +115,21 @@ export function useUpdateProject() {
     onSuccess: (updatedProject, variables) => {
       // Ensure caches reflect server truth
       queryClient.setQueryData(['projects', variables.id], updatedProject);
+      // Update list pages with server response to avoid stale optimistic state
+      queryClient.setQueryData(['projects'], (old: any) => {
+        if (!old || !Array.isArray(old.pages)) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            results: (page?.results || []).map((p: Project) => (p.id === variables.id ? { ...p, ...updatedProject } : p))
+          }))
+        };
+      });
     },
     onSettled: (_data, _err, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['projects', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'], refetchType: 'inactive' });
+      queryClient.invalidateQueries({ queryKey: ['projects', variables.id], refetchType: 'inactive' });
       queryClient.invalidateQueries({ queryKey: PROJECT_FILTER_METADATA_KEY });
     },
   });

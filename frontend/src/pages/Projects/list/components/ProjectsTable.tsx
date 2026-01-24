@@ -5,6 +5,7 @@ import StatusBadge, { getStatusColor, formatStatus } from '@/components/projects
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { getFlag } from '@/lib/flags';
+import { emitDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { useVirtualRows } from '../hooks/useVirtualRows';
 import { deliverablesApi } from '@/services/api';
 import { useUpdateProject } from '@/hooks/useProjects';
@@ -21,7 +22,7 @@ interface Props {
   prevDeliverables?: Map<number, Deliverable | null>;
   projectLeads?: Map<number, string>;
   onChangeStatus?: (projectId: number, newStatus: string) => void;
-  onRefreshDeliverables?: (projectId: number) => void;
+  onRefreshDeliverables?: (projectId: number) => Promise<void> | void;
   onDeliverableEdited?: (projectId: number) => void;
   isMobileList?: boolean;
 }
@@ -119,6 +120,36 @@ const ProjectsTable: React.FC<Props> = ({
     anchorRect: { top: number; left: number; right: number; bottom: number; width: number; height: number };
   } | null>(null);
   const datePopoverRef = useRef<HTMLDivElement | null>(null);
+  const editingDeliverableIds = useMemo(() => {
+    const ids = new Set<number>();
+    if (notesEditor?.deliverableId) ids.add(notesEditor.deliverableId);
+    if (nextEditor?.deliverableId) ids.add(nextEditor.deliverableId);
+    if (datePicker?.deliverableId) ids.add(datePicker.deliverableId);
+    return ids;
+  }, [notesEditor, nextEditor, datePicker]);
+
+  useEffect(() => {
+    if (!nextDeliverables && !prevDeliverables) return;
+    if (editingDeliverableIds.size === 0) {
+      setDeliverableOverrides(new Map());
+      setNotesOverrides(new Map());
+      return;
+    }
+    setDeliverableOverrides(prev => {
+      const next = new Map<number, Partial<Deliverable>>();
+      prev.forEach((value, key) => {
+        if (editingDeliverableIds.has(key)) next.set(key, value);
+      });
+      return next;
+    });
+    setNotesOverrides(prev => {
+      const next = new Map<number, string>();
+      prev.forEach((value, key) => {
+        if (editingDeliverableIds.has(key)) next.set(key, value);
+      });
+      return next;
+    });
+  }, [nextDeliverables, prevDeliverables, editingDeliverableIds]);
   const toggleExpanded = (projectId?: number | null) => {
     if (!projectId) return;
     setExpandedCards((prev) => {
@@ -210,8 +241,9 @@ const ProjectsTable: React.FC<Props> = ({
         next.set(notesEditor.deliverableId, notesEditor.value);
         return next;
       });
-      onRefreshDeliverables?.(notesEditor.projectId);
-      onDeliverableEdited?.(notesEditor.projectId);
+      try { await onRefreshDeliverables?.(notesEditor.projectId); } catch {}
+      try { emitDeliverablesRefresh({ projectId: notesEditor.projectId, reason: 'deliverable-notes-updated' }); } catch {}
+      try { onDeliverableEdited?.(notesEditor.projectId); } catch {}
       setNotesEditor(null);
     } catch (e: any) {
       const msg = e?.message || 'Failed to update notes';
@@ -321,8 +353,9 @@ const ProjectsTable: React.FC<Props> = ({
         next.set(nextEditor.deliverableId, { ...current, ...overridePayload });
         return next;
       });
-      onRefreshDeliverables?.(nextEditor.projectId);
-      onDeliverableEdited?.(nextEditor.projectId);
+      try { await onRefreshDeliverables?.(nextEditor.projectId); } catch {}
+      try { emitDeliverablesRefresh({ projectId: nextEditor.projectId, reason: 'deliverable-updated' }); } catch {}
+      try { onDeliverableEdited?.(nextEditor.projectId); } catch {}
       setNextEditor(null);
     } catch (e: any) {
       const msg = e?.message || 'Failed to update deliverable';
@@ -384,8 +417,9 @@ const ProjectsTable: React.FC<Props> = ({
         next.set(datePicker.deliverableId, { ...current, date: value || null });
         return next;
       });
-      onRefreshDeliverables?.(datePicker.projectId);
-      onDeliverableEdited?.(datePicker.projectId);
+      try { await onRefreshDeliverables?.(datePicker.projectId); } catch {}
+      try { emitDeliverablesRefresh({ projectId: datePicker.projectId, reason: 'deliverable-date-updated' }); } catch {}
+      try { onDeliverableEdited?.(datePicker.projectId); } catch {}
     } catch (e) {
       console.error('Failed to update deliverable date', e);
     } finally {
