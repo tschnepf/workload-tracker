@@ -58,6 +58,7 @@ const ProjectsList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [detailsPaneOpen, setDetailsPaneOpen] = useState(false);
 
   // Optimized filter metadata (assignment counts + hasFutureDeliverables)
   const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata();
@@ -551,7 +552,30 @@ const ProjectsList: React.FC = () => {
 
   const desktopLayout = (
     <div className="h-full min-h-0 flex bg-[var(--bg)]">
-      <div className="w-2/3 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-theme">
+      <div className={`${detailsPaneOpen ? 'w-2/3' : 'w-full'} border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-theme relative transition-all`}>
+        <button
+          type="button"
+          aria-label={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
+          title={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
+          onClick={() => setDetailsPaneOpen((v) => !v)}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-12 px-3 rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface)] flex flex-col items-center justify-center shadow-sm text-[11px] font-semibold tracking-wide text-center leading-tight -translate-x-1/2"
+        >
+          <div className="flex items-center justify-center gap-1">
+            {!detailsPaneOpen ? (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            ) : null}
+            <div className="flex flex-col items-center leading-tight">
+              <span>Details</span>
+            </div>
+            {detailsPaneOpen ? (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            ) : null}
+          </div>
+        </button>
         <div className="p-3 border-b border-[var(--border)]">
           <div className="flex justify-between items-center mb-2">
             <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
@@ -593,96 +617,98 @@ const ProjectsList: React.FC = () => {
           onAutoScrollComplete={() => setAutoScrollProjectId(null)}
         />
       </div>
-      <div className="w-1/3 flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto">
-        {selectedProject ? (
-          <ProjectDetailsPanel
-            project={selectedProject}
-            statusDropdownOpen={statusDropdownOpen}
-            setStatusDropdownOpen={setStatusDropdownOpen}
-            onStatusChange={handleStatusChange}
-            onProjectRefetch={refetchProjects}
-            onDeleteProject={handleDeleteProject}
-            assignments={assignments}
-            editingAssignmentId={editingAssignment}
-            editData={editData}
-            warnings={warnings}
-            onEditAssignment={handleEditAssignment}
-            onDeleteAssignment={handleDeleteAssignment}
-            onSaveEdit={handleSaveEdit}
-            onCancelEdit={handleCancelEdit}
-            onHoursChange={(h) => setEditData((prev) => ({ ...prev, currentWeekHours: h }))}
-            getCurrentWeekHours={getCurrentWeekHours}
-            currentWeekKey={currentWeekKey}
-            onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
-              try {
-                await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
-                if (selectedProject?.id) await reloadAssignments(selectedProject.id);
-                await invalidateFilterMeta();
-              } catch (e) {
-                console.error('Failed to update role on project', e);
+      <div className={`${detailsPaneOpen ? 'w-1/3 translate-x-0' : 'w-0 translate-x-full'} flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto transition-all`}>
+        {detailsPaneOpen ? (
+          selectedProject ? (
+            <ProjectDetailsPanel
+              project={selectedProject}
+              statusDropdownOpen={statusDropdownOpen}
+              setStatusDropdownOpen={setStatusDropdownOpen}
+              onStatusChange={handleStatusChange}
+              onProjectRefetch={refetchProjects}
+              onDeleteProject={handleDeleteProject}
+              assignments={assignments}
+              editingAssignmentId={editingAssignment}
+              editData={editData}
+              warnings={warnings}
+              onEditAssignment={handleEditAssignment}
+              onDeleteAssignment={handleDeleteAssignment}
+              onSaveEdit={handleSaveEdit}
+              onCancelEdit={handleCancelEdit}
+              onHoursChange={(h) => setEditData((prev) => ({ ...prev, currentWeekHours: h }))}
+              getCurrentWeekHours={getCurrentWeekHours}
+              currentWeekKey={currentWeekKey}
+              onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
+                try {
+                  await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+                  if (selectedProject?.id) await reloadAssignments(selectedProject.id);
+                  await invalidateFilterMeta();
+                } catch (e) {
+                  console.error('Failed to update role on project', e);
+                }
+              }}
+              onUpdateWeekHours={async (assignmentId, weekKey, hours) => {
+                try {
+                  const asn = assignments.find(a => a.id === assignmentId);
+                  if (!asn) return;
+                  const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
+                  updatedWeeklyHours[weekKey] = hours;
+                  await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+                } catch (e) {
+                  console.error('Failed to update hours', e);
+                }
+              }}
+              reloadAssignments={reloadAssignments}
+              invalidateFilterMeta={invalidateFilterMeta}
+              getPersonDepartmentId={(personId) => {
+                const p = people.find(pp => pp.id === personId);
+                return (p?.department ?? null) as any;
+              }}
+              getPersonDepartmentName={(personId) => {
+                const p = people.find(pp => pp.id === personId);
+                return p?.departmentName ?? null;
+              }}
+              showAddAssignment={showAddAssignment}
+              onAddAssignment={handleAddAssignment}
+              onSaveAssignment={handleSaveAssignment}
+              onCancelAddAssignment={handleCancelAddAssignment}
+              addAssignmentState={newAssignment as any}
+              onPersonSearch={(term) => { onPersonSearchChange(term); setNewAssignment(prev => ({ ...prev, personSearch: term })); }}
+              onPersonSearchFocus={() => onPersonSearchFocus()}
+              onPersonSearchKeyDown={onPersonSearchKeyDown}
+              srAnnouncement={srAnnouncement}
+              personSearchResults={personSearchResults as any}
+              selectedPersonIndex={selectedPersonIndex}
+              onPersonSelect={handlePersonSelect}
+              onRoleSelectNew={(roleId, roleName) => {
+                const name = roleName || '';
+                setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
+              }}
+              candidatesOnly={candidatesOnly}
+              setCandidatesOnly={setCandidatesOnly}
+              availabilityMap={availabilityMap}
+              deliverablesSlot={
+                <Suspense fallback={<DeliverablesSectionLoaderComp />}>
+                  <DeliverablesSection
+                    project={selectedProject}
+                    variant="embedded"
+                    refreshToken={deliverablesRefreshTick}
+                    onDeliverablesChanged={() => {
+                      try { if (selectedProject?.id) refreshDeliverablesFor(selectedProject.id); } catch {}
+                    }}
+                  />
+                </Suspense>
               }
-            }}
-            onUpdateWeekHours={async (assignmentId, weekKey, hours) => {
-              try {
-                const asn = assignments.find(a => a.id === assignmentId);
-                if (!asn) return;
-                const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
-                updatedWeeklyHours[weekKey] = hours;
-                await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
-              } catch (e) {
-                console.error('Failed to update hours', e);
-              }
-            }}
-            reloadAssignments={reloadAssignments}
-            invalidateFilterMeta={invalidateFilterMeta}
-            getPersonDepartmentId={(personId) => {
-              const p = people.find(pp => pp.id === personId);
-              return (p?.department ?? null) as any;
-            }}
-            getPersonDepartmentName={(personId) => {
-              const p = people.find(pp => pp.id === personId);
-              return p?.departmentName ?? null;
-            }}
-            showAddAssignment={showAddAssignment}
-            onAddAssignment={handleAddAssignment}
-            onSaveAssignment={handleSaveAssignment}
-            onCancelAddAssignment={handleCancelAddAssignment}
-            addAssignmentState={newAssignment as any}
-            onPersonSearch={(term) => { onPersonSearchChange(term); setNewAssignment(prev => ({ ...prev, personSearch: term })); }}
-            onPersonSearchFocus={() => onPersonSearchFocus()}
-            onPersonSearchKeyDown={onPersonSearchKeyDown}
-            srAnnouncement={srAnnouncement}
-            personSearchResults={personSearchResults as any}
-            selectedPersonIndex={selectedPersonIndex}
-            onPersonSelect={handlePersonSelect}
-            onRoleSelectNew={(roleId, roleName) => {
-              const name = roleName || '';
-              setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
-            }}
-            candidatesOnly={candidatesOnly}
-            setCandidatesOnly={setCandidatesOnly}
-            availabilityMap={availabilityMap}
-            deliverablesSlot={
-              <Suspense fallback={<DeliverablesSectionLoaderComp />}>
-                <DeliverablesSection
-                  project={selectedProject}
-                  variant="embedded"
-                  refreshToken={deliverablesRefreshTick}
-                  onDeliverablesChanged={() => {
-                    try { if (selectedProject?.id) refreshDeliverablesFor(selectedProject.id); } catch {}
-                  }}
-                />
-              </Suspense>
-            }
-          />
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-[var(--muted)]">
-              <div className="text-lg mb-2">Select a project</div>
-              <div className="text-sm">Choose a project from the list to view details</div>
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-[var(--muted)]">
+                <div className="text-lg mb-2">Select a project</div>
+                <div className="text-sm">Choose a project from the list to view details</div>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        ) : null}
       </div>
     </div>
   );
