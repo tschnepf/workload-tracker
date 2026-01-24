@@ -59,6 +59,9 @@ const ProjectsList: React.FC = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [detailsPaneOpen, setDetailsPaneOpen] = useState(false);
+  const [detailsSplitPct, setDetailsSplitPct] = useState(66);
+  const splitDragRef = useRef<{ active: boolean; startX: number; startPct: number }>({ active: false, startX: 0, startPct: 66 });
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Optimized filter metadata (assignment counts + hasFutureDeliverables)
   const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata();
@@ -542,6 +545,26 @@ const ProjectsList: React.FC = () => {
     }
   }, [isMobileLayout, selectedProject?.id]);
 
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!splitDragRef.current.active) return;
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const deltaX = e.clientX - splitDragRef.current.startX;
+      const deltaPct = (deltaX / rect.width) * 100;
+      const next = Math.min(80, Math.max(50, splitDragRef.current.startPct + deltaPct));
+      setDetailsSplitPct(next);
+    };
+    const onUp = () => { splitDragRef.current.active = false; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
   if (loading) {
     return (
       <Layout>
@@ -551,8 +574,11 @@ const ProjectsList: React.FC = () => {
   }
 
   const desktopLayout = (
-    <div className="h-full min-h-0 flex bg-[var(--bg)]">
-      <div className={`${detailsPaneOpen ? 'w-2/3' : 'w-full'} border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-theme relative transition-all`}>
+    <div ref={containerRef} className="h-full min-h-0 flex bg-[var(--bg)] relative">
+      <div
+        className={`${detailsPaneOpen ? '' : 'w-full'} border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-theme relative transition-all`}
+        style={detailsPaneOpen ? { width: `${detailsSplitPct}%` } : undefined}
+      >
         <button
           type="button"
           aria-label={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
@@ -617,7 +643,24 @@ const ProjectsList: React.FC = () => {
           onAutoScrollComplete={() => setAutoScrollProjectId(null)}
         />
       </div>
-      <div className={`${detailsPaneOpen ? 'w-1/3 translate-x-0' : 'w-0 translate-x-full'} flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto transition-all`}>
+      {detailsPaneOpen && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          className="absolute top-0 bottom-0 w-2 -ml-1 bg-transparent hover:bg-[var(--border)] cursor-col-resize z-20"
+          style={{ left: `calc(${detailsSplitPct}% - 1px)` }}
+          onMouseDown={(e) => {
+            splitDragRef.current.active = true;
+            splitDragRef.current.startX = e.clientX;
+            splitDragRef.current.startPct = detailsSplitPct;
+            e.preventDefault();
+          }}
+        />
+      )}
+      <div
+        className={`${detailsPaneOpen ? 'translate-x-0' : 'w-0 translate-x-full'} flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto transition-all`}
+        style={detailsPaneOpen ? { width: `${100 - detailsSplitPct}%` } : undefined}
+      >
         {detailsPaneOpen ? (
           selectedProject ? (
             <ProjectDetailsPanel

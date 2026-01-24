@@ -161,6 +161,27 @@ const ProjectDetailsPanel: React.FC<Props> = ({
       throw err;
     }
   }, [commit, localPatch, project, refetchProject, clearFieldError]);
+  const layoutRef = React.useRef<HTMLDivElement | null>(null);
+  const [isNarrowLayout, setIsNarrowLayout] = React.useState(false);
+  React.useEffect(() => {
+    const el = layoutRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const NARROW_PANE_WIDTH = 640;
+    let frame = 0;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width ?? 0;
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const next = width > 0 && width < NARROW_PANE_WIDTH;
+        setIsNarrowLayout(prev => (prev === next ? prev : next));
+      });
+    });
+    observer.observe(el);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
 
   // Client suggestions state
   const [clientOptions, setClientOptions] = React.useState<string[] | null>(null);
@@ -513,25 +534,24 @@ const ProjectDetailsPanel: React.FC<Props> = ({
         </div>
         {/* Hours are temporarily hidden on Project Details page */}
 
-        {/* Responsive layout: 2 columns where left = Deliverables (2fr) and right = stacked department cards (1fr) */}
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-          {/* Left column: Deliverables + Pre-Deliverables (separate cards) */}
-          <div className="flex flex-col gap-4 self-start min-w-0">
+        {/* Responsive layout: columns when wide, single stack when pane is narrow */}
+        <div
+          ref={layoutRef}
+          className="grid gap-4 items-start"
+          style={{
+            gridTemplateColumns: isNarrowLayout ? '1fr' : '2fr 1fr',
+            gridTemplateAreas: isNarrowLayout
+              ? '"deliverables" "assignments" "notes" "predeliverables"'
+              : '"deliverables assignments" "notes assignments" "predeliverables assignments"',
+          }}
+        >
+          <div className="min-w-0" style={{ gridArea: 'deliverables' }}>
             <div className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm p-2 overflow-hidden">
               {deliverablesSlot}
             </div>
-            {/* Project Notes (TipTap) placed above Pre-Deliverable Settings */}
-            <ProjectNotesEditor
-              projectId={project.id!}
-              initialJson={(project as any).notesJson as any}
-              initialHtml={(localPatch as any).notes ?? (project as any).notes}
-              canEdit={canEdit}
-            />
-            <ProjectPreDeliverableSettings projectId={project.id || null} />
           </div>
 
-          {/* Right column: stack department cards vertically */}
-          <div className="flex flex-col gap-4 min-w-0">
+          <div className="flex flex-col gap-4 min-w-0" style={{ gridArea: 'assignments' }}>
             {departmentEntries.length > 0 ? (
               departmentEntries.map(([deptName, items]) => (
                 <div key={deptName} className="bg-[var(--card)] border border-[var(--border)] rounded shadow-sm overflow-hidden min-w-0">
@@ -692,6 +712,19 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 )}
               </div>
             )}
+          </div>
+
+          <div className="min-w-0" style={{ gridArea: 'notes' }}>
+            <ProjectNotesEditor
+              projectId={project.id!}
+              initialJson={(project as any).notesJson as any}
+              initialHtml={(localPatch as any).notes ?? (project as any).notes}
+              canEdit={canEdit}
+            />
+          </div>
+
+          <div className="min-w-0" style={{ gridArea: 'predeliverables' }}>
+            <ProjectPreDeliverableSettings projectId={project.id || null} />
           </div>
         </div>
         </div>
