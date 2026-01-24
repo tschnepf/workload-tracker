@@ -79,12 +79,13 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 
 ---
 
-### 2) Project Form (edit existing project)
+### 2) Project Form (create only; edit route is obsolete)
 **Pages/Files**
 - `frontend/src/pages/Projects/ProjectForm.tsx`
 
 **Issues**
-- Direct API update can leave list/detail stale until next manual refresh.
+- Edit flow is obsolete (`/projects/:id/edit` redirects to list). Avoid planning edits here.
+- Direct API update can leave list/detail stale until next manual refresh if edit paths are reintroduced.
 
 **Plan**
 1. Use a shared update function (no cache writes).

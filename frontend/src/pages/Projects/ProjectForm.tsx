@@ -17,6 +17,8 @@ import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliv
 const ProjectForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  // EDIT FLOW OBSOLETE: /projects/:id/edit redirects to the list.
+  // Keep guarded edit logic for safety in case the route is reintroduced.
   const isEditing = !!id;
   const createProject = useCreateProject();
 
@@ -74,6 +76,9 @@ const ProjectForm: React.FC = () => {
 
   useAuthenticatedEffect(() => {
     if (isEditing && id) {
+      if (typeof window !== 'undefined') {
+        console.warn('[ProjectForm] Edit flow is obsolete; route should redirect to /projects.');
+      }
       loadProject();
     }
   }, [isEditing, id]);
