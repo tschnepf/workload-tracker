@@ -99,7 +99,11 @@ export default function ProjectNotesEditor({ projectId, initialJson, initialHtml
         </div>
       </div>
       <div className={editorWrapClass}>
-        <div className={`pm-editor ${editorClass} bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)]`} onKeyDown={(e)=>{e.stopPropagation();}}>
+        <div
+          className={`pm-editor ${editorClass} bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] cursor-text`}
+          onMouseDown={() => { editor?.chain().focus().run(); }}
+          onKeyDown={(e)=>{e.stopPropagation();}}
+        >
           {editor && <EditorContent editor={editor} />}
         </div>
       </div>

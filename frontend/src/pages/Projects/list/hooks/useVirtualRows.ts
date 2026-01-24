@@ -21,6 +21,5 @@ export function useVirtualRows({ count, estimateSize = 44, overscan = 6, enableV
   const items: VirtualItem[] = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
 
-  return { parentRef, items, totalSize, enabled: enableVirtual } as const;
+  return { parentRef, items, totalSize, enabled: enableVirtual, virtualizer: rowVirtualizer } as const;
 }
-

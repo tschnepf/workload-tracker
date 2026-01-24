@@ -25,6 +25,8 @@ interface Props {
   onRefreshDeliverables?: (projectId: number) => Promise<void> | void;
   onDeliverableEdited?: (projectId: number) => void;
   isMobileList?: boolean;
+  autoScrollProjectId?: number | null;
+  onAutoScrollComplete?: () => void;
 }
 
 const ProjectsTable: React.FC<Props> = ({
@@ -42,10 +44,12 @@ const ProjectsTable: React.FC<Props> = ({
   onRefreshDeliverables,
   onDeliverableEdited,
   isMobileList = false,
+  autoScrollProjectId,
+  onAutoScrollComplete,
 }) => {
   const enableVirtual = !isMobileList && getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
   const statusDropdown = useDropdownManager<string>();
-  const { parentRef, items, totalSize } = useVirtualRows({ count: projects.length, estimateSize: isMobileList ? 116 : 44, overscan: 6, enableVirtual });
+  const { parentRef, items, totalSize, virtualizer } = useVirtualRows({ count: projects.length, estimateSize: isMobileList ? 116 : 44, overscan: 6, enableVirtual });
   const groupClients = sortBy === 'client';
   const [hoverEnabled, setHoverEnabled] = useState(true);
 
@@ -76,6 +80,34 @@ const ProjectsTable: React.FC<Props> = ({
       window.removeEventListener('keydown', disableHover);
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedProjectId || projects.length === 0) return;
+    if (!autoScrollProjectId || autoScrollProjectId !== selectedProjectId) return;
+    const idx = projects.findIndex((p) => p.id === selectedProjectId);
+    if (idx < 0) return;
+    if (enableVirtual) {
+      try {
+        const targetIndex = Math.max(idx - 2, 0);
+        virtualizer.scrollToIndex(targetIndex, { align: 'start' });
+      } catch {}
+      try { onAutoScrollComplete?.(); } catch {}
+      return;
+    }
+    const container = parentRef.current;
+    if (!container) return;
+    const row = container.querySelector(`[data-project-id="${selectedProjectId}"]`) as HTMLElement | null;
+    if (!row) return;
+    try {
+      const rowRect = row.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const rowHeight = rowRect.height || (isMobileList ? 116 : 44);
+      const desiredTop = container.scrollTop + (rowRect.top - containerRect.top) - rowHeight * 2;
+      const maxTop = Math.max(container.scrollHeight - container.clientHeight, 0);
+      container.scrollTop = Math.min(desiredTop, maxTop);
+    } catch {}
+    try { onAutoScrollComplete?.(); } catch {}
+  }, [selectedProjectId, projects, enableVirtual, virtualizer, parentRef, autoScrollProjectId, onAutoScrollComplete, isMobileList]);
 
   const handleRowClick = (project: Project, index: number) => {
     setHoverEnabled(false);
@@ -449,7 +481,7 @@ const ProjectsTable: React.FC<Props> = ({
   }, [datePicker]);
 
   const nonVirtualBody = (
-    <div className="overflow-y-auto h-full pb-12 scrollbar-theme">
+    <div ref={parentRef} className="overflow-y-auto h-full pb-12 scrollbar-theme">
       {projects.map((project, index) => {
         const prev = index > 0 ? projects[index - 1] : null;
         const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
@@ -495,6 +527,7 @@ const ProjectsTable: React.FC<Props> = ({
         return (
           <div
             key={project.id}
+            data-project-id={project.id}
             onClick={() => handleRowClick(project, index)}
             className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
             tabIndex={0}
@@ -835,6 +868,7 @@ const ProjectsTable: React.FC<Props> = ({
           return (
             <div
               key={project.id}
+              data-project-id={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => handleRowClick(project, v.index)}
               className={`relative grid grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))] gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
@@ -1290,8 +1324,12 @@ const ProjectsTable: React.FC<Props> = ({
 
   if (isMobileList) {
     return (
-      <div className="flex-1 overflow-y-auto divide-y divide-[var(--border)] pb-12 scrollbar-theme">
-        {projects.map((project, index) => renderMobileCard(project, index))}
+      <div ref={parentRef} className="flex-1 overflow-y-auto divide-y divide-[var(--border)] pb-12 scrollbar-theme">
+        {projects.map((project, index) => (
+          <div key={project.id} data-project-id={project.id}>
+            {renderMobileCard(project, index)}
+          </div>
+        ))}
         {datePickerPopover}
       </div>
     );

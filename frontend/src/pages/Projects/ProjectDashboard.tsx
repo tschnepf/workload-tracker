@@ -25,6 +25,13 @@ const ProjectDashboard: React.FC = () => {
   const idValue = params.id ?? queryId ?? '';
   const projectId = Number(idValue);
   const hasValidId = Number.isFinite(projectId) && projectId > 0;
+  React.useEffect(() => {
+    if (!hasValidId) return;
+    try {
+      sessionStorage.setItem('projects.lastViewedProjectId', String(projectId));
+      sessionStorage.setItem('projects.lastViewedProjectIdAt', String(Date.now()));
+    } catch {}
+  }, [hasValidId, projectId]);
 
   const auth = useAuth();
   const queryClient = useQueryClient();

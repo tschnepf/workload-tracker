@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tansta
 import { projectsApi } from '@/services/api';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { Project } from '@/types/models';
+import { emitProjectsRefresh, subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
+import { useEffect, useRef } from 'react';
 
 // Projects query hook with state adapter for existing code compatibility
 export function useProjects() {
@@ -24,6 +26,25 @@ export function useProjects() {
     refetchOnWindowFocus: false,
   });
 
+  const refetchProjects = query.refetch;
+  const refreshQueueRef = useRef<{ timer: ReturnType<typeof setTimeout> | null }>({ timer: null });
+  useEffect(() => {
+    const unsubscribe = subscribeProjectsRefresh(() => {
+      if (refreshQueueRef.current.timer) return;
+      refreshQueueRef.current.timer = setTimeout(() => {
+        refreshQueueRef.current.timer = null;
+        refetchProjects();
+      }, 300);
+    });
+    return () => {
+      unsubscribe();
+      if (refreshQueueRef.current.timer) {
+        clearTimeout(refreshQueueRef.current.timer);
+        refreshQueueRef.current.timer = null;
+      }
+    };
+  }, [refetchProjects]);
+
   const projects = (query.data?.pages || []).flatMap(p => p?.results || []);
   const loading = query.isLoading;
   const refreshing = query.isFetching && !query.isLoading;
@@ -34,7 +55,7 @@ export function useProjects() {
     loading,
     refreshing,
     error,
-    refetch: query.refetch,
+    refetch: refetchProjects,
     fetchNextPage: query.fetchNextPage,
     hasNextPage: query.hasNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
@@ -126,6 +147,7 @@ export function useUpdateProject() {
           }))
         };
       });
+      try { emitProjectsRefresh({ projectId: variables.id, reason: 'project-updated' }); } catch {}
     },
     onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({ queryKey: ['projects'], refetchType: 'inactive' });

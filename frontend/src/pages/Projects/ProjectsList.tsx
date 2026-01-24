@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Project, Person, Assignment, Department } from '@/types/models';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -46,6 +46,7 @@ const DeliverablesSection = React.lazy(() => import('@/components/deliverables/D
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
   const { projects, loading, error: projectsError, refetch: refetchProjects } = useProjects();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { people, peopleVersion } = usePeople();
   const deleteProjectMutation = useDeleteProject();
@@ -95,6 +96,7 @@ const ProjectsList: React.FC = () => {
   // Selection (single source of truth)
   // Use the enhanced sortedProjects for selection and table
   const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects);
+  const [autoScrollProjectId, setAutoScrollProjectId] = useState<number | null>(null);
   const handleResponsiveProjectClick = useCallback((project: Project, index: number) => {
     handleProjectClick(project, index);
     if (isMobileLayout) {
@@ -138,25 +140,66 @@ const ProjectsList: React.FC = () => {
 
   // Deep-link selection: /projects?projectId=123
   const location = useLocation();
-  const deepLinkHandled = useRef(false);
+  const [pendingProjectId, setPendingProjectId] = useState<number | null>(null);
   useEffect(() => {
-    if (deepLinkHandled.current) return;
     const sp = new URLSearchParams(location.search || '');
     const idStr = sp.get('projectId');
     if (!idStr) return;
-    deepLinkHandled.current = true;
     const pid = Number(idStr);
     if (!Number.isFinite(pid)) return;
-    const inAll = (projects || []).find(p => p.id === pid) || null;
-    if (!inAll) {
-      setError('Project not found');
+    setPendingProjectId(pid);
+  }, [location.search]);
+
+  useEffect(() => {
+    if (!pendingProjectId) return;
+    if (!sortedProjects || sortedProjects.length === 0) return;
+    const idx = sortedProjects.findIndex(p => p.id === pendingProjectId);
+    if (idx < 0) {
+      // Ensure it is visible: clear search + show all once
+      setSearchTerm('');
+      forceShowAll();
       return;
     }
-    // Ensure it is visible: clear search + show all once
-    setSearchTerm('');
-    forceShowAll();
-    setSelectedProject(inAll);
-  }, [location.search, projects, setSelectedProject, setSearchTerm, forceShowAll]);
+    setSelectedProject(sortedProjects[idx]);
+    setSelectedIndex(idx);
+    setAutoScrollProjectId(pendingProjectId);
+    setPendingProjectId(null);
+    try {
+      sessionStorage.removeItem('projects.lastViewedProjectId');
+      sessionStorage.removeItem('projects.lastViewedProjectIdAt');
+    } catch {}
+    // Strip projectId from URL so manual selection isn't overridden and refresh doesn't reselect.
+    const sp = new URLSearchParams(location.search || '');
+    sp.delete('projectId');
+    const nextSearch = sp.toString();
+    const currentSearch = location.search?.replace(/^\?/, '') || '';
+    if (nextSearch !== currentSearch) {
+      navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
+    }
+  }, [pendingProjectId, sortedProjects, location.pathname, location.search, navigate, setSelectedProject, setSelectedIndex, setSearchTerm, forceShowAll]);
+
+  // If returning from dashboard without a query param, restore last viewed project.
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search || '');
+    if (sp.get('projectId')) return;
+    if (sortedProjects.length === 0) return;
+    try {
+      const rawId = sessionStorage.getItem('projects.lastViewedProjectId');
+      const rawAt = sessionStorage.getItem('projects.lastViewedProjectIdAt');
+      if (!rawId || !rawAt) return;
+      const pid = Number(rawId);
+      const ts = Number(rawAt);
+      if (!Number.isFinite(pid) || !Number.isFinite(ts)) return;
+      if (Date.now() - ts > 5 * 60_000) return;
+      const idx = sortedProjects.findIndex((p) => p.id === pid);
+      if (idx < 0) return;
+      setSelectedProject(sortedProjects[idx]);
+      setSelectedIndex(idx);
+      setAutoScrollProjectId(pid);
+      sessionStorage.removeItem('projects.lastViewedProjectId');
+      sessionStorage.removeItem('projects.lastViewedProjectIdAt');
+    } catch {}
+  }, [location.search, sortedProjects, setSelectedProject, setSelectedIndex]);
 
   // Pre-compute person skills map for performance
   const precomputePersonSkills = useCallback(() => {
@@ -546,6 +589,8 @@ const ProjectsList: React.FC = () => {
           onChangeStatus={handleTableStatusChange}
           onRefreshDeliverables={refreshDeliverablesFor}
           onDeliverableEdited={bumpDeliverablesRefresh}
+          autoScrollProjectId={autoScrollProjectId}
+          onAutoScrollComplete={() => setAutoScrollProjectId(null)}
         />
       </div>
       <div className="w-1/3 flex flex-col bg-[var(--surface)] min-w-0 min-h-0 overflow-y-auto">
@@ -681,6 +726,8 @@ const ProjectsList: React.FC = () => {
         onRefreshDeliverables={refreshDeliverablesFor}
         onDeliverableEdited={bumpDeliverablesRefresh}
         isMobileList
+        autoScrollProjectId={autoScrollProjectId}
+        onAutoScrollComplete={() => setAutoScrollProjectId(null)}
       />
     </div>
   );
