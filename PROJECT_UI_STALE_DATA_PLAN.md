@@ -2,7 +2,7 @@
 
 Date: 2026-01-24  
 Owner: Frontend  
-Scope: Project list/details, project dashboard, deliverables, assignments, departments, and related pages
+Scope: Project list/details, project dashboard, deliverables, assignments, departments, and related pages (excluding notes; see `PROJECT_UI_NOTES_LIVE_COLLAB_PLAN.md`)
 
 ## Pages Affected (Index)
 | Page/File | Section |
@@ -11,19 +11,17 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 | `frontend/src/pages/Projects/list/components/ProjectsTable.tsx` | [1) Projects List + Details](#1-projects-list--details-highest-impact-most-reported-issues) |
 | `frontend/src/pages/Projects/list/components/ProjectDetailsPanel.tsx` | [1) Projects List + Details](#1-projects-list--details-highest-impact-most-reported-issues) |
 | `frontend/src/pages/Projects/list/hooks/useProjectDeliverablesBulk.ts` | [1) Projects List + Details](#1-projects-list--details-highest-impact-most-reported-issues) |
-| `frontend/src/components/projects/ProjectNotesEditor.tsx` | [2) Project Notes + Scratch Pad](#2-project-notes--scratch-pad-stale-project-state) |
-| `frontend/src/components/projects/ProjectScratchPad.tsx` | [2) Project Notes + Scratch Pad](#2-project-notes--scratch-pad-stale-project-state) |
-| `frontend/src/pages/Projects/ProjectForm.tsx` | [3) Project Form](#3-project-form-edit-existing-project) |
-| `frontend/src/pages/Projects/ProjectDashboard.tsx` | [4) Project Dashboard](#4-project-dashboard-cross-page-consistency) |
-| `frontend/src/components/deliverables/DeliverablesSection.tsx` | [4) Project Dashboard](#4-project-dashboard-cross-page-consistency) |
-| `frontend/src/pages/Assignments/AssignmentForm.tsx` | [5) Assignments Grid + Project Assignments](#5-assignments-grid--project-assignments) |
-| `frontend/src/pages/Assignments/AssignmentGrid.tsx` | [5) Assignments Grid + Project Assignments](#5-assignments-grid--project-assignments) |
-| `frontend/src/pages/Assignments/ProjectAssignmentsGrid.tsx` | [5) Assignments Grid + Project Assignments](#5-assignments-grid--project-assignments) |
-| `frontend/src/pages/Assignments/grid/assignmentActions.ts` | [5) Assignments Grid + Project Assignments](#5-assignments-grid--project-assignments) |
-| `frontend/src/pages/Departments/DepartmentsList.tsx` | [6) Departments + People Lists](#6-departments--people-lists) |
-| `frontend/src/hooks/usePeople.ts` | [6) Departments + People Lists](#6-departments--people-lists) |
-| `frontend/src/pages/Reports/*` | [7) Reports/Personal Dashboards](#7-reportspersonal-dashboards-read-only-but-can-be-stale) |
-| `frontend/src/pages/Personal/*` | [7) Reports/Personal Dashboards](#7-reportspersonal-dashboards-read-only-but-can-be-stale) |
+| `frontend/src/pages/Projects/ProjectForm.tsx` | [2) Project Form](#2-project-form-edit-existing-project) |
+| `frontend/src/pages/Projects/ProjectDashboard.tsx` | [3) Project Dashboard](#3-project-dashboard-cross-page-consistency) |
+| `frontend/src/components/deliverables/DeliverablesSection.tsx` | [3) Project Dashboard](#3-project-dashboard-cross-page-consistency) |
+| `frontend/src/pages/Assignments/AssignmentForm.tsx` | [4) Assignments Grid + Project Assignments](#4-assignments-grid--project-assignments) |
+| `frontend/src/pages/Assignments/AssignmentGrid.tsx` | [4) Assignments Grid + Project Assignments](#4-assignments-grid--project-assignments) |
+| `frontend/src/pages/Assignments/ProjectAssignmentsGrid.tsx` | [4) Assignments Grid + Project Assignments](#4-assignments-grid--project-assignments) |
+| `frontend/src/pages/Assignments/grid/assignmentActions.ts` | [4) Assignments Grid + Project Assignments](#4-assignments-grid--project-assignments) |
+| `frontend/src/pages/Departments/DepartmentsList.tsx` | [5) Departments + People Lists](#5-departments--people-lists) |
+| `frontend/src/hooks/usePeople.ts` | [5) Departments + People Lists](#5-departments--people-lists) |
+| `frontend/src/pages/Reports/*` | [6) Reports/Personal Dashboards](#6-reportspersonal-dashboards-read-only-but-can-be-stale) |
+| `frontend/src/pages/Personal/*` | [6) Reports/Personal Dashboards](#6-reportspersonal-dashboards-read-only-but-can-be-stale) |
 
 ## Goals
 - Make the server the only source of truth.
@@ -60,11 +58,14 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 1. **Deliverables in list**
    - Clear `deliverableOverrides` / `notesOverrides` after save or on refetch.
    - Trigger a deliverables refresh signal after any create/update/delete.
+   - Guard against mid-edit clears: do not clear overrides while a field is `isEditing`/`isDirty`.
+   - If a refetch arrives while dirty, keep the draft and show a “server updated” indicator.
 2. **Bulk deliverables hook**
    - Remove cross-view caching. Make it a per-view loader that refetches on:
      - initial mount
      - list filter/sort/page changes
      - deliverables refresh signal
+   - Avoid N+1 fetches: use a batched endpoint or client-side request coalescing.
 3. **Details panel**
    - Replace long-lived `localPatch` with short-lived UI state.
    - After mutation: `await refetchDetails()` and clear local patch state.
@@ -77,25 +78,7 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 
 ---
 
-### 2) Project Notes + Scratch Pad (stale project state)
-**Pages/Files**
-- `frontend/src/components/projects/ProjectNotesEditor.tsx` (already updated)
-- `frontend/src/components/projects/ProjectScratchPad.tsx`
-
-**Issues**
-- Scratch pad uses direct `projectsApi.update`, bypassing any shared refresh flow.
-
-**Plan**
-1. Wrap updates in a shared mutation function (no cache writes).
-2. After success: `await refetchProject()` for the active view.
-3. Publish a `projectsRefreshBus` event to notify other mounted views.
-
-**Validation**
-- Update notes in scratch pad; list/details show updated notes without refresh.
-
----
-
-### 3) Project Form (edit existing project)
+### 2) Project Form (edit existing project)
 **Pages/Files**
 - `frontend/src/pages/Projects/ProjectForm.tsx`
 
@@ -104,15 +87,15 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 
 **Plan**
 1. Use a shared update function (no cache writes).
-2. After success: refetch the form view, then navigate.
-3. On navigation to `/projects`, list view should fetch fresh data on mount.
+2. Navigate after success; the destination view should fetch fresh data on mount.
+3. If you must refetch pre-nav, guard with `isMounted` or cancel on unmount.
 
 **Validation**
 - Edit project via form; list shows updated fields immediately on return.
 
 ---
 
-### 4) Project Dashboard (cross-page consistency)
+### 3) Project Dashboard (cross-page consistency)
 **Pages/Files**
 - `frontend/src/pages/Projects/ProjectDashboard.tsx`
 - `frontend/src/components/deliverables/DeliverablesSection.tsx`
@@ -125,13 +108,15 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 1. After any deliverable mutation: publish `deliverablesRefreshBus`.
 2. After any project field mutation: publish `projectsRefreshBus`.
 3. Dashboard should refetch its own sections after mutations.
+4. Scope refresh signals by resource + id (e.g., `deliverables:projectId`).
+5. Debounce refresh signals and prevent overlapping refetches (abort or token gating).
 
 **Validation**
 - Update deliverables in dashboard; list and details reflect change.
 
 ---
 
-### 5) Assignments Grid + Project Assignments
+### 4) Assignments Grid + Project Assignments
 **Pages/Files**
 - `frontend/src/pages/Assignments/AssignmentForm.tsx`
 - `frontend/src/pages/Assignments/AssignmentGrid.tsx`
@@ -146,13 +131,14 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 1. Create shared assignment mutations (no cache writes).
 2. After success: refetch the active grid and publish `assignmentsRefreshBus`.
 3. Standardize fetch params (filter/sort/page) so refetches are deterministic.
+4. Debounce refresh signals and prevent overlapping refetches (abort or token gating).
 
 **Validation**
 - Update assignment in any grid; other assignment views update without refresh.
 
 ---
 
-### 6) Departments + People Lists
+### 5) Departments + People Lists
 **Pages/Files**
 - `frontend/src/pages/Departments/DepartmentsList.tsx`
 - `frontend/src/hooks/usePeople.ts`
@@ -172,7 +158,7 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 
 ---
 
-### 7) Reports/Personal Dashboards (read-only but can be stale)
+### 6) Reports/Personal Dashboards (read-only but can be stale)
 **Pages/Files**
 - `frontend/src/pages/Reports/*`
 - `frontend/src/pages/Personal/*`
@@ -191,7 +177,7 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 
 ## Cross-Cutting Improvements (No Shared Cache)
 1. **Standardize fetch + refetch**
-   - Each view exports a local `refetch()` that re-runs its data loader.
+   - Use shared loader hooks that return `refetch()` to avoid cross-module coupling.
 2. **Centralize mutation functions**
    - `updateProject`, `updateDeliverable`, `updateAssignment`, `updateDepartment`.
    - Mutations never write to shared caches; they only trigger refetch signals.
@@ -206,7 +192,7 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 ---
 
 ## Rollout Strategy
-1. Apply fixes per page in priority order (1 → 7).
+1. Apply fixes per page in priority order (1 → 6).
 2. Add targeted integration tests:
    - Update in list reflects in details (via refetch).
    - Update in dashboard reflects in list (via refresh bus).
