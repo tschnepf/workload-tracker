@@ -12,7 +12,10 @@ import {
 export function useProjectFilters(
   projects: Project[],
   filterMetadata: ProjectFilterMetadataResponse | null,
-  options?: { customSortGetters?: Record<string, (p: Project) => string | number | Date | null | undefined> }
+  options?: {
+    customSortGetters?: Record<string, (p: Project) => string | number | Date | null | undefined>;
+    extraStatusMatchers?: Record<string, (project: Project, metadata: ProjectFilterMetadataResponse | null) => boolean>;
+  }
 ) {
   // Persisted status filters (default to Active + Active CA)
   const STORAGE_KEY = 'projects.selectedStatusFilters.v1';
@@ -44,6 +47,7 @@ export function useProjectFilters(
     if (status === 'active_with_dates') return 'Active - With Dates';
     if (status === 'active_ca') return 'Active CA';
     if (status === 'no_assignments') return 'No Assignments';
+    if (status === 'missing_qa') return 'Missing QA';
     return formatStatus(status);
   };
 
@@ -102,8 +106,11 @@ export function useProjectFilters(
     if (statusFilter === 'no_assignments') {
       return hasNoAssignments(project.id, metadata);
     }
+    if (options?.extraStatusMatchers?.[statusFilter]) {
+      return options.extraStatusMatchers[statusFilter](project, metadata);
+    }
     return project.status === statusFilter;
-  }, [futureDeliverableLookup, filterMetadata]);
+  }, [futureDeliverableLookup, filterMetadata, options?.extraStatusMatchers]);
 
   const filteredProjects = useMemo(() => {
     const tStart = performance.now();

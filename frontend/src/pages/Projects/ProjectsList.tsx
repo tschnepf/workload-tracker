@@ -66,10 +66,64 @@ const ProjectsList: React.FC = () => {
   // Optimized filter metadata (assignment counts + hasFutureDeliverables)
   const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata();
   // Derived filters/sort/search via hook
-  
+  const { state: deptState, backendParams } = useDepartmentFilter();
 
   // Next Deliverables map for list column + sorting
   const { nextMap: nextDeliverablesMap, prevMap: prevDeliverablesMap, refreshOne: refreshDeliverablesFor } = useProjectDeliverablesBulk(projects);
+
+  const leadAssignmentsKey = useMemo(
+    () => ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null],
+    [backendParams.department, backendParams.include_children]
+  );
+  const leadAssignmentsQuery = useQuery<Assignment[], Error>({
+    queryKey: leadAssignmentsKey,
+    queryFn: () => assignmentsApi.listAll(backendParams),
+    enabled: projects.length > 0,
+    staleTime: 30_000,
+  });
+  const leadAssignments = leadAssignmentsQuery.data ?? [];
+  const departmentFilterId = deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : null;
+  const missingQaProjectIds = useMemo(() => {
+    const ids = new Set<number>();
+    if (!filterMetadata || projects.length === 0) return ids;
+    const assignmentsByProject = new Map<number, Set<number>>();
+    const qaByProject = new Map<number, Set<number>>();
+    leadAssignments.forEach((assignment) => {
+      const projectId = assignment.project;
+      const deptId = assignment.personDepartmentId;
+      if (!projectId || deptId == null) return;
+      const deptSet = assignmentsByProject.get(projectId) ?? new Set<number>();
+      deptSet.add(deptId);
+      assignmentsByProject.set(projectId, deptSet);
+      const roleName = (assignment.roleName || '').toLowerCase();
+      if (roleName.includes('qa') || roleName.includes('quality')) {
+        const qaSet = qaByProject.get(projectId) ?? new Set<number>();
+        qaSet.add(deptId);
+        qaByProject.set(projectId, qaSet);
+      }
+    });
+    projects.forEach((project) => {
+      if (!project?.id) return;
+      const meta = filterMetadata.projectFilters?.[String(project.id)];
+      if (!meta?.hasFutureDeliverables) return;
+      const deptSet = assignmentsByProject.get(project.id) ?? new Set<number>();
+      if (deptSet.size === 0) return;
+      const qaSet = qaByProject.get(project.id) ?? new Set<number>();
+      if (departmentFilterId != null) {
+        if (deptSet.has(departmentFilterId) && !qaSet.has(departmentFilterId)) {
+          ids.add(project.id);
+        }
+        return;
+      }
+      for (const deptId of deptSet.values()) {
+        if (!qaSet.has(deptId)) {
+          ids.add(project.id);
+          break;
+        }
+      }
+    });
+    return ids;
+  }, [filterMetadata, projects, leadAssignments, departmentFilterId]);
 
   // Recompute filters with custom sort getter when needed (stable ID mapping)
   const {
@@ -85,6 +139,12 @@ const ProjectsList: React.FC = () => {
     filteredProjects,
     sortedProjects,
   } = useProjectFilters(projects, filterMetadata, {
+    extraStatusMatchers: {
+      missing_qa: (project: Project) => {
+        if (!project?.id) return false;
+        return missingQaProjectIds.has(project.id);
+      },
+    },
     customSortGetters: {
       nextDue: (p) => {
         const d = p.id != null ? nextDeliverablesMap.get(p.id) : null;
@@ -231,7 +291,6 @@ const ProjectsList: React.FC = () => {
   }, [assignments, precomputePersonSkills]);
 
   // Availability snapshot via hook (preserves Monday anchor)
-  const { state: deptState, backendParams } = useDepartmentFilter();
   const caps = useCapabilities();
   const { availabilityMap } = useProjectAvailability({
     projectId: selectedProject?.id,
@@ -239,24 +298,11 @@ const ProjectsList: React.FC = () => {
     includeChildren: deptState?.includeChildren,
     candidatesOnly,
   });
-
-  const leadAssignmentsKey = useMemo(
-    () => ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null],
-    [backendParams.department, backendParams.include_children]
-  );
-  const leadAssignmentsQuery = useQuery<Assignment[], Error>({
-    queryKey: leadAssignmentsKey,
-    queryFn: () => assignmentsApi.listAll(backendParams),
-    enabled: projects.length > 0,
-    staleTime: 30_000,
-  });
-  const leadAssignments = leadAssignmentsQuery.data ?? [];
   const { data: departments = [] } = useQuery<Department[], Error>({
     queryKey: ['departmentsAll'],
     queryFn: () => departmentsApi.listAll(),
     staleTime: 60_000,
   });
-  const departmentFilterId = deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : null;
 
   const departmentLabelMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -267,6 +313,19 @@ const ProjectsList: React.FC = () => {
     });
     return map;
   }, [departments]);
+
+  const projectAssignmentDepartments = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    leadAssignments.forEach((assignment) => {
+      const projectId = assignment.project;
+      const deptId = assignment.personDepartmentId;
+      if (!projectId || deptId == null) return;
+      const deptSet = map.get(projectId) ?? new Set<number>();
+      deptSet.add(deptId);
+      map.set(projectId, deptSet);
+    });
+    return map;
+  }, [leadAssignments]);
 
   const qaPrefetchByDept = useMemo(() => {
     const map = new Map<number, Array<{ id: number; name: string; roleName?: string | null; department?: number | null }>>();
@@ -788,6 +847,7 @@ const ProjectsList: React.FC = () => {
           projectLeads={projectLeadsMap}
           projectAssignmentsTooltip={projectAssignmentsTooltipMap}
           projectQaAssignments={projectQaAssignmentsMap}
+          projectAssignmentDepartments={projectAssignmentDepartments}
           departmentLabels={departmentLabelMap}
           qaPrefetchByDept={qaPrefetchByDept}
           qaPrefetchAll={qaPrefetchAll}
@@ -951,6 +1011,7 @@ const ProjectsList: React.FC = () => {
         projectLeads={projectLeadsMap}
         projectAssignmentsTooltip={projectAssignmentsTooltipMap}
         projectQaAssignments={projectQaAssignmentsMap}
+        projectAssignmentDepartments={projectAssignmentDepartments}
         departmentLabels={departmentLabelMap}
         qaPrefetchByDept={qaPrefetchByDept}
         qaPrefetchAll={qaPrefetchAll}

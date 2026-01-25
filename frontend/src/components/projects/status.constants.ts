@@ -9,5 +9,6 @@ export const statusOptions = [
   'completed',
   'cancelled',
   'no_assignments',
+  'missing_qa',
   'Show All',
 ] as const;

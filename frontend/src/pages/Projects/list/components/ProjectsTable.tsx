@@ -27,6 +27,7 @@ interface Props {
   prevDeliverables?: Map<number, Deliverable | null>;
   projectLeads?: Map<number, string>;
   projectQaAssignments?: Map<number, Assignment[]>;
+  projectAssignmentDepartments?: Map<number, Set<number>>;
   departmentLabels?: Map<number, string>;
   qaPrefetchByDept?: Map<number, Array<{ id: number; name: string; roleName?: string | null; department?: number | null }>>;
   qaPrefetchAll?: Array<{ id: number; name: string; roleName?: string | null; department?: number | null }>;
@@ -55,6 +56,7 @@ const ProjectsTable: React.FC<Props> = ({
   projectLeads,
   projectQaAssignments,
   projectAssignmentsTooltip,
+  projectAssignmentDepartments,
   departmentLabels,
   qaPrefetchByDept,
   qaPrefetchAll,
@@ -417,6 +419,15 @@ const ProjectsTable: React.FC<Props> = ({
         />
       </div>
     );
+    const assignmentDeptIds = projectAssignmentDepartments?.get(projectId) ?? new Set<number>();
+    const qaDeptIds = new Set<number>();
+    qaAssignments.forEach((assignment) => {
+      if (assignment.personDepartmentId != null) qaDeptIds.add(assignment.personDepartmentId);
+    });
+    const shouldShowAddQa = departmentFilterId != null
+      ? (assignmentDeptIds.has(departmentFilterId) && !qaDeptIds.has(departmentFilterId))
+      : Array.from(assignmentDeptIds).some((deptId) => !qaDeptIds.has(deptId));
+
     if (qaAssignments.length === 0 && !isEditing) {
       return (
         <button
@@ -468,7 +479,7 @@ const ProjectsTable: React.FC<Props> = ({
         {isEditing && qaEditor?.assignmentId == null ? (
           <div>{renderEditor()}</div>
         ) : null}
-        {!isEditing ? (
+        {!isEditing && shouldShowAddQa ? (
           <button
             type="button"
             className="w-full text-left text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
