@@ -9,6 +9,7 @@ import { getFlag } from '@/lib/flags';
 import { emitDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { useVirtualRows } from '../hooks/useVirtualRows';
 import TooltipPortal from '@/components/ui/TooltipPortal';
+import QaAssignmentEditor, { type QaPersonOption } from '@/pages/Projects/list/components/QaAssignmentEditor';
 import { deliverablesApi, assignmentsApi, peopleApi } from '@/services/api';
 import { useUpdateProject } from '@/hooks/useProjects';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -27,6 +28,8 @@ interface Props {
   projectLeads?: Map<number, string>;
   projectQaAssignments?: Map<number, Assignment[]>;
   departmentLabels?: Map<number, string>;
+  qaPrefetchByDept?: Map<number, Array<{ id: number; name: string; roleName?: string | null; department?: number | null }>>;
+  qaPrefetchAll?: Array<{ id: number; name: string; roleName?: string | null; department?: number | null }>;
   departmentFilterId?: number | null;
   onQaAssignmentUpdated?: (projectId: number) => Promise<void> | void;
   projectAssignmentsTooltip?: Map<number, Array<{ deptLabel: string; items: Array<{ name: string; role: string }> }>>;
@@ -53,6 +56,8 @@ const ProjectsTable: React.FC<Props> = ({
   projectQaAssignments,
   projectAssignmentsTooltip,
   departmentLabels,
+  qaPrefetchByDept,
+  qaPrefetchAll,
   departmentFilterId,
   onQaAssignmentUpdated,
   onChangeStatus,
@@ -182,7 +187,7 @@ const ProjectsTable: React.FC<Props> = ({
   } | null>(null);
   const qaBoxRef = useRef<HTMLDivElement | null>(null);
   const qaRoleCacheRef = useRef<Map<number, number | null>>(new Map());
-  const [qaResults, setQaResults] = useState<Array<{ id: number; name: string; roleName?: string | null; department?: number }>>([]);
+  const [qaResults, setQaResults] = useState<QaPersonOption[]>([]);
   const [qaSearching, setQaSearching] = useState(false);
   const debouncedQaSearch = useDebounce(qaEditor?.value ?? '', 150);
   const qaSearchSeq = useRef(0);
@@ -313,6 +318,7 @@ const ProjectsTable: React.FC<Props> = ({
     const assignmentId = assignment?.id ?? null;
     const override = assignmentId != null ? qaOverrides.get(assignmentId) : undefined;
     const value = override?.personName ?? assignment?.personName ?? '';
+    setQaResults([]);
     setQaEditor({
       projectId,
       assignmentId,
@@ -366,75 +372,49 @@ const ProjectsTable: React.FC<Props> = ({
     }
   };
 
+  const handleUnassignQa = async (projectId: number, assignmentId: number) => {
+    setQaEditor((prev) => (prev ? { ...prev, saving: true, error: null } : prev));
+    try {
+      await assignmentsApi.delete(assignmentId);
+      setQaOverrides((prev) => {
+        const next = new Map(prev);
+        next.delete(assignmentId);
+        return next;
+      });
+      try { await onQaAssignmentUpdated?.(projectId); } catch {}
+      setQaEditor(null);
+      setQaResults([]);
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to unassign QA';
+      setQaEditor((prev) => (prev ? { ...prev, saving: false, error: msg } : prev));
+    }
+  };
+
   const renderQaCell = (projectId?: number | null) => {
     if (!projectId) return null;
     const qaAssignments = projectQaAssignments?.get(projectId) || [];
     const isEditing = qaEditor?.projectId === projectId;
     const renderEditor = () => (
       <div className="relative" ref={qaBoxRef} onClick={(e) => e.stopPropagation()}>
-        <input
-          autoFocus
-          type="text"
+        <QaAssignmentEditor
           value={qaEditor?.value ?? ''}
-          onChange={(e) => setQaEditor((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
-          onFocus={(e) => {
-            setQaEditor((prev) => (prev ? { ...prev, error: null } : prev));
-            if (qaEditor?.value) {
-              requestAnimationFrame(() => {
-                try { (e.target as HTMLInputElement).select(); } catch {}
-              });
-            }
+          onChange={(value) => setQaEditor((prev) => (prev ? { ...prev, value, error: null } : prev))}
+          onClose={() => {
+            setQaEditor(null);
+            setQaResults([]);
           }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              setQaEditor(null);
-              setQaResults([]);
-            }
-          }}
-          placeholder="Search QA (min 2 chars)"
-          className="w-full bg-transparent border-none p-0 m-0 text-xs text-[var(--text)] placeholder-[var(--muted)] outline-none focus:outline-none focus:ring-0"
+          onSelect={(person: QaPersonOption) => handleSelectQaPerson(projectId, person)}
+          onUnassign={
+            qaEditor?.assignmentId
+              ? () => handleUnassignQa(projectId, qaEditor.assignmentId as number)
+              : undefined
+          }
+          showUnassign={Boolean(qaEditor?.assignmentId)}
+          results={qaResults}
+          searching={qaSearching}
+          saving={qaEditor?.saving}
+          error={qaEditor?.error ?? null}
         />
-        {(qaSearching || qaResults.length > 0 || (qaEditor?.value || '').trim().length >= 2) ? (
-          <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
-            {(() => {
-              const typedValue = (qaEditor?.value || '').trim();
-              if (qaSearching) {
-                return <div className="px-2 py-1 text-[11px] text-[var(--muted)]">Searching…</div>;
-              }
-              if (typedValue.length < 2) {
-                return null;
-              }
-              if (qaResults.length === 0) {
-                return <div className="px-2 py-1 text-[11px] text-[var(--muted)]">No matches</div>;
-              }
-              return (
-                <div className="py-1">
-                  {qaResults.map((person) => (
-                    <button
-                      key={person.id}
-                      type="button"
-                      className="w-full text-left px-2 py-1 text-[11px] hover:bg-[var(--surfaceHover)]"
-                      onClick={() => handleSelectQaPerson(projectId, person)}
-                    >
-                      <div className="text-[var(--text)]">{person.name}</div>
-                      <div className="text-[10px] text-[var(--muted)]">{person.roleName || 'Role not set'}</div>
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-        ) : null}
-        {((qaEditor?.value || '').trim().length < 2) ? (
-          <div className="mt-1 text-[10px] text-[var(--muted)]">Type at least 2 characters to search</div>
-        ) : null}
-        {qaEditor?.saving ? (
-          <div className="mt-1 text-[10px] text-[var(--muted)]">Saving…</div>
-        ) : null}
-        {qaEditor?.error ? (
-          <div className="mt-1 text-[10px] text-red-400">{qaEditor.error}</div>
-        ) : null}
       </div>
     );
     if (qaAssignments.length === 0 && !isEditing) {
@@ -487,6 +467,20 @@ const ProjectsTable: React.FC<Props> = ({
         })}
         {isEditing && qaEditor?.assignmentId == null ? (
           <div>{renderEditor()}</div>
+        ) : null}
+        {!isEditing ? (
+          <button
+            type="button"
+            className="w-full text-left text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
+            onClick={(e) => {
+              e.stopPropagation();
+              startEditingQa(projectId, null);
+            }}
+            aria-label="Add another QA assignment"
+            title="Add another QA assignment"
+          >
+            + Add QA
+          </button>
         ) : null}
       </div>
     );
@@ -775,6 +769,28 @@ const ProjectsTable: React.FC<Props> = ({
 
   useEffect(() => {
     if (!qaEditor) return;
+    const term = (qaEditor.value || '').trim().toLowerCase();
+    if (term.length < 2) return;
+    const pool = qaEditor.departmentId != null
+      ? qaPrefetchByDept?.get(qaEditor.departmentId)
+      : qaPrefetchAll;
+    if (!pool || pool.length === 0) return;
+    const matches = pool
+      .filter((person) => person.name.toLowerCase().includes(term))
+      .slice(0, 6)
+      .map((person) => ({
+        id: person.id,
+        name: person.name,
+        roleName: person.roleName ?? null,
+        department: person.department ?? null,
+      }));
+    if (matches.length > 0) {
+      setQaResults(matches);
+    }
+  }, [qaEditor?.value, qaEditor?.departmentId, qaPrefetchByDept, qaPrefetchAll]);
+
+  useEffect(() => {
+    if (!qaEditor) return;
     const handleDocClick = (e: MouseEvent) => {
       const target = e.target as Node | null;
       if (qaBoxRef.current && target && qaBoxRef.current.contains(target)) return;
@@ -798,7 +814,10 @@ const ProjectsTable: React.FC<Props> = ({
       });
       next.forEach((override, assignmentId) => {
         const item = assignmentById.get(assignmentId);
-        if (!item) return;
+        if (!item) {
+          next.delete(assignmentId);
+          return;
+        }
         if (!override.personName || item.personName === override.personName) {
           next.delete(assignmentId);
         }

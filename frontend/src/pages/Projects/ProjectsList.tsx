@@ -240,9 +240,13 @@ const ProjectsList: React.FC = () => {
     candidatesOnly,
   });
 
+  const leadAssignmentsKey = useMemo(
+    () => ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null],
+    [backendParams.department, backendParams.include_children]
+  );
   const leadAssignmentsQuery = useQuery<Assignment[], Error>({
-    queryKey: ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null],
-    queryFn: () => assignmentsApi.listAll(backendParams, { noCache: true }),
+    queryKey: leadAssignmentsKey,
+    queryFn: () => assignmentsApi.listAll(backendParams),
     enabled: projects.length > 0,
     staleTime: 30_000,
   });
@@ -263,6 +267,36 @@ const ProjectsList: React.FC = () => {
     });
     return map;
   }, [departments]);
+
+  const qaPrefetchByDept = useMemo(() => {
+    const map = new Map<number, Array<{ id: number; name: string; roleName?: string | null; department?: number | null }>>();
+    people.forEach((person) => {
+      if (person.id == null) return;
+      const deptId = person.department ?? null;
+      if (deptId == null) return;
+      const list = map.get(deptId) || [];
+      list.push({ id: person.id, name: person.name, roleName: person.roleName ?? null, department: deptId });
+      map.set(deptId, list);
+    });
+    map.forEach((list, deptId) => {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      if (list.length > 12) map.set(deptId, list.slice(0, 12));
+    });
+    return map;
+  }, [people]);
+
+  const qaPrefetchAll = useMemo(() => {
+    const list = people
+      .filter((person) => person.id != null)
+      .map((person) => ({
+        id: person.id as number,
+        name: person.name,
+        roleName: person.roleName ?? null,
+        department: person.department ?? null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return list.slice(0, 12);
+  }, [people]);
 
   const projectLeadsMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -440,11 +474,16 @@ const ProjectsList: React.FC = () => {
   };
 
   const handleQaAssignmentUpdated = useCallback(async (projectId: number) => {
-    try { await leadAssignmentsQuery.refetch(); } catch {}
+    try {
+      const fresh = await assignmentsApi.listAll(backendParams, { noCache: true });
+      queryClient.setQueryData(leadAssignmentsKey, fresh);
+    } catch {
+      try { await leadAssignmentsQuery.refetch(); } catch {}
+    }
     if (selectedProject?.id && selectedProject.id === projectId) {
       try { await reloadAssignments(projectId); } catch {}
     }
-  }, [leadAssignmentsQuery, reloadAssignments, selectedProject?.id]);
+  }, [backendParams, leadAssignmentsKey, leadAssignmentsQuery, queryClient, reloadAssignments, selectedProject?.id]);
 
   // Memoized role suggestions based on person skills
   const getSkillBasedRoleSuggestions = useCallback((person: Person | null): string[] => {
@@ -750,6 +789,8 @@ const ProjectsList: React.FC = () => {
           projectAssignmentsTooltip={projectAssignmentsTooltipMap}
           projectQaAssignments={projectQaAssignmentsMap}
           departmentLabels={departmentLabelMap}
+          qaPrefetchByDept={qaPrefetchByDept}
+          qaPrefetchAll={qaPrefetchAll}
           departmentFilterId={departmentFilterId}
           onQaAssignmentUpdated={handleQaAssignmentUpdated}
           onChangeStatus={handleTableStatusChange}
@@ -911,6 +952,8 @@ const ProjectsList: React.FC = () => {
         projectAssignmentsTooltip={projectAssignmentsTooltipMap}
         projectQaAssignments={projectQaAssignmentsMap}
         departmentLabels={departmentLabelMap}
+        qaPrefetchByDept={qaPrefetchByDept}
+        qaPrefetchAll={qaPrefetchAll}
         departmentFilterId={departmentFilterId}
         onQaAssignmentUpdated={handleQaAssignmentUpdated}
         onChangeStatus={handleTableStatusChange}
