@@ -10,6 +10,7 @@ interface Props {
   filterMetaLoading?: boolean;
   filterMetaError?: string | null;
   onRetryFilterMeta?: () => void;
+  rightSlot?: React.ReactNode;
 }
 
 const FiltersBar: React.FC<Props> = ({
@@ -22,6 +23,7 @@ const FiltersBar: React.FC<Props> = ({
   filterMetaLoading,
   filterMetaError,
   onRetryFilterMeta,
+  rightSlot,
 }) => {
   return (
     <div className="space-y-2">
@@ -49,14 +51,15 @@ const FiltersBar: React.FC<Props> = ({
         </div>
       </div>
 
-      <div>
+      <div className="flex items-center gap-2">
         <input
           type="text"
           placeholder="Search projects"
           value={searchTerm}
           onChange={(e) => onSearchTerm(e.target.value)}
-          className="w-full px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+          className="flex-1 min-w-0 px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
         />
+        {rightSlot ? <div className="shrink-0">{rightSlot}</div> : null}
       </div>
 
       {(filterMetaLoading || filterMetaError) && (
@@ -84,4 +87,3 @@ const FiltersBar: React.FC<Props> = ({
 };
 
 export default FiltersBar;
-
