@@ -604,7 +604,7 @@ const ProjectsList: React.FC = () => {
             formatFilterStatus={formatFilterStatus}
             filterMetaLoading={filterMetaLoading}
             filterMetaError={filterMetaError}
-            onRetryFilterMeta={() => refetchFilterMeta()}
+            onRetryFilterMeta={() => { void refetchFilterMeta(); }}
             rightSlot={(
               <button
                 type="button"
@@ -821,7 +821,7 @@ const ProjectsList: React.FC = () => {
           formatFilterStatus={formatFilterStatus}
           filterMetaLoading={filterMetaLoading}
           filterMetaError={filterMetaError}
-          onRetryFilterMeta={() => refetchFilterMeta()}
+          onRetryFilterMeta={() => { void refetchFilterMeta(); }}
         />
         <div className="mt-4 flex items-center justify-between gap-3">
           <button
