@@ -763,7 +763,7 @@ const ProjectsList: React.FC = () => {
                     <polyline points="15 18 9 12 15 6" />
                   </svg>
                 ) : null}
-                <span>Details</span>
+                <span>{detailsPaneOpen ? 'Hide Project Details' : 'Show Project Details'}</span>
                 {detailsPaneOpen ? (
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <polyline points="9 18 15 12 9 6" />
