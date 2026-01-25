@@ -130,13 +130,27 @@ Scope: Project list/details, project dashboard, deliverables, assignments, depar
 - Grid uses local state; other views can remain stale.
 
 **Plan**
-1. Create shared assignment mutations (no cache writes).
-2. After success: refetch the active grid and publish `assignmentsRefreshBus`.
-3. Standardize fetch params (filter/sort/page) so refetches are deterministic.
-4. Debounce refresh signals and prevent overlapping refetches (abort or token gating).
+1. Create shared assignment mutations that **emit event payloads** (not just a refetch signal).
+   - Payload should include `assignmentId`, `projectId`, `personId`, `updatedAt`, and the **changed fields** (or full assignment snapshot if cheap).
+2. **Guardrails (required to avoid breakage)**:
+   - Define a **minimum event schema** (or always include a full assignment snapshot).
+   - Centralize **filter + sort predicates** so events and fetches use the same logic.
+   - Ignore events with `updatedAt` older than the current row (stale‑event protection).
+   - If the row is missing or payload is incomplete, **fallback to a targeted fetch** of that assignment (not a full grid reload).
+   - If the row is being edited locally, **defer/merge** the event to avoid clobbering in‑progress edits.
+3. Add `assignmentsRefreshBus` subscribers in each grid and apply **event‑driven partial updates**:
+   - Update the in‑memory row if it exists.
+   - Insert a new row if it now matches filters.
+   - Remove the row if it no longer matches filters.
+4. Standardize fetch params (filter/sort/page) so **event updates can be applied deterministically**.
+   - Keep the same filter + sort logic used during fetch.
+5. Debounce + coalesce events per assignment (ignore stale `updatedAt`).
+6. Fallback: if an event can’t be applied (missing data), do a **targeted refetch** for that grid only (no global refetch).
 
 **Validation**
-- Update assignment in any grid; other assignment views update without refresh.
+- Update assignment in any grid; other assignment views update instantly without refresh.
+- If the update changes filters/sort eligibility, the row moves or disappears appropriately.
+- No flicker and no full grid reload.
 
 ---
 

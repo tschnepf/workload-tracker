@@ -846,12 +846,19 @@ export const assignmentsApi = {
   },
 
   // Get all assignments (bulk API - Phase 2 optimization)
-  listAll: async (filters?: { department?: number; include_children?: 0 | 1 }): Promise<Assignment[]> => {
+  listAll: async (
+    filters?: { department?: number; include_children?: 0 | 1 },
+    options?: { noCache?: boolean }
+  ): Promise<Assignment[]> => {
     const sp = new URLSearchParams();
     sp.set('all', 'true');
     if (filters?.department != null) sp.set('department', String(filters.department));
     if (filters?.include_children != null) sp.set('include_children', String(filters.include_children));
-  return fetchApiCached<Assignment[]>(`/assignments/?${sp.toString()}`);
+    const qs = sp.toString();
+    if (options?.noCache) {
+      return fetchApi<Assignment[]>(`/assignments/?${qs}`, { headers: { 'Cache-Control': 'no-cache' } });
+    }
+    return fetchApiCached<Assignment[]>(`/assignments/?${qs}`);
   },
 
   // Get assignments for specific person

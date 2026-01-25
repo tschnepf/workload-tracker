@@ -15,6 +15,8 @@ import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import { listProjectRoles } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
+import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
+import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import type { Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
 
 const ProjectDashboard: React.FC = () => {
@@ -120,6 +122,47 @@ const ProjectDashboard: React.FC = () => {
   const [updatingTaskId, setUpdatingTaskId] = React.useState<number | null>(null);
   const [updatingQaTaskId, setUpdatingQaTaskId] = React.useState<number | null>(null);
   const deliverablesRef = React.useRef<DeliverablesSectionHandle | null>(null);
+  const [deliverablesRefreshToken, setDeliverablesRefreshToken] = React.useState(0);
+  const dashboardRefreshQueueRef = React.useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    inFlight: boolean;
+    pending: boolean;
+    deliverables: boolean;
+    project: boolean;
+  }>({ timer: null, inFlight: false, pending: false, deliverables: false, project: false });
+  const scheduleDashboardRefresh = React.useCallback(() => {
+    if (!hasValidId) return;
+    const queue = dashboardRefreshQueueRef.current;
+    if (queue.timer) return;
+    queue.timer = setTimeout(async () => {
+      queue.timer = null;
+      if (queue.inFlight) {
+        queue.pending = true;
+        return;
+      }
+      queue.inFlight = true;
+      queue.pending = false;
+      const refreshDeliverables = queue.deliverables;
+      const refreshProject = queue.project;
+      queue.deliverables = false;
+      queue.project = false;
+      try {
+        const tasks: Array<Promise<unknown>> = [];
+        if (refreshDeliverables) {
+          setDeliverablesRefreshToken((t) => t + 1);
+          tasks.push(queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'deliverable-tasks', projectId] }));
+          tasks.push(queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'qa-tasks', projectId] }));
+        }
+        if (refreshProject) {
+          tasks.push(queryClient.invalidateQueries({ queryKey: ['projects', projectId] }));
+        }
+        if (tasks.length) await Promise.all(tasks);
+      } finally {
+        queue.inFlight = false;
+        if (queue.pending) scheduleDashboardRefresh();
+      }
+    }, 250);
+  }, [hasValidId, projectId, queryClient]);
   const [showAddRisk, setShowAddRisk] = React.useState(false);
   const [riskDescription, setRiskDescription] = React.useState('');
   const [riskPriority, setRiskPriority] = React.useState<'high' | 'medium' | 'low'>('medium');
@@ -144,6 +187,33 @@ const ProjectDashboard: React.FC = () => {
   const [qaSearchByTaskId, setQaSearchByTaskId] = React.useState<Record<number, string>>({});
   const [qaDropdownOpenId, setQaDropdownOpenId] = React.useState<number | null>(null);
   const qaBoxRefs = React.useRef(new Map<number, HTMLDivElement | null>());
+
+  React.useEffect(() => {
+    if (!hasValidId) return;
+    const unsubscribeDeliverables = subscribeDeliverablesRefresh((payload) => {
+      if (payload?.projectId != null && payload.projectId !== projectId) return;
+      const queue = dashboardRefreshQueueRef.current;
+      queue.deliverables = true;
+      scheduleDashboardRefresh();
+    });
+    const unsubscribeProjects = subscribeProjectsRefresh((payload) => {
+      if (payload?.projectId != null && payload.projectId !== projectId) return;
+      const queue = dashboardRefreshQueueRef.current;
+      queue.project = true;
+      scheduleDashboardRefresh();
+    });
+    return () => {
+      unsubscribeDeliverables();
+      unsubscribeProjects();
+      const queue = dashboardRefreshQueueRef.current;
+      if (queue.timer) clearTimeout(queue.timer);
+      queue.timer = null;
+      queue.inFlight = false;
+      queue.pending = false;
+      queue.deliverables = false;
+      queue.project = false;
+    };
+  }, [hasValidId, projectId, scheduleDashboardRefresh]);
 
   React.useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -649,6 +719,7 @@ const ProjectDashboard: React.FC = () => {
                     variant="embedded"
                     appearance="presentation"
                     showHeader={false}
+                    refreshToken={deliverablesRefreshToken}
                   />
                 ) : null}
               </Card>

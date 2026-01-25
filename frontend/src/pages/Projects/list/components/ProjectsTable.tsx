@@ -1,15 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { createPortal } from 'react-dom';
-import type { Project, Deliverable } from '@/types/models';
+import type { Project, Deliverable, Assignment } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus } from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { getFlag } from '@/lib/flags';
 import { emitDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { useVirtualRows } from '../hooks/useVirtualRows';
-import { deliverablesApi } from '@/services/api';
+import TooltipPortal from '@/components/ui/TooltipPortal';
+import { deliverablesApi, assignmentsApi, peopleApi } from '@/services/api';
 import { useUpdateProject } from '@/hooks/useProjects';
+import { useDebounce } from '@/hooks/useDebounce';
+import { listProjectRoles } from '@/roles/api';
 
 interface Props {
   projects: Project[];
@@ -22,6 +25,11 @@ interface Props {
   nextDeliverables?: Map<number, Deliverable | null>;
   prevDeliverables?: Map<number, Deliverable | null>;
   projectLeads?: Map<number, string>;
+  projectQaAssignments?: Map<number, Assignment[]>;
+  departmentLabels?: Map<number, string>;
+  departmentFilterId?: number | null;
+  onQaAssignmentUpdated?: (projectId: number) => Promise<void> | void;
+  projectAssignmentsTooltip?: Map<number, Array<{ deptLabel: string; items: Array<{ name: string; role: string }> }>>;
   onChangeStatus?: (projectId: number, newStatus: string) => void;
   onRefreshDeliverables?: (projectId: number) => Promise<void> | void;
   onDeliverableEdited?: (projectId: number) => void;
@@ -42,6 +50,11 @@ const ProjectsTable: React.FC<Props> = ({
   nextDeliverables,
   prevDeliverables,
   projectLeads,
+  projectQaAssignments,
+  projectAssignmentsTooltip,
+  departmentLabels,
+  departmentFilterId,
+  onQaAssignmentUpdated,
   onChangeStatus,
   onRefreshDeliverables,
   onDeliverableEdited,
@@ -50,9 +63,9 @@ const ProjectsTable: React.FC<Props> = ({
   onAutoScrollComplete,
   showDashboardButton = false,
 }) => {
-  const baseGridCols = 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))]';
+  const baseGridCols = 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))]';
   const gridColsClass = showDashboardButton
-    ? 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(2,minmax(0,0.9fr))_minmax(0,0.35fr)]'
+    ? 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))_minmax(0,0.35fr)]'
     : baseGridCols;
   const enableVirtual = !isMobileList && getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
   const statusDropdown = useDropdownManager<string>();
@@ -159,6 +172,21 @@ const ProjectsTable: React.FC<Props> = ({
     anchorRect: { top: number; left: number; right: number; bottom: number; width: number; height: number };
   } | null>(null);
   const datePopoverRef = useRef<HTMLDivElement | null>(null);
+  const [qaEditor, setQaEditor] = useState<{
+    projectId: number;
+    assignmentId: number | null;
+    value: string;
+    saving: boolean;
+    error: string | null;
+    departmentId: number | null;
+  } | null>(null);
+  const qaBoxRef = useRef<HTMLDivElement | null>(null);
+  const qaRoleCacheRef = useRef<Map<number, number | null>>(new Map());
+  const [qaResults, setQaResults] = useState<Array<{ id: number; name: string; roleName?: string | null; department?: number }>>([]);
+  const [qaSearching, setQaSearching] = useState(false);
+  const debouncedQaSearch = useDebounce(qaEditor?.value ?? '', 150);
+  const qaSearchSeq = useRef(0);
+  const [qaOverrides, setQaOverrides] = useState<Map<number, { personName: string; deptLabel?: string }>>(new Map());
   const editingDeliverableIds = useMemo(() => {
     const ids = new Set<number>();
     if (notesEditor?.deliverableId) ids.add(notesEditor.deliverableId);
@@ -225,11 +253,244 @@ const ProjectsTable: React.FC<Props> = ({
       <div className="col-span-2 flex items-center">
         PROJECT LEAD
       </div>
+      <div className="col-span-2 flex items-center">
+        QA
+      </div>
       {showDashboardButton ? (
         <div className="col-span-1" />
       ) : null}
     </div>
   );
+
+  const renderAssignmentsTooltip = (projectId?: number | null) => {
+    if (projectId == null || !projectAssignmentsTooltip) return null;
+    const groups = projectAssignmentsTooltip.get(projectId);
+    if (!groups || groups.length === 0) return null;
+    return (
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+        {groups.map((group, groupIndex) => (
+          <React.Fragment key={group.deptLabel}>
+            <div
+              className={`col-span-2 text-[var(--text)] text-xs font-semibold ${
+                groupIndex > 0 ? 'mt-1.5' : ''
+              }`}
+            >
+              {group.deptLabel}
+            </div>
+            {group.items.map((item, idx) => (
+              <React.Fragment key={`${group.deptLabel}-${item.name}-${item.role}-${idx}`}>
+                <div className="leading-tight truncate text-[var(--muted)] text-xs">{item.name}</div>
+                <div className="leading-tight whitespace-nowrap text-left text-[var(--muted)] text-xs">{item.role}</div>
+              </React.Fragment>
+            ))}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  };
+
+  const resolveQaRoleId = async (departmentId: number | null) => {
+    if (!departmentId) return null;
+    if (qaRoleCacheRef.current.has(departmentId)) {
+      return qaRoleCacheRef.current.get(departmentId) ?? null;
+    }
+    try {
+      const roles = await listProjectRoles(departmentId);
+      const match = roles.find((role) => {
+        const name = (role.name || '').toLowerCase();
+        return name.includes('qa') || name.includes('quality');
+      });
+      const roleId = match?.id ?? null;
+      qaRoleCacheRef.current.set(departmentId, roleId);
+      return roleId;
+    } catch {
+      qaRoleCacheRef.current.set(departmentId, null);
+      return null;
+    }
+  };
+
+  const startEditingQa = (projectId: number, assignment?: Assignment | null) => {
+    const assignmentId = assignment?.id ?? null;
+    const override = assignmentId != null ? qaOverrides.get(assignmentId) : undefined;
+    const value = override?.personName ?? assignment?.personName ?? '';
+    setQaEditor({
+      projectId,
+      assignmentId,
+      value,
+      saving: false,
+      error: null,
+      departmentId: departmentFilterId ?? (assignment?.personDepartmentId as number | null | undefined) ?? null,
+    });
+  };
+
+  const handleSelectQaPerson = async (projectId: number, person: { id: number; name: string; department?: number | null }) => {
+    setQaEditor((prev) => (prev ? { ...prev, saving: true, error: null, value: person.name } : prev));
+    try {
+      const existing = projectQaAssignments?.get(projectId) || [];
+      const targetAssignment = qaEditor?.assignmentId
+        ? existing.find((item) => item.id === qaEditor.assignmentId)
+        : existing[0];
+      let assignmentId = targetAssignment?.id ?? null;
+      const deptLabel = (person.department != null && departmentLabels?.has(person.department))
+        ? (departmentLabels.get(person.department) || undefined)
+        : undefined;
+      if (assignmentId) {
+        await assignmentsApi.update(assignmentId, { person: person.id });
+      } else {
+        const roleId = await resolveQaRoleId(person.department ?? departmentFilterId ?? null);
+        if (!roleId) {
+          throw new Error('QA role not found for this department');
+        }
+        const created = await assignmentsApi.create({
+          person: person.id,
+          project: projectId,
+          roleOnProjectId: roleId,
+          weeklyHours: {},
+          startDate: new Date().toISOString().slice(0, 10),
+        } as any);
+        assignmentId = (created as any)?.id ?? assignmentId;
+      }
+      setQaOverrides((prev) => {
+        const next = new Map(prev);
+        if (assignmentId != null) {
+          next.set(assignmentId, { personName: person.name, deptLabel });
+        }
+        return next;
+      });
+      try { await onQaAssignmentUpdated?.(projectId); } catch {}
+      setQaEditor(null);
+      setQaResults([]);
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to update QA assignment';
+      setQaEditor((prev) => (prev ? { ...prev, saving: false, error: msg } : prev));
+    }
+  };
+
+  const renderQaCell = (projectId?: number | null) => {
+    if (!projectId) return null;
+    const qaAssignments = projectQaAssignments?.get(projectId) || [];
+    const isEditing = qaEditor?.projectId === projectId;
+    const renderEditor = () => (
+      <div className="relative" ref={qaBoxRef} onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          type="text"
+          value={qaEditor?.value ?? ''}
+          onChange={(e) => setQaEditor((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
+          onFocus={(e) => {
+            setQaEditor((prev) => (prev ? { ...prev, error: null } : prev));
+            if (qaEditor?.value) {
+              requestAnimationFrame(() => {
+                try { (e.target as HTMLInputElement).select(); } catch {}
+              });
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setQaEditor(null);
+              setQaResults([]);
+            }
+          }}
+          placeholder="Search QA (min 2 chars)"
+          className="w-full bg-transparent border-none p-0 m-0 text-xs text-[var(--text)] placeholder-[var(--muted)] outline-none focus:outline-none focus:ring-0"
+        />
+        {(qaSearching || qaResults.length > 0 || (qaEditor?.value || '').trim().length >= 2) ? (
+          <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
+            {(() => {
+              const typedValue = (qaEditor?.value || '').trim();
+              if (qaSearching) {
+                return <div className="px-2 py-1 text-[11px] text-[var(--muted)]">Searching…</div>;
+              }
+              if (typedValue.length < 2) {
+                return null;
+              }
+              if (qaResults.length === 0) {
+                return <div className="px-2 py-1 text-[11px] text-[var(--muted)]">No matches</div>;
+              }
+              return (
+                <div className="py-1">
+                  {qaResults.map((person) => (
+                    <button
+                      key={person.id}
+                      type="button"
+                      className="w-full text-left px-2 py-1 text-[11px] hover:bg-[var(--surfaceHover)]"
+                      onClick={() => handleSelectQaPerson(projectId, person)}
+                    >
+                      <div className="text-[var(--text)]">{person.name}</div>
+                      <div className="text-[10px] text-[var(--muted)]">{person.roleName || 'Role not set'}</div>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        ) : null}
+        {((qaEditor?.value || '').trim().length < 2) ? (
+          <div className="mt-1 text-[10px] text-[var(--muted)]">Type at least 2 characters to search</div>
+        ) : null}
+        {qaEditor?.saving ? (
+          <div className="mt-1 text-[10px] text-[var(--muted)]">Saving…</div>
+        ) : null}
+        {qaEditor?.error ? (
+          <div className="mt-1 text-[10px] text-red-400">{qaEditor.error}</div>
+        ) : null}
+      </div>
+    );
+    if (qaAssignments.length === 0 && !isEditing) {
+      return (
+        <button
+          type="button"
+          className="w-full text-left text-[var(--muted)] text-xs whitespace-pre-line break-words hover:text-[var(--text)]"
+          onClick={(e) => {
+            e.stopPropagation();
+            startEditingQa(projectId, null);
+          }}
+          aria-label="Add QA assignment"
+          title="Click to assign QA"
+        >
+          —
+        </button>
+      );
+    }
+    return (
+      <div className="space-y-0.5">
+        {qaAssignments.map((assignment) => {
+          const override = assignment.id != null ? qaOverrides.get(assignment.id) : undefined;
+          const name = override?.personName || assignment.personName || 'Unknown';
+          const deptLabel = override?.deptLabel
+            ?? (assignment.personDepartmentId != null ? departmentLabels?.get(assignment.personDepartmentId) : undefined);
+          const label = deptLabel ? `${name} (${deptLabel})` : name;
+          const isEditingLine = isEditing && qaEditor?.assignmentId === assignment.id;
+          if (isEditingLine) {
+            return (
+              <div key={assignment.id ?? name}>
+                {renderEditor()}
+              </div>
+            );
+          }
+          return (
+            <button
+              key={assignment.id ?? name}
+              type="button"
+              className="w-full text-left text-[var(--muted)] text-xs whitespace-pre-line break-words hover:text-[var(--text)]"
+              onClick={(e) => {
+                e.stopPropagation();
+                startEditingQa(projectId, assignment);
+              }}
+              aria-label="Edit QA assignment"
+              title="Click to change QA assignment"
+            >
+              {label}
+            </button>
+          );
+        })}
+        {isEditing && qaEditor?.assignmentId == null ? (
+          <div>{renderEditor()}</div>
+        ) : null}
+      </div>
+    );
+  };
 
   const mergeDeliverable = useMemo(() => {
     return (deliverable: Deliverable | null | undefined) => {
@@ -489,6 +750,62 @@ const ProjectsTable: React.FC<Props> = ({
       document.removeEventListener('scroll', handleScroll, true);
     };
   }, [datePicker]);
+
+  useEffect(() => {
+    if (!qaEditor) return;
+    const term = debouncedQaSearch.trim();
+    if (term.length < 2) {
+      setQaSearching(false);
+      setQaResults([]);
+      return;
+    }
+    const seq = ++qaSearchSeq.current;
+    setQaSearching(true);
+    peopleApi.search(term, 20, qaEditor.departmentId != null ? { department: qaEditor.departmentId } : undefined)
+      .then((results) => {
+        if (qaSearchSeq.current === seq) setQaResults(results || []);
+      })
+      .catch(() => {
+        if (qaSearchSeq.current === seq) setQaResults([]);
+      })
+      .finally(() => {
+        if (qaSearchSeq.current === seq) setQaSearching(false);
+      });
+  }, [debouncedQaSearch, qaEditor]);
+
+  useEffect(() => {
+    if (!qaEditor) return;
+    const handleDocClick = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (qaBoxRef.current && target && qaBoxRef.current.contains(target)) return;
+      setQaEditor(null);
+      setQaResults([]);
+    };
+    document.addEventListener('mousedown', handleDocClick);
+    return () => document.removeEventListener('mousedown', handleDocClick);
+  }, [qaEditor]);
+
+  useEffect(() => {
+    if (!projectQaAssignments || qaOverrides.size === 0) return;
+    setQaOverrides((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      const assignmentById = new Map<number, Assignment>();
+      projectQaAssignments.forEach((items) => {
+        items.forEach((item) => {
+          if (item.id != null) assignmentById.set(item.id, item);
+        });
+      });
+      next.forEach((override, assignmentId) => {
+        const item = assignmentById.get(assignmentId);
+        if (!item) return;
+        if (!override.personName || item.personName === override.personName) {
+          next.delete(assignmentId);
+        }
+      });
+      return next;
+    });
+  }, [projectQaAssignments, qaOverrides.size]);
 
   const nonVirtualBody = (
     <div ref={parentRef} className="overflow-y-auto h-full pb-12 scrollbar-theme">
@@ -811,7 +1128,19 @@ const ProjectsTable: React.FC<Props> = ({
               )}
             </div>
             <div className="col-span-2 text-[var(--muted)] text-xs whitespace-pre-line break-words">
-              {projectLead || ''}
+              {(() => {
+                if (!projectLead) return '';
+                const tooltip = renderAssignmentsTooltip(project.id);
+                if (!tooltip) return projectLead;
+                return (
+                  <TooltipPortal title="Assignments" description={tooltip} placement="bottom">
+                    <span>{projectLead}</span>
+                  </TooltipPortal>
+                );
+              })()}
+            </div>
+            <div className="col-span-2 text-[var(--muted)] text-xs whitespace-pre-line break-words">
+              {renderQaCell(project.id)}
             </div>
             {showDashboardButton && project.id ? (
               <div className="col-span-1 flex justify-end">
@@ -1168,7 +1497,19 @@ const ProjectsTable: React.FC<Props> = ({
                 )}
               </div>
               <div className="col-span-2 text-[var(--muted)] text-xs whitespace-pre-line break-words">
-                {projectLead || ''}
+                {(() => {
+                  if (!projectLead) return '';
+                  const tooltip = renderAssignmentsTooltip(project.id);
+                  if (!tooltip) return projectLead;
+                  return (
+                    <TooltipPortal title="Assignments" description={tooltip} placement="bottom">
+                      <span>{projectLead}</span>
+                    </TooltipPortal>
+                  );
+                })()}
+              </div>
+              <div className="col-span-2 text-[var(--muted)] text-xs whitespace-pre-line break-words">
+                {renderQaCell(project.id)}
               </div>
               {showDashboardButton && project.id ? (
                 <div className="col-span-1 flex justify-end">

@@ -240,17 +240,29 @@ const ProjectsList: React.FC = () => {
     candidatesOnly,
   });
 
-  const { data: leadAssignments = [] } = useQuery<Assignment[], Error>({
+  const leadAssignmentsQuery = useQuery<Assignment[], Error>({
     queryKey: ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null],
-    queryFn: () => assignmentsApi.listAll(backendParams),
+    queryFn: () => assignmentsApi.listAll(backendParams, { noCache: true }),
     enabled: projects.length > 0,
     staleTime: 30_000,
   });
+  const leadAssignments = leadAssignmentsQuery.data ?? [];
   const { data: departments = [] } = useQuery<Department[], Error>({
     queryKey: ['departmentsAll'],
     queryFn: () => departmentsApi.listAll(),
     staleTime: 60_000,
   });
+  const departmentFilterId = deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : null;
+
+  const departmentLabelMap = useMemo(() => {
+    const map = new Map<number, string>();
+    departments.forEach((dept) => {
+      if (dept.id != null) {
+        map.set(dept.id, dept.shortName || dept.name || '');
+      }
+    });
+    return map;
+  }, [departments]);
 
   const projectLeadsMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -299,6 +311,89 @@ const ProjectsList: React.FC = () => {
     return map;
   }, [leadAssignments, people, departments]);
 
+  const projectAssignmentsTooltipMap = useMemo(() => {
+    const map = new Map<number, Array<{ deptLabel: string; items: Array<{ name: string; role: string }> }>>();
+    if (!leadAssignments.length) return map;
+    const peopleById = new Map<number, { name: string; departmentId?: number | null; departmentName?: string | null }>();
+    const deptById = new Map<number, { name?: string; shortName?: string }>();
+    people.forEach(p => {
+      if (p.id != null) {
+        peopleById.set(p.id, { name: p.name, departmentId: p.department ?? null, departmentName: p.departmentName ?? null });
+      }
+    });
+    departments.forEach(d => {
+      if (d.id != null) deptById.set(d.id, { name: d.name, shortName: d.shortName });
+    });
+    const grouped = new Map<number, Map<string, Array<{ name: string; role: string }>>>();
+    leadAssignments.forEach((assignment) => {
+      if (!assignment.project) return;
+      const personMeta = assignment.person != null ? peopleById.get(assignment.person) : undefined;
+      const personName = assignment.personName || personMeta?.name || 'Unknown';
+      const deptId = assignment.personDepartmentId ?? personMeta?.departmentId ?? null;
+      const deptMeta = deptId != null ? deptById.get(deptId) : undefined;
+      const deptLabel =
+        deptMeta?.shortName ||
+        deptMeta?.name ||
+        personMeta?.departmentName ||
+        'Unassigned';
+      const roleLabel = assignment.roleName || '';
+      const byDept = grouped.get(assignment.project) || new Map<string, Array<{ name: string; role: string }>>();
+      const list = byDept.get(deptLabel) || [];
+      if (!list.some((item) => item.name === personName && item.role === roleLabel)) {
+        list.push({ name: personName, role: roleLabel });
+      }
+      byDept.set(deptLabel, list);
+      grouped.set(assignment.project, byDept);
+    });
+    grouped.forEach((byDept, projectId) => {
+      const entries = Array.from(byDept.entries()).map(([deptLabel, items]) => ({
+        deptLabel,
+        items: items.slice().sort((a, b) => {
+          const nameCmp = a.name.localeCompare(b.name);
+          if (nameCmp !== 0) return nameCmp;
+          return a.role.localeCompare(b.role);
+        }),
+      }));
+      entries.sort((a, b) => a.deptLabel.localeCompare(b.deptLabel));
+      map.set(projectId, entries);
+    });
+    return map;
+  }, [leadAssignments, people, departments]);
+
+  const projectQaAssignmentsMap = useMemo(() => {
+    const map = new Map<number, Assignment[]>();
+    if (!leadAssignments.length) return map;
+    const grouped = new Map<number, Map<string, Assignment[]>>();
+    leadAssignments.forEach((assignment) => {
+      if (!assignment.project) return;
+      const roleName = (assignment.roleName || '').toLowerCase();
+      if (!roleName.includes('qa') && !roleName.includes('quality')) return;
+      const deptLabel = assignment.personDepartmentId != null
+        ? (departmentLabelMap.get(assignment.personDepartmentId) || `Dept ${assignment.personDepartmentId}`)
+        : 'Unassigned';
+      const byDept = grouped.get(assignment.project) ?? new Map<string, Assignment[]>();
+      const list = byDept.get(deptLabel) || [];
+      list.push(assignment);
+      byDept.set(deptLabel, list);
+      grouped.set(assignment.project, byDept);
+    });
+    grouped.forEach((byDept, projectId) => {
+      const entries = Array.from(byDept.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      const ordered: Assignment[] = [];
+      entries.forEach(([_, items]) => {
+        items.sort((a, b) => {
+          const an = (a.personName || '').toLowerCase();
+          const bn = (b.personName || '').toLowerCase();
+          if (an !== bn) return an.localeCompare(bn);
+          return (a.id || 0) - (b.id || 0);
+        });
+        ordered.push(...items);
+      });
+      map.set(projectId, ordered);
+    });
+    return map;
+  }, [leadAssignments, departmentLabelMap]);
+
   // Conflict checker for add-assignment flow
   const checkAssignmentConflicts = useCallback(async (
     personId: number,
@@ -343,6 +438,13 @@ const ProjectsList: React.FC = () => {
       personSearch: person.name,
     }));
   };
+
+  const handleQaAssignmentUpdated = useCallback(async (projectId: number) => {
+    try { await leadAssignmentsQuery.refetch(); } catch {}
+    if (selectedProject?.id && selectedProject.id === projectId) {
+      try { await reloadAssignments(projectId); } catch {}
+    }
+  }, [leadAssignmentsQuery, reloadAssignments, selectedProject?.id]);
 
   // Memoized role suggestions based on person skills
   const getSkillBasedRoleSuggestions = useCallback((person: Person | null): string[] => {
@@ -645,6 +747,11 @@ const ProjectsList: React.FC = () => {
           nextDeliverables={nextDeliverablesMap}
           prevDeliverables={prevDeliverablesMap}
           projectLeads={projectLeadsMap}
+          projectAssignmentsTooltip={projectAssignmentsTooltipMap}
+          projectQaAssignments={projectQaAssignmentsMap}
+          departmentLabels={departmentLabelMap}
+          departmentFilterId={departmentFilterId}
+          onQaAssignmentUpdated={handleQaAssignmentUpdated}
           onChangeStatus={handleTableStatusChange}
           onRefreshDeliverables={refreshDeliverablesFor}
           onDeliverableEdited={bumpDeliverablesRefresh}
@@ -801,6 +908,11 @@ const ProjectsList: React.FC = () => {
         nextDeliverables={nextDeliverablesMap}
         prevDeliverables={prevDeliverablesMap}
         projectLeads={projectLeadsMap}
+        projectAssignmentsTooltip={projectAssignmentsTooltipMap}
+        projectQaAssignments={projectQaAssignmentsMap}
+        departmentLabels={departmentLabelMap}
+        departmentFilterId={departmentFilterId}
+        onQaAssignmentUpdated={handleQaAssignmentUpdated}
         onChangeStatus={handleTableStatusChange}
         onRefreshDeliverables={refreshDeliverablesFor}
         onDeliverableEdited={bumpDeliverablesRefresh}

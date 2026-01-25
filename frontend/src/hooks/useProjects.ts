@@ -3,7 +3,7 @@ import { projectsApi } from '@/services/api';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { Project } from '@/types/models';
 import { emitProjectsRefresh, subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 // Projects query hook with state adapter for existing code compatibility
 export function useProjects() {
@@ -27,23 +27,55 @@ export function useProjects() {
   });
 
   const refetchProjects = query.refetch;
-  const refreshQueueRef = useRef<{ timer: ReturnType<typeof setTimeout> | null }>({ timer: null });
+  const refreshQueueRef = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    inFlight: boolean;
+    pending: boolean;
+    ids: Set<number>;
+    all: boolean;
+  }>({ timer: null, inFlight: false, pending: false, ids: new Set(), all: false });
+  const scheduleRefetch = useCallback(() => {
+    const queue = refreshQueueRef.current;
+    if (queue.timer) return;
+    queue.timer = setTimeout(async () => {
+      queue.timer = null;
+      if (queue.inFlight) {
+        queue.pending = true;
+        return;
+      }
+      queue.inFlight = true;
+      queue.pending = false;
+      queue.ids.clear();
+      queue.all = false;
+      try {
+        await refetchProjects();
+      } finally {
+        queue.inFlight = false;
+        if (queue.pending) scheduleRefetch();
+      }
+    }, 300);
+  }, [refetchProjects]);
   useEffect(() => {
-    const unsubscribe = subscribeProjectsRefresh(() => {
-      if (refreshQueueRef.current.timer) return;
-      refreshQueueRef.current.timer = setTimeout(() => {
-        refreshQueueRef.current.timer = null;
-        refetchProjects();
-      }, 300);
+    const unsubscribe = subscribeProjectsRefresh((payload) => {
+      const queue = refreshQueueRef.current;
+      if (payload?.projectId != null) {
+        queue.ids.add(payload.projectId);
+      } else {
+        queue.all = true;
+      }
+      scheduleRefetch();
     });
     return () => {
       unsubscribe();
-      if (refreshQueueRef.current.timer) {
-        clearTimeout(refreshQueueRef.current.timer);
-        refreshQueueRef.current.timer = null;
-      }
+      const queue = refreshQueueRef.current;
+      if (queue.timer) clearTimeout(queue.timer);
+      queue.timer = null;
+      queue.inFlight = false;
+      queue.pending = false;
+      queue.ids.clear();
+      queue.all = false;
     };
-  }, [refetchProjects]);
+  }, [scheduleRefetch]);
 
   const projects = (query.data?.pages || []).flatMap(p => p?.results || []);
   const loading = query.isLoading;
