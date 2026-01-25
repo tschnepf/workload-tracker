@@ -28,14 +28,15 @@ const QaAssignmentEditor: React.FC<QaAssignmentEditorProps> = ({
   error,
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const didAutoSelectRef = useRef(false);
 
   useEffect(() => {
     if (!inputRef.current) return;
-    if (value) {
-      requestAnimationFrame(() => {
-        try { inputRef.current?.select(); } catch {}
-      });
-    }
+    if (!value || didAutoSelectRef.current) return;
+    requestAnimationFrame(() => {
+      try { inputRef.current?.select(); } catch {}
+    });
+    didAutoSelectRef.current = true;
   }, [value]);
 
   const hasQuery = value.trim().length >= 2;
