@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { Assignment, Person } from '@/types/models';
 import { assignmentsApi } from '@/services/api';
+import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 
 interface EditData {
   roleOnProject: string; // kept for UI state only (label), not persisted
@@ -101,7 +102,16 @@ export function useAssignmentInlineEdit({
 
       const updatedWeeklyHours = { ...assignment.weeklyHours, [key]: editData.currentWeekHours };
       // Save hours only. Role changes are handled immediately via RoleDropdown using roleOnProjectId.
-      await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+      const updated = await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+      emitAssignmentsRefresh({
+        type: 'updated',
+        assignmentId,
+        projectId: updated?.project ?? assignment.project ?? selectedProjectId ?? null,
+        personId: updated?.person ?? assignment.person ?? null,
+        updatedAt: updated?.updatedAt ?? new Date().toISOString(),
+        fields: ['weeklyHours'],
+        assignment: updated ?? { ...assignment, weeklyHours: updatedWeeklyHours },
+      });
       if (selectedProjectId) {
         await reloadAssignments(selectedProjectId);
       }

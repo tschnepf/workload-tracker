@@ -7,10 +7,10 @@ import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProj
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePeople } from '@/hooks/usePeople';
 import { assignmentsApi, departmentsApi } from '@/services/api';
+import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useProjectFilterMetadata } from '@/hooks/useProjectFilterMetadata';
-import type { ProjectFilterMetadataResponse } from '@/types/models';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 
 // PersonWithAvailability interface moved into usePersonSearch hook
@@ -638,13 +638,21 @@ const ProjectsList: React.FC = () => {
   const handleDeleteAssignment = useCallback(async (assignmentId: number) => {
     if (!confirm('Are you sure you want to remove this assignment?')) return;
     try {
+      const assignment = assignments.find(a => a.id === assignmentId);
       await assignmentsApi.delete(assignmentId);
+      emitAssignmentsRefresh({
+        type: 'deleted',
+        assignmentId,
+        projectId: assignment?.project ?? selectedProject?.id ?? null,
+        personId: assignment?.person ?? null,
+        updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
+      });
       if (selectedProject?.id) await reloadAssignments(selectedProject.id);
       await invalidateFilterMeta();
     } catch {
       setError('Failed to delete assignment');
     }
-  }, [selectedProject?.id, reloadAssignments, invalidateFilterMeta]);
+  }, [selectedProject?.id, reloadAssignments, invalidateFilterMeta, assignments]);
 
   const { onChangeStatus: handleStatusChange } = useProjectStatusMutation({
     selectedProject,
@@ -901,7 +909,16 @@ const ProjectsList: React.FC = () => {
               currentWeekKey={currentWeekKey}
               onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
                 try {
-                  await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+                  const updated = await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+                  emitAssignmentsRefresh({
+                    type: 'updated',
+                    assignmentId,
+                    projectId: updated?.project ?? selectedProject?.id ?? null,
+                    personId: updated?.person ?? null,
+                    updatedAt: updated?.updatedAt ?? new Date().toISOString(),
+                    fields: ['roleOnProjectId', 'roleName'],
+                    assignment: updated ?? undefined,
+                  });
                   if (selectedProject?.id) await reloadAssignments(selectedProject.id);
                   await invalidateFilterMeta();
                 } catch (e) {
@@ -914,7 +931,16 @@ const ProjectsList: React.FC = () => {
                   if (!asn) return;
                   const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
                   updatedWeeklyHours[weekKey] = hours;
-                  await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+                  const updated = await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+                  emitAssignmentsRefresh({
+                    type: 'updated',
+                    assignmentId,
+                    projectId: updated?.project ?? asn.project ?? selectedProject?.id ?? null,
+                    personId: updated?.person ?? asn.person ?? null,
+                    updatedAt: updated?.updatedAt ?? new Date().toISOString(),
+                    fields: ['weeklyHours'],
+                    assignment: updated ?? { ...asn, weeklyHours: updatedWeeklyHours },
+                  });
                 } catch (e) {
                   console.error('Failed to update hours', e);
                 }

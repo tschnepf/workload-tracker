@@ -1,4 +1,5 @@
 import type { Assignment } from '@/types/models';
+import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import type { QueryClient } from '@tanstack/react-query';
 
 export async function removeAssignmentAction(params: {
@@ -16,6 +17,13 @@ export async function removeAssignmentAction(params: {
         ? { ...person, assignments: person.assignments.filter((a: any) => a.id !== assignmentId) }
         : person
     ));
+    emitAssignmentsRefresh({
+      type: 'deleted',
+      assignmentId,
+      projectId: assignment?.project ?? null,
+      personId: assignment?.person ?? personId,
+      updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
+    });
   } catch (err: any) {
     console.error('Failed to delete assignment:', err);
     showToast('Failed to delete assignment: ' + (err?.message || 'Unknown error'), 'error');
@@ -61,6 +69,15 @@ export async function updateAssignmentHoursAction(params: {
     await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
     queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
     queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+    emitAssignmentsRefresh({
+      type: 'updated',
+      assignmentId,
+      projectId: assignment.project ?? null,
+      personId: assignment.person ?? null,
+      updatedAt: assignment.updatedAt ?? new Date().toISOString(),
+      fields: ['weeklyHours'],
+      assignment: { ...assignment, weeklyHours: updatedWeeklyHours },
+    });
   } catch (err: any) {
     setPeople(prev => prev.map((p: any) => p.id === personId ? { ...p, assignments: p.assignments.map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a) } : p));
     setAssignmentsData(prev => prev.map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
@@ -163,6 +180,19 @@ export async function updateMultipleCellsAction(params: {
   if (succeeded) {
     queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
     queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+    updatesArray.forEach((u) => {
+      const person = people.find(p => p.id === u.personId);
+      const assignment = person?.assignments.find((a: any) => a.id === u.assignmentId);
+      emitAssignmentsRefresh({
+        type: 'updated',
+        assignmentId: u.assignmentId,
+        projectId: assignment?.project ?? null,
+        personId: u.personId ?? null,
+        updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
+        fields: ['weeklyHours'],
+        assignment: assignment ? { ...assignment, weeklyHours: u.weeklyHours } as any : undefined,
+      });
+    });
   }
   if (failed.length > 0) {
     setPeople(prev => prev.map((person: any) => {

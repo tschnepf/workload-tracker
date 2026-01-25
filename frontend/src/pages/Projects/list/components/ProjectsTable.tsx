@@ -11,6 +11,7 @@ import { useVirtualRows } from '../hooks/useVirtualRows';
 import TooltipPortal from '@/components/ui/TooltipPortal';
 import QaAssignmentEditor, { type QaPersonOption } from '@/pages/Projects/list/components/QaAssignmentEditor';
 import { deliverablesApi, assignmentsApi, peopleApi } from '@/services/api';
+import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { useUpdateProject } from '@/hooks/useProjects';
 import { useDebounce } from '@/hooks/useDebounce';
 import { listProjectRoles } from '@/roles/api';
@@ -343,7 +344,16 @@ const ProjectsTable: React.FC<Props> = ({
         ? (departmentLabels.get(person.department) || undefined)
         : undefined;
       if (assignmentId) {
-        await assignmentsApi.update(assignmentId, { person: person.id });
+        const updated = await assignmentsApi.update(assignmentId, { person: person.id });
+        emitAssignmentsRefresh({
+          type: 'updated',
+          assignmentId,
+          projectId: projectId ?? null,
+          personId: updated?.person ?? person.id,
+          updatedAt: updated?.updatedAt ?? new Date().toISOString(),
+          fields: ['person'],
+          assignment: updated ?? undefined,
+        });
       } else {
         const roleId = await resolveQaRoleId(person.department ?? departmentFilterId ?? null);
         if (!roleId) {
@@ -356,6 +366,15 @@ const ProjectsTable: React.FC<Props> = ({
           weeklyHours: {},
           startDate: new Date().toISOString().slice(0, 10),
         } as any);
+        emitAssignmentsRefresh({
+          type: 'created',
+          assignmentId: (created as any)?.id as number,
+          projectId: projectId ?? null,
+          personId: (created as any)?.person ?? person.id,
+          updatedAt: (created as any)?.updatedAt ?? new Date().toISOString(),
+          fields: ['person', 'project', 'roleOnProjectId', 'weeklyHours'],
+          assignment: created as any,
+        });
         assignmentId = (created as any)?.id ?? assignmentId;
       }
       setQaOverrides((prev) => {
@@ -378,6 +397,12 @@ const ProjectsTable: React.FC<Props> = ({
     setQaEditor((prev) => (prev ? { ...prev, saving: true, error: null } : prev));
     try {
       await assignmentsApi.delete(assignmentId);
+      emitAssignmentsRefresh({
+        type: 'deleted',
+        assignmentId,
+        projectId: projectId ?? null,
+        updatedAt: new Date().toISOString(),
+      });
       setQaOverrides((prev) => {
         const next = new Map(prev);
         next.delete(assignmentId);

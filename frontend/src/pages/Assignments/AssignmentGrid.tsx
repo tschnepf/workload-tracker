@@ -26,6 +26,7 @@ import Toast from '@/components/ui/Toast';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 // header filter included by HeaderBarComp
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
+import { subscribeAssignmentsRefresh, emitAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
 
@@ -198,6 +199,163 @@ const AssignmentGrid: React.FC = () => {
     } catch {}
     return out;
   }, [people, loadingAssignments, projectsById, matchesStatusFilters]);
+
+  const peopleRef = useRef<PersonWithAssignments[]>([]);
+  const assignmentsRef = useRef<Assignment[]>([]);
+  const lastAssignmentUpdateRef = useRef<Map<number, number>>(new Map());
+  const lastAssignmentUpdateSourceRef = useRef<Map<number, 'event' | 'local'>>(new Map());
+  const eventQueueRef = useRef<AssignmentEvent[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    peopleRef.current = people;
+  }, [people]);
+
+  useEffect(() => {
+    assignmentsRef.current = assignmentsData;
+  }, [assignmentsData]);
+
+  const applyAssignmentEvent = useCallback(async (event: AssignmentEvent) => {
+    if (!event?.assignmentId) return;
+    if (editingCell?.rowKey && event.fields?.includes('weeklyHours')) {
+      const suffix = `:${event.assignmentId}`;
+      if (String(editingCell.rowKey).endsWith(suffix)) return;
+    }
+    const eventTimestamp = event.updatedAt ? Date.parse(event.updatedAt) : 0;
+    const last = lastAssignmentUpdateRef.current.get(event.assignmentId) || 0;
+    const lastSource = lastAssignmentUpdateSourceRef.current.get(event.assignmentId);
+    if (eventTimestamp && last && lastSource === 'event' && eventTimestamp < last) return;
+
+    if (event.type === 'deleted') {
+      if (eventTimestamp) {
+        lastAssignmentUpdateRef.current.set(event.assignmentId, eventTimestamp);
+        lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'event');
+      } else {
+        lastAssignmentUpdateRef.current.set(event.assignmentId, Date.now());
+        lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'local');
+      }
+      setAssignmentsData((prev) => prev.filter((a) => a.id !== event.assignmentId));
+      setPeople((prev) => prev.map((person) => ({
+        ...person,
+        assignments: (person.assignments || []).filter((a: any) => a.id !== event.assignmentId),
+      })));
+      return;
+    }
+
+    let assignment = event.assignment || null;
+    if (!assignment) {
+      try {
+        assignment = await assignmentsApi.get(event.assignmentId);
+      } catch {
+        return;
+      }
+    }
+    if (!assignment?.id) return;
+    const assignmentTs = assignment.updatedAt ? Date.parse(assignment.updatedAt) : 0;
+    if (eventTimestamp || assignmentTs) {
+      const nextTs = eventTimestamp || assignmentTs;
+      lastAssignmentUpdateRef.current.set(assignment.id, nextTs);
+      lastAssignmentUpdateSourceRef.current.set(assignment.id, 'event');
+    } else {
+      lastAssignmentUpdateRef.current.set(assignment.id, Date.now());
+      lastAssignmentUpdateSourceRef.current.set(assignment.id, 'local');
+    }
+
+    setAssignmentsData((prev) => {
+      let found = false;
+      const next = prev.map((a) => {
+        if (a.id === assignment!.id) {
+          found = true;
+          return { ...a, ...assignment };
+        }
+        return a;
+      });
+      if (!found) next.push(assignment as Assignment);
+      return next;
+    });
+
+    const previousPeople = peopleRef.current;
+    const previousAssignment = assignmentsRef.current.find((a) => a.id === assignment!.id);
+    const oldPersonId = previousAssignment?.person ?? null;
+    const newPersonId = assignment.person ?? null;
+    setPeople((prev) => prev.map((person) => {
+      if (person.id !== oldPersonId && person.id !== newPersonId) return person;
+      let nextAssignments = person.assignments || [];
+      if (person.id === oldPersonId && oldPersonId !== newPersonId) {
+        nextAssignments = nextAssignments.filter((a: any) => a.id !== assignment!.id);
+      }
+      if (person.id === newPersonId) {
+        const exists = nextAssignments.some((a: any) => a.id === assignment!.id);
+        nextAssignments = exists
+          ? nextAssignments.map((a: any) => (a.id === assignment!.id ? { ...a, ...assignment } : a))
+          : [...nextAssignments, assignment as Assignment];
+      }
+      return { ...person, assignments: nextAssignments };
+    }));
+
+    if (assignment.weeklyHours && newPersonId != null) {
+      const weeksToUpdate = Object.keys(assignment.weeklyHours || {});
+      if (weeksToUpdate.length > 0) {
+        const person = previousPeople.find((p) => p.id === newPersonId);
+        const assignmentsForPerson = (person?.assignments || []).map((a) =>
+          a.id === assignment!.id ? { ...a, ...assignment } : a
+        );
+        setHoursByPerson((prev) => {
+          const next = { ...prev };
+          const personHours = { ...(next[newPersonId] || {}) };
+          for (const wk of weeksToUpdate) {
+            const total = assignmentsForPerson.reduce((sum, a: any) => {
+              const wh = a.weeklyHours || {};
+              const v = parseFloat((wh?.[wk] as any)?.toString?.() || '0') || 0;
+              return sum + v;
+            }, 0);
+            personHours[wk] = total;
+          }
+          next[newPersonId] = personHours;
+          return next;
+        });
+      }
+    }
+  }, [setAssignmentsData, setPeople, setHoursByPerson, editingCell]);
+
+  const enqueueAssignmentEvent = useCallback((event: AssignmentEvent) => {
+    eventQueueRef.current.push(event);
+    if (flushTimerRef.current) return;
+    flushTimerRef.current = window.setTimeout(async () => {
+      const queued = eventQueueRef.current.splice(0, eventQueueRef.current.length);
+      flushTimerRef.current = null;
+      const coalesced = new Map<number, AssignmentEvent>();
+      queued.forEach((evt) => {
+        if (!evt?.assignmentId) return;
+        const existing = coalesced.get(evt.assignmentId);
+        if (!existing) {
+          coalesced.set(evt.assignmentId, evt);
+          return;
+        }
+        const existingTs = existing.updatedAt ? Date.parse(existing.updatedAt) : 0;
+        const nextTs = evt.updatedAt ? Date.parse(evt.updatedAt) : 0;
+        if (!existingTs || (nextTs && nextTs >= existingTs)) {
+          coalesced.set(evt.assignmentId, evt);
+        }
+      });
+      for (const evt of coalesced.values()) {
+        await applyAssignmentEvent(evt);
+      }
+    }, 60);
+  }, [applyAssignmentEvent]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeAssignmentsRefresh((event) => {
+      enqueueAssignmentEvent(event);
+    });
+    return () => {
+      unsubscribe();
+      if (flushTimerRef.current) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+    };
+  }, [enqueueAssignmentEvent]);
   const interactionStore = useAssignmentsInteractionStore({ weeks: weekKeys, rowOrder });
   const {
     selection: {
@@ -873,6 +1031,16 @@ const AssignmentGrid: React.FC = () => {
           ? { ...person, assignments: [...person.assignments, newAssignment] }
           : person
       ));
+      setAssignmentsData(prev => [...prev, newAssignment]);
+      emitAssignmentsRefresh({
+        type: 'created',
+        assignmentId: newAssignment.id as number,
+        projectId: newAssignment.project ?? project.id ?? null,
+        personId: newAssignment.person ?? personId,
+        updatedAt: newAssignment.updatedAt ?? new Date().toISOString(),
+        fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
+        assignment: newAssignment,
+      });
 
       // Show notification about assignment creation and potential overallocation risk
       const person = people.find(p => p.id === personId);

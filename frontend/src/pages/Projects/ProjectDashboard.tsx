@@ -5,6 +5,7 @@ import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import { useProject } from '@/hooks/useProjects';
 import { assignmentsApi, departmentsApi, projectRisksApi, projectsApi, deliverableTasksApi, deliverableQaTasksApi, peopleApi } from '@/services/api';
+import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { formatUtcToLocal } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
 import DeliverablesSection, { type DeliverablesSectionHandle } from '@/components/deliverables/DeliverablesSection';
@@ -366,13 +367,22 @@ const ProjectDashboard: React.FC = () => {
     if (!projectId || !selectedPerson?.id || savingAssignment) return;
     try {
       setSavingAssignment(true);
-      await assignmentsApi.create({
+      const created = await assignmentsApi.create({
         person: selectedPerson.id,
         project: projectId,
         roleOnProjectId: roleSelection.id ?? null,
         weeklyHours: {},
         startDate: new Date().toISOString().slice(0, 10),
       } as any);
+      emitAssignmentsRefresh({
+        type: 'created',
+        assignmentId: created?.id as number,
+        projectId: created?.project ?? projectId ?? null,
+        personId: created?.person ?? selectedPerson.id,
+        updatedAt: created?.updatedAt ?? new Date().toISOString(),
+        fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
+        assignment: created,
+      });
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
       resetAddAssignment();
       setShowAddAssignment(false);
@@ -388,6 +398,12 @@ const ProjectDashboard: React.FC = () => {
     try {
       setDeletingAssignmentId(assignmentId);
       await assignmentsApi.delete(assignmentId);
+      emitAssignmentsRefresh({
+        type: 'deleted',
+        assignmentId,
+        projectId: projectId ?? null,
+        updatedAt: new Date().toISOString(),
+      });
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
     } finally {
       setDeletingAssignmentId(null);

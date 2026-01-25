@@ -35,6 +35,7 @@ import TopBarPortal from '@/components/layout/TopBarPortal';
 import { useProjectQuickViewPopover } from '@/components/projects/quickview';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { subscribeAssignmentsRefresh, emitAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
 import {
   buildFutureDeliverableLookupFromSet,
   projectMatchesActiveWithDates,
@@ -106,6 +107,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
   // Projects state must be defined before any hook closures that read it
   type ProjectWithAssignments = Project & { assignments: Assignment[]; isExpanded: boolean };
   const [projects, setProjects] = useState<ProjectWithAssignments[]>([]);
+  const projectsRef = useRef<ProjectWithAssignments[]>([]);
+  const lastAssignmentUpdateRef = useRef<Map<number, number>>(new Map());
+  const lastAssignmentUpdateSourceRef = useRef<Map<number, 'event' | 'local'>>(new Map());
+  const assignmentEventQueueRef = useRef<AssignmentEvent[]>([]);
+  const assignmentFlushTimerRef = useRef<number | null>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [mobileStatusProjectId, setMobileStatusProjectId] = useState<number | null>(null);
   const mobileStatusProject = useMemo(
@@ -222,6 +228,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
     return sortAssignmentsByProjectRole(rows, merged);
   }, [rolesByDept]);
+
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
 
   useEffect(() => {
     const deptId = mobileRoleState?.deptId;
@@ -497,7 +507,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
       return { ...project, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
     }));
     try {
-      await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+      const updated = await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+      emitAssignmentsRefresh({
+        type: 'updated',
+        assignmentId,
+        projectId,
+        personId: updated?.person ?? null,
+        updatedAt: updated?.updatedAt ?? new Date().toISOString(),
+        fields: ['roleOnProjectId', 'roleName'],
+        assignment: updated ?? { id: assignmentId, project: projectId, roleOnProjectId: roleId, roleName },
+      });
       showToast('Role updated', 'success');
     } catch (error: any) {
       setProjects(prev => prev.map(project => {
@@ -997,6 +1016,111 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
   }
 
+  const applyAssignmentEvent = React.useCallback(async (event: AssignmentEvent) => {
+    if (!event?.assignmentId) return;
+    if (editingCell && event.fields?.includes('weeklyHours')) {
+      if (String(editingCell.rowKey) === String(event.assignmentId)) return;
+    }
+    const eventTs = event.updatedAt ? Date.parse(event.updatedAt) : 0;
+    const lastTs = lastAssignmentUpdateRef.current.get(event.assignmentId) || 0;
+    const lastSource = lastAssignmentUpdateSourceRef.current.get(event.assignmentId);
+    if (eventTs && lastTs && lastSource === 'event' && eventTs < lastTs) return;
+
+    if (event.type === 'deleted') {
+      if (eventTs) {
+        lastAssignmentUpdateRef.current.set(event.assignmentId, eventTs);
+        lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'event');
+      } else {
+        lastAssignmentUpdateRef.current.set(event.assignmentId, Date.now());
+        lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'local');
+      }
+      setProjects(prev => prev.map(project => ({
+        ...project,
+        assignments: (project.assignments || []).filter(a => a.id !== event.assignmentId),
+      })));
+      return;
+    }
+
+    let assignment = event.assignment || null;
+    if (!assignment) {
+      try {
+        assignment = await assignmentsApi.get(event.assignmentId);
+      } catch {
+        return;
+      }
+    }
+    if (!assignment?.id) return;
+    const assignmentTs = assignment.updatedAt ? Date.parse(assignment.updatedAt) : 0;
+    if (eventTs || assignmentTs) {
+      const nextTs = eventTs || assignmentTs;
+      lastAssignmentUpdateRef.current.set(assignment.id, nextTs);
+      lastAssignmentUpdateSourceRef.current.set(assignment.id, 'event');
+    } else {
+      lastAssignmentUpdateRef.current.set(assignment.id, Date.now());
+      lastAssignmentUpdateSourceRef.current.set(assignment.id, 'local');
+    }
+
+    const projectId = assignment.project ?? event.projectId ?? null;
+    if (!projectId) return;
+    const projectExists = projectsRef.current.some((p) => p.id === projectId);
+    if (!projectExists) return;
+
+    const updatedAssignments = (() => {
+      const current = (projectsRef.current.find(p => p.id === projectId)?.assignments || []) as Assignment[];
+      const exists = current.some(a => a.id === assignment!.id);
+      const next = exists
+        ? current.map(a => (a.id === assignment!.id ? { ...a, ...assignment } : a))
+        : [...current, assignment as Assignment];
+      return next;
+    })();
+
+    const sorted = await sortRowsByDeptRoles(updatedAssignments);
+    setProjects(prev => prev.map(project => (project.id === projectId ? { ...project, assignments: sorted } : project)));
+
+    if (event.fields?.includes('weeklyHours')) {
+      try { await refreshTotalsForProject(projectId); } catch {}
+    }
+  }, [assignmentsApi, sortRowsByDeptRoles, refreshTotalsForProject, editingCell]);
+
+  const enqueueAssignmentEvent = React.useCallback((event: AssignmentEvent) => {
+    assignmentEventQueueRef.current.push(event);
+    if (assignmentFlushTimerRef.current) return;
+    assignmentFlushTimerRef.current = window.setTimeout(async () => {
+      const queued = assignmentEventQueueRef.current.splice(0, assignmentEventQueueRef.current.length);
+      assignmentFlushTimerRef.current = null;
+      const coalesced = new Map<number, AssignmentEvent>();
+      queued.forEach((evt) => {
+        if (!evt?.assignmentId) return;
+        const existing = coalesced.get(evt.assignmentId);
+        if (!existing) {
+          coalesced.set(evt.assignmentId, evt);
+          return;
+        }
+        const existingTs = existing.updatedAt ? Date.parse(existing.updatedAt) : 0;
+        const nextTs = evt.updatedAt ? Date.parse(evt.updatedAt) : 0;
+        if (!existingTs || (nextTs && nextTs >= existingTs)) {
+          coalesced.set(evt.assignmentId, evt);
+        }
+      });
+      for (const evt of coalesced.values()) {
+        await applyAssignmentEvent(evt);
+      }
+    }, 60);
+  }, [applyAssignmentEvent]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeAssignmentsRefresh((event) => {
+      enqueueAssignmentEvent(event);
+    });
+    return () => {
+      unsubscribe();
+      if (assignmentFlushTimerRef.current) {
+        window.clearTimeout(assignmentFlushTimerRef.current);
+        assignmentFlushTimerRef.current = null;
+      }
+    };
+  }, [enqueueAssignmentEvent]);
+
   // Initialize from URL params once
   React.useEffect(() => {
     try {
@@ -1326,6 +1450,20 @@ const ProjectAssignmentsGrid: React.FC = () => {
       } else if (updatesArray.length === 1) {
         await assignmentsApi.update(updatesArray[0].assignmentId, { weeklyHours: updatesArray[0].weeklyHours });
       }
+      updatesArray.forEach((update) => {
+        const assignment = projectsRef.current
+          .flatMap(p => p.assignments || [])
+          .find(a => a.id === update.assignmentId);
+        emitAssignmentsRefresh({
+          type: 'updated',
+          assignmentId: update.assignmentId,
+          projectId: assignment?.project ?? null,
+          personId: assignment?.person ?? null,
+          updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
+          fields: ['weeklyHours'],
+          assignment: assignment ? { ...assignment, weeklyHours: update.weeklyHours } as any : undefined,
+        });
+      });
       // Refresh totals
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
@@ -1779,6 +1917,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                     try {
                                       const created = await assignmentsApi.create({ person: sel.id, project: p.id, weeklyHours: {} });
                                       setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
+                                      emitAssignmentsRefresh({
+                                        type: 'created',
+                                        assignmentId: created.id as number,
+                                        projectId: created.project ?? p.id ?? null,
+                                        personId: created.person ?? sel.id,
+                                        updatedAt: created.updatedAt ?? new Date().toISOString(),
+                                        fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
+                                        assignment: created,
+                                      });
                                       await refreshTotalsForProject(p.id);
                                       showToast('Person added to project', 'success');
                                       setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
@@ -1805,6 +1952,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                       try {
                                         const created = await assignmentsApi.create({ person: r.id, project: p.id, weeklyHours: {} });
                                         setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
+                                        emitAssignmentsRefresh({
+                                          type: 'created',
+                                          assignmentId: created.id as number,
+                                          projectId: created.project ?? p.id ?? null,
+                                          personId: created.person ?? r.id,
+                                          updatedAt: created.updatedAt ?? new Date().toISOString(),
+                                          fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
+                                          assignment: created,
+                                        });
                                         await refreshTotalsForProject(p.id);
                                         showToast('Person added to project', 'success');
                                       } catch (err:any) {
@@ -1883,7 +2039,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                             return { ...x, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
                                           }));
                                           try {
-                                            await assignmentsApi.update(asn.id, { roleOnProjectId: roleId });
+                                            const updated = await assignmentsApi.update(asn.id, { roleOnProjectId: roleId });
+                                            emitAssignmentsRefresh({
+                                              type: 'updated',
+                                              assignmentId: asn.id,
+                                              projectId: p.id ?? null,
+                                              personId: updated?.person ?? asn.person ?? null,
+                                              updatedAt: updated?.updatedAt ?? new Date().toISOString(),
+                                              fields: ['roleOnProjectId', 'roleName'],
+                                              assignment: updated ?? { ...asn, roleOnProjectId: roleId, roleName },
+                                            });
                                             showToast('Role updated', 'success');
                                           } catch (e:any) {
                                             // revert + resort
@@ -1915,6 +2080,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                 try {
                                   await assignmentsApi.delete(asn.id);
                                   setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: x.assignments.filter(a => a.id !== asn.id) } : x));
+                                  emitAssignmentsRefresh({
+                                    type: 'deleted',
+                                    assignmentId: asn.id,
+                                    projectId: p.id ?? null,
+                                    personId: asn.person ?? null,
+                                    updatedAt: asn.updatedAt ?? new Date().toISOString(),
+                                  });
                                   const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
                                   const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
                                   const res = await getProjectTotals([p.id!], { weeks: weeks.length, department: dept, include_children: inc });
