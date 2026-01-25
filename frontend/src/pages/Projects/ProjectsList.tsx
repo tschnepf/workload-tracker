@@ -96,6 +96,9 @@ const ProjectsList: React.FC = () => {
       },
     },
   });
+  const refetchProjectsSafe = useCallback(async () => {
+    try { await refetchProjects(); } catch {}
+  }, [refetchProjects]);
 
   // Selection (single source of truth)
   // Use the enhanced sortedProjects for selection and table
@@ -675,7 +678,7 @@ const ProjectsList: React.FC = () => {
               statusDropdownOpen={statusDropdownOpen}
               setStatusDropdownOpen={setStatusDropdownOpen}
               onStatusChange={handleStatusChange}
-              onProjectRefetch={refetchProjects}
+              onProjectRefetch={refetchProjectsSafe}
               onDeleteProject={handleDeleteProject}
               assignments={assignments}
               editingAssignmentId={editingAssignment}
@@ -850,7 +853,7 @@ const ProjectsList: React.FC = () => {
             statusDropdownOpen={statusDropdownOpen}
             setStatusDropdownOpen={setStatusDropdownOpen}
             onStatusChange={handleStatusChange}
-            onProjectRefetch={refetchProjects}
+            onProjectRefetch={refetchProjectsSafe}
             onDeleteProject={handleDeleteProject}
             assignments={assignments}
             editingAssignmentId={editingAssignment}
