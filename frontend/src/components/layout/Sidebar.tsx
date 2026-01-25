@@ -283,7 +283,7 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       </div>
 
       {/* Scrollable middle: Navigation Menu */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-theme">
       <nav className="py-4" role="navigation" aria-label="Primary">
         <div className="space-y-1 px-3">
           {menuItems.map((item) => (
@@ -527,5 +527,4 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
 };
 
 export default Sidebar;
-
 
