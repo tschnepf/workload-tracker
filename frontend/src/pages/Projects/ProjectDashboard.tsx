@@ -5,7 +5,7 @@ import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import { useProject } from '@/hooks/useProjects';
 import { assignmentsApi, departmentsApi, projectRisksApi, projectsApi, deliverableTasksApi, deliverableQaTasksApi, peopleApi } from '@/services/api';
-import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { createAssignment, deleteAssignment } from '@/lib/mutations/assignments';
 import { formatUtcToLocal } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
 import DeliverablesSection, { type DeliverablesSectionHandle } from '@/components/deliverables/DeliverablesSection';
@@ -191,14 +191,12 @@ const ProjectDashboard: React.FC = () => {
 
   React.useEffect(() => {
     if (!hasValidId) return;
-    const unsubscribeDeliverables = subscribeDeliverablesRefresh((payload) => {
-      if (payload?.projectId != null && payload.projectId !== projectId) return;
+    const unsubscribeDeliverables = subscribeDeliverablesRefresh(() => {
       const queue = dashboardRefreshQueueRef.current;
       queue.deliverables = true;
       scheduleDashboardRefresh();
     });
-    const unsubscribeProjects = subscribeProjectsRefresh((payload) => {
-      if (payload?.projectId != null && payload.projectId !== projectId) return;
+    const unsubscribeProjects = subscribeProjectsRefresh(() => {
       const queue = dashboardRefreshQueueRef.current;
       queue.project = true;
       scheduleDashboardRefresh();
@@ -367,22 +365,13 @@ const ProjectDashboard: React.FC = () => {
     if (!projectId || !selectedPerson?.id || savingAssignment) return;
     try {
       setSavingAssignment(true);
-      const created = await assignmentsApi.create({
+      await createAssignment({
         person: selectedPerson.id,
         project: projectId,
         roleOnProjectId: roleSelection.id ?? null,
         weeklyHours: {},
         startDate: new Date().toISOString().slice(0, 10),
-      } as any);
-      emitAssignmentsRefresh({
-        type: 'created',
-        assignmentId: created?.id as number,
-        projectId: created?.project ?? projectId ?? null,
-        personId: created?.person ?? selectedPerson.id,
-        updatedAt: created?.updatedAt ?? new Date().toISOString(),
-        fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
-        assignment: created,
-      });
+      } as any, assignmentsApi);
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
       resetAddAssignment();
       setShowAddAssignment(false);
@@ -397,12 +386,11 @@ const ProjectDashboard: React.FC = () => {
     if (!ok) return;
     try {
       setDeletingAssignmentId(assignmentId);
-      await assignmentsApi.delete(assignmentId);
-      emitAssignmentsRefresh({
-        type: 'deleted',
-        assignmentId,
+      const assignment = assignments.find((a) => a.id === assignmentId);
+      await deleteAssignment(assignmentId, assignmentsApi, {
         projectId: projectId ?? null,
-        updatedAt: new Date().toISOString(),
+        personId: assignment?.person ?? null,
+        updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
       });
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
     } finally {

@@ -1,29 +1,30 @@
 import type { Assignment } from '@/types/models';
-import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { bulkUpdateAssignmentHours, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import type { QueryClient } from '@tanstack/react-query';
 
 export async function removeAssignmentAction(params: {
   assignmentsApi: any;
   setPeople: React.Dispatch<React.SetStateAction<any[]>>;
+  people: any[];
   personId: number;
   assignmentId: number;
   showToast: (msg: string, type?: 'info'|'success'|'warning'|'error') => void;
 }) {
-  const { assignmentsApi, setPeople, personId, assignmentId, showToast } = params;
+  const { assignmentsApi, setPeople, people, personId, assignmentId, showToast } = params;
   try {
-    await assignmentsApi.delete(assignmentId);
+    const person = people.find(p => p.id === personId);
+    const assignment = person?.assignments?.find((a: any) => a.id === assignmentId);
+    await deleteAssignment(assignmentId, assignmentsApi, {
+      projectId: assignment?.project ?? null,
+      personId,
+      updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
+    });
     setPeople(prev => prev.map((person: any) =>
       person.id === personId
         ? { ...person, assignments: person.assignments.filter((a: any) => a.id !== assignmentId) }
         : person
     ));
-    emitAssignmentsRefresh({
-      type: 'deleted',
-      assignmentId,
-      projectId: assignment?.project ?? null,
-      personId: assignment?.person ?? personId,
-      updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
-    });
+    // refresh signal emitted in deleteAssignment
   } catch (err: any) {
     console.error('Failed to delete assignment:', err);
     showToast('Failed to delete assignment: ' + (err?.message || 'Unknown error'), 'error');
@@ -66,18 +67,10 @@ export async function updateAssignmentHoursAction(params: {
     setHoursByPerson(nextMap);
   } catch {}
   try {
-    await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+    await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi);
     queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
     queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
-    emitAssignmentsRefresh({
-      type: 'updated',
-      assignmentId,
-      projectId: assignment.project ?? null,
-      personId: assignment.person ?? null,
-      updatedAt: assignment.updatedAt ?? new Date().toISOString(),
-      fields: ['weeklyHours'],
-      assignment: { ...assignment, weeklyHours: updatedWeeklyHours },
-    });
+    // refresh signal emitted in updateAssignment
   } catch (err: any) {
     setPeople(prev => prev.map((p: any) => p.id === personId ? { ...p, assignments: p.assignments.map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a) } : p));
     setAssignmentsData(prev => prev.map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
@@ -165,14 +158,14 @@ export async function updateMultipleCellsAction(params: {
   let results: PromiseSettledResult<any>[] = [];
   if (updatesArray.length > 1) {
     try {
-      const bulk = await assignmentsApi.bulkUpdateHours(updatesArray.map(u => ({ assignmentId: u.assignmentId, weeklyHours: u.weeklyHours })));
+      const bulk = await bulkUpdateAssignmentHours(updatesArray.map(u => ({ assignmentId: u.assignmentId, weeklyHours: u.weeklyHours })), assignmentsApi);
       const ok = (bulk?.results || []).map((r: any) => ({ status: 'fulfilled', value: r })) as PromiseSettledResult<any>[];
       results = ok;
     } catch (e) {
       results = updatesArray.map(() => ({ status: 'rejected', reason: e })) as PromiseSettledResult<any>[];
     }
   } else {
-    results = await Promise.allSettled(updatesArray.map(u => assignmentsApi.update(u.assignmentId, { weeklyHours: u.weeklyHours })));
+    results = await Promise.allSettled(updatesArray.map(u => updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi)));
   }
   const failed: typeof updatesArray = [];
   results.forEach((res, idx) => { if (res.status === 'rejected') failed.push(updatesArray[idx]); });
@@ -180,19 +173,7 @@ export async function updateMultipleCellsAction(params: {
   if (succeeded) {
     queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
     queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
-    updatesArray.forEach((u) => {
-      const person = people.find(p => p.id === u.personId);
-      const assignment = person?.assignments.find((a: any) => a.id === u.assignmentId);
-      emitAssignmentsRefresh({
-        type: 'updated',
-        assignmentId: u.assignmentId,
-        projectId: assignment?.project ?? null,
-        personId: u.personId ?? null,
-        updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
-        fields: ['weeklyHours'],
-        assignment: assignment ? { ...assignment, weeklyHours: u.weeklyHours } as any : undefined,
-      });
-    });
+    // refresh signal emitted in updateAssignment/bulkUpdateAssignmentHours
   }
   if (failed.length > 0) {
     setPeople(prev => prev.map((person: any) => {

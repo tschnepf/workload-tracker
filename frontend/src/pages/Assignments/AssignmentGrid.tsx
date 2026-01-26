@@ -26,7 +26,8 @@ import Toast from '@/components/ui/Toast';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 // header filter included by HeaderBarComp
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
-import { subscribeAssignmentsRefresh, emitAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
+import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
+import { createAssignment } from '@/lib/mutations/assignments';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
 
@@ -122,6 +123,7 @@ const AssignmentGrid: React.FC = () => {
     showToast,
   });
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const addUI = useProjectAssignmentAdd({
     search: (query) => searchProjects(query),
@@ -165,6 +167,8 @@ const AssignmentGrid: React.FC = () => {
     setProjectsData: setProjectsData as any,
     setDeliverables,
     setHoursByPerson,
+    getHasData: () => people.length > 0 || assignmentsData.length > 0,
+    setIsFetching,
     subscribeGridRefresh,
     trackPerformanceEvent,
     showToast,
@@ -1020,11 +1024,11 @@ const AssignmentGrid: React.FC = () => {
   // Add new assignment
   const addAssignment = async (personId: number, project: Project) => {
     try {
-      const newAssignment = await assignmentsApi.create({
+      const newAssignment = await createAssignment({
         person: personId,
         project: project.id!,
         weeklyHours: {}
-      });
+      }, assignmentsApi);
       
       setPeople(prev => prev.map(person => 
         person.id === personId 
@@ -1032,16 +1036,6 @@ const AssignmentGrid: React.FC = () => {
           : person
       ));
       setAssignmentsData(prev => [...prev, newAssignment]);
-      emitAssignmentsRefresh({
-        type: 'created',
-        assignmentId: newAssignment.id as number,
-        projectId: newAssignment.project ?? project.id ?? null,
-        personId: newAssignment.person ?? personId,
-        updatedAt: newAssignment.updatedAt ?? new Date().toISOString(),
-        fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
-        assignment: newAssignment,
-      });
-
       // Show notification about assignment creation and potential overallocation risk
       const person = people.find(p => p.id === personId);
       if (person) {
@@ -1071,7 +1065,7 @@ const AssignmentGrid: React.FC = () => {
   // Remove assignment
   const removeAssignment = async (assignmentId: number, personId: number) => {
     if (!confirm('Are you sure you want to remove this assignment?')) return;
-    await removeAssignmentAction({ assignmentsApi, setPeople, personId, assignmentId, showToast });
+    await removeAssignmentAction({ assignmentsApi, setPeople, people, personId, assignmentId, showToast });
   };
 
   // Update assignment hours
@@ -1099,6 +1093,9 @@ const AssignmentGrid: React.FC = () => {
       <div className="flex flex-wrap items-center gap-3 min-w-0">
         <div className="min-w-[120px]">
           <div className="text-lg font-semibold text-[var(--text)] leading-tight">Assignments</div>
+          {isFetching ? (
+            <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
+          ) : null}
         </div>
         <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
         <HeaderActions

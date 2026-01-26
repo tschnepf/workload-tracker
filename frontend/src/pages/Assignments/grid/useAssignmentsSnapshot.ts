@@ -22,6 +22,10 @@ export interface UseAssignmentsSnapshotArgs {
   setDeliverables: React.Dispatch<React.SetStateAction<Deliverable[]>>;
   setHoursByPerson: React.Dispatch<React.SetStateAction<Record<number, Record<string, number>>>>;
 
+  // Optional loading behavior controls
+  getHasData?: () => boolean;
+  setIsFetching?: (v: boolean) => void;
+
   // Utilities
   subscribeGridRefresh: (fn: () => void) => () => void;
   trackPerformanceEvent?: (name: string, value: number, unit: string, tags?: Record<string, any>) => void;
@@ -41,7 +45,9 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
   const loadData = useCallback(async () => {
     const pageSize = 100;
     try {
-      args.setLoading(true);
+      const hasData = args.getHasData ? args.getHasData() : false;
+      args.setLoading(!hasData);
+      if (args.setIsFetching) args.setIsFetching(hasData);
       args.setError(null);
 
       const dept = args.departmentId == null ? undefined : Number(args.departmentId);
@@ -175,6 +181,7 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
       args.setError('Failed to load assignment grid snapshot: ' + (err?.message || 'Unknown error'));
     } finally {
       args.setLoading(false);
+      if (args.setIsFetching) args.setIsFetching(false);
     }
   }, [args]);
 

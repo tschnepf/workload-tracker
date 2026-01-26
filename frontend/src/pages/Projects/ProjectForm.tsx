@@ -7,6 +7,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
 import { Project } from '@/types/models';
 import { projectsApi } from '@/services/api';
+import { updateProject } from '@/lib/mutations/projects';
 import { useCreateProject } from '@/hooks/useProjects';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
@@ -147,7 +148,7 @@ const ProjectForm: React.FC = () => {
       };
 
       if (isEditing && id) {
-        await projectsApi.update(parseInt(id), projectData);
+        await updateProject(parseInt(id), projectData, projectsApi);
       } else {
         await createProject.mutateAsync(projectData as Omit<Project, 'id' | 'createdAt' | 'updatedAt'>);
       }

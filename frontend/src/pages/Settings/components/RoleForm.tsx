@@ -18,6 +18,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    overheadHoursPerWeek: 0,
     isActive: true,
   });
   const [loading, setLoading] = useState(false);
@@ -37,6 +38,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
       setFormData({
         name: role.name || '',
         description: role.description || '',
+        overheadHoursPerWeek: role.overheadHoursPerWeek ?? 0,
         isActive: role.isActive ?? true,
       });
       setNameInputValue(role.name || '');
@@ -44,6 +46,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
       setFormData({
         name: '',
         description: '',
+        overheadHoursPerWeek: 0,
         isActive: true,
       });
       setNameInputValue('');
@@ -105,6 +108,10 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
       errors.description = 'Description cannot exceed 500 characters';
     }
 
+    if (formData.overheadHoursPerWeek < 0 || Number.isNaN(formData.overheadHoursPerWeek)) {
+      errors.overheadHoursPerWeek = 'Overhead hours must be 0 or more';
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -123,6 +130,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
       const roleData = {
         name: formData.name.trim(),
         description: formData.description.trim() || '',
+        overheadHoursPerWeek: formData.overheadHoursPerWeek,
         isActive: formData.isActive,
       };
 
@@ -285,6 +293,41 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
             )}
           </div>
 
+          {/* Overhead Hours Field */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text)] mb-2">
+              Overhead hours per week
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.25"
+              value={Number.isFinite(formData.overheadHoursPerWeek) ? formData.overheadHoursPerWeek : 0}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const parsed = raw === '' ? 0 : parseFloat(raw);
+                setFormData(prev => ({
+                  ...prev,
+                  overheadHoursPerWeek: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+                }));
+                if (validationErrors.overheadHoursPerWeek) {
+                  setValidationErrors(prev => ({ ...prev, overheadHoursPerWeek: '' }));
+                }
+              }}
+              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent ${
+                validationErrors.overheadHoursPerWeek ? 'border-red-500' : 'border-[var(--border)]'
+              }`}
+              placeholder="0"
+              disabled={loading}
+            />
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Default weekly overhead allocation for people in this role.
+            </p>
+            {validationErrors.overheadHoursPerWeek && (
+              <p className="mt-1 text-sm text-red-400">{validationErrors.overheadHoursPerWeek}</p>
+            )}
+          </div>
+
           {/* Active Status */}
           <div className="flex items-center">
             <input
@@ -326,4 +369,3 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
 };
 
 export default RoleForm;
-

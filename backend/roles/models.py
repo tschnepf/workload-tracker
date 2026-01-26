@@ -4,6 +4,7 @@ Role model for managing job roles in the organization.
 
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 
 
 class Role(models.Model):
@@ -17,6 +18,11 @@ class Role(models.Model):
     description = models.TextField(
         blank=True,
         help_text="Optional description of the role responsibilities"
+    )
+    overhead_hours_per_week = models.FloatField(
+        default=0,
+        validators=[MinValueValidator(0.0)],
+        help_text="Default overhead hours per week for people in this role"
     )
     # User-controlled ordering for display
     sort_order = models.IntegerField(default=0)
@@ -48,6 +54,11 @@ class Role(models.Model):
             # Check for reasonable length
             if len(self.name) > 100:
                 raise ValidationError({'name': 'Role name cannot exceed 100 characters.'})
+        try:
+            if self.overhead_hours_per_week is not None and float(self.overhead_hours_per_week) < 0:
+                raise ValidationError({'overhead_hours_per_week': 'Overhead hours per week must be 0 or more.'})
+        except (TypeError, ValueError):
+            raise ValidationError({'overhead_hours_per_week': 'Overhead hours per week must be a number.'})
     
     def save(self, *args, **kwargs):
         """Override save to run validation"""

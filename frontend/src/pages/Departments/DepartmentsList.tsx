@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Department, Person } from '@/types/models';
 import { departmentsApi, peopleApi } from '@/services/api';
+import { createDepartment, deleteDepartment, updateDepartment } from '@/lib/mutations/departments';
 import Layout from '@/components/layout/Layout';
 import DepartmentsSkeleton from '@/components/skeletons/DepartmentsSkeleton';
 import Button from '@/components/ui/Button';
@@ -15,7 +16,7 @@ import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import DepartmentForm from './DepartmentForm';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { emitDepartmentsRefresh, subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
+import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
 
 const DepartmentsList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
@@ -26,25 +27,30 @@ const DepartmentsList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasAutoSelected, setHasAutoSelected] = useState(false); // Track if we've auto-selected
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const loadingRef = useRef(false);
   const suppressNextRefreshRef = useRef(false);
+  const departmentsRef = useRef<Department[]>([]);
 
   const loadDepartments = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
-      setLoading(true);
+      const hasData = departmentsRef.current.length > 0;
+      setIsLoading(!hasData);
+      setIsFetching(hasData);
       const response = await departmentsApi.list();
       setDepartments(response.results || []);
     } catch (err: any) {
       setError('Failed to load departments');
       console.error('Error loading departments:', err);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
+      setIsFetching(false);
       loadingRef.current = false;
     }
   }, []);
@@ -84,6 +90,10 @@ const DepartmentsList: React.FC = () => {
   }, [filteredAndSortedDepartments, hasAutoSelected]);
 
   useEffect(() => {
+    departmentsRef.current = departments;
+  }, [departments]);
+
+  useEffect(() => {
     const unsubscribe = subscribeDepartmentsRefresh(() => {
       if (suppressNextRefreshRef.current) {
         suppressNextRefreshRef.current = false;
@@ -110,16 +120,12 @@ const DepartmentsList: React.FC = () => {
       
       let savedDepartment: Department;
       if (editingDepartment?.id) {
-        savedDepartment = await departmentsApi.update(editingDepartment.id, formData);
+        savedDepartment = await updateDepartment(editingDepartment.id, formData, departmentsApi);
       } else {
-        savedDepartment = await departmentsApi.create(formData as any);
+        savedDepartment = await createDepartment(formData as any, departmentsApi);
       }
 
       suppressNextRefreshRef.current = true;
-      emitDepartmentsRefresh({
-        departmentId: savedDepartment.id,
-        reason: editingDepartment?.id ? 'updated' : 'created',
-      });
       // Refresh departments list
       await loadDepartments();
       
@@ -140,9 +146,8 @@ const DepartmentsList: React.FC = () => {
     if (!confirmed) return;
 
     try {
-      await departmentsApi.delete(department.id);
+      await deleteDepartment(department.id, departmentsApi);
       suppressNextRefreshRef.current = true;
-      emitDepartmentsRefresh({ departmentId: department.id, reason: 'deleted' });
       await loadDepartments();
       
       // Clear selection if deleted department was selected
@@ -176,7 +181,12 @@ const DepartmentsList: React.FC = () => {
           <div className="w-1/3 p-6 border-r border-[var(--border)] bg-[var(--surface)] min-h-0 overflow-y-auto">
             <div className="mb-6">
               <div className="flex justify-between items-center mb-4">
-                <h1 className="text-2xl font-bold text-[var(--text)]">Departments</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold text-[var(--text)]">Departments</h1>
+                  {isFetching && (
+                    <span className="text-xs text-[var(--muted)]">Refreshing…</span>
+                  )}
+                </div>
                 <Button
                   variant="primary"
                   onClick={handleCreateDepartment}
@@ -286,7 +296,12 @@ const DepartmentsList: React.FC = () => {
       {/* Sticky header with search + actions */}
       <div className="sticky top-0 z-[10] bg-[var(--bg)] border-b border-[var(--border)] px-4 py-3">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="text-lg font-semibold text-[var(--text)]">Departments</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-[var(--text)]">Departments</h1>
+            {isFetching && (
+              <span className="text-[10px] text-[var(--muted)]">Refreshing…</span>
+            )}
+          </div>
           <Button
             variant="primary"
             size="sm"
@@ -391,7 +406,7 @@ const DepartmentsList: React.FC = () => {
     </div>
   );
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Layout>
         <DepartmentsSkeleton />

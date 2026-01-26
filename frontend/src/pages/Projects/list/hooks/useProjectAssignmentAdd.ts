@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { AddAssignmentState } from '@/pages/Projects/list/types';
 import { assignmentsApi } from '@/services/api';
-import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { createAssignment } from '@/lib/mutations/assignments';
 
 interface Params {
   projectId: number | undefined | null;
@@ -53,16 +53,7 @@ export function useProjectAssignmentAdd({ projectId, invalidateFilterMeta, reloa
       startDate: new Date().toISOString().split('T')[0],
     } as any;
 
-    const created = await assignmentsApi.create(payload);
-    emitAssignmentsRefresh({
-      type: 'created',
-      assignmentId: created?.id as number,
-      projectId: created?.project ?? projectId ?? null,
-      personId: created?.person ?? state.selectedPerson.id,
-      updatedAt: created?.updatedAt ?? new Date().toISOString(),
-      fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
-      assignment: created,
-    });
+    await createAssignment(payload, assignmentsApi);
     await reloadAssignments(projectId);
     await invalidateFilterMeta();
     setState(initialState);

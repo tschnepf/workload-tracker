@@ -1,5 +1,5 @@
 ﻿import type { Assignment } from '@/types/models';
-import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { updateAssignment } from '@/lib/mutations/assignments';
 
 export async function updateAssignmentRoleAction(params: {
   assignmentsApi: any;
@@ -24,16 +24,7 @@ export async function updateAssignmentRoleAction(params: {
   } : p));
   setAssignmentsData(prevAss => prevAss.map((a: any) => a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName: roleName } : a));
   try {
-    const updated = await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
-    emitAssignmentsRefresh({
-      type: 'updated',
-      assignmentId,
-      projectId: updated?.project ?? assignment.project ?? null,
-      personId: updated?.person ?? assignment.person ?? personId,
-      updatedAt: updated?.updatedAt ?? new Date().toISOString(),
-      fields: ['roleOnProjectId', 'roleName'],
-      assignment: updated ?? { ...assignment, roleOnProjectId: roleId, roleName },
-    });
+    await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
   } catch (err: any) {
     // revert
     setPeople(prevPeople => prevPeople.map((p: any) => p.id === personId ? {
@@ -44,4 +35,3 @@ export async function updateAssignmentRoleAction(params: {
     showToast('Failed to update role: ' + (err?.message || 'Unknown error'), 'error');
   }
 }
-

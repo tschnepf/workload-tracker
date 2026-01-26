@@ -8,7 +8,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
 import { Person, Project, Department, PersonSkill, SkillTag } from '@/types/models';
 import { assignmentsApi, peopleApi, projectsApi, departmentsApi, personSkillsApi, skillTagsApi } from '@/services/api';
-import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { createAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -405,27 +405,9 @@ const AssignmentForm: React.FC = () => {
       };
 
       if (isEditing && id) {
-        const updated = await assignmentsApi.update(parseInt(id), assignmentData);
-        emitAssignmentsRefresh({
-          type: 'updated',
-          assignmentId: updated?.id ?? parseInt(id),
-          projectId: updated?.project ?? assignmentData.project ?? null,
-          personId: updated?.person ?? assignmentData.person ?? null,
-          updatedAt: updated?.updatedAt ?? new Date().toISOString(),
-          fields: ['person', 'project', 'weeklyHours'],
-          assignment: updated,
-        });
+        await updateAssignment(parseInt(id), assignmentData, assignmentsApi);
       } else {
-        const created = await assignmentsApi.create(assignmentData);
-        emitAssignmentsRefresh({
-          type: 'created',
-          assignmentId: created?.id as number,
-          projectId: created?.project ?? assignmentData.project ?? null,
-          personId: created?.person ?? assignmentData.person ?? null,
-          updatedAt: created?.updatedAt ?? new Date().toISOString(),
-          fields: ['person', 'project', 'weeklyHours'],
-          assignment: created,
-        });
+        await createAssignment(assignmentData, assignmentsApi);
       }
 
       navigate('/assignments');

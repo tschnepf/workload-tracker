@@ -13,7 +13,7 @@ import { emitGridRefresh } from '@/lib/gridRefreshBus';
 const PersonalDashboard: React.FC = () => {
   const auth = useAuth();
   const personId = auth?.person?.id;
-  const { data, loading, error, refresh } = usePersonalWork();
+  const { data, loading, isFetching, error, refresh } = usePersonalWork();
   const headingRef = React.useRef<HTMLHeadingElement | null>(null);
   const summary = data?.summary ?? null;
   const alerts = data?.alerts ?? null;
@@ -84,11 +84,11 @@ const PersonalDashboard: React.FC = () => {
             <button
               type="button"
               onClick={() => refresh({ force: true })}
-              disabled={loading}
+              disabled={isFetching}
               className="px-3 py-1.5 rounded-full border border-[var(--border)] text-sm text-[var(--text)] hover:bg-[var(--surface)] disabled:opacity-60"
               aria-label="Refresh my work data"
             >
-              {loading ? 'Refreshing…' : 'Refresh'}
+              {isFetching ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
         </header>

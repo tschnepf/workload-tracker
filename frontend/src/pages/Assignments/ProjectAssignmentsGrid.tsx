@@ -35,7 +35,8 @@ import TopBarPortal from '@/components/layout/TopBarPortal';
 import { useProjectQuickViewPopover } from '@/components/projects/quickview';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { subscribeAssignmentsRefresh, emitAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
+import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
+import { bulkUpdateAssignmentHours, createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import {
   buildFutureDeliverableLookupFromSet,
   projectMatchesActiveWithDates,
@@ -103,6 +104,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [sortBy, setSortBy] = useState<'client' | 'project' | 'deliverable'>('client');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState<boolean>(true);
+  const [isFetching, setIsFetching] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   // Projects state must be defined before any hook closures that read it
   type ProjectWithAssignments = Project & { assignments: Assignment[]; isExpanded: boolean };
@@ -469,7 +471,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       try {
         const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
         const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-        const resp = await assignmentsApi.list({ project: project.id, department: dept, include_children: inc } as any);
+        const resp = await assignmentsApi.list({ project: project.id, department: dept, include_children: inc, page_size: 200 } as any);
         const rows = ((resp as any).results || []) as Assignment[];
         const sorted = await sortRowsByDeptRoles(rows);
         setProjects(prev => prev.map(x => (x.id === project.id ? { ...x, assignments: sorted } : x)));
@@ -507,16 +509,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       return { ...project, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
     }));
     try {
-      const updated = await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
-      emitAssignmentsRefresh({
-        type: 'updated',
-        assignmentId,
-        projectId,
-        personId: updated?.person ?? null,
-        updatedAt: updated?.updatedAt ?? new Date().toISOString(),
-        fields: ['roleOnProjectId', 'roleName'],
-        assignment: updated ?? { id: assignmentId, project: projectId, roleOnProjectId: roleId, roleName },
-      });
+      await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
       showToast('Role updated', 'success');
     } catch (error: any) {
       setProjects(prev => prev.map(project => {
@@ -534,6 +527,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
       <div className="min-w-0">
         <div className="text-lg font-semibold text-[var(--text)] leading-tight">Project Assignments</div>
         <div className="text-[var(--muted)] text-xs">Manage team workload allocation across {weeks.length} weeks</div>
+        {isFetching ? (
+          <div className="text-[10px] text-[var(--muted)] mt-1">Refreshing…</div>
+        ) : null}
       </div>
       <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
       <HeaderActions
@@ -944,7 +940,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc } as any);
+      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, page_size: 200 } as any);
       const rows = ((resp as any).results || []) as Assignment[];
       // Ensure role catalogs for departments present
       const deptIds = Array.from(new Set(rows.map(a => (a as any).personDepartmentId as number | null | undefined)))
@@ -1150,7 +1146,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      setLoading(true);
+      const hasData = projectsRef.current.length > 0;
+      setLoading(!hasData);
+      setIsFetching(hasData);
       setError(null);
       try {
         const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
@@ -1287,7 +1285,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 try {
                   const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
                   const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-                  const resp = await assignmentsApi.list({ project: pid, department: dept, include_children: inc } as any);
+                  const resp = await assignmentsApi.list({ project: pid, department: dept, include_children: inc, page_size: 200 } as any);
                   const rows = ((resp as any).results || []) as Assignment[];
                   const sorted = await sortRowsByDeptRoles(rows);
                   setProjects(prev => prev.map(x => x.id === pid ? { ...x, assignments: sorted, isExpanded: true } : x));
@@ -1305,6 +1303,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       } finally {
         if (mounted) {
           setLoading(false);
+          setIsFetching(false);
           if (pendingRefresh) {
             try { showToast('Refresh complete', 'success'); } catch {}
             setPendingRefresh(false);
@@ -1446,24 +1445,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try {
       const updatesArray = Array.from(updatesMap.entries()).map(([aid, info]) => ({ assignmentId: aid, weeklyHours: info.next }));
       if (updatesArray.length > 1) {
-        await assignmentsApi.bulkUpdateHours(updatesArray);
+        await bulkUpdateAssignmentHours(updatesArray, assignmentsApi);
       } else if (updatesArray.length === 1) {
-        await assignmentsApi.update(updatesArray[0].assignmentId, { weeklyHours: updatesArray[0].weeklyHours });
+        await updateAssignment(updatesArray[0].assignmentId, { weeklyHours: updatesArray[0].weeklyHours }, assignmentsApi);
       }
-      updatesArray.forEach((update) => {
-        const assignment = projectsRef.current
-          .flatMap(p => p.assignments || [])
-          .find(a => a.id === update.assignmentId);
-        emitAssignmentsRefresh({
-          type: 'updated',
-          assignmentId: update.assignmentId,
-          projectId: assignment?.project ?? null,
-          personId: assignment?.person ?? null,
-          updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
-          fields: ['weeklyHours'],
-          assignment: assignment ? { ...assignment, weeklyHours: update.weeklyHours } as any : undefined,
-        });
-      });
       // Refresh totals
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
@@ -1579,7 +1564,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             try {
               const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
               const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-              const resp = await assignmentsApi.list({ project: pid, department: dept, include_children: inc } as any);
+              const resp = await assignmentsApi.list({ project: pid, department: dept, include_children: inc, page_size: 200 } as any);
               const rows = ((resp as any).results || []) as Assignment[];
               const sorted = await sortRowsByDeptRoles(rows);
               setProjects(prev2 => prev2.map(x => x.id === pid ? { ...x, assignments: sorted, isExpanded: true } : x));
@@ -1915,17 +1900,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                   const sel = selectedPersonIndex >= 0 ? personResults[selectedPersonIndex] : null;
                                   if (sel && p.id) {
                                     try {
-                                      const created = await assignmentsApi.create({ person: sel.id, project: p.id, weeklyHours: {} });
+                                      const created = await createAssignment({ person: sel.id, project: p.id, weeklyHours: {} }, assignmentsApi);
                                       setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
-                                      emitAssignmentsRefresh({
-                                        type: 'created',
-                                        assignmentId: created.id as number,
-                                        projectId: created.project ?? p.id ?? null,
-                                        personId: created.person ?? sel.id,
-                                        updatedAt: created.updatedAt ?? new Date().toISOString(),
-                                        fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
-                                        assignment: created,
-                                      });
                                       await refreshTotalsForProject(p.id);
                                       showToast('Person added to project', 'success');
                                       setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
@@ -1950,17 +1926,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                     onMouseDown={async () => {
                                       if (!p.id) return;
                                       try {
-                                        const created = await assignmentsApi.create({ person: r.id, project: p.id, weeklyHours: {} });
+                                        const created = await createAssignment({ person: r.id, project: p.id, weeklyHours: {} }, assignmentsApi);
                                         setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
-                                        emitAssignmentsRefresh({
-                                          type: 'created',
-                                          assignmentId: created.id as number,
-                                          projectId: created.project ?? p.id ?? null,
-                                          personId: created.person ?? r.id,
-                                          updatedAt: created.updatedAt ?? new Date().toISOString(),
-                                          fields: ['person', 'project', 'weeklyHours', 'roleOnProjectId', 'roleName'],
-                                          assignment: created,
-                                        });
                                         await refreshTotalsForProject(p.id);
                                         showToast('Person added to project', 'success');
                                       } catch (err:any) {
@@ -2039,16 +2006,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                             return { ...x, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
                                           }));
                                           try {
-                                            const updated = await assignmentsApi.update(asn.id, { roleOnProjectId: roleId });
-                                            emitAssignmentsRefresh({
-                                              type: 'updated',
-                                              assignmentId: asn.id,
-                                              projectId: p.id ?? null,
-                                              personId: updated?.person ?? asn.person ?? null,
-                                              updatedAt: updated?.updatedAt ?? new Date().toISOString(),
-                                              fields: ['roleOnProjectId', 'roleName'],
-                                              assignment: updated ?? { ...asn, roleOnProjectId: roleId, roleName },
-                                            });
+                                            await updateAssignment(asn.id, { roleOnProjectId: roleId }, assignmentsApi);
                                             showToast('Role updated', 'success');
                                           } catch (e:any) {
                                             // revert + resort
@@ -2078,15 +2036,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
                               onClick={async () => {
                                 if (!asn.id || !p.id) return;
                                 try {
-                                  await assignmentsApi.delete(asn.id);
-                                  setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: x.assignments.filter(a => a.id !== asn.id) } : x));
-                                  emitAssignmentsRefresh({
-                                    type: 'deleted',
-                                    assignmentId: asn.id,
-                                    projectId: p.id ?? null,
+                                  await deleteAssignment(asn.id, assignmentsApi, {
+                                    projectId: p.id,
                                     personId: asn.person ?? null,
-                                    updatedAt: asn.updatedAt ?? new Date().toISOString(),
+                                    updatedAt: new Date().toISOString(),
                                   });
+                                  setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: x.assignments.filter(a => a.id !== asn.id) } : x));
                                   const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
                                   const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
                                   const res = await getProjectTotals([p.id!], { weeks: weeks.length, department: dept, include_children: inc });

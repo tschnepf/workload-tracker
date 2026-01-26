@@ -7,7 +7,7 @@ from django.db.models.signals import post_save, pre_save, post_delete
 from django.dispatch import receiver
 from django.utils.text import slugify
 
-from .models import ProjectRisk
+from .models import Project, ProjectRisk
 
 
 def _marker_filename(project) -> str:
@@ -68,3 +68,18 @@ def create_marker_on_first_attachment(sender, instance: ProjectRisk, **kwargs):
     if not instance.attachment or not instance.attachment.name:
         return
     transaction.on_commit(lambda: _create_marker_file(instance))
+
+
+@receiver(post_save, sender=Project)
+def sync_overhead_assignments_on_project_save(sender, instance: Project, **kwargs):
+    try:
+        name = (instance.name or '').lower()
+    except Exception:
+        return
+    if 'overhead' not in name or not getattr(instance, 'is_active', True):
+        return
+    try:
+        from assignments.overhead import sync_overhead_assignments_for_projects
+    except Exception:  # nosec B110
+        return
+    transaction.on_commit(lambda: sync_overhead_assignments_for_projects([instance.id]))

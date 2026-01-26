@@ -1,32 +1,27 @@
-export type ProjectsRefreshPayload = {
-  projectId?: number;
-  reason?: string;
-};
-
-type Listener = (p: ProjectsRefreshPayload) => void;
+type Listener = () => void;
 
 const listeners = new Set<Listener>();
 const CHANNEL_NAME = 'workload-tracker:refresh';
 const STORAGE_KEY = 'wt.refresh.projects';
 
-const notify = (payload: ProjectsRefreshPayload) => {
+const notify = () => {
   for (const l of Array.from(listeners)) {
-    try { l(payload); } catch {}
+    try { l(); } catch {}
   }
 };
 
-const broadcast = (payload: ProjectsRefreshPayload) => {
+const broadcast = () => {
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const channel = new BroadcastChannel(CHANNEL_NAME);
-      channel.postMessage({ type: 'projects', payload });
+      channel.postMessage({ type: 'projects' });
       channel.close();
       return;
     }
   } catch {}
   try {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ payload, ts: Date.now() }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ts: Date.now() }));
     }
   } catch {}
 };
@@ -37,14 +32,14 @@ if (typeof window !== 'undefined') {
       const channel = new BroadcastChannel(CHANNEL_NAME);
       channel.onmessage = (event) => {
         const data = event?.data;
-        if (data?.type === 'projects') notify(data.payload || {});
+        if (data?.type === 'projects') notify();
       };
     } else {
       window.addEventListener('storage', (e) => {
         if (e.key !== STORAGE_KEY || !e.newValue) return;
         try {
           const data = JSON.parse(e.newValue);
-          notify(data?.payload || {});
+          notify();
         } catch {}
       });
     }
@@ -56,7 +51,7 @@ export function subscribeProjectsRefresh(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-export function emitProjectsRefresh(payload: ProjectsRefreshPayload) {
-  notify(payload);
-  broadcast(payload);
+export function emitProjectsRefresh() {
+  notify();
+  broadcast();
 }

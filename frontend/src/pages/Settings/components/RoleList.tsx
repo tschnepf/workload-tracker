@@ -132,6 +132,9 @@ const RoleList: React.FC<RoleListProps> = ({
                 <div className="text-[var(--muted)] text-xs mt-1">
                   {role.description || 'No description'}
                 </div>
+                <div className="text-[var(--muted)] text-xs mt-1">
+                  Overhead: {(role.overheadHoursPerWeek ?? 0)}h/wk
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`inline-block w-2 h-2 rounded-full ${role.isActive ? 'bg-emerald-400' : 'bg-[var(--muted)]'}`} title={role.isActive ? 'Active' : 'Inactive'} />
@@ -175,8 +178,11 @@ const RoleList: React.FC<RoleListProps> = ({
           <div className="col-span-3">
             <SortableHeader column="name">ROLE NAME</SortableHeader>
           </div>
-          <div className="col-span-5">
+          <div className="col-span-3">
             <SortableHeader column="description">DESCRIPTION</SortableHeader>
+          </div>
+          <div className="col-span-2">
+            OVERHEAD (H/WK)
           </div>
           <div className="col-span-2">
             <SortableHeader column="createdAt">CREATED</SortableHeader>
@@ -198,9 +204,16 @@ const RoleList: React.FC<RoleListProps> = ({
               </div>
 
               {/* Description */}
-              <div className="col-span-5">
+              <div className="col-span-3">
                 <div className="text-[var(--muted)] text-sm">
                   {role.description || 'No description'}
+                </div>
+              </div>
+
+              {/* Overhead Hours */}
+              <div className="col-span-2">
+                <div className="text-[var(--text)] text-sm">
+                  {(role.overheadHoursPerWeek ?? 0)}h/wk
                 </div>
               </div>
 

@@ -12,10 +12,11 @@ class RoleSerializer(serializers.ModelSerializer):
     # CRITICAL: All fields needed by frontend must be explicitly listed
     class Meta:
         model = Role
-        fields = ['id', 'name', 'description', 'isActive', 'sortOrder', 'createdAt', 'updatedAt']
+        fields = ['id', 'name', 'description', 'overheadHoursPerWeek', 'isActive', 'sortOrder', 'createdAt', 'updatedAt']
         extra_kwargs = {
             'isActive': {'source': 'is_active'},
             'sortOrder': {'source': 'sort_order', 'required': False},
+            'overheadHoursPerWeek': {'source': 'overhead_hours_per_week', 'required': False},
             'createdAt': {'source': 'created_at', 'read_only': True},
             'updatedAt': {'source': 'updated_at', 'read_only': True},
         }

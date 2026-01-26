@@ -8,6 +8,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate } from 'react-router';
 import { Assignment, Person, Department } from '@/types/models';
 import { assignmentsApi, peopleApi, departmentsApi } from '@/services/api';
+import { deleteAssignment } from '@/lib/mutations/assignments';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -104,13 +105,17 @@ const AssignmentList: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: number, projectDisplayName: string, personName: string) => {
-    if (!window.confirm(`Remove ${personName} from ${projectDisplayName}?`)) {
+  const handleDelete = async (assignment: Assignment) => {
+    if (!window.confirm(`Remove ${assignment.personName} from ${assignment.projectDisplayName}?`)) {
       return;
     }
 
     try {
-      await assignmentsApi.delete(id);
+      await deleteAssignment(assignment.id!, assignmentsApi, {
+        projectId: assignment.project ?? null,
+        personId: assignment.person ?? null,
+        updatedAt: assignment.updatedAt ?? new Date().toISOString(),
+      });
       await loadAssignments(); // Reload the list
     } catch (err: any) {
       setError(err.message || 'Failed to delete assignment');
@@ -251,7 +256,7 @@ const AssignmentList: React.FC = () => {
                         <Button
                           variant="danger"
                           size="sm"
-                          onClick={() => handleDelete(assignment.id!, assignment.projectDisplayName!, assignment.personName!)}
+                          onClick={() => handleDelete(assignment)}
                         >
                           Remove
                         </Button>
@@ -276,5 +281,3 @@ const AssignmentList: React.FC = () => {
 };
 
 export default AssignmentList;
-
-

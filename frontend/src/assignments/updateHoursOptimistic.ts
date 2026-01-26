@@ -1,4 +1,5 @@
 import { assignmentsApi } from '@/services/api';
+import { updateAssignment } from '@/lib/mutations/assignments';
 import { etagStore } from '@/api/etagStore';
 
 export type Cell = { assignmentId: number; weekKey: string };
@@ -34,7 +35,7 @@ export async function applyHoursToCellsOptimistic(params: {
     for (const [assignmentId, desiredMap] of entries) {
       const current = await assignmentsApi.get(assignmentId);
       const merged = { ...(current?.weeklyHours || {}), ...(desiredMap || {}) } as Record<string, number>;
-      await assignmentsApi.update(assignmentId, { weeklyHours: merged });
+      await updateAssignment(assignmentId, { weeklyHours: merged }, assignmentsApi);
     }
     await (afterSuccess?.());
   } catch (e) {

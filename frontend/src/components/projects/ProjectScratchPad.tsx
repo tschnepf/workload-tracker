@@ -1,5 +1,6 @@
 import React from 'react';
 import { projectsApi } from '@/services/api';
+import { updateProject } from '@/lib/mutations/projects';
 
 type Props = {
   projectId: number;
@@ -114,7 +115,7 @@ export default function ProjectScratchPad({ projectId, initialHtml, canEdit = tr
     try {
       setSaving(true);
       const current = editorRef.current?.innerHTML || html;
-      await projectsApi.update(projectId, { notes: current });
+      await updateProject(projectId, { notes: current }, projectsApi);
       setSavedHtml(current);
       setHtml(current);
       setDirty(false);

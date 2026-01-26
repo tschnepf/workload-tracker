@@ -23,7 +23,8 @@ export type PersonalWorkPayload = {
 
 type HookState = {
   data: PersonalWorkPayload | null;
-  loading: boolean;
+  isLoading: boolean;
+  isFetching: boolean;
   error: string | null;
 };
 
@@ -52,7 +53,12 @@ async function fetchPersonalWork(personId: number): Promise<PersonalWorkPayload>
 export function usePersonalWork() {
   const auth = useAuth();
   const personId = auth?.person?.id ?? null;
-  const [{ data, loading, error }, setState] = React.useState<HookState>({ data: null, loading: false, error: null });
+  const [{ data, isLoading, isFetching, error }, setState] = React.useState<HookState>({
+    data: null,
+    isLoading: false,
+    isFetching: false,
+    error: null,
+  });
   const inflightRef = React.useRef<Promise<PersonalWorkPayload> | null>(null);
   const requestIdRef = React.useRef(0);
   const refreshTimerRef = React.useRef<number | null>(null);
@@ -60,7 +66,12 @@ export function usePersonalWork() {
   const loadPersonalWork = React.useCallback(async (opts?: { force?: boolean }) => {
     if (!personId) return;
     const requestId = ++requestIdRef.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    setState((prev) => ({
+      ...prev,
+      isLoading: !prev.data,
+      isFetching: Boolean(prev.data),
+      error: null,
+    }));
     let request = inflightRef.current;
     if (!request || opts?.force) {
       request = fetchPersonalWork(personId);
@@ -69,10 +80,15 @@ export function usePersonalWork() {
     try {
       const payload = await request;
       if (requestId !== requestIdRef.current) return;
-      setState({ data: payload, loading: false, error: null });
+      setState({ data: payload, isLoading: false, isFetching: false, error: null });
     } catch (err: any) {
       if (requestId !== requestIdRef.current) return;
-      setState((prev) => ({ ...prev, loading: false, error: err?.message || 'Failed to refresh personal work' }));
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+        isFetching: false,
+        error: err?.message || 'Failed to refresh personal work',
+      }));
     } finally {
       if (inflightRef.current === request) {
         inflightRef.current = null;
@@ -89,7 +105,7 @@ export function usePersonalWork() {
 
   React.useEffect(() => {
     if (!personId) {
-      setState({ data: null, loading: false, error: null });
+      setState({ data: null, isLoading: false, isFetching: false, error: null });
       return;
     }
     loadPersonalWork();
@@ -127,7 +143,9 @@ export function usePersonalWork() {
 
   return {
     data,
-    loading,
+    loading: isLoading,
+    isLoading,
+    isFetching,
     error,
     refresh,
     hasPerson: Boolean(personId),

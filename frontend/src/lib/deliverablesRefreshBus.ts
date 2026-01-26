@@ -1,32 +1,27 @@
-export type DeliverablesRefreshPayload = {
-  projectId?: number;
-  reason?: string;
-};
-
-type Listener = (p: DeliverablesRefreshPayload) => void;
+type Listener = () => void;
 
 const listeners = new Set<Listener>();
 const CHANNEL_NAME = 'workload-tracker:refresh';
 const STORAGE_KEY = 'wt.refresh.deliverables';
 
-const notify = (payload: DeliverablesRefreshPayload) => {
+const notify = () => {
   for (const l of Array.from(listeners)) {
-    try { l(payload); } catch {}
+    try { l(); } catch {}
   }
 };
 
-const broadcast = (payload: DeliverablesRefreshPayload) => {
+const broadcast = () => {
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const channel = new BroadcastChannel(CHANNEL_NAME);
-      channel.postMessage({ type: 'deliverables', payload });
+      channel.postMessage({ type: 'deliverables' });
       channel.close();
       return;
     }
   } catch {}
   try {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ payload, ts: Date.now() }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ts: Date.now() }));
     }
   } catch {}
 };
@@ -37,14 +32,14 @@ if (typeof window !== 'undefined') {
       const channel = new BroadcastChannel(CHANNEL_NAME);
       channel.onmessage = (event) => {
         const data = event?.data;
-        if (data?.type === 'deliverables') notify(data.payload || {});
+        if (data?.type === 'deliverables') notify();
       };
     } else {
       window.addEventListener('storage', (e) => {
         if (e.key !== STORAGE_KEY || !e.newValue) return;
         try {
           const data = JSON.parse(e.newValue);
-          notify(data?.payload || {});
+          notify();
         } catch {}
       });
     }
@@ -56,7 +51,7 @@ export function subscribeDeliverablesRefresh(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-export function emitDeliverablesRefresh(payload: DeliverablesRefreshPayload) {
-  notify(payload);
-  broadcast(payload);
+export function emitDeliverablesRefresh() {
+  notify();
+  broadcast();
 }

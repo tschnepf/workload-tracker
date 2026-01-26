@@ -7,7 +7,7 @@ import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProj
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePeople } from '@/hooks/usePeople';
 import { assignmentsApi, departmentsApi } from '@/services/api';
-import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useProjectFilterMetadata } from '@/hooks/useProjectFilterMetadata';
@@ -639,10 +639,7 @@ const ProjectsList: React.FC = () => {
     if (!confirm('Are you sure you want to remove this assignment?')) return;
     try {
       const assignment = assignments.find(a => a.id === assignmentId);
-      await assignmentsApi.delete(assignmentId);
-      emitAssignmentsRefresh({
-        type: 'deleted',
-        assignmentId,
+      await deleteAssignment(assignmentId, assignmentsApi, {
         projectId: assignment?.project ?? selectedProject?.id ?? null,
         personId: assignment?.person ?? null,
         updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
@@ -909,16 +906,7 @@ const ProjectsList: React.FC = () => {
               currentWeekKey={currentWeekKey}
               onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
                 try {
-                  const updated = await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
-                  emitAssignmentsRefresh({
-                    type: 'updated',
-                    assignmentId,
-                    projectId: updated?.project ?? selectedProject?.id ?? null,
-                    personId: updated?.person ?? null,
-                    updatedAt: updated?.updatedAt ?? new Date().toISOString(),
-                    fields: ['roleOnProjectId', 'roleName'],
-                    assignment: updated ?? undefined,
-                  });
+                  await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
                   if (selectedProject?.id) await reloadAssignments(selectedProject.id);
                   await invalidateFilterMeta();
                 } catch (e) {
@@ -931,16 +919,7 @@ const ProjectsList: React.FC = () => {
                   if (!asn) return;
                   const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
                   updatedWeeklyHours[weekKey] = hours;
-                  const updated = await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
-                  emitAssignmentsRefresh({
-                    type: 'updated',
-                    assignmentId,
-                    projectId: updated?.project ?? asn.project ?? selectedProject?.id ?? null,
-                    personId: updated?.person ?? asn.person ?? null,
-                    updatedAt: updated?.updatedAt ?? new Date().toISOString(),
-                    fields: ['weeklyHours'],
-                    assignment: updated ?? { ...asn, weeklyHours: updatedWeeklyHours },
-                  });
+                  await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi);
                 } catch (e) {
                   console.error('Failed to update hours', e);
                 }
@@ -1110,7 +1089,7 @@ const ProjectsList: React.FC = () => {
             currentWeekKey={currentWeekKey}
             onChangeAssignmentRole={async (assignmentId, roleId, roleName) => {
               try {
-                await assignmentsApi.update(assignmentId, { roleOnProjectId: roleId });
+                await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
                 if (selectedProject?.id) await reloadAssignments(selectedProject.id);
                 await invalidateFilterMeta();
               } catch (e) {
@@ -1123,7 +1102,7 @@ const ProjectsList: React.FC = () => {
                 if (!asn) return;
                 const updatedWeeklyHours = { ...(asn.weeklyHours || {}) } as Record<string, number>;
                 updatedWeeklyHours[weekKey] = hours;
-                await assignmentsApi.update(assignmentId, { weeklyHours: updatedWeeklyHours });
+                await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi);
               } catch (e) {
                 console.error('Failed to update hours', e);
               }

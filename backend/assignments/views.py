@@ -17,6 +17,7 @@ from core.choices import DeliverablePhase, MembershipEventType
 from django.db.models.functions import Coalesce, Lower
 from .models import Assignment
 from .analytics import compute_role_capacity
+from .overhead import maybe_sync_overhead_assignments
 from departments.models import Department
 from .serializers import AssignmentSerializer
 from people.models import Person
@@ -72,6 +73,10 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         Get all assignments with person details and optional project
         filtering.
         """
+        try:
+            maybe_sync_overhead_assignments()
+        except Exception:  # nosec B110
+            pass
         queryset = self.get_queryset()
 
         # Filter by project if specified
@@ -276,6 +281,10 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = 1
         if weeks > 26:
             weeks = 26
+        try:
+            maybe_sync_overhead_assignments(weeks=weeks)
+        except Exception:  # nosec B110
+            pass
 
         # Department scoping via people of assignments
         dept_param = request.query_params.get('department')
@@ -2041,6 +2050,10 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = 1
         if weeks > 26:
             weeks = 26
+        try:
+            maybe_sync_overhead_assignments(weeks=weeks)
+        except Exception:  # nosec B110
+            pass
 
         # Build people queryset with optional department scoping
         people_qs = Person.objects.filter(is_active=True).select_related('department')

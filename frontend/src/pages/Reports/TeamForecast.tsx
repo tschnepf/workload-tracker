@@ -20,9 +20,11 @@ const TeamForecastPage: React.FC = () => {
   const { state: deptState, setDepartment } = useDepartmentFilter();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [forecast, setForecast] = useState<WorkloadForecastItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isFetching, setIsFetching] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [depts, setDepts] = useState<Department[]>([]);
+  const forecastRef = useRef<WorkloadForecastItem[]>([]);
 
   // Project timeline state
   const [projects, setProjects] = useState<Project[]>([]);
@@ -48,9 +50,15 @@ const TeamForecastPage: React.FC = () => {
     setPendingProjectId(selectedProject);
   }, [selectedProject]);
 
+  useEffect(() => {
+    forecastRef.current = forecast;
+  }, [forecast]);
+
   const loadForecast = useCallback(async () => {
     const requestId = ++forecastRequestIdRef.current;
-    setLoading(true);
+    const hasData = (forecastRef.current || []).length > 0;
+    setIsLoading(!hasData);
+    setIsFetching(hasData);
     setError(null);
     try {
       const data = await peopleApi.workloadForecast({
@@ -62,7 +70,10 @@ const TeamForecastPage: React.FC = () => {
     } catch (e: any) {
       if (requestId === forecastRequestIdRef.current) setError(e?.message || 'Failed to load forecast');
     } finally {
-      if (requestId === forecastRequestIdRef.current) setLoading(false);
+      if (requestId === forecastRequestIdRef.current) {
+        setIsLoading(false);
+        setIsFetching(false);
+      }
     }
   }, [weeks, deptState.selectedDepartmentId, deptState.includeChildren]);
 
@@ -139,20 +150,15 @@ const TeamForecastPage: React.FC = () => {
 
     const unsubscribeAssignments = subscribeAssignmentsRefresh((event) => {
       scheduleForecastRefresh();
-      if (!selectedProject) return;
-      if (event?.projectId != null && Number(event.projectId) !== Number(selectedProject)) return;
-      scheduleProjectDetailsRefresh();
+      if (selectedProject && event?.projectId != null && Number(event.projectId) !== Number(selectedProject)) return;
+      if (selectedProject) scheduleProjectDetailsRefresh();
     });
-    const unsubscribeDeliverables = subscribeDeliverablesRefresh((event) => {
-      if (!selectedProject) return;
-      if (event?.projectId != null && Number(event.projectId) !== Number(selectedProject)) return;
-      scheduleProjectDetailsRefresh();
+    const unsubscribeDeliverables = subscribeDeliverablesRefresh(() => {
+      if (selectedProject) scheduleProjectDetailsRefresh();
     });
-    const unsubscribeProjects = subscribeProjectsRefresh((event) => {
+    const unsubscribeProjects = subscribeProjectsRefresh(() => {
       loadProjects();
-      if (!selectedProject) return;
-      if (event?.projectId != null && Number(event.projectId) !== Number(selectedProject)) return;
-      scheduleProjectDetailsRefresh();
+      if (selectedProject) scheduleProjectDetailsRefresh();
     });
     const unsubscribeDepartments = subscribeDepartmentsRefresh(() => {
       loadDepartments();
@@ -297,7 +303,7 @@ const TeamForecastPage: React.FC = () => {
                 </select>
               </div>
             </div>
-            {loading ? (
+            {isLoading ? (
               <div className="text-[var(--muted)]">Loading forecast...</div>
             ) : error ? (
               <div className="text-red-400">{error}</div>
@@ -308,6 +314,9 @@ const TeamForecastPage: React.FC = () => {
                 <CapacityTimeline weeklyData={forecast} scale={scale} />
               )
             )}
+            {isFetching ? (
+              <div className="mt-2 text-xs text-[var(--muted)]">Refreshing forecast…</div>
+            ) : null}
           </div>
         </Card>
 

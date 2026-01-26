@@ -23,6 +23,7 @@ export interface Role {
   id: number;
   name: string;
   description?: string;
+  overheadHoursPerWeek?: number;
   isActive?: boolean;
   sortOrder?: number;
   createdAt?: string;

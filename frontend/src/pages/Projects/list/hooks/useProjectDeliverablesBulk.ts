@@ -21,9 +21,7 @@ export function useProjectDeliverablesBulk(projects: Project[] | null | undefine
   const loadSeqRef = useRef(0);
   const refreshSeqRef = useRef<Map<number, number>>(new Map());
   const idsRef = useRef<number[]>([]);
-  const refreshQueueRef = useRef<{ all: boolean; ids: Set<number>; timer: ReturnType<typeof setTimeout> | null }>({
-    all: false,
-    ids: new Set(),
+  const refreshQueueRef = useRef<{ timer: ReturnType<typeof setTimeout> | null }>({
     timer: null,
   });
 
@@ -99,27 +97,13 @@ export function useProjectDeliverablesBulk(projects: Project[] | null | undefine
     const queue = refreshQueueRef.current;
     if (queue.timer) return;
     queue.timer = setTimeout(async () => {
-      const pendingAll = queue.all;
-      const pendingIds = Array.from(queue.ids);
-      queue.all = false;
-      queue.ids.clear();
       queue.timer = null;
-      if (pendingAll) {
-        await load();
-        return;
-      }
-      await Promise.all(pendingIds.map((id) => refreshOne(id)));
+      await load();
     }, 300);
   }, [load, refreshOne]);
 
   useEffect(() => {
-    const unsubscribe = subscribeDeliverablesRefresh((payload) => {
-      const queue = refreshQueueRef.current;
-      if (payload?.projectId != null) {
-        queue.ids.add(payload.projectId);
-      } else {
-        queue.all = true;
-      }
+    const unsubscribe = subscribeDeliverablesRefresh(() => {
       scheduleRefresh();
     });
     return () => {
@@ -129,8 +113,6 @@ export function useProjectDeliverablesBulk(projects: Project[] | null | undefine
         clearTimeout(queue.timer);
         queue.timer = null;
       }
-      queue.ids.clear();
-      queue.all = false;
     };
   }, [scheduleRefresh]);
 

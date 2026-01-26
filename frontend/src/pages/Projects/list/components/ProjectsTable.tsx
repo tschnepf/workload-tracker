@@ -6,12 +6,12 @@ import StatusBadge, { getStatusColor, formatStatus } from '@/components/projects
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { getFlag } from '@/lib/flags';
-import { emitDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
+import { updateDeliverable } from '@/lib/mutations/deliverables';
 import { useVirtualRows } from '../hooks/useVirtualRows';
 import TooltipPortal from '@/components/ui/TooltipPortal';
 import QaAssignmentEditor, { type QaPersonOption } from '@/pages/Projects/list/components/QaAssignmentEditor';
 import { deliverablesApi, assignmentsApi, peopleApi } from '@/services/api';
-import { emitAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import { useUpdateProject } from '@/hooks/useProjects';
 import { useDebounce } from '@/hooks/useDebounce';
 import { listProjectRoles } from '@/roles/api';
@@ -344,37 +344,19 @@ const ProjectsTable: React.FC<Props> = ({
         ? (departmentLabels.get(person.department) || undefined)
         : undefined;
       if (assignmentId) {
-        const updated = await assignmentsApi.update(assignmentId, { person: person.id });
-        emitAssignmentsRefresh({
-          type: 'updated',
-          assignmentId,
-          projectId: projectId ?? null,
-          personId: updated?.person ?? person.id,
-          updatedAt: updated?.updatedAt ?? new Date().toISOString(),
-          fields: ['person'],
-          assignment: updated ?? undefined,
-        });
+        await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
       } else {
         const roleId = await resolveQaRoleId(person.department ?? departmentFilterId ?? null);
         if (!roleId) {
           throw new Error('QA role not found for this department');
         }
-        const created = await assignmentsApi.create({
+        const created = await createAssignment({
           person: person.id,
           project: projectId,
           roleOnProjectId: roleId,
           weeklyHours: {},
           startDate: new Date().toISOString().slice(0, 10),
-        } as any);
-        emitAssignmentsRefresh({
-          type: 'created',
-          assignmentId: (created as any)?.id as number,
-          projectId: projectId ?? null,
-          personId: (created as any)?.person ?? person.id,
-          updatedAt: (created as any)?.updatedAt ?? new Date().toISOString(),
-          fields: ['person', 'project', 'roleOnProjectId', 'weeklyHours'],
-          assignment: created as any,
-        });
+        } as any, assignmentsApi);
         assignmentId = (created as any)?.id ?? assignmentId;
       }
       setQaOverrides((prev) => {
@@ -396,12 +378,12 @@ const ProjectsTable: React.FC<Props> = ({
   const handleUnassignQa = async (projectId: number, assignmentId: number) => {
     setQaEditor((prev) => (prev ? { ...prev, saving: true, error: null } : prev));
     try {
-      await assignmentsApi.delete(assignmentId);
-      emitAssignmentsRefresh({
-        type: 'deleted',
-        assignmentId,
-        projectId: projectId ?? null,
-        updatedAt: new Date().toISOString(),
+      const existing = projectQaAssignments?.get(projectId) || [];
+      const assignment = existing.find((item) => item.id === assignmentId);
+      await deleteAssignment(assignmentId, assignmentsApi, {
+        projectId,
+        personId: assignment?.person ?? null,
+        updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
       });
       setQaOverrides((prev) => {
         const next = new Map(prev);
@@ -568,14 +550,13 @@ const ProjectsTable: React.FC<Props> = ({
     }
     setNotesEditor(prev => (prev ? { ...prev, saving: true, error: null } : prev));
     try {
-      await deliverablesApi.update(notesEditor.deliverableId, { notes: notesEditor.value });
+      await updateDeliverable(notesEditor.deliverableId, { notes: notesEditor.value }, deliverablesApi);
       setNotesOverrides(prev => {
         const next = new Map(prev);
         next.set(notesEditor.deliverableId, notesEditor.value);
         return next;
       });
       try { await onRefreshDeliverables?.(notesEditor.projectId); } catch {}
-      try { emitDeliverablesRefresh({ projectId: notesEditor.projectId, reason: 'deliverable-notes-updated' }); } catch {}
       try { onDeliverableEdited?.(notesEditor.projectId); } catch {}
       setNotesEditor(null);
     } catch (e: any) {
@@ -679,7 +660,7 @@ const ProjectsTable: React.FC<Props> = ({
     }
     setNextEditor(prev => (prev ? { ...prev, saving: true, error: null } : prev));
     try {
-      await deliverablesApi.update(nextEditor.deliverableId, updatePayload);
+      await updateDeliverable(nextEditor.deliverableId, updatePayload, deliverablesApi);
       setDeliverableOverrides(prev => {
         const next = new Map(prev);
         const current = next.get(nextEditor.deliverableId) || {};
@@ -687,7 +668,6 @@ const ProjectsTable: React.FC<Props> = ({
         return next;
       });
       try { await onRefreshDeliverables?.(nextEditor.projectId); } catch {}
-      try { emitDeliverablesRefresh({ projectId: nextEditor.projectId, reason: 'deliverable-updated' }); } catch {}
       try { onDeliverableEdited?.(nextEditor.projectId); } catch {}
       setNextEditor(null);
     } catch (e: any) {
@@ -743,7 +723,7 @@ const ProjectsTable: React.FC<Props> = ({
       return;
     }
     try {
-      await deliverablesApi.update(datePicker.deliverableId, { date: value || null });
+      await updateDeliverable(datePicker.deliverableId, { date: value || null }, deliverablesApi);
       setDeliverableOverrides(prev => {
         const next = new Map(prev);
         const current = next.get(datePicker.deliverableId) || {};
@@ -751,7 +731,6 @@ const ProjectsTable: React.FC<Props> = ({
         return next;
       });
       try { await onRefreshDeliverables?.(datePicker.projectId); } catch {}
-      try { emitDeliverablesRefresh({ projectId: datePicker.projectId, reason: 'deliverable-date-updated' }); } catch {}
       try { onDeliverableEdited?.(datePicker.projectId); } catch {}
     } catch (e) {
       console.error('Failed to update deliverable date', e);
