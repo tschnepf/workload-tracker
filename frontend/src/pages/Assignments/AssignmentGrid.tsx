@@ -600,22 +600,24 @@ const AssignmentGrid: React.FC = () => {
 
   // (status controls and editing cell logic extracted via hooks above)
 
-  // Check if the current selectedCells form a contiguous range within the same assignment
+  // Check if the current selectedCells form a valid contiguous range for bulk apply
   const isContiguousSelection = (): { ok: boolean; reason?: string } => {
     if (!selectedCells || selectedCells.length <= 1) return { ok: true };
 
-    const allSame = selectedCells.every(
-      c => c.personId === selectedCells[0].personId && c.assignmentId === selectedCells[0].assignmentId
-    );
-    if (!allSame) return { ok: false, reason: 'Selection must be within a single assignment row' };
+    const personId = selectedCells[0].personId;
+    const allSamePerson = selectedCells.every(c => c.personId === personId);
+    if (!allSamePerson) return { ok: false, reason: 'Selection must be within a single person' };
 
-    // Ensure weeks are contiguous according to the weeks array order
+    // Ensure the selected weeks form a contiguous range
     const weekIndex = (date: string) => weeks.findIndex(w => w.date === date);
-    const sorted = [...selectedCells].sort((a, b) => weekIndex(a.week) - weekIndex(b.week));
-    const start = weekIndex(sorted[0].week);
-    for (let i = 1; i < sorted.length; i++) {
+    const uniqueWeekIdx = Array.from(
+      new Set(selectedCells.map(c => weekIndex(c.week)).filter(i => i >= 0))
+    ).sort((a, b) => a - b);
+    if (uniqueWeekIdx.length === 0) return { ok: false, reason: 'Selection must include valid weeks' };
+    const start = uniqueWeekIdx[0];
+    for (let i = 1; i < uniqueWeekIdx.length; i++) {
       const expected = start + i;
-      if (weekIndex(sorted[i].week) !== expected) {
+      if (uniqueWeekIdx[i] !== expected) {
         return { ok: false, reason: 'Selection must be a contiguous week range' };
       }
     }
@@ -684,7 +686,7 @@ const AssignmentGrid: React.FC = () => {
     csSelect(rowKeyFor(personId, assignmentId), week, isShiftClick);
   };
 
-  // Click + drag selection support within a single assignment row
+  // Click + drag selection support across rows
   const handleCellMouseDown = (personId: number, assignmentId: number, week: string) => {
     csMouseDown(rowKeyFor(personId, assignmentId), week);
   };
