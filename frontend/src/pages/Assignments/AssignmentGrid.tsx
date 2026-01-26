@@ -1318,7 +1318,9 @@ const AssignmentGrid: React.FC = () => {
           </div>
         </div>
       )}
-      <MobileAddAssignmentSheet addController={addUI} people={people as any} canEditAssignments={canEditAssignments} />
+      {isMobileLayout ? (
+        <MobileAddAssignmentSheet addController={addUI} people={people as any} canEditAssignments={canEditAssignments} />
+      ) : null}
       <MobileAssignmentSheet
         target={mobileEditTarget}
         people={people as any}
