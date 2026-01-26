@@ -29,6 +29,7 @@ const MobilePersonAccordions: React.FC<Props> = ({
   canEditAssignments = true,
   onAddAssignment,
   activeAddPersonId,
+  scheme,
 }) => {
   const [expanded, setExpanded] = React.useState<number | null>(null);
   const sparkWeeks = React.useMemo(() => weeks.slice(0, MAX_WEEKS_IN_SPARK), [weeks]);

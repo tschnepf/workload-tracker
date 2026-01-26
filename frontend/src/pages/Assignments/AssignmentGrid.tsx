@@ -214,9 +214,8 @@ const AssignmentGrid: React.FC = () => {
 
   const applyAssignmentEvent = useCallback(async (event: AssignmentEvent) => {
     if (!event?.assignmentId) return;
-    if (editingCell?.rowKey && event.fields?.includes('weeklyHours')) {
-      const suffix = `:${event.assignmentId}`;
-      if (String(editingCell.rowKey).endsWith(suffix)) return;
+    if (editingCell?.assignmentId && event.fields?.includes('weeklyHours')) {
+      if (editingCell.assignmentId === event.assignmentId) return;
     }
     const eventTimestamp = event.updatedAt ? Date.parse(event.updatedAt) : 0;
     const last = lastAssignmentUpdateRef.current.get(event.assignmentId) || 0;

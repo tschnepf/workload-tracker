@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAssignmentsPageSnapshot, type AssignmentsPageSnapshot } from '@/services/assignmentsPageSnapshotApi';
 import { primeProjectRolesCache } from '@/roles/api';
 import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
@@ -53,7 +53,7 @@ export function useAssignmentsPageSnapshot(params: Params) {
     enabled: params.weeks > 0,
     staleTime: 0,
     refetchOnWindowFocus: false,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   useEffect(() => {
