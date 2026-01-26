@@ -19,6 +19,7 @@ import { logout as performLogout } from '@/store/auth';
 import { TopBarSlotsProvider, useTopBarSlotValues } from '@/components/layout/TopBarSlots';
 import { LayoutDensityProvider, useLayoutDensity } from '@/components/layout/useLayoutDensity';
 import { ProjectQuickViewPopoverProvider } from '@/components/projects/quickview';
+import { ProjectDetailsDrawerProvider } from '@/components/projects/detailsDrawer';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -136,7 +137,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           />
           <MainWithDensity ariaBusy={nav.state !== 'idle'}>
             <ProjectQuickViewPopoverProvider>
-              {children}
+              <ProjectDetailsDrawerProvider>
+                {children}
+              </ProjectDetailsDrawerProvider>
             </ProjectQuickViewPopoverProvider>
           </MainWithDensity>
         </TopBarSlotsProvider>

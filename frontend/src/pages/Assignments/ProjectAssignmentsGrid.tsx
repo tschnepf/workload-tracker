@@ -31,7 +31,7 @@ import StatusFilterChips from '@/components/compact/StatusFilterChips';
 import HeaderActions from '@/components/compact/HeaderActions';
 import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
-import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
@@ -75,15 +75,15 @@ const EMPTY_MARKERS: DeliverableMarker[] = [];
 
 // Local helper component: use the quick view hook inside a descendant of Layout's provider
 const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.ReactNode }> = ({ projectId, children }) => {
-  const { open } = useProjectQuickViewPopover();
+  const { open } = useProjectDetailsDrawer();
   const queryClient = useQueryClient();
   const prefetchTimerRef = React.useRef<number | null>(null);
   return (
     <button
       type="button"
       className="truncate cursor-pointer hover:underline"
-      onClick={(e) => { e.stopPropagation(); open(projectId, e.currentTarget as HTMLElement, { placement: 'center' }); }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(projectId, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
+      onClick={(e) => { e.stopPropagation(); open(projectId); }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(projectId); } }}
       onMouseEnter={() => {
         if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
         prefetchTimerRef.current = window.setTimeout(() => {

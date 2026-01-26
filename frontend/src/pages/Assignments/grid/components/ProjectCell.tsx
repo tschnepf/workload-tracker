@@ -6,7 +6,7 @@ import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
-import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/services/api';
 
@@ -28,7 +28,7 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
   const [openRole, setOpenRole] = React.useState<boolean>(false);
   const roleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
-  const { open: openQuickView } = useProjectQuickViewPopover();
+  const { open: openProjectDetails } = useProjectDetailsDrawer();
   const queryClient = useQueryClient();
   const prefetchTimerRef = React.useRef<number | null>(null);
   return (
@@ -41,8 +41,8 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
               <button
                 type="button"
                 className="truncate hover:underline"
-                onClick={(e) => { e.stopPropagation(); openQuickView(projectId, e.currentTarget as HTMLElement, { placement: 'center' }); }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openQuickView(projectId, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
+                onClick={(e) => { e.stopPropagation(); openProjectDetails(projectId); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openProjectDetails(projectId); } }}
                 onMouseEnter={() => {
                   if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
                   prefetchTimerRef.current = window.setTimeout(() => {

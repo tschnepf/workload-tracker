@@ -288,7 +288,7 @@ const DeliverablesSection = React.forwardRef<DeliverablesSectionHandle, Delivera
     return createPortal(
       <div
         ref={datePopoverRef}
-        className="fixed z-50"
+        className="fixed z-[1300]"
         style={{ top, left, width: popoverWidth }}
         onClick={(e) => e.stopPropagation()}
       >
