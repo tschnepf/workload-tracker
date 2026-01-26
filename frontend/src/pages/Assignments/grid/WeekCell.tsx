@@ -119,9 +119,15 @@ export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
       className={`relative cursor-pointer transition-colors border-l border-[var(--border)] ${
         isSelected ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : 'hover:bg-[var(--surfaceHover)]'
       }`}
-      onMouseDown={(e) => { e.preventDefault(); onMouseDown(assignmentId, weekKey, e as any); }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        const isShift = (e as any).shiftKey;
+        onMouseDown(assignmentId, weekKey, e as any);
+        if (isShift) {
+          onSelect(assignmentId, weekKey, true);
+        }
+      }}
       onMouseEnter={() => onMouseEnter(assignmentId, weekKey)}
-      onClick={(e) => onSelect(assignmentId, weekKey, (e as any).shiftKey)}
       onDoubleClick={() => {
         const seed = hours ? String(hours) : '';
         setValue(seed);

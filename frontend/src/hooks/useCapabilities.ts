@@ -18,12 +18,13 @@ const defaultCaps: Capabilities = {
   personalDashboard: true,
 };
 
-export function useCapabilities() {
+export function useCapabilities(options?: { enabled?: boolean }) {
   return useQuery<Capabilities, Error>({
     queryKey: ['capabilities'],
     queryFn: () => systemApi.getCapabilities(),
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
+    enabled: options?.enabled ?? true,
     select: (data) => ({
       ...defaultCaps,
       ...data,

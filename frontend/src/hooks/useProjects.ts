@@ -7,11 +7,16 @@ import { useCallback, useEffect, useRef } from 'react';
 import { createProject, deleteProject, updateProject } from '@/lib/mutations/projects';
 
 // Projects query hook with state adapter for existing code compatibility
-export function useProjects() {
-  const pageSize = 100;
+export function useProjects(options?: { ordering?: string | null; pageSize?: number }) {
+  const pageSize = options?.pageSize ?? 100;
+  const ordering = options?.ordering ?? null;
   const query = useInfiniteQuery({
-    queryKey: ['projects'],
-    queryFn: ({ pageParam = 1 }) => projectsApi.list({ page: pageParam, page_size: pageSize }),
+    queryKey: ['projects', ordering || 'default', pageSize],
+    queryFn: ({ pageParam = 1 }) => projectsApi.list({
+      page: pageParam,
+      page_size: pageSize,
+      ordering: ordering || undefined,
+    }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
       if (!lastPage?.next) return undefined;

@@ -2,12 +2,15 @@ from rest_framework import viewsets, permissions, status
 import os
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
+from rest_framework.filters import OrderingFilter
+from rest_framework.views import APIView
 from django.db.models import Max, Count, Exists, OuterRef, Q, Prefetch
 from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date, parse_http_date
 from django.conf import settings
 from accounts.permissions import is_admin_or_manager
+from accounts.serializers import AdminAuditLogSerializer
 from django.core.cache import cache
 from django.utils import timezone
 from .models import Project
@@ -47,6 +50,39 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     queryset = Project.objects.filter(is_active=True)
     serializer_class = ProjectSerializer
     # Use global default permissions (IsAuthenticated)
+    filter_backends = [OrderingFilter]
+    ordering_fields = ['client', 'name', 'status', 'project_number', 'created_at', 'updated_at']
+    ordering = ['-created_at', 'name']
+
+    def _log_project_audit(self, action: str, project: Project, extra: dict | None = None) -> None:
+        try:
+            from accounts.models import AdminAuditLog  # type: ignore
+            request = getattr(self, 'request', None)
+            actor = None
+            if request is not None:
+                user = getattr(request, 'user', None)
+                if user and getattr(user, 'is_authenticated', False):
+                    actor = user
+            detail = {
+                'project': {
+                    'id': project.id,
+                    'name': project.name,
+                    'projectNumber': project.project_number,
+                    'status': project.status,
+                    'client': project.client,
+                    'isActive': project.is_active,
+                }
+            }
+            if extra:
+                detail.update(extra)
+            AdminAuditLog.objects.create(
+                actor=actor,
+                action=action,
+                target_user=None,
+                detail=detail,
+            )
+        except Exception:  # nosec B110
+            pass
     
     def get_queryset(self):
         # Phase 3: tighten fields to reduce payload
@@ -107,8 +143,16 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             response['ETag'] = f'"{etag}"'
             response['Last-Modified'] = http_date(last_modified.timestamp())
             response['Cache-Control'] = 'private, max-age=30'  # 30 seconds cache for authenticated responses
-        
+
         return response
+
+    def perform_create(self, serializer):
+        project = serializer.save()
+        self._log_project_audit('create_project', project)
+
+    def perform_destroy(self, instance):
+        self._log_project_audit('delete_project', instance)
+        instance.delete()
 
     @extend_schema(
         responses=inline_serializer(name='ProjectPreDeliverableSettingsResponse', fields={
@@ -801,3 +845,29 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         empty_queryset = self.queryset.none()
         response = export_projects_to_excel(empty_queryset, is_template=True)
         return response
+
+
+class ProjectAuditLogsView(APIView):
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+    throttle_classes = [UserRateThrottle]
+
+    @extend_schema(parameters=[OpenApiParameter(name='limit', type=int, required=False)], responses=AdminAuditLogSerializer(many=True))
+    def get(self, request):
+        """Read-only endpoint for recent project create/delete audit logs (admin only)."""
+        try:
+            limit = int(request.query_params.get('limit', '50'))
+        except Exception:
+            limit = 50
+        limit = max(1, min(500, limit))
+        try:
+            from accounts.models import AdminAuditLog  # type: ignore
+            qs = (
+                AdminAuditLog.objects
+                .select_related('actor', 'target_user')
+                .filter(action__in=['create_project', 'delete_project'])
+                .order_by('-created_at')[:limit]
+            )
+        except Exception:
+            qs = []
+        ser = AdminAuditLogSerializer(qs, many=True)
+        return Response(ser.data)

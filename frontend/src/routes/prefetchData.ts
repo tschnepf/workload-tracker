@@ -21,8 +21,8 @@ export async function prefetchDataForRoute(path: string): Promise<void> {
   try {
     if (p.startsWith('/projects')) {
       await queryClient.prefetchInfiniteQuery({
-        queryKey: ['projects'],
-        queryFn: ({ pageParam = 1 }) => projectsApi.list({ page: pageParam, page_size: 100 }),
+        queryKey: ['projects', 'client,name', 100],
+        queryFn: ({ pageParam = 1 }) => projectsApi.list({ page: pageParam, page_size: 100, ordering: 'client,name' }),
         initialPageParam: 1,
       });
       trackPerformanceEvent('prefetch.data.ok', performance.now() - start, 'ms', { path: '/projects', key: 'projects' });
@@ -41,4 +41,3 @@ export async function prefetchDataForRoute(path: string): Promise<void> {
     trackPerformanceEvent('prefetch.data.err', performance.now() - start, 'ms', { path: p, message: (error as Error)?.message });
   }
 }
-

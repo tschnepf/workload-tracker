@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 // Tokenized: use CSS variables (themes.css) instead of fixed dark theme
-import { departmentsApi } from '@/services/api';
 import type { Department } from '@/types/models';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useDepartments } from '@/hooks/useDepartments';
 
 const INPUT_ID = 'global-dept-filter-input';
 const DESC_ID = 'global-dept-filter-include-children-help';
@@ -14,14 +13,14 @@ type Props = {
   rightActions?: React.ReactNode;
   showCopyLink?: boolean;
   expand?: boolean;
+  departmentsOverride?: Department[];
 };
 
-export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = false, expand = true }) => {
+export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = false, expand = true, departmentsOverride }) => {
   const { state, setDepartment, clearDepartment, setIncludeChildren } = useDepartmentFilter();
 
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { departments: fetchedDepartments, isLoading: loading, error } = useDepartments({ enabled: !departmentsOverride });
+  const departments = departmentsOverride ?? fetchedDepartments;
 
   // Combobox state
   const [open, setOpen] = useState(false);
@@ -34,26 +33,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
   const listRef = useRef<HTMLDivElement>(null);
   const [dropdownRect, setDropdownRect] = useState<{ left: number; top: number; width: number } | null>(null);
 
-  // Fetch departments once
-  useAuthenticatedEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const page = await departmentsApi.list({ page: 1, page_size: 500 });
-        if (!active) return;
-        setDepartments((page.results || []) as Department[]);
-      } catch (e: any) {
-        if (!active) return;
-        setError('Failed to load departments');
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Departments are loaded via React Query hook
 
   // Debounce query
   useEffect(() => {

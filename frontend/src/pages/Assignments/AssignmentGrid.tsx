@@ -4,11 +4,10 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
-import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
 import { Assignment, Person, Deliverable, Project } from '@/types/models';
-import { assignmentsApi, peopleApi, deliverablesApi, projectsApi, jobsApi } from '@/services/api';
+import { assignmentsApi } from '@/services/api';
 import { useCapabilities } from '@/hooks/useCapabilities';
 // status controls composed via useStatusControls
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
@@ -130,7 +129,7 @@ const AssignmentGrid: React.FC = () => {
     onAdd: (personId, project) => addAssignment(personId, project),
   });
   const { editingCell, setEditingCell, editingValue, setEditingValue, startEditing, cancelEdit, sanitizeHours } = useEditingCellHook();
-  const caps = useCapabilities();
+  const caps = useCapabilities({ enabled: false });
   // Async job state for snapshot generation
   // async job state provided by useAssignmentsSnapshot
   // New multi-select project status filters (aggregate selection)
@@ -156,12 +155,6 @@ const AssignmentGrid: React.FC = () => {
     weeksHorizon,
     departmentId: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
     includeChildren: deptState.includeChildren,
-    capsAsyncJobs: (useMemo(() => caps.data?.asyncJobs ?? false, [caps.data]) as boolean),
-    assignmentsApi,
-    peopleApi,
-    deliverablesApi,
-    projectsApi,
-    jobsApi,
     setPeople,
     setAssignmentsData,
     setProjectsData: setProjectsData as any,
@@ -175,7 +168,7 @@ const AssignmentGrid: React.FC = () => {
     setError,
     setLoading,
   });
-  const { weeks, isSnapshotMode, loadData, asyncJob } = snapshot;
+  const { weeks, isSnapshotMode, loadData, asyncJob, departments } = snapshot;
   const canEditAssignments = caps.data?.aggregates?.gridSnapshot !== false;
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
@@ -702,11 +695,7 @@ const AssignmentGrid: React.FC = () => {
   };
 
 
-  // Load data on mount and when department filter or weeks horizon changes
-  useAuthenticatedEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon]);
+  // Snapshot query auto-fetches when weeks/department changes; no manual load needed here.
 
   useGridKeyboardNavigation({
     selectedCell,
@@ -1087,7 +1076,8 @@ const AssignmentGrid: React.FC = () => {
     await updateMultipleCellsAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, cells, hours, showToast });
   };
 
-  const { data: schemeData } = useUtilizationScheme();
+  const { data: schemeData } = useUtilizationScheme({ enabled: false });
+  const scheme = schemeData ?? defaultUtilizationScheme;
   const topBarHeader = (
     <div className="flex flex-col gap-2 min-w-0 w-full">
       <div className="flex flex-wrap items-center gap-3 min-w-0">
@@ -1183,6 +1173,7 @@ const AssignmentGrid: React.FC = () => {
             canEditAssignments={canEditAssignments}
             onAddAssignment={(pid) => addUI.open(pid)}
             activeAddPersonId={addUI.isAddingFor}
+            scheme={scheme}
           />
         </div>
       ) : (
@@ -1210,6 +1201,7 @@ const AssignmentGrid: React.FC = () => {
               selectedStatusFilters={selectedStatusFilters as unknown as Set<string>}
               formatFilterStatus={(status) => formatFilterStatus(status as any)}
               toggleStatusFilter={(status) => toggleStatusFilter(status as any)}
+              departmentsOverride={departments}
             />
           )}
           <WeekHeaderComp
@@ -1294,7 +1286,7 @@ const AssignmentGrid: React.FC = () => {
                   showAddRow={(person) => person.isExpanded && addUI.isAddingFor === person.id}
                   renderWeekTotals={(p, week) => {
                     const totalHours = getPersonTotalHours(p as any, week.date);
-                    const pill = getUtilizationPill({ hours: totalHours, capacity: (p as any).weeklyCapacity!, scheme: schemeData || defaultUtilizationScheme, output: 'classes' });
+                    const pill = getUtilizationPill({ hours: totalHours, capacity: (p as any).weeklyCapacity!, scheme, output: 'classes' });
                     const aria = totalHours > 0 ? `${totalHours} hours` : '0 hours';
                     return (
                       <div className={`inline-flex items-center justify-center h-6 px-2 leading-none rounded-full text-xs font-medium min-w-[40px] text-center ${pill.classes}`} aria-label={aria}>
@@ -1305,7 +1297,7 @@ const AssignmentGrid: React.FC = () => {
                 />
               </div>
               {(() => {
-                const s = schemeData ?? defaultUtilizationScheme;
+                const s = scheme;
                 const labels = s.mode === 'absolute_hours'
                   ? {
                       blue: `${s.blue_min}-${s.blue_max}h`,

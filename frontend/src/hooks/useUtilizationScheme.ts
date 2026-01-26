@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { utilizationSchemeApi, UtilizationScheme } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
 
-export function useUtilizationScheme() {
+export function useUtilizationScheme(options?: { enabled?: boolean }) {
   const auth = useAuth();
   const isAuthenticated = !!auth.accessToken;
   const qc = useQueryClient();
@@ -10,7 +10,7 @@ export function useUtilizationScheme() {
   const query = useQuery<UtilizationScheme, Error>({
     queryKey: ['utilizationScheme'],
     queryFn: () => utilizationSchemeApi.get(),
-    enabled: isAuthenticated,
+    enabled: (options?.enabled ?? true) && isAuthenticated,
     staleTime: 60_000,
     retry: 1,
   });
@@ -34,4 +34,3 @@ export function useUtilizationScheme() {
     isUpdating: mutation.isPending,
   };
 }
-

@@ -1,5 +1,6 @@
 import React from 'react';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
+import type { Department } from '@/types/models';
 
 export interface HeaderBarProps {
   headerRef: React.RefObject<HTMLDivElement>;
@@ -23,6 +24,7 @@ export interface HeaderBarProps {
   selectedStatusFilters: Set<string>;
   formatFilterStatus: (s: string) => string;
   toggleStatusFilter: (s: string) => void;
+  departmentsOverride?: Department[];
 }
 
 const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -47,6 +49,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   selectedStatusFilters,
   formatFilterStatus,
   toggleStatusFilter,
+  departmentsOverride,
 }) => {
   return (
     <div ref={headerRef} className="sticky top-0 bg-[var(--bg)] border-b border-[var(--border)] z-30 px-6 py-4">
@@ -108,6 +111,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
           <div className="flex-none min-w-[220px]">
             <GlobalDepartmentFilter
               showCopyLink={false}
+              departmentsOverride={departmentsOverride}
               rightActions={(
                 <>
                   <button

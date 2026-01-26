@@ -4,7 +4,7 @@ import { useLocation } from 'react-router';
 import Layout from '@/components/layout/Layout';
 import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
-import { getProjectGridSnapshot, getProjectTotals } from '@/services/projectAssignmentsApi';
+import { getProjectTotals } from '@/services/projectAssignmentsApi';
 import { toWeekHeader, WeekHeader } from '@/pages/Assignments/grid/utils';
 import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
 import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
@@ -18,7 +18,6 @@ import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
-import { useCapabilities } from '@/hooks/useCapabilities';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, getUtilizationPill } from '@/util/utilization';
@@ -37,6 +36,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
 import { bulkUpdateAssignmentHours, createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
+import { useAssignmentsPageSnapshot } from '@/pages/Assignments/hooks/useAssignmentsPageSnapshot';
 import {
   buildFutureDeliverableLookupFromSet,
   projectMatchesActiveWithDates,
@@ -60,6 +60,18 @@ type AssignmentUpdateInfo = {
   personId: number | null;
   projectId: number;
 };
+
+const TYPE_COLORS: Record<string, string> = {
+  bulletin: '#3b82f6',
+  cd: '#fb923c',
+  dd: '#818cf8',
+  ifc: '#06b6d4',
+  ifp: '#f472b6',
+  masterplan: '#a78bfa',
+  sd: '#f59e0b',
+  milestone: '#64748b',
+};
+const EMPTY_MARKERS: DeliverableMarker[] = [];
 
 // Local helper component: use the quick view hook inside a descendant of Layout's provider
 const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.ReactNode }> = ({ projectId, children }) => {
@@ -167,7 +179,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [rowOrder]);
   const selection = useCellSelection(weeks.map(w => w.date), rowOrder);
   const aborts = useAbortManager();
-  const caps = useCapabilities();
   const url = useGridUrlState();
   const location = useLocation();
   const statusDropdown = useDropdownManager<string>();
@@ -183,7 +194,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       return (p?.status as any) || 'active';
     }
   });
-  const { data: schemeData } = useUtilizationScheme();
+  const { data: schemeData } = useUtilizationScheme({ enabled: false });
   const scheme = schemeData ?? defaultUtilizationScheme;
   const legendLabels = React.useMemo(() => {
     const s = scheme;
@@ -204,6 +215,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   // Deliverable types per project/week for vertical bar rendering
   const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, DeliverableMarker[]>>>({});
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
+  const loadingAssignmentsRef = useRef<Set<number>>(new Set());
   const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
   const [editingSeed, setEditingSeed] = useState<string | null>(null);
@@ -213,6 +225,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [openRoleFor, setOpenRoleFor] = useState<number | null>(null);
   const roleAnchorRef = useRef<HTMLElement | null>(null);
   const [rolesByDept, setRolesByDept] = useState<Record<number, ProjectRole[]>>({});
+  const expandedFromUrlRef = useRef<string | null>(null);
   // Load any missing role catalogs for departments present in rows, then sort by role order
   const sortRowsByDeptRoles = React.useCallback(async (rows: Assignment[]) => {
     const deptIds = Array.from(new Set(rows.map(a => (a as any).personDepartmentId as number | null | undefined)))
@@ -236,6 +249,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [projects]);
 
   useEffect(() => {
+    loadingAssignmentsRef.current = loadingAssignments;
+  }, [loadingAssignments]);
+
+  useEffect(() => {
     const deptId = mobileRoleState?.deptId;
     if (!deptId || rolesByDept[deptId]) return;
     let cancelled = false;
@@ -251,8 +268,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [mobileRoleState, rolesByDept]);
   // Quick View popover trigger lives in a child component below Layout's provider
   const queryClient = useQueryClient();
-  // Reload trigger for Refresh All
-  const [reloadCounter, setReloadCounter] = useState<number>(0);
   const [pendingRefresh, setPendingRefresh] = useState<boolean>(false);
   const isSnapshotMode = true;
   // Column widths + resizing (parity with person grid)
@@ -427,6 +442,26 @@ const ProjectAssignmentsGrid: React.FC = () => {
       return set.size > 0 ? set : new Set<StatusFilter>(['active','active_ca']);
     } catch { return new Set<StatusFilter>(['active','active_ca']); }
   });
+  const statusParams = useMemo(() => {
+    const statuses = Array.from(selectedStatusFilters);
+    const hasShowAll = statuses.includes('Show All');
+    const hasNoDelivs = statuses.includes('active_no_deliverables');
+    const hasFutureWithDates = statuses.includes('active_with_dates');
+    const normalizedForApi = hasShowAll
+      ? []
+      : statuses
+          .filter((s) => s !== 'Show All' && s !== 'active_no_deliverables')
+          .map((s) => (s === 'active_with_dates' ? 'active' : s));
+    const statusIn = hasShowAll
+      ? undefined
+      : (normalizedForApi.length > 0 ? Array.from(new Set(normalizedForApi)).join(',') : undefined);
+    let hasFutureParam: 0 | 1 | undefined;
+    if (!hasShowAll && statuses.length === 1) {
+      if (hasNoDelivs) hasFutureParam = 0;
+      else if (hasFutureWithDates) hasFutureParam = 1;
+    }
+    return { statuses, hasShowAll, hasNoDelivs, hasFutureWithDates, normalizedForApi, statusIn, hasFutureParam };
+  }, [selectedStatusFilters]);
 
   // Consistent human-friendly labels for filter buttons
   const formatStatusLabel = (status: StatusFilter): string => {
@@ -457,6 +492,34 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
   };
 
+  const snapshotQuery = useAssignmentsPageSnapshot({
+    weeks: weeksHorizon,
+    department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
+    includeChildren: deptState.includeChildren,
+    statusIn: statusParams.statusIn,
+    hasFutureDeliverables: statusParams.hasFutureParam,
+    include: 'project',
+  });
+
+  const loadProjectAssignments = React.useCallback(async (projectId: number) => {
+    if (!projectId) return;
+    if (loadingAssignmentsRef.current.has(projectId)) return;
+    setLoadingAssignments(prev => new Set(prev).add(projectId));
+    try {
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, page_size: 200 } as any);
+      const rows = ((resp as any).results || []) as Assignment[];
+      const sorted = await sortRowsByDeptRoles(rows);
+      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, assignments: sorted, isExpanded: true } : x));
+    } catch {
+      showToast('Failed to load assignments', 'error');
+      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, isExpanded: false } : x));
+    } finally {
+      setLoadingAssignments(prev => { const n = new Set(prev); n.delete(projectId); return n; });
+    }
+  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, sortRowsByDeptRoles, showToast]);
+
   const toggleProjectExpanded = React.useCallback(async (project: ProjectWithAssignments) => {
     if (!project.id) return;
     const willExpand = !project.isExpanded;
@@ -466,23 +529,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
       if (willExpand) expandedIds.add(project.id); else expandedIds.delete(project.id);
       url.set('expanded', expandedIds.size > 0 ? Array.from(expandedIds).join(',') : null);
     } catch {}
-    if (willExpand && project.assignments.length === 0 && !loadingAssignments.has(project.id)) {
-      setLoadingAssignments(prev => new Set(prev).add(project.id));
-      try {
-        const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-        const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-        const resp = await assignmentsApi.list({ project: project.id, department: dept, include_children: inc, page_size: 200 } as any);
-        const rows = ((resp as any).results || []) as Assignment[];
-        const sorted = await sortRowsByDeptRoles(rows);
-        setProjects(prev => prev.map(x => (x.id === project.id ? { ...x, assignments: sorted } : x)));
-      } catch (error: any) {
-        showToast('Failed to load assignments', 'error');
-        setProjects(prev => prev.map(x => (x.id === project.id ? { ...x, isExpanded: false } : x)));
-      } finally {
-        setLoadingAssignments(prev => { const n = new Set(prev); n.delete(project.id); return n; });
-      }
+    if (willExpand && project.assignments.length === 0) {
+      await loadProjectAssignments(project.id);
     }
-  }, [projects, url, deptState.selectedDepartmentId, deptState.includeChildren, loadingAssignments, assignmentsApi, sortRowsByDeptRoles, showToast]);
+  }, [projects, url, loadProjectAssignments]);
 
   const handleMobileStatusChange = React.useCallback(async (projectId: number, newStatus: Project['status']) => {
     try {
@@ -557,7 +607,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     if (!projectId) return Number.POSITIVE_INFINITY;
     for (let i = 0; i < weeks.length; i++) {
       const wk = weeks[i]?.date;
-      const entries = (deliverableTypesByProjectWeek[projectId] || {})[wk] || [];
+      const entries = deliverableTypesByProjectWeek[projectId]?.[wk] ?? EMPTY_MARKERS;
       if (entries && entries.length > 0) return i;
     }
     return Number.POSITIVE_INFINITY;
@@ -600,16 +650,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return list;
   }, [projects, sortBy, sortDir, weeks, deliverableTypesByProjectWeek]);
 
-  const typeColors: Record<string, string> = {
-    bulletin: '#3b82f6',
-    cd: '#fb923c',
-    dd: '#818cf8',
-    ifc: '#06b6d4',
-    ifp: '#f472b6',
-    masterplan: '#a78bfa',
-    sd: '#f59e0b',
-    milestone: '#64748b',
-  };
+  const typeColors = TYPE_COLORS;
 
   const sparkWeeks = React.useMemo(() => weeks.slice(0, Math.min(6, weeks.length)), [weeks]);
 
@@ -676,7 +717,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                   <div className="flex gap-1 min-w-full px-0.5">
                     {weeks.map((week, index) => {
                       const hours = weeklyHours[index];
-                      const deliverables = project.id ? ((deliverableTypesByProjectWeek[project.id] || {})[week.date] || []) : [];
+                      const deliverables = project.id ? (deliverableTypesByProjectWeek[project.id]?.[week.date] ?? EMPTY_MARKERS) : EMPTY_MARKERS;
                       const barHeight = Math.max(6, Math.round((hours / maxWeeklyHours) * 48));
                       const deliverableTitle = deliverables.map((d) => `${d.percentage != null ? `${d.percentage}% ` : ''}${(d.type || '').toUpperCase()}`).join(', ');
                       const weekLabelFull = formatDateWithWeekday(week.date);
@@ -1145,184 +1186,153 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    const load = async () => {
-      const hasData = projectsRef.current.length > 0;
-      setLoading(!hasData);
-      setIsFetching(hasData);
-      setError(null);
-      try {
-        const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-        const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-        // Build server filters
-        const statuses = Array.from(selectedStatusFilters);
-        const hasShowAll = statuses.includes('Show All');
-        const hasNoDelivs = statuses.includes('active_no_deliverables');
-        const hasFutureWithDates = statuses.includes('active_with_dates');
-        const normalizedForApi = hasShowAll
-          ? []
-          : statuses
-              .filter((s) => s !== 'Show All' && s !== 'active_no_deliverables')
-              .map((s) => (s === 'active_with_dates' ? 'active' : s));
-        const statusIn = hasShowAll
-          ? undefined
-          : (normalizedForApi.length > 0 ? Array.from(new Set(normalizedForApi)).join(',') : undefined);
-        let hasFutureParam: 0 | 1 | undefined;
-        if (!hasShowAll && statuses.length === 1) {
-          if (hasNoDelivs) hasFutureParam = 0;
-          else if (hasFutureWithDates) hasFutureParam = 1;
-        }
-        const snap = await getProjectGridSnapshot({
-          weeks: weeksHorizon,
-          department: dept,
-          include_children: inc,
-          status_in: statusIn,
-          has_future_deliverables: hasFutureParam,
-        });
-        if (!mounted) return;
-        setWeeks(toWeekHeader(snap.weekKeys || []));
-        // Normalize projects from snapshot
-        const fromSnapshot: ProjectWithAssignments[] = (snap.projects || [])
-          .map(p => ({ id: p.id, name: p.name, client: p.client ?? undefined, status: p.status ?? undefined, assignments: [], isExpanded: false }));
+    const data = snapshotQuery.data;
+    const snap = data?.projectGridSnapshot;
+    if (!snap) return () => { mounted = false; };
 
-        // Augment with projects that match filters even if they currently have no assignments in the snapshot
-        // When the filter relies on deliverable metadata exclusively we rely on the snapshot (needs server data)
-        let augmented: ProjectWithAssignments[] = fromSnapshot;
-        try {
-          const onlySpecialFilter =
-            (!hasShowAll && hasNoDelivs && statuses.length === 1) ||
-            (!hasShowAll && hasFutureWithDates && statuses.length === 1);
-          if (!onlySpecialFilter) {
-            const allProjects = await projectsApi.listAll();
-            const allowAllStatuses = hasShowAll || statuses.length === 0;
-            const allowed = new Set(
-              (statuses || [])
-                .filter((s) => s !== 'Show All' && s !== 'active_no_deliverables')
-                .map((s) => (s === 'active_with_dates' ? 'active' : s))
-                .map((s) => s.toLowerCase())
-            );
-            const seen = new Set(fromSnapshot.map(p => p.id));
-            const extras = (allProjects || [])
-              .filter(p => !seen.has(p.id!))
-              .filter(p => allowAllStatuses ? true : allowed.has((p.status || '').toLowerCase()))
-              .map(p => ({ id: p.id!, name: p.name, client: (p as any).client ?? undefined, status: (p.status as any) ?? undefined, assignments: [], isExpanded: false }));
-            augmented = [...fromSnapshot, ...extras];
-          }
-        } catch {}
+    const { statuses, hasShowAll, hasNoDelivs, hasFutureWithDates, normalizedForApi } = statusParams;
 
-        // Default sort: client name, then project name
-        const proj: ProjectWithAssignments[] = augmented.sort((a, b) => {
-          const ac = (a.client || '').toString().trim().toLowerCase();
-          const bc = (b.client || '').toString().trim().toLowerCase();
-          if (ac !== bc) {
-            if (!ac && bc) return 1;
-            if (ac && !bc) return -1;
-            return ac.localeCompare(bc);
-          }
-          const an = (a.name || '').toString().trim().toLowerCase();
-          const bn = (b.name || '').toString().trim().toLowerCase();
-          return an.localeCompare(bn);
-        });
-        const future = new Set<number>();
-        Object.entries(snap.hasFutureDeliverablesByProject || {}).forEach(([pid, val]) => { if (val) future.add(Number(pid)); });
-        const futureLookup = buildFutureDeliverableLookupFromSet(future);
-        const showAllSelected = hasShowAll || statuses.length === 0;
-        const allowedStatusSet = new Set(
-          normalizedForApi.map((s) => s.toLowerCase())
+    setWeeks(toWeekHeader(snap.weekKeys || []));
+    // Normalize projects from snapshot
+    const fromSnapshot: ProjectWithAssignments[] = (snap.projects || [])
+      .map(p => ({ id: p.id, name: p.name, client: p.client ?? undefined, status: p.status ?? undefined, assignments: [], isExpanded: false }));
+
+    // Augment with projects that match filters even if they currently have no assignments in the snapshot
+    // When the filter relies on deliverable metadata exclusively we rely on the snapshot (needs server data)
+    let augmented: ProjectWithAssignments[] = fromSnapshot;
+    try {
+      const onlySpecialFilter =
+        (!hasShowAll && hasNoDelivs && statuses.length === 1) ||
+        (!hasShowAll && hasFutureWithDates && statuses.length === 1);
+      if (!onlySpecialFilter) {
+        const allProjects = data?.projects || [];
+        const allowAllStatuses = hasShowAll || statuses.length === 0;
+        const allowed = new Set(
+          (statuses || [])
+            .filter((s) => s !== 'Show All' && s !== 'active_no_deliverables')
+            .map((s) => (s === 'active_with_dates' ? 'active' : s))
+            .map((s) => s.toLowerCase())
         );
-        const filteredProjects = showAllSelected
-          ? proj
-          : proj.filter((project) => {
-              const status = (project.status || '').toLowerCase();
-              const baseMatch = allowedStatusSet.has(status);
-              const withDatesMatch = hasFutureWithDates && projectMatchesActiveWithDates(project, futureLookup);
-              const noDatesMatch = hasNoDelivs && projectMatchesActiveWithoutDates(project, futureLookup);
-              return baseMatch || withDatesMatch || noDatesMatch;
-            });
-        setProjects(filteredProjects);
-        // Coerce hours map keys to numbers
-        const hb: Record<number, Record<string, number>> = {};
-        Object.entries(snap.hoursByProject || {}).forEach(([pid, wk]) => { hb[Number(pid)] = wk; });
-        setHoursByProject(hb);
-        // Deliverables maps (counts + typed markers from snapshot)
-        const dbw: Record<number, Record<string, number>> = {};
-        Object.entries(snap.deliverablesByProjectWeek || {}).forEach(([pid, wk]) => { dbw[Number(pid)] = wk; });
-        setDeliverablesByProjectWeek(dbw);
-        const markersByProject: Record<number, Record<string, DeliverableMarker[]>> = {};
-        if (snap.deliverableMarkersByProjectWeek) {
-          Object.entries(snap.deliverableMarkersByProjectWeek).forEach(([pid, weeksMap]) => {
-            const projectId = Number(pid);
-            if (!projectId || !weeksMap) return;
-            const weekMarkers: Record<string, DeliverableMarker[]> = {};
-            Object.entries(weeksMap || {}).forEach(([weekKey, markers]) => {
-              const normalized = (markers || []).map((m: any) => ({
-                type: String(m.type || '').toLowerCase(),
-                percentage: m.percentage == null || Number.isNaN(Number(m.percentage)) ? undefined : Number(m.percentage),
-                dates: Array.isArray(m.dates) && m.dates.length > 0 ? [...m.dates] : undefined,
-                description: m.description ?? null,
-                note: m.note ?? null,
-              })) as DeliverableMarker[];
-              if (normalized.length > 0) {
-                weekMarkers[weekKey] = normalized;
-              }
-            });
-            if (Object.keys(weekMarkers).length > 0) {
-              markersByProject[projectId] = weekMarkers;
-            }
-          });
-        }
-        setDeliverableTypesByProjectWeek(markersByProject);
-        // Expand projects from URL param and lazy-load their assignments
-        try {
-          const expandedParam = url.get('expanded');
-          if (expandedParam) {
-            const ids = expandedParam.split(',').map(x => parseInt(x, 10)).filter(n => !Number.isNaN(n));
-            if (ids.length > 0) {
-              setProjects(prev => prev.map(p => ids.includes(p.id!) ? { ...p, isExpanded: true } : p));
-              for (const pid of ids) {
-                if (!pid) continue;
-                if (loadingAssignments.has(pid)) continue;
-                setLoadingAssignments(prev => new Set(prev).add(pid));
-                try {
-                  const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-                  const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-                  const resp = await assignmentsApi.list({ project: pid, department: dept, include_children: inc, page_size: 200 } as any);
-                  const rows = ((resp as any).results || []) as Assignment[];
-                  const sorted = await sortRowsByDeptRoles(rows);
-                  setProjects(prev => prev.map(x => x.id === pid ? { ...x, assignments: sorted, isExpanded: true } : x));
-                } catch {}
-                finally {
-                  setLoadingAssignments(prev => { const n = new Set(prev); n.delete(pid); return n; });
-                }
-              }
-            }
-          }
-        } catch {}
-      } catch (e: any) {
-        if (!mounted) return;
-        setError(e?.message || 'Failed to load project grid snapshot');
-      } finally {
-        if (mounted) {
-          setLoading(false);
-          setIsFetching(false);
-          if (pendingRefresh) {
-            try { showToast('Refresh complete', 'success'); } catch {}
-            setPendingRefresh(false);
-          }
-        }
+        const seen = new Set(fromSnapshot.map(p => p.id));
+        const extras = (allProjects || [])
+          .filter(p => !seen.has(p.id!))
+          .filter(p => allowAllStatuses ? true : allowed.has((p.status || '').toLowerCase()))
+          .map(p => ({ id: p.id!, name: p.name, client: (p as any).client ?? undefined, status: (p.status as any) ?? undefined, assignments: [], isExpanded: false }));
+        augmented = [...fromSnapshot, ...extras];
       }
-    };
-    load();
+    } catch {}
+
+    // Default sort: client name, then project name
+    const proj: ProjectWithAssignments[] = augmented.sort((a, b) => {
+      const ac = (a.client || '').toString().trim().toLowerCase();
+      const bc = (b.client || '').toString().trim().toLowerCase();
+      if (ac !== bc) {
+        if (!ac && bc) return 1;
+        if (ac && !bc) return -1;
+        return ac.localeCompare(bc);
+      }
+      const an = (a.name || '').toString().trim().toLowerCase();
+      const bn = (b.name || '').toString().trim().toLowerCase();
+      return an.localeCompare(bn);
+    });
+    const future = new Set<number>();
+    Object.entries(snap.hasFutureDeliverablesByProject || {}).forEach(([pid, val]) => { if (val) future.add(Number(pid)); });
+    const futureLookup = buildFutureDeliverableLookupFromSet(future);
+    const showAllSelected = hasShowAll || statuses.length === 0;
+    const allowedStatusSet = new Set(
+      normalizedForApi.map((s) => s.toLowerCase())
+    );
+    const filteredProjects = showAllSelected
+      ? proj
+      : proj.filter((project) => {
+          const status = (project.status || '').toLowerCase();
+          const baseMatch = allowedStatusSet.has(status);
+          const withDatesMatch = hasFutureWithDates && projectMatchesActiveWithDates(project, futureLookup);
+          const noDatesMatch = hasNoDelivs && projectMatchesActiveWithoutDates(project, futureLookup);
+          return baseMatch || withDatesMatch || noDatesMatch;
+        });
+    if (!mounted) return () => { mounted = false; };
+    setProjects(filteredProjects);
+    // Coerce hours map keys to numbers
+    const hb: Record<number, Record<string, number>> = {};
+    Object.entries(snap.hoursByProject || {}).forEach(([pid, wk]) => { hb[Number(pid)] = wk; });
+    setHoursByProject(hb);
+    // Deliverables maps (counts + typed markers from snapshot)
+    const dbw: Record<number, Record<string, number>> = {};
+    Object.entries(snap.deliverablesByProjectWeek || {}).forEach(([pid, wk]) => { dbw[Number(pid)] = wk; });
+    setDeliverablesByProjectWeek(dbw);
+    const markersByProject: Record<number, Record<string, DeliverableMarker[]>> = {};
+    if (snap.deliverableMarkersByProjectWeek) {
+      Object.entries(snap.deliverableMarkersByProjectWeek).forEach(([pid, weeksMap]) => {
+        const projectId = Number(pid);
+        if (!projectId || !weeksMap) return;
+        const weekMarkers: Record<string, DeliverableMarker[]> = {};
+        Object.entries(weeksMap || {}).forEach(([weekKey, markers]) => {
+          const normalized = (markers || []).map((m: any) => ({
+            type: String(m.type || '').toLowerCase(),
+            percentage: m.percentage == null || Number.isNaN(Number(m.percentage)) ? undefined : Number(m.percentage),
+            dates: Array.isArray(m.dates) && m.dates.length > 0 ? [...m.dates] : undefined,
+            description: m.description ?? null,
+            note: m.note ?? null,
+          })) as DeliverableMarker[];
+          if (normalized.length > 0) {
+            weekMarkers[weekKey] = normalized;
+          }
+        });
+        if (Object.keys(weekMarkers).length > 0) {
+          markersByProject[projectId] = weekMarkers;
+        }
+      });
+    }
+    setDeliverableTypesByProjectWeek(markersByProject);
     return () => { mounted = false; };
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, selectedStatusFilters, reloadCounter]);
+  }, [
+    snapshotQuery.data,
+    statusParams,
+  ]);
+
+  useEffect(() => {
+    const snap = snapshotQuery.data?.projectGridSnapshot;
+    if (!snap) return;
+    const expandedParam = new URLSearchParams(location.search).get('expanded') || '';
+    if (!expandedParam) return;
+    if (expandedFromUrlRef.current === expandedParam) return;
+    expandedFromUrlRef.current = expandedParam;
+    const ids = expandedParam.split(',').map(x => parseInt(x, 10)).filter(n => !Number.isNaN(n));
+    if (ids.length === 0) return;
+    setProjects(prev => prev.map(p => ids.includes(p.id!) ? { ...p, isExpanded: true } : p));
+    ids.forEach((pid) => {
+      void loadProjectAssignments(pid);
+    });
+  }, [snapshotQuery.data, location.search, loadProjectAssignments]);
+
+  useEffect(() => {
+    const hasData = projectsRef.current.length > 0;
+    if (snapshotQuery.isLoading && !hasData) {
+      setLoading(true);
+    } else {
+      setLoading(false);
+    }
+    setIsFetching(snapshotQuery.isFetching && hasData);
+    if (snapshotQuery.error) {
+      setError(snapshotQuery.error?.message || 'Failed to load project grid snapshot');
+    } else {
+      setError(null);
+    }
+    if (!snapshotQuery.isFetching && pendingRefresh) {
+      try { showToast('Refresh complete', 'success'); } catch {}
+      setPendingRefresh(false);
+    }
+  }, [snapshotQuery.isLoading, snapshotQuery.isFetching, snapshotQuery.error, pendingRefresh, showToast]);
 
   // Listen for global grid refresh events and trigger reload
   useEffect(() => {
     const unsub = subscribeGridRefresh(() => {
       setPendingRefresh(true);
-      setReloadCounter((c) => c + 1);
+      try { snapshotQuery.refetch(); } catch {}
     });
     return unsub;
-  }, []);
+  }, [snapshotQuery.refetch]);
 
 
   // Global mouse events for column resizing
@@ -1390,57 +1400,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     savingKeys: string[],
   ) => {
     applyBatchInFlightRef.current = true;
-    // Fire conflict checks in background (grouped per person/week to avoid spam)
-    try {
-      const payloadMap = new Map<string, { personId: number; projectId: number; weekKey: string; proposedHours: number }>();
-      updatesMap.forEach((info) => {
-        if (!info.personId) return;
-        info.weeks.forEach((weekKey) => {
-          const prevVal = Number(info.prev[weekKey] ?? 0) || 0;
-          const nextVal = Number(info.next[weekKey] ?? 0) || 0;
-          const delta = nextVal - prevVal;
-          if (delta === 0) return;
-          const key = `${info.personId}:${weekKey}`;
-          const existing = payloadMap.get(key);
-          if (existing) {
-            existing.proposedHours += delta;
-          } else {
-            payloadMap.set(key, {
-              personId: info.personId!,
-              projectId: info.projectId,
-              weekKey,
-              proposedHours: delta,
-            });
-          }
-        });
-      });
-      const conflictPayloads = Array.from(payloadMap.values());
-      if (conflictPayloads.length) {
-        Promise.allSettled(
-          conflictPayloads.map((payload) =>
-            assignmentsApi
-              .checkConflicts(payload.personId, payload.projectId, payload.weekKey, payload.proposedHours)
-              .then((response) => ({ response }))
-          )
-        ).then((results) => {
-          const warnings: string[] = [];
-          results.forEach((result) => {
-            if (result.status === 'fulfilled') {
-              const resp = result.value?.response;
-              if (resp && Array.isArray(resp.warnings) && resp.warnings.length) {
-                warnings.push(...resp.warnings);
-              }
-            } else {
-              console.warn('Conflict check failed', result.reason);
-            }
-          });
-          if (warnings.length) showToast(warnings.join('\n'), 'warning');
-        });
-      }
-    } catch (conflictErr) {
-      console.warn('Unable to evaluate overallocation risk', conflictErr);
-    }
-
     // Persist updates
     try {
       const updatesArray = Array.from(updatesMap.entries()).map(([aid, info]) => ({ assignmentId: aid, weeklyHours: info.next }));
@@ -1534,6 +1493,32 @@ const ProjectAssignmentsGrid: React.FC = () => {
     void runApplyBatch(updatesMap, touchedProjects, savingKeys);
   }, [selection.getSelectedCells, projects, runApplyBatch]);
 
+  const handleBeginEditing = React.useCallback((assignmentId: number, weekKey: string, seed?: string) => {
+    setEditingCell({ rowKey: String(assignmentId), weekKey });
+    setEditingSeed(seed ?? null);
+  }, []);
+
+  const handleCommitEditing = React.useCallback((assignmentId: number, weekKey: string, value: number) => {
+    applyValueToSelection(assignmentId, weekKey, value);
+  }, [applyValueToSelection]);
+
+  const handleCancelEditing = React.useCallback(() => {
+    setEditingCell(null);
+    setEditingSeed(null);
+  }, []);
+
+  const handleCellMouseDown = React.useCallback((assignmentId: number, weekKey: string, e?: MouseEvent | React.MouseEvent) => {
+    selection.onCellMouseDown(String(assignmentId), weekKey, e as any);
+  }, [selection.onCellMouseDown]);
+
+  const handleCellMouseEnter = React.useCallback((assignmentId: number, weekKey: string) => {
+    selection.onCellMouseEnter(String(assignmentId), weekKey);
+  }, [selection.onCellMouseEnter]);
+
+  const handleCellSelect = React.useCallback((assignmentId: number, weekKey: string, isShiftClick?: boolean) => {
+    selection.onCellSelect(String(assignmentId), weekKey, isShiftClick);
+  }, [selection.onCellSelect]);
+
   // Sorting helpers
   const toggleSort = (key: 'client' | 'project' | 'deliverable') => {
     setSortBy(prev => {
@@ -1546,37 +1531,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
   };
 
-  // React to URL-expanded changes (back/forward) and sync expansions
-  useEffect(() => {
-    try {
-      const sp = new URLSearchParams(location.search);
-      const expandedParam = sp.get('expanded');
-      const ids = expandedParam ? expandedParam.split(',').map(x => parseInt(x, 10)).filter(n => !Number.isNaN(n)) : [];
-      const setIds = new Set(ids);
-      setProjects(prev => prev.map(p => ({ ...p, isExpanded: p.id ? setIds.has(p.id) : false })));
-      // Lazy-load any newly expanded projects without assignments
-      for (const pid of ids) {
-        if (!pid) continue;
-        const pr = projects.find(pp => pp.id === pid);
-        if (pr && pr.assignments.length === 0 && !loadingAssignments.has(pid)) {
-          setLoadingAssignments(prev => new Set(prev).add(pid));
-          (async () => {
-            try {
-              const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-              const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-              const resp = await assignmentsApi.list({ project: pid, department: dept, include_children: inc, page_size: 200 } as any);
-              const rows = ((resp as any).results || []) as Assignment[];
-              const sorted = await sortRowsByDeptRoles(rows);
-              setProjects(prev2 => prev2.map(x => x.id === pid ? { ...x, assignments: sorted, isExpanded: true } : x));
-            } catch {}
-            finally {
-              setLoadingAssignments(prev2 => { const n = new Set(prev2); n.delete(pid); return n; });
-            }
-          })();
-        }
-      }
-    } catch {}
-  }, [location.search]);
   const desktopView = (
     <>
       {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
@@ -1638,6 +1592,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             <div className="flex-1 min-w-[320px]">
               <GlobalDepartmentFilter
                 showCopyLink={false}
+                departmentsOverride={snapshotQuery.data?.departments || []}
                 rightActions={(
                   <>
                     <button
@@ -1856,7 +1811,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                     {/* Week totals */}
                     {weeks.map((w) => {
                       const v = (hoursByProject[p.id!] || {})[w.date] || 0;
-                      const entries = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || [];
+                      const entries = deliverableTypesByProjectWeek[p.id!]?.[w.date] ?? EMPTY_MARKERS;
                       return (
                     <div key={w.date} className="relative py-2 flex items-center justify-center text-[var(--text)] text-xs font-medium border-l border-[var(--border)]" title={(() => { const dtHeader = formatDateWithWeekday(w.date); const lines = entries.length ? entries.flatMap(e => { const ds = (e as any).dates as string[] | undefined; const base = `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`; if (ds && ds.length) { return ds.map(d => `${formatDateWithWeekday(d)} — ${base}`); } return [`${dtHeader} — ${base}`]; }).join('\n') : undefined; return lines; })()}>
                           {v > 0 ? v : ''}
@@ -2062,7 +2017,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                             const key = `${asn.id}-${w.date}`;
                             const isEditing = !!editingCell && editingCell.rowKey === String(asn.id) && editingCell.weekKey === w.date;
                             const isSaving = savingCells.has(key);
-                            const markers = (deliverableTypesByProjectWeek[p.id!] || {})[w.date] || [];
+                            const markers = deliverableTypesByProjectWeek[p.id!]?.[w.date] ?? EMPTY_MARKERS;
                             return (
                               <WeekCell
                                 key={key}
@@ -2078,26 +2033,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
                                 typeColors={typeColors}
                                 isEditing={isEditing}
                                 editingSeed={isEditing ? editingSeed : null}
-                                onBeginEditing={(assignmentId, weekKey, seed) => {
-                                  setEditingCell({ rowKey: String(assignmentId), weekKey });
-                                  setEditingSeed(seed ?? null);
-                                }}
-                                onCommitEditing={(assignmentId, weekKey, value) => {
-                                  applyValueToSelection(assignmentId, weekKey, value);
-                                }}
-                                onCancelEditing={() => {
-                                  setEditingCell(null);
-                                  setEditingSeed(null);
-                                }}
-                                onMouseDown={(assignmentId, weekKey, e) => {
-                                  selection.onCellMouseDown(String(assignmentId), weekKey, e as any);
-                                }}
-                                onMouseEnter={(assignmentId, weekKey) => {
-                                  selection.onCellMouseEnter(String(assignmentId), weekKey);
-                                }}
-                                onSelect={(assignmentId, weekKey, isShiftClick) => {
-                                  selection.onCellSelect(String(assignmentId), weekKey, isShiftClick);
-                                }}
+                                onBeginEditing={handleBeginEditing}
+                                onCommitEditing={handleCommitEditing}
+                                onCancelEditing={handleCancelEditing}
+                                onMouseDown={handleCellMouseDown}
+                                onMouseEnter={handleCellMouseEnter}
+                                onSelect={handleCellSelect}
                               />
                             );
                           })}
@@ -2166,7 +2107,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             <button
               type="button"
               className="px-4 py-2 rounded bg-[var(--primary)] text-white text-sm"
-              onClick={() => setReloadCounter(c => c + 1)}
+              onClick={() => snapshotQuery.refetch()}
             >
               Retry
             </button>

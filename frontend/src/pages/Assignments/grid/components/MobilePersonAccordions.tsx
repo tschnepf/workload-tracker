@@ -2,7 +2,7 @@ import React from 'react';
 import type { Person } from '@/types/models';
 import type { WeekHeader } from '@/pages/Assignments/grid/utils';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
-import { defaultUtilizationScheme, getUtilizationPill } from '@/util/utilization';
+import { defaultUtilizationScheme, getUtilizationPill, type UtilizationScheme } from '@/util/utilization';
 
 type PersonWithHours = Person & { assignments?: any[]; isExpanded?: boolean };
 
@@ -15,6 +15,7 @@ type Props = {
   canEditAssignments?: boolean;
   onAddAssignment?: (personId: number) => void;
   activeAddPersonId?: number | null;
+  scheme?: UtilizationScheme;
 };
 
 const MAX_WEEKS_IN_SPARK = 6;
@@ -31,8 +32,8 @@ const MobilePersonAccordions: React.FC<Props> = ({
 }) => {
   const [expanded, setExpanded] = React.useState<number | null>(null);
   const sparkWeeks = React.useMemo(() => weeks.slice(0, MAX_WEEKS_IN_SPARK), [weeks]);
-  const { data: schemeData } = useUtilizationScheme();
-  const scheme = schemeData || defaultUtilizationScheme;
+  const { data: schemeData } = useUtilizationScheme({ enabled: !scheme });
+  const resolvedScheme = scheme || schemeData || defaultUtilizationScheme;
 
   const toggle = (personId: number) => {
     setExpanded((prev) => (prev === personId ? null : personId));
@@ -66,7 +67,7 @@ const MobilePersonAccordions: React.FC<Props> = ({
                   const pill = getUtilizationPill({
                     hours: value,
                     capacity: person.weeklyCapacity ?? null,
-                    scheme,
+                    scheme: resolvedScheme,
                     output: 'token',
                   });
                   const color = pill.tokens?.bg || 'var(--primary)';

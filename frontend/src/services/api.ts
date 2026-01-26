@@ -566,10 +566,11 @@ export const qaTaskSettingsApi = {
 // Projects API
 export const projectsApi = {
   // Get all projects with pagination support
-  list: async (params?: { page?: number; page_size?: number }) => {
+  list: async (params?: { page?: number; page_size?: number; ordering?: string }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    if (params?.ordering) queryParams.set('ordering', params.ordering);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     const res = await apiClient.GET(`/projects/${queryString}` as any, { headers: authHeaders() });
     if (!res.data) {
@@ -658,6 +659,16 @@ export const projectsApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return;
+  },
+
+  // Project audit logs (admin only)
+  listProjectAudit: async (limit = 50) => {
+    const res = await apiClient.GET(`/projects/audit/?limit=${encodeURIComponent(String(limit))}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as Array<{ id: number; action: string; created_at: string; detail: any; actor?: { username?: string } }>;
   },
 
   // Get unique clients for autocomplete

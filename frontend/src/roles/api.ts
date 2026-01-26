@@ -17,15 +17,57 @@ export type ProjectRoleUsage = {
   }>;
 };
 
+const rolesCache = new Map<string, ProjectRole[]>();
+const rolesInFlight = new Map<string, Promise<ProjectRole[]>>();
+
+function cacheKey(departmentId: number, includeInactive: boolean) {
+  return `${departmentId}:${includeInactive ? '1' : '0'}`;
+}
+
+export function primeProjectRolesCache(payload: Record<string, ProjectRole[]> | null | undefined) {
+  if (!payload) return;
+  Object.entries(payload).forEach(([deptId, roles]) => {
+    const id = Number(deptId);
+    if (!Number.isFinite(id)) return;
+    rolesCache.set(cacheKey(id, false), Array.isArray(roles) ? roles.slice() : []);
+  });
+}
+
+export function clearProjectRolesCache(departmentId?: number) {
+  if (departmentId == null) {
+    rolesCache.clear();
+    rolesInFlight.clear();
+    return;
+  }
+  rolesCache.delete(cacheKey(departmentId, false));
+  rolesCache.delete(cacheKey(departmentId, true));
+  rolesInFlight.delete(cacheKey(departmentId, false));
+  rolesInFlight.delete(cacheKey(departmentId, true));
+}
+
 export async function listProjectRoles(departmentId: number, includeInactive = false): Promise<ProjectRole[]> {
+  const key = cacheKey(departmentId, includeInactive);
+  const cached = rolesCache.get(key);
+  if (cached) return cached.slice();
+  const inflight = rolesInFlight.get(key);
+  if (inflight) return inflight;
   const sp = new URLSearchParams();
   sp.set('department', String(departmentId));
   if (includeInactive) sp.set('include_inactive', 'true');
-  const res = await apiClient.GET('/projects/project-roles/', {
+  const req = apiClient.GET('/projects/project-roles/', {
     params: { query: Object.fromEntries(sp) as any },
     headers: { 'Cache-Control': 'no-cache' },
+  }).then((res) => {
+    const data = (res.data as ProjectRole[]) || [];
+    rolesCache.set(key, data);
+    rolesInFlight.delete(key);
+    return data.slice();
+  }).catch((err) => {
+    rolesInFlight.delete(key);
+    throw err;
   });
-  return res.data as ProjectRole[];
+  rolesInFlight.set(key, req);
+  return req;
 }
 
 export async function createProjectRole(departmentId: number, name: string, sortOrder = 0): Promise<ProjectRole> {

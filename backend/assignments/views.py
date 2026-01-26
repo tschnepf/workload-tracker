@@ -4,6 +4,7 @@ Uses AutoMapped serializers for naming prevention
 """
 
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from core.etag import ETagConditionalMixin
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
@@ -19,9 +20,15 @@ from .models import Assignment
 from .analytics import compute_role_capacity
 from .overhead import maybe_sync_overhead_assignments
 from departments.models import Department
+from departments.serializers import DepartmentSerializer
 from .serializers import AssignmentSerializer
 from people.models import Person
 from projects.models import Project  # noqa: F401
+from projects.models import ProjectRole
+from projects.roles_serializers import ProjectRoleItemSerializer
+from core.models import UtilizationScheme
+from core.serializers import UtilizationSchemeSerializer
+from deliverables.models import Deliverable
 from .services import WorkloadRebalancingService
 from django.conf import settings
 from django.core.cache import cache
@@ -2520,3 +2527,177 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             .generate_rebalance_suggestions(weeks=horizon_weeks)
         )
         return Response(suggestions)
+
+
+@extend_schema(
+    description=(
+        "Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, "
+        "departments, project roles by department, utilization scheme, capabilities, "
+        "projects list, and deliverables within the visible weeks."
+    ),
+    parameters=[
+        OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+        OpenApiParameter(name='department', type=int, required=False),
+        OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+        OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters (project grid)'),
+        OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1 (project grid)'),
+        OpenApiParameter(name='project_ids', type=str, required=False, description='CSV of project IDs to scope totals (project grid)'),
+        OpenApiParameter(name='include', type=str, required=False, description='CSV: assignment,project (default both)'),
+    ],
+)
+class AssignmentsPageSnapshotView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [GridSnapshotThrottle]
+
+    def get(self, request):
+        include_param = (request.query_params.get('include') or '').strip().lower()
+        if include_param:
+            include_set = set(x.strip() for x in include_param.split(',') if x.strip())
+        else:
+            include_set = {'assignment', 'project'}
+
+        # Avoid conditional-GET short-circuit inside nested snapshot calls
+        request.META.pop('HTTP_IF_NONE_MATCH', None)
+        request.META.pop('HTTP_IF_MODIFIED_SINCE', None)
+
+        viewset = AssignmentViewSet()
+        assignment_snapshot = None
+        project_snapshot = None
+        try:
+            if 'assignment' in include_set:
+                resp = viewset.grid_snapshot(request)
+                assignment_snapshot = getattr(resp, 'data', None)
+        except Exception:
+            assignment_snapshot = None
+        try:
+            if 'project' in include_set:
+                resp = viewset.project_grid_snapshot(request)
+                project_snapshot = getattr(resp, 'data', None)
+        except Exception:
+            project_snapshot = None
+
+        # Departments list (active only)
+        try:
+            departments_qs = Department.objects.filter(is_active=True).order_by('name')
+            departments = DepartmentSerializer(departments_qs, many=True).data
+        except Exception:
+            departments = []
+
+        # Project roles by department (active only, ordered)
+        project_roles_by_dept: Dict[str, List[dict]] = {}
+        try:
+            roles_qs = ProjectRole.objects.filter(is_active=True).order_by('department_id', 'sort_order', 'name')
+            roles_data = ProjectRoleItemSerializer(roles_qs, many=True).data
+            for r in roles_data:
+                dept_id = r.get('department_id')
+                if dept_id is None:
+                    continue
+                key = str(dept_id)
+                project_roles_by_dept.setdefault(key, []).append(r)
+        except Exception:
+            project_roles_by_dept = {}
+
+        # Capabilities (same shape as /api/capabilities/)
+        try:
+            caps = {
+                'asyncJobs': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
+                'aggregates': {
+                    'capacityHeatmap': True,
+                    'projectAvailability': True,
+                    'findAvailable': True,
+                    'gridSnapshot': True,
+                    'skillMatch': True,
+                },
+                'cache': {
+                    'shortTtlAggregates': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
+                    'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
+                },
+                'personalDashboard': True,
+            }
+            try:
+                caps['projectRolesByDepartment'] = bool(settings.FEATURES.get('PROJECT_ROLES_BY_DEPARTMENT', False))
+            except Exception:
+                caps['projectRolesByDepartment'] = False
+            try:
+                caps['integrations'] = {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}
+            except Exception:
+                caps['integrations'] = {'enabled': False}
+        except Exception:
+            caps = {}
+
+        # Utilization scheme
+        util_data = None
+        try:
+            obj = UtilizationScheme.get_active()
+            if not settings.FEATURES.get('UTILIZATION_SCHEME_ENABLED', True):
+                util_data = {
+                    'mode': UtilizationScheme.MODE_ABSOLUTE,
+                    'blue_min': 1, 'blue_max': 29,
+                    'green_min': 30, 'green_max': 36,
+                    'orange_min': 37, 'orange_max': 40,
+                    'red_min': 41,
+                    'zero_is_blank': True,
+                    'version': obj.version,
+                    'updated_at': obj.updated_at,
+                }
+            else:
+                util_data = UtilizationSchemeSerializer(obj).data
+        except Exception:
+            util_data = None
+
+        # Projects list (active only, minimal fields)
+        projects_payload: List[dict] = []
+        try:
+            projects_qs = Project.objects.filter(is_active=True).only(
+                'id', 'name', 'client', 'project_number', 'status', 'is_active'
+            ).order_by('name')
+            projects_payload = [
+                {
+                    'id': p.id,
+                    'name': p.name,
+                    'client': p.client,
+                    'projectNumber': p.project_number,
+                    'status': p.status,
+                    'isActive': p.is_active,
+                }
+                for p in projects_qs
+            ]
+        except Exception:
+            projects_payload = []
+
+        # Deliverables within visible weeks (for assignment grid UI)
+        deliverables_payload: List[dict] = []
+        try:
+            week_keys = (assignment_snapshot or {}).get('weekKeys') or []
+            if week_keys:
+                start = date.fromisoformat(week_keys[0])
+                end_date = date.fromisoformat(week_keys[-1]) + timedelta(days=6)
+                qs = Deliverable.objects.filter(date__gte=start, date__lte=end_date).select_related('project')
+                for d in qs:
+                    if d.description:
+                        desc = d.description
+                    elif d.percentage is not None:
+                        desc = f"{d.percentage}%"
+                    else:
+                        desc = 'Milestone'
+                    deliverables_payload.append({
+                        'id': d.id,
+                        'project': d.project_id,
+                        'date': d.date.isoformat() if d.date else None,
+                        'description': desc,
+                        'percentage': d.percentage,
+                    })
+        except Exception:
+            deliverables_payload = []
+
+        payload = {
+            'assignmentGridSnapshot': assignment_snapshot,
+            'projectGridSnapshot': project_snapshot,
+            'projects': projects_payload,
+            'deliverables': deliverables_payload,
+            'departments': departments,
+            'projectRolesByDepartment': project_roles_by_dept,
+            'capabilities': caps,
+            'utilizationScheme': util_data,
+        }
+        return Response(payload)

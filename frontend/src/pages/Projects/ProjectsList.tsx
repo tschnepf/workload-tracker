@@ -45,7 +45,9 @@ const DeliverablesSection = React.lazy(() => import('@/components/deliverables/D
 
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
-  const { projects, loading, error: projectsError, refetch: refetchProjects } = useProjects();
+  const [ordering, setOrdering] = useState<string | null>('client,name');
+  const projectsQueryKey = useMemo(() => ['projects', ordering || 'default', 100], [ordering]);
+  const { projects, loading, error: projectsError, refetch: refetchProjects } = useProjects({ ordering });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { people, peopleVersion } = usePeople();
@@ -156,6 +158,26 @@ const ProjectsList: React.FC = () => {
       },
     },
   });
+  const serverOrdering = useMemo(() => {
+    const direction = sortDirection === 'desc' ? '-' : '';
+    switch (sortBy) {
+      case 'client':
+        return `${direction}client,name`;
+      case 'name':
+        return `${direction}name`;
+      case 'number':
+      case 'projectNumber':
+        return `${direction}project_number`;
+      case 'status':
+        return `${direction}status,name`;
+      default:
+        return null;
+    }
+  }, [sortBy, sortDirection]);
+  useEffect(() => {
+    if (!serverOrdering) return;
+    setOrdering((prev) => (prev === serverOrdering ? prev : serverOrdering));
+  }, [serverOrdering]);
   const refetchProjectsSafe = useCallback(async () => {
     try { await refetchProjects(); } catch {}
   }, [refetchProjects]);
@@ -674,7 +696,7 @@ const ProjectsList: React.FC = () => {
     // Immediate optimistic update for the list cache so the row reflects the change
     try {
       // Optimistically update infinite pages cache
-      const prevPages: any = queryClient.getQueryData(['projects']);
+      const prevPages: any = queryClient.getQueryData(projectsQueryKey);
       if (prevPages && Array.isArray(prevPages.pages)) {
         const nextPages = {
           ...prevPages,
@@ -683,7 +705,7 @@ const ProjectsList: React.FC = () => {
             results: (page?.results || []).map((p: Project) => (p.id === projectId ? { ...p, status: newStatus } : p))
           }))
         };
-        queryClient.setQueryData(['projects'], nextPages);
+        queryClient.setQueryData(projectsQueryKey, nextPages);
       }
       // Optimistically update detail cache for the project
       const prevDetail = queryClient.getQueryData<Project>(['projects', projectId]);
@@ -701,7 +723,7 @@ const ProjectsList: React.FC = () => {
       console.error('Failed to update project status from table', e);
       setError('Failed to update project status');
     }
-  }, [queryClient, updateStatus, selectedProject, setSelectedProject]);
+  }, [queryClient, updateStatus, selectedProject, setSelectedProject, projectsQueryKey]);
 
   // Sorting handled via onSort2 in enhanced filters (next deliverable support)
 

@@ -8,6 +8,7 @@ import CalendarFeedsSection, { CALENDAR_FEEDS_SECTION_ID } from './CalendarFeeds
 import AdminUsersSection, { ADMIN_USERS_SECTION_ID } from './AdminUsersSection';
 import BackupRestoreSection, { BACKUP_RESTORE_SECTION_ID } from './BackupRestoreSection';
 import AuditLogSection, { AUDIT_LOG_SECTION_ID } from './AuditLogSection';
+import ProjectAuditLogSection, { PROJECT_AUDIT_LOG_SECTION_ID } from './ProjectAuditLogSection';
 import IntegrationsSection, { INTEGRATIONS_SECTION_ID } from './IntegrationsSection';
 import DeliverablePhaseMappingSection, { DELIVERABLE_PHASE_MAPPING_SECTION_ID } from './DeliverablePhaseMappingSection';
 import DeliverableTaskTemplatesSection, { DELIVERABLE_TASK_TEMPLATES_SECTION_ID } from './DeliverableTaskTemplatesSection';
@@ -90,5 +91,11 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Admin Audit Log',
     requiresAdmin: true,
     component: AuditLogSection,
+  },
+  {
+    id: PROJECT_AUDIT_LOG_SECTION_ID,
+    title: 'Project Audit Log',
+    requiresAdmin: true,
+    component: ProjectAuditLogSection,
   },
 ];
