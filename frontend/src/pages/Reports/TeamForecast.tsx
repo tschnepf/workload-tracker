@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
@@ -7,6 +7,10 @@ import { WorkloadForecastItem, Project, Assignment, Deliverable, Department } fr
 import CapacityTimeline, { CapacityTimelineCompact } from '@/components/charts/CapacityTimeline';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
+import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
+import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
 
 function fmt(date: Date): string { return date.toISOString().slice(0,10); }
 
@@ -29,6 +33,12 @@ const TeamForecastPage: React.FC = () => {
 
   const [pendingDeptId, setPendingDeptId] = useState<number | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<number | ''>('');
+  const forecastRefreshTimerRef = useRef<number | null>(null);
+  const projectDetailsRefreshTimerRef = useRef<number | null>(null);
+  const forecastRequestIdRef = useRef(0);
+  const projectDetailsRequestIdRef = useRef(0);
+  const projectsRequestIdRef = useRef(0);
+  const departmentsRequestIdRef = useRef(0);
 
   useEffect(() => {
     setPendingDeptId(deptState.selectedDepartmentId ?? null);
@@ -38,48 +48,133 @@ const TeamForecastPage: React.FC = () => {
     setPendingProjectId(selectedProject);
   }, [selectedProject]);
 
-  useAuthenticatedEffect(() => {
-    let active = true;
+  const loadForecast = useCallback(async () => {
+    const requestId = ++forecastRequestIdRef.current;
     setLoading(true);
     setError(null);
-    peopleApi.workloadForecast({
-      weeks,
-      department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
-      include_children: deptState.includeChildren ? 1 : 0,
-    })
-      .then(data => { if (active) setForecast(data || []); })
-      .catch(e => { if (active) setError(e?.message || 'Failed to load forecast'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    try {
+      const data = await peopleApi.workloadForecast({
+        weeks,
+        department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
+        include_children: deptState.includeChildren ? 1 : 0,
+      });
+      if (requestId === forecastRequestIdRef.current) setForecast(data || []);
+    } catch (e: any) {
+      if (requestId === forecastRequestIdRef.current) setError(e?.message || 'Failed to load forecast');
+    } finally {
+      if (requestId === forecastRequestIdRef.current) setLoading(false);
+    }
   }, [weeks, deptState.selectedDepartmentId, deptState.includeChildren]);
 
   useAuthenticatedEffect(() => {
-    projectsApi.list({ page: 1, page_size: 200 })
-      .then(p => setProjects(p.results || []))
-      .catch(() => {});
+    loadForecast();
+  }, [loadForecast]);
+
+  const loadProjects = useCallback(async () => {
+    const requestId = ++projectsRequestIdRef.current;
+    try {
+      const p = await projectsApi.list({ page: 1, page_size: 200 });
+      if (requestId === projectsRequestIdRef.current) setProjects(p.results || []);
+    } catch {}
   }, []);
-  useAuthenticatedEffect(() => {
-    departmentsApi.list({ page: 1, page_size: 500 })
-      .then(p => setDepts(p.results || []))
-      .catch(()=>{});
+
+  const loadDepartments = useCallback(async () => {
+    const requestId = ++departmentsRequestIdRef.current;
+    try {
+      const p = await departmentsApi.list({ page: 1, page_size: 500 });
+      if (requestId === departmentsRequestIdRef.current) setDepts(p.results || []);
+    } catch {}
   }, []);
 
   useAuthenticatedEffect(() => {
-    if (!selectedProject) { setProjAssignments([]); setProjDeliverables([]); return; }
-    let active = true;
+    loadProjects();
+  }, [loadProjects]);
+  useAuthenticatedEffect(() => {
+    loadDepartments();
+  }, [loadDepartments]);
+
+  const loadProjectDetails = useCallback(async () => {
+    const requestId = ++projectDetailsRequestIdRef.current;
+    if (!selectedProject) {
+      setProjAssignments([]);
+      setProjDeliverables([]);
+      return;
+    }
     setProjLoading(true);
     const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
     const inc = deptState.includeChildren ? 1 : 0;
-    Promise.all([
-      assignmentsApi.list({ project: Number(selectedProject), department: dept, include_children: dept != null ? inc : undefined }).then(r => r.results || []),
-      deliverablesApi.list(Number(selectedProject), { page: 1, page_size: 1000 }).then(r => r.results || [])
-    ]).then(([assigns, dels]) => {
-      if (!active) return;
-      setProjAssignments(assigns as any);
-      setProjDeliverables(dels as any);
-    }).finally(() => { if (active) setProjLoading(false); });
-    return () => { active = false; };
+    try {
+      const [assigns, dels] = await Promise.all([
+        assignmentsApi.list({ project: Number(selectedProject), department: dept, include_children: dept != null ? inc : undefined }).then(r => r.results || []),
+        deliverablesApi.list(Number(selectedProject), { page: 1, page_size: 1000 }).then(r => r.results || [])
+      ]);
+      if (requestId === projectDetailsRequestIdRef.current) {
+        setProjAssignments(assigns as any);
+        setProjDeliverables(dels as any);
+      }
+    } finally {
+      if (requestId === projectDetailsRequestIdRef.current) setProjLoading(false);
+    }
   }, [selectedProject, deptState.selectedDepartmentId, deptState.includeChildren]);
+
+  useAuthenticatedEffect(() => {
+    loadProjectDetails();
+  }, [loadProjectDetails]);
+
+  useEffect(() => {
+    const scheduleForecastRefresh = () => {
+      if (forecastRefreshTimerRef.current) return;
+      forecastRefreshTimerRef.current = window.setTimeout(() => {
+        forecastRefreshTimerRef.current = null;
+        loadForecast();
+      }, 200);
+    };
+    const scheduleProjectDetailsRefresh = () => {
+      if (projectDetailsRefreshTimerRef.current) return;
+      projectDetailsRefreshTimerRef.current = window.setTimeout(() => {
+        projectDetailsRefreshTimerRef.current = null;
+        loadProjectDetails();
+      }, 200);
+    };
+
+    const unsubscribeAssignments = subscribeAssignmentsRefresh((event) => {
+      scheduleForecastRefresh();
+      if (!selectedProject) return;
+      if (event?.projectId != null && Number(event.projectId) !== Number(selectedProject)) return;
+      scheduleProjectDetailsRefresh();
+    });
+    const unsubscribeDeliverables = subscribeDeliverablesRefresh((event) => {
+      if (!selectedProject) return;
+      if (event?.projectId != null && Number(event.projectId) !== Number(selectedProject)) return;
+      scheduleProjectDetailsRefresh();
+    });
+    const unsubscribeProjects = subscribeProjectsRefresh((event) => {
+      loadProjects();
+      if (!selectedProject) return;
+      if (event?.projectId != null && Number(event.projectId) !== Number(selectedProject)) return;
+      scheduleProjectDetailsRefresh();
+    });
+    const unsubscribeDepartments = subscribeDepartmentsRefresh(() => {
+      loadDepartments();
+      scheduleForecastRefresh();
+      if (selectedProject) scheduleProjectDetailsRefresh();
+    });
+
+    return () => {
+      unsubscribeAssignments();
+      unsubscribeDeliverables();
+      unsubscribeProjects();
+      unsubscribeDepartments();
+      if (forecastRefreshTimerRef.current) {
+        window.clearTimeout(forecastRefreshTimerRef.current);
+        forecastRefreshTimerRef.current = null;
+      }
+      if (projectDetailsRefreshTimerRef.current) {
+        window.clearTimeout(projectDetailsRefreshTimerRef.current);
+        projectDetailsRefreshTimerRef.current = null;
+      }
+    };
+  }, [loadForecast, loadProjectDetails, loadProjects, loadDepartments, selectedProject]);
 
   const weekStarts = useMemo(() => (forecast || []).map(f => f.weekStart), [forecast]);
 
@@ -278,4 +373,3 @@ const ProjectTimeline: React.FC<{ weeks:number; weekStarts:string[]; weeklyTotal
 }
 
 export default TeamForecastPage;
-

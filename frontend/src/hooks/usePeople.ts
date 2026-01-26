@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { peopleApi } from '@/services/api';
 import { Person } from '@/types/models';
+import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
 
 // People query hook with state adapter for existing code compatibility
 export function usePeople(includeInactive = false) {
@@ -53,6 +54,13 @@ export function usePeople(includeInactive = false) {
   const peopleVersion = people.length; // changes only when count changes
   const loading = query.isLoading || query.isFetching;
   const error = query.error ? (query.error as any).message : null;
+
+  useEffect(() => {
+    const unsubscribe = subscribeDepartmentsRefresh(() => {
+      query.refetch();
+    });
+    return unsubscribe;
+  }, [query.refetch]);
 
   return {
     people,

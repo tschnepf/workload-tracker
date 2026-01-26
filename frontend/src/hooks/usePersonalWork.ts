@@ -5,6 +5,9 @@ import { trackPerformanceEvent } from '@/utils/monitoring';
 import type { Summary, Alerts } from '@/components/personal/MySummaryCard';
 import type { ProjectItem } from '@/components/personal/MyProjectsCard';
 import type { DeliverableItem } from '@/components/personal/MyDeliverablesCard';
+import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
+import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 
 export type PersonalWorkPayload = {
   summary?: Summary | null;
@@ -24,9 +27,6 @@ type HookState = {
   error: string | null;
 };
 
-const cache = new Map<number, PersonalWorkPayload>();
-const inflight = new Map<number, Promise<PersonalWorkPayload>>();
-
 async function fetchPersonalWork(personId: number): Promise<PersonalWorkPayload> {
   let attempt = 0;
   let delay = 500;
@@ -36,7 +36,6 @@ async function fetchPersonalWork(personId: number): Promise<PersonalWorkPayload>
       const res = await apiClient.GET('/personal/work/' as any, { headers: authHeaders() });
       const payload = (res as any)?.data ?? res;
       if (!payload) throw new Error('Empty response');
-      cache.set(personId, payload);
       if (start) trackPerformanceEvent('personal_work_fetch_ms', Math.round(performance.now() - start), 'ms', { ok: true, attempt });
       return payload;
     } catch (err) {
@@ -50,57 +49,81 @@ async function fetchPersonalWork(personId: number): Promise<PersonalWorkPayload>
   throw new Error('Failed to fetch personal work');
 }
 
-function loadPersonalWork(personId: number, force = false) {
-  if (!force && cache.has(personId)) {
-    return Promise.resolve(cache.get(personId)!);
-  }
-  if (!force && inflight.has(personId)) {
-    return inflight.get(personId)!;
-  }
-  const promise = fetchPersonalWork(personId).finally(() => {
-    inflight.delete(personId);
-  });
-  inflight.set(personId, promise);
-  return promise;
-}
-
 export function usePersonalWork() {
   const auth = useAuth();
   const personId = auth?.person?.id ?? null;
   const [{ data, loading, error }, setState] = React.useState<HookState>({ data: null, loading: false, error: null });
+  const inflightRef = React.useRef<Promise<PersonalWorkPayload> | null>(null);
+  const requestIdRef = React.useRef(0);
+  const refreshTimerRef = React.useRef<number | null>(null);
+
+  const loadPersonalWork = React.useCallback(async (opts?: { force?: boolean }) => {
+    if (!personId) return;
+    const requestId = ++requestIdRef.current;
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    let request = inflightRef.current;
+    if (!request || opts?.force) {
+      request = fetchPersonalWork(personId);
+      inflightRef.current = request;
+    }
+    try {
+      const payload = await request;
+      if (requestId !== requestIdRef.current) return;
+      setState({ data: payload, loading: false, error: null });
+    } catch (err: any) {
+      if (requestId !== requestIdRef.current) return;
+      setState((prev) => ({ ...prev, loading: false, error: err?.message || 'Failed to refresh personal work' }));
+    } finally {
+      if (inflightRef.current === request) {
+        inflightRef.current = null;
+      }
+    }
+  }, [personId]);
 
   const refresh = React.useCallback(
     async (opts?: { force?: boolean }) => {
-      if (!personId) return;
-      setState((prev) => ({ ...prev, loading: true, error: null }));
-      try {
-        const payload = await loadPersonalWork(personId, opts?.force ?? true);
-        setState({ data: payload, loading: false, error: null });
-      } catch (err: any) {
-        setState((prev) => ({ ...prev, loading: false, error: err?.message || 'Failed to refresh personal work' }));
-      }
+      await loadPersonalWork({ force: opts?.force ?? true });
     },
-    [personId]
+    [loadPersonalWork]
   );
 
   React.useEffect(() => {
-    let cancelled = false;
     if (!personId) {
       setState({ data: null, loading: false, error: null });
       return;
     }
-    setState((prev) => ({ ...prev, loading: !cache.has(personId), error: null }));
-    loadPersonalWork(personId)
-      .then((payload) => {
-        if (!cancelled) setState({ data: payload, loading: false, error: null });
-      })
-      .catch((err: any) => {
-        if (!cancelled) setState({ data: null, loading: false, error: err?.message || 'Failed to load personal work' });
-      });
-    return () => {
-      cancelled = true;
+    loadPersonalWork();
+  }, [personId, loadPersonalWork]);
+
+  React.useEffect(() => {
+    if (!personId) return;
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) return;
+      refreshTimerRef.current = window.setTimeout(() => {
+        refreshTimerRef.current = null;
+        refresh({ force: true });
+      }, 200);
     };
-  }, [personId]);
+    const unsubscribeAssignments = subscribeAssignmentsRefresh((event) => {
+      if (event?.personId && event.personId !== personId) return;
+      scheduleRefresh();
+    });
+    const unsubscribeProjects = subscribeProjectsRefresh(() => {
+      scheduleRefresh();
+    });
+    const unsubscribeDeliverables = subscribeDeliverablesRefresh(() => {
+      scheduleRefresh();
+    });
+    return () => {
+      unsubscribeAssignments();
+      unsubscribeProjects();
+      unsubscribeDeliverables();
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [personId, refresh]);
 
   return {
     data,

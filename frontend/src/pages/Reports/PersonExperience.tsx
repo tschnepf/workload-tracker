@@ -1,8 +1,11 @@
 import React from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from '@/utils/useDebounce';
 import { usePeopleAutocomplete } from '@/hooks/usePeople';
 import { usePersonExperienceProfile, usePersonProjectTimeline } from '@/hooks/useExperience';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 
 function addMonths(d: Date, months: number) {
   const copy = new Date(d.getTime());
@@ -32,6 +35,7 @@ export default function PersonExperienceReport() {
   const debounced = useDebounce(search, 200);
   const { people, loading: loadingPeople } = usePeopleAutocomplete(debounced);
   const [selectedPersonId, setSelectedPersonId] = React.useState<number | null>(null);
+  const queryClient = useQueryClient();
 
   // Interval controls
   const [intervalType, setIntervalType] = React.useState<'months' | 'years'>('months');
@@ -55,6 +59,32 @@ export default function PersonExperienceReport() {
     }
     return filtersOpen ? 'mt-3 space-y-3' : 'mt-3 hidden';
   }, [isMobile, filtersOpen]);
+
+  React.useEffect(() => {
+    let refreshTimer: number | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        queryClient.invalidateQueries({ queryKey: ['personExperienceProfile'] });
+        queryClient.invalidateQueries({ queryKey: ['personProjectTimeline'] });
+      }, 200);
+    };
+    const unsubscribeAssignments = subscribeAssignmentsRefresh((event) => {
+      if (selectedPersonId && event?.personId && event.personId !== selectedPersonId) return;
+      scheduleRefresh();
+    });
+    const unsubscribeProjects = subscribeProjectsRefresh(() => {
+      scheduleRefresh();
+    });
+    return () => {
+      unsubscribeAssignments();
+      unsubscribeProjects();
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+      }
+    };
+  }, [queryClient, selectedPersonId]);
 
   return (
     <div className="p-4 space-y-4">

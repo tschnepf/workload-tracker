@@ -3,7 +3,7 @@
  * Following PeopleList.tsx structure with VSCode dark theme
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Department, Person } from '@/types/models';
@@ -15,6 +15,7 @@ import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import DepartmentForm from './DepartmentForm';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { emitDepartmentsRefresh, subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
 
 const DepartmentsList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
@@ -29,11 +30,38 @@ const DepartmentsList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [hasAutoSelected, setHasAutoSelected] = useState(false); // Track if we've auto-selected
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const loadingRef = useRef(false);
+  const suppressNextRefreshRef = useRef(false);
+
+  const loadDepartments = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    try {
+      setLoading(true);
+      const response = await departmentsApi.list();
+      setDepartments(response.results || []);
+    } catch (err: any) {
+      setError('Failed to load departments');
+      console.error('Error loading departments:', err);
+    } finally {
+      setLoading(false);
+      loadingRef.current = false;
+    }
+  }, []);
+
+  const loadPeople = useCallback(async () => {
+    try {
+      const response = await peopleApi.list();
+      setPeople(response.results || []);
+    } catch (err) {
+      console.error('Error loading people:', err);
+    }
+  }, []);
 
   useAuthenticatedEffect(() => {
     loadDepartments();
     loadPeople();
-  }, []);
+  }, [loadDepartments, loadPeople]);
 
   // Filter and sort departments
   const filteredAndSortedDepartments = useMemo(() => {
@@ -55,27 +83,17 @@ const DepartmentsList: React.FC = () => {
     }
   }, [filteredAndSortedDepartments, hasAutoSelected]);
 
-  const loadDepartments = async () => {
-    try {
-      setLoading(true);
-      const response = await departmentsApi.list();
-      setDepartments(response.results || []);
-    } catch (err: any) {
-      setError('Failed to load departments');
-      console.error('Error loading departments:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadPeople = async () => {
-    try {
-      const response = await peopleApi.list();
-      setPeople(response.results || []);
-    } catch (err) {
-      console.error('Error loading people:', err);
-    }
-  };
+  useEffect(() => {
+    const unsubscribe = subscribeDepartmentsRefresh(() => {
+      if (suppressNextRefreshRef.current) {
+        suppressNextRefreshRef.current = false;
+        return;
+      }
+      if (loadingRef.current) return;
+      loadDepartments();
+    });
+    return unsubscribe;
+  }, [loadDepartments]);
 
   const handleCreateDepartment = () => {
     setEditingDepartment(null);
@@ -97,6 +115,11 @@ const DepartmentsList: React.FC = () => {
         savedDepartment = await departmentsApi.create(formData as any);
       }
 
+      suppressNextRefreshRef.current = true;
+      emitDepartmentsRefresh({
+        departmentId: savedDepartment.id,
+        reason: editingDepartment?.id ? 'updated' : 'created',
+      });
       // Refresh departments list
       await loadDepartments();
       
@@ -118,6 +141,8 @@ const DepartmentsList: React.FC = () => {
 
     try {
       await departmentsApi.delete(department.id);
+      suppressNextRefreshRef.current = true;
+      emitDepartmentsRefresh({ departmentId: department.id, reason: 'deleted' });
       await loadDepartments();
       
       // Clear selection if deleted department was selected

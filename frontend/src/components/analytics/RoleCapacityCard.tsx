@@ -6,6 +6,8 @@ import { rolesApi, departmentsApi } from '@/services/api';
 import { getRoleCapacityTimeline } from '@/services/analyticsApi';
 import type { Department } from '@/types/models';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
+import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 
 type HideControls = {
   timeframe?: boolean;
@@ -53,6 +55,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[] }>>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const refreshTimerRef = React.useRef<number | null>(null);
 
   // Load roles once
   React.useEffect(() => {
@@ -112,6 +115,30 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   }, [canQuery, effectiveDeptId, weeks, selectedRoleIds]);
 
   React.useEffect(() => { if (canQuery) refresh(); }, [canQuery, refresh]);
+
+  React.useEffect(() => {
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) return;
+      refreshTimerRef.current = window.setTimeout(() => {
+        refreshTimerRef.current = null;
+        refresh();
+      }, 200);
+    };
+    const unsubscribeAssignments = subscribeAssignmentsRefresh(() => {
+      scheduleRefresh();
+    });
+    const unsubscribeProjects = subscribeProjectsRefresh(() => {
+      scheduleRefresh();
+    });
+    return () => {
+      unsubscribeAssignments();
+      unsubscribeProjects();
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [refresh]);
 
   const displayedSeries = React.useMemo(() => {
     if (!series?.length) return series;
