@@ -162,7 +162,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return map;
   }, [projects]);
   // Build row order for rectangular selection (assignment IDs in render order)
-  const rowOrder = React.useMemo(() => {
+  const rowOrderAll = React.useMemo(() => {
     const arr: string[] = [];
     for (const p of projects) {
       if (!p.isExpanded) continue;
@@ -172,13 +172,32 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
     return arr;
   }, [projects]);
+  const rowOrderByProject = React.useMemo(() => {
+    const map = new Map<number, string[]>();
+    for (const p of projects) {
+      if (!p.isExpanded || !p.id) continue;
+      const rows: string[] = [];
+      for (const a of p.assignments || []) {
+        if (a?.id != null) rows.push(String(a.id));
+      }
+      map.set(p.id, rows);
+    }
+    return map;
+  }, [projects]);
+  const [activeSelectionProjectId, setActiveSelectionProjectId] = useState<number | null>(null);
+  const activeSelectionProjectIdRef = useRef<number | null>(null);
+  const selectionRowOrder = React.useMemo(() => {
+    if (activeSelectionProjectId != null) {
+      return rowOrderByProject.get(activeSelectionProjectId) || [];
+    }
+    return rowOrderAll;
+  }, [activeSelectionProjectId, rowOrderAll, rowOrderByProject]);
   const rowIndexByKey = React.useMemo(() => {
     const map = new Map<string, number>();
-    rowOrder.forEach((rk, idx) => { map.set(rk, idx); });
+    selectionRowOrder.forEach((rk, idx) => { map.set(rk, idx); });
     return map;
-  }, [rowOrder]);
-  const selection = useCellSelection(weeks.map(w => w.date), rowOrder);
-  const selectionProjectIdRef = useRef<number | null>(null);
+  }, [selectionRowOrder]);
+  const selection = useCellSelection(weeks.map(w => w.date), selectionRowOrder);
   const getProjectIdForAssignment = React.useCallback((assignmentId: number) => {
     const entry = assignmentById.get(assignmentId);
     return entry?.projectId ?? null;
@@ -1515,13 +1534,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
   useEffect(() => {
     const start = selection.selectionStart;
     if (!start) {
-      selectionProjectIdRef.current = null;
+      activeSelectionProjectIdRef.current = null;
+      setActiveSelectionProjectId(null);
       return;
     }
     const aid = parseInt(start.rowKey, 10);
     if (!Number.isNaN(aid)) {
       const pid = getProjectIdForAssignment(aid);
-      if (pid != null) selectionProjectIdRef.current = pid;
+      if (pid != null) {
+        activeSelectionProjectIdRef.current = pid;
+        setActiveSelectionProjectId(prev => (prev === pid ? prev : pid));
+      }
     }
   }, [selection.selectionStart, getProjectIdForAssignment]);
 
@@ -1542,19 +1565,27 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [editingCell, handleCommitEditing]);
 
   const handleCellMouseDown = React.useCallback((assignmentId: number, weekKey: string, e?: MouseEvent | React.MouseEvent) => {
-    selectionProjectIdRef.current = getProjectIdForAssignment(assignmentId);
+    const pid = getProjectIdForAssignment(assignmentId);
+    activeSelectionProjectIdRef.current = pid;
+    if (pid != null) setActiveSelectionProjectId(prev => (prev === pid ? prev : pid));
     selection.onCellMouseDown(String(assignmentId), weekKey, e as any);
   }, [selection.onCellMouseDown, getProjectIdForAssignment]);
 
   const handleCellMouseEnter = React.useCallback((assignmentId: number, weekKey: string) => {
     const pid = getProjectIdForAssignment(assignmentId);
-    if (selectionProjectIdRef.current != null && pid != null && pid !== selectionProjectIdRef.current) return;
+    const activePid = activeSelectionProjectIdRef.current;
+    if (activePid != null && pid != null && pid !== activePid) return;
     selection.onCellMouseEnter(String(assignmentId), weekKey);
   }, [selection.onCellMouseEnter, getProjectIdForAssignment]);
 
   const handleCellSelect = React.useCallback((assignmentId: number, weekKey: string, isShiftClick?: boolean) => {
     const pid = getProjectIdForAssignment(assignmentId);
-    if (selectionProjectIdRef.current != null && pid != null && pid !== selectionProjectIdRef.current) return;
+    if (activeSelectionProjectIdRef.current == null && pid != null) {
+      activeSelectionProjectIdRef.current = pid;
+      setActiveSelectionProjectId(prev => (prev === pid ? prev : pid));
+    }
+    const activePid = activeSelectionProjectIdRef.current;
+    if (activePid != null && pid != null && pid !== activePid) return;
     selection.onCellSelect(String(assignmentId), weekKey, isShiftClick);
   }, [selection.onCellSelect, getProjectIdForAssignment]);
 
