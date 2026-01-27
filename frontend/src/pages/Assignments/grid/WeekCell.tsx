@@ -119,6 +119,7 @@ export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
       className={`relative cursor-pointer transition-colors border-l border-[var(--border)] ${
         isSelected ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : 'hover:bg-[var(--surfaceHover)]'
       }`}
+      data-week-cell-editing={isEditing ? 'true' : undefined}
       onMouseDown={(e) => {
         e.preventDefault();
         const isShift = (e as any).shiftKey;

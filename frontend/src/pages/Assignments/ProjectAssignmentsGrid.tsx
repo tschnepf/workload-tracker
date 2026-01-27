@@ -178,6 +178,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return map;
   }, [rowOrder]);
   const selection = useCellSelection(weeks.map(w => w.date), rowOrder);
+  const selectionProjectIdRef = useRef<number | null>(null);
+  const getProjectIdForAssignment = React.useCallback((assignmentId: number) => {
+    const entry = assignmentById.get(assignmentId);
+    return entry?.projectId ?? null;
+  }, [assignmentById]);
   const aborts = useAbortManager();
   const url = useGridUrlState();
   const location = useLocation();
@@ -1507,17 +1512,51 @@ const ProjectAssignmentsGrid: React.FC = () => {
     setEditingSeed(null);
   }, []);
 
+  useEffect(() => {
+    const start = selection.selectionStart;
+    if (!start) {
+      selectionProjectIdRef.current = null;
+      return;
+    }
+    const aid = parseInt(start.rowKey, 10);
+    if (!Number.isNaN(aid)) {
+      const pid = getProjectIdForAssignment(aid);
+      if (pid != null) selectionProjectIdRef.current = pid;
+    }
+  }, [selection.selectionStart, getProjectIdForAssignment]);
+
+  // Commit edits on outside click (mouse only) to mirror Assignments page
+  useEffect(() => {
+    if (!editingCell) return;
+    const handleDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-week-cell-editing="true"]')) return;
+      const input = document.querySelector('[data-week-cell-editing="true"] input') as HTMLInputElement | null;
+      if (!input) return;
+      const v = parseFloat(input.value);
+      handleCommitEditing(parseInt(editingCell.rowKey, 10), editingCell.weekKey, v);
+    };
+    document.addEventListener('mousedown', handleDocMouseDown, true);
+    return () => document.removeEventListener('mousedown', handleDocMouseDown, true);
+  }, [editingCell, handleCommitEditing]);
+
   const handleCellMouseDown = React.useCallback((assignmentId: number, weekKey: string, e?: MouseEvent | React.MouseEvent) => {
+    selectionProjectIdRef.current = getProjectIdForAssignment(assignmentId);
     selection.onCellMouseDown(String(assignmentId), weekKey, e as any);
-  }, [selection.onCellMouseDown]);
+  }, [selection.onCellMouseDown, getProjectIdForAssignment]);
 
   const handleCellMouseEnter = React.useCallback((assignmentId: number, weekKey: string) => {
+    const pid = getProjectIdForAssignment(assignmentId);
+    if (selectionProjectIdRef.current != null && pid != null && pid !== selectionProjectIdRef.current) return;
     selection.onCellMouseEnter(String(assignmentId), weekKey);
-  }, [selection.onCellMouseEnter]);
+  }, [selection.onCellMouseEnter, getProjectIdForAssignment]);
 
   const handleCellSelect = React.useCallback((assignmentId: number, weekKey: string, isShiftClick?: boolean) => {
+    const pid = getProjectIdForAssignment(assignmentId);
+    if (selectionProjectIdRef.current != null && pid != null && pid !== selectionProjectIdRef.current) return;
     selection.onCellSelect(String(assignmentId), weekKey, isShiftClick);
-  }, [selection.onCellSelect]);
+  }, [selection.onCellSelect, getProjectIdForAssignment]);
 
   // Sorting helpers
   const toggleSort = (key: 'client' | 'project' | 'deliverable') => {

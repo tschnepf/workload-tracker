@@ -179,23 +179,88 @@ const AssignmentGrid: React.FC = () => {
   const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
   const { setLeft, setRight, clearLeft, clearRight } = useTopBarSlots();
   const rowKeyFor = (personId: number, assignmentId: number) => `${personId}:${assignmentId}`;
+  // Per-person assignment sort mode (default client->project; alt by next deliverable date)
+  const [personSortMode, setPersonSortMode] = useState<'client_project' | 'deliverable'>('client_project');
+
+  // Precompute next upcoming deliverable date per project for sorting
+  const nextDeliverableByProject = useMemo(() => {
+    const map = new Map<number, string>();
+    try {
+      const now = new Date(); now.setHours(0,0,0,0);
+      for (const d of (deliverables || [])) {
+        const pid = (d as any).project as number | undefined; const ds = (d as any).date as string | undefined;
+        if (!pid || !ds) continue; const dt = new Date(ds.replace(/-/g,'/')); dt.setHours(0,0,0,0);
+        if (dt < now) continue;
+        const prev = map.get(pid);
+        if (!prev || new Date(ds.replace(/-/g,'/')).getTime() < new Date(prev.replace(/-/g,'/')).getTime()) {
+          map.set(pid, ds);
+        }
+      }
+    } catch {}
+    return map;
+  }, [deliverables]);
+
+  // Filter + sort assignments based on status filters and current sort mode
+  const getVisibleAssignments = (assignments: Assignment[]): Assignment[] => {
+    try {
+      if (!assignments?.length) return [];
+
+      const filteredAssignments = assignments.filter(assignment => {
+        const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
+        return matchesStatusFilters(project as Project);
+      });
+
+      // Sort within person based on active mode
+      const list = [...filteredAssignments];
+      if (personSortMode === 'deliverable') {
+        list.sort((a, b) => {
+          const ad = a?.project ? nextDeliverableByProject.get(a.project) : undefined;
+          const bd = b?.project ? nextDeliverableByProject.get(b.project) : undefined;
+          if (ad && bd) return ad.localeCompare(bd);
+          if (ad && !bd) return -1;
+          if (!ad && bd) return 1;
+          // fallback deterministic by client->project
+          const ap = a?.project ? projectsById.get(a.project) : undefined;
+          const bp = b?.project ? projectsById.get(b.project) : undefined;
+          const ac = (ap?.client || '').toString().trim().toLowerCase();
+          const bc = (bp?.client || '').toString().trim().toLowerCase();
+          if (ac !== bc) return ac.localeCompare(bc);
+          const an = (ap?.name || '').toString().trim().toLowerCase();
+          const bn = (bp?.name || '').toString().trim().toLowerCase();
+          return an.localeCompare(bn);
+        });
+      } else {
+        list.sort((a, b) => {
+          const ap = a?.project ? projectsById.get(a.project) : undefined;
+          const bp = b?.project ? projectsById.get(b.project) : undefined;
+          const ac = (ap?.client || '').toString().trim().toLowerCase();
+          const bc = (bp?.client || '').toString().trim().toLowerCase();
+          if (ac !== bc) return ac.localeCompare(bc);
+          const an = (ap?.name || '').toString().trim().toLowerCase();
+          const bn = (bp?.name || '').toString().trim().toLowerCase();
+          return an.localeCompare(bn);
+        });
+      }
+      return list;
+    } catch (error) {
+      console.error('Error filtering/sorting assignments:', error);
+      return assignments || []; // Safe fallback - show all on error
+    }
+  };
   const rowOrder = useMemo(() => {
     const out: string[] = [];
     try {
       for (const person of people || []) {
         if (!person?.isExpanded) continue;
         if (loadingAssignments.has(person.id!)) continue;
-        const assignments = person.assignments || [];
+        const assignments = getVisibleAssignments(person.assignments || []);
         for (const a of assignments) {
-          const project = a?.project ? projectsById.get(a.project) : undefined;
-          if (project && matchesStatusFilters(project as Project) && a?.id != null) {
-            out.push(`${person.id!}:${a.id!}`);
-          }
+          if (a?.id != null) out.push(`${person.id!}:${a.id!}`);
         }
       }
     } catch {}
     return out;
-  }, [people, loadingAssignments, projectsById, matchesStatusFilters]);
+  }, [people, loadingAssignments, getVisibleAssignments]);
 
   const peopleRef = useRef<PersonWithAssignments[]>([]);
   const assignmentsRef = useRef<Assignment[]>([]);
@@ -413,27 +478,6 @@ const AssignmentGrid: React.FC = () => {
   const selectionStart = useMemo(() => selStart ? (() => { const [p,a] = selStart.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: selStart.weekKey }; })() : null, [selStart]);
   const url = useGridUrlState();
 
-  // Per-person assignment sort mode (default client->project; alt by next deliverable date)
-  const [personSortMode, setPersonSortMode] = useState<'client_project' | 'deliverable'>('client_project');
-
-  // Precompute next upcoming deliverable date per project for sorting
-  const nextDeliverableByProject = useMemo(() => {
-    const map = new Map<number, string>();
-    try {
-      const now = new Date(); now.setHours(0,0,0,0);
-      for (const d of (deliverables || [])) {
-        const pid = (d as any).project as number | undefined; const ds = (d as any).date as string | undefined;
-        if (!pid || !ds) continue; const dt = new Date(ds.replace(/-/g,'/')); dt.setHours(0,0,0,0);
-        if (dt < now) continue;
-        const prev = map.get(pid);
-        if (!prev || new Date(ds.replace(/-/g,'/')).getTime() < new Date(prev.replace(/-/g,'/')).getTime()) {
-          map.set(pid, ds);
-        }
-      }
-    } catch {}
-    return map;
-  }, [deliverables]);
-
   // Column width state (extracted hook, assignGrid keys)
   const {
     clientColumnWidth,
@@ -624,8 +668,10 @@ const AssignmentGrid: React.FC = () => {
     return { ok: true };
   };
 
+  const saveEditInFlightRef = useRef(false);
   const saveEdit = async () => {
-    if (!editingCell) return;
+    if (!editingCell || saveEditInFlightRef.current) return;
+    saveEditInFlightRef.current = true;
 
     const numValue = sanitizeHours(editingValue);
 
@@ -676,9 +722,23 @@ const AssignmentGrid: React.FC = () => {
       console.error('Failed to save edit:', err);
       showToast('Failed to save hours: ' + (err?.message || 'Unknown error'), 'error');
     } finally {
+      saveEditInFlightRef.current = false;
       setEditingCell(null);
     }
   };
+
+  // Commit edits on outside click (avoid selection mouse events stealing focus)
+  useEffect(() => {
+    if (!editingCell) return;
+    const handleDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-week-cell-editing="true"]')) return;
+      saveEdit();
+    };
+    document.addEventListener('mousedown', handleDocMouseDown, true);
+    return () => document.removeEventListener('mousedown', handleDocMouseDown, true);
+  }, [editingCell, saveEdit]);
 
   // (cancelEdit provided by useEditingCellHook)
 
@@ -940,53 +1000,7 @@ const AssignmentGrid: React.FC = () => {
 
   // Status filter matching provided by useProjectStatusFilters
 
-  // Filter assignments based on multi-select status filters
-  const getVisibleAssignments = (assignments: Assignment[]): Assignment[] => {
-    try {
-      if (!assignments?.length) return [];
-
-      const filteredAssignments = assignments.filter(assignment => {
-        const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
-        return matchesStatusFilters(project as Project);
-      });
-
-      // Sort within person based on active mode
-      const list = [...filteredAssignments];
-      if (personSortMode === 'deliverable') {
-        list.sort((a, b) => {
-          const ad = a?.project ? nextDeliverableByProject.get(a.project) : undefined;
-          const bd = b?.project ? nextDeliverableByProject.get(b.project) : undefined;
-          if (ad && bd) return ad.localeCompare(bd);
-          if (ad && !bd) return -1;
-          if (!ad && bd) return 1;
-          // fallback deterministic by client->project
-          const ap = a?.project ? projectsById.get(a.project) : undefined;
-          const bp = b?.project ? projectsById.get(b.project) : undefined;
-          const ac = (ap?.client || '').toString().trim().toLowerCase();
-          const bc = (bp?.client || '').toString().trim().toLowerCase();
-          if (ac !== bc) return ac.localeCompare(bc);
-          const an = (ap?.name || '').toString().trim().toLowerCase();
-          const bn = (bp?.name || '').toString().trim().toLowerCase();
-          return an.localeCompare(bn);
-        });
-      } else {
-        list.sort((a, b) => {
-          const ap = a?.project ? projectsById.get(a.project) : undefined;
-          const bp = b?.project ? projectsById.get(b.project) : undefined;
-          const ac = (ap?.client || '').toString().trim().toLowerCase();
-          const bc = (bp?.client || '').toString().trim().toLowerCase();
-          if (ac !== bc) return ac.localeCompare(bc);
-          const an = (ap?.name || '').toString().trim().toLowerCase();
-          const bn = (bp?.name || '').toString().trim().toLowerCase();
-          return an.localeCompare(bn);
-        });
-      }
-      return list;
-    } catch (error) {
-      console.error('Error filtering/sorting assignments:', error);
-      return assignments || []; // Safe fallback - show all on error
-    }
-  };
+  // Status filter matching provided by useProjectStatusFilters
 
   // Calculate person total using filtered assignments with null safety
   const calculatePersonTotal = (assignments: Assignment[], week: string): number => {

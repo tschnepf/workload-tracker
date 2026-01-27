@@ -27,6 +27,7 @@ const WeekCell: React.FC<WeekCellProps> = ({ isSelected, isEditing, currentHours
         relative cursor-pointer transition-colors border-l border-[var(--border)]
         ${isSelected ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : 'hover:bg-[var(--surfaceHover)]'}
       `}
+      data-week-cell-editing={isEditing ? 'true' : undefined}
       onClick={(e) => onSelect((e as any).shiftKey)}
       onMouseDown={(e) => { e.preventDefault(); onMouseDown(); }}
       onMouseEnter={() => onMouseEnter()}
@@ -38,7 +39,6 @@ const WeekCell: React.FC<WeekCellProps> = ({ isSelected, isEditing, currentHours
           type="number"
           value={editingValue}
           onChange={(e) => onEditValueChange(e.target.value)}
-          onBlur={onEditSave}
           onKeyDown={(e) => {
             if (e.key === 'Enter') onEditSave();
             if (e.key === 'Escape') onEditCancel();
