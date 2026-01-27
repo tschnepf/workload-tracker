@@ -11,17 +11,15 @@ import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
 import type { Project, Assignment, Person } from '@/types/models';
 import { showToast } from '@/lib/toastBus';
 import { useAbortManager } from '@/utils/useAbortManager';
-import { assignmentsApi, peopleApi, projectsApi } from '@/services/api';
+import { assignmentsApi, peopleApi } from '@/services/api';
 import { formatDateWithWeekday } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
-import StatusDropdown from '@/components/projects/StatusDropdown';
 import { useDropdownManager } from '@/components/projects/useDropdownManager';
 import { useProjectStatus } from '@/components/projects/useProjectStatus';
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, getUtilizationPill } from '@/util/utilization';
-import RoleDropdown from '@/roles/components/RoleDropdown';
 import { listProjectRoles, type ProjectRole } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
 import { getFlag } from '@/lib/flags';
@@ -31,8 +29,6 @@ import StatusFilterChips from '@/components/compact/StatusFilterChips';
 import HeaderActions from '@/components/compact/HeaderActions';
 import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
-import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
-import { useQueryClient } from '@tanstack/react-query';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
 import { bulkUpdateAssignmentHours, createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
@@ -42,16 +38,9 @@ import {
   projectMatchesActiveWithDates,
   projectMatchesActiveWithoutDates,
 } from '@/components/projects/statusFilterUtils';
-import { WeekCell } from '@/pages/Assignments/grid/WeekCell';
-
-type ProjectWithAssignments = Project & { assignments: Assignment[]; isExpanded: boolean };
-export type DeliverableMarker = {
-  type: string;
-  percentage?: number;
-  dates?: string[];
-  description?: string | null;
-  note?: string | null;
-};
+import ProjectsSection from '@/pages/Assignments/projectAssignments/components/ProjectsSection';
+import ProjectNameQuickViewButton from '@/pages/Assignments/projectAssignments/components/ProjectNameQuickViewButton';
+import type { DeliverableMarker, ProjectWithAssignments } from '@/pages/Assignments/projectAssignments/types';
 
 type AssignmentUpdateInfo = {
   prev: Record<string, number>;
@@ -73,35 +62,19 @@ const TYPE_COLORS: Record<string, string> = {
 };
 const EMPTY_MARKERS: DeliverableMarker[] = [];
 
-// Local helper component: use the quick view hook inside a descendant of Layout's provider
-const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.ReactNode }> = ({ projectId, children }) => {
-  const { open } = useProjectDetailsDrawer();
-  const queryClient = useQueryClient();
-  const prefetchTimerRef = React.useRef<number | null>(null);
-  return (
-    <button
-      type="button"
-      className="truncate cursor-pointer hover:underline"
-      onClick={(e) => { e.stopPropagation(); open(projectId); }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(projectId); } }}
-      onMouseEnter={() => {
-        if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
-        prefetchTimerRef.current = window.setTimeout(() => {
-          queryClient.ensureQueryData({ queryKey: ['projects', projectId], queryFn: () => projectsApi.get(projectId) });
-        }, 150);
-      }}
-      onMouseLeave={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
-      onFocus={() => {
-        if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
-        prefetchTimerRef.current = window.setTimeout(() => {
-          queryClient.ensureQueryData({ queryKey: ['projects', projectId], queryFn: () => projectsApi.get(projectId) });
-        }, 150);
-      }}
-      onBlur={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
-    >
-      {children}
-    </button>
-  );
+const buildDeliverableTooltip = (weekKey: string, entries: DeliverableMarker[] | undefined): string | undefined => {
+  if (!entries || entries.length === 0) return undefined;
+  const dtHeader = formatDateWithWeekday(weekKey);
+  return entries
+    .flatMap((m) => {
+      const dates = (m as any).dates as string[] | undefined;
+      const base = `${m.percentage != null ? `${m.percentage}% ` : ''}${m.type.toUpperCase()}`;
+      if (dates && dates.length) {
+        return dates.map((d) => `${formatDateWithWeekday(d)} — ${base}`);
+      }
+      return [`${dtHeader} — ${base}`];
+    })
+    .join('\n');
 };
 
 // Project Assignments Grid (scaffold)
@@ -119,7 +92,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   // Projects state must be defined before any hook closures that read it
-  type ProjectWithAssignments = Project & { assignments: Assignment[]; isExpanded: boolean };
   const [projects, setProjects] = useState<ProjectWithAssignments[]>([]);
   const projectsRef = useRef<ProjectWithAssignments[]>([]);
   const lastAssignmentUpdateRef = useRef<Map<number, number>>(new Map());
@@ -205,7 +177,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const aborts = useAbortManager();
   const url = useGridUrlState();
   const location = useLocation();
-  const statusDropdown = useDropdownManager<string>();
+  const { openId: statusDropdownOpenId, toggle: toggleStatusDropdown, close: closeStatusDropdown } = useDropdownManager<number>();
   const { emitStatusChange } = useProjectStatusSubscription({ debug: false });
   const projectStatus = useProjectStatus({
     onSuccess: (pid, newStatus) => {
@@ -238,11 +210,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [deliverablesByProjectWeek, setDeliverablesByProjectWeek] = useState<Record<number, Record<string, number>>>({});
   // Deliverable types per project/week for vertical bar rendering
   const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, DeliverableMarker[]>>>({});
+  const [deliverableTooltipsByProjectWeek, setDeliverableTooltipsByProjectWeek] = useState<Record<number, Record<string, string>>>({});
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
   const loadingAssignmentsRef = useRef<Set<number>>(new Set());
   const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
-  const [editingSeed, setEditingSeed] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState<string>('');
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
   const applyBatchInFlightRef = useRef(false);
   // Role dropdown state
@@ -250,6 +223,33 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const roleAnchorRef = useRef<HTMLElement | null>(null);
   const [rolesByDept, setRolesByDept] = useState<Record<number, ProjectRole[]>>({});
   const expandedFromUrlRef = useRef<string | null>(null);
+  const editingProjectId = React.useMemo(() => {
+    if (!editingCell) return null;
+    const aid = parseInt(editingCell.rowKey, 10);
+    if (Number.isNaN(aid)) return null;
+    return assignmentById.get(aid)?.projectId ?? null;
+  }, [editingCell, assignmentById]);
+  const openRoleProjectId = React.useMemo(() => {
+    if (!openRoleFor) return null;
+    return assignmentById.get(openRoleFor)?.projectId ?? null;
+  }, [openRoleFor, assignmentById]);
+  const savingCellsByProject = React.useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    for (const key of savingCells) {
+      const [aidRaw] = key.split('-');
+      const aid = parseInt(aidRaw, 10);
+      if (Number.isNaN(aid)) continue;
+      const pid = assignmentById.get(aid)?.projectId;
+      if (pid == null) continue;
+      let set = map.get(pid);
+      if (!set) {
+        set = new Set<string>();
+        map.set(pid, set);
+      }
+      set.add(key);
+    }
+    return map;
+  }, [savingCells, assignmentById]);
   // Load any missing role catalogs for departments present in rows, then sort by role order
   const sortRowsByDeptRoles = React.useCallback(async (rows: Assignment[]) => {
     const deptIds = Array.from(new Set(rows.map(a => (a as any).personDepartmentId as number | null | undefined)))
@@ -290,8 +290,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     })();
     return () => { cancelled = true; };
   }, [mobileRoleState, rolesByDept]);
-  // Quick View popover trigger lives in a child component below Layout's provider
-  const queryClient = useQueryClient();
   const [pendingRefresh, setPendingRefresh] = useState<boolean>(false);
   const isSnapshotMode = true;
   // Column widths + resizing (parity with person grid)
@@ -441,7 +439,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   // Add person combobox state
   const [isAddingForProject, setIsAddingForProject] = useState<number | null>(null);
   const [personQuery, setPersonQuery] = useState<string>('');
-  const [personResults, setPersonResults] = useState<Array<{ id: number; name: string; department: number | null }>>([]);
+  const [personResults, setPersonResults] = useState<Person[]>([]);
   const [selectedPersonIndex, setSelectedPersonIndex] = useState<number>(-1);
   // Status filter chips
   const statusFilterOptions = [
@@ -594,6 +592,157 @@ const ProjectAssignmentsGrid: React.FC = () => {
       showToast(error?.message || 'Failed to update role', 'error');
     }
   }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole]);
+
+  const handleAddPersonClick = React.useCallback((projectId: number) => {
+    setIsAddingForProject(prev => prev === projectId ? null : projectId);
+    setPersonQuery('');
+    setPersonResults([]);
+    setSelectedPersonIndex(-1);
+  }, []);
+
+  const handlePersonQueryChange = React.useCallback(async (query: string) => {
+    const q = query;
+    setPersonQuery(q);
+    if (q.trim().length === 0) {
+      setPersonResults([]);
+      setSelectedPersonIndex(-1);
+      return;
+    }
+    try {
+      const res = await peopleApi.autocomplete(q, 20);
+      setPersonResults(res || []);
+      setSelectedPersonIndex(res && res.length > 0 ? 0 : -1);
+    } catch {}
+  }, []);
+
+  const handlePersonKeyDown = React.useCallback(async (e: React.KeyboardEvent<HTMLInputElement>, projectId: number) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedPersonIndex(i => Math.min(i + 1, personResults.length - 1));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedPersonIndex(i => Math.max(i - 1, 0));
+      return;
+    }
+    if (e.key === 'Escape') {
+      setIsAddingForProject(null);
+      setPersonQuery('');
+      setPersonResults([]);
+      setSelectedPersonIndex(-1);
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const sel = selectedPersonIndex >= 0 ? personResults[selectedPersonIndex] : null;
+    if (!sel || !projectId) return;
+    try {
+      const created = await createAssignment({ person: sel.id, project: projectId, weeklyHours: {} }, assignmentsApi);
+      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
+      await refreshTotalsForProject(projectId);
+      showToast('Person added to project', 'success');
+      setIsAddingForProject(null);
+      setPersonQuery('');
+      setPersonResults([]);
+      setSelectedPersonIndex(-1);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to add person', 'error');
+    }
+  }, [personResults, selectedPersonIndex, assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole]);
+
+  const handlePersonSelect = React.useCallback(async (projectId: number, person: Person) => {
+    if (!projectId) return;
+    try {
+      const created = await createAssignment({ person: person.id, project: projectId, weeklyHours: {} }, assignmentsApi);
+      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
+      await refreshTotalsForProject(projectId);
+      showToast('Person added to project', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to add person', 'error');
+    } finally {
+      setIsAddingForProject(null);
+      setPersonQuery('');
+      setPersonResults([]);
+      setSelectedPersonIndex(-1);
+    }
+  }, [assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole]);
+
+  const handleRemoveAssignment = React.useCallback(async (projectId: number, assignmentId: number, personId: number | null) => {
+    if (!assignmentId || !projectId) return;
+    try {
+      await deleteAssignment(assignmentId, assignmentsApi, {
+        projectId,
+        personId,
+        updatedAt: new Date().toISOString(),
+      });
+      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, assignments: x.assignments.filter(a => a.id !== assignmentId) } : x));
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const res = await getProjectTotals([projectId], { weeks: weeks.length, department: dept, include_children: inc });
+      setHoursByProject(prev => ({ ...prev, [projectId]: res.hoursByProject[String(projectId)] || {} }));
+      showToast('Assignment removed', 'success');
+    } catch (e: any) {
+      showToast('Failed to remove assignment', 'error');
+    }
+  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, weeks.length, showToast]);
+
+  const handleToggleRole = React.useCallback(async (assignmentId: number, deptId: number | null, anchor: HTMLElement) => {
+    if (!deptId) return;
+    roleAnchorRef.current = anchor;
+    setOpenRoleFor(prev => prev === assignmentId ? null : assignmentId);
+    if (!rolesByDept[deptId]) {
+      try {
+        const roles = await listProjectRoles(deptId);
+        setRolesByDept(prev => ({ ...prev, [deptId]: roles }));
+      } catch {}
+    }
+  }, [rolesByDept]);
+
+  const handleSelectRole = React.useCallback(async (
+    projectId: number,
+    assignmentId: number,
+    deptId: number | null,
+    roleId: number | null,
+    roleName: string | null,
+    previousId: number | null,
+    previousName: string | null
+  ) => {
+    if (!assignmentId || !projectId) return;
+    setProjects(prev => prev.map(x => {
+      if (x.id !== projectId) return x;
+      const updated = x.assignments.map(a => a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName } : a);
+      return { ...x, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
+    }));
+    try {
+      await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
+      showToast('Role updated', 'success');
+    } catch (e: any) {
+      setProjects(prev => prev.map(x => {
+        if (x.id !== projectId) return x;
+        const rolled = x.assignments.map(a => a.id === assignmentId ? { ...a, roleOnProjectId: previousId, roleName: previousName ?? undefined } : a);
+        return { ...x, assignments: sortAssignmentsByProjectRole(rolled, rolesByDept) };
+      }));
+      showToast(e?.message || 'Failed to update role', 'error');
+    } finally {
+      setOpenRoleFor(null);
+    }
+  }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole]);
+
+  const handleCloseRole = React.useCallback(() => {
+    setOpenRoleFor(null);
+  }, []);
+
+  const handleProjectStatusSelect = React.useCallback(async (projectId: number, newStatus: Project['status']) => {
+    if (!projectId) return;
+    try {
+      await projectStatus.updateStatus(projectId, newStatus);
+      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, status: newStatus } : x));
+      closeStatusDropdown();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to update status', 'error');
+    }
+  }, [projectStatus, closeStatusDropdown, showToast]);
 
   // Compact header slot injection (after filter state is defined)
   const topBarHeader = (
@@ -988,7 +1137,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   );
 
   // Helper: refresh totals for project from server
-  const refreshTotalsForProject = async (projectId: number) => {
+  async function refreshTotalsForProject(projectId: number) {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
@@ -997,7 +1146,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } catch (e:any) {
       showToast('Failed to refresh totals: ' + (e?.message || 'Unknown error'), 'error');
     }
-  };
+  }
 
   // Refresh assignments for a specific project
   const refreshProjectAssignments = async (projectId: number) => {
@@ -1286,11 +1435,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
     Object.entries(snap.deliverablesByProjectWeek || {}).forEach(([pid, wk]) => { dbw[Number(pid)] = wk; });
     setDeliverablesByProjectWeek(dbw);
     const markersByProject: Record<number, Record<string, DeliverableMarker[]>> = {};
+    const tooltipsByProject: Record<number, Record<string, string>> = {};
     if (snap.deliverableMarkersByProjectWeek) {
       Object.entries(snap.deliverableMarkersByProjectWeek).forEach(([pid, weeksMap]) => {
         const projectId = Number(pid);
         if (!projectId || !weeksMap) return;
         const weekMarkers: Record<string, DeliverableMarker[]> = {};
+        const weekTooltips: Record<string, string> = {};
         Object.entries(weeksMap || {}).forEach(([weekKey, markers]) => {
           const normalized = (markers || []).map((m: any) => ({
             type: String(m.type || '').toLowerCase(),
@@ -1301,14 +1452,20 @@ const ProjectAssignmentsGrid: React.FC = () => {
           })) as DeliverableMarker[];
           if (normalized.length > 0) {
             weekMarkers[weekKey] = normalized;
+            const tooltip = buildDeliverableTooltip(weekKey, normalized);
+            if (tooltip) weekTooltips[weekKey] = tooltip;
           }
         });
         if (Object.keys(weekMarkers).length > 0) {
           markersByProject[projectId] = weekMarkers;
         }
+        if (Object.keys(weekTooltips).length > 0) {
+          tooltipsByProject[projectId] = weekTooltips;
+        }
       });
     }
     setDeliverableTypesByProjectWeek(markersByProject);
+    setDeliverableTooltipsByProjectWeek(tooltipsByProject);
     return () => { mounted = false; };
   }, [
     snapshotQuery.data,
@@ -1403,7 +1560,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         e.preventDefault();
         const seed = e.key === '.' ? '0.' : e.key;
         setEditingCell({ rowKey: String(active.rowKey), weekKey: active.weekKey });
-        setEditingSeed(seed);
+        setEditingValue(seed);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -1511,7 +1668,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       return { ...x, assignments: x.assignments.map(a => { if (!a.id || !updatesMap.has(a.id)) return a; const info = updatesMap.get(a.id)!; return { ...a, weeklyHours: info.next }; }) };
     }));
     setEditingCell(null);
-    setEditingSeed(null);
+    setEditingValue('');
 
     // Kick off heavy work asynchronously
     void runApplyBatch(updatesMap, touchedProjects, savingKeys);
@@ -1519,7 +1676,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   const handleBeginEditing = React.useCallback((assignmentId: number, weekKey: string, seed?: string) => {
     setEditingCell({ rowKey: String(assignmentId), weekKey });
-    setEditingSeed(seed ?? null);
+    setEditingValue(seed ?? '');
   }, []);
 
   const handleCommitEditing = React.useCallback((assignmentId: number, weekKey: string, value: number) => {
@@ -1528,7 +1685,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   const handleCancelEditing = React.useCallback(() => {
     setEditingCell(null);
-    setEditingSeed(null);
+    setEditingValue('');
   }, []);
 
   useEffect(() => {
@@ -1555,14 +1712,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
       if (target.closest('[data-week-cell-editing="true"]')) return;
-      const input = document.querySelector('[data-week-cell-editing="true"] input') as HTMLInputElement | null;
-      if (!input) return;
-      const v = parseFloat(input.value);
+      const v = parseFloat(editingValue);
       handleCommitEditing(parseInt(editingCell.rowKey, 10), editingCell.weekKey, v);
     };
     document.addEventListener('mousedown', handleDocMouseDown, true);
     return () => document.removeEventListener('mousedown', handleDocMouseDown, true);
-  }, [editingCell, handleCommitEditing]);
+  }, [editingCell, handleCommitEditing, editingValue]);
 
   const handleCellMouseDown = React.useCallback((assignmentId: number, weekKey: string, e?: MouseEvent | React.MouseEvent) => {
     const pid = getProjectIdForAssignment(assignmentId);
@@ -1795,344 +1950,55 @@ const ProjectAssignmentsGrid: React.FC = () => {
           )}
 
           {!loading && !error && projects.length > 0 && (
-            <div className="space-y-1" style={{ minWidth: totalMinWidth }}>
-              {sortedProjects.map((p) => (
-                <div key={p.id} className="border-b border-[var(--border)] last:border-b-0">
-                  {/* Project summary row */}
-                  <div
-                    className="grid items-stretch gap-px p-2 hover:bg-[var(--surfaceHover)] transition-colors cursor-pointer"
-                    style={{ gridTemplateColumns: gridTemplate }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      void toggleProjectExpanded(p);
-                    }}
-                    role="button"
-                    aria-expanded={p.isExpanded}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter') {
-                        e.preventDefault();
-                        void toggleProjectExpanded(p);
-                      }
-                    }}
-                  >
-                    {/* Client with chevron on left */}
-                    <div className="pl-4 pr-2 py-2 text-[var(--text)] text-sm flex items-center gap-2 truncate" title={p.client || ''}>
-                      <svg
-                        className={`w-3 h-3 transition-transform ${p.isExpanded ? 'rotate-90' : ''}`}
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"
-                      >
-                        <path d="M8 5l8 7-8 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <span className="truncate">{p.client || ''}</span>
-                    </div>
-                    {/* Project name (no chevron) with status aligned to right */}
-                    <div className="pr-2 py-2 text-[var(--text)] text-sm flex items-center" title={p.name}>
-                      <div className="min-w-0 truncate">
-                        {p.id ? (
-                          <ProjectNameQuickViewButton projectId={p.id!}>{p.name}</ProjectNameQuickViewButton>
-                        ) : (
-                          <span className="truncate">{p.name}</span>
-                        )}
-                      </div>
-                      <div className="relative ml-auto" data-dropdown onClick={(e) => e.stopPropagation()}>
-                        <StatusBadge
-                          status={(p.status as any) || 'active'}
-                          // Always render the editable button variant for parity with Assignments
-                          variant="editable"
-                          onClick={() => p.id && statusDropdown.toggle(String(p.id))}
-                          isUpdating={p.id ? projectStatus.isUpdating(p.id) : false}
-                        />
-                        {p.id && (
-                          <StatusDropdown
-                            currentStatus={(p.status as any) || 'active'}
-                            isOpen={statusDropdown.isOpen(String(p.id))}
-                            onSelect={async (newStatus) => {
-                              if (!p.id) return;
-                              try {
-                                await projectStatus.updateStatus(p.id, newStatus);
-                                setProjects(prev => prev.map(x => x.id === p.id ? { ...x, status: newStatus } : x));
-                                statusDropdown.close();
-                              } catch (e:any) {
-                                showToast(e?.message || 'Failed to update status', 'error');
-                              }
-                            }}
-                            onClose={statusDropdown.close}
-                            projectId={p.id}
-                            disabled={projectStatus.isUpdating(p.id)}
-                            closeOnSelect={false}
-                          />
-                        )}
-                      </div>
-                    </div>
-                    {/* Actions: add person (left) + refresh (right) to match Assignments */}
-                    <div className="py-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      {/* Add person */}
-                      <button
-                        className="w-7 h-7 flex items-center justify-center text-[var(--text)] hover:text-[var(--text)] hover:bg-[var(--cardHover)] rounded"
-                        onClick={() => { setIsAddingForProject(prev => prev === p.id ? null : p.id!); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1); }}
-                        title="Add person"
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                          <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round"/>
-                        </svg>
-                      </button>
-                    </div>
-                    {/* Week totals */}
-                    {weeks.map((w) => {
-                      const v = (hoursByProject[p.id!] || {})[w.date] || 0;
-                      const entries = deliverableTypesByProjectWeek[p.id!]?.[w.date] ?? EMPTY_MARKERS;
-                      return (
-                    <div key={w.date} className="relative py-2 flex items-center justify-center text-[var(--text)] text-xs font-medium border-l border-[var(--border)]" title={(() => { const dtHeader = formatDateWithWeekday(w.date); const lines = entries.length ? entries.flatMap(e => { const ds = (e as any).dates as string[] | undefined; const base = `${e.percentage != null ? e.percentage + '% ' : ''}${e.type.toUpperCase()}`; if (ds && ds.length) { return ds.map(d => `${formatDateWithWeekday(d)} — ${base}`); } return [`${dtHeader} — ${base}`]; }).join('\n') : undefined; return lines; })()}>
-                          {v > 0 ? v : ''}
-                          {entries.length > 0 && (
-                            <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px]">
-                              {entries.slice(0,3).map((e, idx) => (
-                                <div key={idx} className="w-[3px] rounded" style={{ background: typeColors[e.type] || 'var(--primary)' }} />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Expanded assignment rows */}
-                  {p.isExpanded && (
-                    <div className="p-2">
-                      {/* Add person row */}
-                      {isAddingForProject === p.id && (
-                        <>
-                          <div className="pl-8 pr-2 py-1">
-                            <input
-                              type="text"
-                              value={personQuery}
-                              onChange={async (e) => {
-                                const q = e.target.value;
-                                setPersonQuery(q);
-                                if (q.trim().length === 0) { setPersonResults([]); setSelectedPersonIndex(-1); return; }
-                                try {
-                                  const res = await peopleApi.autocomplete(q, 20);
-                                  setPersonResults(res || []);
-                                  setSelectedPersonIndex(res && res.length > 0 ? 0 : -1);
-                                } catch {}
-                              }}
-                              onKeyDown={async (e) => {
-                                if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedPersonIndex(i => Math.min(i+1, personResults.length-1)); }
-                                else if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedPersonIndex(i => Math.max(i-1, 0)); }
-                                else if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const sel = selectedPersonIndex >= 0 ? personResults[selectedPersonIndex] : null;
-                                  if (sel && p.id) {
-                                    try {
-                                      const created = await createAssignment({ person: sel.id, project: p.id, weeklyHours: {} }, assignmentsApi);
-                                      setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
-                                      await refreshTotalsForProject(p.id);
-                                      showToast('Person added to project', 'success');
-                                      setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
-                                    } catch (err:any) {
-                                      showToast(err?.message || 'Failed to add person', 'error');
-                                    }
-                                  }
-                                } else if (e.key === 'Escape') {
-                                  setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
-                                }
-                              }}
-                              placeholder="Search people by name..."
-                              className="w-full h-7 bg-[var(--card)] border border-[var(--border)] rounded px-2 text-[var(--text)] text-xs"
-                            />
-                            {/* Dropdown */}
-                            {personResults.length > 0 && (
-                              <div className="mt-1 max-h-48 overflow-auto bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg">
-                                {personResults.map((r, idx) => (
-                                  <div
-                                    key={r.id}
-                                    className={`px-2 py-1 text-xs cursor-pointer ${idx===selectedPersonIndex ? 'bg-[var(--surfaceOverlay)] text-[var(--text)]' : 'text-[var(--text)] hover:bg-[var(--cardHover)]'}`}
-                                    onMouseDown={async () => {
-                                      if (!p.id) return;
-                                      try {
-                                        const created = await createAssignment({ person: r.id, project: p.id, weeklyHours: {} }, assignmentsApi);
-                                        setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
-                                        await refreshTotalsForProject(p.id);
-                                        showToast('Person added to project', 'success');
-                                      } catch (err:any) {
-                                        showToast(err?.message || 'Failed to add person', 'error');
-                                      } finally {
-                                        setIsAddingForProject(null); setPersonQuery(''); setPersonResults([]); setSelectedPersonIndex(-1);
-                                      }
-                                    }}
-                                  >
-                                    {r.name}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <div className="py-1"></div>
-                          {weeks.map(w => (<div key={w.date}></div>))}
-                        </>
-                      )}
-                      {/* Loading skeleton for assignments */}
-                      {loadingAssignments.has(p.id!) && (
-                        <>
-                          <div className="pl-8 pr-2 py-2 text-[var(--muted)] text-xs italic col-span-3">Loading assignments…</div>
-                          {weeks.map((w) => (
-                            <div key={w.date} className="py-2 border-l border-[var(--border)]">
-                              <div className="mx-auto w-10 h-4 bg-[var(--card)] animate-pulse rounded" />
-                            </div>
-                          ))}
-                        </>
-                      )}
-                      {/* Render rows */}
-                      {!loadingAssignments.has(p.id!) && p.assignments.map(asn => {
-                        const rowKey = String(asn.id);
-                        const rowIdx = rowIndexByKey.get(rowKey) ?? null;
-                        return (
-                        <div key={asn.id} className="grid gap-px py-1 bg-[var(--surface)] hover:bg-[var(--cardHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
-                          <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={asn.personName || String(asn.person)}>
-                            {asn.personName || `Person #${asn.person}`}
-                          </div>
-                          <div className="pl-8 pr-2 py-2 text-[var(--muted)] text-xs truncate relative">
-                            {(() => {
-                              const deptId = (asn as any).personDepartmentId as number | null | undefined;
-                              const label = (asn as any).roleName as string | null | undefined;
-                              const currentId = (asn as any).roleOnProjectId as number | null | undefined;
-                              return (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={!deptId}
-                                    className={`underline decoration-dotted underline-offset-2 ${deptId ? '' : 'text-[var(--muted)] cursor-not-allowed'}`}
-                                    onClick={async (e) => {
-                                      if (!deptId) return;
-                                      roleAnchorRef.current = e.currentTarget as HTMLElement;
-                                      setOpenRoleFor(openRoleFor === asn.id ? null : (asn.id || null));
-                                      if (!rolesByDept[deptId]) {
-                                        try {
-                                          const roles = await listProjectRoles(deptId);
-                                          setRolesByDept(prev => ({ ...prev, [deptId]: roles }));
-                                        } catch {}
-                                      }
-                                    }}
-                                  >
-                                    {label || 'Set role'}
-                                  </button>
-                                  {openRoleFor === asn.id && deptId && (
-                                    <div className="absolute mt-1">
-                                      <RoleDropdown
-                                        roles={rolesByDept[deptId] || []}
-                                        currentId={currentId ?? null}
-                                        onSelect={async (roleId, roleName) => {
-                                          if (!asn.id || !p.id) return;
-                                          // optimistic update + resort
-                                          setProjects(prev => prev.map(x => {
-                                            if (x.id !== p.id) return x;
-                                            const updated = x.assignments.map(a => a.id === asn.id ? { ...a, roleOnProjectId: roleId, roleName } : a);
-                                            return { ...x, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
-                                          }));
-                                          try {
-                                            await updateAssignment(asn.id, { roleOnProjectId: roleId }, assignmentsApi);
-                                            showToast('Role updated', 'success');
-                                          } catch (e:any) {
-                                            // revert + resort
-                                            setProjects(prev => prev.map(x => {
-                                              if (x.id !== p.id) return x;
-                                              const rolled = x.assignments.map(a => a.id === asn.id ? { ...a, roleOnProjectId: (currentId ?? null), roleName: (label ?? null) } : a);
-                                              return { ...x, assignments: sortAssignmentsByProjectRole(rolled, rolesByDept) };
-                                            }));
-                                            showToast(e?.message || 'Failed to update role', 'error');
-                                          } finally {
-                                            setOpenRoleFor(null);
-                                          }
-                                        }}
-                                        onClose={() => setOpenRoleFor(null)}
-                                        anchorRef={roleAnchorRef as any}
-                                      />
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
-                          <div className="py-2 flex items-center justify-center">
-                            <button
-                              className="w-5 h-5 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded"
-                              title="Remove assignment"
-                              onClick={async () => {
-                                if (!asn.id || !p.id) return;
-                                try {
-                                  await deleteAssignment(asn.id, assignmentsApi, {
-                                    projectId: p.id,
-                                    personId: asn.person ?? null,
-                                    updatedAt: new Date().toISOString(),
-                                  });
-                                  setProjects(prev => prev.map(x => x.id === p.id ? { ...x, assignments: x.assignments.filter(a => a.id !== asn.id) } : x));
-                                  const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-                                  const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-                                  const res = await getProjectTotals([p.id!], { weeks: weeks.length, department: dept, include_children: inc });
-                                  setHoursByProject(prev => ({ ...prev, [p.id!]: res.hoursByProject[String(p.id!)] || {} }));
-                                  showToast('Assignment removed', 'success');
-                                } catch (e:any) {
-                                  showToast('Failed to remove assignment', 'error');
-                                }
-                              }}
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                          {weeks.map((w, weekIndex) => {
-                            const hours = Number((asn.weeklyHours || {})[w.date] || 0) || 0;
-                            const key = `${asn.id}-${w.date}`;
-                            const isEditing = !!editingCell && editingCell.rowKey === String(asn.id) && editingCell.weekKey === w.date;
-                            const isSaving = savingCells.has(key);
-                            const markers = deliverableTypesByProjectWeek[p.id!]?.[w.date] ?? EMPTY_MARKERS;
-                            return (
-                              <WeekCell
-                                key={key}
-                                projectId={p.id!}
-                                assignmentId={asn.id!}
-                                weekKey={w.date}
-                                rowIndex={rowIdx}
-                                weekIndex={weekIndex}
-                                hours={hours}
-                                isSelected={selection.isIndexSelected(rowIdx, weekIndex)}
-                                isSaving={isSaving}
-                                deliverableMarkers={markers}
-                                typeColors={typeColors}
-                                isEditing={isEditing}
-                                editingSeed={isEditing ? editingSeed : null}
-                                onBeginEditing={handleBeginEditing}
-                                onCommitEditing={handleCommitEditing}
-                                onCancelEditing={handleCancelEditing}
-                                onMouseDown={handleCellMouseDown}
-                                onMouseEnter={handleCellMouseEnter}
-                                onSelect={handleCellSelect}
-                              />
-                            );
-                          })}
-                        </div>
-                      ); })}
-                      {/* Empty state */}
-                      {!loadingAssignments.has(p.id!) && p.assignments.length === 0 && (
-                        <div className="grid gap-px py-1 bg-[var(--surface)]" style={{ gridTemplateColumns: gridTemplate }}>
-                          <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
-                            <div className="text-[var(--muted)] text-xs italic">No assignments</div>
-                          </div>
-                          <div></div>
-                          {weeks.map((week) => (
-                            <div key={week.date} className="flex items-center justify-center">
-                              <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs">-</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <ProjectsSection
+              projects={sortedProjects}
+              weeks={weeks}
+              gridTemplate={gridTemplate}
+              minWidth={totalMinWidth}
+              clientColumnWidth={clientColumnWidth}
+              projectColumnWidth={projectColumnWidth}
+              loadingAssignments={loadingAssignments}
+              hoursByProject={hoursByProject}
+              deliverableTypesByProjectWeek={deliverableTypesByProjectWeek}
+              deliverableTooltipsByProjectWeek={deliverableTooltipsByProjectWeek}
+              typeColors={typeColors}
+              statusDropdownOpenId={statusDropdownOpenId}
+              onToggleStatusDropdown={toggleStatusDropdown}
+              onCloseStatusDropdown={closeStatusDropdown}
+              onStatusSelect={handleProjectStatusSelect}
+              isProjectUpdating={projectStatus.isUpdating}
+              onToggleExpanded={toggleProjectExpanded}
+              onAddPersonClick={handleAddPersonClick}
+              isAddingForProject={isAddingForProject}
+              personQuery={personQuery}
+              personResults={personResults}
+              selectedPersonIndex={selectedPersonIndex}
+              onPersonQueryChange={handlePersonQueryChange}
+              onPersonKeyDown={handlePersonKeyDown}
+              onPersonSelect={handlePersonSelect}
+              rowIndexByKey={rowIndexByKey}
+              selectionBounds={selection.selectionBounds}
+              editingCell={editingCell}
+              activeSelectionProjectId={activeSelectionProjectId}
+              editingProjectId={editingProjectId}
+              openRoleProjectId={openRoleProjectId}
+              savingCellsByProject={savingCellsByProject}
+              editingValue={editingValue}
+              onEditValueChange={setEditingValue}
+              onBeginEditing={handleBeginEditing}
+              onCommitEditing={handleCommitEditing}
+              onCancelEditing={handleCancelEditing}
+              onCellMouseDown={handleCellMouseDown}
+              onCellMouseEnter={handleCellMouseEnter}
+              onCellSelect={handleCellSelect}
+              onRemoveAssignment={handleRemoveAssignment}
+              openRoleFor={openRoleFor}
+              roleAnchorRef={roleAnchorRef}
+              rolesByDept={rolesByDept}
+              onToggleRole={handleToggleRole}
+              onSelectRole={handleSelectRole}
+              onCloseRole={handleCloseRole}
+            />
           )}
 
           {/* Status Bar (Utilization Legend) */}

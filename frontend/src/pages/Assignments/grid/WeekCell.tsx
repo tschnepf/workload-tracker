@@ -1,20 +1,17 @@
 import React from 'react';
-import { formatDateWithWeekday } from '@/utils/dates';
-import type { DeliverableMarker } from '../ProjectAssignmentsGrid';
+import type { DeliverableMarker } from '@/pages/Assignments/projectAssignments/types';
 
 export type WeekCellProps = {
-  projectId: number;
   assignmentId: number;
   weekKey: string;
-  rowIndex: number;
-  weekIndex: number;
   hours: number;
-  isSelected: boolean;
   isSaving: boolean;
   deliverableMarkers: DeliverableMarker[];
+  tooltip?: string;
   typeColors: Record<string, string>;
   isEditing: boolean;
-  editingSeed: string | null;
+  editingValue: string;
+  onEditValueChange: (value: string) => void;
   onBeginEditing: (assignmentId: number, weekKey: string, seed?: string) => void;
   onCommitEditing: (assignmentId: number, weekKey: string, value: number) => void;
   onCancelEditing: () => void;
@@ -25,18 +22,16 @@ export type WeekCellProps = {
 
 export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
   const {
-    projectId,
     assignmentId,
     weekKey,
-    rowIndex,
-    weekIndex,
     hours,
-    isSelected,
     isSaving,
     deliverableMarkers,
+    tooltip,
     typeColors,
     isEditing,
-    editingSeed,
+    editingValue,
+    onEditValueChange,
     onBeginEditing,
     onCommitEditing,
     onCancelEditing,
@@ -45,25 +40,11 @@ export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
     onSelect,
   } = props;
 
-  const [value, setValue] = React.useState<string>('');
-  const wasEditingRef = React.useRef(false);
-
-  // Initialize local value when editing starts
-  React.useEffect(() => {
-    if (isEditing && !wasEditingRef.current) {
-      const initial = editingSeed != null ? editingSeed : (hours > 0 ? String(hours) : '');
-      setValue(initial);
-      wasEditingRef.current = true;
-    } else if (!isEditing && wasEditingRef.current) {
-      wasEditingRef.current = false;
-    }
-  }, [isEditing, editingSeed, hours]);
-
   const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement | HTMLInputElement> = (e) => {
     if (e.currentTarget instanceof HTMLInputElement) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        const v = parseFloat(value);
+        const v = parseFloat(editingValue);
         onCommitEditing(assignmentId, weekKey, v);
       } else if (e.key === 'Escape') {
         e.preventDefault();
@@ -77,48 +58,28 @@ export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
     if (/^[0-9]$/.test(e.key)) {
       e.preventDefault();
       const seed = e.key;
-      setValue(seed);
       onBeginEditing(assignmentId, weekKey, seed);
       return;
     }
     if (e.key === '.' || e.key === 'Decimal') {
       e.preventDefault();
       const seed = '0.';
-      setValue(seed);
       onBeginEditing(assignmentId, weekKey, seed);
       return;
     }
     if (e.key === 'Enter') {
       const seed = hours ? String(hours) : '';
-      setValue(seed);
       onBeginEditing(assignmentId, weekKey, seed);
     } else if (e.key === 'Escape') {
       onCancelEditing();
     }
   };
 
-  const title = React.useMemo(() => {
-    if (!deliverableMarkers.length) return undefined;
-    const dtHeader = formatDateWithWeekday(weekKey);
-    return deliverableMarkers
-      .flatMap((m) => {
-        const dates = (m as any).dates as string[] | undefined;
-        const base = `${m.percentage != null ? `${m.percentage}% ` : ''}${m.type.toUpperCase()}`;
-        if (dates && dates.length) {
-          return dates.map((d) => `${formatDateWithWeekday(d)} — ${base}`);
-        }
-        return [`${dtHeader} — ${base}`];
-      })
-      .join('\n');
-  }, [deliverableMarkers, weekKey]);
-
   const entries = deliverableMarkers;
 
   return (
     <div
-      className={`relative cursor-pointer transition-colors border-l border-[var(--border)] ${
-        isSelected ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : 'hover:bg-[var(--surfaceHover)]'
-      }`}
+      className="relative cursor-pointer transition-colors border-l border-[var(--border)] hover:bg-[var(--surfaceHover)]"
       data-week-cell-editing={isEditing ? 'true' : undefined}
       onMouseDown={(e) => {
         e.preventDefault();
@@ -131,19 +92,17 @@ export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
       onMouseEnter={() => onMouseEnter(assignmentId, weekKey)}
       onDoubleClick={() => {
         const seed = hours ? String(hours) : '';
-        setValue(seed);
         onBeginEditing(assignmentId, weekKey, seed);
       }}
-      aria-selected={isSelected}
-      title={title}
+      title={tooltip}
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
       {isEditing ? (
         <input
           autoFocus
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
+          value={editingValue}
+          onChange={(e) => onEditValueChange(e.target.value)}
           onKeyDown={handleKeyDown}
           className="w-full h-8 px-1 text-xs bg-[var(--bg)] text-[var(--text)] font-medium border border-[var(--primary)] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield] text-center"
         />
