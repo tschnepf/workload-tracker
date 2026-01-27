@@ -70,6 +70,7 @@ const EMPTY_WEEK_TOOLTIPS: Record<string, string> = {};
 const EMPTY_PERSON_RESULTS: Person[] = [];
 const EMPTY_ROW_INDEX = new Map<string, number>();
 const EMPTY_SAVING_SET = new Set<string>();
+const EMPTY_ROLES_BY_DEPT: Record<number, ProjectRole[]> = {};
 const noop = (_value: string) => {};
 
 const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
@@ -173,6 +174,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
         const editingValueForProject = editingProjectId === project.id ? editingValue : '';
         const onEditValueChangeForProject = editingProjectId === project.id ? onEditValueChange : noop;
         const openRoleForProject = openRoleProjectId === project.id ? openRoleFor : null;
+        const rolesByDeptForProject = openRoleProjectId === project.id ? rolesByDept : EMPTY_ROLES_BY_DEPT;
         const personQueryValue = isAdding ? personQuery : '';
         const personResultsValue = isAdding ? personResults : EMPTY_PERSON_RESULTS;
         const selectedIndexValue = isAdding ? selectedPersonIndex : -1;
@@ -233,7 +235,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
               onRemoveAssignment={onRemoveAssignment}
               openRoleFor={openRoleForProject}
               roleAnchorRef={roleAnchorRef}
-              rolesByDept={rolesByDept}
+              rolesByDept={rolesByDeptForProject}
               onToggleRole={onToggleRole}
               onSelectRole={onSelectRole}
               onCloseRole={onCloseRole}

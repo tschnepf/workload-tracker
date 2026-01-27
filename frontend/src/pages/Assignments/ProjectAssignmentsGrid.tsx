@@ -61,6 +61,7 @@ const TYPE_COLORS: Record<string, string> = {
   milestone: '#64748b',
 };
 const EMPTY_MARKERS: DeliverableMarker[] = [];
+const normalizeSortValue = (value: unknown) => (value ?? '').toString().trim().toLowerCase();
 
 const buildDeliverableTooltip = (weekKey: string, entries: DeliverableMarker[] | undefined): string | undefined => {
   if (!entries || entries.length === 0) return undefined;
@@ -94,6 +95,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   // Projects state must be defined before any hook closures that read it
   const [projects, setProjects] = useState<ProjectWithAssignments[]>([]);
   const projectsRef = useRef<ProjectWithAssignments[]>([]);
+  const projectIndexByIdRef = useRef<Map<number, number>>(new Map());
   const lastAssignmentUpdateRef = useRef<Map<number, number>>(new Map());
   const lastAssignmentUpdateSourceRef = useRef<Map<number, 'event' | 'local'>>(new Map());
   const assignmentEventQueueRef = useRef<AssignmentEvent[]>([]);
@@ -270,7 +272,30 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   useEffect(() => {
     projectsRef.current = projects;
+    const map = new Map<number, number>();
+    projects.forEach((project, index) => {
+      if (project.id != null) map.set(project.id, index);
+    });
+    projectIndexByIdRef.current = map;
   }, [projects]);
+
+  const updateProjectById = React.useCallback(
+    (projectId: number, updater: (project: ProjectWithAssignments) => ProjectWithAssignments) => {
+      if (!projectId) return;
+      setProjects(prev => {
+        const refIdx = projectIndexByIdRef.current.get(projectId);
+        const idx = refIdx != null ? refIdx : prev.findIndex(project => project.id === projectId);
+        if (idx < 0) return prev;
+        const current = prev[idx];
+        const nextProject = updater(current);
+        if (nextProject === current) return prev;
+        const next = prev.slice();
+        next[idx] = nextProject;
+        return next;
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     loadingAssignmentsRef.current = loadingAssignments;
@@ -533,19 +558,19 @@ const ProjectAssignmentsGrid: React.FC = () => {
       const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, page_size: 200 } as any);
       const rows = ((resp as any).results || []) as Assignment[];
       const sorted = await sortRowsByDeptRoles(rows);
-      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, assignments: sorted, isExpanded: true } : x));
+      updateProjectById(projectId, (project) => ({ ...project, assignments: sorted, isExpanded: true }));
     } catch {
       showToast('Failed to load assignments', 'error');
-      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, isExpanded: false } : x));
+      updateProjectById(projectId, (project) => ({ ...project, isExpanded: false }));
     } finally {
       setLoadingAssignments(prev => { const n = new Set(prev); n.delete(projectId); return n; });
     }
-  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, sortRowsByDeptRoles, showToast]);
+  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, sortRowsByDeptRoles, showToast, updateProjectById]);
 
   const toggleProjectExpanded = React.useCallback(async (project: ProjectWithAssignments) => {
     if (!project.id) return;
     const willExpand = !project.isExpanded;
-    setProjects(prev => prev.map(x => (x.id === project.id ? { ...x, isExpanded: !x.isExpanded } : x)));
+    updateProjectById(project.id, (projectRow) => ({ ...projectRow, isExpanded: !projectRow.isExpanded }));
     try {
       const expandedIds = new Set<number>(projects.filter(x => x.isExpanded).map(x => x.id!).filter(Boolean));
       if (willExpand) expandedIds.add(project.id); else expandedIds.delete(project.id);
@@ -554,17 +579,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
     if (willExpand && project.assignments.length === 0) {
       await loadProjectAssignments(project.id);
     }
-  }, [projects, url, loadProjectAssignments]);
+  }, [projects, url, loadProjectAssignments, updateProjectById]);
 
   const handleMobileStatusChange = React.useCallback(async (projectId: number, newStatus: Project['status']) => {
     try {
       await projectStatus.updateStatus(projectId, newStatus);
-      setProjects(prev => prev.map(p => (p.id === projectId ? { ...p, status: newStatus } : p)));
+      updateProjectById(projectId, (projectRow) => ({ ...projectRow, status: newStatus }));
       showToast('Status updated', 'success');
     } catch (error: any) {
       showToast(error?.message || 'Failed to update status', 'error');
     }
-  }, [projectStatus, showToast]);
+  }, [projectStatus, showToast, updateProjectById]);
 
   const handleMobileRoleChange = React.useCallback(async (params: {
     projectId: number;
@@ -575,23 +600,21 @@ const ProjectAssignmentsGrid: React.FC = () => {
     previousName: string | null;
   }) => {
     const { projectId, assignmentId, roleId, roleName, previousId, previousName } = params;
-    setProjects(prev => prev.map(project => {
-      if (project.id !== projectId) return project;
-      const updated = project.assignments.map(a => (a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName: roleName ?? undefined } : a));
-      return { ...project, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
-    }));
+    updateProjectById(projectId, (projectRow) => {
+      const updated = projectRow.assignments.map(a => (a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName: roleName ?? undefined } : a));
+      return { ...projectRow, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
+    });
     try {
       await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
       showToast('Role updated', 'success');
     } catch (error: any) {
-      setProjects(prev => prev.map(project => {
-        if (project.id !== projectId) return project;
-        const rolledBack = project.assignments.map(a => (a.id === assignmentId ? { ...a, roleOnProjectId: previousId, roleName: previousName ?? undefined } : a));
-        return { ...project, assignments: sortAssignmentsByProjectRole(rolledBack, rolesByDept) };
-      }));
+      updateProjectById(projectId, (projectRow) => {
+        const rolledBack = projectRow.assignments.map(a => (a.id === assignmentId ? { ...a, roleOnProjectId: previousId, roleName: previousName ?? undefined } : a));
+        return { ...projectRow, assignments: sortAssignmentsByProjectRole(rolledBack, rolesByDept) };
+      });
       showToast(error?.message || 'Failed to update role', 'error');
     }
-  }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole]);
+  }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole, updateProjectById]);
 
   const handleAddPersonClick = React.useCallback((projectId: number) => {
     setIsAddingForProject(prev => prev === projectId ? null : projectId);
@@ -639,7 +662,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
     if (!sel || !projectId) return;
     try {
       const created = await createAssignment({ person: sel.id, project: projectId, weeklyHours: {} }, assignmentsApi);
-      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
+      updateProjectById(projectId, (projectRow) => ({
+        ...projectRow,
+        assignments: sortAssignmentsByProjectRole([...(projectRow.assignments || []), created], rolesByDept),
+      }));
       await refreshTotalsForProject(projectId);
       showToast('Person added to project', 'success');
       setIsAddingForProject(null);
@@ -649,13 +675,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } catch (err: any) {
       showToast(err?.message || 'Failed to add person', 'error');
     }
-  }, [personResults, selectedPersonIndex, assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole]);
+  }, [personResults, selectedPersonIndex, assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
 
   const handlePersonSelect = React.useCallback(async (projectId: number, person: Person) => {
     if (!projectId) return;
     try {
       const created = await createAssignment({ person: person.id, project: projectId, weeklyHours: {} }, assignmentsApi);
-      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, assignments: sortAssignmentsByProjectRole([...(x.assignments || []), created], rolesByDept) } : x));
+      updateProjectById(projectId, (projectRow) => ({
+        ...projectRow,
+        assignments: sortAssignmentsByProjectRole([...(projectRow.assignments || []), created], rolesByDept),
+      }));
       await refreshTotalsForProject(projectId);
       showToast('Person added to project', 'success');
     } catch (err: any) {
@@ -666,7 +695,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       setPersonResults([]);
       setSelectedPersonIndex(-1);
     }
-  }, [assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole]);
+  }, [assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
 
   const handleRemoveAssignment = React.useCallback(async (projectId: number, assignmentId: number, personId: number | null) => {
     if (!assignmentId || !projectId) return;
@@ -676,7 +705,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
         personId,
         updatedAt: new Date().toISOString(),
       });
-      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, assignments: x.assignments.filter(a => a.id !== assignmentId) } : x));
+      updateProjectById(projectId, (projectRow) => ({
+        ...projectRow,
+        assignments: projectRow.assignments.filter(a => a.id !== assignmentId),
+      }));
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
       const res = await getProjectTotals([projectId], { weeks: weeks.length, department: dept, include_children: inc });
@@ -685,7 +717,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } catch (e: any) {
       showToast('Failed to remove assignment', 'error');
     }
-  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, weeks.length, showToast]);
+  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, weeks.length, showToast, updateProjectById]);
 
   const handleToggleRole = React.useCallback(async (assignmentId: number, deptId: number | null, anchor: HTMLElement) => {
     if (!deptId) return;
@@ -709,25 +741,23 @@ const ProjectAssignmentsGrid: React.FC = () => {
     previousName: string | null
   ) => {
     if (!assignmentId || !projectId) return;
-    setProjects(prev => prev.map(x => {
-      if (x.id !== projectId) return x;
-      const updated = x.assignments.map(a => a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName } : a);
-      return { ...x, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
-    }));
+    updateProjectById(projectId, (projectRow) => {
+      const updated = projectRow.assignments.map(a => a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName } : a);
+      return { ...projectRow, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
+    });
     try {
       await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
       showToast('Role updated', 'success');
     } catch (e: any) {
-      setProjects(prev => prev.map(x => {
-        if (x.id !== projectId) return x;
-        const rolled = x.assignments.map(a => a.id === assignmentId ? { ...a, roleOnProjectId: previousId, roleName: previousName ?? undefined } : a);
-        return { ...x, assignments: sortAssignmentsByProjectRole(rolled, rolesByDept) };
-      }));
+      updateProjectById(projectId, (projectRow) => {
+        const rolled = projectRow.assignments.map(a => a.id === assignmentId ? { ...a, roleOnProjectId: previousId, roleName: previousName ?? undefined } : a);
+        return { ...projectRow, assignments: sortAssignmentsByProjectRole(rolled, rolesByDept) };
+      });
       showToast(e?.message || 'Failed to update role', 'error');
     } finally {
       setOpenRoleFor(null);
     }
-  }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole]);
+  }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole, updateProjectById]);
 
   const handleCloseRole = React.useCallback(() => {
     setOpenRoleFor(null);
@@ -737,12 +767,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
     if (!projectId) return;
     try {
       await projectStatus.updateStatus(projectId, newStatus);
-      setProjects(prev => prev.map(x => x.id === projectId ? { ...x, status: newStatus } : x));
+      updateProjectById(projectId, (projectRow) => ({ ...projectRow, status: newStatus }));
       closeStatusDropdown();
     } catch (e: any) {
       showToast(e?.message || 'Failed to update status', 'error');
     }
-  }, [projectStatus, closeStatusDropdown, showToast]);
+  }, [projectStatus, closeStatusDropdown, showToast, updateProjectById]);
 
   // Compact header slot injection (after filter state is defined)
   const topBarHeader = (
@@ -776,52 +806,73 @@ const ProjectAssignmentsGrid: React.FC = () => {
     </div>
   );
 
-  const getNextDeliverableIndex = (projectId?: number | null) => {
-    if (!projectId) return Number.POSITIVE_INFINITY;
-    for (let i = 0; i < weeks.length; i++) {
-      const wk = weeks[i]?.date;
-      const entries = deliverableTypesByProjectWeek[projectId]?.[wk] ?? EMPTY_MARKERS;
-      if (entries && entries.length > 0) return i;
+  const deliverableIndexByProject = React.useMemo(() => {
+    const map = new Map<number, number>();
+    if (weeks.length === 0) return map;
+    Object.entries(deliverableTypesByProjectWeek || {}).forEach(([pidRaw, weekMap]) => {
+      const pid = Number(pidRaw);
+      if (!pid || !weekMap) return;
+      let idx = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < weeks.length; i++) {
+        const wk = weeks[i]?.date;
+        const entries = wk ? (weekMap as Record<string, DeliverableMarker[]>)[wk] : undefined;
+        if (entries && entries.length > 0) {
+          idx = i;
+          break;
+        }
+      }
+      map.set(pid, idx);
+    });
+    return map;
+  }, [deliverableTypesByProjectWeek, weeks]);
+
+  const projectSortKeys = React.useMemo(() => {
+    const map = new Map<number, { clientKey: string; projectKey: string }>();
+    for (const project of projects) {
+      if (project.id == null) continue;
+      map.set(project.id, {
+        clientKey: normalizeSortValue(project.client),
+        projectKey: normalizeSortValue(project.name),
+      });
     }
-    return Number.POSITIVE_INFINITY;
-  };
+    return map;
+  }, [projects]);
+
+  const getNextDeliverableIndex = React.useCallback((projectId?: number | null) => {
+    if (!projectId) return Number.POSITIVE_INFINITY;
+    return deliverableIndexByProject.get(projectId) ?? Number.POSITIVE_INFINITY;
+  }, [deliverableIndexByProject]);
 
   const sortedProjects = React.useMemo(() => {
     const list = [...projects];
     const factor = sortDir === 'asc' ? 1 : -1;
     list.sort((a, b) => {
+      const aKeys = a.id != null ? projectSortKeys.get(a.id) : null;
+      const bKeys = b.id != null ? projectSortKeys.get(b.id) : null;
+      const ac = aKeys?.clientKey ?? normalizeSortValue(a.client);
+      const bc = bKeys?.clientKey ?? normalizeSortValue(b.client);
+      const an = aKeys?.projectKey ?? normalizeSortValue(a.name);
+      const bn = bKeys?.projectKey ?? normalizeSortValue(b.name);
       if (sortBy === 'client') {
-        const ac = (a.client || '').toString().trim().toLowerCase();
-        const bc = (b.client || '').toString().trim().toLowerCase();
         if (ac !== bc) {
           if (!ac && bc) return 1 * factor;
           if (ac && !bc) return -1 * factor;
           return ac.localeCompare(bc) * factor;
         }
-        const an = (a.name || '').toString().trim().toLowerCase();
-        const bn = (b.name || '').toString().trim().toLowerCase();
         return an.localeCompare(bn) * factor;
       }
       if (sortBy === 'project') {
-        const an = (a.name || '').toString().trim().toLowerCase();
-        const bn = (b.name || '').toString().trim().toLowerCase();
         if (an !== bn) return an.localeCompare(bn) * factor;
-        const ac = (a.client || '').toString().trim().toLowerCase();
-        const bc = (b.client || '').toString().trim().toLowerCase();
         return ac.localeCompare(bc) * factor;
       }
       const ai = getNextDeliverableIndex(a.id);
       const bi = getNextDeliverableIndex(b.id);
       if (ai !== bi) return (ai - bi) * factor;
-      const ac = (a.client || '').toString().trim().toLowerCase();
-      const bc = (b.client || '').toString().trim().toLowerCase();
       if (ac !== bc) return ac.localeCompare(bc) * factor;
-      const an = (a.name || '').toString().trim().toLowerCase();
-      const bn = (b.name || '').toString().trim().toLowerCase();
       return an.localeCompare(bn) * factor;
     });
     return list;
-  }, [projects, sortBy, sortDir, weeks, deliverableTypesByProjectWeek]);
+  }, [projects, sortBy, sortDir, getNextDeliverableIndex, projectSortKeys]);
 
   const typeColors = TYPE_COLORS;
 
@@ -1169,7 +1220,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         merged = next;
       }
       const sorted = sortAssignmentsByProjectRole(rows, merged);
-      setProjects(prev => prev.map(p => (p.id === projectId ? { ...p, assignments: sorted } : p)));
+      updateProjectById(projectId, (projectRow) => ({ ...projectRow, assignments: sorted }));
       showToast('Project assignments refreshed', 'success');
     } catch (e: any) {
       showToast('Failed to refresh project assignments: ' + (e?.message || 'Unknown error'), 'error');
@@ -1244,10 +1295,18 @@ const ProjectAssignmentsGrid: React.FC = () => {
         lastAssignmentUpdateRef.current.set(event.assignmentId, Date.now());
         lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'local');
       }
-      setProjects(prev => prev.map(project => ({
-        ...project,
-        assignments: (project.assignments || []).filter(a => a.id !== event.assignmentId),
-      })));
+      const deletedProjectId = assignmentById.get(event.assignmentId)?.projectId ?? event.projectId ?? null;
+      if (deletedProjectId) {
+        updateProjectById(deletedProjectId, (projectRow) => ({
+          ...projectRow,
+          assignments: (projectRow.assignments || []).filter(a => a.id !== event.assignmentId),
+        }));
+      } else {
+        setProjects(prev => prev.map(project => ({
+          ...project,
+          assignments: (project.assignments || []).filter(a => a.id !== event.assignmentId),
+        })));
+      }
       return;
     }
 
@@ -1285,12 +1344,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
     })();
 
     const sorted = await sortRowsByDeptRoles(updatedAssignments);
-    setProjects(prev => prev.map(project => (project.id === projectId ? { ...project, assignments: sorted } : project)));
+    updateProjectById(projectId, (projectRow) => ({ ...projectRow, assignments: sorted }));
 
     if (event.fields?.includes('weeklyHours')) {
       try { await refreshTotalsForProject(projectId); } catch {}
     }
-  }, [assignmentsApi, sortRowsByDeptRoles, refreshTotalsForProject, editingCell]);
+  }, [assignmentsApi, sortRowsByDeptRoles, refreshTotalsForProject, editingCell, assignmentById, updateProjectById]);
 
   const enqueueAssignmentEvent = React.useCallback((event: AssignmentEvent) => {
     assignmentEventQueueRef.current.push(event);
