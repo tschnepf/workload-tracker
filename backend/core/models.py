@@ -214,6 +214,8 @@ class AutoHoursRoleSetting(models.Model):
     )
     # Map of weeks-before -> percent of weekly capacity (keys stored as strings: "0".."8")
     ramp_percent_by_week = models.JSONField(default=dict, blank=True)
+    # Map of phase -> weeks-before -> percent (phase keys: "sd","dd","ifp","ifc")
+    ramp_percent_by_phase = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

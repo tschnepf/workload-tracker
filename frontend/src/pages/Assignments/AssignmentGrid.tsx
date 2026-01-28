@@ -6,8 +6,8 @@
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
-import { Assignment, Person, Deliverable, Project } from '@/types/models';
-import { assignmentsApi, autoHoursSettingsApi, type AutoHoursRoleSetting } from '@/services/api';
+import { Assignment, Person, Deliverable, Project, DeliverablePhaseMappingSettings } from '@/types/models';
+import { assignmentsApi, autoHoursSettingsApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
 import { useCapabilities } from '@/hooks/useCapabilities';
 // status controls composed via useStatusControls
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
@@ -80,7 +80,22 @@ interface PersonWithAssignments extends Person {
 
 const AUTO_HOURS_MAX_WEEKS = 8;
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
-const roundHours = (value: number) => Math.round(value * 100) / 100;
+const roundHours = (value: number) => (Number.isFinite(value) ? Math.ceil(value) : 0);
+const DEFAULT_PHASE_MAPPING: DeliverablePhaseMappingSettings = {
+  useDescriptionMatch: true,
+  descSdTokens: ['sd', 'schematic'],
+  descDdTokens: ['dd', 'design development'],
+  descIfpTokens: ['ifp'],
+  descIfcTokens: ['ifc'],
+  rangeSdMin: 1,
+  rangeSdMax: 40,
+  rangeDdMin: 41,
+  rangeDdMax: 89,
+  rangeIfpMin: 90,
+  rangeIfpMax: 99,
+  rangeIfcExact: 100,
+};
+const AUTO_HOURS_PHASES = ['sd', 'dd', 'ifp', 'ifc'] as const;
 const isDateInWeek = (dateStr: string, weekStartStr: string) => {
   try {
     const deliverableDate = new Date(dateStr);
@@ -106,9 +121,11 @@ const AssignmentGrid: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [assignmentsData, setAssignmentsData] = useState<Assignment[]>([]);
   const [projectsData, setProjectsData] = useState<Project[]>([]);
-  const [autoHoursSettings, setAutoHoursSettings] = useState<AutoHoursRoleSetting[]>([]);
+  const [autoHoursSettingsByPhase, setAutoHoursSettingsByPhase] = useState<Record<string, AutoHoursRoleSetting[]>>({});
   const [autoHoursSettingsLoading, setAutoHoursSettingsLoading] = useState<boolean>(false);
   const [autoHoursSettingsError, setAutoHoursSettingsError] = useState<string | null>(null);
+  const [phaseMapping, setPhaseMapping] = useState<DeliverablePhaseMappingSettings | null>(null);
+  const [phaseMappingError, setPhaseMappingError] = useState<string | null>(null);
   // Snapshot/rendering mode and aggregated hours
   const [hoursByPerson, setHoursByPerson] = useState<Record<number, Record<string, number>>>({});
   // isSnapshotMode provided by useAssignmentsSnapshot
@@ -208,7 +225,7 @@ const AssignmentGrid: React.FC = () => {
   const autoHoursDepartmentId = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
   const refreshAutoHoursSettings = useCallback(async () => {
     if (!canUseAutoHours) {
-      setAutoHoursSettings([]);
+      setAutoHoursSettingsByPhase({});
       setAutoHoursSettingsError(null);
       setAutoHoursSettingsLoading(false);
       return;
@@ -216,8 +233,20 @@ const AssignmentGrid: React.FC = () => {
     try {
       setAutoHoursSettingsLoading(true);
       setAutoHoursSettingsError(null);
-      const data = await autoHoursSettingsApi.list(autoHoursDepartmentId);
-      setAutoHoursSettings(data || []);
+      const results = await Promise.allSettled(
+        AUTO_HOURS_PHASES.map(phase => autoHoursSettingsApi.list(autoHoursDepartmentId, phase))
+      );
+      const next: Record<string, AutoHoursRoleSetting[]> = {};
+      const failures: string[] = [];
+      results.forEach((res, idx) => {
+        const phase = AUTO_HOURS_PHASES[idx];
+        if (res.status === 'fulfilled') next[phase] = res.value || [];
+        else failures.push(phase);
+      });
+      setAutoHoursSettingsByPhase(next);
+      if (failures.length) {
+        setAutoHoursSettingsError(`Failed to load auto hours for: ${failures.join(', ')}`);
+      }
     } catch (e: any) {
       setAutoHoursSettingsError(e?.message || 'Failed to load auto hours settings');
     } finally {
@@ -228,6 +257,24 @@ const AssignmentGrid: React.FC = () => {
   useEffect(() => {
     void refreshAutoHoursSettings();
   }, [refreshAutoHoursSettings]);
+
+  useEffect(() => {
+    if (!canUseAutoHours) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const mapping = await deliverablePhaseMappingApi.get();
+        if (!mounted) return;
+        setPhaseMapping(mapping || null);
+        setPhaseMappingError(null);
+      } catch (e: any) {
+        if (!mounted) return;
+        setPhaseMappingError(e?.message || 'Failed to load deliverable phase mapping');
+        setPhaseMapping(null);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [canUseAutoHours]);
 
   // Precompute next upcoming deliverable date per project for sorting
   const nextDeliverableByProject = useMemo(() => {
@@ -656,16 +703,54 @@ const AssignmentGrid: React.FC = () => {
   // Get deliverables for a specific project and week (indexed)
   const getDeliverablesForProjectWeek = useDeliverablesIndex(deliverables);
 
-  const autoHoursSettingsByRole = useMemo(() => {
-    const map = new Map<number, AutoHoursRoleSetting>();
-    for (const setting of autoHoursSettings || []) {
-      map.set(setting.roleId, setting);
-    }
-    return map;
-  }, [autoHoursSettings]);
+  const autoHoursSettingsByPhaseMap = useMemo(() => {
+    const out: Record<string, Map<number, AutoHoursRoleSetting>> = {};
+    AUTO_HOURS_PHASES.forEach((phase) => {
+      const map = new Map<number, AutoHoursRoleSetting>();
+      const rows = autoHoursSettingsByPhase?.[phase] || [];
+      for (const setting of rows) {
+        map.set(setting.roleId, setting);
+      }
+      out[phase] = map;
+    });
+    return out;
+  }, [autoHoursSettingsByPhase]);
 
-  const deliverableWeekIndicesByProject = useMemo(() => {
-    const map = new Map<number, number[]>();
+  const phaseMappingEffective = useMemo(() => phaseMapping || DEFAULT_PHASE_MAPPING, [phaseMapping]);
+
+  const classifyDeliverablePhase = useCallback((deliverable: Deliverable): typeof AUTO_HOURS_PHASES[number] | null => {
+    const descRaw = (deliverable?.description || '').toLowerCase().trim();
+    const desc = descRaw.replace(/\s+/g, ' ');
+    if (desc.includes('bulletin') || desc.includes('addendum')) return null;
+    if (desc.includes('masterplan') || desc.includes('master plan') || desc.includes('masterplanning')) return null;
+
+    const tokenMatch = (text: string, token: string) => {
+      if (!token) return false;
+      if (token.includes(' ') || token.length > 3) return text.includes(token);
+      return new RegExp(`\\b${token.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`).test(text);
+    };
+
+    if (phaseMappingEffective.useDescriptionMatch && desc) {
+      if (phaseMappingEffective.descSdTokens?.some(t => tokenMatch(desc, t))) return 'sd';
+      if (phaseMappingEffective.descDdTokens?.some(t => tokenMatch(desc, t))) return 'dd';
+      if (phaseMappingEffective.descIfpTokens?.some(t => tokenMatch(desc, t))) return 'ifp';
+      if (phaseMappingEffective.descIfcTokens?.some(t => tokenMatch(desc, t))) return 'ifc';
+    }
+
+    if (deliverable?.percentage != null) {
+      const p = Math.round(Number(deliverable.percentage));
+      if (Number.isFinite(p)) {
+        if (p === phaseMappingEffective.rangeIfcExact) return 'ifc';
+        if (p >= phaseMappingEffective.rangeSdMin && p <= phaseMappingEffective.rangeSdMax) return 'sd';
+        if (p >= phaseMappingEffective.rangeDdMin && p <= phaseMappingEffective.rangeDdMax) return 'dd';
+        if (p >= phaseMappingEffective.rangeIfpMin && p <= phaseMappingEffective.rangeIfpMax) return 'ifp';
+      }
+    }
+    return null;
+  }, [phaseMappingEffective]);
+
+  const deliverableWeekEntriesByProject = useMemo(() => {
+    const map = new Map<number, Array<{ weekIndex: number; phase: typeof AUTO_HOURS_PHASES[number] }>>();
     if (!weeks.length) return map;
     for (const deliverable of deliverables || []) {
       const projectId = (deliverable as any).project as number | undefined;
@@ -673,12 +758,16 @@ const AssignmentGrid: React.FC = () => {
       if (!projectId || !date) continue;
       const weekIndex = weeks.findIndex(week => isDateInWeek(date, week.date));
       if (weekIndex < 0) continue;
+      const phase = classifyDeliverablePhase(deliverable);
+      if (!phase) continue;
       const list = map.get(projectId) || [];
-      if (!list.includes(weekIndex)) list.push(weekIndex);
+      if (!list.some(entry => entry.weekIndex === weekIndex && entry.phase === phase)) {
+        list.push({ weekIndex, phase });
+      }
       map.set(projectId, list);
     }
     return map;
-  }, [deliverables, weeks]);
+  }, [classifyDeliverablePhase, deliverables, weeks]);
 
   // Smart project search (kept as-is; independent of status filters)
   const searchProjects = (query: string): Project[] => {
@@ -1190,14 +1279,9 @@ const AssignmentGrid: React.FC = () => {
         skipped.missingRole += 1;
         continue;
       }
-      const settings = autoHoursSettingsByRole.get(roleId);
-      if (!settings) {
-        skipped.missingSettings += 1;
-        continue;
-      }
       const projectId = assignment.project ?? null;
-      const deliverableIndices = projectId ? deliverableWeekIndicesByProject.get(projectId) : null;
-      if (!projectId || !deliverableIndices || deliverableIndices.length === 0) {
+      const deliverableEntries = projectId ? deliverableWeekEntriesByProject.get(projectId) : null;
+      if (!projectId || !deliverableEntries || deliverableEntries.length === 0) {
         skipped.missingDeliverables += 1;
         continue;
       }
@@ -1208,7 +1292,13 @@ const AssignmentGrid: React.FC = () => {
       }
       const targetWeeks = new Set<string>();
       const totals = new Map<string, number>();
-      deliverableIndices.forEach((deliverableIndex) => {
+      let hasAnySettings = false;
+      deliverableEntries.forEach(({ weekIndex: deliverableIndex, phase }) => {
+        const settings = autoHoursSettingsByPhaseMap?.[phase]?.get(roleId);
+        if (!settings) {
+          return;
+        }
+        hasAnySettings = true;
         for (let offset = 0; offset <= AUTO_HOURS_MAX_WEEKS; offset += 1) {
           const targetIndex = deliverableIndex - offset;
           if (targetIndex < 0 || targetIndex >= weeks.length) continue;
@@ -1219,6 +1309,10 @@ const AssignmentGrid: React.FC = () => {
           totals.set(weekKey, (totals.get(weekKey) || 0) + pct);
         }
       });
+      if (!hasAnySettings) {
+        skipped.missingSettings += 1;
+        continue;
+      }
       if (targetWeeks.size === 0) {
         skipped.missingDeliverables += 1;
         continue;
@@ -1253,7 +1347,7 @@ const AssignmentGrid: React.FC = () => {
       });
     }
     return { updates, skipped };
-  }, [autoHoursSettingsByRole, deliverableWeekIndicesByProject, weeks]);
+  }, [autoHoursSettingsByPhaseMap, deliverableWeekEntriesByProject, weeks]);
 
   const applyAutoHoursUpdates = async (updates: AutoHoursUpdate[]) => {
     if (!updates.length) {
@@ -1403,6 +1497,9 @@ const AssignmentGrid: React.FC = () => {
       showToast('Auto hours actions are restricted to admins and managers.', 'warning');
       return;
     }
+    if (phaseMappingError) {
+      showToast(phaseMappingError, 'warning');
+    }
     if (autoHoursSettingsLoading) {
       showToast('Auto hours settings are still loading.', 'info');
       return;
@@ -1435,6 +1532,9 @@ const AssignmentGrid: React.FC = () => {
     if (!canUseAutoHours) {
       showToast('Auto hours actions are restricted to admins and managers.', 'warning');
       return;
+    }
+    if (phaseMappingError) {
+      showToast(phaseMappingError, 'warning');
     }
     if (autoHoursSettingsLoading) {
       showToast('Auto hours settings are still loading.', 'info');

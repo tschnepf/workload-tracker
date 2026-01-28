@@ -574,18 +574,21 @@ export type AutoHoursRoleSetting = {
 };
 
 export const autoHoursSettingsApi = {
-  list: async (departmentId?: number | null): Promise<AutoHoursRoleSetting[]> => {
+  list: async (departmentId?: number | null, phase?: string | null): Promise<AutoHoursRoleSetting[]> => {
     const sp = new URLSearchParams();
     if (departmentId != null) sp.set('department_id', String(departmentId));
+    if (phase) sp.set('phase', phase);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-settings/${qs}`, { headers: authHeaders() });
   },
   update: async (
     departmentId: number | null | undefined,
-    settings: Array<{ roleId: number; percentByWeek: Record<string, number> }>
+    settings: Array<{ roleId: number; percentByWeek: Record<string, number> }>,
+    phase?: string | null
   ): Promise<AutoHoursRoleSetting[]> => {
     const sp = new URLSearchParams();
     if (departmentId != null) sp.set('department_id', String(departmentId));
+    if (phase) sp.set('phase', phase);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-settings/${qs}`, {
       method: 'PUT',

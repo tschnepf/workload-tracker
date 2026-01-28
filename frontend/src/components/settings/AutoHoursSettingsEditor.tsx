@@ -1,7 +1,9 @@
 import React from 'react';
 import Button from '@/components/ui/Button';
-import { autoHoursSettingsApi, departmentsApi, type AutoHoursRoleSetting } from '@/services/api';
+import { autoHoursSettingsApi, departmentsApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
+import { defaultUtilizationScheme, resolveUtilizationLevel, utilizationLevelToClasses } from '@/util/utilization';
 
 type Dept = { id?: number; name: string };
 
@@ -11,14 +13,41 @@ const AutoHoursSettingsEditor: React.FC = () => {
   const weeks = React.useMemo(() => Array.from({ length: 9 }, (_, idx) => String(8 - idx)), []);
   const [departments, setDepartments] = React.useState<Dept[]>([]);
   const [departmentsLoading, setDepartmentsLoading] = React.useState<boolean>(false);
-  const [selectedDeptId, setSelectedDeptId] = React.useState<number | null>(null);
   const [rows, setRows] = React.useState<AutoHoursRoleSetting[]>([]);
   const rowsRef = React.useRef<AutoHoursRoleSetting[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [saving, setSaving] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const [dirty, setDirty] = React.useState<boolean>(false);
+  const [selectedPhase, setSelectedPhase] = React.useState<string>('sd');
+  const [phaseOptions, setPhaseOptions] = React.useState<Array<{ value: string; label: string }>>([
+    { value: 'sd', label: 'SD' },
+    { value: 'dd', label: 'DD' },
+    { value: 'ifp', label: 'IFP' },
+    { value: 'ifc', label: 'IFC' },
+  ]);
+  const { data: schemeData } = useUtilizationScheme({ enabled: true });
+  const scheme = React.useMemo(() => {
+    const base = schemeData ?? defaultUtilizationScheme;
+    return { ...base, mode: 'absolute_hours' as const };
+  }, [schemeData]);
   const rowOrder = React.useMemo(() => rows.map(row => String(row.roleId)), [rows]);
+  const groupedRows = React.useMemo(() => {
+    const groups: Array<{ departmentId: number; departmentName: string; rows: AutoHoursRoleSetting[] }> = [];
+    let current: { departmentId: number; departmentName: string; rows: AutoHoursRoleSetting[] } | null = null;
+    rows.forEach((row) => {
+      if (!current || current.departmentId !== row.departmentId) {
+        current = {
+          departmentId: row.departmentId,
+          departmentName: row.departmentName || 'Unknown Department',
+          rows: [],
+        };
+        groups.push(current);
+      }
+      current.rows.push(row);
+    });
+    return groups;
+  }, [rows]);
   const rowIndexMap = React.useMemo(() => {
     const map = new Map<string, number>();
     rowOrder.forEach((rk, idx) => map.set(rk, idx));
@@ -107,6 +136,15 @@ const AutoHoursSettingsEditor: React.FC = () => {
     }));
     setDirty(true);
   }, [buildCellsByRow]);
+
+  const getCellClasses = React.useCallback((value: number, isSelected: boolean) => {
+    const clamped = Math.min(100, Math.max(0, Number(value) || 0));
+    const hoursEquivalent = (clamped / 100) * 40;
+    const level = resolveUtilizationLevel({ hours: hoursEquivalent, scheme });
+    const colorClasses = utilizationLevelToClasses(level);
+    const selectionClasses = isSelected ? 'ring-1 ring-[var(--primary)] border-[var(--primary)]' : '';
+    return `w-full rounded px-2 py-1 text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] ${colorClasses} ${selectionClasses}`;
+  }, [scheme]);
 
   const snapshotSelection = React.useCallback(() => {
     const cells = selectedCellsRef.current;
@@ -320,9 +358,6 @@ const AutoHoursSettingsEditor: React.FC = () => {
         const list = await departmentsApi.listAll();
         if (!mounted) return;
         setDepartments(list || []);
-        if (selectedDeptId == null && list && list.length) {
-          setSelectedDeptId(list[0]?.id ?? null);
-        }
       } catch (e: any) {
         showToast(e?.message || 'Failed to load departments', 'error');
       } finally {
@@ -332,29 +367,71 @@ const AutoHoursSettingsEditor: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
-  const loadSettings = React.useCallback(async (deptId: number) => {
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const mapping = await deliverablePhaseMappingApi.get();
+        if (!mounted || !mapping) return;
+        const opts = [
+          { value: 'sd', label: 'SD' },
+          { value: 'dd', label: 'DD' },
+          { value: 'ifp', label: 'IFP' },
+          { value: 'ifc', label: 'IFC' },
+        ];
+        setPhaseOptions(opts);
+      } catch {
+        // fallback to defaults if mapping fetch fails
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const loadAllSettings = React.useCallback(async (phase?: string) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await autoHoursSettingsApi.list(deptId);
-      setRows(data || []);
+      const phaseKey = phase ?? selectedPhase;
+      const all: AutoHoursRoleSetting[] = [];
+      const failures: string[] = [];
+      for (const dept of departments) {
+        if (!dept?.id) continue;
+        try {
+          const data = await autoHoursSettingsApi.list(dept.id, phaseKey);
+          if (data?.length) all.push(...data);
+        } catch (e: any) {
+          failures.push(dept.name);
+        }
+      }
+      all.sort((a, b) => {
+        const deptCompare = (a.departmentName || '').localeCompare(b.departmentName || '');
+        if (deptCompare !== 0) return deptCompare;
+        const sortCompare = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+        if (sortCompare !== 0) return sortCompare;
+        return (a.roleName || '').localeCompare(b.roleName || '');
+      });
+      setRows(all);
       setDirty(false);
       clearSelection();
+      if (failures.length) {
+        setError(`Failed to load auto hours for: ${failures.join(', ')}`);
+      }
     } catch (e: any) {
       setError(e?.message || 'Failed to load auto hours settings');
     } finally {
       setLoading(false);
     }
-  }, [clearSelection]);
+  }, [clearSelection, departments, selectedPhase]);
 
   React.useEffect(() => {
-    if (selectedDeptId == null) {
+    if (departmentsLoading) return;
+    if (departments.length === 0) {
       setRows([]);
       clearSelection();
       return;
     }
-    void loadSettings(selectedDeptId);
-  }, [loadSettings, selectedDeptId]);
+    void loadAllSettings(selectedPhase);
+  }, [clearSelection, departments.length, departmentsLoading, loadAllSettings, selectedPhase]);
 
   const updateRowPercent = (roleId: number, week: number, value: string) => {
     const parsed = Number(value);
@@ -390,18 +467,34 @@ const AutoHoursSettingsEditor: React.FC = () => {
   };
 
   const onSave = async () => {
-    if (selectedDeptId == null) return;
     try {
       setSaving(true);
       setError(null);
-      const payload = rows.map(row => ({
-        roleId: row.roleId,
-        percentByWeek: row.percentByWeek || {},
-      }));
-      const data = await autoHoursSettingsApi.update(selectedDeptId, payload);
-      setRows(data || []);
-      setDirty(false);
-      showToast('Auto hours settings updated', 'success');
+      const byDept = new Map<number, Array<{ roleId: number; percentByWeek: Record<string, number> }>>();
+      rows.forEach(row => {
+        const deptId = row.departmentId;
+        if (!byDept.has(deptId)) byDept.set(deptId, []);
+        byDept.get(deptId)!.push({ roleId: row.roleId, percentByWeek: row.percentByWeek || {} });
+      });
+      const failures: number[] = [];
+      const updatedByRole = new Map<number, AutoHoursRoleSetting>();
+      for (const [deptId, settings] of byDept.entries()) {
+        try {
+          const data = await autoHoursSettingsApi.update(deptId, settings, selectedPhase);
+          (data || []).forEach((row) => updatedByRole.set(row.roleId, row));
+        } catch {
+          failures.push(deptId);
+        }
+      }
+      if (updatedByRole.size > 0) {
+        setRows(prev => prev.map(row => updatedByRole.get(row.roleId) || row));
+      }
+      if (failures.length) {
+        setError(`Failed to save auto hours for ${failures.length} department(s).`);
+      } else {
+        setDirty(false);
+        showToast('Auto hours settings updated', 'success');
+      }
     } catch (e: any) {
       setError(e?.message || 'Failed to save auto hours settings');
     } finally {
@@ -413,29 +506,36 @@ const AutoHoursSettingsEditor: React.FC = () => {
     <div ref={containerRef}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
         <div className="flex items-center gap-3">
-          <label className="text-sm text-[var(--muted)]">Department</label>
-          <select
-            className="min-w-[220px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[36px] focus:border-[var(--primary)]"
-            value={selectedDeptId ?? ''}
-            disabled={departmentsLoading || departments.length === 0}
-            onChange={(e) => setSelectedDeptId(e.target.value ? Number(e.target.value) : null)}
-          >
-            {departments.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
-          </select>
+          <div className="text-sm text-[var(--muted)]">
+            {departmentsLoading ? 'Loading departments…' : `${departments.length} department${departments.length === 1 ? '' : 's'} loaded`}
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-[var(--muted)]">Phase</label>
+            <select
+              className="min-w-[120px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 min-h-[32px] focus:border-[var(--primary)]"
+              value={selectedPhase}
+              onChange={(e) => setSelectedPhase(e.target.value)}
+              disabled={loading || saving}
+            >
+              {phaseOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => { if (selectedDeptId != null) void loadSettings(selectedDeptId); }}
-            disabled={loading || saving || selectedDeptId == null}
+            onClick={() => { void loadAllSettings(selectedPhase); }}
+            disabled={loading || saving || departments.length === 0}
           >
             Refresh
           </Button>
           <Button
             size="sm"
             onClick={onSave}
-            disabled={!dirty || saving || loading || selectedDeptId == null}
+            disabled={!dirty || saving || loading || departments.length === 0}
           >
             {saving ? 'Saving...' : 'Save'}
           </Button>
@@ -455,74 +555,87 @@ const AutoHoursSettingsEditor: React.FC = () => {
       ) : loading ? (
         <div className="text-sm text-[var(--text)]">Loading...</div>
       ) : rows.length === 0 ? (
-        <div className="text-sm text-[var(--muted)]">No roles found for this department.</div>
+        <div className="text-sm text-[var(--muted)]">No roles found.</div>
       ) : (
-        <div ref={gridRef} className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="text-[var(--muted)]">
-              <tr className="border-b border-[var(--border)]">
-                <th className="py-2 pr-2 text-left">Role</th>
-                {Array.from({ length: 9 }).map((_, idx) => {
-                  const week = 8 - idx;
-                  const label = week === 0 ? 'Week of' : `${week}w`;
-                  return (
-                    <th key={week} className="py-2 pr-2 text-left whitespace-nowrap">
-                      {label}
-                    </th>
-                  );
-                })}
-                <th className="py-2 text-left">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {rows.map((row) => (
-                <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
-                  <td className="py-2 pr-2 text-[var(--text)]">{row.roleName}</td>
-                  {Array.from({ length: 9 }).map((_, idx) => {
-                    const week = 8 - idx;
-                    const value = row.percentByWeek?.[String(week)] ?? 0;
-                    const rowKey = String(row.roleId);
-                    const weekKey = String(week);
-                    const isSelected = selectedCells.has(cellKey(rowKey, weekKey));
-                    return (
-                      <td
-                        key={week}
-                        className={`py-2 pr-2 ${isSelected ? 'bg-[var(--surfaceHover)]' : ''}`}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          handleCellMouseDown(rowKey, weekKey, e);
-                        }}
-                        onMouseEnter={() => handleCellMouseEnter(rowKey, weekKey)}
-                        onClick={(e) => handleCellClick(rowKey, weekKey, e)}
-                      >
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step="0.25"
-                            value={Number.isFinite(value) ? value : 0}
-                            className={`w-16 bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] ${isSelected ? 'border-[var(--primary)] ring-1 ring-[var(--primary)]' : ''}`}
-                            onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
-                            onFocus={(e) => e.currentTarget.select()}
-                            onClick={(e) => {
-                              e.currentTarget.focus();
-                              e.currentTarget.select();
+        <div ref={gridRef} className="overflow-x-auto space-y-6">
+          {groupedRows.map((group) => (
+            <div key={group.departmentId} className="min-w-full">
+              <div className="text-sm font-semibold text-[var(--text)] mb-2">
+                {group.departmentName}
+              </div>
+              <table className="w-max text-sm table-fixed border-collapse">
+                <colgroup>
+                  <col style={{ width: 160 }} />
+                  {Array.from({ length: 9 }).map((_, idx) => (
+                    <col key={`wk-${idx}`} style={{ width: 45 }} />
+                  ))}
+                  <col style={{ width: 45 }} />
+                </colgroup>
+                <thead className="text-[var(--muted)]">
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="py-2 pr-2 text-left">Role</th>
+                    {Array.from({ length: 9 }).map((_, idx) => {
+                      const week = 8 - idx;
+                      const label = week === 0 ? '0w' : `${week}w`;
+                      return (
+                        <th key={week} className="py-2 px-0 text-center whitespace-nowrap">
+                          {label}
+                        </th>
+                      );
+                    })}
+                    <th className="py-2 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {group.rows.map((row) => (
+                    <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
+                      <td className="py-2 pr-2 text-[var(--text)] truncate">{row.roleName}</td>
+                      {Array.from({ length: 9 }).map((_, idx) => {
+                        const week = 8 - idx;
+                        const value = row.percentByWeek?.[String(week)] ?? 0;
+                        const rowKey = String(row.roleId);
+                        const weekKey = String(week);
+                        const isSelected = selectedCells.has(cellKey(rowKey, weekKey));
+                        return (
+                          <td
+                            key={week}
+                            className={`py-2 px-0 ${isSelected ? 'bg-[var(--surfaceHover)]' : ''}`}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleCellMouseDown(rowKey, weekKey, e);
+                            }}
+                            onMouseEnter={() => handleCellMouseEnter(rowKey, weekKey)}
+                            onClick={(e) => handleCellClick(rowKey, weekKey, e)}
+                          >
+                            <div className="flex items-center">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step="0.25"
+                                value={Number.isFinite(value) ? value : 0}
+                                className={`${getCellClasses(value, isSelected)} px-1`}
+                                onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
+                                onFocus={(e) => e.currentTarget.select()}
+                                onClick={(e) => {
+                                  e.currentTarget.focus();
+                                  e.currentTarget.select();
                             }}
                             onDragStart={(e) => e.preventDefault()}
                           />
-                          <span className="text-xs text-[var(--muted)]">%</span>
                         </div>
+                          </td>
+                        );
+                      })}
+                      <td className="py-2 text-[var(--muted)] text-xs text-center">
+                        {row.isActive ? 'Active' : 'Inactive'}
                       </td>
-                    );
-                  })}
-                  <td className="py-2 text-[var(--muted)] text-xs">
-                    {row.isActive ? 'Active' : 'Inactive'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
         </div>
       )}
     </div>

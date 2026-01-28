@@ -51,6 +51,9 @@ class PreDeliverableGlobalSettingsView(APIView):
         responses=PreDeliverableGlobalSettingsItemSerializer(many=True),
     )
     def put(self, request):
+        phase, phase_err = self._parse_phase(request)
+        if phase_err:
+            return Response({'error': phase_err}, status=400)
         payload = request.data or {}
         settings = payload.get('settings') or []
         if not isinstance(settings, list):
@@ -77,6 +80,7 @@ class PreDeliverableGlobalSettingsView(APIView):
 class AutoHoursRoleSettingsView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
     MAX_WEEKS_BEFORE = 8
+    VALID_PHASES = {'sd', 'dd', 'ifp', 'ifc'}
 
     def _empty_hours_by_week(self) -> dict:
         return {str(i): 0 for i in range(self.MAX_WEEKS_BEFORE + 1)}
@@ -118,6 +122,15 @@ class AutoHoursRoleSettingsView(APIView):
 
         return {}, 'percentByWeek must be a list or object'
 
+    def _parse_phase(self, request) -> tuple[str | None, str | None]:
+        phase = request.query_params.get('phase')
+        if not phase:
+            return None, None
+        norm = str(phase).strip().lower()
+        if norm in self.VALID_PHASES:
+            return norm, None
+        return None, 'phase must be one of: sd, dd, ifp, ifc'
+
     @extend_schema(
         responses=inline_serializer(
             name='AutoHoursRoleSettingItem',
@@ -134,6 +147,9 @@ class AutoHoursRoleSettingsView(APIView):
         ),
     )
     def get(self, request):
+        phase, phase_err = self._parse_phase(request)
+        if phase_err:
+            return Response({'error': phase_err}, status=400)
         dept_id = request.query_params.get('department_id')
         dept_id_int = None
         if dept_id:
@@ -154,7 +170,13 @@ class AutoHoursRoleSettingsView(APIView):
             setting = settings_map.get(role.id)
             hours_by_week = self._empty_hours_by_week()
             if setting:
-                raw = setting.ramp_percent_by_week or {}
+                raw = None
+                if phase:
+                    raw_phase = (setting.ramp_percent_by_phase or {}).get(phase)
+                    if isinstance(raw_phase, dict) or isinstance(raw_phase, list):
+                        raw = raw_phase
+                if raw is None:
+                    raw = setting.ramp_percent_by_week or {}
                 if isinstance(raw, dict):
                     for key, value in raw.items():
                         if str(key) in hours_by_week:
@@ -259,8 +281,14 @@ class AutoHoursRoleSettingsView(APIView):
                     obj.standard_percent_of_capacity = Decimal(str(hours_by_week.get('0', 0)))
                 except Exception:
                     obj.standard_percent_of_capacity = 0
-                obj.ramp_percent_by_week = hours_by_week
-                obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_week', 'updated_at'])
+                if phase:
+                    by_phase = obj.ramp_percent_by_phase or {}
+                    by_phase[phase] = hours_by_week
+                    obj.ramp_percent_by_phase = by_phase
+                    obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_phase', 'updated_at'])
+                else:
+                    obj.ramp_percent_by_week = hours_by_week
+                    obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_week', 'updated_at'])
 
         return self.get(request)
 
