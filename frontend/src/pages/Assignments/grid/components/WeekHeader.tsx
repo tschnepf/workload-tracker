@@ -13,6 +13,7 @@ export interface WeekHeaderProps {
   onWeeksClick?: () => void;
   virtualPaddingLeft?: number;
   virtualPaddingRight?: number;
+  showAutoHoursHeader?: boolean;
 }
 
 const WeekHeader: React.FC<WeekHeaderProps> = ({
@@ -27,6 +28,7 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({
   onWeeksClick,
   virtualPaddingLeft = 0,
   virtualPaddingRight = 0,
+  showAutoHoursHeader = true,
 }) => {
   return (
     <div
@@ -65,6 +67,7 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({
           </div>
 
           <div className="text-center text-xs text-[var(--muted)] px-1">+/-</div>
+          <div className="text-center text-[10px] text-[var(--muted)] px-1">{showAutoHoursHeader ? 'R/S' : ''}</div>
           {weeks.map((week, index) => (
             <div
               key={week.date}

@@ -6,6 +6,7 @@ from rest_framework import serializers, status
 from django.conf import settings
 import hashlib
 from django.db import transaction
+from decimal import Decimal
 
 from .serializers import (
     PreDeliverableGlobalSettingsItemSerializer,
@@ -16,11 +17,12 @@ from .serializers import (
     DeliverablePhaseMappingSettingsSerializer,
     QATaskSettingsSerializer,
 )
-from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole, CalendarFeedSettings, DeliverablePhaseMappingSettings, QATaskSettings
+from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole, CalendarFeedSettings, DeliverablePhaseMappingSettings, QATaskSettings, AutoHoursRoleSetting
 from accounts.permissions import IsAdminOrManager
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
 from assignments.models import Assignment  # type: ignore
+from projects.models import ProjectRole as DepartmentProjectRole
 
 
 class PreDeliverableGlobalSettingsView(APIView):
@@ -69,6 +71,197 @@ class PreDeliverableGlobalSettingsView(APIView):
             obj.default_days_before = days
             obj.is_enabled_by_default = enabled
             obj.save(update_fields=['default_days_before', 'is_enabled_by_default', 'updated_at'])
+        return self.get(request)
+
+
+class AutoHoursRoleSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    MAX_WEEKS_BEFORE = 8
+
+    def _empty_hours_by_week(self) -> dict:
+        return {str(i): 0 for i in range(self.MAX_WEEKS_BEFORE + 1)}
+
+    def _normalize_hours_by_week(self, raw) -> tuple[dict, str | None]:
+        if raw is None:
+            return self._empty_hours_by_week(), None
+
+        normalized = self._empty_hours_by_week()
+        if isinstance(raw, list):
+            for idx, value in enumerate(raw):
+                if idx > self.MAX_WEEKS_BEFORE:
+                    continue
+                try:
+                    hours = Decimal(str(value))
+                except Exception:
+                    return {}, f'invalid percent value at index {idx}'
+                if hours < 0 or hours > 100:
+                    return {}, 'percentPerWeek must be between 0 and 100'
+                normalized[str(idx)] = float(hours)
+            return normalized, None
+
+        if isinstance(raw, dict):
+            for key, value in raw.items():
+                try:
+                    week = int(key)
+                except Exception:
+                    return {}, f'invalid week key {key}'
+                if week < 0 or week > self.MAX_WEEKS_BEFORE:
+                    return {}, f'weeksBefore must be between 0 and {self.MAX_WEEKS_BEFORE}'
+                try:
+                    hours = Decimal(str(value))
+                except Exception:
+                    return {}, f'invalid percent value for week {week}'
+                if hours < 0 or hours > 100:
+                    return {}, 'percentPerWeek must be between 0 and 100'
+                normalized[str(week)] = float(hours)
+            return normalized, None
+
+        return {}, 'percentByWeek must be a list or object'
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='AutoHoursRoleSettingItem',
+            fields={
+                'roleId': serializers.IntegerField(),
+                'roleName': serializers.CharField(),
+                'departmentId': serializers.IntegerField(),
+                'departmentName': serializers.CharField(),
+                'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                'isActive': serializers.BooleanField(),
+                'sortOrder': serializers.IntegerField(),
+            },
+            many=True,
+        ),
+    )
+    def get(self, request):
+        dept_id = request.query_params.get('department_id')
+        dept_id_int = None
+        if dept_id:
+            try:
+                dept_id_int = int(dept_id)
+            except Exception:
+                return Response({'error': 'department_id must be an integer'}, status=400)
+        roles_qs = DepartmentProjectRole.objects.select_related('department')
+        if dept_id_int is not None:
+            roles_qs = roles_qs.filter(department_id=dept_id_int)
+        roles = list(roles_qs.order_by('department_id', 'sort_order', 'name'))
+        role_ids = [r.id for r in roles]
+        settings_map = {
+            s.role_id: s for s in AutoHoursRoleSetting.objects.filter(role_id__in=role_ids)
+        }
+        items = []
+        for role in roles:
+            setting = settings_map.get(role.id)
+            hours_by_week = self._empty_hours_by_week()
+            if setting:
+                raw = setting.ramp_percent_by_week or {}
+                if isinstance(raw, dict):
+                    for key, value in raw.items():
+                        if str(key) in hours_by_week:
+                            try:
+                                hours_by_week[str(int(key))] = float(Decimal(str(value)))
+                            except Exception:
+                                pass
+                if not raw:
+                    try:
+                        hours_by_week['0'] = float(setting.standard_percent_of_capacity)
+                    except Exception:
+                        pass
+            items.append({
+                'roleId': role.id,
+                'roleName': role.name,
+                'departmentId': role.department_id,
+                'departmentName': getattr(role.department, 'name', ''),
+                'percentByWeek': hours_by_week,
+                'isActive': role.is_active,
+                'sortOrder': role.sort_order,
+            })
+        return Response(items)
+
+    @extend_schema(
+        request=inline_serializer(
+            name='AutoHoursRoleSettingsUpdate',
+            fields={
+                'settings': inline_serializer(
+                    name='AutoHoursRoleSettingUpdateItem',
+                    fields={
+                        'roleId': serializers.IntegerField(),
+                        'percentByWeek': serializers.DictField(child=serializers.FloatField(), required=False),
+                        'percentPerWeek': serializers.FloatField(required=False),
+                    },
+                    many=True,
+                ),
+            },
+        ),
+        responses=inline_serializer(
+            name='AutoHoursRoleSettingItemResponse',
+            fields={
+                'roleId': serializers.IntegerField(),
+                'roleName': serializers.CharField(),
+                'departmentId': serializers.IntegerField(),
+                'departmentName': serializers.CharField(),
+                'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                'isActive': serializers.BooleanField(),
+                'sortOrder': serializers.IntegerField(),
+            },
+            many=True,
+        ),
+    )
+    def put(self, request):
+        payload = request.data or {}
+        settings = payload.get('settings') or []
+        if not isinstance(settings, list):
+            return Response({'error': 'settings must be a list'}, status=400)
+
+        dept_id = request.query_params.get('department_id')
+        dept_id_int = None
+        if dept_id:
+            try:
+                dept_id_int = int(dept_id)
+            except Exception:
+                return Response({'error': 'department_id must be an integer'}, status=400)
+
+        updates: list[tuple[int, dict]] = []
+        role_ids: list[int] = []
+        for item in settings:
+            try:
+                role_id = int(item.get('roleId'))
+            except Exception:
+                return Response({'error': 'invalid roleId'}, status=400)
+            hours_by_week_raw = item.get('percentByWeek')
+            hours_by_week, err = self._normalize_hours_by_week(hours_by_week_raw)
+            if err:
+                return Response({'error': err}, status=400)
+            if hours_by_week_raw is None and item.get('percentPerWeek') is not None:
+                try:
+                    hours = Decimal(str(item.get('percentPerWeek')))
+                except Exception:
+                    return Response({'error': f'invalid percentPerWeek for roleId {role_id}'}, status=400)
+                if hours < 0 or hours > 100:
+                    return Response({'error': 'percentPerWeek must be between 0 and 100'}, status=400)
+                hours_by_week['0'] = float(hours)
+            updates.append((role_id, hours_by_week))
+            role_ids.append(role_id)
+
+        if role_ids:
+            existing_qs = DepartmentProjectRole.objects.filter(id__in=role_ids)
+            if dept_id_int is not None:
+                existing_qs = existing_qs.filter(department_id=dept_id_int)
+            existing = set(existing_qs.values_list('id', flat=True))
+            missing = [rid for rid in role_ids if rid not in existing]
+            if missing:
+                return Response({'error': f'unknown roleId(s): {missing}'}, status=400)
+
+        with transaction.atomic():
+            for role_id, hours_by_week in updates:
+                obj, _ = AutoHoursRoleSetting.objects.get_or_create(role_id=role_id)
+                try:
+                    obj.standard_percent_of_capacity = Decimal(str(hours_by_week.get('0', 0)))
+                except Exception:
+                    obj.standard_percent_of_capacity = 0
+                obj.ramp_percent_by_week = hours_by_week
+                obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_week', 'updated_at'])
+
         return self.get(request)
 
 

@@ -4,6 +4,7 @@ import RoleManagementSection, { ROLE_MANAGEMENT_SECTION_ID } from './RoleManagem
 import UtilizationSection, { UTILIZATION_SECTION_ID } from './UtilizationSection';
 import DepartmentRolesSection, { DEPARTMENT_ROLES_SECTION_ID } from './DepartmentRolesSection';
 import PreDeliverablesSection, { PRE_DELIVERABLES_SECTION_ID } from './PreDeliverablesSection';
+import AutoHoursSection, { AUTO_HOURS_SECTION_ID } from './AutoHoursSection';
 import CalendarFeedsSection, { CALENDAR_FEEDS_SECTION_ID } from './CalendarFeedsSection';
 import AdminUsersSection, { ADMIN_USERS_SECTION_ID } from './AdminUsersSection';
 import BackupRestoreSection, { BACKUP_RESTORE_SECTION_ID } from './BackupRestoreSection';
@@ -47,6 +48,13 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Pre-Deliverables',
     requiresAdmin: true,
     component: PreDeliverablesSection,
+  },
+  {
+    id: AUTO_HOURS_SECTION_ID,
+    title: 'Auto Hours',
+    requiresAdmin: true,
+    allowManager: true,
+    component: AutoHoursSection,
   },
   {
     id: DELIVERABLE_PHASE_MAPPING_SECTION_ID,

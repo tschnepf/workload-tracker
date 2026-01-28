@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import PreDeliverableGlobalSettings, CalendarFeedSettings, RiskAttachmentSettings, QATaskSettings
+from .models import PreDeliverableGlobalSettings, CalendarFeedSettings, RiskAttachmentSettings, QATaskSettings, AutoHoursRoleSetting
 
 
 @admin.register(PreDeliverableGlobalSettings)
@@ -32,3 +32,9 @@ class RiskAttachmentSettingsAdmin(admin.ModelAdmin):
 class QATaskSettingsAdmin(admin.ModelAdmin):
     list_display = ('key', 'default_days_before', 'updated_at')
     list_editable = ('default_days_before',)
+
+
+@admin.register(AutoHoursRoleSetting)
+class AutoHoursRoleSettingAdmin(admin.ModelAdmin):
+    list_display = ('role', 'standard_percent_of_capacity', 'updated_at')
+    list_editable = ('standard_percent_of_capacity',)

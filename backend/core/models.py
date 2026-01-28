@@ -198,6 +198,33 @@ class QATaskSettings(models.Model):
         return obj
 
 
+class AutoHoursRoleSetting(models.Model):
+    """Global auto-hours defaults per project role."""
+
+    role = models.OneToOneField(
+        'projects.ProjectRole',
+        on_delete=models.CASCADE,
+        related_name='auto_hours_setting',
+    )
+    standard_percent_of_capacity = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
+    )
+    # Map of weeks-before -> percent of weekly capacity (keys stored as strings: "0".."8")
+    ramp_percent_by_week = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['role_id']
+        verbose_name = 'Auto Hours Role Setting'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"AutoHours({self.role_id})"
+
+
 class NotificationPreference(models.Model):
     user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='notification_preferences')
     email_pre_deliverable_reminders = models.BooleanField(default=True)

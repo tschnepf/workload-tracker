@@ -563,6 +563,38 @@ export const qaTaskSettingsApi = {
   },
 };
 
+export type AutoHoursRoleSetting = {
+  roleId: number;
+  roleName: string;
+  departmentId: number;
+  departmentName: string;
+  percentByWeek: Record<string, number>;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+export const autoHoursSettingsApi = {
+  list: async (departmentId?: number | null): Promise<AutoHoursRoleSetting[]> => {
+    const sp = new URLSearchParams();
+    if (departmentId != null) sp.set('department_id', String(departmentId));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-settings/${qs}`, { headers: authHeaders() });
+  },
+  update: async (
+    departmentId: number | null | undefined,
+    settings: Array<{ roleId: number; percentByWeek: Record<string, number> }>
+  ): Promise<AutoHoursRoleSetting[]> => {
+    const sp = new URLSearchParams();
+    if (departmentId != null) sp.set('department_id', String(departmentId));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-settings/${qs}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ settings }),
+    });
+  },
+};
+
 // Projects API
 export const projectsApi = {
   // Get all projects with pagination support

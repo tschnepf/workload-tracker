@@ -3,6 +3,7 @@ import type { Assignment, Deliverable, Project } from '@/types/models';
 import ProjectCell from '@/pages/Assignments/grid/components/ProjectCell';
 import RemoveAssignmentButton from '@/pages/Assignments/grid/components/RemoveAssignmentButton';
 import WeekCell from '@/pages/Assignments/grid/components/WeekCell';
+import AutoHoursActionButtons from '@/pages/Assignments/grid/components/AutoHoursActionButtons';
 import type { useDropdownManager } from '@/components/projects/useDropdownManager';
 import type { useProjectStatus } from '@/components/projects/useProjectStatus';
 
@@ -32,6 +33,8 @@ export interface AssignmentRowProps {
   gridTemplate: string;
   onAssignmentRoleChange?: (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => void;
   personDepartmentId?: number | null;
+  onAutoHoursReplace?: (assignment: Assignment, personId: number) => void;
+  onAutoHoursSupplement?: (assignment: Assignment, personId: number) => void;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
@@ -59,6 +62,8 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
   gridTemplate,
   onAssignmentRoleChange,
   personDepartmentId,
+  onAutoHoursReplace,
+  onAutoHoursSupplement,
 }) => {
   const isSelected = (week: string) => {
     const inMulti = selectedCells.some(cell =>
@@ -108,6 +113,15 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
 
       <div className="flex items-center justify-center">
         <RemoveAssignmentButton onClick={() => onRemoveAssignment(assignment.id!)} />
+      </div>
+
+      <div className="flex items-center justify-center">
+        {onAutoHoursReplace && onAutoHoursSupplement ? (
+          <AutoHoursActionButtons
+            onReplace={() => onAutoHoursReplace(assignment, personId)}
+            onSupplement={() => onAutoHoursSupplement(assignment, personId)}
+          />
+        ) : null}
       </div>
 
       {mondays.map((monday) => (

@@ -13,6 +13,7 @@ const EmptyStateRow: React.FC<EmptyStateRowProps> = ({ weeks, gridTemplate }) =>
         <div className="text-[var(--muted)] text-xs italic">No assignments</div>
       </div>
       <div></div>
+      <div></div>
       {weeks.map((week) => (
         <div key={week.date} className="flex items-center justify-center">
           <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs"></div>

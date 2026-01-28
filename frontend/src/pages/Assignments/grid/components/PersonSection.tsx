@@ -40,9 +40,12 @@ export interface PersonSectionProps {
   onAssignmentRoleChange?: (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => void;
   assignments?: Assignment[]; // optional filtered assignments; falls back to person.assignments
   renderAddAction?: React.ReactNode;
+  renderAutoHoursAction?: React.ReactNode;
   showAddRow?: boolean;
   renderAddRow?: React.ReactNode;
   renderWeekTotals?: (person: PersonWithAssignments, week: WeekHeader) => React.ReactNode;
+  onAutoHoursReplaceAssignment?: (assignment: Assignment, personId: number) => void;
+  onAutoHoursSupplementAssignment?: (assignment: Assignment, personId: number) => void;
 }
 
 const PersonSection: React.FC<PersonSectionProps> = ({
@@ -72,9 +75,12 @@ const PersonSection: React.FC<PersonSectionProps> = ({
   onAssignmentRoleChange,
   assignments,
   renderAddAction,
+  renderAutoHoursAction,
   showAddRow,
   renderAddRow,
   renderWeekTotals,
+  onAutoHoursReplaceAssignment,
+  onAutoHoursSupplementAssignment,
 }) => {
   const visible = assignments ?? person.assignments ?? [];
   return (
@@ -84,6 +90,7 @@ const PersonSection: React.FC<PersonSectionProps> = ({
         <PersonGroupHeader person={person} onToggle={() => togglePersonExpanded(person.id!)} />
         {/* Add Assignment Action (slot) */}
         <div className="flex items-center justify-center gap-1">{renderAddAction ?? null}</div>
+        <div className="flex items-center justify-center">{renderAutoHoursAction ?? null}</div>
         {/* Weekly Totals */}
         {weeks.map((week) => (
           <div key={week.date} className="flex items-center justify-center px-1">
@@ -98,6 +105,7 @@ const PersonSection: React.FC<PersonSectionProps> = ({
           <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
             <div className="text-[var(--muted)] text-xs">Loading assignments...</div>
           </div>
+          <div></div>
           <div></div>
           {weeks.map((week) => (
             <div key={week.date} className="flex items-center justify-center">
@@ -136,6 +144,8 @@ const PersonSection: React.FC<PersonSectionProps> = ({
           gridTemplate={gridTemplate}
           onAssignmentRoleChange={onAssignmentRoleChange}
           personDepartmentId={person.department as any}
+          onAutoHoursReplace={onAutoHoursReplaceAssignment}
+          onAutoHoursSupplement={onAutoHoursSupplementAssignment}
         />
       ))}
 

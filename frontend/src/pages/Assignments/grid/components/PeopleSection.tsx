@@ -38,7 +38,10 @@ export interface PeopleSectionProps {
   projectStatus: any;
   onStatusChange: (projectId: number, s: Project['status']) => void;
   onAssignmentRoleChange?: (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => void;
+  onAutoHoursReplaceAssignment?: (assignment: Assignment, personId: number) => void;
+  onAutoHoursSupplementAssignment?: (assignment: Assignment, personId: number) => void;
   renderAddAction: (person: PersonWithAssignmentsMinimal) => React.ReactNode;
+  renderAutoHoursAction: (person: PersonWithAssignmentsMinimal) => React.ReactNode;
   renderAddRow: (person: PersonWithAssignmentsMinimal) => React.ReactNode;
   showAddRow: (person: PersonWithAssignmentsMinimal) => boolean;
   renderWeekTotals: (person: PersonWithAssignmentsMinimal, week: WeekHeader) => React.ReactNode;
@@ -55,6 +58,7 @@ const PeopleSection: React.FC<PeopleSectionProps> = (props) => {
     projectsById,
     getVisibleAssignments,
     renderAddAction,
+    renderAutoHoursAction,
     renderAddRow,
     showAddRow,
     renderWeekTotals,
@@ -77,6 +81,7 @@ const PeopleSection: React.FC<PeopleSectionProps> = (props) => {
             projectsById={projectsById as any}
             assignments={visibleAssignments}
             renderAddAction={renderAddAction(person)}
+            renderAutoHoursAction={renderAutoHoursAction(person)}
             renderAddRow={renderAddRow(person)}
             showAddRow={showAddRow(person)}
             renderWeekTotals={renderWeekTotals as any}

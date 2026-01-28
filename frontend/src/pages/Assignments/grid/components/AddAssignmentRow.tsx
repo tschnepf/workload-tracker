@@ -109,6 +109,7 @@ const AddAssignmentRow: React.FC<AddAssignmentRowProps> = ({
           ✕
         </button>
       </div>
+      <div></div>
       {weeks.map((week) => (
         <div key={week.date} className="flex items-center justify-center">
           <div className="w-12 h-6 flex items-center justify-center text-[var(--muted)] text-xs"></div>
@@ -119,4 +120,3 @@ const AddAssignmentRow: React.FC<AddAssignmentRowProps> = ({
 };
 
 export default AddAssignmentRow;
-

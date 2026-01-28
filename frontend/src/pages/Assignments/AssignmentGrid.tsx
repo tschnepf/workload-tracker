@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallba
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
 import { Assignment, Person, Deliverable, Project } from '@/types/models';
-import { assignmentsApi } from '@/services/api';
+import { assignmentsApi, autoHoursSettingsApi, type AutoHoursRoleSetting } from '@/services/api';
 import { useCapabilities } from '@/hooks/useCapabilities';
 // status controls composed via useStatusControls
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
@@ -26,7 +26,7 @@ import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 // header filter included by HeaderBarComp
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
-import { createAssignment } from '@/lib/mutations/assignments';
+import { bulkUpdateAssignmentHours, createAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
 
@@ -59,10 +59,13 @@ import { buildProjectAssignmentsLink } from '@/pages/Assignments/grid/linkUtils'
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
 import MobilePersonAccordions from '@/pages/Assignments/grid/components/MobilePersonAccordions';
+import AutoHoursActionButtons from '@/pages/Assignments/grid/components/AutoHoursActionButtons';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import MobileAssignmentSheet from '@/pages/Assignments/grid/components/MobileAssignmentSheet';
 import MobileAddAssignmentSheet from '@/pages/Assignments/grid/components/MobileAddAssignmentSheet';
 import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
+import { useAuth } from '@/hooks/useAuth';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 // Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
 
@@ -74,6 +77,21 @@ interface PersonWithAssignments extends Person {
   isExpanded: boolean;
 }
 // Removed local Monday computation - weeks come from server snapshot only.
+
+const AUTO_HOURS_MAX_WEEKS = 8;
+const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
+const roundHours = (value: number) => Math.round(value * 100) / 100;
+const isDateInWeek = (dateStr: string, weekStartStr: string) => {
+  try {
+    const deliverableDate = new Date(dateStr);
+    const weekStartDate = new Date(weekStartStr);
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    return deliverableDate >= weekStartDate && deliverableDate <= weekEndDate;
+  } catch {
+    return false;
+  }
+};
 
 const AssignmentGrid: React.FC = () => {
   const queryClient = useQueryClient();
@@ -88,6 +106,9 @@ const AssignmentGrid: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [assignmentsData, setAssignmentsData] = useState<Assignment[]>([]);
   const [projectsData, setProjectsData] = useState<Project[]>([]);
+  const [autoHoursSettings, setAutoHoursSettings] = useState<AutoHoursRoleSetting[]>([]);
+  const [autoHoursSettingsLoading, setAutoHoursSettingsLoading] = useState<boolean>(false);
+  const [autoHoursSettingsError, setAutoHoursSettingsError] = useState<string | null>(null);
   // Snapshot/rendering mode and aggregated hours
   const [hoursByPerson, setHoursByPerson] = useState<Record<number, Record<string, number>>>({});
   // isSnapshotMode provided by useAssignmentsSnapshot
@@ -130,6 +151,8 @@ const AssignmentGrid: React.FC = () => {
   });
   const { editingCell, setEditingCell, editingValue, setEditingValue, startEditing, cancelEdit, sanitizeHours } = useEditingCellHook();
   const caps = useCapabilities({ enabled: false });
+  const auth = useAuth();
+  const canUseAutoHours = isAdminOrManager(auth.user);
   // Async job state for snapshot generation
   // async job state provided by useAssignmentsSnapshot
   // New multi-select project status filters (aggregate selection)
@@ -181,6 +204,30 @@ const AssignmentGrid: React.FC = () => {
   const rowKeyFor = (personId: number, assignmentId: number) => `${personId}:${assignmentId}`;
   // Per-person assignment sort mode (default client->project; alt by next deliverable date)
   const [personSortMode, setPersonSortMode] = useState<'client_project' | 'deliverable'>('client_project');
+
+  const autoHoursDepartmentId = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+  const refreshAutoHoursSettings = useCallback(async () => {
+    if (!canUseAutoHours) {
+      setAutoHoursSettings([]);
+      setAutoHoursSettingsError(null);
+      setAutoHoursSettingsLoading(false);
+      return;
+    }
+    try {
+      setAutoHoursSettingsLoading(true);
+      setAutoHoursSettingsError(null);
+      const data = await autoHoursSettingsApi.list(autoHoursDepartmentId);
+      setAutoHoursSettings(data || []);
+    } catch (e: any) {
+      setAutoHoursSettingsError(e?.message || 'Failed to load auto hours settings');
+    } finally {
+      setAutoHoursSettingsLoading(false);
+    }
+  }, [autoHoursDepartmentId, canUseAutoHours]);
+
+  useEffect(() => {
+    void refreshAutoHoursSettings();
+  }, [refreshAutoHoursSettings]);
 
   // Precompute next upcoming deliverable date per project for sorting
   const nextDeliverableByProject = useMemo(() => {
@@ -493,15 +540,16 @@ const AssignmentGrid: React.FC = () => {
   } = useGridColumnWidthsAssign();
 
   // Create dynamic grid template based on column widths
+  const autoHoursColumnWidth = 28;
   const gridTemplate = useMemo(() => {
     const count = Math.max(1, (isMobileLayout ? mobileWeeks.length : weeks.length));
-    return `${clientColumnWidth}px ${projectColumnWidth}px 40px repeat(${count}, 70px)`;
-  }, [clientColumnWidth, projectColumnWidth, mobileWeeks.length, weeks.length, isMobileLayout]);
+    return `${clientColumnWidth}px ${projectColumnWidth}px 40px ${autoHoursColumnWidth}px repeat(${count}, 70px)`;
+  }, [clientColumnWidth, projectColumnWidth, mobileWeeks.length, weeks.length, isMobileLayout, autoHoursColumnWidth]);
 
   // Calculate total minimum width
   const totalMinWidth = useMemo(() => {
-    return clientColumnWidth + projectColumnWidth + 40 + (weeks.length * 70) + 20; // +20 for gaps/padding
-  }, [clientColumnWidth, projectColumnWidth, weeks.length]);
+    return clientColumnWidth + projectColumnWidth + 40 + autoHoursColumnWidth + (weeks.length * 70) + 20; // +20 for gaps/padding
+  }, [clientColumnWidth, projectColumnWidth, weeks.length, autoHoursColumnWidth]);
 
   // Initialize from URL (weeks + view)
   useEffect(() => {
@@ -607,6 +655,30 @@ const AssignmentGrid: React.FC = () => {
 
   // Get deliverables for a specific project and week (indexed)
   const getDeliverablesForProjectWeek = useDeliverablesIndex(deliverables);
+
+  const autoHoursSettingsByRole = useMemo(() => {
+    const map = new Map<number, AutoHoursRoleSetting>();
+    for (const setting of autoHoursSettings || []) {
+      map.set(setting.roleId, setting);
+    }
+    return map;
+  }, [autoHoursSettings]);
+
+  const deliverableWeekIndicesByProject = useMemo(() => {
+    const map = new Map<number, number[]>();
+    if (!weeks.length) return map;
+    for (const deliverable of deliverables || []) {
+      const projectId = (deliverable as any).project as number | undefined;
+      const date = (deliverable as any).date as string | null | undefined;
+      if (!projectId || !date) continue;
+      const weekIndex = weeks.findIndex(week => isDateInWeek(date, week.date));
+      if (weekIndex < 0) continue;
+      const list = map.get(projectId) || [];
+      if (!list.includes(weekIndex)) list.push(weekIndex);
+      map.set(projectId, list);
+    }
+    return map;
+  }, [deliverables, weeks]);
 
   // Smart project search (kept as-is; independent of status filters)
   const searchProjects = (query: string): Project[] => {
@@ -818,16 +890,18 @@ const AssignmentGrid: React.FC = () => {
 
   // Load a person's assignments once when expanding.
   // Prefer already-loaded assignments from state to avoid redundant network calls.
-  const ensureAssignmentsLoaded = async (personId: number) => {
+  const ensureAssignmentsLoaded = async (personId: number): Promise<Assignment[]> => {
     const person = people.find(p => p.id === personId);
-    if (loadedAssignmentIds.has(personId) || loadingAssignments.has(personId)) return;
+    if (loadedAssignmentIds.has(personId) || loadingAssignments.has(personId)) {
+      return person?.assignments || [];
+    }
     if (person && Array.isArray(person.assignments) && person.assignments.length > 0) {
       setLoadedAssignmentIds(prev => {
         const next = new Set(prev);
         next.add(personId);
         return next;
       });
-      return;
+      return person.assignments;
     }
     setLoadingAssignments(prev => new Set(prev).add(personId));
     try {
@@ -859,12 +933,15 @@ const AssignmentGrid: React.FC = () => {
           return next;
         });
       } catch {}
+      return rows || [];
     } catch (e: any) {
       showToast('Failed to load assignments: ' + (e?.message || 'Unknown error'), 'error');
       setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: false } : p)));
+      return [];
     } finally {
       setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
     }
+    return person?.assignments || [];
   };
 
   // Manual refresh for a person's assignments on demand
@@ -1091,6 +1168,295 @@ const AssignmentGrid: React.FC = () => {
     await updateMultipleCellsAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, cells, hours, showToast });
   };
 
+  type AutoHoursUpdate = {
+    personId: number;
+    assignmentId: number;
+    weeklyHours: Record<string, number>;
+    prevWeeklyHours: Record<string, number>;
+    weeksTouched: string[];
+  };
+
+  const buildAutoHoursUpdates = useCallback((
+    assignments: Assignment[],
+    person: PersonWithAssignments,
+    mode: 'replace' | 'supplement'
+  ) => {
+    const updates: AutoHoursUpdate[] = [];
+    const skipped = { missingRole: 0, missingSettings: 0, missingDeliverables: 0, missingCapacity: 0 };
+    for (const assignment of assignments || []) {
+      if (!assignment?.id) continue;
+      const roleId = assignment.roleOnProjectId ?? null;
+      if (!roleId) {
+        skipped.missingRole += 1;
+        continue;
+      }
+      const settings = autoHoursSettingsByRole.get(roleId);
+      if (!settings) {
+        skipped.missingSettings += 1;
+        continue;
+      }
+      const projectId = assignment.project ?? null;
+      const deliverableIndices = projectId ? deliverableWeekIndicesByProject.get(projectId) : null;
+      if (!projectId || !deliverableIndices || deliverableIndices.length === 0) {
+        skipped.missingDeliverables += 1;
+        continue;
+      }
+      const capacity = person.weeklyCapacity ?? assignment.personWeeklyCapacity ?? 0;
+      if (!capacity || capacity <= 0) {
+        skipped.missingCapacity += 1;
+        continue;
+      }
+      const targetWeeks = new Set<string>();
+      const totals = new Map<string, number>();
+      deliverableIndices.forEach((deliverableIndex) => {
+        for (let offset = 0; offset <= AUTO_HOURS_MAX_WEEKS; offset += 1) {
+          const targetIndex = deliverableIndex - offset;
+          if (targetIndex < 0 || targetIndex >= weeks.length) continue;
+          const weekKey = weeks[targetIndex]?.date;
+          if (!weekKey) continue;
+          targetWeeks.add(weekKey);
+          const pct = settings.percentByWeek?.[String(offset)] ?? 0;
+          totals.set(weekKey, (totals.get(weekKey) || 0) + pct);
+        }
+      });
+      if (targetWeeks.size === 0) {
+        skipped.missingDeliverables += 1;
+        continue;
+      }
+      const prevWeeklyHours = { ...(assignment.weeklyHours || {}) };
+      const nextWeeklyHours = { ...(assignment.weeklyHours || {}) };
+      const weeksTouched: string[] = [];
+      let changed = false;
+      targetWeeks.forEach((weekKey) => {
+        const pct = clampPercent(totals.get(weekKey) || 0);
+        const hours = roundHours((capacity || 0) * pct / 100);
+        if (mode === 'supplement') {
+          const current = Number(nextWeeklyHours[weekKey] ?? 0) || 0;
+          if (current > 0 || hours <= 0) return;
+          nextWeeklyHours[weekKey] = hours;
+          weeksTouched.push(weekKey);
+          changed = true;
+          return;
+        }
+        const current = Number(nextWeeklyHours[weekKey] ?? 0) || 0;
+        if (current !== hours) changed = true;
+        nextWeeklyHours[weekKey] = hours;
+        weeksTouched.push(weekKey);
+      });
+      if (!changed) continue;
+      updates.push({
+        personId: person.id!,
+        assignmentId: assignment.id!,
+        weeklyHours: nextWeeklyHours,
+        prevWeeklyHours,
+        weeksTouched,
+      });
+    }
+    return { updates, skipped };
+  }, [autoHoursSettingsByRole, deliverableWeekIndicesByProject, weeks]);
+
+  const applyAutoHoursUpdates = async (updates: AutoHoursUpdate[]) => {
+    if (!updates.length) {
+      showToast('No auto hours changes to apply.', 'info');
+      return;
+    }
+    const updatesByAssignmentId = new Map<number, Record<string, number>>();
+    const updatesByPerson = new Map<number, AutoHoursUpdate[]>();
+    const byPersonWeeks = new Map<number, Set<string>>();
+    updates.forEach((u) => {
+      updatesByAssignmentId.set(u.assignmentId, u.weeklyHours);
+      const list = updatesByPerson.get(u.personId) || [];
+      list.push(u);
+      updatesByPerson.set(u.personId, list);
+      const weeksSet = byPersonWeeks.get(u.personId) || new Set<string>();
+      u.weeksTouched.forEach((wk) => weeksSet.add(wk));
+      byPersonWeeks.set(u.personId, weeksSet);
+    });
+
+    setPeople(prev => prev.map((person: any) => {
+      const personUpdates = updatesByPerson.get(person.id) || [];
+      if (personUpdates.length === 0) return person;
+      return {
+        ...person,
+        assignments: person.assignments.map((assignment: any) => {
+          const u = personUpdates.find(x => x.assignmentId === assignment.id);
+          return u ? { ...assignment, weeklyHours: u.weeklyHours } : assignment;
+        }),
+      };
+    }));
+    setAssignmentsData(prev => prev.map((a: any) => {
+      const u = updatesByAssignmentId.get(a.id as number);
+      return u ? { ...a, weeklyHours: u } : a;
+    }));
+
+    try {
+      setHoursByPerson(prev => {
+        const next: Record<number, Record<string, number>> = { ...prev };
+        for (const [pid, weeksSet] of byPersonWeeks.entries()) {
+          const person = people.find(p => p.id === pid);
+          if (!person) continue;
+          if (!next[pid]) next[pid] = { ...(prev[pid] || {}) };
+          for (const wk of weeksSet) {
+            const total = (person.assignments || []).reduce((sum: number, a: any) => {
+              const wh = updatesByAssignmentId.get(a.id as number) || a.weeklyHours || {};
+              const v = parseFloat((wh?.[wk] as any)?.toString?.() || '0') || 0;
+              return sum + v;
+            }, 0);
+            next[pid][wk] = total;
+          }
+        }
+        return next;
+      });
+    } catch {}
+
+    let results: PromiseSettledResult<any>[] = [];
+    const updatesPayload = updates.map(u => ({ assignmentId: u.assignmentId, weeklyHours: u.weeklyHours }));
+    if (updatesPayload.length > 1) {
+      try {
+        const bulk = await bulkUpdateAssignmentHours(updatesPayload, assignmentsApi);
+        results = (bulk?.results || []).map((r: any) => ({ status: 'fulfilled', value: r })) as PromiseSettledResult<any>[];
+      } catch (e) {
+        results = updatesPayload.map(() => ({ status: 'rejected', reason: e })) as PromiseSettledResult<any>[];
+      }
+    } else {
+      results = await Promise.allSettled(
+        updatesPayload.map(u => updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi))
+      );
+    }
+
+    const failed: AutoHoursUpdate[] = [];
+    results.forEach((res, idx) => {
+      if (res.status === 'rejected') failed.push(updates[idx]);
+    });
+
+    if (results.some(r => r.status === 'fulfilled')) {
+      queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+    }
+
+    if (failed.length > 0) {
+      const failedByAssignmentId = new Map<number, AutoHoursUpdate>();
+      const failedByPersonWeeks = new Map<number, Set<string>>();
+      failed.forEach((f) => {
+        failedByAssignmentId.set(f.assignmentId, f);
+        const weeksSet = failedByPersonWeeks.get(f.personId) || new Set<string>();
+        f.weeksTouched.forEach((wk) => weeksSet.add(wk));
+        failedByPersonWeeks.set(f.personId, weeksSet);
+      });
+      setPeople(prev => prev.map((person: any) => {
+        const failedForPerson = failed.filter(f => f.personId === person.id);
+        if (failedForPerson.length === 0) return person;
+        return {
+          ...person,
+          assignments: person.assignments.map((assignment: any) => {
+            const f = failedByAssignmentId.get(assignment.id as number);
+            return f ? { ...assignment, weeklyHours: f.prevWeeklyHours } : assignment;
+          }),
+        };
+      }));
+      setAssignmentsData(prev => prev.map((a: any) => {
+        const f = failedByAssignmentId.get(a.id as number);
+        return f ? { ...a, weeklyHours: f.prevWeeklyHours } : a;
+      }));
+      try {
+        setHoursByPerson(prev => {
+          const next: Record<number, Record<string, number>> = { ...prev };
+          for (const [pid, weeksSet] of failedByPersonWeeks.entries()) {
+            const person = people.find(p => p.id === pid);
+            if (!person) continue;
+            if (!next[pid]) next[pid] = { ...(prev[pid] || {}) };
+            for (const wk of weeksSet) {
+              const total = (person.assignments || []).reduce((sum: number, a: any) => {
+                const failedEntry = failedByAssignmentId.get(a.id as number);
+                if (failedEntry) {
+                  const v = parseFloat((failedEntry.prevWeeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+                  return sum + v;
+                }
+                const updated = updatesByAssignmentId.get(a.id as number);
+                const wh = updated || a.weeklyHours || {};
+                const v = parseFloat((wh?.[wk] as any)?.toString?.() || '0') || 0;
+                return sum + v;
+              }, 0);
+              next[pid][wk] = total;
+            }
+          }
+          return next;
+        });
+      } catch {}
+      showToast(`Failed to update ${failed.length} assignment(s). Changes were reverted for those.`, 'error');
+    } else {
+      showToast(`Auto hours applied to ${updates.length} assignment${updates.length === 1 ? '' : 's'}.`, 'success');
+    }
+  };
+
+  const describeAutoHoursSkip = (skipped: { missingRole: number; missingSettings: number; missingDeliverables: number; missingCapacity: number }) => {
+    const reasons: string[] = [];
+    if (skipped.missingRole) reasons.push('missing project role');
+    if (skipped.missingSettings) reasons.push('missing presets');
+    if (skipped.missingDeliverables) reasons.push('no deliverables in range');
+    if (skipped.missingCapacity) reasons.push('missing capacity');
+    return reasons.length ? `No auto hours changes to apply (${reasons.join(', ')}).` : 'No auto hours changes to apply.';
+  };
+
+  const applyAutoHoursForPerson = async (person: PersonWithAssignments, mode: 'replace' | 'supplement') => {
+    if (!canUseAutoHours) {
+      showToast('Auto hours actions are restricted to admins and managers.', 'warning');
+      return;
+    }
+    if (autoHoursSettingsLoading) {
+      showToast('Auto hours settings are still loading.', 'info');
+      return;
+    }
+    if (autoHoursSettingsError) {
+      showToast(autoHoursSettingsError, 'error');
+      return;
+    }
+    if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) {
+      return;
+    }
+    const assignments = await ensureAssignmentsLoaded(person.id!);
+    if (!assignments || assignments.length === 0) {
+      showToast('No assignments found for this person.', 'info');
+      return;
+    }
+    const { updates, skipped } = buildAutoHoursUpdates(assignments, person, mode);
+    if (updates.length === 0) {
+      showToast(describeAutoHoursSkip(skipped), 'info');
+      return;
+    }
+    await applyAutoHoursUpdates(updates);
+  };
+
+  const applyAutoHoursForAssignment = async (
+    assignment: Assignment,
+    personId: number,
+    mode: 'replace' | 'supplement'
+  ) => {
+    if (!canUseAutoHours) {
+      showToast('Auto hours actions are restricted to admins and managers.', 'warning');
+      return;
+    }
+    if (autoHoursSettingsLoading) {
+      showToast('Auto hours settings are still loading.', 'info');
+      return;
+    }
+    if (autoHoursSettingsError) {
+      showToast(autoHoursSettingsError, 'error');
+      return;
+    }
+    if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) {
+      return;
+    }
+    const person = people.find(p => p.id === personId);
+    if (!person) return;
+    const { updates, skipped } = buildAutoHoursUpdates([assignment], person, mode);
+    if (updates.length === 0) {
+      showToast(describeAutoHoursSkip(skipped), 'info');
+      return;
+    }
+    await applyAutoHoursUpdates(updates);
+  };
+
   const { data: schemeData } = useUtilizationScheme({ enabled: false });
   const scheme = schemeData ?? defaultUtilizationScheme;
   const topBarHeader = (
@@ -1231,6 +1597,7 @@ const AssignmentGrid: React.FC = () => {
             onWeeksClick={() => setPersonSortMode('deliverable')}
             virtualPaddingLeft={isMobileLayout ? weekPaddingLeft : 0}
             virtualPaddingRight={isMobileLayout ? weekPaddingRight : 0}
+            showAutoHoursHeader={canUseAutoHours}
           />
           <DeliverableLegendFloating top={(compact ? 0 : headerHeight) + 8} />
           <div
@@ -1279,6 +1646,14 @@ const AssignmentGrid: React.FC = () => {
                       +
                     </button>
                   )}
+                  renderAutoHoursAction={(person) => (
+                    canUseAutoHours ? (
+                      <AutoHoursActionButtons
+                        onReplace={() => void applyAutoHoursForPerson(person as any, 'replace')}
+                        onSupplement={() => void applyAutoHoursForPerson(person as any, 'supplement')}
+                      />
+                    ) : null
+                  )}
                   renderAddRow={(person) => (
                     <AddAssignmentRow
                       personId={person.id!}
@@ -1309,7 +1684,9 @@ const AssignmentGrid: React.FC = () => {
                       </div>
                     );
                   }}
-                />
+                  onAutoHoursReplaceAssignment={canUseAutoHours ? ((assignment, personId) => void applyAutoHoursForAssignment(assignment, personId, 'replace')) : undefined}
+                  onAutoHoursSupplementAssignment={canUseAutoHours ? ((assignment, personId) => void applyAutoHoursForAssignment(assignment, personId, 'supplement')) : undefined}
+                  />
               </div>
               {(() => {
                 const s = scheme;
