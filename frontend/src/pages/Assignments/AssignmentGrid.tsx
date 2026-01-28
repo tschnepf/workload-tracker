@@ -6,8 +6,8 @@
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { useQueryClient } from '@tanstack/react-query';
-import { Assignment, Person, Deliverable, Project, DeliverablePhaseMappingSettings } from '@/types/models';
-import { assignmentsApi, autoHoursSettingsApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
+import { Assignment, Person, Deliverable, Project, DeliverablePhaseMappingSettings, AutoHoursTemplate } from '@/types/models';
+import { assignmentsApi, autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
 import { useCapabilities } from '@/hooks/useCapabilities';
 // status controls composed via useStatusControls
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
@@ -124,6 +124,9 @@ const AssignmentGrid: React.FC = () => {
   const [autoHoursSettingsByPhase, setAutoHoursSettingsByPhase] = useState<Record<string, AutoHoursRoleSetting[]>>({});
   const [autoHoursSettingsLoading, setAutoHoursSettingsLoading] = useState<boolean>(false);
   const [autoHoursSettingsError, setAutoHoursSettingsError] = useState<string | null>(null);
+  const [autoHoursTemplateSettings, setAutoHoursTemplateSettings] = useState<Record<number, Record<string, AutoHoursRoleSetting[]>>>({});
+  const [autoHoursTemplateSettingsLoading, setAutoHoursTemplateSettingsLoading] = useState<Set<number>>(new Set());
+  const [autoHoursTemplates, setAutoHoursTemplates] = useState<AutoHoursTemplate[]>([]);
   const [phaseMapping, setPhaseMapping] = useState<DeliverablePhaseMappingSettings | null>(null);
   const [phaseMappingError, setPhaseMappingError] = useState<string | null>(null);
   // Snapshot/rendering mode and aggregated hours
@@ -257,6 +260,59 @@ const AssignmentGrid: React.FC = () => {
   useEffect(() => {
     void refreshAutoHoursSettings();
   }, [refreshAutoHoursSettings]);
+
+  useEffect(() => {
+    if (!canUseAutoHours) {
+      setAutoHoursTemplates([]);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const list = await autoHoursTemplatesApi.list();
+        if (!mounted) return;
+        setAutoHoursTemplates(list || []);
+      } catch (e: any) {
+        if (!mounted) return;
+        setAutoHoursTemplates([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [canUseAutoHours]);
+
+  const ensureTemplateSettings = useCallback(async (templateIds: number[]) => {
+    const ids = Array.from(new Set(templateIds.filter(id => Number.isFinite(id))));
+    if (ids.length === 0) return;
+    const missing = ids.filter(id => !autoHoursTemplateSettings[id]);
+    if (missing.length === 0) return;
+    setAutoHoursTemplateSettingsLoading(prev => {
+      const next = new Set(prev);
+      missing.forEach(id => next.add(id));
+      return next;
+    });
+    try {
+      await Promise.all(missing.map(async (templateId) => {
+        const phasesToFetch = Array.from(autoHoursTemplatePhaseKeysById.get(templateId) ?? AUTO_HOURS_PHASES);
+        const results = await Promise.allSettled(
+          phasesToFetch.map(phase => autoHoursTemplatesApi.listSettings(templateId, phase))
+        );
+        const phaseMap: Record<string, AutoHoursRoleSetting[]> = {};
+        results.forEach((res, idx) => {
+          const phase = phasesToFetch[idx];
+          if (res.status === 'fulfilled') phaseMap[phase] = res.value || [];
+        });
+        setAutoHoursTemplateSettings(prev => ({ ...prev, [templateId]: phaseMap }));
+      }));
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to load auto hours templates', 'error');
+    } finally {
+      setAutoHoursTemplateSettingsLoading(prev => {
+        const next = new Set(prev);
+        missing.forEach(id => next.delete(id));
+        return next;
+      });
+    }
+  }, [autoHoursTemplatePhaseKeysById, autoHoursTemplateSettings, showToast]);
 
   useEffect(() => {
     if (!canUseAutoHours) return;
@@ -715,6 +771,35 @@ const AssignmentGrid: React.FC = () => {
     });
     return out;
   }, [autoHoursSettingsByPhase]);
+
+  const autoHoursTemplateSettingsByPhaseMap = useMemo(() => {
+    const out: Record<number, Record<string, Map<number, AutoHoursRoleSetting>>> = {};
+    Object.entries(autoHoursTemplateSettings || {}).forEach(([tid, phases]) => {
+      const templateId = Number(tid);
+      const phaseMaps: Record<string, Map<number, AutoHoursRoleSetting>> = {};
+      AUTO_HOURS_PHASES.forEach((phase) => {
+        const map = new Map<number, AutoHoursRoleSetting>();
+        const rows = phases?.[phase] || [];
+        for (const setting of rows) {
+          map.set(setting.roleId, setting);
+        }
+        phaseMaps[phase] = map;
+      });
+      out[templateId] = phaseMaps;
+    });
+    return out;
+  }, [autoHoursTemplateSettings]);
+
+  const autoHoursTemplatePhaseKeysById = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    (autoHoursTemplates || []).forEach((template) => {
+      const keys = (template.phaseKeys && template.phaseKeys.length)
+        ? template.phaseKeys
+        : AUTO_HOURS_PHASES;
+      map.set(template.id, new Set(keys));
+    });
+    return map;
+  }, [autoHoursTemplates]);
 
   const phaseMappingEffective = useMemo(() => phaseMapping || DEFAULT_PHASE_MAPPING, [phaseMapping]);
 
@@ -1280,6 +1365,8 @@ const AssignmentGrid: React.FC = () => {
         continue;
       }
       const projectId = assignment.project ?? null;
+      const project = projectId ? (projectsById as Map<number, any>).get(projectId) : null;
+      const templateId = project?.autoHoursTemplateId ?? null;
       const deliverableEntries = projectId ? deliverableWeekEntriesByProject.get(projectId) : null;
       if (!projectId || !deliverableEntries || deliverableEntries.length === 0) {
         skipped.missingDeliverables += 1;
@@ -1294,7 +1381,17 @@ const AssignmentGrid: React.FC = () => {
       const totals = new Map<string, number>();
       let hasAnySettings = false;
       deliverableEntries.forEach(({ weekIndex: deliverableIndex, phase }) => {
-        const settings = autoHoursSettingsByPhaseMap?.[phase]?.get(roleId);
+        let settings: AutoHoursRoleSetting | undefined;
+        if (templateId) {
+          const allowedPhases = autoHoursTemplatePhaseKeysById.get(templateId);
+          if (allowedPhases && !allowedPhases.has(phase)) {
+            settings = autoHoursSettingsByPhaseMap?.[phase]?.get(roleId);
+          } else {
+            settings = autoHoursTemplateSettingsByPhaseMap?.[templateId]?.[phase]?.get(roleId);
+          }
+        } else {
+          settings = autoHoursSettingsByPhaseMap?.[phase]?.get(roleId);
+        }
         if (!settings) {
           return;
         }
@@ -1347,7 +1444,7 @@ const AssignmentGrid: React.FC = () => {
       });
     }
     return { updates, skipped };
-  }, [autoHoursSettingsByPhaseMap, deliverableWeekEntriesByProject, weeks]);
+  }, [autoHoursSettingsByPhaseMap, autoHoursTemplatePhaseKeysById, autoHoursTemplateSettingsByPhaseMap, deliverableWeekEntriesByProject, projectsById, weeks]);
 
   const applyAutoHoursUpdates = async (updates: AutoHoursUpdate[]) => {
     if (!updates.length) {
@@ -1516,6 +1613,13 @@ const AssignmentGrid: React.FC = () => {
       showToast('No assignments found for this person.', 'info');
       return;
     }
+    const templateIds = assignments
+      .map(a => {
+        const project = a.project ? (projectsById as Map<number, any>).get(a.project) : null;
+        return project?.autoHoursTemplateId ?? null;
+      })
+      .filter((id): id is number => typeof id === 'number');
+    await ensureTemplateSettings(templateIds);
     const { updates, skipped } = buildAutoHoursUpdates(assignments, person, mode);
     if (updates.length === 0) {
       showToast(describeAutoHoursSkip(skipped), 'info');
@@ -1549,6 +1653,11 @@ const AssignmentGrid: React.FC = () => {
     }
     const person = people.find(p => p.id === personId);
     if (!person) return;
+    const project = assignment.project ? (projectsById as Map<number, any>).get(assignment.project) : null;
+    const templateId = project?.autoHoursTemplateId ?? null;
+    if (templateId) {
+      await ensureTemplateSettings([templateId]);
+    }
     const { updates, skipped } = buildAutoHoursUpdates([assignment], person, mode);
     if (updates.length === 0) {
       showToast(describeAutoHoursSkip(skipped), 'info');

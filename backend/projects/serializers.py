@@ -27,6 +27,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     bqeClientName = serializers.CharField(source='bqe_client_name', read_only=True)
     bqeClientId = serializers.CharField(source='bqe_client_id', read_only=True)
     clientSyncPolicyState = serializers.CharField(source='client_sync_policy_state', read_only=True)
+    autoHoursTemplateId = serializers.IntegerField(source='auto_hours_template_id', required=False, allow_null=True)
     # Scratch pad notes (rich-text HTML accepted)
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     # Canonical TipTap JSON (camelCase -> snake_case)
@@ -36,7 +37,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = ['id', 'name', 'status', 'client', 'description', 'notes', 'notesJson', 'projectNumber',
                  'startDate', 'endDate', 'estimatedHours', 'isActive', 'bqeClientName', 'bqeClientId',
-                 'clientSyncPolicyState', 'createdAt', 'updatedAt']
+                 'clientSyncPolicyState', 'autoHoursTemplateId', 'createdAt', 'updatedAt']
         read_only_fields = ['id', 'createdAt', 'updatedAt']
 
     # Best practice: normalize optional fields and enforce constraints at the

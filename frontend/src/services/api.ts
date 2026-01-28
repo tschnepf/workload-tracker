@@ -17,6 +17,7 @@ import {
   DeliverableQATask,
   DeliverablePhaseMappingSettings,
   QATaskSettings,
+  AutoHoursTemplate,
   PersonCapacityHeatmapItem,
   WorkloadForecastItem,
   PersonUtilization,
@@ -591,6 +592,55 @@ export const autoHoursSettingsApi = {
     if (phase) sp.set('phase', phase);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-settings/${qs}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ settings }),
+    });
+  },
+};
+
+export const autoHoursTemplatesApi = {
+  list: async (): Promise<AutoHoursTemplate[]> => {
+    return fetchApi<AutoHoursTemplate[]>(`/core/auto-hours-templates/`, { headers: authHeaders() });
+  },
+  create: async (payload: { name: string; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
+    return fetchApi<AutoHoursTemplate>(`/core/auto-hours-templates/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+  },
+  update: async (templateId: number, payload: { name?: string; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
+    return fetchApi<AutoHoursTemplate>(`/core/auto-hours-templates/${templateId}/`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+  },
+  delete: async (templateId: number): Promise<void> => {
+    await fetchApi<void>(`/core/auto-hours-templates/${templateId}/`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+  },
+  listSettings: async (templateId: number, phase: string, departmentId?: number | null): Promise<AutoHoursRoleSetting[]> => {
+    const sp = new URLSearchParams();
+    if (phase) sp.set('phase', phase);
+    if (departmentId != null) sp.set('department_id', String(departmentId));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-templates/${templateId}/settings/${qs}`, { headers: authHeaders() });
+  },
+  updateSettings: async (
+    templateId: number,
+    settings: Array<{ roleId: number; percentByWeek: Record<string, number> }>,
+    phase: string,
+    departmentId?: number | null
+  ): Promise<AutoHoursRoleSetting[]> => {
+    const sp = new URLSearchParams();
+    if (phase) sp.set('phase', phase);
+    if (departmentId != null) sp.set('department_id', String(departmentId));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-templates/${templateId}/settings/${qs}`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ settings }),

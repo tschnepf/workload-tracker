@@ -3,6 +3,7 @@ import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFra
 import { useSettingsData } from '../SettingsDataContext';
 import { isAdminOrManager } from '@/utils/roleAccess';
 import AutoHoursSettingsEditor from '@/components/settings/AutoHoursSettingsEditor';
+import AutoHoursTemplatesEditor from '@/components/settings/AutoHoursTemplatesEditor';
 
 export const AUTO_HOURS_SECTION_ID = 'auto-hours';
 
@@ -12,14 +13,23 @@ const AutoHoursSection: React.FC = () => {
   if (!canAccess) return null;
 
   return (
-    <SettingsSectionFrame
-      id={AUTO_HOURS_SECTION_ID}
-      title="Auto Hours"
-      description="Configure percent of weekly capacity before deliverables by project role."
-      className="mt-6"
-    >
-      <AutoHoursSettingsEditor />
-    </SettingsSectionFrame>
+    <>
+      <SettingsSectionFrame
+        title="Project Templates"
+        description="Create templates to override the global defaults on a per-project basis."
+        className="mt-6"
+      >
+        <AutoHoursTemplatesEditor />
+      </SettingsSectionFrame>
+      <SettingsSectionFrame
+        id={AUTO_HOURS_SECTION_ID}
+        title="Hours"
+        description="Configure percent of weekly capacity before deliverables by project role."
+        className="mt-6"
+      >
+        <AutoHoursSettingsEditor />
+      </SettingsSectionFrame>
+    </>
   );
 };
 

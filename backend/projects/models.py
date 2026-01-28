@@ -47,6 +47,13 @@ class Project(models.Model):
 
     # System fields
     is_active = models.BooleanField(default=True)
+    auto_hours_template = models.ForeignKey(
+        'core.AutoHoursTemplate',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='projects',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

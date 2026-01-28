@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
-import type { Project, Assignment, Person } from '@/types/models';
+import type { Project, Assignment, Person, AutoHoursTemplate } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
 import { InlineText, InlineTextarea, InlineDate } from '@/components/ui/InlineEdit';
@@ -17,7 +17,8 @@ import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
 import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeyboardNavigation';
 import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import { applyHoursToCellsOptimistic } from '@/assignments/updateHoursOptimistic';
-import { projectsApi } from '@/services/api';
+import { autoHoursTemplatesApi, projectsApi } from '@/services/api';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 interface Props {
   project: Project;
@@ -122,6 +123,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const addRoleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const auth = useAuth();
   const canEdit = !!auth?.accessToken; // general fields editable for signed-in users
+  const canEditAutoHoursTemplate = canEdit && isAdminOrManager(auth?.user);
   const { commit } = useInlineProjectUpdate(project.id!);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const clearFieldError = (k: string) => setFieldErrors(prev => { if (!prev[k]) return prev; const n = { ...prev }; delete n[k]; return n; });
@@ -188,6 +190,9 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const [filteredClients, setFilteredClients] = React.useState<string[]>([]);
   const [clientOpen, setClientOpen] = React.useState(false);
   const clientBoxRef = React.useRef<HTMLDivElement | null>(null);
+  const [autoHoursTemplates, setAutoHoursTemplates] = React.useState<AutoHoursTemplate[]>([]);
+  const [autoHoursTemplatesLoading, setAutoHoursTemplatesLoading] = React.useState(false);
+  const [autoHoursTemplatesError, setAutoHoursTemplatesError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -196,6 +201,25 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setAutoHoursTemplatesLoading(true);
+        setAutoHoursTemplatesError(null);
+        const list = await autoHoursTemplatesApi.list();
+        if (!mounted) return;
+        setAutoHoursTemplates(list || []);
+      } catch (err) {
+        if (!mounted) return;
+        setAutoHoursTemplatesError('Failed to load templates');
+      } finally {
+        if (mounted) setAutoHoursTemplatesLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   // Determine department for selected person to fetch appropriate role options
@@ -309,6 +333,14 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     }
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [assignments, getPersonDepartmentName]);
+
+  const selectedAutoHoursTemplateId =
+    (localPatch.autoHoursTemplateId !== undefined ? localPatch.autoHoursTemplateId : project.autoHoursTemplateId) ?? null;
+  const selectedAutoHoursTemplateName =
+    autoHoursTemplates.find(t => t.id === selectedAutoHoursTemplateId)?.name
+    ?? (selectedAutoHoursTemplateId ? `Template #${selectedAutoHoursTemplateId}` : 'Global default');
+  const isAutoHoursTemplateMissing =
+    !!selectedAutoHoursTemplateId && !autoHoursTemplates.some(t => t.id === selectedAutoHoursTemplateId);
 
   return (
     <>
@@ -520,6 +552,38 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 />
                 {fieldErrors.estimatedHours && (<div className="text-red-400 text-xs mt-1">{fieldErrors.estimatedHours}</div>)}
               </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-[var(--muted)] text-xs mb-1">Auto Hours Template:</div>
+              <div className="flex items-center gap-2">
+                <select
+                  className="min-w-[220px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)] disabled:opacity-60"
+                  value={selectedAutoHoursTemplateId ?? ''}
+                  onChange={async (e) => {
+                    const next = e.target.value ? Number(e.target.value) : null;
+                    await commitField('autoHoursTemplateId', next);
+                  }}
+                  disabled={!canEditAutoHoursTemplate || autoHoursTemplatesLoading}
+                  aria-label="Auto hours template"
+                >
+                  <option value="">Global default</option>
+                  {isAutoHoursTemplateMissing && selectedAutoHoursTemplateId && (
+                    <option value={selectedAutoHoursTemplateId}>{selectedAutoHoursTemplateName}</option>
+                  )}
+                  {autoHoursTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </select>
+                {!canEditAutoHoursTemplate && (
+                  <span className="text-xs text-[var(--muted)]">{selectedAutoHoursTemplateName}</span>
+                )}
+                {autoHoursTemplatesLoading && (
+                  <span className="text-xs text-[var(--muted)]">Loading…</span>
+                )}
+              </div>
+              {autoHoursTemplatesError && (
+                <div className="text-red-400 text-xs mt-1">{autoHoursTemplatesError}</div>
+              )}
             </div>
       </div>
 

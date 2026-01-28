@@ -1,18 +1,19 @@
 import React from 'react';
 import Button from '@/components/ui/Button';
-import { autoHoursSettingsApi, departmentsApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
+import { autoHoursTemplatesApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, resolveUtilizationLevel, utilizationLevelToClasses } from '@/util/utilization';
+import type { AutoHoursTemplate } from '@/types/models';
 
-type Dept = { id?: number; name: string };
-
-const AutoHoursSettingsEditor: React.FC = () => {
+const AutoHoursTemplatesEditor: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
   const weeks = React.useMemo(() => Array.from({ length: 9 }, (_, idx) => String(8 - idx)), []);
-  const [departments, setDepartments] = React.useState<Dept[]>([]);
-  const [departmentsLoading, setDepartmentsLoading] = React.useState<boolean>(false);
+  const [templates, setTemplates] = React.useState<AutoHoursTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = React.useState<boolean>(false);
+  const [selectedTemplateId, setSelectedTemplateId] = React.useState<number | null>(null);
+  const [newTemplateName, setNewTemplateName] = React.useState<string>('');
   const [rows, setRows] = React.useState<AutoHoursRoleSetting[]>([]);
   const rowsRef = React.useRef<AutoHoursRoleSetting[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -31,7 +32,29 @@ const AutoHoursSettingsEditor: React.FC = () => {
     const base = schemeData ?? defaultUtilizationScheme;
     return { ...base, mode: 'absolute_hours' as const };
   }, [schemeData]);
+
   const rowOrder = React.useMemo(() => rows.map(row => String(row.roleId)), [rows]);
+  const selectedTemplate = React.useMemo(
+    () => templates.find(t => t.id === selectedTemplateId) || null,
+    [templates, selectedTemplateId],
+  );
+  const activePhaseKeys = React.useMemo(() => {
+    if (!selectedTemplate || !selectedTemplate.phaseKeys || selectedTemplate.phaseKeys.length === 0) {
+      return phaseOptions.map(opt => opt.value);
+    }
+    return selectedTemplate.phaseKeys;
+  }, [phaseOptions, selectedTemplate]);
+  const rowIndexMap = React.useMemo(() => {
+    const map = new Map<string, number>();
+    rowOrder.forEach((rk, idx) => map.set(rk, idx));
+    return map;
+  }, [rowOrder]);
+  const weekIndexMap = React.useMemo(() => {
+    const map = new Map<string, number>();
+    weeks.forEach((wk, idx) => map.set(wk, idx));
+    return map;
+  }, [weeks]);
+
   const groupedRows = React.useMemo(() => {
     const groups: Array<{ departmentId: number; departmentName: string; rows: AutoHoursRoleSetting[] }> = [];
     let current: { departmentId: number; departmentName: string; rows: AutoHoursRoleSetting[] } | null = null;
@@ -48,16 +71,6 @@ const AutoHoursSettingsEditor: React.FC = () => {
     });
     return groups;
   }, [rows]);
-  const rowIndexMap = React.useMemo(() => {
-    const map = new Map<string, number>();
-    rowOrder.forEach((rk, idx) => map.set(rk, idx));
-    return map;
-  }, [rowOrder]);
-  const weekIndexMap = React.useMemo(() => {
-    const map = new Map<string, number>();
-    weeks.forEach((wk, idx) => map.set(wk, idx));
-    return map;
-  }, [weeks]);
 
   const [selectedCells, setSelectedCells] = React.useState<Set<string>>(new Set());
   const selectedCellsRef = React.useRef<Set<string>>(new Set());
@@ -136,15 +149,6 @@ const AutoHoursSettingsEditor: React.FC = () => {
     }));
     setDirty(true);
   }, [buildCellsByRow]);
-
-  const getCellClasses = React.useCallback((value: number, isSelected: boolean) => {
-    const clamped = Math.min(100, Math.max(0, Number(value) || 0));
-    const hoursEquivalent = (clamped / 100) * 40;
-    const level = resolveUtilizationLevel({ hours: hoursEquivalent, scheme });
-    const colorClasses = utilizationLevelToClasses(level);
-    const selectionClasses = isSelected ? 'ring-1 ring-[var(--primary)] border-[var(--primary)]' : '';
-    return `w-full rounded px-2 py-1 text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] ${colorClasses} ${selectionClasses}`;
-  }, [scheme]);
 
   const snapshotSelection = React.useCallback(() => {
     const cells = selectedCellsRef.current;
@@ -350,22 +354,34 @@ const AutoHoursSettingsEditor: React.FC = () => {
     return () => window.removeEventListener('mousedown', onDown);
   }, [clearSelection, finalizeBulkEdit]);
 
+  const getCellClasses = React.useCallback((value: number, isSelected: boolean) => {
+    const clamped = Math.min(100, Math.max(0, Number(value) || 0));
+    const hoursEquivalent = (clamped / 100) * 40;
+    const level = resolveUtilizationLevel({ hours: hoursEquivalent, scheme });
+    const colorClasses = utilizationLevelToClasses(level);
+    const selectionClasses = isSelected ? 'ring-1 ring-[var(--primary)] border-[var(--primary)]' : '';
+    return `w-full rounded px-1 py-1 text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] ${colorClasses} ${selectionClasses}`;
+  }, [scheme]);
+
   React.useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        setDepartmentsLoading(true);
-        const list = await departmentsApi.listAll();
+        setTemplatesLoading(true);
+        const list = await autoHoursTemplatesApi.list();
         if (!mounted) return;
-        setDepartments(list || []);
+        setTemplates(list || []);
+        if (selectedTemplateId == null && list && list.length) {
+          setSelectedTemplateId(list[0]?.id ?? null);
+        }
       } catch (e: any) {
-        showToast(e?.message || 'Failed to load departments', 'error');
+        showToast(e?.message || 'Failed to load templates', 'error');
       } finally {
-        if (mounted) setDepartmentsLoading(false);
+        if (mounted) setTemplatesLoading(false);
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [selectedTemplateId]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -387,51 +403,38 @@ const AutoHoursSettingsEditor: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
-  const loadAllSettings = React.useCallback(async (phase?: string) => {
+  const loadTemplateSettings = React.useCallback(async (templateId: number, phase: string) => {
     try {
       setLoading(true);
       setError(null);
-      const phaseKey = phase ?? selectedPhase;
-      const all: AutoHoursRoleSetting[] = [];
-      const failures: string[] = [];
-      for (const dept of departments) {
-        if (!dept?.id) continue;
-        try {
-          const data = await autoHoursSettingsApi.list(dept.id, phaseKey);
-          if (data?.length) all.push(...data);
-        } catch (e: any) {
-          failures.push(dept.name);
-        }
-      }
-      all.sort((a, b) => {
-        const deptCompare = (a.departmentName || '').localeCompare(b.departmentName || '');
-        if (deptCompare !== 0) return deptCompare;
-        const sortCompare = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-        if (sortCompare !== 0) return sortCompare;
-        return (a.roleName || '').localeCompare(b.roleName || '');
-      });
-      setRows(all);
+      const data = await autoHoursTemplatesApi.listSettings(templateId, phase);
+      setRows(data || []);
       setDirty(false);
       clearSelection();
-      if (failures.length) {
-        setError(`Failed to load auto hours for: ${failures.join(', ')}`);
-      }
     } catch (e: any) {
-      setError(e?.message || 'Failed to load auto hours settings');
+      setError(e?.message || 'Failed to load auto hours template settings');
     } finally {
       setLoading(false);
     }
-  }, [clearSelection, departments, selectedPhase]);
+  }, [clearSelection]);
 
   React.useEffect(() => {
-    if (departmentsLoading) return;
-    if (departments.length === 0) {
+    if (selectedTemplateId == null) {
       setRows([]);
       clearSelection();
       return;
     }
-    void loadAllSettings(selectedPhase);
-  }, [clearSelection, departments.length, departmentsLoading, loadAllSettings, selectedPhase]);
+    const nextPhase = activePhaseKeys.includes(selectedPhase)
+      ? selectedPhase
+      : activePhaseKeys[0];
+    if (nextPhase && nextPhase !== selectedPhase) {
+      setSelectedPhase(nextPhase);
+      return;
+    }
+    if (nextPhase) {
+      void loadTemplateSettings(selectedTemplateId, nextPhase);
+    }
+  }, [activePhaseKeys, clearSelection, loadTemplateSettings, selectedPhase, selectedTemplateId]);
 
   const updateRowPercent = (roleId: number, week: number, value: string) => {
     const parsed = Number(value);
@@ -467,87 +470,178 @@ const AutoHoursSettingsEditor: React.FC = () => {
   };
 
   const onSave = async () => {
+    if (selectedTemplateId == null) return;
     try {
       setSaving(true);
       setError(null);
-      const byDept = new Map<number, Array<{ roleId: number; percentByWeek: Record<string, number> }>>();
-      rows.forEach(row => {
-        const deptId = row.departmentId;
-        if (!byDept.has(deptId)) byDept.set(deptId, []);
-        byDept.get(deptId)!.push({ roleId: row.roleId, percentByWeek: row.percentByWeek || {} });
-      });
-      const failures: number[] = [];
-      const updatedByRole = new Map<number, AutoHoursRoleSetting>();
-      for (const [deptId, settings] of byDept.entries()) {
-        try {
-          const data = await autoHoursSettingsApi.update(deptId, settings, selectedPhase);
-          (data || []).forEach((row) => updatedByRole.set(row.roleId, row));
-        } catch {
-          failures.push(deptId);
-        }
-      }
-      if (updatedByRole.size > 0) {
-        setRows(prev => prev.map(row => updatedByRole.get(row.roleId) || row));
-      }
-      if (failures.length) {
-        setError(`Failed to save auto hours for ${failures.length} department(s).`);
-      } else {
-        setDirty(false);
-        showToast('Auto hours settings updated', 'success');
-      }
+      const payload = rows.map(row => ({
+        roleId: row.roleId,
+        percentByWeek: row.percentByWeek || {},
+      }));
+      const data = await autoHoursTemplatesApi.updateSettings(selectedTemplateId, payload, selectedPhase);
+      setRows(data || []);
+      setDirty(false);
+      showToast('Template settings updated', 'success');
     } catch (e: any) {
-      setError(e?.message || 'Failed to save auto hours settings');
+      setError(e?.message || 'Failed to save template settings');
     } finally {
       setSaving(false);
     }
   };
 
+  const toggleTemplatePhase = async (phaseKey: string) => {
+    if (selectedTemplateId == null) return;
+    const current = new Set(activePhaseKeys);
+    if (current.has(phaseKey)) {
+      current.delete(phaseKey);
+    } else {
+      current.add(phaseKey);
+    }
+    const next = phaseOptions.map(opt => opt.value).filter(key => current.has(key));
+    if (next.length === 0) {
+      showToast('At least one phase is required', 'error');
+      return;
+    }
+    try {
+      const updated = await autoHoursTemplatesApi.update(selectedTemplateId, { phaseKeys: next });
+      setTemplates(prev => prev.map(t => (t.id === selectedTemplateId ? updated : t)));
+      if (!next.includes(selectedPhase)) {
+        setSelectedPhase(next[0]);
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to update template phases', 'error');
+    }
+  };
+
+  const handleCreateTemplate = async () => {
+    const name = newTemplateName.trim();
+    if (!name) return;
+    try {
+      const created = await autoHoursTemplatesApi.create({ name });
+      setTemplates(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedTemplateId(created.id);
+      setNewTemplateName('');
+      showToast('Template created', 'success');
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to create template', 'error');
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (selectedTemplateId == null) return;
+    const template = templates.find(t => t.id === selectedTemplateId);
+    const name = template?.name || 'this template';
+    if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+    try {
+      await autoHoursTemplatesApi.delete(selectedTemplateId);
+      const next = templates.filter(t => t.id !== selectedTemplateId);
+      setTemplates(next);
+      setSelectedTemplateId(next[0]?.id ?? null);
+      showToast('Template deleted', 'success');
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to delete template', 'error');
+    }
+  };
+
   return (
     <div ref={containerRef}>
-      <div className="flex flex-col gap-3 mb-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div role="tablist" aria-label="Deliverable phases" className="inline-flex items-center rounded border border-[var(--border)] bg-[var(--card)] overflow-hidden">
-            {phaseOptions.map(opt => {
-              const isActive = selectedPhase === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  className={`px-3 py-1 text-sm transition-colors border-r border-[var(--border)] last:border-r-0 ${
-                    isActive
-                      ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
-                      : 'text-[var(--muted)] hover:text-[var(--text)]'
-                  }`}
-                  onClick={() => setSelectedPhase(opt.value)}
-                  disabled={loading || saving}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-[var(--muted)]">Template</label>
+            <select
+              className="min-w-[200px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 min-h-[32px] focus:border-[var(--primary)]"
+              value={selectedTemplateId ?? ''}
+              disabled={templatesLoading || templates.length === 0}
+              onChange={(e) => setSelectedTemplateId(e.target.value ? Number(e.target.value) : null)}
+            >
+              {templates.map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
+            </select>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { void loadAllSettings(selectedPhase); }}
-              disabled={loading || saving || departments.length === 0}
-            >
-              Refresh
+            <input
+              type="text"
+              value={newTemplateName}
+              onChange={(e) => setNewTemplateName(e.currentTarget.value)}
+              placeholder="New template name"
+              className="min-w-[200px] bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)]"
+            />
+            <Button variant="ghost" size="sm" onClick={handleCreateTemplate} disabled={!newTemplateName.trim()}>
+              Create
             </Button>
-            <Button
-              size="sm"
-              onClick={onSave}
-              disabled={!dirty || saving || loading || departments.length === 0}
-            >
-              {saving ? 'Saving...' : 'Save'}
+            <Button variant="ghost" size="sm" onClick={handleDeleteTemplate} disabled={selectedTemplateId == null}>
+              Delete
             </Button>
           </div>
+          <div className="flex items-center gap-2">
+            <span
+              className="text-sm text-[var(--muted)] cursor-help"
+              title="Enable which deliverable phases this template applies to. Disabled phases fall back to the global defaults."
+            >
+              Select Phases
+            </span>
+            <div className="flex items-center rounded border border-[var(--border)] overflow-hidden">
+              {phaseOptions.map(opt => {
+                const isActive = activePhaseKeys.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`px-2 py-1 text-xs transition-colors border-r border-[var(--border)] last:border-r-0 ${
+                      isActive
+                        ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
+                        : 'text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                    onClick={() => toggleTemplatePhase(opt.value)}
+                    disabled={selectedTemplateId == null}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <div className="text-sm text-[var(--muted)]">
-          {departmentsLoading ? 'Loading departments…' : `${departments.length} department${departments.length === 1 ? '' : 's'} loaded`}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { if (selectedTemplateId != null) void loadTemplateSettings(selectedTemplateId, selectedPhase); }}
+            disabled={loading || saving || selectedTemplateId == null}
+          >
+            Refresh
+          </Button>
+          <Button
+            size="sm"
+            onClick={onSave}
+            disabled={!dirty || saving || loading || selectedTemplateId == null}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mb-3">
+        <div role="tablist" aria-label="Template phases" className="inline-flex items-center rounded border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+          {phaseOptions.filter(opt => activePhaseKeys.includes(opt.value)).map(opt => {
+            const isActive = selectedPhase === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`px-3 py-1 text-sm transition-colors border-r border-[var(--border)] last:border-r-0 ${
+                  isActive
+                    ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+                onClick={() => setSelectedPhase(opt.value)}
+                disabled={loading || saving}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -557,10 +651,10 @@ const AutoHoursSettingsEditor: React.FC = () => {
 
       {error && <div className="text-sm text-red-400 mb-3">{error}</div>}
 
-      {departmentsLoading ? (
-        <div className="text-sm text-[var(--text)]">Loading departments...</div>
-      ) : departments.length === 0 ? (
-        <div className="text-sm text-[var(--muted)]">No departments available.</div>
+      {templatesLoading ? (
+        <div className="text-sm text-[var(--text)]">Loading templates...</div>
+      ) : templates.length === 0 ? (
+        <div className="text-sm text-[var(--muted)]">No templates available. Create one to get started.</div>
       ) : loading ? (
         <div className="text-sm text-[var(--text)]">Loading...</div>
       ) : rows.length === 0 ? (
@@ -623,16 +717,16 @@ const AutoHoursSettingsEditor: React.FC = () => {
                                 max={100}
                                 step="0.25"
                                 value={Number.isFinite(value) ? value : 0}
-                                className={`${getCellClasses(value, isSelected)} px-1`}
+                                className={getCellClasses(value, isSelected)}
                                 onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
                                 onFocus={(e) => e.currentTarget.select()}
                                 onClick={(e) => {
                                   e.currentTarget.focus();
                                   e.currentTarget.select();
-                            }}
-                            onDragStart={(e) => e.preventDefault()}
-                          />
-                        </div>
+                                }}
+                                onDragStart={(e) => e.preventDefault()}
+                              />
+                            </div>
                           </td>
                         );
                       })}
@@ -651,4 +745,4 @@ const AutoHoursSettingsEditor: React.FC = () => {
   );
 };
 
-export default AutoHoursSettingsEditor;
+export default AutoHoursTemplatesEditor;

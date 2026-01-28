@@ -5,10 +5,12 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
-import { Project } from '@/types/models';
-import { projectsApi } from '@/services/api';
+import { Project, AutoHoursTemplate } from '@/types/models';
+import { autoHoursTemplatesApi, projectsApi } from '@/services/api';
 import { updateProject } from '@/lib/mutations/projects';
 import { useCreateProject } from '@/hooks/useProjects';
+import { useAuth } from '@/hooks/useAuth';
+import { isAdminOrManager } from '@/utils/roleAccess';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -22,6 +24,8 @@ const ProjectForm: React.FC = () => {
   // Keep guarded edit logic for safety in case the route is reintroduced.
   const isEditing = !!id;
   const createProject = useCreateProject();
+  const auth = useAuth();
+  const canEditAutoHoursTemplate = isAdminOrManager(auth?.user);
 
   const [formData, setFormData] = useState<Partial<Project>>({
     name: '',
@@ -31,6 +35,7 @@ const ProjectForm: React.FC = () => {
     startDate: '',
     estimatedHours: undefined,
     projectNumber: '',
+    autoHoursTemplateId: null,
   });
 
   const [loading, setLoading] = useState(false);
@@ -44,6 +49,9 @@ const ProjectForm: React.FC = () => {
   const clientDropdownRef = useRef<HTMLDivElement | null>(null);
   const clientInputRef = useRef<HTMLInputElement | null>(null);
   const [preSettingsOpen, setPreSettingsOpen] = useState(false);
+  const [autoHoursTemplates, setAutoHoursTemplates] = useState<AutoHoursTemplate[]>([]);
+  const [autoHoursTemplatesLoading, setAutoHoursTemplatesLoading] = useState(false);
+  const [autoHoursTemplatesError, setAutoHoursTemplatesError] = useState<string | null>(null);
   const preSettingsPanelId = useId();
   const visibleClients = filteredClients.slice(0, 50);
   const highlightedClientId = clientHighlightIndex >= 0 ? `${clientListboxId}-option-${clientHighlightIndex}` : undefined;
@@ -98,6 +106,26 @@ const ProjectForm: React.FC = () => {
 
     loadClients();
   }, []);
+
+  useAuthenticatedEffect(() => {
+    if (!canEditAutoHoursTemplate) return;
+    let mounted = true;
+    (async () => {
+      try {
+        setAutoHoursTemplatesLoading(true);
+        setAutoHoursTemplatesError(null);
+        const list = await autoHoursTemplatesApi.list();
+        if (!mounted) return;
+        setAutoHoursTemplates(list || []);
+      } catch (err) {
+        if (!mounted) return;
+        setAutoHoursTemplatesError('Failed to load auto hours templates');
+      } finally {
+        if (mounted) setAutoHoursTemplatesLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [canEditAutoHoursTemplate]);
 
   const loadProject = async () => {
     try {
@@ -417,6 +445,28 @@ const ProjectForm: React.FC = () => {
                 className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
               />
             </div>
+
+            {canEditAutoHoursTemplate && (
+              <div>
+                <label className="block text-sm font-medium text-[#cccccc] mb-2">
+                  Auto Hours Template
+                </label>
+                <select
+                  value={formData.autoHoursTemplateId ?? ''}
+                  onChange={(e) => handleChange('autoHoursTemplateId', e.target.value ? Number(e.target.value) : null)}
+                  className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+                  disabled={autoHoursTemplatesLoading}
+                >
+                  <option value="">Global default</option>
+                  {autoHoursTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </select>
+                {autoHoursTemplatesError && (
+                  <p className="text-red-400 text-xs mt-1">{autoHoursTemplatesError}</p>
+                )}
+              </div>
+            )}
 
             {/* Project Number */}
             <div>

@@ -17,7 +17,17 @@ from .serializers import (
     DeliverablePhaseMappingSettingsSerializer,
     QATaskSettingsSerializer,
 )
-from .models import PreDeliverableGlobalSettings, UtilizationScheme, ProjectRole, CalendarFeedSettings, DeliverablePhaseMappingSettings, QATaskSettings, AutoHoursRoleSetting
+from .models import (
+    PreDeliverableGlobalSettings,
+    UtilizationScheme,
+    ProjectRole,
+    CalendarFeedSettings,
+    DeliverablePhaseMappingSettings,
+    QATaskSettings,
+    AutoHoursRoleSetting,
+    AutoHoursTemplate,
+    AutoHoursTemplateRoleSetting,
+)
 from accounts.permissions import IsAdminOrManager
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
@@ -291,6 +301,422 @@ class AutoHoursRoleSettingsView(APIView):
                     obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_week', 'updated_at'])
 
         return self.get(request)
+
+
+class AutoHoursTemplatesView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    VALID_PHASES = ['sd', 'dd', 'ifp', 'ifc']
+
+    def _parse_phase_keys(self, data) -> tuple[list[str] | None, str | None]:
+        if 'phaseKeys' not in data:
+            return None, None
+        raw = data.get('phaseKeys')
+        if raw is None:
+            return None, 'phaseKeys must include at least one phase'
+        if not isinstance(raw, list):
+            return None, 'phaseKeys must be a list'
+        normalized: list[str] = []
+        for item in raw:
+            key = str(item).strip().lower()
+            if key not in self.VALID_PHASES:
+                return None, 'phaseKeys must be a subset of: sd, dd, ifp, ifc'
+            if key not in normalized:
+                normalized.append(key)
+        if not normalized:
+            return None, 'phaseKeys must include at least one phase'
+        ordered = [k for k in self.VALID_PHASES if k in normalized]
+        return ordered, None
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='AutoHoursTemplateListItem',
+            fields={
+                'id': serializers.IntegerField(),
+                'name': serializers.CharField(),
+                'isActive': serializers.BooleanField(),
+                'phaseKeys': serializers.ListField(child=serializers.CharField()),
+                'createdAt': serializers.DateTimeField(),
+                'updatedAt': serializers.DateTimeField(),
+            },
+            many=True,
+        ),
+    )
+    def get(self, request):
+        items = []
+        for t in AutoHoursTemplate.objects.all().order_by('name'):
+            items.append({
+                'id': t.id,
+                'name': t.name,
+                'isActive': t.is_active,
+                'phaseKeys': t.phase_keys or [],
+                'createdAt': t.created_at,
+                'updatedAt': t.updated_at,
+            })
+        return Response(items)
+
+    @extend_schema(
+        request=inline_serializer(
+            name='AutoHoursTemplateCreate',
+            fields={
+                'name': serializers.CharField(),
+                'isActive': serializers.BooleanField(required=False),
+                'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
+            },
+        ),
+        responses=inline_serializer(
+            name='AutoHoursTemplateCreateResponse',
+            fields={
+                'id': serializers.IntegerField(),
+                'name': serializers.CharField(),
+                'isActive': serializers.BooleanField(),
+                'phaseKeys': serializers.ListField(child=serializers.CharField()),
+                'createdAt': serializers.DateTimeField(),
+                'updatedAt': serializers.DateTimeField(),
+            },
+        ),
+    )
+    def post(self, request):
+        name = (request.data or {}).get('name') or ''
+        name = str(name).strip()
+        if not name:
+            return Response({'error': 'name is required'}, status=400)
+        if AutoHoursTemplate.objects.filter(name__iexact=name).exists():
+            return Response({'error': 'template name already exists'}, status=400)
+        data = request.data or {}
+        is_active = bool(data.get('isActive', True))
+        phase_keys, phase_err = self._parse_phase_keys(data)
+        if phase_err:
+            return Response({'error': phase_err}, status=400)
+        obj = AutoHoursTemplate.objects.create(
+            name=name,
+            is_active=is_active,
+            phase_keys=phase_keys if phase_keys is not None else self.VALID_PHASES,
+        )
+        return Response({
+            'id': obj.id,
+            'name': obj.name,
+            'isActive': obj.is_active,
+            'phaseKeys': obj.phase_keys or [],
+            'createdAt': obj.created_at,
+            'updatedAt': obj.updated_at,
+        }, status=201)
+
+
+class AutoHoursTemplateDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    VALID_PHASES = ['sd', 'dd', 'ifp', 'ifc']
+
+    def _parse_phase_keys(self, data) -> tuple[list[str] | None, str | None]:
+        if 'phaseKeys' not in data:
+            return None, None
+        raw = data.get('phaseKeys')
+        if raw is None:
+            return None, 'phaseKeys must include at least one phase'
+        if not isinstance(raw, list):
+            return None, 'phaseKeys must be a list'
+        normalized: list[str] = []
+        for item in raw:
+            key = str(item).strip().lower()
+            if key not in self.VALID_PHASES:
+                return None, 'phaseKeys must be a subset of: sd, dd, ifp, ifc'
+            if key not in normalized:
+                normalized.append(key)
+        if not normalized:
+            return None, 'phaseKeys must include at least one phase'
+        ordered = [k for k in self.VALID_PHASES if k in normalized]
+        return ordered, None
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='AutoHoursTemplateDetail',
+            fields={
+                'id': serializers.IntegerField(),
+                'name': serializers.CharField(),
+                'isActive': serializers.BooleanField(),
+                'phaseKeys': serializers.ListField(child=serializers.CharField()),
+                'createdAt': serializers.DateTimeField(),
+                'updatedAt': serializers.DateTimeField(),
+            },
+        ),
+    )
+    def get(self, request, template_id: int):
+        obj = AutoHoursTemplate.objects.filter(id=template_id).first()
+        if not obj:
+            return Response({'error': 'template not found'}, status=404)
+        return Response({
+            'id': obj.id,
+            'name': obj.name,
+            'isActive': obj.is_active,
+            'phaseKeys': obj.phase_keys or [],
+            'createdAt': obj.created_at,
+            'updatedAt': obj.updated_at,
+        })
+
+    @extend_schema(
+        request=inline_serializer(
+            name='AutoHoursTemplateUpdate',
+            fields={
+                'name': serializers.CharField(required=False),
+                'isActive': serializers.BooleanField(required=False),
+                'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
+            },
+        ),
+        responses=inline_serializer(
+            name='AutoHoursTemplateUpdateResponse',
+            fields={
+                'id': serializers.IntegerField(),
+                'name': serializers.CharField(),
+                'isActive': serializers.BooleanField(),
+                'phaseKeys': serializers.ListField(child=serializers.CharField()),
+                'createdAt': serializers.DateTimeField(),
+                'updatedAt': serializers.DateTimeField(),
+            },
+        ),
+    )
+    def put(self, request, template_id: int):
+        obj = AutoHoursTemplate.objects.filter(id=template_id).first()
+        if not obj:
+            return Response({'error': 'template not found'}, status=404)
+        data = request.data or {}
+        if 'name' in data:
+            name = str(data.get('name') or '').strip()
+            if not name:
+                return Response({'error': 'name is required'}, status=400)
+            if AutoHoursTemplate.objects.filter(name__iexact=name).exclude(id=obj.id).exists():
+                return Response({'error': 'template name already exists'}, status=400)
+            obj.name = name
+        if 'isActive' in data:
+            obj.is_active = bool(data.get('isActive'))
+        phase_keys, phase_err = self._parse_phase_keys(data)
+        if phase_err:
+            return Response({'error': phase_err}, status=400)
+        if phase_keys is not None:
+            obj.phase_keys = phase_keys
+        obj.save(update_fields=['name', 'is_active', 'phase_keys', 'updated_at'])
+        return Response({
+            'id': obj.id,
+            'name': obj.name,
+            'isActive': obj.is_active,
+            'phaseKeys': obj.phase_keys or [],
+            'createdAt': obj.created_at,
+            'updatedAt': obj.updated_at,
+        })
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='AutoHoursTemplateDeleteResponse',
+            fields={'detail': serializers.CharField()},
+        ),
+    )
+    def delete(self, request, template_id: int):
+        obj = AutoHoursTemplate.objects.filter(id=template_id).first()
+        if not obj:
+            return Response({'error': 'template not found'}, status=404)
+        if obj.projects.exists():
+            return Response({'error': 'template is assigned to one or more projects'}, status=400)
+        obj.delete()
+        return Response({'detail': 'deleted'})
+
+
+class AutoHoursTemplateRoleSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    MAX_WEEKS_BEFORE = 8
+    VALID_PHASES = {'sd', 'dd', 'ifp', 'ifc'}
+
+    def _empty_hours_by_week(self) -> dict:
+        return {str(i): 0 for i in range(self.MAX_WEEKS_BEFORE + 1)}
+
+    def _normalize_hours_by_week(self, raw) -> tuple[dict, str | None]:
+        if raw is None:
+            return self._empty_hours_by_week(), None
+
+        normalized = self._empty_hours_by_week()
+        if isinstance(raw, list):
+            for idx, value in enumerate(raw):
+                if idx > self.MAX_WEEKS_BEFORE:
+                    continue
+                try:
+                    hours = Decimal(str(value))
+                except Exception:
+                    return {}, f'invalid percent value at index {idx}'
+                if hours < 0 or hours > 100:
+                    return {}, 'percentPerWeek must be between 0 and 100'
+                normalized[str(idx)] = float(hours)
+            return normalized, None
+
+        if isinstance(raw, dict):
+            for key, value in raw.items():
+                try:
+                    week = int(key)
+                except Exception:
+                    return {}, f'invalid week key {key}'
+                if week < 0 or week > self.MAX_WEEKS_BEFORE:
+                    return {}, f'weeksBefore must be between 0 and {self.MAX_WEEKS_BEFORE}'
+                try:
+                    hours = Decimal(str(value))
+                except Exception:
+                    return {}, f'invalid percent value for week {week}'
+                if hours < 0 or hours > 100:
+                    return {}, 'percentPerWeek must be between 0 and 100'
+                normalized[str(week)] = float(hours)
+            return normalized, None
+
+        return {}, 'percentByWeek must be a list or object'
+
+    def _parse_phase(self, request) -> tuple[str | None, str | None]:
+        phase = request.query_params.get('phase')
+        if not phase:
+            return None, 'phase is required'
+        norm = str(phase).strip().lower()
+        if norm in self.VALID_PHASES:
+            return norm, None
+        return None, 'phase must be one of: sd, dd, ifp, ifc'
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='AutoHoursTemplateRoleSettingItem',
+            fields={
+                'roleId': serializers.IntegerField(),
+                'roleName': serializers.CharField(),
+                'departmentId': serializers.IntegerField(),
+                'departmentName': serializers.CharField(),
+                'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                'isActive': serializers.BooleanField(),
+                'sortOrder': serializers.IntegerField(),
+            },
+            many=True,
+        ),
+    )
+    def get(self, request, template_id: int):
+        phase, phase_err = self._parse_phase(request)
+        if phase_err:
+            return Response({'error': phase_err}, status=400)
+        template = AutoHoursTemplate.objects.filter(id=template_id).first()
+        if not template:
+            return Response({'error': 'template not found'}, status=404)
+        if phase not in (template.phase_keys or []):
+            return Response([])
+        dept_id = request.query_params.get('department_id')
+        dept_id_int = None
+        if dept_id:
+            try:
+                dept_id_int = int(dept_id)
+            except Exception:
+                return Response({'error': 'department_id must be an integer'}, status=400)
+        roles_qs = DepartmentProjectRole.objects.select_related('department')
+        if dept_id_int is not None:
+            roles_qs = roles_qs.filter(department_id=dept_id_int)
+        roles = list(roles_qs.order_by('department_id', 'sort_order', 'name'))
+        role_ids = [r.id for r in roles]
+        settings_map = {
+            s.role_id: s for s in AutoHoursTemplateRoleSetting.objects.filter(template_id=template_id, role_id__in=role_ids)
+        }
+        items = []
+        for role in roles:
+            setting = settings_map.get(role.id)
+            hours_by_week = self._empty_hours_by_week()
+            if setting:
+                raw = (setting.ramp_percent_by_phase or {}).get(phase) or {}
+                if isinstance(raw, dict):
+                    for key, value in raw.items():
+                        if str(key) in hours_by_week:
+                            try:
+                                hours_by_week[str(int(key))] = float(Decimal(str(value)))
+                            except Exception:
+                                pass
+            items.append({
+                'roleId': role.id,
+                'roleName': role.name,
+                'departmentId': role.department_id,
+                'departmentName': getattr(role.department, 'name', ''),
+                'percentByWeek': hours_by_week,
+                'isActive': role.is_active,
+                'sortOrder': role.sort_order,
+            })
+        return Response(items)
+
+    @extend_schema(
+        request=inline_serializer(
+            name='AutoHoursTemplateRoleSettingsUpdate',
+            fields={
+                'settings': inline_serializer(
+                    name='AutoHoursTemplateRoleSettingUpdateItem',
+                    fields={
+                        'roleId': serializers.IntegerField(),
+                        'percentByWeek': serializers.DictField(child=serializers.FloatField(), required=False),
+                    },
+                    many=True,
+                ),
+            },
+        ),
+        responses=inline_serializer(
+            name='AutoHoursTemplateRoleSettingItemResponse',
+            fields={
+                'roleId': serializers.IntegerField(),
+                'roleName': serializers.CharField(),
+                'departmentId': serializers.IntegerField(),
+                'departmentName': serializers.CharField(),
+                'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                'isActive': serializers.BooleanField(),
+                'sortOrder': serializers.IntegerField(),
+            },
+            many=True,
+        ),
+    )
+    def put(self, request, template_id: int):
+        phase, phase_err = self._parse_phase(request)
+        if phase_err:
+            return Response({'error': phase_err}, status=400)
+        template = AutoHoursTemplate.objects.filter(id=template_id).first()
+        if not template:
+            return Response({'error': 'template not found'}, status=404)
+        if phase not in (template.phase_keys or []):
+            return Response({'error': 'phase is not enabled for this template'}, status=400)
+        payload = request.data or {}
+        settings = payload.get('settings') or []
+        if not isinstance(settings, list):
+            return Response({'error': 'settings must be a list'}, status=400)
+
+        dept_id = request.query_params.get('department_id')
+        dept_id_int = None
+        if dept_id:
+            try:
+                dept_id_int = int(dept_id)
+            except Exception:
+                return Response({'error': 'department_id must be an integer'}, status=400)
+
+        updates: list[tuple[int, dict]] = []
+        role_ids: list[int] = []
+        for item in settings:
+            try:
+                role_id = int(item.get('roleId'))
+            except Exception:
+                return Response({'error': 'invalid roleId'}, status=400)
+            hours_by_week_raw = item.get('percentByWeek')
+            hours_by_week, err = self._normalize_hours_by_week(hours_by_week_raw)
+            if err:
+                return Response({'error': err}, status=400)
+            updates.append((role_id, hours_by_week))
+            role_ids.append(role_id)
+
+        if role_ids:
+            existing_qs = DepartmentProjectRole.objects.filter(id__in=role_ids)
+            if dept_id_int is not None:
+                existing_qs = existing_qs.filter(department_id=dept_id_int)
+            existing = set(existing_qs.values_list('id', flat=True))
+            missing = [rid for rid in role_ids if rid not in existing]
+            if missing:
+                return Response({'error': f'unknown roleId(s): {missing}'}, status=400)
+
+        with transaction.atomic():
+            for role_id, hours_by_week in updates:
+                obj, _ = AutoHoursTemplateRoleSetting.objects.get_or_create(template_id=template_id, role_id=role_id)
+                by_phase = obj.ramp_percent_by_phase or {}
+                by_phase[phase] = hours_by_week
+                obj.ramp_percent_by_phase = by_phase
+                obj.save(update_fields=['ramp_percent_by_phase', 'updated_at'])
+
+        return self.get(request, template_id=template_id)
 
 
 class UtilizationSchemeView(APIView):

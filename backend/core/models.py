@@ -5,6 +5,10 @@ from django.conf import settings
 import secrets
 
 
+def default_auto_hours_phase_keys():
+    return ['sd', 'dd', 'ifp', 'ifc']
+
+
 class PreDeliverableGlobalSettings(models.Model):
     """System-wide default settings for pre-deliverable generation.
 
@@ -225,6 +229,42 @@ class AutoHoursRoleSetting(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"AutoHours({self.role_id})"
+
+
+class AutoHoursTemplate(models.Model):
+    """Project auto-hours template."""
+
+    name = models.CharField(max_length=120, unique=True)
+    is_active = models.BooleanField(default=True)
+    phase_keys = models.JSONField(default=default_auto_hours_phase_keys, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Auto Hours Template'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"AutoHoursTemplate({self.name})"
+
+
+class AutoHoursTemplateRoleSetting(models.Model):
+    """Template-scoped auto-hours defaults per project role."""
+
+    template = models.ForeignKey('core.AutoHoursTemplate', on_delete=models.CASCADE, related_name='role_settings')
+    role = models.ForeignKey('projects.ProjectRole', on_delete=models.CASCADE, related_name='auto_hours_template_settings')
+    # Map of phase -> weeks-before -> percent (keys: "sd","dd","ifp","ifc")
+    ramp_percent_by_phase = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['template_id', 'role_id']
+        unique_together = [['template', 'role']]
+        verbose_name = 'Auto Hours Template Role Setting'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"AutoHoursTemplateRole({self.template_id}, {self.role_id})"
 
 
 class NotificationPreference(models.Model):

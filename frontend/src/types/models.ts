@@ -43,6 +43,7 @@ export interface Project {
   endDate?: string;
   estimatedHours?: number;
   projectNumber?: string;
+  autoHoursTemplateId?: number | null;
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -192,6 +193,15 @@ export interface DeliverableQATask {
 
 export interface QATaskSettings {
   defaultDaysBefore: number;
+  updatedAt?: string;
+}
+
+export interface AutoHoursTemplate {
+  id: number;
+  name: string;
+  isActive: boolean;
+  phaseKeys?: string[];
+  createdAt?: string;
   updatedAt?: string;
 }
 
