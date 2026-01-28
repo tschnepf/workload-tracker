@@ -83,19 +83,14 @@ const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
 const roundHours = (value: number) => (Number.isFinite(value) ? Math.ceil(value) : 0);
 const DEFAULT_PHASE_MAPPING: DeliverablePhaseMappingSettings = {
   useDescriptionMatch: true,
-  descSdTokens: ['sd', 'schematic'],
-  descDdTokens: ['dd', 'design development'],
-  descIfpTokens: ['ifp'],
-  descIfcTokens: ['ifc'],
-  rangeSdMin: 1,
-  rangeSdMax: 40,
-  rangeDdMin: 41,
-  rangeDdMax: 89,
-  rangeIfpMin: 90,
-  rangeIfpMax: 99,
-  rangeIfcExact: 100,
+  phases: [
+    { key: 'sd', label: 'SD', descriptionTokens: ['sd', 'schematic'], rangeMin: 0, rangeMax: 40, sortOrder: 0 },
+    { key: 'dd', label: 'DD', descriptionTokens: ['dd', 'design development'], rangeMin: 41, rangeMax: 89, sortOrder: 1 },
+    { key: 'ifp', label: 'IFP', descriptionTokens: ['ifp'], rangeMin: 90, rangeMax: 99, sortOrder: 2 },
+    { key: 'ifc', label: 'IFC', descriptionTokens: ['ifc'], rangeMin: 100, rangeMax: 100, sortOrder: 3 },
+  ],
 };
-const AUTO_HOURS_PHASES = ['sd', 'dd', 'ifp', 'ifc'] as const;
+const DEFAULT_AUTO_HOURS_PHASES = ['sd', 'dd', 'ifp', 'ifc'] as const;
 const isDateInWeek = (dateStr: string, weekStartStr: string) => {
   try {
     const deliverableDate = new Date(dateStr);
@@ -129,6 +124,11 @@ const AssignmentGrid: React.FC = () => {
   const [autoHoursTemplates, setAutoHoursTemplates] = useState<AutoHoursTemplate[]>([]);
   const [phaseMapping, setPhaseMapping] = useState<DeliverablePhaseMappingSettings | null>(null);
   const [phaseMappingError, setPhaseMappingError] = useState<string | null>(null);
+  const phaseMappingEffective = useMemo(() => phaseMapping || DEFAULT_PHASE_MAPPING, [phaseMapping]);
+  const autoHoursPhases = useMemo(() => {
+    const keys = (phaseMappingEffective.phases || []).map(p => p.key).filter(Boolean);
+    return keys.length ? keys : Array.from(DEFAULT_AUTO_HOURS_PHASES);
+  }, [phaseMappingEffective]);
   // Snapshot/rendering mode and aggregated hours
   const [hoursByPerson, setHoursByPerson] = useState<Record<number, Record<string, number>>>({});
   // isSnapshotMode provided by useAssignmentsSnapshot
@@ -237,12 +237,12 @@ const AssignmentGrid: React.FC = () => {
       setAutoHoursSettingsLoading(true);
       setAutoHoursSettingsError(null);
       const results = await Promise.allSettled(
-        AUTO_HOURS_PHASES.map(phase => autoHoursSettingsApi.list(autoHoursDepartmentId, phase))
+        autoHoursPhases.map(phase => autoHoursSettingsApi.list(autoHoursDepartmentId, phase))
       );
       const next: Record<string, AutoHoursRoleSetting[]> = {};
       const failures: string[] = [];
       results.forEach((res, idx) => {
-        const phase = AUTO_HOURS_PHASES[idx];
+        const phase = autoHoursPhases[idx];
         if (res.status === 'fulfilled') next[phase] = res.value || [];
         else failures.push(phase);
       });
@@ -255,7 +255,7 @@ const AssignmentGrid: React.FC = () => {
     } finally {
       setAutoHoursSettingsLoading(false);
     }
-  }, [autoHoursDepartmentId, canUseAutoHours]);
+  }, [autoHoursDepartmentId, autoHoursPhases, canUseAutoHours]);
 
   useEffect(() => {
     void refreshAutoHoursSettings();
@@ -292,7 +292,7 @@ const AssignmentGrid: React.FC = () => {
     });
     try {
       await Promise.all(missing.map(async (templateId) => {
-        const phasesToFetch = Array.from(autoHoursTemplatePhaseKeysById.get(templateId) ?? AUTO_HOURS_PHASES);
+        const phasesToFetch = Array.from(autoHoursTemplatePhaseKeysById.get(templateId) ?? autoHoursPhases);
         const results = await Promise.allSettled(
           phasesToFetch.map(phase => autoHoursTemplatesApi.listSettings(templateId, phase))
         );
@@ -761,7 +761,7 @@ const AssignmentGrid: React.FC = () => {
 
   const autoHoursSettingsByPhaseMap = useMemo(() => {
     const out: Record<string, Map<number, AutoHoursRoleSetting>> = {};
-    AUTO_HOURS_PHASES.forEach((phase) => {
+    autoHoursPhases.forEach((phase) => {
       const map = new Map<number, AutoHoursRoleSetting>();
       const rows = autoHoursSettingsByPhase?.[phase] || [];
       for (const setting of rows) {
@@ -770,14 +770,14 @@ const AssignmentGrid: React.FC = () => {
       out[phase] = map;
     });
     return out;
-  }, [autoHoursSettingsByPhase]);
+  }, [autoHoursPhases, autoHoursSettingsByPhase]);
 
   const autoHoursTemplateSettingsByPhaseMap = useMemo(() => {
     const out: Record<number, Record<string, Map<number, AutoHoursRoleSetting>>> = {};
     Object.entries(autoHoursTemplateSettings || {}).forEach(([tid, phases]) => {
       const templateId = Number(tid);
       const phaseMaps: Record<string, Map<number, AutoHoursRoleSetting>> = {};
-      AUTO_HOURS_PHASES.forEach((phase) => {
+      autoHoursPhases.forEach((phase) => {
         const map = new Map<number, AutoHoursRoleSetting>();
         const rows = phases?.[phase] || [];
         for (const setting of rows) {
@@ -788,22 +788,20 @@ const AssignmentGrid: React.FC = () => {
       out[templateId] = phaseMaps;
     });
     return out;
-  }, [autoHoursTemplateSettings]);
+  }, [autoHoursPhases, autoHoursTemplateSettings]);
 
   const autoHoursTemplatePhaseKeysById = useMemo(() => {
     const map = new Map<number, Set<string>>();
     (autoHoursTemplates || []).forEach((template) => {
       const keys = (template.phaseKeys && template.phaseKeys.length)
         ? template.phaseKeys
-        : AUTO_HOURS_PHASES;
+        : autoHoursPhases;
       map.set(template.id, new Set(keys));
     });
     return map;
-  }, [autoHoursTemplates]);
+  }, [autoHoursPhases, autoHoursTemplates]);
 
-  const phaseMappingEffective = useMemo(() => phaseMapping || DEFAULT_PHASE_MAPPING, [phaseMapping]);
-
-  const classifyDeliverablePhase = useCallback((deliverable: Deliverable): typeof AUTO_HOURS_PHASES[number] | null => {
+  const classifyDeliverablePhase = useCallback((deliverable: Deliverable): string | null => {
     const descRaw = (deliverable?.description || '').toLowerCase().trim();
     const desc = descRaw.replace(/\s+/g, ' ');
     if (desc.includes('bulletin') || desc.includes('addendum')) return null;
@@ -815,27 +813,31 @@ const AssignmentGrid: React.FC = () => {
       return new RegExp(`\\b${token.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`).test(text);
     };
 
+    const phases = (phaseMappingEffective.phases || []).slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
     if (phaseMappingEffective.useDescriptionMatch && desc) {
-      if (phaseMappingEffective.descSdTokens?.some(t => tokenMatch(desc, t))) return 'sd';
-      if (phaseMappingEffective.descDdTokens?.some(t => tokenMatch(desc, t))) return 'dd';
-      if (phaseMappingEffective.descIfpTokens?.some(t => tokenMatch(desc, t))) return 'ifp';
-      if (phaseMappingEffective.descIfcTokens?.some(t => tokenMatch(desc, t))) return 'ifc';
+      for (const phase of phases) {
+        const tokens = phase.descriptionTokens || [];
+        if (tokens.some(t => tokenMatch(desc, t))) return phase.key;
+      }
     }
 
     if (deliverable?.percentage != null) {
       const p = Math.round(Number(deliverable.percentage));
       if (Number.isFinite(p)) {
-        if (p === phaseMappingEffective.rangeIfcExact) return 'ifc';
-        if (p >= phaseMappingEffective.rangeSdMin && p <= phaseMappingEffective.rangeSdMax) return 'sd';
-        if (p >= phaseMappingEffective.rangeDdMin && p <= phaseMappingEffective.rangeDdMax) return 'dd';
-        if (p >= phaseMappingEffective.rangeIfpMin && p <= phaseMappingEffective.rangeIfpMax) return 'ifp';
+        for (const phase of phases) {
+          const rmin = phase.rangeMin;
+          const rmax = phase.rangeMax;
+          if (rmin == null || rmax == null) continue;
+          if (p >= rmin && p <= rmax) return phase.key;
+        }
       }
     }
     return null;
   }, [phaseMappingEffective]);
 
   const deliverableWeekEntriesByProject = useMemo(() => {
-    const map = new Map<number, Array<{ weekIndex: number; phase: typeof AUTO_HOURS_PHASES[number] }>>();
+    const map = new Map<number, Array<{ weekIndex: number; phase: string }>>();
     if (!weeks.length) return map;
     for (const deliverable of deliverables || []) {
       const projectId = (deliverable as any).project as number | undefined;

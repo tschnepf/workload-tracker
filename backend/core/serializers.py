@@ -5,7 +5,7 @@ NEVER write manual field mappings - always use these base classes.
 
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
-from .models import UtilizationScheme, ProjectRole, CalendarFeedSettings, DeliverablePhaseMappingSettings, QATaskSettings
+from .models import UtilizationScheme, ProjectRole, CalendarFeedSettings, QATaskSettings
 
 
 class PreDeliverableGlobalSettingsItemSerializer(serializers.Serializer):
@@ -105,41 +105,63 @@ class CalendarFeedSettingsSerializer(serializers.ModelSerializer):
         fields = ['deliverables_token', 'updated_at']
 
 
-class DeliverablePhaseMappingSettingsSerializer(serializers.ModelSerializer):
-    useDescriptionMatch = serializers.BooleanField(source='use_description_match')
-    descSdTokens = serializers.JSONField(source='desc_sd_tokens')
-    descDdTokens = serializers.JSONField(source='desc_dd_tokens')
-    descIfpTokens = serializers.JSONField(source='desc_ifp_tokens')
-    descIfcTokens = serializers.JSONField(source='desc_ifc_tokens')
-    rangeSdMin = serializers.IntegerField(source='range_sd_min')
-    rangeSdMax = serializers.IntegerField(source='range_sd_max')
-    rangeDdMin = serializers.IntegerField(source='range_dd_min')
-    rangeDdMax = serializers.IntegerField(source='range_dd_max')
-    rangeIfpMin = serializers.IntegerField(source='range_ifp_min')
-    rangeIfpMax = serializers.IntegerField(source='range_ifp_max')
-    rangeIfcExact = serializers.IntegerField(source='range_ifc_exact')
-    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+class DeliverablePhaseDefinitionSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    descriptionTokens = serializers.ListField(child=serializers.CharField(), required=False)
+    rangeMin = serializers.IntegerField(required=False, allow_null=True)
+    rangeMax = serializers.IntegerField(required=False, allow_null=True)
+    sortOrder = serializers.IntegerField(required=False)
 
-    class Meta:
-        model = DeliverablePhaseMappingSettings
-        fields = [
-            'useDescriptionMatch',
-            'descSdTokens', 'descDdTokens', 'descIfpTokens', 'descIfcTokens',
-            'rangeSdMin', 'rangeSdMax',
-            'rangeDdMin', 'rangeDdMax',
-            'rangeIfpMin', 'rangeIfpMax',
-            'rangeIfcExact',
-            'updatedAt',
-        ]
+
+class DeliverablePhaseMappingSettingsSerializer(serializers.Serializer):
+    useDescriptionMatch = serializers.BooleanField()
+    phases = DeliverablePhaseDefinitionSerializer(many=True)
+    updatedAt = serializers.DateTimeField(read_only=True)
 
     def validate(self, attrs):
-        inst = self.instance or DeliverablePhaseMappingSettings.get_active()
-        for k, v in attrs.items():
-            setattr(inst, k, v)
-        try:
-            inst.clean()
-        except Exception as e:
-            raise serializers.ValidationError({'detail': str(e)})
+        phases = attrs.get('phases') or []
+        if not phases:
+            raise serializers.ValidationError({'phases': 'At least one phase is required'})
+
+        seen_keys = set()
+        ranges = []
+        for idx, phase in enumerate(phases):
+            key = str(phase.get('key') or '').strip().lower()
+            label = str(phase.get('label') or '').strip()
+            if not key:
+                raise serializers.ValidationError({'phases': f'Phase at position {idx + 1} must include a key'})
+            if not label:
+                raise serializers.ValidationError({'phases': f'Phase {key} must include a label'})
+            if key in seen_keys:
+                raise serializers.ValidationError({'phases': f'Duplicate phase key: {key}'})
+            seen_keys.add(key)
+
+            rmin = phase.get('rangeMin', None)
+            rmax = phase.get('rangeMax', None)
+            if rmin is None and rmax is None:
+                continue
+            if rmin is None or rmax is None:
+                raise serializers.ValidationError({'phases': f'Phase {key} must include both rangeMin and rangeMax'})
+            if rmin < 0 or rmax > 100:
+                raise serializers.ValidationError({'phases': f'Phase {key} range must be between 0 and 100'})
+            if rmin > rmax:
+                raise serializers.ValidationError({'phases': f'Phase {key} rangeMin must be <= rangeMax'})
+            ranges.append((rmin, rmax, key))
+
+        if not ranges:
+            raise serializers.ValidationError({'phases': 'At least one phase must include a percentage range'})
+
+        ranges.sort(key=lambda r: r[0])
+        # Require full coverage 0-100 with no overlaps and no gaps
+        expected_min = 0
+        for rmin, rmax, key in ranges:
+            if rmin != expected_min:
+                raise serializers.ValidationError({'phases': f'Percentage ranges must cover 0-100 with no gaps (expected {expected_min} for {key})'})
+            expected_min = rmax + 1
+        if expected_min != 101:
+            raise serializers.ValidationError({'phases': 'Percentage ranges must cover 0-100 with no gaps'})
+
         return attrs
 
 

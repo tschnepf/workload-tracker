@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { deliverableTaskTemplatesApi, departmentsApi } from '@/services/api';
+import { deliverableTaskTemplatesApi, departmentsApi, deliverablePhaseMappingApi } from '@/services/api';
 import type { DeliverableTaskTemplate, Department, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
 
 type EditableTemplate = DeliverableTaskTemplate & {
@@ -15,6 +15,7 @@ const qaOptions: DeliverableTaskQaStatus[] = ['not_reviewed', 'in_review', 'appr
 const DeliverableTaskTemplatesEditor: React.FC = () => {
   const [rows, setRows] = useState<EditableTemplate[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [phaseOptions, setPhaseOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,15 +26,18 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const [tplResp, deptList] = await Promise.all([
+      const [tplResp, deptList, mapping] = await Promise.all([
         deliverableTaskTemplatesApi.list({ page: 1, page_size: 200 }),
         departmentsApi.listAll(),
+        deliverablePhaseMappingApi.get(),
       ]);
       const templates = tplResp.results || [];
       setRows(
         templates.map((t) => ({ ...t, _key: String(t.id) }))
       );
       setDepartments(deptList || []);
+      const opts = (mapping?.phases || []).map((p) => ({ value: p.key, label: p.label || p.key }));
+      setPhaseOptions(opts);
       setDirty(false);
     } catch (e: any) {
       setError(e?.message || 'Failed to load task templates');
@@ -53,10 +57,11 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
 
   const addRow = () => {
     const defaultDeptId = departments[0]?.id ?? 0;
+    const defaultPhase = phaseOptions[0]?.value || 'sd';
     const next: EditableTemplate = {
       _key: `new-${Date.now()}`,
       _isNew: true,
-      phase: 'sd',
+      phase: defaultPhase,
       departmentId: defaultDeptId || 0,
       sheetNumber: '',
       sheetName: '',
@@ -172,10 +177,15 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                       className="bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
                       onChange={(e) => updateRow(row._key, { phase: e.currentTarget.value as any })}
                     >
-                      <option value="sd">SD</option>
-                      <option value="dd">DD</option>
-                      <option value="ifp">IFP</option>
-                      <option value="ifc">IFC</option>
+                      {phaseOptions.length === 0 && (
+                        <option value="">No phases</option>
+                      )}
+                      {!phaseOptions.some((opt) => opt.value === row.phase) && (
+                        <option value={row.phase}>{row.phase}</option>
+                      )}
+                      {phaseOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
                     </select>
                   </td>
                   <td className="py-2 pr-4">

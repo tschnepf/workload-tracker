@@ -31,6 +31,13 @@ const AutoHoursSettingsEditor: React.FC = () => {
     const base = schemeData ?? defaultUtilizationScheme;
     return { ...base, mode: 'absolute_hours' as const };
   }, [schemeData]);
+
+  React.useEffect(() => {
+    const values = phaseOptions.map(opt => opt.value);
+    if (values.length && !values.includes(selectedPhase)) {
+      setSelectedPhase(values[0]);
+    }
+  }, [phaseOptions, selectedPhase]);
   const rowOrder = React.useMemo(() => rows.map(row => String(row.roleId)), [rows]);
   const groupedRows = React.useMemo(() => {
     const groups: Array<{ departmentId: number; departmentName: string; rows: AutoHoursRoleSetting[] }> = [];
@@ -373,13 +380,11 @@ const AutoHoursSettingsEditor: React.FC = () => {
       try {
         const mapping = await deliverablePhaseMappingApi.get();
         if (!mounted || !mapping) return;
-        const opts = [
-          { value: 'sd', label: 'SD' },
-          { value: 'dd', label: 'DD' },
-          { value: 'ifp', label: 'IFP' },
-          { value: 'ifc', label: 'IFC' },
-        ];
-        setPhaseOptions(opts);
+        const opts = (mapping.phases || []).map((phase) => ({
+          value: phase.key,
+          label: phase.label || phase.key,
+        }));
+        if (opts.length) setPhaseOptions(opts);
       } catch {
         // fallback to defaults if mapping fetch fails
       }

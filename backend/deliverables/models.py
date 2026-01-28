@@ -9,7 +9,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
 import re
 
-from core.choices import DeliverablePhase, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus, DeliverableQAReviewStatus
+from core.choices import DeliverableTaskCompletionStatus, DeliverableTaskQaStatus, DeliverableQAReviewStatus
 
 
 class Deliverable(models.Model):
@@ -219,7 +219,7 @@ class PreDeliverableItem(models.Model):
 class DeliverableTaskTemplate(models.Model):
     """Template rows for generating deliverable tasks by phase."""
 
-    phase = models.CharField(max_length=20, choices=DeliverablePhase.choices)
+    phase = models.CharField(max_length=20)
     department = models.ForeignKey('departments.Department', on_delete=models.PROTECT, related_name='deliverable_task_templates')
     sheet_number = models.CharField(max_length=50, blank=True, null=True)
     sheet_name = models.CharField(max_length=100, blank=True, null=True)
@@ -245,7 +245,7 @@ class DeliverableTaskTemplate(models.Model):
         verbose_name_plural = 'Deliverable Task Templates'
 
     def __str__(self) -> str:  # pragma: no cover - trivial
-        return f"{self.get_phase_display()} - {self.department.name}"
+        return f"{self.phase} - {self.department.name}"
 
     def clean(self):
         super().clean()

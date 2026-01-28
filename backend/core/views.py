@@ -23,6 +23,7 @@ from .models import (
     ProjectRole,
     CalendarFeedSettings,
     DeliverablePhaseMappingSettings,
+    DeliverablePhaseDefinition,
     QATaskSettings,
     AutoHoursRoleSetting,
     AutoHoursTemplate,
@@ -90,7 +91,6 @@ class PreDeliverableGlobalSettingsView(APIView):
 class AutoHoursRoleSettingsView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
     MAX_WEEKS_BEFORE = 8
-    VALID_PHASES = {'sd', 'dd', 'ifp', 'ifc'}
 
     def _empty_hours_by_week(self) -> dict:
         return {str(i): 0 for i in range(self.MAX_WEEKS_BEFORE + 1)}
@@ -137,9 +137,10 @@ class AutoHoursRoleSettingsView(APIView):
         if not phase:
             return None, None
         norm = str(phase).strip().lower()
-        if norm in self.VALID_PHASES:
+        valid = set(DeliverablePhaseDefinition.objects.values_list('key', flat=True))
+        if norm in valid:
             return norm, None
-        return None, 'phase must be one of: sd, dd, ifp, ifc'
+        return None, 'phase must match an existing phase mapping'
 
     @extend_schema(
         responses=inline_serializer(
@@ -305,7 +306,9 @@ class AutoHoursRoleSettingsView(APIView):
 
 class AutoHoursTemplatesView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
-    VALID_PHASES = ['sd', 'dd', 'ifp', 'ifc']
+
+    def _valid_phase_keys(self) -> list[str]:
+        return list(DeliverablePhaseDefinition.objects.order_by('sort_order', 'id').values_list('key', flat=True))
 
     def _parse_phase_keys(self, data) -> tuple[list[str] | None, str | None]:
         if 'phaseKeys' not in data:
@@ -315,16 +318,17 @@ class AutoHoursTemplatesView(APIView):
             return None, 'phaseKeys must include at least one phase'
         if not isinstance(raw, list):
             return None, 'phaseKeys must be a list'
+        valid = self._valid_phase_keys()
         normalized: list[str] = []
         for item in raw:
             key = str(item).strip().lower()
-            if key not in self.VALID_PHASES:
-                return None, 'phaseKeys must be a subset of: sd, dd, ifp, ifc'
+            if key not in valid:
+                return None, 'phaseKeys must match existing phase mappings'
             if key not in normalized:
                 normalized.append(key)
         if not normalized:
             return None, 'phaseKeys must include at least one phase'
-        ordered = [k for k in self.VALID_PHASES if k in normalized]
+        ordered = [k for k in valid if k in normalized]
         return ordered, None
 
     @extend_schema(
@@ -390,7 +394,7 @@ class AutoHoursTemplatesView(APIView):
         obj = AutoHoursTemplate.objects.create(
             name=name,
             is_active=is_active,
-            phase_keys=phase_keys if phase_keys is not None else self.VALID_PHASES,
+            phase_keys=phase_keys if phase_keys is not None else self._valid_phase_keys(),
         )
         return Response({
             'id': obj.id,
@@ -404,7 +408,6 @@ class AutoHoursTemplatesView(APIView):
 
 class AutoHoursTemplateDetailView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
-    VALID_PHASES = ['sd', 'dd', 'ifp', 'ifc']
 
     def _parse_phase_keys(self, data) -> tuple[list[str] | None, str | None]:
         if 'phaseKeys' not in data:
@@ -414,16 +417,17 @@ class AutoHoursTemplateDetailView(APIView):
             return None, 'phaseKeys must include at least one phase'
         if not isinstance(raw, list):
             return None, 'phaseKeys must be a list'
+        valid = list(DeliverablePhaseDefinition.objects.order_by('sort_order', 'id').values_list('key', flat=True))
         normalized: list[str] = []
         for item in raw:
             key = str(item).strip().lower()
-            if key not in self.VALID_PHASES:
-                return None, 'phaseKeys must be a subset of: sd, dd, ifp, ifc'
+            if key not in valid:
+                return None, 'phaseKeys must match existing phase mappings'
             if key not in normalized:
                 normalized.append(key)
         if not normalized:
             return None, 'phaseKeys must include at least one phase'
-        ordered = [k for k in self.VALID_PHASES if k in normalized]
+        ordered = [k for k in valid if k in normalized]
         return ordered, None
 
     @extend_schema(
@@ -521,7 +525,6 @@ class AutoHoursTemplateDetailView(APIView):
 class AutoHoursTemplateRoleSettingsView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
     MAX_WEEKS_BEFORE = 8
-    VALID_PHASES = {'sd', 'dd', 'ifp', 'ifc'}
 
     def _empty_hours_by_week(self) -> dict:
         return {str(i): 0 for i in range(self.MAX_WEEKS_BEFORE + 1)}
@@ -568,9 +571,10 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         if not phase:
             return None, 'phase is required'
         norm = str(phase).strip().lower()
-        if norm in self.VALID_PHASES:
+        valid = set(DeliverablePhaseDefinition.objects.values_list('key', flat=True))
+        if norm in valid:
             return norm, None
-        return None, 'phase must be one of: sd, dd, ifp, ifc'
+        return None, 'phase must match an existing phase mapping'
 
     @extend_schema(
         responses=inline_serializer(
@@ -850,21 +854,92 @@ class DeliverablePhaseMappingSettingsView(APIView):
     @extend_schema(responses=DeliverablePhaseMappingSettingsSerializer)
     def get(self, request):
         obj = DeliverablePhaseMappingSettings.get_active()
-        return Response(DeliverablePhaseMappingSettingsSerializer(obj).data)
+        phases = DeliverablePhaseDefinition.objects.all().order_by('sort_order', 'id')
+        payload = {
+            'useDescriptionMatch': bool(obj.use_description_match),
+            'phases': [
+                {
+                    'key': p.key,
+                    'label': p.label,
+                    'descriptionTokens': p.description_tokens or [],
+                    'rangeMin': p.range_min,
+                    'rangeMax': p.range_max,
+                    'sortOrder': p.sort_order,
+                }
+                for p in phases
+            ],
+            'updatedAt': obj.updated_at,
+        }
+        return Response(payload)
 
     @extend_schema(request=DeliverablePhaseMappingSettingsSerializer, responses=DeliverablePhaseMappingSettingsSerializer)
     def put(self, request):
         obj = DeliverablePhaseMappingSettings.get_active()
-        ser = DeliverablePhaseMappingSettingsSerializer(instance=obj, data=request.data, partial=False)
+        ser = DeliverablePhaseMappingSettingsSerializer(data=request.data, partial=False)
         ser.is_valid(raise_exception=True)
-        ser.save()
+        data = ser.validated_data
+        phases = data.get('phases') or []
+        use_desc = bool(data.get('useDescriptionMatch'))
+
+        incoming_keys = []
+        for phase in phases:
+            key = str(phase.get('key') or '').strip().lower()
+            incoming_keys.append(key)
+
+        existing_keys = set(DeliverablePhaseDefinition.objects.values_list('key', flat=True))
+        remove_keys = [k for k in existing_keys if k not in set(incoming_keys)]
+        if remove_keys:
+            from deliverables.models import DeliverableTaskTemplate
+            used = set(DeliverableTaskTemplate.objects.filter(phase__in=remove_keys).values_list('phase', flat=True))
+            if used:
+                return Response({'error': f'Cannot remove phases with existing task templates: {sorted(used)}'}, status=400)
+
+        with transaction.atomic():
+            obj.use_description_match = use_desc
+            obj.save(update_fields=['use_description_match', 'updated_at'])
+
+            for idx, phase in enumerate(phases):
+                key = str(phase.get('key') or '').strip().lower()
+                label = str(phase.get('label') or '').strip()
+                tokens = phase.get('descriptionTokens') or []
+                normalized_tokens = []
+                for token in tokens:
+                    t = str(token).strip().lower()
+                    if not t:
+                        continue
+                    if t in normalized_tokens:
+                        continue
+                    normalized_tokens.append(t)
+                rmin = phase.get('rangeMin', None)
+                rmax = phase.get('rangeMax', None)
+                sort_order = phase.get('sortOrder', idx)
+                incoming_keys.append(key)
+                obj_phase, _ = DeliverablePhaseDefinition.objects.get_or_create(
+                    key=key,
+                    defaults={
+                        'label': label,
+                        'description_tokens': normalized_tokens,
+                        'range_min': rmin,
+                        'range_max': rmax,
+                        'sort_order': sort_order,
+                    },
+                )
+                obj_phase.label = label
+                obj_phase.description_tokens = normalized_tokens
+                obj_phase.range_min = rmin
+                obj_phase.range_max = rmax
+                obj_phase.sort_order = sort_order
+                obj_phase.save(update_fields=['label', 'description_tokens', 'range_min', 'range_max', 'sort_order', 'updated_at'])
+
+            if remove_keys:
+                DeliverablePhaseDefinition.objects.filter(key__in=remove_keys).delete()
         # Invalidate classifier cache
         try:
             from core.deliverable_phase import clear_phase_mapping_cache
             clear_phase_mapping_cache()
         except Exception:  # nosec B110
             pass
-        return Response(DeliverablePhaseMappingSettingsSerializer(obj).data)
+        return self.get(request)
 
     @extend_schema(
         request=inline_serializer(

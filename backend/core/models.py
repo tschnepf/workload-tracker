@@ -182,6 +182,26 @@ class DeliverablePhaseMappingSettings(models.Model):
         return obj
 
 
+class DeliverablePhaseDefinition(models.Model):
+    """User-defined deliverable phase definitions for mapping and tasks."""
+
+    key = models.CharField(max_length=20, unique=True)
+    label = models.CharField(max_length=50)
+    description_tokens = models.JSONField(default=list, blank=True)
+    range_min = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    range_max = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    sort_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        verbose_name = 'Deliverable Phase Definition'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"DeliverablePhase({self.key})"
+
+
 class QATaskSettings(models.Model):
     """Singleton settings for QA task defaults."""
 

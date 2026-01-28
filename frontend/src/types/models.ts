@@ -127,7 +127,7 @@ export type DeliverableQAReviewStatus = 'not_reviewed' | 'reviewed';
 
 export interface DeliverableTaskTemplate {
   id?: number;
-  phase: 'sd' | 'dd' | 'ifp' | 'ifc';
+  phase: string;
   departmentId: number;
   departmentName?: string;
   sheetNumber?: string | null;
@@ -205,19 +205,18 @@ export interface AutoHoursTemplate {
   updatedAt?: string;
 }
 
+export interface DeliverablePhaseMappingPhase {
+  key: string;
+  label: string;
+  descriptionTokens?: string[];
+  rangeMin?: number | null;
+  rangeMax?: number | null;
+  sortOrder?: number;
+}
+
 export interface DeliverablePhaseMappingSettings {
   useDescriptionMatch: boolean;
-  descSdTokens: string[];
-  descDdTokens: string[];
-  descIfpTokens: string[];
-  descIfcTokens: string[];
-  rangeSdMin: number;
-  rangeSdMax: number;
-  rangeDdMin: number;
-  rangeDdMax: number;
-  rangeIfpMin: number;
-  rangeIfpMax: number;
-  rangeIfcExact: number;
+  phases: DeliverablePhaseMappingPhase[];
   updatedAt?: string;
 }
 

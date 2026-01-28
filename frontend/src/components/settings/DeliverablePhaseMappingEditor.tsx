@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { deliverablePhaseMappingApi } from '@/services/api';
-import type { DeliverablePhaseMappingSettings } from '@/types/models';
+import type { DeliverablePhaseMappingSettings, DeliverablePhaseMappingPhase } from '@/types/models';
 
 const tokensToString = (tokens?: string[]) => (tokens || []).join(', ');
 const stringToTokens = (value: string) =>
@@ -11,8 +11,14 @@ const stringToTokens = (value: string) =>
     .map((t) => t.trim())
     .filter(Boolean);
 
+type PhaseRow = DeliverablePhaseMappingPhase & { _localId: string; _tokensText: string };
+type PhaseMappingState = Omit<DeliverablePhaseMappingSettings, 'phases'> & { phases: PhaseRow[] };
+
+const createLocalId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+const normalizeTokensText = (tokens?: string[]) => tokensToString(tokens);
+
 const DeliverablePhaseMappingEditor: React.FC = () => {
-  const [settings, setSettings] = useState<DeliverablePhaseMappingSettings | null>(null);
+  const [settings, setSettings] = useState<PhaseMappingState | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +29,19 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
       setLoading(true);
       setError(null);
       const data = await deliverablePhaseMappingApi.get();
-      setSettings(data);
+      const phases = (data?.phases || [])
+        .slice()
+        .sort((a, b) => {
+          const av = a.sortOrder ?? 0;
+          const bv = b.sortOrder ?? 0;
+          return av - bv;
+        })
+        .map((phase) => ({
+          ...phase,
+          _localId: createLocalId(),
+          _tokensText: normalizeTokensText(phase.descriptionTokens),
+        }));
+      setSettings({ ...data, phases } as PhaseMappingState);
       setDirty(false);
     } catch (e: any) {
       setError(e?.message || 'Failed to load phase mapping');
@@ -34,9 +52,48 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const updateField = <K extends keyof DeliverablePhaseMappingSettings>(field: K, value: DeliverablePhaseMappingSettings[K]) => {
+  const updateField = <K extends keyof PhaseMappingState>(field: K, value: PhaseMappingState[K]) => {
     if (!settings) return;
     setSettings({ ...settings, [field]: value });
+    setDirty(true);
+  };
+
+  const updatePhaseField = (index: number, field: keyof DeliverablePhaseMappingPhase, value: any) => {
+    if (!settings) return;
+    const phases = settings.phases.slice();
+    const current = phases[index] || {
+      key: '',
+      label: '',
+      _localId: createLocalId(),
+      _tokensText: '',
+    };
+    phases[index] = { ...current, [field]: value };
+    setSettings({ ...settings, phases });
+    setDirty(true);
+  };
+
+  const removePhase = (index: number) => {
+    if (!settings) return;
+    const phases = settings.phases.slice();
+    phases.splice(index, 1);
+    setSettings({ ...settings, phases });
+    setDirty(true);
+  };
+
+  const addPhase = () => {
+    if (!settings) return;
+    const phases = settings.phases.slice();
+    phases.push({
+      key: '',
+      label: '',
+      descriptionTokens: [],
+      rangeMin: null,
+      rangeMax: null,
+      sortOrder: phases.length,
+      _localId: createLocalId(),
+      _tokensText: '',
+    });
+    setSettings({ ...settings, phases });
     setDirty(true);
   };
 
@@ -45,8 +102,28 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
     try {
       setSaving(true);
       setError(null);
-      const data = await deliverablePhaseMappingApi.update(settings);
-      setSettings(data);
+      const payload = {
+        ...settings,
+        phases: (settings.phases || []).map(({ _localId, _tokensText, ...phase }, idx) => ({
+          ...phase,
+          descriptionTokens: stringToTokens(_tokensText ?? tokensToString(phase.descriptionTokens)),
+          sortOrder: idx,
+        })),
+      };
+      const data = await deliverablePhaseMappingApi.update(payload);
+      const phases = (data?.phases || [])
+        .slice()
+        .sort((a, b) => {
+          const av = a.sortOrder ?? 0;
+          const bv = b.sortOrder ?? 0;
+          return av - bv;
+        })
+        .map((phase) => ({
+          ...phase,
+          _localId: createLocalId(),
+          _tokensText: normalizeTokensText(phase.descriptionTokens),
+        }));
+      setSettings({ ...data, phases } as PhaseMappingState);
       setDirty(false);
     } catch (e: any) {
       setError(e?.message || 'Failed to save phase mapping');
@@ -55,45 +132,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
     }
   };
 
-  const rows = useMemo(() => {
-    if (!settings) return [];
-    return [
-      {
-        label: 'SD',
-        tokens: settings.descSdTokens,
-        min: settings.rangeSdMin,
-        max: settings.rangeSdMax,
-        tokenField: 'descSdTokens' as const,
-        minField: 'rangeSdMin' as const,
-        maxField: 'rangeSdMax' as const,
-      },
-      {
-        label: 'DD',
-        tokens: settings.descDdTokens,
-        min: settings.rangeDdMin,
-        max: settings.rangeDdMax,
-        tokenField: 'descDdTokens' as const,
-        minField: 'rangeDdMin' as const,
-        maxField: 'rangeDdMax' as const,
-      },
-      {
-        label: 'IFP',
-        tokens: settings.descIfpTokens,
-        min: settings.rangeIfpMin,
-        max: settings.rangeIfpMax,
-        tokenField: 'descIfpTokens' as const,
-        minField: 'rangeIfpMin' as const,
-        maxField: 'rangeIfpMax' as const,
-      },
-      {
-        label: 'IFC',
-        tokens: settings.descIfcTokens,
-        exact: settings.rangeIfcExact,
-        tokenField: 'descIfcTokens' as const,
-        exactField: 'rangeIfcExact' as const,
-      },
-    ];
-  }, [settings]);
+  const rows = useMemo(() => settings?.phases || [], [settings]);
 
   return (
     <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
@@ -106,6 +145,9 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
           {error && (
             <Button variant="ghost" onClick={load} disabled={loading || saving}>Retry</Button>
           )}
+          <Button variant="ghost" onClick={addPhase} disabled={loading || saving}>
+            + Add Phase
+          </Button>
           <Button disabled={!dirty || saving || loading} onClick={save}>
             {saving ? 'Saving…' : 'Save'}
           </Button>
@@ -128,64 +170,96 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
             <table className="min-w-full text-xs">
               <thead className="text-[#cbd5e1]">
                 <tr>
-                  <th className="py-2 pr-4 text-left">Phase</th>
+                  <th className="py-2 pr-4 text-left">Key</th>
+                  <th className="py-2 pr-4 text-left">Label</th>
                   <th className="py-2 pr-4 text-left">Description Tokens</th>
                   <th className="py-2 pr-4 text-left">Min %</th>
                   <th className="py-2 pr-4 text-left">Max % / Exact</th>
+                  <th className="py-2 pr-4 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody className="text-[#e5e7eb]">
-                {rows.map((row) => (
-                  <tr key={row.label} className="border-t border-[#3e3e42]">
-                    <td className="py-2 pr-4 font-semibold">{row.label}</td>
+                {rows.map((row, index) => (
+                  <tr key={row._localId} className="border-t border-[#3e3e42]">
                     <td className="py-2 pr-4">
                       <input
                         type="text"
-                        value={tokensToString(row.tokens)}
-                        className="w-64 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
-                        onChange={(e) =>
-                          updateField(row.tokenField, stringToTokens(e.currentTarget.value))
-                        }
+                        value={row.key || ''}
+                        className="w-24 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        onChange={(e) => updatePhaseField(index, 'key', e.currentTarget.value)}
                       />
                     </td>
-                    {'min' in row ? (
-                      <>
-                        <td className="py-2 pr-4">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={row.min ?? 0}
-                            className="w-20 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
-                            onChange={(e) => updateField(row.minField, Number(e.currentTarget.value))}
-                          />
-                        </td>
-                        <td className="py-2 pr-4">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={row.max ?? 0}
-                            className="w-20 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
-                            onChange={(e) => updateField(row.maxField, Number(e.currentTarget.value))}
-                          />
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="py-2 pr-4 text-[#94a3b8]">—</td>
-                        <td className="py-2 pr-4">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={row.exact ?? 100}
-                            className="w-20 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
-                            onChange={(e) => updateField(row.exactField, Number(e.currentTarget.value))}
-                          />
-                        </td>
-                      </>
-                    )}
+                    <td className="py-2 pr-4">
+                      <input
+                        type="text"
+                        value={row.label || ''}
+                        className="w-24 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        onChange={(e) => updatePhaseField(index, 'label', e.currentTarget.value)}
+                      />
+                    </td>
+                    <td className="py-2 pr-4">
+                      <input
+                        type="text"
+                        value={row._tokensText}
+                        className="w-64 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        onChange={(e) => {
+                          const value = e.currentTarget.value;
+                          const phases = settings?.phases.slice() || [];
+                          const current = phases[index];
+                          if (!current) return;
+                          phases[index] = {
+                            ...current,
+                            _tokensText: value,
+                            descriptionTokens: stringToTokens(value),
+                          };
+                          setSettings({ ...(settings as PhaseMappingState), phases });
+                          setDirty(true);
+                        }}
+                        onBlur={() => {
+                          const phases = settings?.phases.slice() || [];
+                          const current = phases[index];
+                          if (!current) return;
+                          const normalized = normalizeTokensText(current.descriptionTokens);
+                          phases[index] = { ...current, _tokensText: normalized };
+                          setSettings({ ...(settings as PhaseMappingState), phases });
+                        }}
+                      />
+                    </td>
+                    <td className="py-2 pr-4">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={row.rangeMin ?? ''}
+                        className="w-20 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        onChange={(e) => {
+                          const v = e.currentTarget.value.trim();
+                          updatePhaseField(index, 'rangeMin', v === '' ? null : Number(v));
+                        }}
+                      />
+                    </td>
+                    <td className="py-2 pr-4">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={row.rangeMax ?? ''}
+                        className="w-20 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        onChange={(e) => {
+                          const v = e.currentTarget.value.trim();
+                          updatePhaseField(index, 'rangeMax', v === '' ? null : Number(v));
+                        }}
+                      />
+                    </td>
+                    <td className="py-2 pr-4">
+                      <button
+                        type="button"
+                        className="text-xs text-red-400 hover:text-red-300"
+                        onClick={() => removePhase(index)}
+                      >
+                        Remove
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

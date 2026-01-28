@@ -278,11 +278,16 @@ class DeliverableTaskService:
             deliverable = Deliverable.objects.select_related('project').get(id=deliverable.id)
 
         phase = classify_deliverable_phase(deliverable.description, deliverable.percentage)
-        if phase not in (DeliverablePhase.SD, DeliverablePhase.DD, DeliverablePhase.IFP, DeliverablePhase.IFC):
+        if phase in (
+            DeliverablePhase.BULLETINS.value,
+            DeliverablePhase.MASTERPLAN.value,
+            DeliverablePhase.CA.value,
+            DeliverablePhase.OTHER.value,
+        ):
             return []
 
         templates = list(
-            DeliverableTaskTemplate.objects.filter(phase=phase.value, is_active=True)
+            DeliverableTaskTemplate.objects.filter(phase=phase, is_active=True)
             .select_related('department')
             .order_by('sort_order', 'id')
         )

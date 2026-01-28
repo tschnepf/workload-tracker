@@ -14,7 +14,7 @@ from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
 from django.db.models import Sum, Max, Prefetch, Value, Count  # noqa: F401
 from core.deliverable_phase import build_project_week_classification
-from core.choices import DeliverablePhase, MembershipEventType
+from core.choices import MembershipEventType
 from django.db.models.functions import Coalesce, Lower
 from .models import Assignment
 from .analytics import compute_role_capacity
@@ -812,7 +812,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         'hours': serializers.FloatField(),
                     })),
                     'phases': serializers.DictField(child=inline_serializer(name='PEPClientPhase', fields={
-                        'phase': serializers.ChoiceField(choices=DeliverablePhase.choices),
+                        'phase': serializers.CharField(),
                         'weeks': serializers.IntegerField(),
                         'hours': serializers.FloatField(),
                     })),
@@ -829,7 +829,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         'hours': serializers.FloatField(),
                     })),
                     'phases': serializers.DictField(child=inline_serializer(name='PEPProjectPhase', fields={
-                        'phase': serializers.ChoiceField(choices=DeliverablePhase.choices),
+                        'phase': serializers.CharField(),
                         'weeks': serializers.IntegerField(),
                         'hours': serializers.FloatField(),
                     })),
@@ -1002,7 +1002,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'events': serializers.ListField(child=inline_serializer(name='MembershipEvent', fields={
                     'week_start': serializers.CharField(),
                     'event_type': serializers.ChoiceField(choices=MembershipEventType.choices),
-                    'deliverable_phase': serializers.ChoiceField(choices=DeliverablePhase.choices),
+                    'deliverable_phase': serializers.CharField(),
                     'hours_before': serializers.FloatField(),
                     'hours_after': serializers.FloatField(),
                 })),

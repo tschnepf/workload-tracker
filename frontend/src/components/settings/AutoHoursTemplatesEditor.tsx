@@ -39,10 +39,12 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     [templates, selectedTemplateId],
   );
   const activePhaseKeys = React.useMemo(() => {
+    const available = new Set(phaseOptions.map(opt => opt.value));
     if (!selectedTemplate || !selectedTemplate.phaseKeys || selectedTemplate.phaseKeys.length === 0) {
       return phaseOptions.map(opt => opt.value);
     }
-    return selectedTemplate.phaseKeys;
+    const filtered = selectedTemplate.phaseKeys.filter(key => available.has(key));
+    return filtered.length ? filtered : phaseOptions.map(opt => opt.value);
   }, [phaseOptions, selectedTemplate]);
   const rowIndexMap = React.useMemo(() => {
     const map = new Map<string, number>();
@@ -389,13 +391,11 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       try {
         const mapping = await deliverablePhaseMappingApi.get();
         if (!mounted || !mapping) return;
-        const opts = [
-          { value: 'sd', label: 'SD' },
-          { value: 'dd', label: 'DD' },
-          { value: 'ifp', label: 'IFP' },
-          { value: 'ifc', label: 'IFC' },
-        ];
-        setPhaseOptions(opts);
+        const opts = (mapping.phases || []).map((phase) => ({
+          value: phase.key,
+          label: phase.label || phase.key,
+        }));
+        if (opts.length) setPhaseOptions(opts);
       } catch {
         // fallback to defaults if mapping fetch fails
       }

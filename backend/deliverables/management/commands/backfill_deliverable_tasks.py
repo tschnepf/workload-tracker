@@ -12,7 +12,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--project_id', type=int, help='Limit to a project id')
-        parser.add_argument('--phase', type=str, choices=['sd', 'dd', 'ifp', 'ifc'], help='Limit to a phase')
+        parser.add_argument('--phase', type=str, help='Limit to a phase')
         parser.add_argument('--dry_run', action='store_true', help='Preview counts without writing')
 
     def handle(self, *args, **options):
@@ -29,9 +29,14 @@ class Command(BaseCommand):
         for d in qs.iterator():
             scanned += 1
             phase = classify_deliverable_phase(d.description, d.percentage)
-            if phase not in (DeliverablePhase.SD, DeliverablePhase.DD, DeliverablePhase.IFP, DeliverablePhase.IFC):
+            if phase in (
+                DeliverablePhase.BULLETINS.value,
+                DeliverablePhase.MASTERPLAN.value,
+                DeliverablePhase.CA.value,
+                DeliverablePhase.OTHER.value,
+            ):
                 continue
-            if phase_filter and phase.value != phase_filter:
+            if phase_filter and phase != phase_filter:
                 continue
             if dry_run:
                 # Just count potential creations

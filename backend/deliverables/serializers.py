@@ -219,7 +219,7 @@ class PreDeliverableItemSerializer(serializers.ModelSerializer):
 
 
 class DeliverableTaskTemplateSerializer(serializers.ModelSerializer):
-    phase = serializers.ChoiceField(choices=DeliverableTaskTemplate._meta.get_field('phase').choices)
+    phase = serializers.CharField()
     departmentId = serializers.PrimaryKeyRelatedField(source='department', queryset=DeliverableTaskTemplate._meta.get_field('department').related_model.objects.all())
     departmentName = serializers.CharField(source='department.name', read_only=True)
     sheetNumber = serializers.CharField(source='sheet_number', allow_null=True, allow_blank=True, required=False)
@@ -251,10 +251,14 @@ class DeliverableTaskTemplateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_phase(self, value):
-        allowed = {'sd', 'dd', 'ifp', 'ifc'}
-        if value not in allowed:
-            raise serializers.ValidationError('phase must be sd, dd, ifp, or ifc')
-        return value
+        from core.models import DeliverablePhaseDefinition
+        key = str(value or '').strip().lower()
+        if not key:
+            raise serializers.ValidationError('phase is required')
+        exists = DeliverablePhaseDefinition.objects.filter(key=key).exists()
+        if not exists:
+            raise serializers.ValidationError('phase must match an existing phase mapping')
+        return key
 
     def validate_sheetNumber(self, value):
         if value and not re.match(r'^[A-Za-z0-9]+([-.][A-Za-z0-9]+)*$', value):

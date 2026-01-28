@@ -128,7 +128,7 @@ class WeeklyAssignmentSnapshot(models.Model):
     role_on_project_id = models.IntegerField(null=True, blank=True)
     department_id = models.IntegerField(null=True, blank=True)
     project_status = models.CharField(max_length=20, null=True, blank=True)
-    deliverable_phase = models.CharField(max_length=20, choices=DeliverablePhase.choices, default=DeliverablePhase.OTHER)
+    deliverable_phase = models.CharField(max_length=20, default=DeliverablePhase.OTHER)
     hours = models.FloatField(validators=[MinValueValidator(0.0)])
     source = models.CharField(max_length=20, choices=SnapshotSource.choices, default=SnapshotSource.ASSIGNED)
     # Denormalized resilience fields
@@ -175,7 +175,7 @@ class AssignmentMembershipEvent(models.Model):
     project = models.ForeignKey('projects.Project', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignment_membership_events')
     role_on_project_id = models.IntegerField(null=True, blank=True)
     event_type = models.CharField(max_length=20, choices=MembershipEventType.choices)
-    deliverable_phase = models.CharField(max_length=20, choices=DeliverablePhase.choices, default=DeliverablePhase.OTHER)
+    deliverable_phase = models.CharField(max_length=20, default=DeliverablePhase.OTHER)
     hours_before = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
     hours_after = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
     # Denormalized

@@ -8,7 +8,7 @@ Rules:
 - Active-CA override: if project status is 'active_ca' treat the week as 'ca'
   if no next deliverable exists.
 
-Returns values from DeliverablePhase (controlled vocabulary).
+Returns phase keys as strings (controlled vocabulary + user-defined phases).
 """
 from __future__ import annotations
 
@@ -36,36 +36,32 @@ def _load_phase_mapping() -> Dict[str, Any]:
     if cached:
         return cached
     try:
-        from core.models import DeliverablePhaseMappingSettings
+        from core.models import DeliverablePhaseMappingSettings, DeliverablePhaseDefinition
         obj = DeliverablePhaseMappingSettings.get_active()
+        phases = list(DeliverablePhaseDefinition.objects.all().order_by('sort_order', 'id'))
         data = {
             'use_description_match': bool(obj.use_description_match),
-            'desc_sd_tokens': obj.desc_sd_tokens or [],
-            'desc_dd_tokens': obj.desc_dd_tokens or [],
-            'desc_ifp_tokens': obj.desc_ifp_tokens or [],
-            'desc_ifc_tokens': obj.desc_ifc_tokens or [],
-            'range_sd_min': int(obj.range_sd_min),
-            'range_sd_max': int(obj.range_sd_max),
-            'range_dd_min': int(obj.range_dd_min),
-            'range_dd_max': int(obj.range_dd_max),
-            'range_ifp_min': int(obj.range_ifp_min),
-            'range_ifp_max': int(obj.range_ifp_max),
-            'range_ifc_exact': int(obj.range_ifc_exact),
+            'phases': [
+                {
+                    'key': p.key,
+                    'label': p.label,
+                    'tokens': p.description_tokens or [],
+                    'range_min': p.range_min,
+                    'range_max': p.range_max,
+                    'sort_order': p.sort_order,
+                }
+                for p in phases
+            ],
         }
     except Exception:  # nosec B110
         data = {
             'use_description_match': True,
-            'desc_sd_tokens': ['sd', 'schematic'],
-            'desc_dd_tokens': ['dd', 'design development'],
-            'desc_ifp_tokens': ['ifp'],
-            'desc_ifc_tokens': ['ifc'],
-            'range_sd_min': 1,
-            'range_sd_max': 40,
-            'range_dd_min': 41,
-            'range_dd_max': 89,
-            'range_ifp_min': 90,
-            'range_ifp_max': 99,
-            'range_ifc_exact': 100,
+            'phases': [
+                {'key': 'sd', 'label': 'SD', 'tokens': ['sd', 'schematic'], 'range_min': 0, 'range_max': 40, 'sort_order': 0},
+                {'key': 'dd', 'label': 'DD', 'tokens': ['dd', 'design development'], 'range_min': 41, 'range_max': 89, 'sort_order': 1},
+                {'key': 'ifp', 'label': 'IFP', 'tokens': ['ifp'], 'range_min': 90, 'range_max': 99, 'sort_order': 2},
+                {'key': 'ifc', 'label': 'IFC', 'tokens': ['ifc'], 'range_min': 100, 'range_max': 100, 'sort_order': 3},
+            ],
         }
     try:
         cache.set(_PHASE_MAPPING_CACHE_KEY, data, _PHASE_MAPPING_CACHE_TTL)
@@ -92,43 +88,39 @@ def _token_match(desc: str, tokens: List[str]) -> bool:
     return False
 
 
-def _classify_from_desc_pct(desc: Optional[str], pct: Optional[int]) -> DeliverablePhase:
+def _classify_from_desc_pct(desc: Optional[str], pct: Optional[int]) -> str:
     d = (desc or '').strip().lower()
     if d:
         d = re.sub(r'\s+', ' ', d)
     if 'bulletin' in d or 'addendum' in d:
-        return DeliverablePhase.BULLETINS
+        return DeliverablePhase.BULLETINS.value
     if 'masterplan' in d or 'master plan' in d or 'masterplanning' in d:
-        return DeliverablePhase.MASTERPLAN
+        return DeliverablePhase.MASTERPLAN.value
 
     mapping = _load_phase_mapping()
+    phases = mapping.get('phases', []) or []
+    phases_sorted = sorted(phases, key=lambda p: p.get('sort_order', 0))
     if mapping.get('use_description_match'):
-        if _token_match(d, mapping.get('desc_sd_tokens', [])):
-            return DeliverablePhase.SD
-        if _token_match(d, mapping.get('desc_dd_tokens', [])):
-            return DeliverablePhase.DD
-        if _token_match(d, mapping.get('desc_ifp_tokens', [])):
-            return DeliverablePhase.IFP
-        if _token_match(d, mapping.get('desc_ifc_tokens', [])):
-            return DeliverablePhase.IFC
+        for phase in phases_sorted:
+            if _token_match(d, phase.get('tokens', [])):
+                return str(phase.get('key'))
 
     try:
         if pct is not None:
             p = int(pct)
-            if p == mapping.get('range_ifc_exact'):
-                return DeliverablePhase.IFC
-            if mapping.get('range_sd_min') <= p <= mapping.get('range_sd_max'):
-                return DeliverablePhase.SD
-            if mapping.get('range_dd_min') <= p <= mapping.get('range_dd_max'):
-                return DeliverablePhase.DD
-            if mapping.get('range_ifp_min') <= p <= mapping.get('range_ifp_max'):
-                return DeliverablePhase.IFP
+            for phase in phases_sorted:
+                rmin = phase.get('range_min')
+                rmax = phase.get('range_max')
+                if rmin is None or rmax is None:
+                    continue
+                if rmin <= p <= rmax:
+                    return str(phase.get('key'))
     except Exception:  # nosec B110
         pass
-    return DeliverablePhase.OTHER
+    return DeliverablePhase.OTHER.value
 
 
-def classify_deliverable_phase(desc: Optional[str], pct: Optional[int]) -> DeliverablePhase:
+def classify_deliverable_phase(desc: Optional[str], pct: Optional[int]) -> str:
     """Classify a deliverable directly from description and percentage."""
     return _classify_from_desc_pct(desc, pct)
 
@@ -160,7 +152,7 @@ def classify_week_for_project(
     week_key: str,
     project_status: Optional[str],
     deliverables: Iterable[Dict[str, Any]],
-) -> DeliverablePhase:
+) -> str:
     """Classify a single Sunday week for a project using forward selection.
 
     - Uses the Monday exception.
@@ -190,12 +182,12 @@ def classify_week_for_project(
     if chosen is None:
         # No next deliverable
         if (project_status or '').lower() == 'active_ca':
-            return DeliverablePhase.CA
+            return DeliverablePhase.CA.value
         # Fallback to last deliverable if any
         if rows:
             last = rows[-1]
             return _classify_from_desc_pct(last.get('desc'), last.get('pct'))
-        return DeliverablePhase.OTHER
+        return DeliverablePhase.OTHER.value
 
     # Monday exception when chosen deliverable falls on Monday and equals week
     try:
@@ -213,14 +205,11 @@ def build_project_week_classification(
     project_status: Optional[str],
     deliverables: Iterable[Dict[str, Any]],
 ) -> List[str]:
-    """Return a list of DeliverablePhase values for each week key.
-
-    Values are the .value strings of DeliverablePhase for easy JSON usage.
-    """
+    """Return a list of phase keys for each week key."""
     rows = _normalize_deliverables(deliverables)
     out: List[str] = []
     for wk in week_keys:
         # Reuse single-week classifier to avoid duplicating logic.
         phase = classify_week_for_project(wk, project_status, rows)
-        out.append(phase.value)
+        out.append(phase)
     return out
