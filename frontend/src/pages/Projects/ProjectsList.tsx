@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePeople } from '@/hooks/usePeople';
 import { assignmentsApi, departmentsApi } from '@/services/api';
 import { deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
+import { showToast } from '@/lib/toastBus';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useProjectFilterMetadata } from '@/hooks/useProjectFilterMetadata';
@@ -992,8 +993,10 @@ const ProjectsList: React.FC = () => {
                   await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
                   if (selectedProject?.id) await reloadAssignments(selectedProject.id);
                   await invalidateFilterMeta();
+                  showToast('Assignment updated', 'success');
                 } catch (e) {
-                  console.error('Failed to replace placeholder', e);
+                  showToast((e as any)?.message || 'Failed to replace placeholder', 'error');
+                  if (selectedProject?.id) await reloadAssignments(selectedProject.id);
                 }
               }}
               candidatesOnly={candidatesOnly}
@@ -1197,8 +1200,10 @@ const ProjectsList: React.FC = () => {
                 await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
                 if (selectedProject?.id) await reloadAssignments(selectedProject.id);
                 await invalidateFilterMeta();
+                showToast('Assignment updated', 'success');
               } catch (e) {
-                console.error('Failed to replace placeholder', e);
+                showToast((e as any)?.message || 'Failed to replace placeholder', 'error');
+                if (selectedProject?.id) await reloadAssignments(selectedProject.id);
               }
             }}
             candidatesOnly={candidatesOnly}

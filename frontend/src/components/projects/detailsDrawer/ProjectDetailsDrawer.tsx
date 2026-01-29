@@ -18,6 +18,7 @@ import DeliverablesSection from '@/components/deliverables/DeliverablesSection';
 import { assignmentsApi, departmentsApi } from '@/services/api';
 import { updateAssignment, deleteAssignment } from '@/lib/mutations/assignments';
 import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
+import { showToast } from '@/lib/toastBus';
 
 type Props = {
   open: boolean;
@@ -367,8 +368,10 @@ const ProjectDetailsDrawerContent: React.FC<Props> = ({ open, projectId, onClose
                   await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
                   if (selectedProject?.id) await reloadAssignments(selectedProject.id);
                   await invalidateFilterMeta();
+                  showToast('Assignment updated', 'success');
                 } catch (e) {
-                  console.error('Failed to replace placeholder', e);
+                  showToast((e as any)?.message || 'Failed to replace placeholder', 'error');
+                  if (selectedProject?.id) await reloadAssignments(selectedProject.id);
                 }
               }}
               candidatesOnly={candidatesOnly}

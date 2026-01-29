@@ -1,9 +1,11 @@
+from django.db import transaction
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.core.cache import cache
 from django.utils import timezone
 
 from assignments.models import Assignment
+from assignments.rollup_service import queue_project_rollup_refresh
 from deliverables.models import DeliverableAssignment, DeliverableTask
 from deliverables.services import DeliverableQATaskService
 from core.choices import DeliverableTaskCompletionStatus
@@ -23,6 +25,11 @@ def _bump_analytics_cache_version():
 @receiver([post_save, post_delete], sender=Assignment)
 def invalidate_on_assignment_change(sender, instance, **kwargs):
     _bump_analytics_cache_version()
+    try:
+        if instance.project_id:
+            transaction.on_commit(lambda: queue_project_rollup_refresh([instance.project_id]))
+    except Exception:  # nosec B110
+        pass
 
 
 @receiver([post_save, post_delete], sender=DeliverableAssignment)

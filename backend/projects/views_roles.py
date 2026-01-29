@@ -7,6 +7,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from django.utils.http import http_date
 import hashlib
+from django.db.models import Q
 
 from projects.roles_serializers import (
     ProjectRoleItemSerializer,
@@ -79,6 +80,33 @@ class ProjectRoleListCreateView(APIView):
             is_active=True,
         )
         return Response(ProjectRoleItemSerializer(obj).data, status=201)
+
+
+class ProjectRoleSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=ProjectRoleItemSerializer(many=True))
+    def get(self, request):
+        q = str(request.query_params.get('q') or '').strip()
+        if len(q) < 2:
+            return Response([])
+        dept_param = request.query_params.get('department')
+        dept_id = None
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+            except Exception:
+                return Response({'detail': 'invalid department'}, status=400)
+        include_inactive = (request.query_params.get('include_inactive') or '').lower() in ('1', 'true', 'yes')
+        norm = normalize_name(q)
+        qs = ProjectRole.objects.all()
+        if not include_inactive:
+            qs = qs.filter(is_active=True)
+        if dept_id:
+            qs = qs.filter(department_id=dept_id)
+        qs = qs.filter(Q(name__icontains=q) | Q(normalized_name__icontains=norm))
+        qs = qs.order_by('department_id', 'sort_order', 'name')[:50]
+        return Response(ProjectRoleItemSerializer(qs, many=True).data)
 
 
 class ProjectRoleDetailView(APIView):

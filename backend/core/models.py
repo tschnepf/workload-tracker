@@ -251,13 +251,42 @@ class AutoHoursRoleSetting(models.Model):
         return f"AutoHours({self.role_id})"
 
 
+class AutoHoursGlobalSettings(models.Model):
+    """Singleton settings for global auto-hours configuration."""
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    weeks_by_phase = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Auto Hours Global Settings'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"AutoHoursGlobalSettings({self.key})"
+
+    @classmethod
+    def get_active(cls):
+        obj, _ = cls.objects.get_or_create(key='default', defaults={'weeks_by_phase': {}})
+        return obj
+
+
 class AutoHoursTemplate(models.Model):
     """Project auto-hours template."""
 
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True, default='')
-    excluded_role_ids = models.JSONField(default=list, blank=True)
-    excluded_department_ids = models.JSONField(default=list, blank=True)
+    weeks_by_phase = models.JSONField(default=dict, blank=True)
+    excluded_roles = models.ManyToManyField(
+        'projects.ProjectRole',
+        blank=True,
+        related_name='auto_hours_template_exclusions',
+    )
+    excluded_departments = models.ManyToManyField(
+        'departments.Department',
+        blank=True,
+        related_name='auto_hours_template_exclusions',
+    )
     is_active = models.BooleanField(default=True)
     phase_keys = models.JSONField(default=default_auto_hours_phase_keys, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

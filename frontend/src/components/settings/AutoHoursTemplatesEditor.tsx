@@ -9,7 +9,7 @@ import type { AutoHoursTemplate } from '@/types/models';
 const AutoHoursTemplatesEditor: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
-  const weeks = React.useMemo(() => Array.from({ length: 9 }, (_, idx) => String(8 - idx)), []);
+  const MAX_WEEKS_COUNT = 9;
   const roleColumnWidth = 160;
   const xToGridGap = 15;
   const [templates, setTemplates] = React.useState<AutoHoursTemplate[]>([]);
@@ -38,6 +38,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     { value: 'ifp', label: 'IFP' },
     { value: 'ifc', label: 'IFC' },
   ]);
+  const [weeksByTemplate, setWeeksByTemplate] = React.useState<Record<string, Record<string, number>>>({});
   const { data: schemeData } = useUtilizationScheme({ enabled: true });
   const scheme = React.useMemo(() => {
     const base = schemeData ?? defaultUtilizationScheme;
@@ -58,6 +59,22 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     const filtered = selectedTemplate.phaseKeys.filter(key => available.has(key));
     return filtered.length ? filtered : phaseOptions.map(opt => opt.value);
   }, [phaseOptions, selectedTemplate]);
+  const templateKey = selectedTemplateId === GLOBAL_TEMPLATE_ID ? GLOBAL_TEMPLATE_ID : String(selectedTemplateId ?? '');
+  const clampWeeksCount = React.useCallback((value: number) => {
+    if (!Number.isFinite(value)) return MAX_WEEKS_COUNT;
+    return Math.min(MAX_WEEKS_COUNT, Math.max(1, Math.round(value)));
+  }, [MAX_WEEKS_COUNT]);
+  const weeksCount = React.useMemo(() => {
+    const fromState = weeksByTemplate[templateKey]?.[selectedPhase];
+    if (fromState != null) return clampWeeksCount(fromState);
+    const fromTemplate = selectedTemplate?.weeksByPhase?.[selectedPhase];
+    if (fromTemplate != null) return clampWeeksCount(fromTemplate);
+    return MAX_WEEKS_COUNT;
+  }, [clampWeeksCount, selectedPhase, selectedTemplate?.weeksByPhase, templateKey, weeksByTemplate, MAX_WEEKS_COUNT]);
+  const weeks = React.useMemo(() => {
+    const maxWeek = Math.max(0, weeksCount - 1);
+    return Array.from({ length: weeksCount }, (_, idx) => String(maxWeek - idx));
+  }, [weeksCount]);
   const rowIndexMap = React.useMemo(() => {
     const map = new Map<string, number>();
     rowOrder.forEach((rk, idx) => map.set(rk, idx));
@@ -449,6 +466,19 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   }, [GLOBAL_TEMPLATE_ID, selectedTemplateId]);
 
   React.useEffect(() => {
+    if (templates.length === 0) return;
+    setWeeksByTemplate((prev) => {
+      const next = { ...prev };
+      templates.forEach((template) => {
+        if (template.weeksByPhase) {
+          next[String(template.id)] = { ...(next[String(template.id)] || {}), ...template.weeksByPhase };
+        }
+      });
+      return next;
+    });
+  }, [templates]);
+
+  React.useEffect(() => {
     let mounted = true;
     (async () => {
       try {
@@ -501,6 +531,14 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       const data = templateId === GLOBAL_TEMPLATE_ID
         ? await autoHoursSettingsApi.list(undefined, phase)
         : await autoHoursTemplatesApi.listSettings(templateId, phase);
+      const weeksCountFromData = data?.find((row) => row.weeksCount != null)?.weeksCount;
+      if (weeksCountFromData != null) {
+        const key = templateId === GLOBAL_TEMPLATE_ID ? GLOBAL_TEMPLATE_ID : String(templateId);
+        setWeeksByTemplate((prev) => ({
+          ...prev,
+          [key]: { ...(prev[key] || {}), [phase]: weeksCountFromData },
+        }));
+      }
       setRows(data || []);
       setDirty(false);
       clearSelection();
@@ -562,6 +600,31 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     setDirty(true);
   };
 
+  const handleWeeksCountChange = (value: string) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    const nextCount = clampWeeksCount(parsed);
+    if (nextCount === weeksCount) return;
+    const prevCount = weeksCount;
+    setWeeksByTemplate((prev) => ({
+      ...prev,
+      [templateKey]: { ...(prev[templateKey] || {}), [selectedPhase]: nextCount },
+    }));
+    if (nextCount < prevCount) {
+      const removedWeeks: string[] = [];
+      for (let wk = prevCount - 1; wk >= nextCount; wk -= 1) {
+        removedWeeks.push(String(wk));
+      }
+      setRows((prev) => prev.map((row) => {
+        const next = { ...(row.percentByWeek || {}) };
+        removedWeeks.forEach((wk) => { next[wk] = 0; });
+        return { ...row, percentByWeek: next };
+      }));
+      clearSelection();
+    }
+    setDirty(true);
+  };
+
   const onSave = async () => {
     if (selectedTemplateId == null) return;
     try {
@@ -572,8 +635,8 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         percentByWeek: row.percentByWeek || {},
       }));
       const data = selectedTemplateId === GLOBAL_TEMPLATE_ID
-        ? await autoHoursSettingsApi.update(undefined, payload, selectedPhase)
-        : await autoHoursTemplatesApi.updateSettings(selectedTemplateId, payload, selectedPhase);
+        ? await autoHoursSettingsApi.update(undefined, payload, selectedPhase, weeksCount)
+        : await autoHoursTemplatesApi.updateSettings(selectedTemplateId, payload, selectedPhase, undefined, weeksCount);
       setRows(data || []);
       setDirty(false);
       showToast(
@@ -655,25 +718,9 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         showToast('No phases available to duplicate', 'error');
         return;
       }
-      const created = await autoHoursTemplatesApi.create({
-        name: copyName,
-        description: base?.description || '',
-        phaseKeys,
-        excludedRoleIds: base?.excludedRoleIds || [],
-        excludedDepartmentIds: base?.excludedDepartmentIds || [],
-      });
-      // Copy per-phase settings
-      const phases = phaseKeys;
-      for (const phase of phases) {
-        const settings = isDefault
-          ? await autoHoursSettingsApi.list(undefined, phase)
-          : await autoHoursTemplatesApi.listSettings(base!.id, phase);
-        const payload = (settings || []).map((row) => ({
-          roleId: row.roleId,
-          percentByWeek: row.percentByWeek || {},
-        }));
-        await autoHoursTemplatesApi.updateSettings(created.id, payload, phase);
-      }
+      const created = isDefault
+        ? await autoHoursTemplatesApi.duplicateDefault({ name: copyName, phaseKeys })
+        : await autoHoursTemplatesApi.duplicate(base!.id, { name: copyName });
       setTemplates(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       setSelectedTemplateId(created.id);
       showToast('Template duplicated', 'success');
@@ -1051,8 +1098,22 @@ const AutoHoursTemplatesEditor: React.FC = () => {
             </div>
 
             <div className="border border-[var(--border)] border-t-0 rounded-b-lg px-3 pb-3 pt-3">
-              <div className="text-sm text-[var(--muted)] mb-3">
-                Set percent of weekly capacity (0-100%) or hours (0-{fullCapacityHours}) for each week leading up to a deliverable (8 weeks out to the deliverable week).
+              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--muted)] mb-3">
+                <span>
+                  Set percent of weekly capacity (0-100%) or hours (0-{fullCapacityHours}) for each week leading up to a deliverable ({Math.max(0, weeksCount - 1)} weeks out to the deliverable week).
+                </span>
+                <div className="inline-flex items-center gap-2">
+                  <span>Weeks</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={MAX_WEEKS_COUNT}
+                    step={1}
+                    value={weeksCount}
+                    onChange={(e) => handleWeeksCountChange(e.currentTarget.value)}
+                    className="w-16 bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
               </div>
 
               {error && <div className="text-sm text-red-400 mb-3">{error}</div>}
@@ -1092,29 +1153,29 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                     <table className="w-max text-sm table-fixed border-collapse">
                       <colgroup>
                         <col style={{ width: roleColumnWidth + xToGridGap }} />
-                        {Array.from({ length: 9 }).map((_, idx) => (
-                          <col key={`wk-${idx}`} style={{ width: 52 }} />
+                        {weeks.map((weekKey) => (
+                          <col key={`wk-${weekKey}`} style={{ width: 52 }} />
                         ))}
-                          <col style={{ width: 52 }} />
-                        </colgroup>
-                        <thead className="text-[var(--muted)]">
-                          <tr className="border-b border-[var(--border)]">
-                            <th className="py-2 pr-2 text-left">Role</th>
-                            {Array.from({ length: 9 }).map((_, idx) => {
-                              const week = 8 - idx;
-                              const label = week === 0 ? '0w' : `${week}w`;
-                              return (
-                                <th key={week} className="py-2 px-0 text-center whitespace-nowrap">
-                                  {label}
-                                </th>
-                              );
-                            })}
-                            <th className="py-2 text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border)]">
-                          {group.rows.map((row) => (
-                            <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
+                        <col style={{ width: 52 }} />
+                      </colgroup>
+                      <thead className="text-[var(--muted)]">
+                        <tr className="border-b border-[var(--border)]">
+                          <th className="py-2 pr-2 text-left">Role</th>
+                          {weeks.map((weekKey) => {
+                            const week = Number(weekKey);
+                            const label = week === 0 ? '0w' : `${week}w`;
+                            return (
+                              <th key={week} className="py-2 px-0 text-center whitespace-nowrap">
+                                {label}
+                              </th>
+                            );
+                          })}
+                          <th className="py-2 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--border)]">
+                        {group.rows.map((row) => (
+                          <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
                             <td className="py-2 pr-0 text-[var(--text)]">
                               <div className="relative">
                                 <span className="block pr-6 truncate">{row.roleName}</span>
@@ -1132,15 +1193,14 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                                 )}
                               </div>
                             </td>
-                              {Array.from({ length: 9 }).map((_, idx) => {
-                                const week = 8 - idx;
-                                const value = row.percentByWeek?.[String(week)] ?? 0;
-                                const rowKey = String(row.roleId);
-                                const weekKey = String(week);
-                                const isSelected = selectedCells.has(cellKey(rowKey, weekKey));
-                                const displayValue = displayValueFromPercent(value);
-                                const hideZero = Number(displayValue) === 0;
-                                return (
+                            {weeks.map((weekKey) => {
+                              const week = Number(weekKey);
+                              const value = row.percentByWeek?.[weekKey] ?? 0;
+                              const rowKey = String(row.roleId);
+                              const isSelected = selectedCells.has(cellKey(rowKey, weekKey));
+                              const displayValue = displayValueFromPercent(value);
+                              const hideZero = Number(displayValue) === 0;
+                              return (
                                 <td
                                   key={week}
                                   className={`py-2 px-0 ${isSelected ? 'bg-[var(--surfaceHover)]' : ''}`}
@@ -1149,38 +1209,38 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                                     e.preventDefault();
                                     handleCellMouseDown(rowKey, weekKey, e);
                                   }}
-                                    onMouseEnter={() => handleCellMouseEnter(rowKey, weekKey)}
-                                    onClick={(e) => handleCellClick(rowKey, weekKey, e)}
-                                  >
-                                    <div className="relative flex items-center">
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        max={inputMode === 'hours' ? fullCapacityHours : 100}
-                                        step="0.25"
-                                        value={hideZero ? '' : displayValue}
-                                        className={`${getCellClasses(value, isSelected)} ${inputMode === 'percent' ? 'pr-3' : ''}`}
-                                        onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
-                                        onFocus={(e) => e.currentTarget.select()}
-                                        onClick={(e) => {
-                                          e.currentTarget.focus();
-                                          e.currentTarget.select();
-                                        }}
-                                        onDragStart={(e) => e.preventDefault()}
-                                      />
-                                      {inputMode === 'percent' && !hideZero && (
-                                        <span className="pointer-events-none absolute right-[6px] text-[10px] text-[var(--muted)]">%</span>
-                                      )}
-                                    </div>
-                                  </td>
-                                );
-                              })}
-                              <td className="py-2 text-[var(--muted)] text-xs text-center">
-                                {row.isActive ? 'Active' : 'Inactive'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
+                                  onMouseEnter={() => handleCellMouseEnter(rowKey, weekKey)}
+                                  onClick={(e) => handleCellClick(rowKey, weekKey, e)}
+                                >
+                                  <div className="relative flex items-center">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={inputMode === 'hours' ? fullCapacityHours : 100}
+                                      step="0.25"
+                                      value={hideZero ? '' : displayValue}
+                                      className={`${getCellClasses(value, isSelected)} ${inputMode === 'percent' ? 'pr-3' : ''}`}
+                                      onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
+                                      onFocus={(e) => e.currentTarget.select()}
+                                      onClick={(e) => {
+                                        e.currentTarget.focus();
+                                        e.currentTarget.select();
+                                      }}
+                                      onDragStart={(e) => e.preventDefault()}
+                                    />
+                                    {inputMode === 'percent' && !hideZero && (
+                                      <span className="pointer-events-none absolute right-[6px] text-[10px] text-[var(--muted)]">%</span>
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                            <td className="py-2 text-[var(--muted)] text-xs text-center">
+                              {row.isActive ? 'Active' : 'Inactive'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
                     </table>
                     {index < groupedRows.length - 1 && (
                       <div className="border-b border-[var(--border)] mx-3 my-4" />

@@ -1,9 +1,11 @@
 from django.db import transaction
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.core.cache import cache
 
 from .models import Person
+from assignments.rollup_service import queue_project_rollup_refresh
+from assignments.models import Assignment
 
 
 def _bump_analytics_cache_version():
@@ -21,6 +23,39 @@ def _bump_analytics_cache_version():
 @receiver([post_save, post_delete], sender=Person)
 def invalidate_on_person_change(sender, instance, **kwargs):
     _bump_analytics_cache_version()
+
+
+@receiver(pre_save, sender=Person)
+def capture_person_department(sender, instance: Person, **kwargs):
+    if not instance.pk:
+        instance._previous_department_id = None
+        return
+    try:
+        instance._previous_department_id = (
+            Person.objects.filter(pk=instance.pk)
+            .values_list('department_id', flat=True)
+            .first()
+        )
+    except Exception:  # nosec B110
+        instance._previous_department_id = None
+
+
+@receiver(post_save, sender=Person)
+def refresh_rollups_on_department_change(sender, instance: Person, **kwargs):
+    prev = getattr(instance, '_previous_department_id', None)
+    if prev == instance.department_id:
+        return
+    try:
+        project_ids = list(
+            Assignment.objects.filter(person_id=instance.id, is_active=True)
+            .values_list('project_id', flat=True)
+            .distinct()
+        )
+        project_ids = [pid for pid in project_ids if pid]
+        if project_ids:
+            queue_project_rollup_refresh(project_ids)
+    except Exception:  # nosec B110
+        pass
 
 
 @receiver(post_save, sender=Person)

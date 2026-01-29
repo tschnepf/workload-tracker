@@ -16,7 +16,7 @@ from django.db.models import Sum, Max, Prefetch, Value, Count, Q  # noqa: F401
 from core.deliverable_phase import build_project_week_classification
 from core.choices import MembershipEventType
 from django.db.models.functions import Coalesce, Lower
-from .models import Assignment
+from .models import Assignment, ProjectWeeklyHoursRollup, ProjectAssignmentCountsRollup
 from .analytics import compute_role_capacity
 from .overhead import maybe_sync_overhead_assignments
 from departments.models import Department
@@ -365,53 +365,109 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
-        # Base assignments queryset
-        qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
-        if include_placeholders:
-            qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
-        else:
-            qs = qs.filter(person__is_active=True)
-        if dept_ids:
+        def _compute_from_assignments():
+            qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
             if include_placeholders:
-                qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
+                qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
             else:
-                qs = qs.filter(person__department_id__in=dept_ids)
+                qs = qs.filter(person__is_active=True)
+            if dept_ids:
+                if include_placeholders:
+                    qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
+                else:
+                    qs = qs.filter(person__department_id__in=dept_ids)
+            if scope_set:
+                qs = qs.filter(project_id__in=scope_set)
 
-        # If scope_set provided, restrict to those projects
+            project_hours_local: dict[int, dict[str, float]] = {}
+            people_counts: dict[int, int] = {}
+            placeholders_counts: dict[int, int] = {}
+
+            def hours_for_week_from_json(weekly_hours, sunday_key):
+                try:
+                    v = weekly_hours.get(sunday_key)
+                    return float(v or 0)
+                except Exception:
+                    return 0.0
+
+            people_sets: dict[int, set[int]] = {}
+            for a in qs:
+                pid = a.project_id
+                if pid is None:
+                    continue
+                project_hours_local.setdefault(pid, {})
+                if a.person_id:
+                    people_sets.setdefault(pid, set()).add(a.person_id)
+                elif include_placeholders:
+                    placeholders_counts[pid] = placeholders_counts.get(pid, 0) + 1
+                wh = a.weekly_hours or {}
+                for wk in week_keys:
+                    h = hours_for_week_from_json(wh, wk)
+                    if h:
+                        project_hours_local[pid][wk] = round(project_hours_local[pid].get(wk, 0.0) + h, 2)
+
+            for pid, people_set in people_sets.items():
+                people_counts[pid] = len(people_set)
+            return project_hours_local, people_counts, placeholders_counts
+
+        # Rollup-based aggregation
+        project_hours: dict[int, dict[str, float]] = {}
+        people_per_project: dict[int, int] = {}
+        placeholders_per_project: dict[int, int] = {}
+
+        hours_qs = ProjectWeeklyHoursRollup.objects.filter(week_start__in=week_keys)
+        if dept_ids:
+            hours_qs = hours_qs.filter(department_id__in=dept_ids)
         if scope_set:
-            qs = qs.filter(project_id__in=scope_set)
-
-        # Derive project list respecting status filter later
-        # Collect projects encountered in assignments
-        project_hours = {}
-        people_per_project = {}
-        placeholders_per_project = {}
-
-        def hours_for_week_from_json(weekly_hours, sunday_key):
-            try:
-                v = weekly_hours.get(sunday_key)
-                return float(v or 0)
-            except Exception:
-                return 0.0
-
-        # Aggregate hours by project/week and people counts
-        for a in qs:
-            pid = a.project_id
+            hours_qs = hours_qs.filter(project_id__in=scope_set)
+        hours_rows = hours_qs.values('project_id', 'week_start').annotate(
+            person_sum=Sum('person_hours'),
+            placeholder_sum=Sum('placeholder_hours'),
+        )
+        for row in hours_rows:
+            pid = row['project_id']
             if pid is None:
                 continue
             project_hours.setdefault(pid, {})
-            if a.person_id:
-                people_per_project.setdefault(pid, set()).add(a.person_id)
-            else:
-                placeholders_per_project[pid] = placeholders_per_project.get(pid, 0) + 1
-            wh = a.weekly_hours or {}
-            for wk in week_keys:
-                h = hours_for_week_from_json(wh, wk)
-                if h:
-                    project_hours[pid][wk] = round(project_hours[pid].get(wk, 0.0) + h, 2)
+            total = float(row.get('person_sum') or 0.0)
+            if include_placeholders:
+                total += float(row.get('placeholder_sum') or 0.0)
+            if total:
+                project_hours[pid][row['week_start'].isoformat()] = round(total, 2)
 
-        # Candidate project ids
-        project_ids = list(project_hours.keys()) if project_hours else []
+        counts_qs = ProjectAssignmentCountsRollup.objects.all()
+        if dept_ids:
+            counts_qs = counts_qs.filter(department_id__in=dept_ids)
+        if scope_set:
+            counts_qs = counts_qs.filter(project_id__in=scope_set)
+        counts_rows = counts_qs.values('project_id').annotate(
+            people_count=Sum('people_count'),
+            placeholder_count=Sum('placeholder_count'),
+        )
+        for row in counts_rows:
+            pid = row['project_id']
+            if pid is None:
+                continue
+            people_per_project[pid] = int(row.get('people_count') or 0)
+            if include_placeholders:
+                placeholders = int(row.get('placeholder_count') or 0)
+                if placeholders:
+                    placeholders_per_project[pid] = placeholders
+
+        project_ids = list(set(project_hours.keys()) | set(people_per_project.keys()) | set(placeholders_per_project.keys()))
+        if not project_ids and scope_set:
+            project_ids = list(scope_set)
+
+        # Fallback to live compute if rollups are missing
+        if not project_ids:
+            project_hours, people_per_project, placeholders_per_project = _compute_from_assignments()
+            project_ids = list(set(project_hours.keys()) | set(people_per_project.keys()) | set(placeholders_per_project.keys()))
+            if project_ids:
+                try:
+                    from assignments.rollup_service import queue_project_rollup_refresh
+                    queue_project_rollup_refresh(project_ids)
+                except Exception:  # nosec B110
+                    pass
 
         # Deliverables aggregates (for shading, filters, and per-week markers)
         deliverables_by_week = {}
@@ -480,7 +536,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             project_ids = filtered
             # Prune aggregates accordingly
             project_hours = { pid: project_hours[pid] for pid in project_ids if pid in project_hours }
-            people_per_project = { pid: people_per_project.get(pid, set()) for pid in project_ids }
+            people_per_project = { pid: people_per_project.get(pid, 0) for pid in project_ids }
+            placeholders_per_project = { pid: placeholders_per_project.get(pid, 0) for pid in project_ids if pid in placeholders_per_project }
 
         # Build project list from Project model filtered to those IDs, applying status filter
         projects_qs = Project.objects.filter(id__in=project_ids)
@@ -490,7 +547,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         # Metrics
         projects_count = len(projects)
-        people_assigned = sum(len(s) for s in people_per_project.values())
+        people_assigned = sum(people_per_project.values())
         total_hours = 0.0
         for pid, wkmap in project_hours.items():
             for _, v in wkmap.items():
@@ -1352,35 +1409,69 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
-        qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).select_related('person', 'project')
-        if include_placeholders:
-            qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
-        else:
-            qs = qs.filter(person__is_active=True)
+        project_hours: dict[int, dict[str, float]] = {}
+
+        counts_qs = ProjectAssignmentCountsRollup.objects.filter(project_id__in=project_ids)
         if dept_ids:
-            if include_placeholders:
-                qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
-            else:
-                qs = qs.filter(person__department_id__in=dept_ids)
+            counts_qs = counts_qs.filter(department_id__in=dept_ids)
+        count_project_ids = list(counts_qs.values_list('project_id', flat=True).distinct())
+        for pid in count_project_ids:
+            project_hours.setdefault(pid, {})
 
-        def hours_for_week_from_json(weekly_hours, sunday_key):
-            try:
-                v = weekly_hours.get(sunday_key)
-                return float(v or 0)
-            except Exception:
-                return 0.0
-
-        project_hours = {}
-        for a in qs:
-            pid = a.project_id
+        hours_qs = ProjectWeeklyHoursRollup.objects.filter(project_id__in=project_ids, week_start__in=week_keys)
+        if dept_ids:
+            hours_qs = hours_qs.filter(department_id__in=dept_ids)
+        hours_rows = hours_qs.values('project_id', 'week_start').annotate(
+            person_sum=Sum('person_hours'),
+            placeholder_sum=Sum('placeholder_hours'),
+        )
+        for row in hours_rows:
+            pid = row['project_id']
             if pid is None:
                 continue
             project_hours.setdefault(pid, {})
-            wh = a.weekly_hours or {}
-            for wk in week_keys:
-                h = hours_for_week_from_json(wh, wk)
-                if h:
-                    project_hours[pid][wk] = round(project_hours[pid].get(wk, 0.0) + h, 2)
+            total = float(row.get('person_sum') or 0.0)
+            if include_placeholders:
+                total += float(row.get('placeholder_sum') or 0.0)
+            if total:
+                project_hours[pid][row['week_start'].isoformat()] = round(total, 2)
+
+        if not project_hours:
+            # Fallback to live aggregation if rollups are missing
+            qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).select_related('person', 'project')
+            if include_placeholders:
+                qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
+            else:
+                qs = qs.filter(person__is_active=True)
+            if dept_ids:
+                if include_placeholders:
+                    qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
+                else:
+                    qs = qs.filter(person__department_id__in=dept_ids)
+
+            def hours_for_week_from_json(weekly_hours, sunday_key):
+                try:
+                    v = weekly_hours.get(sunday_key)
+                    return float(v or 0)
+                except Exception:
+                    return 0.0
+
+            for a in qs:
+                pid = a.project_id
+                if pid is None:
+                    continue
+                project_hours.setdefault(pid, {})
+                wh = a.weekly_hours or {}
+                for wk in week_keys:
+                    h = hours_for_week_from_json(wh, wk)
+                    if h:
+                        project_hours[pid][wk] = round(project_hours[pid].get(wk, 0.0) + h, 2)
+            if project_hours:
+                try:
+                    from assignments.rollup_service import queue_project_rollup_refresh
+                    queue_project_rollup_refresh(project_hours.keys())
+                except Exception:  # nosec B110
+                    pass
 
         return Response({'hoursByProject': project_hours})
 

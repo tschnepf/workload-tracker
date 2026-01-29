@@ -20,7 +20,7 @@ import { useProjectStatusSubscription } from '@/components/projects/useProjectSt
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, getUtilizationPill } from '@/util/utilization';
-import { listProjectRoles, type ProjectRole } from '@/roles/api';
+import { listProjectRoles, searchProjectRoles, type ProjectRole } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
 import { getFlag } from '@/lib/flags';
 import { useLayoutDensity } from '@/components/layout/useLayoutDensity';
@@ -575,39 +575,46 @@ const ProjectAssignmentsGrid: React.FC = () => {
     include: 'project',
   });
   const departments = snapshotQuery.data?.departments || [];
-  const roleSearchQuery = personQuery.trim().toLowerCase();
-  const roleMatches = React.useMemo(() => {
-    if (!roleSearchQuery) return [];
-    const results: Array<{ role: ProjectRole; deptId: number; deptName: string }> = [];
+  const roleSearchQuery = personQuery.trim();
+  const [roleSearchMatches, setRoleSearchMatches] = React.useState<ProjectRole[]>([]);
+  const roleSearchRequestRef = React.useRef(0);
+  const deptNameById = React.useMemo(() => {
+    const map: Record<number, string> = {};
     departments.forEach((dept) => {
       if (dept.id == null) return;
-      const roles = rolesByDept[dept.id] || [];
-      roles.forEach((role) => {
-        if (role.name.toLowerCase().includes(roleSearchQuery)) {
-          results.push({
-            role,
-            deptId: dept.id as number,
-            deptName: dept.name || `Dept #${dept.id}`,
-          });
-        }
-      });
+      map[dept.id as number] = dept.name || `Dept #${dept.id}`;
     });
-    return results;
-  }, [departments, roleSearchQuery, rolesByDept]);
+    return map;
+  }, [departments]);
   React.useEffect(() => {
-    if (!isAddingForProject) return;
-    if (!roleSearchQuery) return;
-    const missing = departments.filter((dept) => dept.id != null && !rolesByDept[dept.id]);
-    if (missing.length === 0) return;
-    missing.forEach((dept) => {
-      if (dept.id == null) return;
-      listProjectRoles(dept.id)
+    if (!isAddingForProject || roleSearchQuery.length < 2) {
+      setRoleSearchMatches([]);
+      return;
+    }
+    const requestId = ++roleSearchRequestRef.current;
+    const timer = window.setTimeout(() => {
+      searchProjectRoles(roleSearchQuery)
         .then((roles) => {
-          setRolesByDept((prev) => (prev[dept.id as number] ? prev : { ...prev, [dept.id as number]: roles }));
+          if (requestId === roleSearchRequestRef.current) {
+            setRoleSearchMatches(roles || []);
+          }
         })
-        .catch(() => {});
-    });
-  }, [departments, isAddingForProject, roleSearchQuery, rolesByDept]);
+        .catch(() => {
+          if (requestId === roleSearchRequestRef.current) {
+            setRoleSearchMatches([]);
+          }
+        });
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [isAddingForProject, roleSearchQuery]);
+  const roleMatches = React.useMemo(() => {
+    if (!roleSearchQuery) return [];
+    return roleSearchMatches.map((role) => ({
+      role,
+      deptId: role.department_id,
+      deptName: deptNameById[role.department_id] || `Dept #${role.department_id}`,
+    }));
+  }, [deptNameById, roleSearchMatches, roleSearchQuery]);
 
   const loadProjectAssignments = React.useCallback(async (projectId: number) => {
     if (!projectId) return;

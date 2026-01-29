@@ -204,6 +204,7 @@ export interface AutoHoursTemplate {
   excludedDepartmentIds?: number[];
   isActive: boolean;
   phaseKeys?: string[];
+  weeksByPhase?: Record<string, number>;
   createdAt?: string;
   updatedAt?: string;
 }

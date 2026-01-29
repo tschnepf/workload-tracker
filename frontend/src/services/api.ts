@@ -571,6 +571,7 @@ export type AutoHoursRoleSetting = {
   departmentId: number;
   departmentName: string;
   percentByWeek: Record<string, number>;
+  weeksCount?: number;
   isActive: boolean;
   sortOrder: number;
 };
@@ -586,7 +587,8 @@ export const autoHoursSettingsApi = {
   update: async (
     departmentId: number | null | undefined,
     settings: Array<{ roleId: number; percentByWeek: Record<string, number> }>,
-    phase?: string | null
+    phase?: string | null,
+    weeksCount?: number
   ): Promise<AutoHoursRoleSetting[]> => {
     const sp = new URLSearchParams();
     if (departmentId != null) sp.set('department_id', String(departmentId));
@@ -595,7 +597,7 @@ export const autoHoursSettingsApi = {
     return fetchApi<AutoHoursRoleSetting[]>(`/core/project-template-settings/${qs}`, {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ settings }),
+      body: JSON.stringify({ settings, ...(weeksCount != null ? { weeksCount } : {}) }),
     });
   },
 };
@@ -604,16 +606,30 @@ export const autoHoursTemplatesApi = {
   list: async (): Promise<AutoHoursTemplate[]> => {
     return fetchApi<AutoHoursTemplate[]>(`/core/project-templates/`, { headers: authHeaders() });
   },
-  create: async (payload: { name: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
+  create: async (payload: { name: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[]; weeksByPhase?: Record<string, number> }): Promise<AutoHoursTemplate> => {
     return fetchApi<AutoHoursTemplate>(`/core/project-templates/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(payload),
     });
   },
-  update: async (templateId: number, payload: { name?: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
+  update: async (templateId: number, payload: { name?: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[]; weeksByPhase?: Record<string, number> }): Promise<AutoHoursTemplate> => {
     return fetchApi<AutoHoursTemplate>(`/core/project-templates/${templateId}/`, {
       method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+  },
+  duplicate: async (templateId: number, payload: { name: string }): Promise<AutoHoursTemplate> => {
+    return fetchApi<AutoHoursTemplate>(`/core/project-templates/${templateId}/duplicate/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+  },
+  duplicateDefault: async (payload: { name: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[]; weeksByPhase?: Record<string, number> }): Promise<AutoHoursTemplate> => {
+    return fetchApi<AutoHoursTemplate>(`/core/project-templates/duplicate-default/`, {
+      method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(payload),
     });
@@ -635,7 +651,8 @@ export const autoHoursTemplatesApi = {
     templateId: number,
     settings: Array<{ roleId: number; percentByWeek: Record<string, number> }>,
     phase: string,
-    departmentId?: number | null
+    departmentId?: number | null,
+    weeksCount?: number
   ): Promise<AutoHoursRoleSetting[]> => {
     const sp = new URLSearchParams();
     if (phase) sp.set('phase', phase);
@@ -644,7 +661,7 @@ export const autoHoursTemplatesApi = {
     return fetchApi<AutoHoursRoleSetting[]>(`/core/project-template-settings/${templateId}/${qs}`, {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ settings }),
+      body: JSON.stringify({ settings, ...(weeksCount != null ? { weeksCount } : {}) }),
     });
   },
 };

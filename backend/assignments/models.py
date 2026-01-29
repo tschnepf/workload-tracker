@@ -113,6 +113,57 @@ class Assignment(models.Model):
         return self.project_name or "Unknown Project"
 
 
+class ProjectWeeklyHoursRollup(models.Model):
+    """Per-project weekly hours rollup scoped by effective department.
+
+    Stores person vs placeholder hours separately to support include_placeholders.
+    """
+
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='weekly_hours_rollups')
+    department = models.ForeignKey('departments.Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='weekly_hours_rollups')
+    week_start = models.DateField(help_text="Sunday ISO date key (UTC)")
+    person_hours = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    placeholder_hours = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['project', 'department', 'week_start'],
+                name='uniq_project_weekly_hours_rollup'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['week_start'], name='idx_pwh_week_start'),
+            models.Index(fields=['project', 'week_start'], name='idx_pwh_project_week'),
+            models.Index(fields=['department', 'week_start'], name='idx_pwh_dept_week'),
+        ]
+        ordering = ['-week_start', 'project_id']
+
+
+class ProjectAssignmentCountsRollup(models.Model):
+    """Per-project assignment counts scoped by effective department."""
+
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='assignment_counts_rollups')
+    department = models.ForeignKey('departments.Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignment_counts_rollups')
+    people_count = models.PositiveIntegerField(default=0)
+    placeholder_count = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['project', 'department'],
+                name='uniq_project_assignment_counts_rollup'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['project'], name='idx_pac_project'),
+            models.Index(fields=['department'], name='idx_pac_department'),
+        ]
+        ordering = ['project_id']
+
+
 class WeeklyAssignmentSnapshot(models.Model):
     """Immutable weekly snapshot of assigned hours per person-project-role.
 

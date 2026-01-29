@@ -70,6 +70,20 @@ export async function listProjectRoles(departmentId: number, includeInactive = f
   return req;
 }
 
+export async function searchProjectRoles(query: string, departmentId?: number, includeInactive = false): Promise<ProjectRole[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const sp = new URLSearchParams();
+  sp.set('q', q);
+  if (departmentId != null) sp.set('department', String(departmentId));
+  if (includeInactive) sp.set('include_inactive', 'true');
+  const res = await apiClient.GET('/projects/project-roles/search/' as any, {
+    params: { query: Object.fromEntries(sp) as any },
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  return (res.data as ProjectRole[]) || [];
+}
+
 export async function createProjectRole(departmentId: number, name: string, sortOrder = 0): Promise<ProjectRole> {
   const res = await apiClient.POST('/projects/project-roles/', { body: { department: departmentId, name, sortOrder } as any });
   return res.data as ProjectRole;
