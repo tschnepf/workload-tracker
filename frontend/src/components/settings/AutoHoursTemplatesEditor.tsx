@@ -10,6 +10,8 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
   const weeks = React.useMemo(() => Array.from({ length: 9 }, (_, idx) => String(8 - idx)), []);
+  const roleColumnWidth = 160;
+  const xToGridGap = 15;
   const [templates, setTemplates] = React.useState<AutoHoursTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = React.useState<boolean>(false);
   const GLOBAL_TEMPLATE_ID = 'global' as const;
@@ -20,6 +22,8 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const [renaming, setRenaming] = React.useState<boolean>(false);
   const [isEditingTitle, setIsEditingTitle] = React.useState<boolean>(false);
   const [isEditingDescription, setIsEditingDescription] = React.useState<boolean>(false);
+  const [allRoles, setAllRoles] = React.useState<AutoHoursRoleSetting[]>([]);
+  const [updatingExclusions, setUpdatingExclusions] = React.useState(false);
   const [rows, setRows] = React.useState<AutoHoursRoleSetting[]>([]);
   const rowsRef = React.useRef<AutoHoursRoleSetting[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -81,6 +85,29 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     });
     return groups;
   }, [rows]);
+  const allRolesByDepartment = React.useMemo(() => {
+    const map = new Map<number, { id: number; name: string }>();
+    allRoles.forEach((role) => {
+      if (!map.has(role.departmentId)) {
+        map.set(role.departmentId, { id: role.departmentId, name: role.departmentName || 'Unknown Department' });
+      }
+    });
+    return map;
+  }, [allRoles]);
+  const excludedDepartmentIds = selectedTemplate?.excludedDepartmentIds || [];
+  const excludedRoleIds = selectedTemplate?.excludedRoleIds || [];
+  const excludedDepartments = React.useMemo(() => {
+    return excludedDepartmentIds
+      .map((id) => allRolesByDepartment.get(id))
+      .filter(Boolean) as Array<{ id: number; name: string }>;
+  }, [allRolesByDepartment, excludedDepartmentIds]);
+  const excludedRoles = React.useMemo(() => {
+    const map = new Map<number, AutoHoursRoleSetting>();
+    allRoles.forEach((role) => map.set(role.roleId, role));
+    return excludedRoleIds
+      .map((id) => map.get(id))
+      .filter(Boolean) as AutoHoursRoleSetting[];
+  }, [allRoles, excludedRoleIds]);
 
   const [selectedCells, setSelectedCells] = React.useState<Set<string>>(new Set());
   const selectedCellsRef = React.useRef<Set<string>>(new Set());
@@ -440,6 +467,20 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const list = await autoHoursSettingsApi.list(undefined, selectedPhase);
+        if (!mounted) return;
+        setAllRoles(list || []);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { mounted = false; };
+  }, [selectedPhase]);
+
+  React.useEffect(() => {
     if (selectedTemplateId === GLOBAL_TEMPLATE_ID) {
       setTemplateName('');
       setTemplateDescription('');
@@ -635,6 +676,43 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     }
   };
 
+  const updateTemplateExclusions = async (nextExcludedRoleIds: number[], nextExcludedDepartmentIds: number[]) => {
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
+    try {
+      setUpdatingExclusions(true);
+      const updated = await autoHoursTemplatesApi.update(selectedTemplateId, {
+        excludedRoleIds: nextExcludedRoleIds,
+        excludedDepartmentIds: nextExcludedDepartmentIds,
+      });
+      setTemplates(prev => prev.map(t => (t.id === selectedTemplateId ? updated : t)));
+      await loadTemplateSettings(selectedTemplateId, selectedPhase);
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to update template exclusions', 'error');
+    } finally {
+      setUpdatingExclusions(false);
+    }
+  };
+
+  const handleExcludeDepartment = async (departmentId: number) => {
+    const next = Array.from(new Set([...(excludedDepartmentIds || []), departmentId]));
+    await updateTemplateExclusions(excludedRoleIds || [], next);
+  };
+
+  const handleIncludeDepartment = async (departmentId: number) => {
+    const next = (excludedDepartmentIds || []).filter((id) => id !== departmentId);
+    await updateTemplateExclusions(excludedRoleIds || [], next);
+  };
+
+  const handleExcludeRole = async (roleId: number) => {
+    const next = Array.from(new Set([...(excludedRoleIds || []), roleId]));
+    await updateTemplateExclusions(next, excludedDepartmentIds || []);
+  };
+
+  const handleIncludeRole = async (roleId: number) => {
+    const next = (excludedRoleIds || []).filter((id) => id !== roleId);
+    await updateTemplateExclusions(next, excludedDepartmentIds || []);
+  };
+
   return (
     <div ref={containerRef}>
       <div className="flex flex-col gap-4 lg:flex-row">
@@ -780,6 +858,43 @@ const AutoHoursTemplatesEditor: React.FC = () => {
               </button>
             )}
           </div>
+          {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
+            <div className="mb-4">
+              {(excludedDepartments.length > 0 || excludedRoles.length > 0) ? (
+                <div className="space-y-2">
+                  <div className="text-xs text-[var(--muted)] uppercase tracking-wide">Excluded</div>
+                  <div className="flex flex-wrap gap-2">
+                    {excludedDepartments.map((dept) => (
+                      <button
+                        key={`dept-${dept.id}`}
+                        type="button"
+                        className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)]"
+                        onClick={() => handleIncludeDepartment(dept.id)}
+                        disabled={updatingExclusions}
+                        title="Add department back"
+                      >
+                        + {dept.name}
+                      </button>
+                    ))}
+                    {excludedRoles.map((role) => (
+                      <button
+                        key={`role-${role.roleId}`}
+                        type="button"
+                        className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)]"
+                        onClick={() => handleIncludeRole(role.roleId)}
+                        disabled={updatingExclusions}
+                        title="Add role back"
+                      >
+                        + {role.roleName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-[var(--muted)]">All roles and departments included.</div>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between pb-3 mb-4 border-b border-[var(--border)]">
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
@@ -895,17 +1010,34 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                 <div className="text-sm text-[var(--muted)] py-4">No roles found.</div>
               ) : (
                 <div ref={gridRef} className="overflow-x-auto space-y-6">
-                  {groupedRows.map((group) => (
+                  {groupedRows.map((group, index) => (
                     <div key={group.departmentId} className="min-w-full">
-                      <div className="text-sm font-semibold text-[var(--text)] mb-2">
-                        {group.departmentName}
+                    <div className="grid items-center mb-2" style={{ gridTemplateColumns: `${roleColumnWidth + xToGridGap}px 1fr` }}>
+                      <div className="relative" style={{ width: roleColumnWidth + xToGridGap }}>
+                        <span className="text-sm font-semibold text-[var(--text)] block pr-6">
+                          {group.departmentName}
+                        </span>
+                        {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
+                          <button
+                            type="button"
+                            className="absolute top-0 text-sm text-red-400 hover:text-red-300 px-1"
+                            style={{ right: xToGridGap }}
+                            onClick={() => handleExcludeDepartment(group.departmentId)}
+                            disabled={updatingExclusions}
+                            title="Remove department from template"
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
-                      <table className="w-max text-sm table-fixed border-collapse">
-                        <colgroup>
-                          <col style={{ width: 160 }} />
-                          {Array.from({ length: 9 }).map((_, idx) => (
-                            <col key={`wk-${idx}`} style={{ width: 52 }} />
-                          ))}
+                      <div />
+                    </div>
+                    <table className="w-max text-sm table-fixed border-collapse">
+                      <colgroup>
+                        <col style={{ width: roleColumnWidth + xToGridGap }} />
+                        {Array.from({ length: 9 }).map((_, idx) => (
+                          <col key={`wk-${idx}`} style={{ width: 52 }} />
+                        ))}
                           <col style={{ width: 52 }} />
                         </colgroup>
                         <thead className="text-[var(--muted)]">
@@ -926,7 +1058,23 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                         <tbody className="divide-y divide-[var(--border)]">
                           {group.rows.map((row) => (
                             <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
-                              <td className="py-2 pr-2 text-[var(--text)] truncate">{row.roleName}</td>
+                            <td className="py-2 pr-0 text-[var(--text)]">
+                              <div className="relative">
+                                <span className="block pr-6 truncate">{row.roleName}</span>
+                                {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
+                                  <button
+                                    type="button"
+                                    className="absolute top-0 text-sm text-red-400 hover:text-red-300 px-1"
+                                    style={{ right: xToGridGap }}
+                                    onClick={() => handleExcludeRole(row.roleId)}
+                                    disabled={updatingExclusions}
+                                    title="Remove role from template"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                               {Array.from({ length: 9 }).map((_, idx) => {
                                 const week = 8 - idx;
                                 const value = row.percentByWeek?.[String(week)] ?? 0;
@@ -975,9 +1123,12 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                             </tr>
                           ))}
                         </tbody>
-                      </table>
-                    </div>
-                  ))}
+                    </table>
+                    {index < groupedRows.length - 1 && (
+                      <div className="border-b border-[var(--border)] mx-3 my-4" />
+                    )}
+                  </div>
+                ))}
                 </div>
               )}
             </div>

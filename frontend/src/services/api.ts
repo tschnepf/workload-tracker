@@ -604,14 +604,14 @@ export const autoHoursTemplatesApi = {
   list: async (): Promise<AutoHoursTemplate[]> => {
     return fetchApi<AutoHoursTemplate[]>(`/core/project-templates/`, { headers: authHeaders() });
   },
-  create: async (payload: { name: string; description?: string; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
+  create: async (payload: { name: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
     return fetchApi<AutoHoursTemplate>(`/core/project-templates/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(payload),
     });
   },
-  update: async (templateId: number, payload: { name?: string; description?: string; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
+  update: async (templateId: number, payload: { name?: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
     return fetchApi<AutoHoursTemplate>(`/core/project-templates/${templateId}/`, {
       method: 'PUT',
       headers: authHeaders(),

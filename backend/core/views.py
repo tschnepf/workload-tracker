@@ -307,6 +307,33 @@ class AutoHoursRoleSettingsView(APIView):
 class AutoHoursTemplatesView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
 
+    def _parse_exclusions(self, data) -> tuple[list[int] | None, list[int] | None, str | None]:
+        excluded_roles = None
+        excluded_departments = None
+        if 'excludedRoleIds' in data:
+            raw = data.get('excludedRoleIds')
+            if raw is None:
+                excluded_roles = []
+            elif not isinstance(raw, list):
+                return None, None, 'excludedRoleIds must be a list'
+            else:
+                try:
+                    excluded_roles = [int(x) for x in raw]
+                except Exception:
+                    return None, None, 'excludedRoleIds must be a list of integers'
+        if 'excludedDepartmentIds' in data:
+            raw = data.get('excludedDepartmentIds')
+            if raw is None:
+                excluded_departments = []
+            elif not isinstance(raw, list):
+                return None, None, 'excludedDepartmentIds must be a list'
+            else:
+                try:
+                    excluded_departments = [int(x) for x in raw]
+                except Exception:
+                    return None, None, 'excludedDepartmentIds must be a list of integers'
+        return excluded_roles, excluded_departments, None
+
     def _valid_phase_keys(self) -> list[str]:
         return list(DeliverablePhaseDefinition.objects.order_by('sort_order', 'id').values_list('key', flat=True))
 
@@ -338,6 +365,8 @@ class AutoHoursTemplatesView(APIView):
                 'id': serializers.IntegerField(),
                 'name': serializers.CharField(),
                 'description': serializers.CharField(),
+                'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
+                'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'createdAt': serializers.DateTimeField(),
@@ -353,6 +382,8 @@ class AutoHoursTemplatesView(APIView):
                 'id': t.id,
                 'name': t.name,
                 'description': t.description or '',
+                'excludedRoleIds': t.excluded_role_ids or [],
+                'excludedDepartmentIds': t.excluded_department_ids or [],
                 'isActive': t.is_active,
                 'phaseKeys': t.phase_keys or [],
                 'createdAt': t.created_at,
@@ -366,6 +397,8 @@ class AutoHoursTemplatesView(APIView):
             fields={
                 'name': serializers.CharField(),
                 'description': serializers.CharField(required=False),
+                'excludedRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
+                'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'isActive': serializers.BooleanField(required=False),
                 'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
             },
@@ -376,6 +409,8 @@ class AutoHoursTemplatesView(APIView):
                 'id': serializers.IntegerField(),
                 'name': serializers.CharField(),
                 'description': serializers.CharField(),
+                'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
+                'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'createdAt': serializers.DateTimeField(),
@@ -393,12 +428,17 @@ class AutoHoursTemplatesView(APIView):
         data = request.data or {}
         description = str(data.get('description') or '').strip()
         is_active = bool(data.get('isActive', True))
+        excluded_roles, excluded_departments, excl_err = self._parse_exclusions(data)
+        if excl_err:
+            return Response({'error': excl_err}, status=400)
         phase_keys, phase_err = self._parse_phase_keys(data)
         if phase_err:
             return Response({'error': phase_err}, status=400)
         obj = AutoHoursTemplate.objects.create(
             name=name,
             description=description,
+            excluded_role_ids=excluded_roles or [],
+            excluded_department_ids=excluded_departments or [],
             is_active=is_active,
             phase_keys=phase_keys if phase_keys is not None else self._valid_phase_keys(),
         )
@@ -406,6 +446,8 @@ class AutoHoursTemplatesView(APIView):
             'id': obj.id,
             'name': obj.name,
             'description': obj.description or '',
+            'excludedRoleIds': obj.excluded_role_ids or [],
+            'excludedDepartmentIds': obj.excluded_department_ids or [],
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'createdAt': obj.created_at,
@@ -444,6 +486,8 @@ class AutoHoursTemplateDetailView(APIView):
                 'id': serializers.IntegerField(),
                 'name': serializers.CharField(),
                 'description': serializers.CharField(),
+                'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
+                'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'createdAt': serializers.DateTimeField(),
@@ -459,6 +503,8 @@ class AutoHoursTemplateDetailView(APIView):
             'id': obj.id,
             'name': obj.name,
             'description': obj.description or '',
+            'excludedRoleIds': obj.excluded_role_ids or [],
+            'excludedDepartmentIds': obj.excluded_department_ids or [],
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'createdAt': obj.created_at,
@@ -471,6 +517,8 @@ class AutoHoursTemplateDetailView(APIView):
             fields={
                 'name': serializers.CharField(required=False),
                 'description': serializers.CharField(required=False),
+                'excludedRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
+                'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'isActive': serializers.BooleanField(required=False),
                 'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
             },
@@ -481,6 +529,8 @@ class AutoHoursTemplateDetailView(APIView):
                 'id': serializers.IntegerField(),
                 'name': serializers.CharField(),
                 'description': serializers.CharField(),
+                'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
+                'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'createdAt': serializers.DateTimeField(),
@@ -502,6 +552,13 @@ class AutoHoursTemplateDetailView(APIView):
             obj.name = name
         if 'description' in data:
             obj.description = str(data.get('description') or '').strip()
+        excluded_roles, excluded_departments, excl_err = self._parse_exclusions(data)
+        if excl_err:
+            return Response({'error': excl_err}, status=400)
+        if excluded_roles is not None:
+            obj.excluded_role_ids = excluded_roles
+        if excluded_departments is not None:
+            obj.excluded_department_ids = excluded_departments
         if 'isActive' in data:
             obj.is_active = bool(data.get('isActive'))
         phase_keys, phase_err = self._parse_phase_keys(data)
@@ -509,11 +566,13 @@ class AutoHoursTemplateDetailView(APIView):
             return Response({'error': phase_err}, status=400)
         if phase_keys is not None:
             obj.phase_keys = phase_keys
-        obj.save(update_fields=['name', 'description', 'is_active', 'phase_keys', 'updated_at'])
+        obj.save(update_fields=['name', 'description', 'excluded_role_ids', 'excluded_department_ids', 'is_active', 'phase_keys', 'updated_at'])
         return Response({
             'id': obj.id,
             'name': obj.name,
             'description': obj.description or '',
+            'excludedRoleIds': obj.excluded_role_ids or [],
+            'excludedDepartmentIds': obj.excluded_department_ids or [],
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'createdAt': obj.created_at,
@@ -624,6 +683,12 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         roles_qs = DepartmentProjectRole.objects.select_related('department')
         if dept_id_int is not None:
             roles_qs = roles_qs.filter(department_id=dept_id_int)
+        excluded_departments = set(template.excluded_department_ids or [])
+        excluded_roles = set(template.excluded_role_ids or [])
+        if excluded_departments:
+            roles_qs = roles_qs.exclude(department_id__in=excluded_departments)
+        if excluded_roles:
+            roles_qs = roles_qs.exclude(id__in=excluded_roles)
         roles = list(roles_qs.order_by('department_id', 'sort_order', 'name'))
         role_ids = [r.id for r in roles]
         settings_map = {
@@ -721,10 +786,16 @@ class AutoHoursTemplateRoleSettingsView(APIView):
             existing_qs = DepartmentProjectRole.objects.filter(id__in=role_ids)
             if dept_id_int is not None:
                 existing_qs = existing_qs.filter(department_id=dept_id_int)
+            excluded_departments = set(template.excluded_department_ids or [])
+            excluded_roles = set(template.excluded_role_ids or [])
+            if excluded_departments:
+                existing_qs = existing_qs.exclude(department_id__in=excluded_departments)
+            if excluded_roles:
+                existing_qs = existing_qs.exclude(id__in=excluded_roles)
             existing = set(existing_qs.values_list('id', flat=True))
             missing = [rid for rid in role_ids if rid not in existing]
             if missing:
-                return Response({'error': f'unknown roleId(s): {missing}'}, status=400)
+                return Response({'error': f'unknown or excluded roleId(s): {missing}'}, status=400)
 
         with transaction.atomic():
             for role_id, hours_by_week in updates:

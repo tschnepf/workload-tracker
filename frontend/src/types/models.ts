@@ -200,6 +200,8 @@ export interface AutoHoursTemplate {
   id: number;
   name: string;
   description?: string;
+  excludedRoleIds?: number[];
+  excludedDepartmentIds?: number[];
   isActive: boolean;
   phaseKeys?: string[];
   createdAt?: string;
