@@ -5,6 +5,8 @@ import RoleDropdown from '@/roles/components/RoleDropdown';
 import type { ProjectRole } from '@/roles/api';
 import { WeekCell } from '@/pages/Assignments/grid/WeekCell';
 import type { DeliverableMarker } from '@/pages/Assignments/projectAssignments/types';
+import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
+import type { Person } from '@/types/models';
 
 const EMPTY_MARKERS: DeliverableMarker[] = [];
 
@@ -44,6 +46,7 @@ export type ProjectAssignmentRowProps = {
     previousName: string | null
   ) => void;
   onCloseRole: () => void;
+  onSwapPlaceholder: (projectId: number, assignmentId: number, person: Pick<Person, 'id' | 'name' | 'department'>) => Promise<void> | void;
 };
 
 const ProjectAssignmentRow: React.FC<ProjectAssignmentRowProps> = React.memo(({
@@ -74,12 +77,14 @@ const ProjectAssignmentRow: React.FC<ProjectAssignmentRowProps> = React.memo(({
   onToggleRole,
   onSelectRole,
   onCloseRole,
+  onSwapPlaceholder,
 }) => {
   const rowKey = String(assignment.id);
   const deptId = (assignment as any).personDepartmentId as number | null | undefined;
   const label = (assignment as any).roleName as string | null | undefined;
   const personLabel = assignment.personName
     || (assignment.person != null ? `Person #${assignment.person}` : (label ? `<${label}>` : 'Unassigned'));
+  const canSwapPlaceholder = assignment.person == null && !!label;
   const currentId = (assignment as any).roleOnProjectId as number | null | undefined;
   const roleIsOpen = openRoleFor === assignment.id;
   const WEEK_WIDTH = 70;
@@ -96,7 +101,16 @@ const ProjectAssignmentRow: React.FC<ProjectAssignmentRowProps> = React.memo(({
   return (
     <div className="relative grid gap-px py-1 bg-[var(--surface)] hover:bg-[var(--cardHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
       <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={personLabel}>
-        {personLabel}
+        {canSwapPlaceholder ? (
+          <PlaceholderPersonSwap
+            label={personLabel}
+            deptId={deptId ?? null}
+            className="text-[var(--text)] text-xs truncate"
+            onSelect={(person) => onSwapPlaceholder(projectId, assignment.id!, person)}
+          />
+        ) : (
+          personLabel
+        )}
       </div>
       <div className="pl-8 pr-2 py-2 text-[var(--muted)] text-xs truncate relative">
         <button

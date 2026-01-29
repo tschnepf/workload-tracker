@@ -23,6 +23,7 @@ export type ProjectGridSnapshot = {
     note?: string | null;
   }>>>;
   hasFutureDeliverablesByProject: Record<string, boolean>;
+  hasPlaceholdersByProject?: Record<string, number>;
   metrics: { projectsCount: number; peopleAssignedCount: number; totalHours: number };
 };
 

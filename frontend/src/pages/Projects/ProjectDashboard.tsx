@@ -5,7 +5,7 @@ import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import { useProject } from '@/hooks/useProjects';
 import { assignmentsApi, departmentsApi, projectRisksApi, projectsApi, deliverableTasksApi, deliverableQaTasksApi, peopleApi } from '@/services/api';
-import { createAssignment, deleteAssignment } from '@/lib/mutations/assignments';
+import { createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import { formatUtcToLocal } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
 import DeliverablesSection, { type DeliverablesSectionHandle } from '@/components/deliverables/DeliverablesSection';
@@ -18,6 +18,7 @@ import { listProjectRoles } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
 import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
+import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
 import type { Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
 
 const ProjectDashboard: React.FC = () => {
@@ -441,6 +442,15 @@ const ProjectDashboard: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
     } finally {
       setDeletingAssignmentId(null);
+    }
+  };
+
+  const handleSwapPlaceholder = async (assignmentId: number, person: { id: number; name: string }) => {
+    try {
+      await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
+      await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
+    } catch (e) {
+      console.error('Failed to replace placeholder', e);
     }
   };
 
@@ -1223,10 +1233,22 @@ const ProjectDashboard: React.FC = () => {
                             const roleLabel = assignment.roleName || null;
                             const personLabel = assignment.personName
                               || (personId != null ? `Person #${personId}` : (roleLabel ? `<${roleLabel}>` : 'Unassigned'));
+                            const canSwapPlaceholder = personId == null && !!roleLabel;
                             return (
                               <li key={assignment.id} className="py-1.5 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3 items-center pl-3">
                                 <div className="min-w-0">
-                                  <div className="text-xs text-[var(--text)] truncate">{personLabel}</div>
+                                  <div className="text-xs text-[var(--text)] truncate">
+                                    {canSwapPlaceholder ? (
+                                      <PlaceholderPersonSwap
+                                        label={personLabel}
+                                        deptId={(assignment as any).personDepartmentId ?? null}
+                                        className="text-xs text-[var(--text)] truncate"
+                                        onSelect={(person) => handleSwapPlaceholder(assignment.id!, person)}
+                                      />
+                                    ) : (
+                                      personLabel
+                                    )}
+                                  </div>
                                   {assignment.isActive === false ? (
                                     <div className="text-[11px] text-[var(--muted)]">Inactive</div>
                                   ) : null}

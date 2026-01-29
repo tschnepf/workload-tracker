@@ -76,6 +76,7 @@ export type ProjectSectionProps = {
     previousName: string | null
   ) => void;
   onCloseRole: () => void;
+  onSwapPlaceholder: (projectId: number, assignmentId: number, person: { id: number; name: string; department?: number | null }) => Promise<void> | void;
 };
 
 const ProjectSection: React.FC<ProjectSectionProps> = React.memo(({
@@ -134,6 +135,7 @@ const ProjectSection: React.FC<ProjectSectionProps> = React.memo(({
   onToggleRole,
   onSelectRole,
   onCloseRole,
+  onSwapPlaceholder,
 }) => {
   return (
     <div className="border-b border-[var(--border)] last:border-b-0">
@@ -315,6 +317,7 @@ const ProjectSection: React.FC<ProjectSectionProps> = React.memo(({
                 onToggleRole={onToggleRole}
                 onSelectRole={onSelectRole}
                 onCloseRole={onCloseRole}
+                onSwapPlaceholder={onSwapPlaceholder}
               />
             );
           })}

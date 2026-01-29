@@ -987,6 +987,15 @@ const ProjectsList: React.FC = () => {
                 onPersonSearchChange(`<${name}>`);
               }}
               departments={departments}
+              onSwapPlaceholder={async (assignmentId, person) => {
+                try {
+                  await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
+                  if (selectedProject?.id) await reloadAssignments(selectedProject.id);
+                  await invalidateFilterMeta();
+                } catch (e) {
+                  console.error('Failed to replace placeholder', e);
+                }
+              }}
               candidatesOnly={candidatesOnly}
               setCandidatesOnly={setCandidatesOnly}
               availabilityMap={availabilityMap}
@@ -1183,6 +1192,15 @@ const ProjectsList: React.FC = () => {
               onPersonSearchChange(`<${name}>`);
             }}
             departments={departments}
+            onSwapPlaceholder={async (assignmentId, person) => {
+              try {
+                await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
+                if (selectedProject?.id) await reloadAssignments(selectedProject.id);
+                await invalidateFilterMeta();
+              } catch (e) {
+                console.error('Failed to replace placeholder', e);
+              }
+            }}
             candidatesOnly={candidatesOnly}
             setCandidatesOnly={setCandidatesOnly}
             availabilityMap={availabilityMap}

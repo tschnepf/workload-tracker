@@ -80,6 +80,7 @@ export type ProjectsSectionProps = {
     previousName: string | null
   ) => void;
   onCloseRole: () => void;
+  onSwapPlaceholder: (projectId: number, assignmentId: number, person: { id: number; name: string; department?: number | null }) => Promise<void> | void;
 };
 
 const EMPTY_WEEK_HOURS: Record<string, number> = {};
@@ -152,8 +153,9 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
     roleAnchorRef,
     rolesByDept,
     onToggleRole,
-    onSelectRole,
-    onCloseRole,
+  onSelectRole,
+  onCloseRole,
+  onSwapPlaceholder,
   } = props;
 
   const listRef = React.useRef<HTMLDivElement | null>(null);
@@ -287,6 +289,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
               onToggleRole={onToggleRole}
               onSelectRole={onSelectRole}
               onCloseRole={onCloseRole}
+              onSwapPlaceholder={onSwapPlaceholder}
             />
           </div>
         );

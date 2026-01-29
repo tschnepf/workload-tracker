@@ -33,6 +33,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
 import { bulkUpdateAssignmentHours, createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import { useAssignmentsPageSnapshot } from '@/pages/Assignments/hooks/useAssignmentsPageSnapshot';
+import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
 import {
   buildFutureDeliverableLookupFromSet,
   projectMatchesActiveWithDates,
@@ -470,6 +471,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [roleDeptId, setRoleDeptId] = useState<number | null>(null);
   const [roleQuery, setRoleQuery] = useState<string>('');
   const [selectedRoleIndex, setSelectedRoleIndex] = useState<number>(-1);
+  const [showPlaceholdersOnly, setShowPlaceholdersOnly] = useState(false);
   const roleResults = React.useMemo(() => {
     if (!roleDeptId) return [];
     const roles = rolesByDept[roleDeptId] || [];
@@ -837,6 +839,22 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
   }, [assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
 
+  const handleSwapPlaceholder = React.useCallback(async (
+    projectId: number,
+    assignmentId: number,
+    person: { id: number; name: string; department?: number | null }
+  ) => {
+    if (!projectId || !assignmentId) return;
+    try {
+      await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
+      await loadProjectAssignments(projectId);
+      await refreshTotalsForProject(projectId);
+      showToast('Assignment updated', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to replace placeholder', 'error');
+    }
+  }, [assignmentsApi, loadProjectAssignments, refreshTotalsForProject, showToast]);
+
   const handleRemoveAssignment = React.useCallback(async (projectId: number, assignmentId: number, personId: number | null) => {
     if (!assignmentId || !projectId) return;
     try {
@@ -937,6 +955,19 @@ const ProjectAssignmentsGrid: React.FC = () => {
         format={(s) => formatStatusLabel(s as any)}
         onToggle={(s) => toggleStatusFilter(s as any)}
       />
+      <button
+        onClick={() => setShowPlaceholdersOnly((v) => !v)}
+        className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+          showPlaceholdersOnly
+            ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+            : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
+        }`}
+        aria-pressed={showPlaceholdersOnly}
+        aria-label="Filter: projects with placeholders"
+        title="Show projects with placeholders"
+      >
+        W/Placeholders
+      </button>
       <a
         href={buildAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
         className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
@@ -1140,6 +1171,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                       const label = (asn as any).roleName as string | null | undefined;
                       const currentId = (asn as any).roleOnProjectId as number | null | undefined;
                       const personCapacity = (asn as any).personWeeklyCapacity as number | undefined;
+                      const isPlaceholder = asn.person == null && !!label;
                       const assignmentSparkWeeks = sparkWeeks.length > 0 ? sparkWeeks : weeks;
                       const weekHours = assignmentSparkWeeks.map((week) => Number(((asn.weeklyHours as any) || {})[week.date] || 0));
                       const maxHour = Math.max(...weekHours, personCapacity || 0, 1);
@@ -1148,7 +1180,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="text-sm font-medium text-[var(--text)]">
-                                {asn.personName || (asn.person != null ? `Person #${asn.person}` : (asn.roleName ? `<${asn.roleName}>` : 'Unassigned'))}
+                                {isPlaceholder ? (
+                                  <PlaceholderPersonSwap
+                                    label={asn.roleName ? `<${asn.roleName}>` : 'Unassigned'}
+                                    deptId={deptId ?? null}
+                                    className="text-sm font-medium text-[var(--text)]"
+                                    onSelect={(person) => handleSwapPlaceholder(project.id!, asn.id!, person)}
+                                  />
+                                ) : (
+                                  asn.personName || (asn.person != null ? `Person #${asn.person}` : (asn.roleName ? `<${asn.roleName}>` : 'Unassigned'))
+                                )}
                               </div>
                               <button
                                 type="button"
@@ -1220,6 +1261,18 @@ const ProjectAssignmentsGrid: React.FC = () => {
             format={(status) => formatStatusLabel(status as StatusFilter)}
             onToggle={(status) => toggleStatusFilter(status as StatusFilter)}
           />
+          <button
+            type="button"
+            onClick={() => setShowPlaceholdersOnly((v) => !v)}
+            className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+              showPlaceholdersOnly
+                ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
+            }`}
+            aria-pressed={showPlaceholdersOnly}
+          >
+            W/Placeholders
+          </button>
           <HeaderActions
             onExpandAll={async () => { try { setProjects(prev => prev.map(p => ({ ...p, isExpanded: true }))); await refreshAllAssignments(); } catch {} }}
             onCollapseAll={() => { setProjects(prev => prev.map(p => ({ ...p, isExpanded: false }))); url.set('expanded', null); }}
@@ -1625,8 +1678,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
           const noDatesMatch = hasNoDelivs && projectMatchesActiveWithoutDates(project, futureLookup);
           return baseMatch || withDatesMatch || noDatesMatch;
         });
+    const placeholderSet = new Set<number>();
+    const placeholderEntries = Object.entries(snap.hasPlaceholdersByProject || {});
+    placeholderEntries.forEach(([pid, count]) => {
+      if (count) placeholderSet.add(Number(pid));
+    });
+    const canApplyPlaceholderFilter = placeholderEntries.length > 0;
+    const placeholderFiltered = showPlaceholdersOnly && canApplyPlaceholderFilter
+      ? filteredProjects.filter((project) => project.id != null && placeholderSet.has(project.id))
+      : filteredProjects;
     if (!mounted) return () => { mounted = false; };
-    setProjects(filteredProjects);
+    setProjects(placeholderFiltered);
     // Coerce hours map keys to numbers
     const hb: Record<number, Record<string, number>> = {};
     Object.entries(snap.hoursByProject || {}).forEach(([pid, wk]) => { hb[Number(pid)] = wk; });
@@ -1671,6 +1733,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [
     snapshotQuery.data,
     statusParams,
+    showPlaceholdersOnly,
   ]);
 
   useEffect(() => {
@@ -2089,6 +2152,19 @@ const ProjectAssignmentsGrid: React.FC = () => {
                   </button>
                 );
               })}
+              <button
+                onClick={() => setShowPlaceholdersOnly((v) => !v)}
+                className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                  showPlaceholdersOnly
+                    ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                    : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
+                }`}
+                aria-pressed={showPlaceholdersOnly}
+                aria-label="Filter: projects with placeholders"
+                title="Show projects with placeholders"
+              >
+                W/Placeholders
+              </button>
             </div>
           </div>
         </div>
@@ -2211,6 +2287,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
               onToggleRole={handleToggleRole}
               onSelectRole={handleSelectRole}
               onCloseRole={handleCloseRole}
+              onSwapPlaceholder={handleSwapPlaceholder}
             />
           )}
 

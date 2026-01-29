@@ -69,6 +69,7 @@ interface Props {
   onRoleSelectNew: OnRoleSelect;
   onRolePlaceholderSelect: (role: ProjectRole) => void;
   departments: Department[];
+  onSwapPlaceholder: (assignmentId: number, person: { id: number; name: string; department?: number | null }) => Promise<void> | void;
 
   candidatesOnly: boolean;
   setCandidatesOnly: (v: boolean) => void;
@@ -116,6 +117,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   onRoleSelectNew,
   onRolePlaceholderSelect,
   departments,
+  onSwapPlaceholder,
   candidatesOnly,
   setCandidatesOnly,
   availabilityMap,
@@ -708,6 +710,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                           editingValue={editingValue}
                           onEditValueChangeCell={onEditValueChangeCell}
                           optimisticHours={optimisticHours}
+                          onSwapPlaceholder={onSwapPlaceholder}
                         />
                       </div>
                     ))}

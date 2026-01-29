@@ -270,6 +270,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     required=False,
                 ),
                 'hasFutureDeliverablesByProject': serializers.DictField(child=serializers.BooleanField()),
+                'hasPlaceholdersByProject': serializers.DictField(child=serializers.IntegerField(), required=False),
                 'metrics': inline_serializer(name='ProjectSnapshotMetrics', fields={
                     'projectsCount': serializers.IntegerField(),
                     'peopleAssignedCount': serializers.IntegerField(),
@@ -384,6 +385,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Collect projects encountered in assignments
         project_hours = {}
         people_per_project = {}
+        placeholders_per_project = {}
 
         def hours_for_week_from_json(weekly_hours, sunday_key):
             try:
@@ -400,6 +402,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             project_hours.setdefault(pid, {})
             if a.person_id:
                 people_per_project.setdefault(pid, set()).add(a.person_id)
+            else:
+                placeholders_per_project[pid] = placeholders_per_project.get(pid, 0) + 1
             wh = a.weekly_hours or {}
             for wk in week_keys:
                 h = hours_for_week_from_json(wh, wk)
@@ -499,6 +503,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'deliverablesByProjectWeek': deliverables_by_week,
             'deliverableMarkersByProjectWeek': deliverable_markers_by_week,
             'hasFutureDeliverablesByProject': { str(pid): True for pid in has_future_deliverables.keys() },
+            'hasPlaceholdersByProject': { str(pid): count for pid, count in placeholders_per_project.items() },
             'metrics': {
                 'projectsCount': projects_count,
                 'peopleAssignedCount': people_assigned,

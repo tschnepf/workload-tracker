@@ -1,8 +1,9 @@
 import React from 'react';
-import type { Assignment, Deliverable } from '@/types/models';
+import type { Assignment, Deliverable, Person } from '@/types/models';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import WeekCell from '@/pages/Assignments/grid/components/WeekCell';
+import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
 
 export interface AssignmentRowProps {
   assignment: Assignment;
@@ -36,6 +37,7 @@ export interface AssignmentRowProps {
   getDeliverablesForProjectWeek?: (projectId: number | undefined, weekStart: string) => Deliverable[];
   optimisticHours?: Map<number, Record<string, number>>;
   showHours?: boolean;
+  onSwapPlaceholder?: (assignmentId: number, person: Pick<Person, 'id' | 'name' | 'department'>) => Promise<void> | void;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = ({
@@ -66,12 +68,14 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   getDeliverablesForProjectWeek,
   optimisticHours,
   showHours,
+  onSwapPlaceholder,
 }) => {
   const [openRole, setOpenRole] = React.useState(false);
   const roleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
   const personLabel = assignment.personName
     || (assignment.person != null ? `Person #${assignment.person}` : (assignment.roleName ? `<${assignment.roleName}>` : 'Unassigned'));
+  const canSwapPlaceholder = assignment.person == null && !!assignment.roleName && !!onSwapPlaceholder;
   // selection/editing handled by parent using WeekCell helpers
   if (isEditing) {
     return (
@@ -155,7 +159,16 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
       <div className="flex justify-between items-center p-2 pl-8 bg-[var(--card)] rounded">
         <div className="min-w-0 pr-2">
           <div className="text-[var(--text)] font-medium leading-tight truncate">
-            {personLabel}
+            {canSwapPlaceholder ? (
+              <PlaceholderPersonSwap
+                label={personLabel}
+                deptId={personDepartmentId ?? (assignment as any).personDepartmentId ?? null}
+                className="text-[var(--text)] font-medium leading-tight truncate"
+                onSelect={(person) => onSwapPlaceholder?.(assignment.id!, person)}
+              />
+            ) : (
+              personLabel
+            )}
           </div>
           <div className="mt-0.5 text-[var(--muted)] text-xs truncate">
             <button
@@ -201,7 +214,18 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
       <div className="flex-1">
         <div className="grid grid-cols-3 gap-4 items-center">
           <div className="min-w-0">
-            <div className="text-[var(--text)] font-medium leading-tight truncate">{personLabel}</div>
+            <div className="text-[var(--text)] font-medium leading-tight truncate">
+              {canSwapPlaceholder ? (
+                <PlaceholderPersonSwap
+                  label={personLabel}
+                  deptId={personDepartmentId ?? (assignment as any).personDepartmentId ?? null}
+                  className="text-[var(--text)] font-medium leading-tight truncate"
+                  onSelect={(person) => onSwapPlaceholder?.(assignment.id!, person)}
+                />
+              ) : (
+                personLabel
+              )}
+            </div>
             <div className="mt-0.5 text-[var(--muted)] text-xs truncate">
               <button
                 type="button"
