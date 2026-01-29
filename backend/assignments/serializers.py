@@ -6,7 +6,7 @@ RETROFIT: Support weekly hours for 12-week planning horizon
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from .models import Assignment
-from projects.models import Project
+from projects.models import Project, ProjectRole
 from skills.serializers import PersonSkillSummarySerializer
 
 class AssignmentSerializer(serializers.ModelSerializer):
@@ -19,7 +19,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
     projectDisplayName = serializers.CharField(source='project_display', read_only=True)
     personName = serializers.CharField(source='person.name', read_only=True)
     personWeeklyCapacity = serializers.IntegerField(source='person.weekly_capacity', read_only=True)
-    personDepartmentId = serializers.IntegerField(source='person.department_id', read_only=True)
+    personDepartmentId = serializers.SerializerMethodField()
     personSkills = PersonSkillSummarySerializer(source='person.skills', many=True, read_only=True)
     # Department-scoped Project Role fields (FK-based)
     roleOnProjectId = serializers.IntegerField(source='role_on_project_ref_id', required=False, allow_null=True)
@@ -52,6 +52,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'createdAt': {'source': 'created_at', 'read_only': True},
             'updatedAt': {'source': 'updated_at', 'read_only': True},
+            'person': {'required': False, 'allow_null': True},
         }
 
     @extend_schema_field(serializers.CharField(allow_null=True))
@@ -64,6 +65,24 @@ class AssignmentSerializer(serializers.ModelSerializer):
             pass
         legacy = getattr(obj, 'role_on_project', None)
         return legacy or None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_personDepartmentId(self, obj) -> int | None:
+        try:
+            if getattr(obj, 'person_id', None):
+                return getattr(obj.person, 'department_id', None)
+        except Exception:  # nosec B110
+            pass
+        dept_id = getattr(obj, 'department_id', None)
+        if dept_id:
+            return dept_id
+        try:
+            role_ref = getattr(obj, 'role_on_project_ref', None)
+            if role_ref:
+                return getattr(role_ref, 'department_id', None)
+        except Exception:  # nosec B110
+            pass
+        return None
     
     def validate_weeklyHours(self, value):
         """Validate weekly hours data structure and values.
@@ -108,7 +127,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
         - Ensure department is set from person if missing.
         - If a role FK is provided, enforce department match at the application level.
         """
-        person = self.instance.person if getattr(self, 'instance', None) else attrs.get('person')
+        person = attrs.get('person') if 'person' in attrs else (self.instance.person if getattr(self, 'instance', None) else None)
         # Prevent assigning projects to inactive people when person is explicitly set/changed
         if attrs.get('person') is not None:
             try:
@@ -116,19 +135,44 @@ class AssignmentSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({'person': 'Cannot assign projects to inactive people.'})
             except AttributeError:  # nosec B110
                 pass
-        dept = attrs.get('department')
-        if dept is None and person is not None:
-            # Default department from person
+        dept = attrs.get('department') if 'department' in attrs else (self.instance.department if getattr(self, 'instance', None) else None)
+        role_id = attrs.get('role_on_project_ref_id') if 'role_on_project_ref_id' in attrs else (
+            self.instance.role_on_project_ref_id if getattr(self, 'instance', None) else None
+        )
+
+        if person is None and role_id is None:
+            raise serializers.ValidationError({'person': 'person_or_role_required'})
+
+        if dept is None:
+            # Default department from person or role (for placeholder assignments)
+            if person is not None:
+                try:
+                    attrs['department'] = person.department
+                    dept = attrs['department']
+                except Exception:  # nosec B110
+                    pass
+            elif role_id is not None:
+                try:
+                    role_obj = ProjectRole.objects.filter(id=role_id).only('department_id').first()
+                    if role_obj:
+                        attrs['department'] = role_obj.department
+                        dept = attrs['department']
+                except Exception:  # nosec B110
+                    pass
+
+        if role_id is not None:
+            # Determine effective department
+            effective_dept = dept or (getattr(person, 'department', None) if person else None)
+            if effective_dept is None:
+                raise serializers.ValidationError({'roleOnProjectId': 'role_department_mismatch'})
             try:
-                attrs['department'] = person.department
+                role_obj = ProjectRole.objects.filter(id=role_id).only('department_id').first()
+                if role_obj and role_obj.department_id != getattr(effective_dept, 'id', effective_dept):
+                    raise serializers.ValidationError({'roleOnProjectId': 'role_department_mismatch'})
+            except serializers.ValidationError:
+                raise
             except Exception:  # nosec B110
                 pass
-        role = attrs.get('role_on_project_ref')
-        if role is not None:
-            # Determine effective department
-            effective_dept = attrs.get('department') or (getattr(self.instance, 'department', None) if getattr(self, 'instance', None) else None) or (getattr(person, 'department', None) if person else None)
-            if effective_dept is None or role.department_id != getattr(effective_dept, 'id', effective_dept):
-                raise serializers.ValidationError({'roleOnProjectId': 'role_department_mismatch'})
         return attrs
     
     def create(self, validated_data):
@@ -138,6 +182,13 @@ class AssignmentSerializer(serializers.ModelSerializer):
         if not validated_data.get('department') and validated_data.get('person'):
             try:
                 validated_data['department'] = validated_data['person'].department
+            except Exception:  # nosec B110
+                pass
+        if not validated_data.get('department') and validated_data.get('role_on_project_ref_id'):
+            try:
+                role_obj = ProjectRole.objects.filter(id=validated_data['role_on_project_ref_id']).only('department_id').first()
+                if role_obj:
+                    validated_data['department'] = role_obj.department
             except Exception:  # nosec B110
                 pass
         return super().create(validated_data)

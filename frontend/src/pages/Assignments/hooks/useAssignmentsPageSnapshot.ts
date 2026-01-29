@@ -10,6 +10,7 @@ type Params = {
   weeks: number;
   department?: number;
   includeChildren?: boolean;
+  includePlaceholders?: boolean;
   statusIn?: string;
   hasFutureDeliverables?: 0 | 1;
   projectIds?: number[];
@@ -30,12 +31,13 @@ export function useAssignmentsPageSnapshot(params: Params) {
       params.weeks,
       dept,
       inc,
+      params.includePlaceholders ? 1 : 0,
       params.statusIn ?? null,
       params.hasFutureDeliverables ?? null,
       projectIdsKey,
       params.include ?? null,
     ],
-    [params.weeks, dept, inc, params.statusIn, params.hasFutureDeliverables, projectIdsKey, params.include]
+    [params.weeks, dept, inc, params.includePlaceholders, params.statusIn, params.hasFutureDeliverables, projectIdsKey, params.include]
   );
 
   const query = useQuery<AssignmentsPageSnapshot, Error>({
@@ -45,6 +47,7 @@ export function useAssignmentsPageSnapshot(params: Params) {
         weeks: params.weeks,
         department: params.department,
         include_children: params.includeChildren ? 1 : 0,
+        include_placeholders: params.includePlaceholders ? 1 : 0,
         status_in: params.statusIn,
         has_future_deliverables: params.hasFutureDeliverables,
         project_ids: params.projectIds,

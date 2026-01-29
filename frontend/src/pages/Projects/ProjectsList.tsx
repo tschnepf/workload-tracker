@@ -79,7 +79,7 @@ const ProjectsList: React.FC = () => {
   );
   const leadAssignmentsQuery = useQuery<Assignment[], Error>({
     queryKey: leadAssignmentsKey,
-    queryFn: () => assignmentsApi.listAll(backendParams),
+    queryFn: () => assignmentsApi.listAll({ ...backendParams, include_placeholders: 1 }),
     enabled: projects.length > 0,
     staleTime: 30_000,
   });
@@ -443,7 +443,9 @@ const ProjectsList: React.FC = () => {
     leadAssignments.forEach((assignment) => {
       if (!assignment.project) return;
       const personMeta = assignment.person != null ? peopleById.get(assignment.person) : undefined;
-      const personName = assignment.personName || personMeta?.name || 'Unknown';
+      const personName = assignment.personName
+        || personMeta?.name
+        || (assignment.person == null && assignment.roleName ? `<${assignment.roleName}>` : 'Unknown');
       const deptId = assignment.personDepartmentId ?? personMeta?.departmentId ?? null;
       const deptMeta = deptId != null ? deptById.get(deptId) : undefined;
       const deptLabel =
@@ -556,7 +558,7 @@ const ProjectsList: React.FC = () => {
 
   const handleQaAssignmentUpdated = useCallback(async (projectId: number) => {
     try {
-      const fresh = await assignmentsApi.listAll(backendParams, { noCache: true });
+      const fresh = await assignmentsApi.listAll({ ...backendParams, include_placeholders: 1 }, { noCache: true });
       queryClient.setQueryData(leadAssignmentsKey, fresh);
     } catch {
       try { await leadAssignmentsQuery.refetch(); } catch {}
@@ -972,6 +974,19 @@ const ProjectsList: React.FC = () => {
                 const name = roleName || '';
                 setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
               }}
+              onRolePlaceholderSelect={(role) => {
+                const name = role?.name || '';
+                setNewAssignment(prev => ({
+                  ...prev,
+                  selectedPerson: null,
+                  personSearch: `<${name}>`,
+                  roleOnProjectId: role?.id ?? null,
+                  roleOnProject: name,
+                  roleSearch: name,
+                }));
+                onPersonSearchChange(`<${name}>`);
+              }}
+              departments={departments}
               candidatesOnly={candidatesOnly}
               setCandidatesOnly={setCandidatesOnly}
               availabilityMap={availabilityMap}
@@ -1155,6 +1170,19 @@ const ProjectsList: React.FC = () => {
               const name = roleName || '';
               setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
             }}
+            onRolePlaceholderSelect={(role) => {
+              const name = role?.name || '';
+              setNewAssignment(prev => ({
+                ...prev,
+                selectedPerson: null,
+                personSearch: `<${name}>`,
+                roleOnProjectId: role?.id ?? null,
+                roleOnProject: name,
+                roleSearch: name,
+              }));
+              onPersonSearchChange(`<${name}>`);
+            }}
+            departments={departments}
             candidatesOnly={candidatesOnly}
             setCandidatesOnly={setCandidatesOnly}
             availabilityMap={availabilityMap}

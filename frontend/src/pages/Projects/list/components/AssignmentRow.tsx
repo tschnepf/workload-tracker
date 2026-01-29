@@ -70,12 +70,14 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   const [openRole, setOpenRole] = React.useState(false);
   const roleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
+  const personLabel = assignment.personName
+    || (assignment.person != null ? `Person #${assignment.person}` : (assignment.roleName ? `<${assignment.roleName}>` : 'Unassigned'));
   // selection/editing handled by parent using WeekCell helpers
   if (isEditing) {
     return (
       <div className="p-3 bg-[var(--surfaceOverlay)] rounded border border-[var(--border)]">
         <div className="grid grid-cols-4 gap-4 items-center">
-          <div className="text-[var(--text)]">{assignment.personName || 'Unknown'}</div>
+          <div className="text-[var(--text)]">{personLabel}</div>
 
           <div className="relative">
             <button
@@ -153,7 +155,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
       <div className="flex justify-between items-center p-2 pl-8 bg-[var(--card)] rounded">
         <div className="min-w-0 pr-2">
           <div className="text-[var(--text)] font-medium leading-tight truncate">
-            {assignment.personName || 'Unknown'}
+            {personLabel}
           </div>
           <div className="mt-0.5 text-[var(--muted)] text-xs truncate">
             <button
@@ -199,7 +201,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
       <div className="flex-1">
         <div className="grid grid-cols-3 gap-4 items-center">
           <div className="min-w-0">
-            <div className="text-[var(--text)] font-medium leading-tight truncate">{assignment.personName || 'Unknown'}</div>
+            <div className="text-[var(--text)] font-medium leading-tight truncate">{personLabel}</div>
             <div className="mt-0.5 text-[var(--muted)] text-xs truncate">
               <button
                 type="button"

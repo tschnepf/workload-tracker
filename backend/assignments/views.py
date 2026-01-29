@@ -12,7 +12,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
-from django.db.models import Sum, Max, Prefetch, Value, Count  # noqa: F401
+from django.db.models import Sum, Max, Prefetch, Value, Count, Q  # noqa: F401
 from core.deliverable_phase import build_project_week_classification
 from core.choices import MembershipEventType
 from django.db.models.functions import Coalesce, Lower
@@ -67,13 +67,26 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     Assignment CRUD API with utilization tracking
     Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
     """
-    queryset = (
-        Assignment.objects.filter(is_active=True, person__is_active=True)
-        .select_related('person', 'person__department', 'project', 'department', 'role_on_project_ref')
-        .order_by('-created_at')
-    )
     serializer_class = AssignmentSerializer
+    queryset = Assignment.objects.all()
     # Use global default permissions (IsAuthenticated)
+
+    def get_queryset(self):
+        qs = (
+            Assignment.objects.filter(is_active=True)
+            .select_related('person', 'person__department', 'project', 'department', 'role_on_project_ref')
+            .order_by('-created_at')
+        )
+        req = getattr(self, 'request', None)
+        include_placeholders = False
+        if req is not None:
+            include_placeholders = (req.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
+        if getattr(self, 'action', None) == 'list':
+            if include_placeholders:
+                return qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
+            return qs.filter(person__is_active=True)
+        # For detail and non-list actions, allow placeholder rows but exclude inactive people.
+        return qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
     
     def list(self, request, *args, **kwargs):
         """
@@ -85,6 +98,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         except Exception:  # nosec B110
             pass
         queryset = self.get_queryset()
+        include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
 
         # Filter by project if specified
         project_id = request.query_params.get('project')
@@ -118,11 +132,19 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         ):
                             if d not in ids:
                                 stack.append(d)
-                    queryset = queryset.filter(
-                        person__department_id__in=list(ids)
-                    )
+                    if include_placeholders:
+                        queryset = queryset.filter(
+                            Q(person__department_id__in=list(ids)) | Q(department_id__in=list(ids))
+                        )
+                    else:
+                        queryset = queryset.filter(
+                            person__department_id__in=list(ids)
+                        )
                 else:
-                    queryset = queryset.filter(person__department_id=dept_id)
+                    if include_placeholders:
+                        queryset = queryset.filter(Q(person__department_id=dept_id) | Q(department_id=dept_id))
+                    else:
+                        queryset = queryset.filter(person__department_id=dept_id)
             except (TypeError, ValueError):  # nosec B110
                 # Ignore invalid department filter; return unfiltered
                 pass
@@ -209,6 +231,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),
             OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters'),
             OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1'),
             OpenApiParameter(name='project_ids', type=str, required=False, description='CSV of project IDs to scope totals (optional)'),
@@ -268,6 +291,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     f"w={request.query_params.get('weeks','12')}:"
                     f"d={request.query_params.get('department','')}:"
                     f"c={request.query_params.get('include_children','')}:"
+                    f"p={request.query_params.get('include_placeholders','')}:"
                     f"s={request.query_params.get('status_in','')}:"
                     f"hfd={request.query_params.get('has_future_deliverables','')}:"
                     f"ids={request.query_params.get('project_ids','')}"
@@ -296,6 +320,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping via people of assignments
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -340,9 +365,16 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
         # Base assignments queryset
-        qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
+        qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
+        if include_placeholders:
+            qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
+        else:
+            qs = qs.filter(person__is_active=True)
         if dept_ids:
-            qs = qs.filter(person__department_id__in=dept_ids)
+            if include_placeholders:
+                qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
+            else:
+                qs = qs.filter(person__department_id__in=dept_ids)
 
         # If scope_set provided, restrict to those projects
         if scope_set:
@@ -366,7 +398,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             if pid is None:
                 continue
             project_hours.setdefault(pid, {})
-            people_per_project.setdefault(pid, set()).add(a.person_id)
+            if a.person_id:
+                people_per_project.setdefault(pid, set()).add(a.person_id)
             wh = a.weekly_hours or {}
             for wk in week_keys:
                 h = hours_for_week_from_json(wh, wk)
@@ -1259,6 +1292,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),
         ],
         responses=inline_serializer(name='ProjectTotalsResponse', fields={
             'hoursByProject': serializers.DictField(child=serializers.DictField(child=serializers.FloatField()))
@@ -1285,6 +1319,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -1312,9 +1347,16 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
-        qs = Assignment.objects.filter(is_active=True, person__is_active=True, project_id__in=project_ids).select_related('person', 'project')
+        qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).select_related('person', 'project')
+        if include_placeholders:
+            qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
+        else:
+            qs = qs.filter(person__is_active=True)
         if dept_ids:
-            qs = qs.filter(person__department_id__in=dept_ids)
+            if include_placeholders:
+                qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
+            else:
+                qs = qs.filter(person__department_id__in=dept_ids)
 
         def hours_for_week_from_json(weekly_hours, sunday_key):
             try:
@@ -2539,6 +2581,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
         OpenApiParameter(name='department', type=int, required=False),
         OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+        OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),
         OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters (project grid)'),
         OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1 (project grid)'),
         OpenApiParameter(name='project_ids', type=str, required=False, description='CSV of project IDs to scope totals (project grid)'),

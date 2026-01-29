@@ -42,7 +42,7 @@ const ProjectDashboard: React.FC = () => {
 
   const assignmentsQuery = useQuery({
     queryKey: ['project-dashboard', 'assignments', projectId],
-    queryFn: () => assignmentsApi.list({ project: projectId, page_size: 200 }),
+    queryFn: () => assignmentsApi.list({ project: projectId, page_size: 200, include_placeholders: 1 }),
     enabled: hasValidId,
     staleTime: 30_000,
   });
@@ -109,6 +109,7 @@ const ProjectDashboard: React.FC = () => {
     ? (formatUtcToLocal(project.endDate, { dateStyle: 'medium' }) || project.endDate)
     : '-';
   const [showAddAssignment, setShowAddAssignment] = React.useState(false);
+  const [assignmentMode, setAssignmentMode] = React.useState<'person' | 'role'>('person');
   const [personSearch, setPersonSearch] = React.useState('');
   const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(null);
   const [roleOpen, setRoleOpen] = React.useState(false);
@@ -116,6 +117,12 @@ const ProjectDashboard: React.FC = () => {
   const roleButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const { people: peopleResults } = usePeopleAutocomplete(personSearch);
   const { data: projectRoles = [] } = useProjectRoles(selectedPerson?.department ?? null);
+  const [placeholderDeptId, setPlaceholderDeptId] = React.useState<number | null>(null);
+  const [roleSearch, setRoleSearch] = React.useState('');
+  const [roleDropdownOpen, setRoleDropdownOpen] = React.useState(false);
+  const [placeholderRole, setPlaceholderRole] = React.useState<{ id: number | null; name: string | null }>({ id: null, name: null });
+  const roleBoxRef = React.useRef<HTMLDivElement | null>(null);
+  const { data: placeholderRoles = [] } = useProjectRoles(placeholderDeptId);
   const [personDropdownOpen, setPersonDropdownOpen] = React.useState(false);
   const personBoxRef = React.useRef<HTMLDivElement | null>(null);
   const [savingAssignment, setSavingAssignment] = React.useState(false);
@@ -178,6 +185,19 @@ const ProjectDashboard: React.FC = () => {
   const [riskEditFile, setRiskEditFile] = React.useState<File | null>(null);
   const [riskEditDeptOpen, setRiskEditDeptOpen] = React.useState(false);
   const riskEditDeptRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (assignmentMode !== 'role') return;
+    if (placeholderDeptId != null) return;
+    const firstDept = departmentsQuery.data?.[0]?.id;
+    if (firstDept) setPlaceholderDeptId(firstDept);
+  }, [assignmentMode, placeholderDeptId, departmentsQuery.data]);
+
+  const filteredPlaceholderRoles = React.useMemo(() => {
+    const query = roleSearch.trim().toLowerCase();
+    if (!query) return placeholderRoles;
+    return placeholderRoles.filter((role) => role.name.toLowerCase().includes(query));
+  }, [placeholderRoles, roleSearch]);
   const riskFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const riskEditFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [savingRisk, setSavingRisk] = React.useState(false);
@@ -219,6 +239,9 @@ const ProjectDashboard: React.FC = () => {
       const target = e.target as Element;
       if (personBoxRef.current && !personBoxRef.current.contains(target)) {
         setPersonDropdownOpen(false);
+      }
+      if (roleBoxRef.current && !roleBoxRef.current.contains(target)) {
+        setRoleDropdownOpen(false);
       }
       if (riskEditDeptOpen && riskEditDeptRef.current && !riskEditDeptRef.current.contains(target)) {
         setRiskEditDeptOpen(false);
@@ -347,11 +370,16 @@ const ProjectDashboard: React.FC = () => {
   });
 
   const resetAddAssignment = () => {
+    setAssignmentMode('person');
     setPersonSearch('');
     setSelectedPerson(null);
     setRoleSelection({ id: null, name: null });
     setRoleOpen(false);
     setPersonDropdownOpen(false);
+    setPlaceholderDeptId(null);
+    setRoleSearch('');
+    setRoleDropdownOpen(false);
+    setPlaceholderRole({ id: null, name: null });
   };
 
   const handleSelectPerson = (person: Person) => {
@@ -361,17 +389,35 @@ const ProjectDashboard: React.FC = () => {
     setRoleSelection({ id: null, name: null });
   };
 
+  const handleSelectPlaceholderRole = (role: { id: number; name: string }) => {
+    setPlaceholderRole({ id: role.id, name: role.name });
+    setRoleSearch(role.name);
+    setRoleDropdownOpen(false);
+  };
+
   const handleSaveAssignment = async () => {
-    if (!projectId || !selectedPerson?.id || savingAssignment) return;
+    if (!projectId || savingAssignment) return;
+    if (assignmentMode === 'person' && !selectedPerson?.id) return;
+    if (assignmentMode === 'role' && !placeholderRole.id) return;
     try {
       setSavingAssignment(true);
-      await createAssignment({
-        person: selectedPerson.id,
-        project: projectId,
-        roleOnProjectId: roleSelection.id ?? null,
-        weeklyHours: {},
-        startDate: new Date().toISOString().slice(0, 10),
-      } as any, assignmentsApi);
+      if (assignmentMode === 'person') {
+        await createAssignment({
+          person: selectedPerson?.id ?? null,
+          project: projectId,
+          roleOnProjectId: roleSelection.id ?? null,
+          weeklyHours: {},
+          startDate: new Date().toISOString().slice(0, 10),
+        } as any, assignmentsApi);
+      } else {
+        await createAssignment({
+          person: null,
+          project: projectId,
+          roleOnProjectId: placeholderRole.id ?? null,
+          weeklyHours: {},
+          startDate: new Date().toISOString().slice(0, 10),
+        } as any, assignmentsApi);
+      }
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
       resetAddAssignment();
       setShowAddAssignment(false);
@@ -1002,66 +1048,158 @@ const ProjectDashboard: React.FC = () => {
               </div>
               {showAddAssignment && (
                 <div className="mb-3 rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/40 p-2 space-y-2">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">New Assignment</div>
-                  <div className="space-y-2">
-                    <div className="relative" ref={personBoxRef}>
-                      <input
-                        type="text"
-                        placeholder="Search people (min 2 chars)"
-                        value={personSearch}
-                        onChange={(e) => {
-                          setPersonSearch(e.target.value);
-                          setPersonDropdownOpen(true);
-                          setSelectedPerson(null);
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">New Assignment</div>
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentMode('person');
+                          setRoleDropdownOpen(false);
                         }}
-                        onFocus={() => setPersonDropdownOpen(true)}
-                        className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                      />
-                      {personDropdownOpen && personSearch.trim().length >= 2 && peopleResults.length > 0 && (
-                        <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
-                          {peopleResults.map((person) => (
-                            <button
-                              key={person.id}
-                              type="button"
-                              className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--surfaceHover)]"
-                              onClick={() => handleSelectPerson(person)}
-                            >
-                              <div className="text-[var(--text)]">{person.name}</div>
-                              <div className="text-[11px] text-[var(--muted)]">{person.roleName || 'Role not set'}</div>
-                            </button>
-                          ))}
-                        </div>
+                        className={`px-2 py-0.5 rounded border border-[var(--border)] ${assignmentMode === 'person' ? 'bg-[var(--primary)] text-white' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+                      >
+                        Person
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentMode('role');
+                          setPersonDropdownOpen(false);
+                          setRoleOpen(false);
+                        }}
+                        className={`px-2 py-0.5 rounded border border-[var(--border)] ${assignmentMode === 'role' ? 'bg-[var(--primary)] text-white' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+                      >
+                        Role
+                      </button>
+                    </div>
+                  </div>
+
+                  {assignmentMode === 'person' ? (
+                    <div className="space-y-2">
+                      <div className="relative" ref={personBoxRef}>
+                        <input
+                          type="text"
+                          placeholder="Search people (min 2 chars)"
+                          value={personSearch}
+                          onChange={(e) => {
+                            setPersonSearch(e.target.value);
+                            setPersonDropdownOpen(true);
+                            setSelectedPerson(null);
+                          }}
+                          onFocus={() => setPersonDropdownOpen(true)}
+                          className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                        />
+                        {personDropdownOpen && personSearch.trim().length >= 2 && peopleResults.length > 0 && (
+                          <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
+                            {peopleResults.map((person) => (
+                              <button
+                                key={person.id}
+                                type="button"
+                                className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--surfaceHover)]"
+                                onClick={() => handleSelectPerson(person)}
+                              >
+                                <div className="text-[var(--text)]">{person.name}</div>
+                                <div className="text-[11px] text-[var(--muted)]">{person.roleName || 'Role not set'}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          ref={roleButtonRef}
+                          type="button"
+                          onClick={() => setRoleOpen((prev) => !prev)}
+                          className="flex-1 text-left px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                          disabled={!selectedPerson}
+                        >
+                          {roleSelection.name || 'Select role (optional)'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveAssignment}
+                          disabled={!selectedPerson || savingAssignment}
+                          className="text-[11px] px-2 py-1 rounded border border-[var(--border)] bg-[var(--primary)] text-white disabled:opacity-50"
+                        >
+                          {savingAssignment ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                      {roleOpen && selectedPerson && (
+                        <RoleDropdown
+                          roles={projectRoles}
+                          currentId={roleSelection.id}
+                          onSelect={(id, name) => setRoleSelection({ id, name })}
+                          onClose={() => setRoleOpen(false)}
+                          anchorRef={roleButtonRef}
+                        />
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        ref={roleButtonRef}
-                        type="button"
-                        onClick={() => setRoleOpen((prev) => !prev)}
-                        className="flex-1 text-left px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-                        disabled={!selectedPerson}
-                      >
-                        {roleSelection.name || 'Select role (optional)'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveAssignment}
-                        disabled={!selectedPerson || savingAssignment}
-                        className="text-[11px] px-2 py-1 rounded border border-[var(--border)] bg-[var(--primary)] text-white disabled:opacity-50"
-                      >
-                        {savingAssignment ? 'Saving…' : 'Save'}
-                      </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={placeholderDeptId ?? ''}
+                          onChange={(e) => {
+                            const next = e.target.value ? Number(e.target.value) : null;
+                            setPlaceholderDeptId(next);
+                            setRoleSearch('');
+                            setPlaceholderRole({ id: null, name: null });
+                            setRoleDropdownOpen(false);
+                          }}
+                          className="px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)]"
+                        >
+                          <option value="">Select department</option>
+                          {(departmentsQuery.data || []).map((dept) => (
+                            <option key={dept.id} value={dept.id ?? ''}>{dept.name}</option>
+                          ))}
+                        </select>
+                        <div className="relative flex-1" ref={roleBoxRef}>
+                          <input
+                            type="text"
+                            placeholder={placeholderDeptId ? 'Search roles...' : 'Select a department first'}
+                            value={roleSearch}
+                            onChange={(e) => {
+                              setRoleSearch(e.target.value);
+                              setRoleDropdownOpen(true);
+                              setPlaceholderRole({ id: null, name: null });
+                            }}
+                            onFocus={() => {
+                              if (placeholderDeptId) setRoleDropdownOpen(true);
+                            }}
+                            disabled={!placeholderDeptId}
+                            className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none disabled:opacity-50"
+                          />
+                          {roleDropdownOpen && roleSearch.trim().length >= 1 && (
+                            <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
+                              {filteredPlaceholderRoles.length === 0 ? (
+                                <div className="px-2 py-1 text-[11px] text-[var(--muted)]">No matches</div>
+                              ) : (
+                                filteredPlaceholderRoles.map((role) => (
+                                  <button
+                                    key={role.id}
+                                    type="button"
+                                    className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--surfaceHover)]"
+                                    onClick={() => handleSelectPlaceholderRole(role)}
+                                  >
+                                    <div className="text-[var(--text)]">{role.name}</div>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSaveAssignment}
+                          disabled={!placeholderRole.id || savingAssignment}
+                          className="text-[11px] px-2 py-1 rounded border border-[var(--border)] bg-[var(--primary)] text-white disabled:opacity-50"
+                        >
+                          {savingAssignment ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
                     </div>
-                    {roleOpen && selectedPerson && (
-                      <RoleDropdown
-                        roles={projectRoles}
-                        currentId={roleSelection.id}
-                        onSelect={(id, name) => setRoleSelection({ id, name })}
-                        onClose={() => setRoleOpen(false)}
-                        anchorRef={roleButtonRef}
-                      />
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
               {assignmentsQuery.isLoading ? (
@@ -1082,8 +1220,9 @@ const ProjectDashboard: React.FC = () => {
                         <ul className="space-y-1">
                           {group.items.map((assignment) => {
                             const personId = Number.isFinite(assignment.person) ? assignment.person : null;
-                            const personLabel = assignment.personName || (personId != null ? `Person #${personId}` : 'Unassigned');
                             const roleLabel = assignment.roleName || null;
+                            const personLabel = assignment.personName
+                              || (personId != null ? `Person #${personId}` : (roleLabel ? `<${roleLabel}>` : 'Unassigned'));
                             return (
                               <li key={assignment.id} className="py-1.5 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3 items-center pl-3">
                                 <div className="min-w-0">

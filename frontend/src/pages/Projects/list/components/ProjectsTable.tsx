@@ -455,7 +455,9 @@ const ProjectsTable: React.FC<Props> = ({
       <div className="space-y-0.5">
         {qaAssignments.map((assignment) => {
           const override = assignment.id != null ? qaOverrides.get(assignment.id) : undefined;
-          const name = override?.personName || assignment.personName || 'Unknown';
+          const name = override?.personName
+            || assignment.personName
+            || (assignment.person == null && assignment.roleName ? `<${assignment.roleName}>` : 'Unknown');
           const deptLabel = override?.deptLabel
             ?? (assignment.personDepartmentId != null ? departmentLabels?.get(assignment.personDepartmentId) : undefined);
           const label = deptLabel ? `${name} (${deptLabel})` : name;

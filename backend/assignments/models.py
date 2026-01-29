@@ -12,7 +12,7 @@ from core.choices import DeliverablePhase, SnapshotSource, MembershipEventType
 class Assignment(models.Model):
     """Assignment model - the heart of workload tracking"""
     
-    person = models.ForeignKey('people.Person', on_delete=models.CASCADE, related_name='assignments')
+    person = models.ForeignKey('people.Person', on_delete=models.CASCADE, related_name='assignments', null=True, blank=True)
     
     # === FLEXIBLE PROJECT REFERENCE (Migration-safe) ===
     # Chunk 1-2: Use project_name only
@@ -49,7 +49,8 @@ class Assignment(models.Model):
     def __str__(self):
         project_display = self.project_display
         total_hours = sum(self.weekly_hours.values()) if self.weekly_hours else 0
-        return f"{self.person.name} on {project_display} ({total_hours}h total)"
+        person_label = self.person.name if getattr(self, 'person', None) else 'Unassigned'
+        return f"{person_label} on {project_display} ({total_hours}h total)"
     
     # === BUSINESS LOGIC ===
     @staticmethod

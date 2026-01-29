@@ -19,7 +19,7 @@ export function useProjectAssignments({ projectId, people }: UseProjectAssignmen
     const all: Assignment[] = [];
     // Defensive upper bound to avoid accidental infinite loops
     for (let i = 0; i < 100; i++) {
-      const resp = await assignmentsApi.list({ project: pid, page, page_size: 200 });
+      const resp = await assignmentsApi.list({ project: pid, page, page_size: 200, include_placeholders: 1 });
       const items = (resp?.results || []) as Assignment[];
       all.push(...items);
       const next = resp?.next;

@@ -893,13 +893,14 @@ export const departmentsApi = {
 // Assignment API
 export const assignmentsApi = {
   // Get all assignments with pagination support and optional project filtering
-  list: (params?: { page?: number; page_size?: number; project?: number; department?: number; include_children?: 0 | 1 }) => {
+  list: (params?: { page?: number; page_size?: number; project?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1 }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     if (params?.project) queryParams.set('project', params.project.toString());
     if (params?.department != null) queryParams.set('department', String(params.department));
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
+    if (params?.include_placeholders != null) queryParams.set('include_placeholders', String(params.include_placeholders));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     // Avoid any intermediate caching layers returning stale data after writes
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`, { headers: { 'Cache-Control': 'no-cache' } });
@@ -944,13 +945,14 @@ export const assignmentsApi = {
 
   // Get all assignments (bulk API - Phase 2 optimization)
   listAll: async (
-    filters?: { department?: number; include_children?: 0 | 1 },
+    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1 },
     options?: { noCache?: boolean }
   ): Promise<Assignment[]> => {
     const sp = new URLSearchParams();
     sp.set('all', 'true');
     if (filters?.department != null) sp.set('department', String(filters.department));
     if (filters?.include_children != null) sp.set('include_children', String(filters.include_children));
+    if (filters?.include_placeholders != null) sp.set('include_placeholders', String(filters.include_placeholders));
     const qs = sp.toString();
     if (options?.noCache) {
       return fetchApi<Assignment[]>(`/assignments/?${qs}`, { headers: { 'Cache-Control': 'no-cache' } });

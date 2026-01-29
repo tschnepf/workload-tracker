@@ -1,11 +1,11 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Assignment, Person, Project } from '@/types/models';
+import type { Assignment, Person, Project, Department } from '@/types/models';
 import { useProject, useDeleteProject } from '@/hooks/useProjects';
 import { usePeople } from '@/hooks/usePeople';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { useProjectAssignments } from '@/pages/Projects/list/hooks/useProjectAssignments';
 import { useAssignmentInlineEdit } from '@/pages/Projects/list/hooks/useAssignmentInlineEdit';
@@ -15,7 +15,7 @@ import { useProjectAvailability } from '@/pages/Projects/list/hooks/useProjectAv
 import ProjectDetailsPanel from '@/pages/Projects/list/components/ProjectDetailsPanel';
 import DeliverablesSectionLoader from '@/pages/Projects/list/components/DeliverablesSectionLoader';
 import DeliverablesSection from '@/components/deliverables/DeliverablesSection';
-import { assignmentsApi } from '@/services/api';
+import { assignmentsApi, departmentsApi } from '@/services/api';
 import { updateAssignment, deleteAssignment } from '@/lib/mutations/assignments';
 import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 
@@ -157,6 +157,11 @@ const ProjectDetailsDrawerContent: React.FC<Props> = ({ open, projectId, onClose
     departmentId: deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : undefined,
     includeChildren: deptState?.includeChildren,
     candidatesOnly,
+  });
+  const { data: departments = [] } = useQuery<Department[], Error>({
+    queryKey: ['departmentsAll'],
+    queryFn: () => departmentsApi.listAll(),
+    staleTime: 60_000,
   });
 
   const {
@@ -344,6 +349,19 @@ const ProjectDetailsDrawerContent: React.FC<Props> = ({ open, projectId, onClose
                 const name = roleName || '';
                 setNewAssignment(prev => ({ ...prev, roleOnProjectId: roleId ?? null, roleOnProject: name, roleSearch: name }));
               }}
+              onRolePlaceholderSelect={(role) => {
+                const name = role?.name || '';
+                setNewAssignment(prev => ({
+                  ...prev,
+                  selectedPerson: null,
+                  personSearch: `<${name}>`,
+                  roleOnProjectId: role?.id ?? null,
+                  roleOnProject: name,
+                  roleSearch: name,
+                }));
+                onPersonSearchChange(`<${name}>`);
+              }}
+              departments={departments}
               candidatesOnly={candidatesOnly}
               setCandidatesOnly={setCandidatesOnly}
               availabilityMap={availabilityMap}

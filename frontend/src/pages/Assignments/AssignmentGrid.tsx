@@ -280,6 +280,17 @@ const AssignmentGrid: React.FC = () => {
     return () => { mounted = false; };
   }, [canUseAutoHours]);
 
+  const autoHoursTemplatePhaseKeysById = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    (autoHoursTemplates || []).forEach((template) => {
+      const keys = (template.phaseKeys && template.phaseKeys.length)
+        ? template.phaseKeys
+        : autoHoursPhases;
+      map.set(template.id, new Set(keys));
+    });
+    return map;
+  }, [autoHoursPhases, autoHoursTemplates]);
+
   const ensureTemplateSettings = useCallback(async (templateIds: number[]) => {
     const ids = Array.from(new Set(templateIds.filter(id => Number.isFinite(id))));
     if (ids.length === 0) return;
@@ -789,17 +800,6 @@ const AssignmentGrid: React.FC = () => {
     });
     return out;
   }, [autoHoursPhases, autoHoursTemplateSettings]);
-
-  const autoHoursTemplatePhaseKeysById = useMemo(() => {
-    const map = new Map<number, Set<string>>();
-    (autoHoursTemplates || []).forEach((template) => {
-      const keys = (template.phaseKeys && template.phaseKeys.length)
-        ? template.phaseKeys
-        : autoHoursPhases;
-      map.set(template.id, new Set(keys));
-    });
-    return map;
-  }, [autoHoursPhases, autoHoursTemplates]);
 
   const classifyDeliverablePhase = useCallback((deliverable: Deliverable): string | null => {
     const descRaw = (deliverable?.description || '').toLowerCase().trim();

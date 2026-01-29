@@ -24,31 +24,36 @@ export function useProjectAssignmentAdd({ projectId, invalidateFilterMeta, reloa
   const [warnings, setWarnings] = useState<string[]>([]);
 
   const save = useCallback(async () => {
-    if (!projectId || !state.selectedPerson?.id) return;
+    if (!projectId) return;
+    const personId = state.selectedPerson?.id ?? null;
+    const roleId = state.roleOnProjectId ?? null;
+    if (!personId && !roleId) return;
 
-    // Warning checks for over-allocation on current week
-    const weeklyHours = state.weeklyHours || {};
-    const totalNewHours = Object.values(weeklyHours).reduce((sum, hours) => sum + (hours || 0), 0);
+    // Warning checks for over-allocation on current week (people only)
+    if (personId) {
+      const weeklyHours = state.weeklyHours || {};
+      const totalNewHours = Object.values(weeklyHours).reduce((sum, hours) => sum + (hours || 0), 0);
 
-    if (totalNewHours > 0) {
-      const now = new Date();
-      const dayOfWeek = now.getDay();
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
-      const currentWeekKey = monday.toISOString().split('T')[0];
+      if (totalNewHours > 0) {
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
+        const currentWeekKey = monday.toISOString().split('T')[0];
 
-      const currentWeekHours = weeklyHours[currentWeekKey] || 0;
-      if (currentWeekHours > 0 && projectId) {
-        const conflictWarnings = await checkAssignmentConflicts(state.selectedPerson.id, projectId, currentWeekKey, currentWeekHours);
-        setWarnings(conflictWarnings);
+        const currentWeekHours = weeklyHours[currentWeekKey] || 0;
+        if (currentWeekHours > 0) {
+          const conflictWarnings = await checkAssignmentConflicts(personId, projectId, currentWeekKey, currentWeekHours);
+          setWarnings(conflictWarnings);
+        }
       }
     }
 
     const payload = {
-      person: state.selectedPerson.id,
+      person: personId,
       project: projectId,
       // Use FK only; legacy string is not sent
-      roleOnProjectId: state.roleOnProjectId ?? null,
+      roleOnProjectId: roleId,
       weeklyHours: state.weeklyHours,
       startDate: new Date().toISOString().split('T')[0],
     } as any;

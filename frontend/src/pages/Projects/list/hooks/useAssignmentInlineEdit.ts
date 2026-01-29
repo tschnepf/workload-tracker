@@ -93,7 +93,7 @@ export function useAssignmentInlineEdit({
       const key = getCurrentWeekKey();
       const currentWeekHours = assignment.weeklyHours?.[key] || 0;
       const hoursChange = editData.currentWeekHours - currentWeekHours;
-      if (hoursChange > 0 && selectedProjectId) {
+      if (hoursChange > 0 && selectedProjectId && assignment.person != null) {
         const conflictWarnings = await checkAssignmentConflicts(assignment.person, selectedProjectId, key, hoursChange);
         setWarnings(conflictWarnings);
       } else {

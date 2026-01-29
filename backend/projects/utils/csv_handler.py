@@ -34,7 +34,7 @@ def export_projects_to_csv(queryset, filename=None):
     
     # Optimize relationships: prefetch assignments and deliverables once
     optimized_qs = queryset.prefetch_related(
-        Prefetch('assignments', queryset=Assignment.objects.select_related('person').only('person_id', 'notes', 'is_active', 'weekly_hours', 'role_on_project')),
+        Prefetch('assignments', queryset=Assignment.objects.select_related('person', 'role_on_project_ref').only('person_id', 'notes', 'is_active', 'weekly_hours', 'role_on_project', 'role_on_project_ref_id')),
         'deliverables',
     )
 
@@ -54,7 +54,17 @@ def export_projects_to_csv(queryset, filename=None):
         
         # Compute additional fields
         assignments = project.assignments.all() if hasattr(project, 'assignments') else []
-        assigned_people = ', '.join([assignment.person.name for assignment in assignments])
+        assigned_people = ', '.join([
+            (
+                assignment.person.name
+                if getattr(assignment, 'person', None)
+                else (
+                    assignment.role_on_project_ref.name
+                    if getattr(assignment, 'role_on_project_ref', None) else (assignment.role_on_project or 'Unassigned')
+                )
+            )
+            for assignment in assignments
+        ])
         total_assignments = len(assignments)
         deliverable_count = project.deliverables.count() if hasattr(project, 'deliverables') else 0
         
@@ -119,14 +129,17 @@ def export_projects_with_assignments_to_csv(queryset, filename=None):
                 weekly_hours_json = json.dumps(assignment.weekly_hours) if assignment.weekly_hours else ""
                 total_hours = assignment.total_hours if hasattr(assignment, 'total_hours') else 0
                 
+                person_name = assignment.person.name if getattr(assignment, 'person', None) else ''
+                person_email = assignment.person.email if getattr(assignment, 'person', None) else ''
+                role_label = assignment.role_on_project_ref.name if getattr(assignment, 'role_on_project_ref', None) else (assignment.role_on_project or '')
                 row = [
                     project.name,                                   # projectName
                     project.project_number or '',                  # projectNumber
                     project.status,                                # projectStatus
                     project.client,                                # client
-                    assignment.person.name,                        # personName
-                    assignment.person.email or '',                 # personEmail
-                    assignment.role_on_project or '',              # roleOnProject
+                    person_name,                                   # personName
+                    person_email or '',                            # personEmail
+                    role_label,                                    # roleOnProject
                     weekly_hours_json,                             # weeklyHoursJson
                     total_hours,                                   # totalHours
                     assignment.notes or '',                        # assignmentNotes

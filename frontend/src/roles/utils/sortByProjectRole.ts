@@ -28,6 +28,8 @@ export function sortAssignmentsByProjectRole(
     return idx == null ? Number.MAX_SAFE_INTEGER : idx;
   };
 
+  const isPlaceholder = (a: Assignment) => a.person == null;
+
   const byName = (a: Assignment, b: Assignment) => {
     const an = ((a as any).personName || '').toString().toLowerCase();
     const bn = ((b as any).personName || '').toString().toLowerCase();
@@ -38,6 +40,9 @@ export function sortAssignmentsByProjectRole(
 
   const copy = [...assignments];
   copy.sort((a, b) => {
+    const pa = isPlaceholder(a) ? 1 : 0;
+    const pb = isPlaceholder(b) ? 1 : 0;
+    if (pa !== pb) return pa - pb;
     const ia = getIdx(a);
     const ib = getIdx(b);
     if (ia !== ib) return ia - ib;
@@ -45,4 +50,3 @@ export function sortAssignmentsByProjectRole(
   });
   return copy;
 }
-

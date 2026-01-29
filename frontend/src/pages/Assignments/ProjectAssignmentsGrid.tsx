@@ -463,9 +463,33 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [headerHeight, totalMinWidth]);
   // Add person combobox state
   const [isAddingForProject, setIsAddingForProject] = useState<number | null>(null);
+  const [addMode, setAddMode] = useState<'person' | 'role'>('person');
   const [personQuery, setPersonQuery] = useState<string>('');
   const [personResults, setPersonResults] = useState<Person[]>([]);
   const [selectedPersonIndex, setSelectedPersonIndex] = useState<number>(-1);
+  const [roleDeptId, setRoleDeptId] = useState<number | null>(null);
+  const [roleQuery, setRoleQuery] = useState<string>('');
+  const [selectedRoleIndex, setSelectedRoleIndex] = useState<number>(-1);
+  const roleResults = React.useMemo(() => {
+    if (!roleDeptId) return [];
+    const roles = rolesByDept[roleDeptId] || [];
+    const q = roleQuery.trim().toLowerCase();
+    if (!q) return [];
+    return roles.filter((r) => r.name.toLowerCase().includes(q));
+  }, [roleDeptId, roleQuery, rolesByDept]);
+  React.useEffect(() => {
+    if (!roleDeptId || rolesByDept[roleDeptId]) return;
+    listProjectRoles(roleDeptId)
+      .then((roles) => setRolesByDept((prev) => ({ ...prev, [roleDeptId]: roles })))
+      .catch(() => {});
+  }, [roleDeptId, rolesByDept]);
+  React.useEffect(() => {
+    if (roleResults.length > 0) {
+      setSelectedRoleIndex((idx) => (idx >= 0 ? Math.min(idx, roleResults.length - 1) : 0));
+    } else {
+      setSelectedRoleIndex(-1);
+    }
+  }, [roleResults]);
   // Status filter chips
   const statusFilterOptions = [
     'active',
@@ -543,10 +567,45 @@ const ProjectAssignmentsGrid: React.FC = () => {
     weeks: weeksHorizon,
     department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
     includeChildren: deptState.includeChildren,
+    includePlaceholders: true,
     statusIn: statusParams.statusIn,
     hasFutureDeliverables: statusParams.hasFutureParam,
     include: 'project',
   });
+  const departments = snapshotQuery.data?.departments || [];
+  const roleSearchQuery = personQuery.trim().toLowerCase();
+  const roleMatches = React.useMemo(() => {
+    if (!roleSearchQuery) return [];
+    const results: Array<{ role: ProjectRole; deptId: number; deptName: string }> = [];
+    departments.forEach((dept) => {
+      if (dept.id == null) return;
+      const roles = rolesByDept[dept.id] || [];
+      roles.forEach((role) => {
+        if (role.name.toLowerCase().includes(roleSearchQuery)) {
+          results.push({
+            role,
+            deptId: dept.id as number,
+            deptName: dept.name || `Dept #${dept.id}`,
+          });
+        }
+      });
+    });
+    return results;
+  }, [departments, roleSearchQuery, rolesByDept]);
+  React.useEffect(() => {
+    if (!isAddingForProject) return;
+    if (!roleSearchQuery) return;
+    const missing = departments.filter((dept) => dept.id != null && !rolesByDept[dept.id]);
+    if (missing.length === 0) return;
+    missing.forEach((dept) => {
+      if (dept.id == null) return;
+      listProjectRoles(dept.id)
+        .then((roles) => {
+          setRolesByDept((prev) => (prev[dept.id as number] ? prev : { ...prev, [dept.id as number]: roles }));
+        })
+        .catch(() => {});
+    });
+  }, [departments, isAddingForProject, roleSearchQuery, rolesByDept]);
 
   const loadProjectAssignments = React.useCallback(async (projectId: number) => {
     if (!projectId) return;
@@ -555,7 +614,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, page_size: 200 } as any);
+      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, include_placeholders: 1, page_size: 200 } as any);
       const rows = ((resp as any).results || []) as Assignment[];
       const sorted = await sortRowsByDeptRoles(rows);
       updateProjectById(projectId, (project) => ({ ...project, assignments: sorted, isExpanded: true }));
@@ -618,9 +677,26 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   const handleAddPersonClick = React.useCallback((projectId: number) => {
     setIsAddingForProject(prev => prev === projectId ? null : projectId);
+    setAddMode('person');
     setPersonQuery('');
     setPersonResults([]);
     setSelectedPersonIndex(-1);
+    setRoleQuery('');
+    setSelectedRoleIndex(-1);
+    setRoleDeptId(deptState.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : null);
+  }, [deptState.selectedDepartmentId]);
+
+  const handleAddModeChange = React.useCallback((mode: 'person' | 'role') => {
+    setAddMode(mode);
+    if (mode === 'role' && roleDeptId == null && deptState.selectedDepartmentId != null) {
+      setRoleDeptId(Number(deptState.selectedDepartmentId));
+    }
+  }, [deptState.selectedDepartmentId, roleDeptId]);
+
+  const handleRoleDeptChange = React.useCallback((deptId: number | null) => {
+    setRoleDeptId(deptId);
+    setRoleQuery('');
+    setSelectedRoleIndex(-1);
   }, []);
 
   const handlePersonQueryChange = React.useCallback(async (query: string) => {
@@ -669,6 +745,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       await refreshTotalsForProject(projectId);
       showToast('Person added to project', 'success');
       setIsAddingForProject(null);
+      setAddMode('person');
       setPersonQuery('');
       setPersonResults([]);
       setSelectedPersonIndex(-1);
@@ -691,9 +768,72 @@ const ProjectAssignmentsGrid: React.FC = () => {
       showToast(err?.message || 'Failed to add person', 'error');
     } finally {
       setIsAddingForProject(null);
+      setAddMode('person');
       setPersonQuery('');
       setPersonResults([]);
       setSelectedPersonIndex(-1);
+    }
+  }, [assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
+
+  const handleRoleQueryChange = React.useCallback((query: string) => {
+    setRoleQuery(query);
+  }, []);
+
+  const handleRoleKeyDown = React.useCallback(async (e: React.KeyboardEvent<HTMLInputElement>, projectId: number) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedRoleIndex(i => Math.min(i + 1, roleResults.length - 1));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedRoleIndex(i => Math.max(i - 1, 0));
+      return;
+    }
+    if (e.key === 'Escape') {
+      setIsAddingForProject(null);
+      setRoleQuery('');
+      setSelectedRoleIndex(-1);
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const sel = selectedRoleIndex >= 0 ? roleResults[selectedRoleIndex] : null;
+    if (!sel || !projectId) return;
+    try {
+      const created = await createAssignment({ person: null, project: projectId, roleOnProjectId: sel.id, weeklyHours: {} }, assignmentsApi);
+      updateProjectById(projectId, (projectRow) => ({
+        ...projectRow,
+        assignments: sortAssignmentsByProjectRole([...(projectRow.assignments || []), created], rolesByDept),
+      }));
+      await refreshTotalsForProject(projectId);
+      showToast(`${sel.name} added`, 'success');
+      setIsAddingForProject(null);
+      setAddMode('person');
+      setRoleQuery('');
+      setSelectedRoleIndex(-1);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to add role', 'error');
+    }
+  }, [assignmentsApi, roleResults, rolesByDept, selectedRoleIndex, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
+
+  const handleRoleSelect = React.useCallback(async (projectId: number, role: ProjectRole) => {
+    if (!projectId) return;
+    try {
+      const created = await createAssignment({ person: null, project: projectId, roleOnProjectId: role.id, weeklyHours: {} }, assignmentsApi);
+      updateProjectById(projectId, (projectRow) => ({
+        ...projectRow,
+        assignments: sortAssignmentsByProjectRole([...(projectRow.assignments || []), created], rolesByDept),
+      }));
+      await refreshTotalsForProject(projectId);
+      showToast(`${role.name} added`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to add role', 'error');
+    } finally {
+      setIsAddingForProject(null);
+      setAddMode('person');
+      setRoleQuery('');
+      setSelectedRoleIndex(-1);
     }
   }, [assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
 
@@ -711,7 +851,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       }));
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const res = await getProjectTotals([projectId], { weeks: weeks.length, department: dept, include_children: inc });
+      const res = await getProjectTotals([projectId], { weeks: weeks.length, department: dept, include_children: inc, include_placeholders: 1 });
       setHoursByProject(prev => ({ ...prev, [projectId]: res.hoursByProject[String(projectId)] || {} }));
       showToast('Assignment removed', 'success');
     } catch (e: any) {
@@ -1007,7 +1147,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
                         <div key={asn.id} className="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-sm font-medium text-[var(--text)]">{asn.personName || `Person #${asn.person}`}</div>
+                              <div className="text-sm font-medium text-[var(--text)]">
+                                {asn.personName || (asn.person != null ? `Person #${asn.person}` : (asn.roleName ? `<${asn.roleName}>` : 'Unassigned'))}
+                              </div>
                               <button
                                 type="button"
                                 className={`text-xs text-[var(--muted)] bg-transparent border-none p-0 ${
@@ -1192,7 +1334,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const res = await getProjectTotals([projectId], { weeks: weeks.length, department: dept, include_children: inc });
+      const res = await getProjectTotals([projectId], { weeks: weeks.length, department: dept, include_children: inc, include_placeholders: 1 });
       setHoursByProject(prev => ({ ...prev, [projectId]: res.hoursByProject[String(projectId)] || {} }));
     } catch (e:any) {
       showToast('Failed to refresh totals: ' + (e?.message || 'Unknown error'), 'error');
@@ -1205,7 +1347,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, page_size: 200 } as any);
+      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, include_placeholders: 1, page_size: 200 } as any);
       const rows = ((resp as any).results || []) as Assignment[];
       // Ensure role catalogs for departments present
       const deptIds = Array.from(new Set(rows.map(a => (a as any).personDepartmentId as number | null | undefined)))
@@ -1245,7 +1387,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const bulk = await assignmentsApi.listAll({ department: dept, include_children: dept != null ? inc : undefined } as any);
+      const bulk = await assignmentsApi.listAll({ department: dept, include_children: dept != null ? inc : undefined, include_placeholders: 1 } as any);
       const allAssignments = Array.isArray(bulk) ? bulk : [];
 
       const byProject = new Map<number, Assignment[]>();
@@ -1653,7 +1795,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
       const pidList = Array.from(touchedProjects);
       if (pidList.length > 0) {
-        const res = await getProjectTotals(pidList, { weeks: weeks.length, department: dept, include_children: inc });
+        const res = await getProjectTotals(pidList, { weeks: weeks.length, department: dept, include_children: inc, include_placeholders: 1 });
         setHoursByProject(prev => {
           const next = { ...prev } as any;
           pidList.forEach(pid => { next[pid] = (res.hoursByProject[String(pid)] || {}); });
@@ -1876,7 +2018,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             <div className="flex-1 min-w-[320px]">
               <GlobalDepartmentFilter
                 showCopyLink={false}
-                departmentsOverride={snapshotQuery.data?.departments || []}
+              departmentsOverride={departments}
                 rightActions={(
                   <>
                     <button
@@ -2029,12 +2171,24 @@ const ProjectAssignmentsGrid: React.FC = () => {
               onToggleExpanded={toggleProjectExpanded}
               onAddPersonClick={handleAddPersonClick}
               isAddingForProject={isAddingForProject}
+              addMode={addMode}
               personQuery={personQuery}
               personResults={personResults}
               selectedPersonIndex={selectedPersonIndex}
               onPersonQueryChange={handlePersonQueryChange}
               onPersonKeyDown={handlePersonKeyDown}
               onPersonSelect={handlePersonSelect}
+              roleDeptId={roleDeptId}
+              roleQuery={roleQuery}
+              roleResults={roleResults}
+              selectedRoleIndex={selectedRoleIndex}
+              departments={departments}
+              roleMatches={roleMatches}
+              onAddModeChange={handleAddModeChange}
+              onRoleDeptChange={handleRoleDeptChange}
+              onRoleQueryChange={handleRoleQueryChange}
+              onRoleKeyDown={handleRoleKeyDown}
+              onRoleSelect={handleRoleSelect}
               rowIndexByKey={rowIndexByKey}
               selectionBounds={selection.selectionBounds}
               editingCell={editingCell}

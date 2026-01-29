@@ -1,10 +1,16 @@
 import React from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ProjectRole } from '@/roles/api';
-import type { Person, Project } from '@/types/models';
+import type { Department, Person, Project } from '@/types/models';
 import type { WeekHeader } from '@/pages/Assignments/grid/utils';
 import type { DeliverableMarker, ProjectWithAssignments } from '@/pages/Assignments/projectAssignments/types';
 import ProjectSection from '@/pages/Assignments/projectAssignments/components/ProjectSection';
+
+type RoleMatch = {
+  role: ProjectRole;
+  deptId: number;
+  deptName: string;
+};
 
 export type ProjectsSectionProps = {
   projects: ProjectWithAssignments[];
@@ -26,12 +32,24 @@ export type ProjectsSectionProps = {
   onToggleExpanded: (project: ProjectWithAssignments) => void;
   onAddPersonClick: (projectId: number) => void;
   isAddingForProject: number | null;
+  addMode: 'person' | 'role';
   personQuery: string;
   personResults: Person[];
+  roleMatches: RoleMatch[];
   selectedPersonIndex: number;
   onPersonQueryChange: (value: string) => void;
   onPersonKeyDown: (event: React.KeyboardEvent<HTMLInputElement>, projectId: number) => void;
   onPersonSelect: (projectId: number, person: Person) => void;
+  roleDeptId: number | null;
+  roleQuery: string;
+  roleResults: ProjectRole[];
+  selectedRoleIndex: number;
+  departments: Department[];
+  onAddModeChange: (mode: 'person' | 'role') => void;
+  onRoleDeptChange: (deptId: number | null) => void;
+  onRoleQueryChange: (value: string) => void;
+  onRoleKeyDown: (event: React.KeyboardEvent<HTMLInputElement>, projectId: number) => void;
+  onRoleSelect: (projectId: number, role: ProjectRole) => void;
   rowIndexByKey: Map<string, number>;
   selectionBounds: { weekLo: number; weekHi: number; rowLo: number | null; rowHi: number | null } | null;
   editingCell: { rowKey: string; weekKey: string } | null;
@@ -68,6 +86,8 @@ const EMPTY_WEEK_HOURS: Record<string, number> = {};
 const EMPTY_WEEK_DELIVERABLES: Record<string, DeliverableMarker[]> = {};
 const EMPTY_WEEK_TOOLTIPS: Record<string, string> = {};
 const EMPTY_PERSON_RESULTS: Person[] = [];
+const EMPTY_ROLE_RESULTS: ProjectRole[] = [];
+const EMPTY_ROLE_MATCHES: RoleMatch[] = [];
 const EMPTY_ROW_INDEX = new Map<string, number>();
 const EMPTY_SAVING_SET = new Set<string>();
 const EMPTY_ROLES_BY_DEPT: Record<number, ProjectRole[]> = {};
@@ -92,14 +112,26 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
     onStatusSelect,
     isProjectUpdating,
     onToggleExpanded,
-    onAddPersonClick,
-    isAddingForProject,
-    personQuery,
-    personResults,
-    selectedPersonIndex,
-    onPersonQueryChange,
-    onPersonKeyDown,
-    onPersonSelect,
+  onAddPersonClick,
+  isAddingForProject,
+  addMode,
+  personQuery,
+  personResults,
+  roleMatches,
+  selectedPersonIndex,
+  onPersonQueryChange,
+  onPersonKeyDown,
+  onPersonSelect,
+  roleDeptId,
+  roleQuery,
+  roleResults,
+  selectedRoleIndex,
+  departments,
+  onAddModeChange,
+  onRoleDeptChange,
+  onRoleQueryChange,
+  onRoleKeyDown,
+  onRoleSelect,
     rowIndexByKey,
     selectionBounds,
     editingCell,
@@ -177,7 +209,11 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
         const rolesByDeptForProject = openRoleProjectId === project.id ? rolesByDept : EMPTY_ROLES_BY_DEPT;
         const personQueryValue = isAdding ? personQuery : '';
         const personResultsValue = isAdding ? personResults : EMPTY_PERSON_RESULTS;
+        const roleMatchesValue = isAdding ? roleMatches : EMPTY_ROLE_MATCHES;
         const selectedIndexValue = isAdding ? selectedPersonIndex : -1;
+        const roleQueryValue = isAdding ? roleQuery : '';
+        const roleResultsValue = isAdding ? roleResults : EMPTY_ROLE_RESULTS;
+        const selectedRoleIndexValue = isAdding ? selectedRoleIndex : -1;
         const isStatusDropdownOpen = statusDropdownOpenId === project.id;
         const isUpdating = project.id ? isProjectUpdating(project.id) : false;
         const deliverableTooltipsByWeek = project.id ? (deliverableTooltipsByProjectWeek[project.id] || EMPTY_WEEK_TOOLTIPS) : EMPTY_WEEK_TOOLTIPS;
@@ -214,12 +250,24 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
               onToggleExpanded={onToggleExpanded}
               onAddPersonClick={onAddPersonClick}
               isAddingForProject={isAdding}
+              addMode={addMode}
               personQuery={personQueryValue}
               personResults={personResultsValue}
+              roleMatches={roleMatchesValue}
               selectedPersonIndex={selectedIndexValue}
               onPersonQueryChange={onPersonQueryChange}
               onPersonKeyDown={onPersonKeyDown}
               onPersonSelect={onPersonSelect}
+              roleDeptId={roleDeptId}
+              roleQuery={roleQueryValue}
+              roleResults={roleResultsValue}
+              selectedRoleIndex={selectedRoleIndexValue}
+              departments={departments}
+              onAddModeChange={onAddModeChange}
+              onRoleDeptChange={onRoleDeptChange}
+              onRoleQueryChange={onRoleQueryChange}
+              onRoleKeyDown={onRoleKeyDown}
+              onRoleSelect={onRoleSelect}
               rowIndexByKey={rowIndex}
               selectionBounds={selectionBoundsForProject}
               editingCell={editingCellForProject}

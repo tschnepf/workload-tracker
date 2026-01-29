@@ -51,7 +51,7 @@ export interface Project {
 
 export interface Assignment {
   id?: number;
-  person: number; // Person ID
+  person: number | null; // Person ID
   personName?: string; // Read-only person name
   personWeeklyCapacity?: number; // Read-only person capacity
   personDepartmentId?: number | null; // Read-only person department ID

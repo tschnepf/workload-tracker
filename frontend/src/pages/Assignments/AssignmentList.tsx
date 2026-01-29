@@ -106,7 +106,9 @@ const AssignmentList: React.FC = () => {
   };
 
   const handleDelete = async (assignment: Assignment) => {
-    if (!window.confirm(`Remove ${assignment.personName} from ${assignment.projectDisplayName}?`)) {
+    const label = assignment.personName
+      || (assignment.person != null ? `Person #${assignment.person}` : (assignment.roleName ? `<${assignment.roleName}>` : 'Unassigned'));
+    if (!window.confirm(`Remove ${label} from ${assignment.projectDisplayName}?`)) {
       return;
     }
 
@@ -232,7 +234,10 @@ const AssignmentList: React.FC = () => {
                   {filteredAssignments.map((assignment) => (
                     <tr key={assignment.id} className="hover:bg-[#3e3e42]/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-[#cccccc]">{assignment.personName}</div>
+                        <div className="font-medium text-[#cccccc]">
+                          {assignment.personName
+                            || (assignment.person != null ? `Person #${assignment.person}` : (assignment.roleName ? `<${assignment.roleName}>` : 'Unassigned'))}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-slate-300">{assignment.projectDisplayName || assignment.projectName || 'No Project'}</div>

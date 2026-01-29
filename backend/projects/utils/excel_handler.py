@@ -214,12 +214,15 @@ def _create_assignments_sheet(workbook, queryset):
             weekly_hours_json = json.dumps(assignment.weekly_hours) if assignment.weekly_hours else "{}"
             total_hours = assignment.total_hours if hasattr(assignment, 'total_hours') else 0
             
+            person_name = assignment.person.name if getattr(assignment, 'person', None) else ''
+            person_email = assignment.person.email if getattr(assignment, 'person', None) else ''
+            role_label = assignment.role_on_project_ref.name if getattr(assignment, 'role_on_project_ref', None) else (assignment.role_on_project or '')
             row_data = [
                 project.name,                                   # projectName
                 project.project_number or '',                  # projectNumber
-                assignment.person.name,                        # personName
-                assignment.person.email or '',                 # personEmail
-                assignment.role_on_project or '',              # roleOnProject
+                person_name,                                   # personName
+                person_email or '',                            # personEmail
+                role_label,                                    # roleOnProject
                 assignment.start_date or '',                   # startDate
                 assignment.end_date or '',                     # endDate
                 weekly_hours_json,                             # weeklyHours

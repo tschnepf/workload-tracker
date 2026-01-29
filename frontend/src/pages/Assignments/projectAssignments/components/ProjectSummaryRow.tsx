@@ -127,7 +127,7 @@ const ProjectSummaryRow: React.FC<ProjectSummaryRowProps> = React.memo(({
         <button
           className="w-7 h-7 flex items-center justify-center text-[var(--text)] hover:text-[var(--text)] hover:bg-[var(--cardHover)] rounded"
           onClick={() => { if (project.id) onAddPersonClick(project.id); }}
-          title="Add person"
+          title="Add assignment"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round" />

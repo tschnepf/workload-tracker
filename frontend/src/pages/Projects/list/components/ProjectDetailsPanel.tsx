@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
-import type { Project, Assignment, Person, AutoHoursTemplate } from '@/types/models';
+import type { Project, Assignment, Person, AutoHoursTemplate, Department } from '@/types/models';
 import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
 import { InlineText, InlineTextarea, InlineDate } from '@/components/ui/InlineEdit';
@@ -9,6 +9,7 @@ import ProjectNotesEditor from '@/components/projects/ProjectNotesEditor';
 import { useInlineProjectUpdate } from '@/hooks/useInlineProjectUpdate';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
+import { listProjectRoles, type ProjectRole } from '@/roles/api';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import AssignmentRow from './AssignmentRow';
 import type { OnRoleSelect } from '@/roles/types';
@@ -66,6 +67,8 @@ interface Props {
   selectedPersonIndex: number;
   onPersonSelect: (p: Person) => void;
   onRoleSelectNew: OnRoleSelect;
+  onRolePlaceholderSelect: (role: ProjectRole) => void;
+  departments: Department[];
 
   candidatesOnly: boolean;
   setCandidatesOnly: (v: boolean) => void;
@@ -111,6 +114,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   selectedPersonIndex,
   onPersonSelect,
   onRoleSelectNew,
+  onRolePlaceholderSelect,
+  departments,
   candidatesOnly,
   setCandidatesOnly,
   availabilityMap,
@@ -229,6 +234,40 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   }, [addAssignmentState?.selectedPerson, getPersonDepartmentId]);
 
   const { data: addRoles = [] } = useProjectRoles(selectedDeptId ?? undefined);
+  const [rolesByDept, setRolesByDept] = React.useState<Record<number, ProjectRole[]>>({});
+  const roleSearchQuery = addAssignmentState.personSearch.trim().toLowerCase();
+  const roleMatches = React.useMemo(() => {
+    if (!roleSearchQuery) return [];
+    const matches: Array<{ role: ProjectRole; deptId: number; deptName: string }> = [];
+    departments.forEach((dept) => {
+      if (dept.id == null) return;
+      const roles = rolesByDept[dept.id] || [];
+      roles.forEach((role) => {
+        if (role.name.toLowerCase().includes(roleSearchQuery)) {
+          matches.push({
+            role,
+            deptId: dept.id as number,
+            deptName: dept.shortName || dept.name || `Dept #${dept.id}`,
+          });
+        }
+      });
+    });
+    return matches;
+  }, [departments, roleSearchQuery, rolesByDept]);
+  React.useEffect(() => {
+    if (!showAddAssignment) return;
+    if (!roleSearchQuery) return;
+    const missing = departments.filter((dept) => dept.id != null && !rolesByDept[dept.id]);
+    if (missing.length === 0) return;
+    missing.forEach((dept) => {
+      if (dept.id == null) return;
+      listProjectRoles(dept.id)
+        .then((roles) => {
+          setRolesByDept((prev) => (prev[dept.id as number] ? prev : { ...prev, [dept.id as number]: roles }));
+        })
+        .catch(() => {});
+    });
+  }, [departments, roleSearchQuery, rolesByDept, showAddAssignment]);
   // Build week keys from assignment data to avoid TZ drift and mismatches.
   // Prefer the next 4 assignment week keys >= baseline; fallback to local Monday +3.
   const weekKeys = React.useMemo(() => {
@@ -323,16 +362,30 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     findAssignment: (personId, assignmentId) => assignments.some(a => a.id === assignmentId && a.person === personId),
   });
 
-  // Pre-group assignments by department to simplify JSX
+  const departmentNameById = React.useMemo(() => {
+    const map = new Map<number, string>();
+    departments.forEach((dept) => {
+      if (dept.id != null) {
+        map.set(dept.id, dept.name || dept.shortName || `Dept #${dept.id}`);
+      }
+    });
+    return map;
+  }, [departments]);
+
+  // Pre-group assignments by department to simplify JSX (supports role placeholders)
   const departmentEntries = React.useMemo(() => {
     const groups = new Map<string, Assignment[]>();
     for (const a of assignments) {
-      const name = (getPersonDepartmentName ? getPersonDepartmentName(a.person) : null) || 'Unassigned';
+      const deptId = (a as any).personDepartmentId as number | null | undefined;
+      const personDeptName = a.person != null && getPersonDepartmentName ? getPersonDepartmentName(a.person) : null;
+      const name = deptId != null
+        ? (departmentNameById.get(deptId) || personDeptName || `Dept #${deptId}`)
+        : (personDeptName || 'Unassigned');
       if (!groups.has(name)) groups.set(name, []);
       groups.get(name)!.push(a);
     }
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [assignments, getPersonDepartmentName]);
+  }, [assignments, departmentNameById, getPersonDepartmentName]);
 
   const selectedAutoHoursTemplateId =
     (localPatch.autoHoursTemplateId !== undefined ? localPatch.autoHoursTemplateId : project.autoHoursTemplateId) ?? null;
@@ -637,7 +690,10 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                           onHoursChange={onHoursChange}
                           getCurrentWeekHours={getCurrentWeekHours}
                           onChangeAssignmentRole={onChangeAssignmentRole}
-                          personDepartmentId={getPersonDepartmentId ? getPersonDepartmentId(assignment.person) : undefined}
+                          personDepartmentId={
+                            (assignment as any).personDepartmentId
+                            ?? (getPersonDepartmentId && assignment.person != null ? getPersonDepartmentId(assignment.person) : undefined)
+                          }
                           currentWeekKey={currentWeekKey}
                           onUpdateWeekHours={onUpdateWeekHours}
                           weekKeys={weekKeys}
@@ -675,13 +731,13 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Start typing name or click to see all..."
+                      placeholder="Start typing name or role..."
                       value={addAssignmentState.personSearch}
                       onChange={(e) => onPersonSearch(e.target.value)}
                       onFocus={onPersonSearchFocus}
                       onKeyDown={onPersonSearchKeyDown}
                       role="combobox"
-                      aria-expanded={addAssignmentState.personSearch.trim().length > 0 && personSearchResults.length > 0}
+                      aria-expanded={addAssignmentState.personSearch.trim().length > 0 && (personSearchResults.length > 0 || roleMatches.length > 0)}
                       aria-haspopup="listbox"
                       aria-owns="person-search-results"
                       aria-describedby="person-search-help"
@@ -720,7 +776,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   <div className="flex gap-1">
                     <button
                       onClick={onSaveAssignment}
-                      disabled={!addAssignmentState.selectedPerson}
+                      disabled={!addAssignmentState.selectedPerson && !addAssignmentState.roleOnProjectId}
                       className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Save
@@ -733,9 +789,14 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                     </button>
                   </div>
                 </div>
-                {addAssignmentState.personSearch.trim().length > 0 && personSearchResults.length > 0 && (
+                {addAssignmentState.personSearch.trim().length > 0 && (personSearchResults.length > 0 || roleMatches.length > 0) && (
                   <div className="relative col-span-3">
                     <div id="person-search-results" role="listbox" className="mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 max-h-56 overflow-y-auto">
+                      {personSearchResults.length > 0 && (
+                        <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                          People
+                        </div>
+                      )}
                       {personSearchResults.map((person: any, index: number) => (
                         <button
                           key={person.id}
@@ -768,6 +829,23 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                                 <span className="text-[var(--muted)] text-xs">({person.utilizationPercent}% used)</span>
                               </div>
                             )}
+                          </div>
+                        </button>
+                      ))}
+                      {roleMatches.length > 0 && (
+                        <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                          Roles
+                        </div>
+                      )}
+                      {roleMatches.map((match) => (
+                        <button
+                          key={`${match.deptId}-${match.role.id}`}
+                          onClick={() => onRolePlaceholderSelect(match.role)}
+                          className="w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium">{`<${match.role.name}>`}</div>
+                            <div className="text-[10px] text-[var(--muted)]">{match.deptName}</div>
                           </div>
                         </button>
                       ))}

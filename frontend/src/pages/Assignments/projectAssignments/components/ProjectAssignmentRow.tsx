@@ -78,6 +78,8 @@ const ProjectAssignmentRow: React.FC<ProjectAssignmentRowProps> = React.memo(({
   const rowKey = String(assignment.id);
   const deptId = (assignment as any).personDepartmentId as number | null | undefined;
   const label = (assignment as any).roleName as string | null | undefined;
+  const personLabel = assignment.personName
+    || (assignment.person != null ? `Person #${assignment.person}` : (label ? `<${label}>` : 'Unassigned'));
   const currentId = (assignment as any).roleOnProjectId as number | null | undefined;
   const roleIsOpen = openRoleFor === assignment.id;
   const WEEK_WIDTH = 70;
@@ -93,8 +95,8 @@ const ProjectAssignmentRow: React.FC<ProjectAssignmentRowProps> = React.memo(({
 
   return (
     <div className="relative grid gap-px py-1 bg-[var(--surface)] hover:bg-[var(--cardHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
-      <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={assignment.personName || String(assignment.person)}>
-        {assignment.personName || `Person #${assignment.person}`}
+      <div className="pl-8 pr-2 py-2 text-[var(--text)] text-xs truncate" title={personLabel}>
+        {personLabel}
       </div>
       <div className="pl-8 pr-2 py-2 text-[var(--muted)] text-xs truncate relative">
         <button
