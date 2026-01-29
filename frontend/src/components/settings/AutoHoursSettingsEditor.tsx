@@ -10,7 +10,7 @@ type Dept = { id?: number; name: string };
 const AutoHoursSettingsEditor: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
-  const weeks = React.useMemo(() => Array.from({ length: 9 }, (_, idx) => String(8 - idx)), []);
+  const weeks = React.useMemo(() => Array.from({ length: 18 }, (_, idx) => String(17 - idx)), []);
   const [departments, setDepartments] = React.useState<Dept[]>([]);
   const [departmentsLoading, setDepartmentsLoading] = React.useState<boolean>(false);
   const [rows, setRows] = React.useState<AutoHoursRoleSetting[]>([]);
@@ -558,7 +558,7 @@ const AutoHoursSettingsEditor: React.FC = () => {
       </div>
 
       <div className="text-sm text-[var(--muted)] mb-3">
-        Set percent of weekly capacity (0-100%) for each week leading up to a deliverable (8 weeks out to the deliverable week).
+        Set percent of weekly capacity (0-100%) for each week leading up to a deliverable.
       </div>
 
       {error && <div className="text-sm text-red-400 mb-3">{error}</div>}
@@ -581,7 +581,7 @@ const AutoHoursSettingsEditor: React.FC = () => {
               <table className="w-max text-sm table-fixed border-collapse">
                 <colgroup>
                   <col style={{ width: 160 }} />
-                  {Array.from({ length: 9 }).map((_, idx) => (
+                  {Array.from({ length: 18 }).map((_, idx) => (
                     <col key={`wk-${idx}`} style={{ width: 45 }} />
                   ))}
                   <col style={{ width: 45 }} />
@@ -589,8 +589,8 @@ const AutoHoursSettingsEditor: React.FC = () => {
                 <thead className="text-[var(--muted)]">
                   <tr className="border-b border-[var(--border)]">
                     <th className="py-2 pr-2 text-left">Role</th>
-                    {Array.from({ length: 9 }).map((_, idx) => {
-                      const week = 8 - idx;
+                    {Array.from({ length: 18 }).map((_, idx) => {
+                      const week = 17 - idx;
                       const label = week === 0 ? '0w' : `${week}w`;
                       return (
                         <th key={week} className="py-2 px-0 text-center whitespace-nowrap">
@@ -605,8 +605,8 @@ const AutoHoursSettingsEditor: React.FC = () => {
                   {group.rows.map((row) => (
                     <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
                       <td className="py-2 pr-2 text-[var(--text)] truncate">{row.roleName}</td>
-                      {Array.from({ length: 9 }).map((_, idx) => {
-                        const week = 8 - idx;
+                      {Array.from({ length: 18 }).map((_, idx) => {
+                        const week = 17 - idx;
                         const value = row.percentByWeek?.[String(week)] ?? 0;
                         const rowKey = String(row.roleId);
                         const weekKey = String(week);

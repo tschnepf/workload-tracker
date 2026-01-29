@@ -307,6 +307,8 @@ class AutoHoursTemplateRoleSetting(models.Model):
     role = models.ForeignKey('projects.ProjectRole', on_delete=models.CASCADE, related_name='auto_hours_template_settings')
     # Map of phase -> weeks-before -> percent (keys: "sd","dd","ifp","ifc")
     ramp_percent_by_phase = models.JSONField(default=dict, blank=True)
+    # Map of phase -> role count (int)
+    role_count_by_phase = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

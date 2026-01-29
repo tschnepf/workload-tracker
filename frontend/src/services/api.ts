@@ -571,6 +571,7 @@ export type AutoHoursRoleSetting = {
   departmentId: number;
   departmentName: string;
   percentByWeek: Record<string, number>;
+  roleCount?: number;
   weeksCount?: number;
   isActive: boolean;
   sortOrder: number;
@@ -649,7 +650,7 @@ export const autoHoursTemplatesApi = {
   },
   updateSettings: async (
     templateId: number,
-    settings: Array<{ roleId: number; percentByWeek: Record<string, number> }>,
+    settings: Array<{ roleId: number; percentByWeek: Record<string, number>; roleCount?: number }>,
     phase: string,
     departmentId?: number | null,
     weeksCount?: number

@@ -4,14 +4,18 @@ import { autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi
 import { showToast } from '@/lib/toastBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, resolveUtilizationLevel, utilizationLevelToClasses } from '@/util/utilization';
-import type { AutoHoursTemplate } from '@/types/models';
+import type { AutoHoursTemplate, DeliverablePhaseMappingPhase } from '@/types/models';
 
 const AutoHoursTemplatesEditor: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
-  const MAX_WEEKS_COUNT = 9;
+  const MAX_WEEKS_COUNT = 18;
+  const DEFAULT_WEEKS_COUNT = 6;
   const roleColumnWidth = 160;
   const xToGridGap = 15;
+  const roleCountControlWidth = 72;
+  const roleCountControlOffset = 20;
+  const roleCellPaddingRight = xToGridGap + roleCountControlOffset + roleCountControlWidth;
   const [templates, setTemplates] = React.useState<AutoHoursTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = React.useState<boolean>(false);
   const GLOBAL_TEMPLATE_ID = 'global' as const;
@@ -38,6 +42,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     { value: 'ifp', label: 'IFP' },
     { value: 'ifc', label: 'IFC' },
   ]);
+  const [phaseMeta, setPhaseMeta] = React.useState<DeliverablePhaseMappingPhase[]>([]);
   const [weeksByTemplate, setWeeksByTemplate] = React.useState<Record<string, Record<string, number>>>({});
   const { data: schemeData } = useUtilizationScheme({ enabled: true });
   const scheme = React.useMemo(() => {
@@ -62,15 +67,31 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const templateKey = selectedTemplateId === GLOBAL_TEMPLATE_ID ? GLOBAL_TEMPLATE_ID : String(selectedTemplateId ?? '');
   const clampWeeksCount = React.useCallback((value: number) => {
     if (!Number.isFinite(value)) return MAX_WEEKS_COUNT;
-    return Math.min(MAX_WEEKS_COUNT, Math.max(1, Math.round(value)));
+    return Math.min(MAX_WEEKS_COUNT, Math.max(0, Math.round(value)));
   }, [MAX_WEEKS_COUNT]);
   const weeksCount = React.useMemo(() => {
     const fromState = weeksByTemplate[templateKey]?.[selectedPhase];
     if (fromState != null) return clampWeeksCount(fromState);
     const fromTemplate = selectedTemplate?.weeksByPhase?.[selectedPhase];
     if (fromTemplate != null) return clampWeeksCount(fromTemplate);
-    return MAX_WEEKS_COUNT;
-  }, [clampWeeksCount, selectedPhase, selectedTemplate?.weeksByPhase, templateKey, weeksByTemplate, MAX_WEEKS_COUNT]);
+    return DEFAULT_WEEKS_COUNT;
+  }, [clampWeeksCount, selectedPhase, selectedTemplate?.weeksByPhase, templateKey, weeksByTemplate, DEFAULT_WEEKS_COUNT]);
+  const percentPhaseKeys = React.useMemo(() => {
+    return new Set(
+      (phaseMeta || [])
+        .filter((phase) => phase.rangeMin != null || phase.rangeMax != null)
+        .map((phase) => phase.key)
+    );
+  }, [phaseMeta]);
+  const totalPercentWeeks = React.useMemo(() => {
+    const keys = activePhaseKeys.filter((key) => percentPhaseKeys.has(key));
+    if (keys.length === 0) return 0;
+    return keys.reduce((sum, key) => {
+      const raw = weeksByTemplate[templateKey]?.[key] ?? selectedTemplate?.weeksByPhase?.[key];
+      const count = raw != null ? clampWeeksCount(raw) : DEFAULT_WEEKS_COUNT;
+      return sum + count;
+    }, 0);
+  }, [activePhaseKeys, clampWeeksCount, percentPhaseKeys, selectedTemplate?.weeksByPhase, templateKey, weeksByTemplate, DEFAULT_WEEKS_COUNT]);
   const weeks = React.useMemo(() => {
     const maxWeek = Math.max(0, weeksCount - 1);
     return Array.from({ length: weeksCount }, (_, idx) => String(maxWeek - idx));
@@ -489,6 +510,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
           label: phase.label || phase.key,
         }));
         if (opts.length) setPhaseOptions(opts);
+        setPhaseMeta(mapping.phases || []);
       } catch {
         // fallback to defaults if mapping fetch fails
       }
@@ -600,28 +622,35 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     setDirty(true);
   };
 
+  const adjustRoleCount = (roleId: number, delta: number) => {
+    setRows((prev) => prev.map((row) => {
+      if (row.roleId !== roleId) return row;
+      const current = Number.isFinite(row.roleCount) ? Number(row.roleCount) : 1;
+      const next = Math.max(0, current + delta);
+      return { ...row, roleCount: next };
+    }));
+    setDirty(true);
+  };
+
   const handleWeeksCountChange = (value: string) => {
+    if (value.trim() === '') {
+      if (weeksCount === 0) return;
+      const nextCount = 0;
+      setWeeksByTemplate((prev) => ({
+        ...prev,
+        [templateKey]: { ...(prev[templateKey] || {}), [selectedPhase]: nextCount },
+      }));
+      setDirty(true);
+      return;
+    }
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return;
     const nextCount = clampWeeksCount(parsed);
     if (nextCount === weeksCount) return;
-    const prevCount = weeksCount;
     setWeeksByTemplate((prev) => ({
       ...prev,
       [templateKey]: { ...(prev[templateKey] || {}), [selectedPhase]: nextCount },
     }));
-    if (nextCount < prevCount) {
-      const removedWeeks: string[] = [];
-      for (let wk = prevCount - 1; wk >= nextCount; wk -= 1) {
-        removedWeeks.push(String(wk));
-      }
-      setRows((prev) => prev.map((row) => {
-        const next = { ...(row.percentByWeek || {}) };
-        removedWeeks.forEach((wk) => { next[wk] = 0; });
-        return { ...row, percentByWeek: next };
-      }));
-      clearSelection();
-    }
     setDirty(true);
   };
 
@@ -633,6 +662,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       const payload = rows.map(row => ({
         roleId: row.roleId,
         percentByWeek: row.percentByWeek || {},
+        ...(row.roleCount != null ? { roleCount: row.roleCount } : {}),
       }));
       const data = selectedTemplateId === GLOBAL_TEMPLATE_ID
         ? await autoHoursSettingsApi.update(undefined, payload, selectedPhase, weeksCount)
@@ -925,7 +955,10 @@ const AutoHoursTemplatesEditor: React.FC = () => {
           </div>
           <div className="mb-4">
             {selectedTemplateId === GLOBAL_TEMPLATE_ID ? (
-              <div className="text-sm text-[var(--muted)]">Default settings used when no template is assigned.</div>
+              <div className="space-y-1">
+                <div className="text-sm text-[var(--muted)]">Default settings used when no template is assigned.</div>
+                <div className="text-xs text-[var(--muted)]">Total weeks (percent phases): {totalPercentWeeks}</div>
+              </div>
             ) : isEditingDescription ? (
               <textarea
                 value={templateDescription}
@@ -953,13 +986,16 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                 disabled={renaming}
               />
             ) : (
-              <button
-                type="button"
-                className="text-sm text-[var(--muted)] text-left hover:text-[var(--text)]"
-                onClick={() => setIsEditingDescription(true)}
-              >
-                {selectedTemplate?.description || 'Add a description'}
-              </button>
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  className="text-sm text-[var(--muted)] text-left hover:text-[var(--text)]"
+                  onClick={() => setIsEditingDescription(true)}
+                >
+                  {selectedTemplate?.description || 'Add a description'}
+                </button>
+                <div className="text-xs text-[var(--muted)]">Total weeks (percent phases): {totalPercentWeeks}</div>
+              </div>
             )}
           </div>
           {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
@@ -1100,17 +1136,17 @@ const AutoHoursTemplatesEditor: React.FC = () => {
             <div className="border border-[var(--border)] border-t-0 rounded-b-lg px-3 pb-3 pt-3">
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--muted)] mb-3">
                 <span>
-                  Set percent of weekly capacity (0-100%) or hours (0-{fullCapacityHours}) for each week leading up to a deliverable ({Math.max(0, weeksCount - 1)} weeks out to the deliverable week).
+                  Set percent of weekly capacity (0-100%) or hours (0-{fullCapacityHours}) for each week leading up to a deliverable.
                 </span>
                 <div className="inline-flex items-center gap-2">
                   <span>Weeks</span>
                   <input
                     type="number"
-                    min={1}
-                    max={MAX_WEEKS_COUNT}
-                    step={1}
-                    value={weeksCount}
-                    onChange={(e) => handleWeeksCountChange(e.currentTarget.value)}
+                  min={0}
+                  max={MAX_WEEKS_COUNT}
+                  step={1}
+                  value={weeksCount === 0 ? '' : weeksCount}
+                  onChange={(e) => handleWeeksCountChange(e.currentTarget.value)}
                     className="w-16 bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
@@ -1177,8 +1213,39 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                         {group.rows.map((row) => (
                           <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
                             <td className="py-2 pr-0 text-[var(--text)]">
-                              <div className="relative">
-                                <span className="block pr-6 truncate">{row.roleName}</span>
+                              <div
+                                className="relative"
+                                style={{
+                                  paddingRight: selectedTemplateId !== GLOBAL_TEMPLATE_ID ? roleCellPaddingRight : xToGridGap,
+                                }}
+                              >
+                                <span className="block truncate">{row.roleName}</span>
+                                {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
+                                  <div
+                                    className="absolute top-0 flex items-center gap-1"
+                                    style={{ right: xToGridGap + roleCountControlOffset }}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
+                                      onClick={() => adjustRoleCount(row.roleId, -1)}
+                                      title="Decrease role count"
+                                    >
+                                      −
+                                    </button>
+                                    <span className="text-xs text-[var(--muted)] w-4 text-center">
+                                      {Number.isFinite(row.roleCount) ? row.roleCount : 1}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
+                                      onClick={() => adjustRoleCount(row.roleId, 1)}
+                                      title="Increase role count"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
                                 {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
                                   <button
                                     type="button"

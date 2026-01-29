@@ -37,8 +37,9 @@ from assignments.models import Assignment  # type: ignore
 from projects.models import ProjectRole as DepartmentProjectRole
 from departments.models import Department
 
-AUTO_HOURS_MAX_WEEKS_BEFORE = 8
-AUTO_HOURS_DEFAULT_WEEKS_COUNT = AUTO_HOURS_MAX_WEEKS_BEFORE + 1
+AUTO_HOURS_MAX_WEEKS_BEFORE = 17
+AUTO_HOURS_MAX_WEEKS_COUNT = AUTO_HOURS_MAX_WEEKS_BEFORE + 1
+AUTO_HOURS_DEFAULT_WEEKS_COUNT = 6
 
 
 class PreDeliverableGlobalSettingsView(APIView):
@@ -107,8 +108,8 @@ class AutoHoursRoleSettingsView(APIView):
             count = int(value)
         except Exception:
             return None, 'weeksCount must be an integer'
-        if count < 1 or count > (self.MAX_WEEKS_BEFORE + 1):
-            return None, f'weeksCount must be between 1 and {self.MAX_WEEKS_BEFORE + 1}'
+        if count < 0 or count > (self.MAX_WEEKS_BEFORE + 1):
+            return None, f'weeksCount must be between 0 and {self.MAX_WEEKS_BEFORE + 1}'
         return count, None
 
     def _get_weeks_count(self, phase: str | None) -> int:
@@ -119,7 +120,7 @@ class AutoHoursRoleSettingsView(APIView):
         try:
             return int(raw)
         except Exception:
-            return self.MAX_WEEKS_BEFORE + 1
+            return AUTO_HOURS_DEFAULT_WEEKS_COUNT
 
     def _set_weeks_count(self, phase: str | None, count: int) -> None:
         if not phase:
@@ -288,6 +289,11 @@ class AutoHoursRoleSettingsView(APIView):
         if phase_err:
             return Response({'error': phase_err}, status=400)
         payload = request.data or {}
+        weeks_count = None
+        if 'weeksCount' in payload:
+            weeks_count, weeks_err = self._coerce_weeks_count(payload.get('weeksCount'))
+            if weeks_err:
+                return Response({'error': weeks_err}, status=400)
         settings = payload.get('settings') or []
         if not isinstance(settings, list):
             return Response({'error': 'settings must be a list'}, status=400)
@@ -336,9 +342,6 @@ class AutoHoursRoleSettingsView(APIView):
 
         with transaction.atomic():
             for role_id, hours_by_week in updates:
-                if weeks_count is not None:
-                    for wk in range(weeks_count, self.MAX_WEEKS_BEFORE + 1):
-                        hours_by_week[str(wk)] = 0
                 obj, _ = AutoHoursRoleSetting.objects.get_or_create(role_id=role_id)
                 try:
                     obj.standard_percent_of_capacity = Decimal(str(hours_by_week.get('0', 0)))
@@ -415,9 +418,9 @@ class AutoHoursTemplatesView(APIView):
                 count = int(value)
             except Exception:
                 return None, f'weeksByPhase[{phase}] must be an integer'
-            if count < 1 or count > AUTO_HOURS_DEFAULT_WEEKS_COUNT:
-                return None, f'weeksByPhase[{phase}] must be between 1 and {AUTO_HOURS_DEFAULT_WEEKS_COUNT}'
-            normalized[phase] = count
+        if count < 0 or count > AUTO_HOURS_MAX_WEEKS_COUNT:
+            return None, f'weeksByPhase[{phase}] must be between 0 and {AUTO_HOURS_MAX_WEEKS_COUNT}'
+        normalized[phase] = count
         return normalized, None
 
     def _weeks_by_phase_response(self, template: AutoHoursTemplate) -> dict[str, int]:
@@ -761,6 +764,7 @@ class AutoHoursTemplateDuplicateView(APIView):
                     template_id=obj.id,
                     role_id=setting.role_id,
                     ramp_percent_by_phase=setting.ramp_percent_by_phase or {},
+                    role_count_by_phase=setting.role_count_by_phase or {},
                 )
                 for setting in base_settings
             ]
@@ -896,6 +900,7 @@ class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
                     template_id=obj.id,
                     role_id=role.id,
                     ramp_percent_by_phase=by_phase,
+                    role_count_by_phase={phase: 1 for phase in phase_keys},
                 ))
             if new_settings:
                 AutoHoursTemplateRoleSetting.objects.bulk_create(new_settings)
@@ -923,8 +928,8 @@ class AutoHoursTemplateRoleSettingsView(APIView):
             count = int(value)
         except Exception:
             return None, 'weeksCount must be an integer'
-        if count < 1 or count > (self.MAX_WEEKS_BEFORE + 1):
-            return None, f'weeksCount must be between 1 and {self.MAX_WEEKS_BEFORE + 1}'
+        if count < 0 or count > (self.MAX_WEEKS_BEFORE + 1):
+            return None, f'weeksCount must be between 0 and {self.MAX_WEEKS_BEFORE + 1}'
         return count, None
 
     def _get_weeks_count(self, template: AutoHoursTemplate, phase: str) -> int:
@@ -932,7 +937,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         try:
             return int(raw)
         except Exception:
-            return self.MAX_WEEKS_BEFORE + 1
+            return AUTO_HOURS_DEFAULT_WEEKS_COUNT
 
     def _set_weeks_count(self, template: AutoHoursTemplate, phase: str, count: int) -> None:
         weeks_by_phase = template.weeks_by_phase or {}
@@ -999,6 +1004,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                 'departmentId': serializers.IntegerField(),
                 'departmentName': serializers.CharField(),
                 'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                'roleCount': serializers.IntegerField(),
                 'weeksCount': serializers.IntegerField(),
                 'isActive': serializers.BooleanField(),
                 'sortOrder': serializers.IntegerField(),
@@ -1041,6 +1047,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         for role in roles:
             setting = settings_map.get(role.id)
             hours_by_week = self._empty_hours_by_week()
+            role_count = 1
             if setting:
                 raw = (setting.ramp_percent_by_phase or {}).get(phase) or {}
                 if isinstance(raw, dict):
@@ -1050,12 +1057,19 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                                 hours_by_week[str(int(key))] = float(Decimal(str(value)))
                             except Exception:
                                 pass
+                try:
+                    count_raw = (setting.role_count_by_phase or {}).get(phase)
+                    if count_raw is not None:
+                        role_count = max(0, int(count_raw))
+                except Exception:
+                    role_count = 1
             items.append({
                 'roleId': role.id,
                 'roleName': role.name,
                 'departmentId': role.department_id,
                 'departmentName': getattr(role.department, 'name', ''),
                 'percentByWeek': hours_by_week,
+                'roleCount': role_count,
                 'weeksCount': weeks_count,
                 'isActive': role.is_active,
                 'sortOrder': role.sort_order,
@@ -1072,6 +1086,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                     fields={
                         'roleId': serializers.IntegerField(),
                         'percentByWeek': serializers.DictField(child=serializers.FloatField(), required=False),
+                        'roleCount': serializers.IntegerField(required=False),
                     },
                     many=True,
                 ),
@@ -1085,6 +1100,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                 'departmentId': serializers.IntegerField(),
                 'departmentName': serializers.CharField(),
                 'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                'roleCount': serializers.IntegerField(),
                 'weeksCount': serializers.IntegerField(),
                 'isActive': serializers.BooleanField(),
                 'sortOrder': serializers.IntegerField(),
@@ -1119,7 +1135,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
             except Exception:
                 return Response({'error': 'department_id must be an integer'}, status=400)
 
-        updates: list[tuple[int, dict]] = []
+        updates: list[tuple[int, dict, int | None]] = []
         role_ids: list[int] = []
         for item in settings:
             try:
@@ -1130,7 +1146,15 @@ class AutoHoursTemplateRoleSettingsView(APIView):
             hours_by_week, err = self._normalize_hours_by_week(hours_by_week_raw)
             if err:
                 return Response({'error': err}, status=400)
-            updates.append((role_id, hours_by_week))
+            role_count = None
+            if 'roleCount' in item:
+                try:
+                    role_count = int(item.get('roleCount'))
+                except Exception:
+                    return Response({'error': f'invalid roleCount for roleId {role_id}'}, status=400)
+                if role_count < 0:
+                    return Response({'error': 'roleCount must be >= 0'}, status=400)
+            updates.append((role_id, hours_by_week, role_count))
             role_ids.append(role_id)
 
         if role_ids:
@@ -1152,15 +1176,18 @@ class AutoHoursTemplateRoleSettingsView(APIView):
             self._set_weeks_count(template, phase, weeks_count)
 
         with transaction.atomic():
-            for role_id, hours_by_week in updates:
-                if weeks_count is not None:
-                    for wk in range(weeks_count, self.MAX_WEEKS_BEFORE + 1):
-                        hours_by_week[str(wk)] = 0
+            for role_id, hours_by_week, role_count in updates:
                 obj, _ = AutoHoursTemplateRoleSetting.objects.get_or_create(template_id=template_id, role_id=role_id)
                 by_phase = obj.ramp_percent_by_phase or {}
                 by_phase[phase] = hours_by_week
                 obj.ramp_percent_by_phase = by_phase
-                obj.save(update_fields=['ramp_percent_by_phase', 'updated_at'])
+                if role_count is not None:
+                    count_by_phase = obj.role_count_by_phase or {}
+                    count_by_phase[phase] = int(role_count)
+                    obj.role_count_by_phase = count_by_phase
+                    obj.save(update_fields=['ramp_percent_by_phase', 'role_count_by_phase', 'updated_at'])
+                else:
+                    obj.save(update_fields=['ramp_percent_by_phase', 'updated_at'])
 
         return self.get(request, template_id=template_id)
 
