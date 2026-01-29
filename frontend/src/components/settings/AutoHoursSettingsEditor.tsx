@@ -348,9 +348,9 @@ const AutoHoursSettingsEditor: React.FC = () => {
 
   React.useEffect(() => {
     const onDown = (ev: MouseEvent) => {
-      const target = ev.target as Node | null;
-      const inGrid = target && gridRef.current?.contains(target);
-      if (inGrid) return;
+      const target = ev.target as HTMLElement | null;
+      const inCell = target?.closest('[data-auto-hours-cell]');
+      if (inCell) return;
       if (bulkEditActiveRef.current) finalizeBulkEdit();
       if (selectedCellsRef.current.size > 0) clearSelection();
     };
@@ -615,6 +615,7 @@ const AutoHoursSettingsEditor: React.FC = () => {
                           <td
                             key={week}
                             className={`py-2 px-0 ${isSelected ? 'bg-[var(--surfaceHover)]' : ''}`}
+                            data-auto-hours-cell
                             onMouseDown={(e) => {
                               e.preventDefault();
                               handleCellMouseDown(rowKey, weekKey, e);

@@ -241,6 +241,9 @@ class AutoHoursRoleSettingsView(APIView):
         ),
     )
     def put(self, request):
+        phase, phase_err = self._parse_phase(request)
+        if phase_err:
+            return Response({'error': phase_err}, status=400)
         payload = request.data or {}
         settings = payload.get('settings') or []
         if not isinstance(settings, list):

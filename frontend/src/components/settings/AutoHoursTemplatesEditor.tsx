@@ -404,9 +404,9 @@ const AutoHoursTemplatesEditor: React.FC = () => {
 
   React.useEffect(() => {
     const onDown = (ev: MouseEvent) => {
-      const target = ev.target as Node | null;
-      const inGrid = target && gridRef.current?.contains(target);
-      if (inGrid) return;
+      const target = ev.target as HTMLElement | null;
+      const inCell = target?.closest('[data-auto-hours-cell]');
+      if (inCell) return;
       if (bulkEditActiveRef.current) finalizeBulkEdit();
       if (selectedCellsRef.current.size > 0) clearSelection();
     };
@@ -641,6 +641,47 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     }
   };
 
+  const handleDuplicateTemplate = async () => {
+    if (selectedTemplateId == null) return;
+    const isDefault = selectedTemplateId === GLOBAL_TEMPLATE_ID;
+    const base = isDefault ? null : templates.find(t => t.id === selectedTemplateId);
+    const baseName = isDefault ? 'Default' : (base?.name || 'Template');
+    const copyName = `${baseName} Copy`;
+    try {
+      const phaseKeys = (base?.phaseKeys && base.phaseKeys.length)
+        ? base.phaseKeys
+        : phaseOptions.map((opt) => opt.value);
+      if (!phaseKeys.length) {
+        showToast('No phases available to duplicate', 'error');
+        return;
+      }
+      const created = await autoHoursTemplatesApi.create({
+        name: copyName,
+        description: base?.description || '',
+        phaseKeys,
+        excludedRoleIds: base?.excludedRoleIds || [],
+        excludedDepartmentIds: base?.excludedDepartmentIds || [],
+      });
+      // Copy per-phase settings
+      const phases = phaseKeys;
+      for (const phase of phases) {
+        const settings = isDefault
+          ? await autoHoursSettingsApi.list(undefined, phase)
+          : await autoHoursTemplatesApi.listSettings(base!.id, phase);
+        const payload = (settings || []).map((row) => ({
+          roleId: row.roleId,
+          percentByWeek: row.percentByWeek || {},
+        }));
+        await autoHoursTemplatesApi.updateSettings(created.id, payload, phase);
+      }
+      setTemplates(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedTemplateId(created.id);
+      showToast('Template duplicated', 'success');
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to duplicate template', 'error');
+    }
+  };
+
   const handleRenameTemplate = async (nextName?: string) => {
     if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
     const name = (nextName ?? templateName).trim();
@@ -716,21 +757,30 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   return (
     <div ref={containerRef}>
       <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="w-full lg:w-60 lg:pr-4 lg:border-r lg:border-[var(--border)]">
+        <div className="w-full lg:w-72 lg:pr-6 lg:relative lg:after:content-[''] lg:after:absolute lg:after:top-0 lg:after:bottom-0 lg:after:right-[-12px] lg:after:w-px lg:after:bg-[var(--border)]">
           <div className="text-sm text-[var(--muted)] mb-2">Templates</div>
           <div className="space-y-2 mb-3">
-            <input
-              type="text"
-              value={newTemplateName}
-              onChange={(e) => setNewTemplateName(e.currentTarget.value)}
-              placeholder="New template name"
-              className="w-full bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)]"
-            />
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={handleCreateTemplate} disabled={!newTemplateName.trim()}>
+            <div className="grid w-full grid-cols-3 gap-2">
+              <Button
+                className="w-full"
+                variant="ghost"
+                size="sm"
+                onClick={handleCreateTemplate}
+                disabled={!newTemplateName.trim()}
+              >
                 Create
               </Button>
               <Button
+                className="w-full"
+                variant="ghost"
+                size="sm"
+                onClick={handleDuplicateTemplate}
+                disabled={selectedTemplateId == null}
+              >
+                Duplicate
+              </Button>
+              <Button
+                className="w-full"
                 variant="ghost"
                 size="sm"
                 onClick={handleDeleteTemplate}
@@ -739,6 +789,13 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                 Delete
               </Button>
             </div>
+            <input
+              type="text"
+              value={newTemplateName}
+              onChange={(e) => setNewTemplateName(e.currentTarget.value)}
+              placeholder="New template name"
+              className="w-full bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)]"
+            />
           </div>
           <div className="max-h-[360px] overflow-y-auto border border-[var(--border)] rounded bg-[var(--card)]">
             <div className="divide-y divide-[var(--border)]">
@@ -780,7 +837,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1">
+        <div className="flex-1 lg:pl-6">
           <div className="mb-2">
             {selectedTemplateId === GLOBAL_TEMPLATE_ID ? (
               <div className="text-lg font-semibold text-[var(--text)]">Default</div>
@@ -1084,13 +1141,14 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                                 const displayValue = displayValueFromPercent(value);
                                 const hideZero = Number(displayValue) === 0;
                                 return (
-                                  <td
-                                    key={week}
-                                    className={`py-2 px-0 ${isSelected ? 'bg-[var(--surfaceHover)]' : ''}`}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      handleCellMouseDown(rowKey, weekKey, e);
-                                    }}
+                                <td
+                                  key={week}
+                                  className={`py-2 px-0 ${isSelected ? 'bg-[var(--surfaceHover)]' : ''}`}
+                                  data-auto-hours-cell
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    handleCellMouseDown(rowKey, weekKey, e);
+                                  }}
                                     onMouseEnter={() => handleCellMouseEnter(rowKey, weekKey)}
                                     onClick={(e) => handleCellClick(rowKey, weekKey, e)}
                                   >

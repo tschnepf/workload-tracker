@@ -53,7 +53,6 @@ export const settingsSections: SettingsSectionDefinition[] = [
     id: AUTO_HOURS_SECTION_ID,
     title: 'Project Template',
     requiresAdmin: true,
-    allowManager: true,
     component: AutoHoursSection,
   },
   {

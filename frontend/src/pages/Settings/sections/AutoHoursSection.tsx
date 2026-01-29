@@ -1,14 +1,14 @@
 import React from 'react';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
 import { useSettingsData } from '../SettingsDataContext';
-import { isAdminOrManager } from '@/utils/roleAccess';
+import { isAdminUser } from '@/utils/roleAccess';
 import AutoHoursTemplatesEditor from '@/components/settings/AutoHoursTemplatesEditor';
 
 export const AUTO_HOURS_SECTION_ID = 'project-templates';
 
 const AutoHoursSection: React.FC = () => {
   const { auth } = useSettingsData();
-  const canAccess = isAdminOrManager(auth.user);
+  const canAccess = isAdminUser(auth.user);
   if (!canAccess) return null;
 
   return (
