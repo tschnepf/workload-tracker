@@ -1,6 +1,6 @@
 import React from 'react';
 import Button from '@/components/ui/Button';
-import { autoHoursTemplatesApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
+import { autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, resolveUtilizationLevel, utilizationLevelToClasses } from '@/util/utilization';
@@ -12,8 +12,14 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const weeks = React.useMemo(() => Array.from({ length: 9 }, (_, idx) => String(8 - idx)), []);
   const [templates, setTemplates] = React.useState<AutoHoursTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = React.useState<boolean>(false);
-  const [selectedTemplateId, setSelectedTemplateId] = React.useState<number | null>(null);
+  const GLOBAL_TEMPLATE_ID = 'global' as const;
+  const [selectedTemplateId, setSelectedTemplateId] = React.useState<number | typeof GLOBAL_TEMPLATE_ID>(GLOBAL_TEMPLATE_ID);
   const [newTemplateName, setNewTemplateName] = React.useState<string>('');
+  const [templateName, setTemplateName] = React.useState<string>('');
+  const [templateDescription, setTemplateDescription] = React.useState<string>('');
+  const [renaming, setRenaming] = React.useState<boolean>(false);
+  const [isEditingTitle, setIsEditingTitle] = React.useState<boolean>(false);
+  const [isEditingDescription, setIsEditingDescription] = React.useState<boolean>(false);
   const [rows, setRows] = React.useState<AutoHoursRoleSetting[]>([]);
   const rowsRef = React.useRef<AutoHoursRoleSetting[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -36,10 +42,10 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const fullCapacityHours = scheme.full_capacity_hours ?? 36;
 
   const rowOrder = React.useMemo(() => rows.map(row => String(row.roleId)), [rows]);
-  const selectedTemplate = React.useMemo(
-    () => templates.find(t => t.id === selectedTemplateId) || null,
-    [templates, selectedTemplateId],
-  );
+  const selectedTemplate = React.useMemo(() => {
+    if (selectedTemplateId === GLOBAL_TEMPLATE_ID) return null;
+    return templates.find(t => t.id === selectedTemplateId) || null;
+  }, [templates, selectedTemplateId]);
   const activePhaseKeys = React.useMemo(() => {
     const available = new Set(phaseOptions.map(opt => opt.value));
     if (!selectedTemplate || !selectedTemplate.phaseKeys || selectedTemplate.phaseKeys.length === 0) {
@@ -400,8 +406,11 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         const list = await autoHoursTemplatesApi.list();
         if (!mounted) return;
         setTemplates(list || []);
-        if (selectedTemplateId == null && list && list.length) {
-          setSelectedTemplateId(list[0]?.id ?? null);
+        if (selectedTemplateId == null) {
+          setSelectedTemplateId(GLOBAL_TEMPLATE_ID);
+        } else if (selectedTemplateId !== GLOBAL_TEMPLATE_ID) {
+          const exists = (list || []).some((t) => t.id === selectedTemplateId);
+          if (!exists) setSelectedTemplateId(GLOBAL_TEMPLATE_ID);
         }
       } catch (e: any) {
         showToast(e?.message || 'Failed to load templates', 'error');
@@ -410,7 +419,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [selectedTemplateId]);
+  }, [GLOBAL_TEMPLATE_ID, selectedTemplateId]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -430,20 +439,36 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
-  const loadTemplateSettings = React.useCallback(async (templateId: number, phase: string) => {
+  React.useEffect(() => {
+    if (selectedTemplateId === GLOBAL_TEMPLATE_ID) {
+      setTemplateName('');
+      setTemplateDescription('');
+      setIsEditingTitle(false);
+      setIsEditingDescription(false);
+      return;
+    }
+    setTemplateName(selectedTemplate?.name || '');
+    setTemplateDescription(selectedTemplate?.description || '');
+    setIsEditingTitle(false);
+    setIsEditingDescription(false);
+  }, [GLOBAL_TEMPLATE_ID, selectedTemplate, selectedTemplateId]);
+
+  const loadTemplateSettings = React.useCallback(async (templateId: number | typeof GLOBAL_TEMPLATE_ID, phase: string) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await autoHoursTemplatesApi.listSettings(templateId, phase);
+      const data = templateId === GLOBAL_TEMPLATE_ID
+        ? await autoHoursSettingsApi.list(undefined, phase)
+        : await autoHoursTemplatesApi.listSettings(templateId, phase);
       setRows(data || []);
       setDirty(false);
       clearSelection();
     } catch (e: any) {
-      setError(e?.message || 'Failed to load auto hours template settings');
+      setError(e?.message || 'Failed to load project template settings');
     } finally {
       setLoading(false);
     }
-  }, [clearSelection]);
+  }, [GLOBAL_TEMPLATE_ID, clearSelection]);
 
   React.useEffect(() => {
     if (selectedTemplateId == null) {
@@ -505,10 +530,15 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         roleId: row.roleId,
         percentByWeek: row.percentByWeek || {},
       }));
-      const data = await autoHoursTemplatesApi.updateSettings(selectedTemplateId, payload, selectedPhase);
+      const data = selectedTemplateId === GLOBAL_TEMPLATE_ID
+        ? await autoHoursSettingsApi.update(undefined, payload, selectedPhase)
+        : await autoHoursTemplatesApi.updateSettings(selectedTemplateId, payload, selectedPhase);
       setRows(data || []);
       setDirty(false);
-      showToast('Template settings updated', 'success');
+      showToast(
+        selectedTemplateId === GLOBAL_TEMPLATE_ID ? 'Global defaults updated' : 'Template settings updated',
+        'success'
+      );
     } catch (e: any) {
       setError(e?.message || 'Failed to save template settings');
     } finally {
@@ -517,7 +547,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   };
 
   const toggleTemplatePhase = async (phaseKey: string) => {
-    if (selectedTemplateId == null) return;
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
     const current = new Set(activePhaseKeys);
     if (current.has(phaseKey)) {
       current.delete(phaseKey);
@@ -555,7 +585,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   };
 
   const handleDeleteTemplate = async () => {
-    if (selectedTemplateId == null) return;
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
     const template = templates.find(t => t.id === selectedTemplateId);
     const name = template?.name || 'this template';
     if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
@@ -570,232 +600,390 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     }
   };
 
+  const handleRenameTemplate = async (nextName?: string) => {
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
+    const name = (nextName ?? templateName).trim();
+    if (!name) return;
+    if (selectedTemplate?.name === name) return;
+    try {
+      setRenaming(true);
+      const updated = await autoHoursTemplatesApi.update(selectedTemplateId, { name });
+      setTemplates(prev => prev.map(t => (t.id === selectedTemplateId ? updated : t)));
+      setTemplateName(updated.name);
+      showToast('Template renamed', 'success');
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to rename template', 'error');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const handleUpdateDescription = async (nextDescription?: string) => {
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
+    const description = (nextDescription ?? templateDescription).trim();
+    if ((selectedTemplate?.description || '') === description) return;
+    try {
+      setRenaming(true);
+      const updated = await autoHoursTemplatesApi.update(selectedTemplateId, { description });
+      setTemplates(prev => prev.map(t => (t.id === selectedTemplateId ? updated : t)));
+      setTemplateDescription(updated.description || '');
+      showToast('Template description updated', 'success');
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to update description', 'error');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   return (
     <div ref={containerRef}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-[var(--muted)]">Template</label>
-            <select
-              className="min-w-[200px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 min-h-[32px] focus:border-[var(--primary)]"
-              value={selectedTemplateId ?? ''}
-              disabled={templatesLoading || templates.length === 0}
-              onChange={(e) => setSelectedTemplateId(e.target.value ? Number(e.target.value) : null)}
-            >
-              {templates.map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <div className="w-full lg:w-60 lg:pr-4 lg:border-r lg:border-[var(--border)]">
+          <div className="text-sm text-[var(--muted)] mb-2">Templates</div>
+          <div className="space-y-2 mb-3">
             <input
               type="text"
               value={newTemplateName}
               onChange={(e) => setNewTemplateName(e.currentTarget.value)}
               placeholder="New template name"
-              className="min-w-[200px] bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)]"
+              className="w-full bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)]"
             />
-            <Button variant="ghost" size="sm" onClick={handleCreateTemplate} disabled={!newTemplateName.trim()}>
-              Create
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleDeleteTemplate} disabled={selectedTemplateId == null}>
-              Delete
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className="text-sm text-[var(--muted)] cursor-help"
-              title="Enable which deliverable phases this template applies to. Disabled phases fall back to the global defaults."
-            >
-              Select Phases
-            </span>
-            <div className="flex items-center rounded border border-[var(--border)] overflow-hidden">
-              {phaseOptions.map(opt => {
-                const isActive = activePhaseKeys.includes(opt.value);
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    className={`px-2 py-1 text-xs transition-colors border-r border-[var(--border)] last:border-r-0 ${
-                      isActive
-                        ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
-                        : 'text-[var(--muted)] hover:text-[var(--text)]'
-                    }`}
-                    onClick={() => toggleTemplatePhase(opt.value)}
-                    disabled={selectedTemplateId == null}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => { if (selectedTemplateId != null) void loadTemplateSettings(selectedTemplateId, selectedPhase); }}
-            disabled={loading || saving || selectedTemplateId == null}
-          >
-            Refresh
-          </Button>
-          <Button
-            size="sm"
-            onClick={onSave}
-            disabled={!dirty || saving || loading || selectedTemplateId == null}
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <div role="tablist" aria-label="Template phases" className="inline-flex items-center rounded border border-[var(--border)] bg-[var(--card)] overflow-hidden">
-          {phaseOptions.filter(opt => activePhaseKeys.includes(opt.value)).map(opt => {
-            const isActive = selectedPhase === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`px-3 py-1 text-sm transition-colors border-r border-[var(--border)] last:border-r-0 ${
-                  isActive
-                    ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
-                    : 'text-[var(--muted)] hover:text-[var(--text)]'
-                }`}
-                onClick={() => setSelectedPhase(opt.value)}
-                disabled={loading || saving}
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={handleCreateTemplate} disabled={!newTemplateName.trim()}>
+                Create
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDeleteTemplate}
+                disabled={selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID}
               >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="inline-flex items-center gap-2 text-sm text-[var(--muted)]">
-          <span>Input mode</span>
-          <div className="inline-flex items-center rounded border border-[var(--border)] bg-[var(--card)] overflow-hidden">
-            {(['percent', 'hours'] as const).map((mode) => {
-              const isActive = inputMode === mode;
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  className={`px-3 py-1 text-xs transition-colors border-r border-[var(--border)] last:border-r-0 ${
-                    isActive
-                      ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
-                      : 'text-[var(--muted)] hover:text-[var(--text)]'
-                  }`}
-                  onClick={() => setInputMode(mode)}
-                >
-                  {mode === 'percent' ? 'Percent' : 'Hours'}
-                </button>
-              );
-            })}
-          </div>
-          <span className="text-xs text-[var(--muted)]">({fullCapacityHours}h = 100%)</span>
-        </div>
-      </div>
-
-      <div className="text-sm text-[var(--muted)] mb-3">
-        Set percent of weekly capacity (0-100%) or hours (0-{fullCapacityHours}) for each week leading up to a deliverable (8 weeks out to the deliverable week).
-      </div>
-
-      {error && <div className="text-sm text-red-400 mb-3">{error}</div>}
-
-      {templatesLoading ? (
-        <div className="text-sm text-[var(--text)]">Loading templates...</div>
-      ) : templates.length === 0 ? (
-        <div className="text-sm text-[var(--muted)]">No templates available. Create one to get started.</div>
-      ) : loading ? (
-        <div className="text-sm text-[var(--text)]">Loading...</div>
-      ) : rows.length === 0 ? (
-        <div className="text-sm text-[var(--muted)]">No roles found.</div>
-      ) : (
-        <div ref={gridRef} className="overflow-x-auto space-y-6">
-          {groupedRows.map((group) => (
-            <div key={group.departmentId} className="min-w-full">
-              <div className="text-sm font-semibold text-[var(--text)] mb-2">
-                {group.departmentName}
-              </div>
-              <table className="w-max text-sm table-fixed border-collapse">
-                <colgroup>
-                  <col style={{ width: 160 }} />
-                  {Array.from({ length: 9 }).map((_, idx) => (
-                    <col key={`wk-${idx}`} style={{ width: 52 }} />
-                  ))}
-                  <col style={{ width: 52 }} />
-                </colgroup>
-                <thead className="text-[var(--muted)]">
-                  <tr className="border-b border-[var(--border)]">
-                    <th className="py-2 pr-2 text-left">Role</th>
-                    {Array.from({ length: 9 }).map((_, idx) => {
-                      const week = 8 - idx;
-                      const label = week === 0 ? '0w' : `${week}w`;
-                      return (
-                        <th key={week} className="py-2 px-0 text-center whitespace-nowrap">
-                          {label}
-                        </th>
-                      );
-                    })}
-                    <th className="py-2 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {group.rows.map((row) => (
-                    <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
-                      <td className="py-2 pr-2 text-[var(--text)] truncate">{row.roleName}</td>
-                      {Array.from({ length: 9 }).map((_, idx) => {
-                        const week = 8 - idx;
-                        const value = row.percentByWeek?.[String(week)] ?? 0;
-                        const rowKey = String(row.roleId);
-                        const weekKey = String(week);
-                        const isSelected = selectedCells.has(cellKey(rowKey, weekKey));
-                        const displayValue = displayValueFromPercent(value);
-                        const hideZero = Number(displayValue) === 0;
-                        return (
-                          <td
-                            key={week}
-                            className={`py-2 px-0 ${isSelected ? 'bg-[var(--surfaceHover)]' : ''}`}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleCellMouseDown(rowKey, weekKey, e);
-                            }}
-                            onMouseEnter={() => handleCellMouseEnter(rowKey, weekKey)}
-                            onClick={(e) => handleCellClick(rowKey, weekKey, e)}
-                          >
-                            <div className="relative flex items-center">
-                              <input
-                                type="number"
-                                min={0}
-                                max={inputMode === 'hours' ? fullCapacityHours : 100}
-                                step="0.25"
-                                value={hideZero ? '' : displayValue}
-                                className={`${getCellClasses(value, isSelected)} ${inputMode === 'percent' ? 'pr-3' : ''}`}
-                                onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
-                                onFocus={(e) => e.currentTarget.select()}
-                                onClick={(e) => {
-                                  e.currentTarget.focus();
-                                  e.currentTarget.select();
-                                }}
-                                onDragStart={(e) => e.preventDefault()}
-                              />
-                              {inputMode === 'percent' && !hideZero && (
-                                <span className="pointer-events-none absolute right-[6px] text-[10px] text-[var(--muted)]">%</span>
-                              )}
-                            </div>
-                          </td>
-                        );
-                      })}
-                      <td className="py-2 text-[var(--muted)] text-xs text-center">
-                        {row.isActive ? 'Active' : 'Inactive'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                Delete
+              </Button>
             </div>
-          ))}
+          </div>
+          <div className="max-h-[360px] overflow-y-auto border border-[var(--border)] rounded bg-[var(--card)]">
+            <div className="divide-y divide-[var(--border)]">
+              <button
+                type="button"
+                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                  selectedTemplateId === GLOBAL_TEMPLATE_ID
+                    ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+                }`}
+                onClick={() => setSelectedTemplateId(GLOBAL_TEMPLATE_ID)}
+              >
+                Default
+              </button>
+              {templatesLoading ? (
+                <div className="text-sm text-[var(--muted)] p-3">Loading templates...</div>
+              ) : templates.length === 0 ? (
+                <div className="text-sm text-[var(--muted)] p-3">No templates yet.</div>
+              ) : (
+                templates.map((t) => {
+                  const isActive = selectedTemplateId === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
+                          : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+                      }`}
+                      onClick={() => setSelectedTemplateId(t.id)}
+                    >
+                      {t.name}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
-      )}
+
+        <div className="flex-1">
+          <div className="mb-2">
+            {selectedTemplateId === GLOBAL_TEMPLATE_ID ? (
+              <div className="text-lg font-semibold text-[var(--text)]">Default</div>
+            ) : isEditingTitle ? (
+              <input
+                type="text"
+                value={templateName}
+                autoFocus
+                onChange={(e) => setTemplateName(e.currentTarget.value)}
+                onBlur={() => {
+                  setIsEditingTitle(false);
+                  void handleRenameTemplate();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setIsEditingTitle(false);
+                    void handleRenameTemplate();
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setTemplateName(selectedTemplate?.name || '');
+                    setIsEditingTitle(false);
+                  }
+                }}
+                className="text-lg font-semibold text-[var(--text)] bg-transparent border-b border-[var(--border)] focus:border-[var(--primary)] outline-none w-full"
+                disabled={renaming}
+              />
+            ) : (
+              <button
+                type="button"
+                className="text-lg font-semibold text-[var(--text)] hover:text-[var(--text)]"
+                onClick={() => setIsEditingTitle(true)}
+              >
+                {selectedTemplate?.name || 'Template'}
+              </button>
+            )}
+          </div>
+          <div className="mb-4">
+            {selectedTemplateId === GLOBAL_TEMPLATE_ID ? (
+              <div className="text-sm text-[var(--muted)]">Default settings used when no template is assigned.</div>
+            ) : isEditingDescription ? (
+              <textarea
+                value={templateDescription}
+                autoFocus
+                onChange={(e) => setTemplateDescription(e.currentTarget.value)}
+                onBlur={() => {
+                  setIsEditingDescription(false);
+                  void handleUpdateDescription();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setTemplateDescription(selectedTemplate?.description || '');
+                    setIsEditingDescription(false);
+                  }
+                  if ((e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
+                    e.preventDefault();
+                    setIsEditingDescription(false);
+                    void handleUpdateDescription();
+                  }
+                }}
+                placeholder="Add a description"
+                rows={2}
+                className="w-full text-sm text-[var(--text)] bg-transparent border border-[var(--border)] rounded px-2 py-1 focus:border-[var(--primary)] outline-none resize-none"
+                disabled={renaming}
+              />
+            ) : (
+              <button
+                type="button"
+                className="text-sm text-[var(--muted)] text-left hover:text-[var(--text)]"
+                onClick={() => setIsEditingDescription(true)}
+              >
+                {selectedTemplate?.description || 'Add a description'}
+              </button>
+            )}
+          </div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between pb-3 mb-4 border-b border-[var(--border)]">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-sm text-[var(--muted)] cursor-help"
+                  title="Enable which deliverable phases this template applies to. Disabled phases fall back to the global defaults."
+                >
+                  Select Applicable Phase
+                </span>
+                <div className="flex items-center rounded border border-[var(--border)] overflow-hidden">
+                  {phaseOptions.map(opt => {
+                    const isActive = activePhaseKeys.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        className={`px-2 py-1 text-xs transition-colors border-r border-[var(--border)] last:border-r-0 ${
+                          isActive
+                            ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
+                            : 'text-[var(--muted)] hover:text-[var(--text)]'
+                      }`}
+                        onClick={() => toggleTemplatePhase(opt.value)}
+                        disabled={selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="inline-flex items-center gap-2 text-sm text-[var(--muted)]">
+                <span>Input mode</span>
+                <div className="inline-flex items-center rounded border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+                  {(['percent', 'hours'] as const).map((mode) => {
+                    const isActive = inputMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`px-3 py-1 text-xs transition-colors border-r border-[var(--border)] last:border-r-0 ${
+                          isActive
+                            ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
+                            : 'text-[var(--muted)] hover:text-[var(--text)]'
+                        }`}
+                        onClick={() => setInputMode(mode)}
+                      >
+                        {mode === 'percent' ? 'Percent' : 'Hours'}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="text-xs text-[var(--muted)]">({fullCapacityHours}h = 100%)</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { if (selectedTemplateId != null) void loadTemplateSettings(selectedTemplateId, selectedPhase); }}
+                disabled={loading || saving || selectedTemplateId == null}
+              >
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                onClick={onSave}
+                disabled={!dirty || saving || loading || selectedTemplateId == null}
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </div>
+          <div className="bg-[var(--card)]">
+            <div className="flex flex-wrap items-center gap-3 px-3 pt-3 border-b border-[var(--border)]">
+              <div role="tablist" aria-label="Template phases" className="inline-flex items-center">
+                {phaseOptions.filter(opt => activePhaseKeys.includes(opt.value)).map(opt => {
+                  const isActive = selectedPhase === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      className={`px-3 py-1 text-sm transition-colors ${
+                        isActive
+                          ? 'relative bg-[var(--surfaceHover)] text-[var(--text)] font-semibold border border-[var(--border)] border-b-transparent border-t-4 border-t-[var(--primary)] rounded-t -mb-px after:content-[\'\'] after:absolute after:left-0 after:right-0 after:bottom-[-1px] after:h-[2px] after:bg-[var(--card)]'
+                          : 'text-[var(--muted)] hover:text-[var(--text)]'
+                      }`}
+                      onClick={() => setSelectedPhase(opt.value)}
+                      disabled={loading || saving}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border border-[var(--border)] border-t-0 rounded-b-lg px-3 pb-3 pt-3">
+              <div className="text-sm text-[var(--muted)] mb-3">
+                Set percent of weekly capacity (0-100%) or hours (0-{fullCapacityHours}) for each week leading up to a deliverable (8 weeks out to the deliverable week).
+              </div>
+
+              {error && <div className="text-sm text-red-400 mb-3">{error}</div>}
+
+              {templatesLoading ? (
+                <div className="text-sm text-[var(--text)] py-4">Loading templates...</div>
+              ) : templates.length === 0 ? (
+                <div className="text-sm text-[var(--muted)] py-4">No templates available. Create one to get started.</div>
+              ) : loading ? (
+                <div className="text-sm text-[var(--text)] py-4">Loading...</div>
+              ) : rows.length === 0 ? (
+                <div className="text-sm text-[var(--muted)] py-4">No roles found.</div>
+              ) : (
+                <div ref={gridRef} className="overflow-x-auto space-y-6">
+                  {groupedRows.map((group) => (
+                    <div key={group.departmentId} className="min-w-full">
+                      <div className="text-sm font-semibold text-[var(--text)] mb-2">
+                        {group.departmentName}
+                      </div>
+                      <table className="w-max text-sm table-fixed border-collapse">
+                        <colgroup>
+                          <col style={{ width: 160 }} />
+                          {Array.from({ length: 9 }).map((_, idx) => (
+                            <col key={`wk-${idx}`} style={{ width: 52 }} />
+                          ))}
+                          <col style={{ width: 52 }} />
+                        </colgroup>
+                        <thead className="text-[var(--muted)]">
+                          <tr className="border-b border-[var(--border)]">
+                            <th className="py-2 pr-2 text-left">Role</th>
+                            {Array.from({ length: 9 }).map((_, idx) => {
+                              const week = 8 - idx;
+                              const label = week === 0 ? '0w' : `${week}w`;
+                              return (
+                                <th key={week} className="py-2 px-0 text-center whitespace-nowrap">
+                                  {label}
+                                </th>
+                              );
+                            })}
+                            <th className="py-2 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--border)]">
+                          {group.rows.map((row) => (
+                            <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
+                              <td className="py-2 pr-2 text-[var(--text)] truncate">{row.roleName}</td>
+                              {Array.from({ length: 9 }).map((_, idx) => {
+                                const week = 8 - idx;
+                                const value = row.percentByWeek?.[String(week)] ?? 0;
+                                const rowKey = String(row.roleId);
+                                const weekKey = String(week);
+                                const isSelected = selectedCells.has(cellKey(rowKey, weekKey));
+                                const displayValue = displayValueFromPercent(value);
+                                const hideZero = Number(displayValue) === 0;
+                                return (
+                                  <td
+                                    key={week}
+                                    className={`py-2 px-0 ${isSelected ? 'bg-[var(--surfaceHover)]' : ''}`}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      handleCellMouseDown(rowKey, weekKey, e);
+                                    }}
+                                    onMouseEnter={() => handleCellMouseEnter(rowKey, weekKey)}
+                                    onClick={(e) => handleCellClick(rowKey, weekKey, e)}
+                                  >
+                                    <div className="relative flex items-center">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={inputMode === 'hours' ? fullCapacityHours : 100}
+                                        step="0.25"
+                                        value={hideZero ? '' : displayValue}
+                                        className={`${getCellClasses(value, isSelected)} ${inputMode === 'percent' ? 'pr-3' : ''}`}
+                                        onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
+                                        onFocus={(e) => e.currentTarget.select()}
+                                        onClick={(e) => {
+                                          e.currentTarget.focus();
+                                          e.currentTarget.select();
+                                        }}
+                                        onDragStart={(e) => e.preventDefault()}
+                                      />
+                                      {inputMode === 'percent' && !hideZero && (
+                                        <span className="pointer-events-none absolute right-[6px] text-[10px] text-[var(--muted)]">%</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                              <td className="py-2 text-[var(--muted)] text-xs text-center">
+                                {row.isActive ? 'Active' : 'Inactive'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

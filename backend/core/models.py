@@ -255,6 +255,7 @@ class AutoHoursTemplate(models.Model):
     """Project auto-hours template."""
 
     name = models.CharField(max_length=120, unique=True)
+    description = models.TextField(blank=True, default='')
     is_active = models.BooleanField(default=True)
     phase_keys = models.JSONField(default=default_auto_hours_phase_keys, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -581,7 +581,7 @@ export const autoHoursSettingsApi = {
     if (departmentId != null) sp.set('department_id', String(departmentId));
     if (phase) sp.set('phase', phase);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-settings/${qs}`, { headers: authHeaders() });
+    return fetchApi<AutoHoursRoleSetting[]>(`/core/project-template-settings/${qs}`, { headers: authHeaders() });
   },
   update: async (
     departmentId: number | null | undefined,
@@ -592,7 +592,7 @@ export const autoHoursSettingsApi = {
     if (departmentId != null) sp.set('department_id', String(departmentId));
     if (phase) sp.set('phase', phase);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-settings/${qs}`, {
+    return fetchApi<AutoHoursRoleSetting[]>(`/core/project-template-settings/${qs}`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ settings }),
@@ -602,24 +602,24 @@ export const autoHoursSettingsApi = {
 
 export const autoHoursTemplatesApi = {
   list: async (): Promise<AutoHoursTemplate[]> => {
-    return fetchApi<AutoHoursTemplate[]>(`/core/auto-hours-templates/`, { headers: authHeaders() });
+    return fetchApi<AutoHoursTemplate[]>(`/core/project-templates/`, { headers: authHeaders() });
   },
-  create: async (payload: { name: string; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
-    return fetchApi<AutoHoursTemplate>(`/core/auto-hours-templates/`, {
+  create: async (payload: { name: string; description?: string; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
+    return fetchApi<AutoHoursTemplate>(`/core/project-templates/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(payload),
     });
   },
-  update: async (templateId: number, payload: { name?: string; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
-    return fetchApi<AutoHoursTemplate>(`/core/auto-hours-templates/${templateId}/`, {
+  update: async (templateId: number, payload: { name?: string; description?: string; isActive?: boolean; phaseKeys?: string[] }): Promise<AutoHoursTemplate> => {
+    return fetchApi<AutoHoursTemplate>(`/core/project-templates/${templateId}/`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(payload),
     });
   },
   delete: async (templateId: number): Promise<void> => {
-    await fetchApi<void>(`/core/auto-hours-templates/${templateId}/`, {
+    await fetchApi<void>(`/core/project-templates/${templateId}/`, {
       method: 'DELETE',
       headers: authHeaders(),
     });
@@ -629,7 +629,7 @@ export const autoHoursTemplatesApi = {
     if (phase) sp.set('phase', phase);
     if (departmentId != null) sp.set('department_id', String(departmentId));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-templates/${templateId}/settings/${qs}`, { headers: authHeaders() });
+    return fetchApi<AutoHoursRoleSetting[]>(`/core/project-template-settings/${templateId}/${qs}`, { headers: authHeaders() });
   },
   updateSettings: async (
     templateId: number,
@@ -641,7 +641,7 @@ export const autoHoursTemplatesApi = {
     if (phase) sp.set('phase', phase);
     if (departmentId != null) sp.set('department_id', String(departmentId));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<AutoHoursRoleSetting[]>(`/core/auto-hours-templates/${templateId}/settings/${qs}`, {
+    return fetchApi<AutoHoursRoleSetting[]>(`/core/project-template-settings/${templateId}/${qs}`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ settings }),

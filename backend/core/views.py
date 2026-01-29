@@ -337,6 +337,7 @@ class AutoHoursTemplatesView(APIView):
             fields={
                 'id': serializers.IntegerField(),
                 'name': serializers.CharField(),
+                'description': serializers.CharField(),
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'createdAt': serializers.DateTimeField(),
@@ -351,6 +352,7 @@ class AutoHoursTemplatesView(APIView):
             items.append({
                 'id': t.id,
                 'name': t.name,
+                'description': t.description or '',
                 'isActive': t.is_active,
                 'phaseKeys': t.phase_keys or [],
                 'createdAt': t.created_at,
@@ -363,6 +365,7 @@ class AutoHoursTemplatesView(APIView):
             name='AutoHoursTemplateCreate',
             fields={
                 'name': serializers.CharField(),
+                'description': serializers.CharField(required=False),
                 'isActive': serializers.BooleanField(required=False),
                 'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
             },
@@ -372,6 +375,7 @@ class AutoHoursTemplatesView(APIView):
             fields={
                 'id': serializers.IntegerField(),
                 'name': serializers.CharField(),
+                'description': serializers.CharField(),
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'createdAt': serializers.DateTimeField(),
@@ -387,18 +391,21 @@ class AutoHoursTemplatesView(APIView):
         if AutoHoursTemplate.objects.filter(name__iexact=name).exists():
             return Response({'error': 'template name already exists'}, status=400)
         data = request.data or {}
+        description = str(data.get('description') or '').strip()
         is_active = bool(data.get('isActive', True))
         phase_keys, phase_err = self._parse_phase_keys(data)
         if phase_err:
             return Response({'error': phase_err}, status=400)
         obj = AutoHoursTemplate.objects.create(
             name=name,
+            description=description,
             is_active=is_active,
             phase_keys=phase_keys if phase_keys is not None else self._valid_phase_keys(),
         )
         return Response({
             'id': obj.id,
             'name': obj.name,
+            'description': obj.description or '',
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'createdAt': obj.created_at,
@@ -436,6 +443,7 @@ class AutoHoursTemplateDetailView(APIView):
             fields={
                 'id': serializers.IntegerField(),
                 'name': serializers.CharField(),
+                'description': serializers.CharField(),
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'createdAt': serializers.DateTimeField(),
@@ -450,6 +458,7 @@ class AutoHoursTemplateDetailView(APIView):
         return Response({
             'id': obj.id,
             'name': obj.name,
+            'description': obj.description or '',
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'createdAt': obj.created_at,
@@ -461,6 +470,7 @@ class AutoHoursTemplateDetailView(APIView):
             name='AutoHoursTemplateUpdate',
             fields={
                 'name': serializers.CharField(required=False),
+                'description': serializers.CharField(required=False),
                 'isActive': serializers.BooleanField(required=False),
                 'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
             },
@@ -470,6 +480,7 @@ class AutoHoursTemplateDetailView(APIView):
             fields={
                 'id': serializers.IntegerField(),
                 'name': serializers.CharField(),
+                'description': serializers.CharField(),
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'createdAt': serializers.DateTimeField(),
@@ -489,6 +500,8 @@ class AutoHoursTemplateDetailView(APIView):
             if AutoHoursTemplate.objects.filter(name__iexact=name).exclude(id=obj.id).exists():
                 return Response({'error': 'template name already exists'}, status=400)
             obj.name = name
+        if 'description' in data:
+            obj.description = str(data.get('description') or '').strip()
         if 'isActive' in data:
             obj.is_active = bool(data.get('isActive'))
         phase_keys, phase_err = self._parse_phase_keys(data)
@@ -496,10 +509,11 @@ class AutoHoursTemplateDetailView(APIView):
             return Response({'error': phase_err}, status=400)
         if phase_keys is not None:
             obj.phase_keys = phase_keys
-        obj.save(update_fields=['name', 'is_active', 'phase_keys', 'updated_at'])
+        obj.save(update_fields=['name', 'description', 'is_active', 'phase_keys', 'updated_at'])
         return Response({
             'id': obj.id,
             'name': obj.name,
+            'description': obj.description or '',
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'createdAt': obj.created_at,

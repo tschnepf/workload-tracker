@@ -4,7 +4,7 @@ import { useSettingsData } from '../SettingsDataContext';
 import { isAdminOrManager } from '@/utils/roleAccess';
 import AutoHoursTemplatesEditor from '@/components/settings/AutoHoursTemplatesEditor';
 
-export const AUTO_HOURS_SECTION_ID = 'auto-hours';
+export const AUTO_HOURS_SECTION_ID = 'project-templates';
 
 const AutoHoursSection: React.FC = () => {
   const { auth } = useSettingsData();

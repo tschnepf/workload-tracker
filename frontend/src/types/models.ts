@@ -199,6 +199,7 @@ export interface QATaskSettings {
 export interface AutoHoursTemplate {
   id: number;
   name: string;
+  description?: string;
   isActive: boolean;
   phaseKeys?: string[];
   createdAt?: string;
