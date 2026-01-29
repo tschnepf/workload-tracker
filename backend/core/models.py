@@ -240,6 +240,8 @@ class AutoHoursRoleSetting(models.Model):
     ramp_percent_by_week = models.JSONField(default=dict, blank=True)
     # Map of phase -> weeks-before -> percent (phase keys: "sd","dd","ifp","ifc")
     ramp_percent_by_phase = models.JSONField(default=dict, blank=True)
+    # Map of phase -> role count (int)
+    role_count_by_phase = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

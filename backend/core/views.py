@@ -183,18 +183,31 @@ class AutoHoursRoleSettingsView(APIView):
 
     @extend_schema(
         responses=inline_serializer(
-            name='AutoHoursRoleSettingItem',
+            name='AutoHoursRoleSettingsResponse',
             fields={
-                'roleId': serializers.IntegerField(),
-                'roleName': serializers.CharField(),
-                'departmentId': serializers.IntegerField(),
-                'departmentName': serializers.CharField(),
-                'percentByWeek': serializers.DictField(child=serializers.FloatField()),
-                'weeksCount': serializers.IntegerField(),
-                'isActive': serializers.BooleanField(),
-                'sortOrder': serializers.IntegerField(),
+                'settings': inline_serializer(
+                    name='AutoHoursRoleSettingItem',
+                    fields={
+                        'roleId': serializers.IntegerField(),
+                        'roleName': serializers.CharField(),
+                        'departmentId': serializers.IntegerField(),
+                        'departmentName': serializers.CharField(),
+                        'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                        'roleCount': serializers.IntegerField(),
+                        'weeksCount': serializers.IntegerField(),
+                        'isActive': serializers.BooleanField(),
+                        'sortOrder': serializers.IntegerField(),
+                    },
+                    many=True,
+                ),
+                'weekLimits': inline_serializer(
+                    name='AutoHoursWeekLimits',
+                    fields={
+                        'maxWeeksCount': serializers.IntegerField(),
+                        'defaultWeeksCount': serializers.IntegerField(),
+                    },
+                ),
             },
-            many=True,
         ),
     )
     def get(self, request):
@@ -241,17 +254,32 @@ class AutoHoursRoleSettingsView(APIView):
                         hours_by_week['0'] = float(setting.standard_percent_of_capacity)
                     except Exception:
                         pass
+            role_count = 1
+            if setting and phase:
+                try:
+                    count_raw = (setting.role_count_by_phase or {}).get(phase)
+                    if count_raw is not None:
+                        role_count = max(0, int(count_raw))
+                except Exception:
+                    role_count = 1
             items.append({
                 'roleId': role.id,
                 'roleName': role.name,
                 'departmentId': role.department_id,
                 'departmentName': getattr(role.department, 'name', ''),
                 'percentByWeek': hours_by_week,
+                'roleCount': role_count,
                 'weeksCount': weeks_count,
                 'isActive': role.is_active,
                 'sortOrder': role.sort_order,
             })
-        return Response(items)
+        return Response({
+            'settings': items,
+            'weekLimits': {
+                'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+                'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
+            },
+        })
 
     @extend_schema(
         request=inline_serializer(
@@ -264,6 +292,7 @@ class AutoHoursRoleSettingsView(APIView):
                         'roleId': serializers.IntegerField(),
                         'percentByWeek': serializers.DictField(child=serializers.FloatField(), required=False),
                         'percentPerWeek': serializers.FloatField(required=False),
+                        'roleCount': serializers.IntegerField(required=False),
                     },
                     many=True,
                 ),
@@ -272,16 +301,29 @@ class AutoHoursRoleSettingsView(APIView):
         responses=inline_serializer(
             name='AutoHoursRoleSettingItemResponse',
             fields={
-                'roleId': serializers.IntegerField(),
-                'roleName': serializers.CharField(),
-                'departmentId': serializers.IntegerField(),
-                'departmentName': serializers.CharField(),
-                'percentByWeek': serializers.DictField(child=serializers.FloatField()),
-                'weeksCount': serializers.IntegerField(),
-                'isActive': serializers.BooleanField(),
-                'sortOrder': serializers.IntegerField(),
+                'settings': inline_serializer(
+                    name='AutoHoursRoleSettingItemResponseItem',
+                    fields={
+                        'roleId': serializers.IntegerField(),
+                        'roleName': serializers.CharField(),
+                        'departmentId': serializers.IntegerField(),
+                        'departmentName': serializers.CharField(),
+                        'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                        'roleCount': serializers.IntegerField(),
+                        'weeksCount': serializers.IntegerField(),
+                        'isActive': serializers.BooleanField(),
+                        'sortOrder': serializers.IntegerField(),
+                    },
+                    many=True,
+                ),
+                'weekLimits': inline_serializer(
+                    name='AutoHoursWeekLimitsResponse',
+                    fields={
+                        'maxWeeksCount': serializers.IntegerField(),
+                        'defaultWeeksCount': serializers.IntegerField(),
+                    },
+                ),
             },
-            many=True,
         ),
     )
     def put(self, request):
@@ -306,7 +348,7 @@ class AutoHoursRoleSettingsView(APIView):
             except Exception:
                 return Response({'error': 'department_id must be an integer'}, status=400)
 
-        updates: list[tuple[int, dict]] = []
+        updates: list[tuple[int, dict, int | None]] = []
         role_ids: list[int] = []
         for item in settings:
             try:
@@ -325,7 +367,15 @@ class AutoHoursRoleSettingsView(APIView):
                 if hours < 0 or hours > 100:
                     return Response({'error': 'percentPerWeek must be between 0 and 100'}, status=400)
                 hours_by_week['0'] = float(hours)
-            updates.append((role_id, hours_by_week))
+            role_count = None
+            if 'roleCount' in item:
+                try:
+                    role_count = int(item.get('roleCount'))
+                except Exception:
+                    return Response({'error': f'invalid roleCount for roleId {role_id}'}, status=400)
+                if role_count < 0:
+                    return Response({'error': 'roleCount must be >= 0'}, status=400)
+            updates.append((role_id, hours_by_week, role_count))
             role_ids.append(role_id)
 
         if role_ids:
@@ -341,7 +391,7 @@ class AutoHoursRoleSettingsView(APIView):
             self._set_weeks_count(phase, weeks_count)
 
         with transaction.atomic():
-            for role_id, hours_by_week in updates:
+            for role_id, hours_by_week, role_count in updates:
                 obj, _ = AutoHoursRoleSetting.objects.get_or_create(role_id=role_id)
                 try:
                     obj.standard_percent_of_capacity = Decimal(str(hours_by_week.get('0', 0)))
@@ -351,7 +401,13 @@ class AutoHoursRoleSettingsView(APIView):
                     by_phase = obj.ramp_percent_by_phase or {}
                     by_phase[phase] = hours_by_week
                     obj.ramp_percent_by_phase = by_phase
-                    obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_phase', 'updated_at'])
+                    if role_count is not None:
+                        count_by_phase = obj.role_count_by_phase or {}
+                        count_by_phase[phase] = int(role_count)
+                        obj.role_count_by_phase = count_by_phase
+                        obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_phase', 'role_count_by_phase', 'updated_at'])
+                    else:
+                        obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_phase', 'updated_at'])
                 else:
                     obj.ramp_percent_by_week = hours_by_week
                     obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_week', 'updated_at'])
@@ -418,9 +474,9 @@ class AutoHoursTemplatesView(APIView):
                 count = int(value)
             except Exception:
                 return None, f'weeksByPhase[{phase}] must be an integer'
-        if count < 0 or count > AUTO_HOURS_MAX_WEEKS_COUNT:
-            return None, f'weeksByPhase[{phase}] must be between 0 and {AUTO_HOURS_MAX_WEEKS_COUNT}'
-        normalized[phase] = count
+            if count < 0 or count > AUTO_HOURS_MAX_WEEKS_COUNT:
+                return None, f'weeksByPhase[{phase}] must be between 0 and {AUTO_HOURS_MAX_WEEKS_COUNT}'
+            normalized[phase] = count
         return normalized, None
 
     def _weeks_by_phase_response(self, template: AutoHoursTemplate) -> dict[str, int]:
@@ -461,6 +517,8 @@ class AutoHoursTemplatesView(APIView):
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
+                'maxWeeksCount': serializers.IntegerField(),
+                'defaultWeeksCount': serializers.IntegerField(),
                 'createdAt': serializers.DateTimeField(),
                 'updatedAt': serializers.DateTimeField(),
             },
@@ -481,6 +539,8 @@ class AutoHoursTemplatesView(APIView):
                 'isActive': t.is_active,
                 'phaseKeys': t.phase_keys or [],
                 'weeksByPhase': self._weeks_by_phase_response(t),
+                'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+                'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
                 'createdAt': t.created_at,
                 'updatedAt': t.updated_at,
             })
@@ -510,6 +570,8 @@ class AutoHoursTemplatesView(APIView):
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
+                'maxWeeksCount': serializers.IntegerField(),
+                'defaultWeeksCount': serializers.IntegerField(),
                 'createdAt': serializers.DateTimeField(),
                 'updatedAt': serializers.DateTimeField(),
             },
@@ -554,6 +616,8 @@ class AutoHoursTemplatesView(APIView):
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'weeksByPhase': self._weeks_by_phase_response(obj),
+            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
             'createdAt': obj.created_at,
             'updatedAt': obj.updated_at,
         }, status=201)
@@ -595,6 +659,8 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
+                'maxWeeksCount': serializers.IntegerField(),
+                'defaultWeeksCount': serializers.IntegerField(),
                 'createdAt': serializers.DateTimeField(),
                 'updatedAt': serializers.DateTimeField(),
             },
@@ -613,6 +679,8 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'weeksByPhase': self._weeks_by_phase_response(obj),
+            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
             'createdAt': obj.created_at,
             'updatedAt': obj.updated_at,
         })
@@ -641,6 +709,8 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
+                'maxWeeksCount': serializers.IntegerField(),
+                'defaultWeeksCount': serializers.IntegerField(),
                 'createdAt': serializers.DateTimeField(),
                 'updatedAt': serializers.DateTimeField(),
             },
@@ -691,6 +761,8 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'weeksByPhase': self._weeks_by_phase_response(obj),
+            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
             'createdAt': obj.created_at,
             'updatedAt': obj.updated_at,
         })
@@ -732,6 +804,8 @@ class AutoHoursTemplateDuplicateView(APIView):
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
+                'maxWeeksCount': serializers.IntegerField(),
+                'defaultWeeksCount': serializers.IntegerField(),
                 'createdAt': serializers.DateTimeField(),
                 'updatedAt': serializers.DateTimeField(),
             },
@@ -780,6 +854,8 @@ class AutoHoursTemplateDuplicateView(APIView):
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'weeksByPhase': self._weeks_by_phase_response(obj),
+            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
             'createdAt': obj.created_at,
             'updatedAt': obj.updated_at,
         })
@@ -840,6 +916,8 @@ class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
                 'isActive': serializers.BooleanField(),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
+                'maxWeeksCount': serializers.IntegerField(),
+                'defaultWeeksCount': serializers.IntegerField(),
                 'createdAt': serializers.DateTimeField(),
                 'updatedAt': serializers.DateTimeField(),
             },
@@ -914,6 +992,8 @@ class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
             'isActive': obj.is_active,
             'phaseKeys': obj.phase_keys or [],
             'weeksByPhase': self._weeks_by_phase_response(obj),
+            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
             'createdAt': obj.created_at,
             'updatedAt': obj.updated_at,
         })

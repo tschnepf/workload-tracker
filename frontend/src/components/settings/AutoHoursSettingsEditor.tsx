@@ -10,7 +10,9 @@ type Dept = { id?: number; name: string };
 const AutoHoursSettingsEditor: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
-  const weeks = React.useMemo(() => Array.from({ length: 18 }, (_, idx) => String(17 - idx)), []);
+  const FALLBACK_MAX_WEEKS_COUNT = 18;
+  const [maxWeeksCount, setMaxWeeksCount] = React.useState<number>(FALLBACK_MAX_WEEKS_COUNT);
+  const weeks = React.useMemo(() => Array.from({ length: maxWeeksCount }, (_, idx) => String(maxWeeksCount - 1 - idx)), [maxWeeksCount]);
   const [departments, setDepartments] = React.useState<Dept[]>([]);
   const [departmentsLoading, setDepartmentsLoading] = React.useState<boolean>(false);
   const [rows, setRows] = React.useState<AutoHoursRoleSetting[]>([]);
@@ -38,6 +40,7 @@ const AutoHoursSettingsEditor: React.FC = () => {
       setSelectedPhase(values[0]);
     }
   }, [phaseOptions, selectedPhase]);
+
   const rowOrder = React.useMemo(() => rows.map(row => String(row.roleId)), [rows]);
   const groupedRows = React.useMemo(() => {
     const groups: Array<{ departmentId: number; departmentName: string; rows: AutoHoursRoleSetting[] }> = [];
@@ -403,8 +406,11 @@ const AutoHoursSettingsEditor: React.FC = () => {
       for (const dept of departments) {
         if (!dept?.id) continue;
         try {
-          const data = await autoHoursSettingsApi.list(dept.id, phaseKey);
-          if (data?.length) all.push(...data);
+          const response = await autoHoursSettingsApi.list(dept.id, phaseKey);
+          if (response?.weekLimits?.maxWeeksCount != null) {
+            setMaxWeeksCount(Number(response.weekLimits.maxWeeksCount));
+          }
+          if (response?.settings?.length) all.push(...response.settings);
         } catch (e: any) {
           failures.push(dept.name);
         }
@@ -486,8 +492,11 @@ const AutoHoursSettingsEditor: React.FC = () => {
       const updatedByRole = new Map<number, AutoHoursRoleSetting>();
       for (const [deptId, settings] of byDept.entries()) {
         try {
-          const data = await autoHoursSettingsApi.update(deptId, settings, selectedPhase);
-          (data || []).forEach((row) => updatedByRole.set(row.roleId, row));
+          const response = await autoHoursSettingsApi.update(deptId, settings, selectedPhase);
+          if (response?.weekLimits?.maxWeeksCount != null) {
+            setMaxWeeksCount(Number(response.weekLimits.maxWeeksCount));
+          }
+          (response?.settings || []).forEach((row) => updatedByRole.set(row.roleId, row));
         } catch {
           failures.push(deptId);
         }

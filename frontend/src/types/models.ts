@@ -205,6 +205,8 @@ export interface AutoHoursTemplate {
   isActive: boolean;
   phaseKeys?: string[];
   weeksByPhase?: Record<string, number>;
+  maxWeeksCount?: number;
+  defaultWeeksCount?: number;
   createdAt?: string;
   updatedAt?: string;
 }

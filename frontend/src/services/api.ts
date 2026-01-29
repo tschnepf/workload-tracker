@@ -577,25 +577,33 @@ export type AutoHoursRoleSetting = {
   sortOrder: number;
 };
 
+export type AutoHoursSettingsResponse = {
+  settings: AutoHoursRoleSetting[];
+  weekLimits: {
+    maxWeeksCount: number;
+    defaultWeeksCount: number;
+  };
+};
+
 export const autoHoursSettingsApi = {
-  list: async (departmentId?: number | null, phase?: string | null): Promise<AutoHoursRoleSetting[]> => {
+  list: async (departmentId?: number | null, phase?: string | null): Promise<AutoHoursSettingsResponse> => {
     const sp = new URLSearchParams();
     if (departmentId != null) sp.set('department_id', String(departmentId));
     if (phase) sp.set('phase', phase);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<AutoHoursRoleSetting[]>(`/core/project-template-settings/${qs}`, { headers: authHeaders() });
+    return fetchApi<AutoHoursSettingsResponse>(`/core/project-template-settings/${qs}`, { headers: authHeaders() });
   },
   update: async (
     departmentId: number | null | undefined,
-    settings: Array<{ roleId: number; percentByWeek: Record<string, number> }>,
+    settings: Array<{ roleId: number; percentByWeek: Record<string, number>; roleCount?: number }>,
     phase?: string | null,
     weeksCount?: number
-  ): Promise<AutoHoursRoleSetting[]> => {
+  ): Promise<AutoHoursSettingsResponse> => {
     const sp = new URLSearchParams();
     if (departmentId != null) sp.set('department_id', String(departmentId));
     if (phase) sp.set('phase', phase);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<AutoHoursRoleSetting[]>(`/core/project-template-settings/${qs}`, {
+    return fetchApi<AutoHoursSettingsResponse>(`/core/project-template-settings/${qs}`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ settings, ...(weeksCount != null ? { weeksCount } : {}) }),

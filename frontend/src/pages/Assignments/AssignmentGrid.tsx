@@ -243,7 +243,7 @@ const AssignmentGrid: React.FC = () => {
       const failures: string[] = [];
       results.forEach((res, idx) => {
         const phase = autoHoursPhases[idx];
-        if (res.status === 'fulfilled') next[phase] = res.value || [];
+        if (res.status === 'fulfilled') next[phase] = res.value?.settings || [];
         else failures.push(phase);
       });
       setAutoHoursSettingsByPhase(next);

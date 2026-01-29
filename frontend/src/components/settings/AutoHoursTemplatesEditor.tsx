@@ -9,8 +9,11 @@ import type { AutoHoursTemplate, DeliverablePhaseMappingPhase } from '@/types/mo
 const AutoHoursTemplatesEditor: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
-  const MAX_WEEKS_COUNT = 18;
-  const DEFAULT_WEEKS_COUNT = 6;
+  const FALLBACK_MAX_WEEKS_COUNT = 18;
+  const FALLBACK_DEFAULT_WEEKS_COUNT = 6;
+  const [weeksConfig, setWeeksConfig] = React.useState({ max: FALLBACK_MAX_WEEKS_COUNT, default: FALLBACK_DEFAULT_WEEKS_COUNT });
+  const maxWeeksCount = weeksConfig.max;
+  const defaultWeeksCount = weeksConfig.default;
   const roleColumnWidth = 160;
   const xToGridGap = 15;
   const roleCountControlWidth = 72;
@@ -43,6 +46,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     { value: 'ifc', label: 'IFC' },
   ]);
   const [phaseMeta, setPhaseMeta] = React.useState<DeliverablePhaseMappingPhase[]>([]);
+  const [phaseMetaLoaded, setPhaseMetaLoaded] = React.useState<boolean>(false);
   const [weeksByTemplate, setWeeksByTemplate] = React.useState<Record<string, Record<string, number>>>({});
   const { data: schemeData } = useUtilizationScheme({ enabled: true });
   const scheme = React.useMemo(() => {
@@ -66,16 +70,16 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   }, [phaseOptions, selectedTemplate]);
   const templateKey = selectedTemplateId === GLOBAL_TEMPLATE_ID ? GLOBAL_TEMPLATE_ID : String(selectedTemplateId ?? '');
   const clampWeeksCount = React.useCallback((value: number) => {
-    if (!Number.isFinite(value)) return MAX_WEEKS_COUNT;
-    return Math.min(MAX_WEEKS_COUNT, Math.max(0, Math.round(value)));
-  }, [MAX_WEEKS_COUNT]);
+    if (!Number.isFinite(value)) return maxWeeksCount;
+    return Math.min(maxWeeksCount, Math.max(0, Math.round(value)));
+  }, [maxWeeksCount]);
   const weeksCount = React.useMemo(() => {
     const fromState = weeksByTemplate[templateKey]?.[selectedPhase];
     if (fromState != null) return clampWeeksCount(fromState);
     const fromTemplate = selectedTemplate?.weeksByPhase?.[selectedPhase];
     if (fromTemplate != null) return clampWeeksCount(fromTemplate);
-    return DEFAULT_WEEKS_COUNT;
-  }, [clampWeeksCount, selectedPhase, selectedTemplate?.weeksByPhase, templateKey, weeksByTemplate, DEFAULT_WEEKS_COUNT]);
+    return defaultWeeksCount;
+  }, [clampWeeksCount, defaultWeeksCount, selectedPhase, selectedTemplate?.weeksByPhase, templateKey, weeksByTemplate]);
   const percentPhaseKeys = React.useMemo(() => {
     return new Set(
       (phaseMeta || [])
@@ -84,14 +88,16 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     );
   }, [phaseMeta]);
   const totalPercentWeeks = React.useMemo(() => {
+    if (!phaseMetaLoaded) return null;
     const keys = activePhaseKeys.filter((key) => percentPhaseKeys.has(key));
     if (keys.length === 0) return 0;
     return keys.reduce((sum, key) => {
       const raw = weeksByTemplate[templateKey]?.[key] ?? selectedTemplate?.weeksByPhase?.[key];
-      const count = raw != null ? clampWeeksCount(raw) : DEFAULT_WEEKS_COUNT;
+      const count = raw != null ? clampWeeksCount(raw) : defaultWeeksCount;
       return sum + count;
     }, 0);
-  }, [activePhaseKeys, clampWeeksCount, percentPhaseKeys, selectedTemplate?.weeksByPhase, templateKey, weeksByTemplate, DEFAULT_WEEKS_COUNT]);
+  }, [activePhaseKeys, clampWeeksCount, defaultWeeksCount, percentPhaseKeys, phaseMetaLoaded, selectedTemplate?.weeksByPhase, templateKey, weeksByTemplate]);
+  const totalPercentWeeksLabel = totalPercentWeeks == null ? '—' : totalPercentWeeks;
   const weeks = React.useMemo(() => {
     const maxWeek = Math.max(0, weeksCount - 1);
     return Array.from({ length: weeksCount }, (_, idx) => String(maxWeek - idx));
@@ -210,6 +216,22 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     return map;
   }, []);
 
+  const applyPercentUpdates = React.useCallback((byRow: Map<string, Record<string, number>>) => {
+    if (byRow.size === 0) return;
+    setRows((prev) => {
+      const next = [...prev];
+      byRow.forEach((updates, rowKey) => {
+        const idx = rowIndexMap.get(rowKey);
+        if (idx == null) return;
+        const row = prev[idx];
+        if (!row) return;
+        const merged = { ...(row.percentByWeek || {}), ...updates };
+        next[idx] = { ...row, percentByWeek: merged };
+      });
+      return next;
+    });
+  }, [rowIndexMap]);
+
   const normalizeToPercent = React.useCallback((value: number) => {
     if (!Number.isFinite(value)) return 0;
     if (inputMode === 'hours') {
@@ -232,15 +254,15 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     if (cells.size === 0) return;
     const clamped = normalizeToPercent(value);
     const byRow = buildCellsByRow(cells);
-    setRows(prev => prev.map(row => {
-      const keys = byRow.get(String(row.roleId));
-      if (!keys) return row;
-      const next = { ...(row.percentByWeek || {}) };
-      keys.forEach(k => { next[k] = clamped; });
-      return { ...row, percentByWeek: next };
-    }));
+    const updates = new Map<string, Record<string, number>>();
+    byRow.forEach((keys, rowKey) => {
+      const next: Record<string, number> = {};
+      keys.forEach((wk) => { next[wk] = clamped; });
+      updates.set(rowKey, next);
+    });
+    applyPercentUpdates(updates);
     setDirty(true);
-  }, [buildCellsByRow, normalizeToPercent]);
+  }, [applyPercentUpdates, buildCellsByRow, normalizeToPercent]);
 
   const snapshotSelection = React.useCallback(() => {
     const cells = selectedCellsRef.current;
@@ -267,14 +289,8 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       entry[wk] = value;
       byRow.set(rk, entry);
     });
-    setRows(prev => prev.map(row => {
-      const entry = byRow.get(String(row.roleId));
-      if (!entry) return row;
-      const next = { ...(row.percentByWeek || {}) };
-      Object.entries(entry).forEach(([wk, val]) => { next[wk] = val; });
-      return { ...row, percentByWeek: next };
-    }));
-  }, []);
+    applyPercentUpdates(byRow);
+  }, [applyPercentUpdates]);
 
   const finalizeBulkEdit = React.useCallback(() => {
     if (!bulkEditActiveRef.current) return;
@@ -511,6 +527,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         }));
         if (opts.length) setPhaseOptions(opts);
         setPhaseMeta(mapping.phases || []);
+        setPhaseMetaLoaded(true);
       } catch {
         // fallback to defaults if mapping fetch fails
       }
@@ -522,9 +539,15 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     let mounted = true;
     (async () => {
       try {
-        const list = await autoHoursSettingsApi.list(undefined, selectedPhase);
+        const response = await autoHoursSettingsApi.list(undefined, selectedPhase);
         if (!mounted) return;
-        setAllRoles(list || []);
+        if (response?.weekLimits) {
+          setWeeksConfig((prev) => ({
+            max: Number.isFinite(response.weekLimits.maxWeeksCount) ? Number(response.weekLimits.maxWeeksCount) : prev.max,
+            default: Number.isFinite(response.weekLimits.defaultWeeksCount) ? Number(response.weekLimits.defaultWeeksCount) : prev.default,
+          }));
+        }
+        setAllRoles(response?.settings || []);
       } catch {
         // ignore
       }
@@ -550,10 +573,20 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = templateId === GLOBAL_TEMPLATE_ID
-        ? await autoHoursSettingsApi.list(undefined, phase)
-        : await autoHoursTemplatesApi.listSettings(templateId, phase);
-      const weeksCountFromData = data?.find((row) => row.weeksCount != null)?.weeksCount;
+      let settings: AutoHoursRoleSetting[] = [];
+      if (templateId === GLOBAL_TEMPLATE_ID) {
+        const response = await autoHoursSettingsApi.list(undefined, phase);
+        settings = response?.settings || [];
+        if (response?.weekLimits) {
+          setWeeksConfig((prev) => ({
+            max: Number.isFinite(response.weekLimits.maxWeeksCount) ? Number(response.weekLimits.maxWeeksCount) : prev.max,
+            default: Number.isFinite(response.weekLimits.defaultWeeksCount) ? Number(response.weekLimits.defaultWeeksCount) : prev.default,
+          }));
+        }
+      } else {
+        settings = await autoHoursTemplatesApi.listSettings(templateId, phase);
+      }
+      const weeksCountFromData = settings.find((row) => row.weeksCount != null)?.weeksCount;
       if (weeksCountFromData != null) {
         const key = templateId === GLOBAL_TEMPLATE_ID ? GLOBAL_TEMPLATE_ID : String(templateId);
         setWeeksByTemplate((prev) => ({
@@ -561,7 +594,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
           [key]: { ...(prev[key] || {}), [phase]: weeksCountFromData },
         }));
       }
-      setRows(data || []);
+      setRows(settings);
       setDirty(false);
       clearSelection();
     } catch (e: any) {
@@ -605,19 +638,18 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         list.push(wk);
         cellsByRow.set(rk, list);
       });
-      setRows(prev => prev.map(row => {
-        const keys = cellsByRow.get(String(row.roleId));
-        if (!keys) return row;
-        const next = { ...(row.percentByWeek || {}) };
-        keys.forEach(k => { next[k] = nextValue; });
-        return { ...row, percentByWeek: next };
-      }));
+      const updates = new Map<string, Record<string, number>>();
+      cellsByRow.forEach((weekKeys, rowKey) => {
+        const next: Record<string, number> = {};
+        weekKeys.forEach((wk) => { next[wk] = nextValue; });
+        updates.set(rowKey, next);
+      });
+      applyPercentUpdates(updates);
     } else {
-      setRows(prev => prev.map(row => (
-        row.roleId === roleId
-          ? { ...row, percentByWeek: { ...(row.percentByWeek || {}), [String(week)]: nextValue } }
-          : row
-      )));
+      const updates = new Map<string, Record<string, number>>([
+        [rowKey, { [String(week)]: nextValue }],
+      ]);
+      applyPercentUpdates(updates);
     }
     setDirty(true);
   };
@@ -664,10 +696,20 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         percentByWeek: row.percentByWeek || {},
         ...(row.roleCount != null ? { roleCount: row.roleCount } : {}),
       }));
-      const data = selectedTemplateId === GLOBAL_TEMPLATE_ID
-        ? await autoHoursSettingsApi.update(undefined, payload, selectedPhase, weeksCount)
-        : await autoHoursTemplatesApi.updateSettings(selectedTemplateId, payload, selectedPhase, undefined, weeksCount);
-      setRows(data || []);
+      let nextRows: AutoHoursRoleSetting[] = [];
+      if (selectedTemplateId === GLOBAL_TEMPLATE_ID) {
+        const response = await autoHoursSettingsApi.update(undefined, payload, selectedPhase, weeksCount);
+        nextRows = response?.settings || [];
+        if (response?.weekLimits) {
+          setWeeksConfig((prev) => ({
+            max: Number.isFinite(response.weekLimits.maxWeeksCount) ? Number(response.weekLimits.maxWeeksCount) : prev.max,
+            default: Number.isFinite(response.weekLimits.defaultWeeksCount) ? Number(response.weekLimits.defaultWeeksCount) : prev.default,
+          }));
+        }
+      } else {
+        nextRows = await autoHoursTemplatesApi.updateSettings(selectedTemplateId, payload, selectedPhase, undefined, weeksCount);
+      }
+      setRows(nextRows);
       setDirty(false);
       showToast(
         selectedTemplateId === GLOBAL_TEMPLATE_ID ? 'Global defaults updated' : 'Template settings updated',
@@ -957,7 +999,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
             {selectedTemplateId === GLOBAL_TEMPLATE_ID ? (
               <div className="space-y-1">
                 <div className="text-sm text-[var(--muted)]">Default settings used when no template is assigned.</div>
-                <div className="text-xs text-[var(--muted)]">Total weeks (percent phases): {totalPercentWeeks}</div>
+                <div className="text-xs text-[var(--muted)]">Total weeks (percent phases): {totalPercentWeeksLabel}</div>
               </div>
             ) : isEditingDescription ? (
               <textarea
@@ -994,7 +1036,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                 >
                   {selectedTemplate?.description || 'Add a description'}
                 </button>
-                <div className="text-xs text-[var(--muted)]">Total weeks (percent phases): {totalPercentWeeks}</div>
+                <div className="text-xs text-[var(--muted)]">Total weeks (percent phases): {totalPercentWeeksLabel}</div>
               </div>
             )}
           </div>
@@ -1143,7 +1185,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                   <input
                     type="number"
                   min={0}
-                  max={MAX_WEEKS_COUNT}
+                  max={maxWeeksCount}
                   step={1}
                   value={weeksCount === 0 ? '' : weeksCount}
                   onChange={(e) => handleWeeksCountChange(e.currentTarget.value)}
@@ -1216,36 +1258,34 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                               <div
                                 className="relative"
                                 style={{
-                                  paddingRight: selectedTemplateId !== GLOBAL_TEMPLATE_ID ? roleCellPaddingRight : xToGridGap,
+                                  paddingRight: roleCellPaddingRight,
                                 }}
                               >
                                 <span className="block truncate">{row.roleName}</span>
-                                {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
-                                  <div
-                                    className="absolute top-0 flex items-center gap-1"
-                                    style={{ right: xToGridGap + roleCountControlOffset }}
+                                <div
+                                  className="absolute top-0 flex items-center gap-1"
+                                  style={{ right: xToGridGap + roleCountControlOffset }}
+                                >
+                                  <button
+                                    type="button"
+                                    className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
+                                    onClick={() => adjustRoleCount(row.roleId, -1)}
+                                    title="Decrease role count"
                                   >
-                                    <button
-                                      type="button"
-                                      className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
-                                      onClick={() => adjustRoleCount(row.roleId, -1)}
-                                      title="Decrease role count"
-                                    >
-                                      −
-                                    </button>
-                                    <span className="text-xs text-[var(--muted)] w-4 text-center">
-                                      {Number.isFinite(row.roleCount) ? row.roleCount : 1}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
-                                      onClick={() => adjustRoleCount(row.roleId, 1)}
-                                      title="Increase role count"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                )}
+                                    −
+                                  </button>
+                                  <span className="text-xs text-[var(--muted)] w-4 text-center">
+                                    {Number.isFinite(row.roleCount) ? row.roleCount : 1}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
+                                    onClick={() => adjustRoleCount(row.roleId, 1)}
+                                    title="Increase role count"
+                                  >
+                                    +
+                                  </button>
+                                </div>
                                 {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
                                   <button
                                     type="button"
