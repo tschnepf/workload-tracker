@@ -146,7 +146,8 @@ const AutoHoursSettingsEditor: React.FC = () => {
 
   const getCellClasses = React.useCallback((value: number, isSelected: boolean) => {
     const clamped = Math.min(100, Math.max(0, Number(value) || 0));
-    const hoursEquivalent = (clamped / 100) * 40;
+    const fullCapacityHours = scheme.full_capacity_hours ?? 36;
+    const hoursEquivalent = (clamped / 100) * fullCapacityHours;
     const level = resolveUtilizationLevel({ hours: hoursEquivalent, scheme });
     const colorClasses = utilizationLevelToClasses(level);
     const selectionClasses = isSelected ? 'ring-1 ring-[var(--primary)] border-[var(--primary)]' : '';

@@ -21,6 +21,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [dirty, setDirty] = React.useState<boolean>(false);
   const [selectedPhase, setSelectedPhase] = React.useState<string>('sd');
+  const [inputMode, setInputMode] = React.useState<'percent' | 'hours'>('percent');
   const [phaseOptions, setPhaseOptions] = React.useState<Array<{ value: string; label: string }>>([
     { value: 'sd', label: 'SD' },
     { value: 'dd', label: 'DD' },
@@ -32,6 +33,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     const base = schemeData ?? defaultUtilizationScheme;
     return { ...base, mode: 'absolute_hours' as const };
   }, [schemeData]);
+  const fullCapacityHours = scheme.full_capacity_hours ?? 36;
 
   const rowOrder = React.useMemo(() => rows.map(row => String(row.roleId)), [rows]);
   const selectedTemplate = React.useMemo(
@@ -137,10 +139,27 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     return map;
   }, []);
 
+  const normalizeToPercent = React.useCallback((value: number) => {
+    if (!Number.isFinite(value)) return 0;
+    if (inputMode === 'hours') {
+      const capacity = fullCapacityHours > 0 ? fullCapacityHours : 1;
+      return Math.min(100, Math.max(0, (value / capacity) * 100));
+    }
+    return Math.min(100, Math.max(0, value));
+  }, [fullCapacityHours, inputMode]);
+
+  const displayValueFromPercent = React.useCallback((value: number) => {
+    if (!Number.isFinite(value)) return 0;
+    if (inputMode === 'hours') {
+      return Number(((value / 100) * fullCapacityHours).toFixed(2));
+    }
+    return Math.round(value);
+  }, [fullCapacityHours, inputMode]);
+
   const applyValueToSelection = React.useCallback((value: number) => {
     const cells = selectedCellsRef.current;
     if (cells.size === 0) return;
-    const clamped = Math.min(100, Math.max(0, value));
+    const clamped = normalizeToPercent(value);
     const byRow = buildCellsByRow(cells);
     setRows(prev => prev.map(row => {
       const keys = byRow.get(String(row.roleId));
@@ -150,7 +169,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       return { ...row, percentByWeek: next };
     }));
     setDirty(true);
-  }, [buildCellsByRow]);
+  }, [buildCellsByRow, normalizeToPercent]);
 
   const snapshotSelection = React.useCallback(() => {
     const cells = selectedCellsRef.current;
@@ -215,6 +234,12 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     bulkEditValueRef.current = '';
     bulkEditSnapshotRef.current = new Map();
   }, []);
+
+  React.useEffect(() => {
+    if (bulkEditActiveRef.current) {
+      cancelBulkEdit();
+    }
+  }, [cancelBulkEdit, inputMode]);
 
   const handleCellMouseDown = React.useCallback((rowKey: string, weekKey: string, ev: React.MouseEvent) => {
     if (bulkEditActiveRef.current) {
@@ -358,12 +383,14 @@ const AutoHoursTemplatesEditor: React.FC = () => {
 
   const getCellClasses = React.useCallback((value: number, isSelected: boolean) => {
     const clamped = Math.min(100, Math.max(0, Number(value) || 0));
-    const hoursEquivalent = (clamped / 100) * 40;
+    const hoursEquivalent = inputMode === 'hours'
+      ? displayValueFromPercent(clamped)
+      : (clamped / 100) * fullCapacityHours;
     const level = resolveUtilizationLevel({ hours: hoursEquivalent, scheme });
     const colorClasses = utilizationLevelToClasses(level);
     const selectionClasses = isSelected ? 'ring-1 ring-[var(--primary)] border-[var(--primary)]' : '';
     return `w-full rounded px-1 py-1 text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] ${colorClasses} ${selectionClasses}`;
-  }, [scheme]);
+  }, [displayValueFromPercent, fullCapacityHours, inputMode, scheme]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -438,7 +465,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
 
   const updateRowPercent = (roleId: number, week: number, value: string) => {
     const parsed = Number(value);
-    const nextValue = Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0;
+    const nextValue = normalizeToPercent(parsed);
     const rowKey = String(roleId);
     const weekKey = String(week);
     const keys = Array.from(selectedCellsRef.current);
@@ -620,7 +647,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
           </Button>
         </div>
       </div>
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex flex-wrap items-center gap-3 mb-3">
         <div role="tablist" aria-label="Template phases" className="inline-flex items-center rounded border border-[var(--border)] bg-[var(--card)] overflow-hidden">
           {phaseOptions.filter(opt => activePhaseKeys.includes(opt.value)).map(opt => {
             const isActive = selectedPhase === opt.value;
@@ -643,10 +670,33 @@ const AutoHoursTemplatesEditor: React.FC = () => {
             );
           })}
         </div>
+        <div className="inline-flex items-center gap-2 text-sm text-[var(--muted)]">
+          <span>Input mode</span>
+          <div className="inline-flex items-center rounded border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+            {(['percent', 'hours'] as const).map((mode) => {
+              const isActive = inputMode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`px-3 py-1 text-xs transition-colors border-r border-[var(--border)] last:border-r-0 ${
+                    isActive
+                      ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
+                      : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  }`}
+                  onClick={() => setInputMode(mode)}
+                >
+                  {mode === 'percent' ? 'Percent' : 'Hours'}
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-xs text-[var(--muted)]">({fullCapacityHours}h = 100%)</span>
+        </div>
       </div>
 
       <div className="text-sm text-[var(--muted)] mb-3">
-        Set percent of weekly capacity (0-100%) for each week leading up to a deliverable (8 weeks out to the deliverable week).
+        Set percent of weekly capacity (0-100%) or hours (0-{fullCapacityHours}) for each week leading up to a deliverable (8 weeks out to the deliverable week).
       </div>
 
       {error && <div className="text-sm text-red-400 mb-3">{error}</div>}
@@ -670,9 +720,9 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                 <colgroup>
                   <col style={{ width: 160 }} />
                   {Array.from({ length: 9 }).map((_, idx) => (
-                    <col key={`wk-${idx}`} style={{ width: 45 }} />
+                    <col key={`wk-${idx}`} style={{ width: 52 }} />
                   ))}
-                  <col style={{ width: 45 }} />
+                  <col style={{ width: 52 }} />
                 </colgroup>
                 <thead className="text-[var(--muted)]">
                   <tr className="border-b border-[var(--border)]">
@@ -699,6 +749,8 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                         const rowKey = String(row.roleId);
                         const weekKey = String(week);
                         const isSelected = selectedCells.has(cellKey(rowKey, weekKey));
+                        const displayValue = displayValueFromPercent(value);
+                        const hideZero = Number(displayValue) === 0;
                         return (
                           <td
                             key={week}
@@ -710,14 +762,14 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                             onMouseEnter={() => handleCellMouseEnter(rowKey, weekKey)}
                             onClick={(e) => handleCellClick(rowKey, weekKey, e)}
                           >
-                            <div className="flex items-center">
+                            <div className="relative flex items-center">
                               <input
                                 type="number"
                                 min={0}
-                                max={100}
+                                max={inputMode === 'hours' ? fullCapacityHours : 100}
                                 step="0.25"
-                                value={Number.isFinite(value) ? value : 0}
-                                className={getCellClasses(value, isSelected)}
+                                value={hideZero ? '' : displayValue}
+                                className={`${getCellClasses(value, isSelected)} ${inputMode === 'percent' ? 'pr-3' : ''}`}
                                 onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
                                 onFocus={(e) => e.currentTarget.select()}
                                 onClick={(e) => {
@@ -726,6 +778,9 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                                 }}
                                 onDragStart={(e) => e.preventDefault()}
                               />
+                              {inputMode === 'percent' && !hideZero && (
+                                <span className="pointer-events-none absolute right-[6px] text-[10px] text-[var(--muted)]">%</span>
+                              )}
                             </div>
                           </td>
                         );

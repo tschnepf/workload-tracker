@@ -31,6 +31,7 @@ class UtilizationSchemeApiTests(TestCase):
             'green_min': 30, 'green_max': 36,
             'orange_min': 37, 'orange_max': 40,
             'red_min': 41,
+            'full_capacity_hours': 36,
             'zero_is_blank': True,
         }, format='json')
         self.assertEqual(res.status_code, 403)
@@ -43,6 +44,7 @@ class UtilizationSchemeApiTests(TestCase):
             'green_min': 30, 'green_max': 36,
             'orange_min': 37, 'orange_max': 40,
             'red_min': 41,
+            'full_capacity_hours': 36,
             'zero_is_blank': True,
         }, format='json')
         self.assertEqual(res2.status_code, 412)
@@ -62,6 +64,7 @@ class UtilizationSchemeApiTests(TestCase):
             'green_min': 30, 'green_max': 36,
             'orange_min': 37, 'orange_max': 40,
             'red_min': 41,
+            'full_capacity_hours': 36,
             'zero_is_blank': False,  # toggle
         }
         res2 = self.client.put('/api/core/utilization_scheme/', data=payload, format='json', HTTP_IF_MATCH=etag)
@@ -86,6 +89,7 @@ class UtilizationSchemeApiTests(TestCase):
             'green_min': 30, 'green_max': 36,
             'orange_min': 37, 'orange_max': 40,
             'red_min': 41,
+            'full_capacity_hours': 36,
             'zero_is_blank': True,
         }
         res2 = self.client.put('/api/core/utilization_scheme/', data=bad, format='json', HTTP_IF_MATCH=etag)
@@ -101,4 +105,3 @@ class UtilizationSchemeApiTests(TestCase):
             etag = res.headers.get('ETag') or res.headers.get('etag')
             res2 = self.client.put('/api/core/utilization_scheme/', data=res.json(), format='json', HTTP_IF_MATCH=etag)
             self.assertEqual(res2.status_code, 403)
-

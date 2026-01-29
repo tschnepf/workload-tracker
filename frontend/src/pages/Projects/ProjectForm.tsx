@@ -449,7 +449,7 @@ const ProjectForm: React.FC = () => {
             {canEditAutoHoursTemplate && (
               <div>
                 <label className="block text-sm font-medium text-[#cccccc] mb-2">
-                  Auto Hours Template
+                  Project Template
                 </label>
                 <select
                   value={formData.autoHoursTemplateId ?? ''}

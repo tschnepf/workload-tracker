@@ -75,6 +75,7 @@ class UtilizationSchemeSerializer(serializers.ModelSerializer):
             'green_min', 'green_max',
             'orange_min', 'orange_max',
             'red_min',
+            'full_capacity_hours',
             'zero_is_blank',
             'version', 'updated_at',
         ]

@@ -501,6 +501,7 @@ export type UtilizationScheme = {
   orange_min: number;
   orange_max: number;
   red_min: number;
+  full_capacity_hours: number;
   zero_is_blank: boolean;
   version: number;
   updated_at: string;

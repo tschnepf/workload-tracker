@@ -338,6 +338,8 @@ class UtilizationScheme(models.Model):
     orange_max = models.PositiveIntegerField(default=40)
     red_min = models.PositiveIntegerField(default=41)
 
+    full_capacity_hours = models.PositiveIntegerField(default=36)
+
     zero_is_blank = models.BooleanField(default=True)
 
     version = models.PositiveIntegerField(default=1)
@@ -369,6 +371,8 @@ class UtilizationScheme(models.Model):
             raise ValidationError('orange_min must be green_max + 1')
         if self.red_min != self.orange_max + 1:
             raise ValidationError('red_min must be orange_max + 1')
+        if self.full_capacity_hours < 1:
+            raise ValidationError('Full capacity hours must be >= 1')
 
     @classmethod
     def get_active(cls):
@@ -384,6 +388,7 @@ class UtilizationScheme(models.Model):
                 orange_min=37,
                 orange_max=40,
                 red_min=41,
+                full_capacity_hours=36,
                 zero_is_blank=True,
                 version=1,
             ),

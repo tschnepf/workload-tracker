@@ -554,7 +554,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
               </div>
             </div>
             <div className="mt-3">
-              <div className="text-[var(--muted)] text-xs mb-1">Auto Hours Template:</div>
+              <div className="text-[var(--muted)] text-xs mb-1">Project Template:</div>
               <div className="flex items-center gap-2">
                 <select
                   className="min-w-[220px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)] disabled:opacity-60"

@@ -8,6 +8,7 @@ export type UtilizationScheme = {
   green_min: number; green_max: number;
   orange_min: number; orange_max: number;
   red_min: number;
+  full_capacity_hours: number;
   zero_is_blank: boolean;
 };
 
@@ -17,6 +18,7 @@ export const defaultUtilizationScheme: UtilizationScheme = {
   green_min: 30, green_max: 36,
   orange_min: 37, orange_max: 40,
   red_min: 41,
+  full_capacity_hours: 36,
   zero_is_blank: true,
 };
 

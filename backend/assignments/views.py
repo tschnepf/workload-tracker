@@ -2636,6 +2636,7 @@ class AssignmentsPageSnapshotView(APIView):
                     'green_min': 30, 'green_max': 36,
                     'orange_min': 37, 'orange_max': 40,
                     'red_min': 41,
+                    'full_capacity_hours': 36,
                     'zero_is_blank': True,
                     'version': obj.version,
                     'updated_at': obj.updated_at,
