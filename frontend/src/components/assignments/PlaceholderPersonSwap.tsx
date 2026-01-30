@@ -1,8 +1,9 @@
 import React from 'react';
-import type { Person } from '@/types/models';
 import { usePeopleAutocomplete } from '@/hooks/usePeople';
 
-type PersonOption = Pick<Person, 'id' | 'name' | 'department'> & {
+type PersonOption = {
+  id: number;
+  name: string;
   department?: number | null;
 };
 
@@ -22,6 +23,12 @@ const PlaceholderPersonSwap: React.FC<Props> = ({ label, deptId, onSelect, class
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const canOpen = !disabled;
   const { people, loading } = usePeopleAutocomplete(query, deptId ? { department: deptId } : undefined);
+  const peopleOptions = React.useMemo(
+    () => (people || [])
+      .filter((person) => person?.id != null)
+      .map((person) => ({ ...person, id: person.id as number })),
+    [people]
+  );
 
   React.useEffect(() => {
     if (!open) return;
@@ -94,17 +101,17 @@ const PlaceholderPersonSwap: React.FC<Props> = ({ label, deptId, onSelect, class
             {query.trim().length >= 2 && loading && (
               <div className="text-[11px] text-[var(--muted)] px-1">Searching…</div>
             )}
-            {query.trim().length >= 2 && !loading && people.length === 0 && (
+            {query.trim().length >= 2 && !loading && peopleOptions.length === 0 && (
               <div className="text-[11px] text-[var(--muted)] px-1">No matches.</div>
             )}
-            {query.trim().length >= 2 && people.map((person) => (
+            {query.trim().length >= 2 && peopleOptions.map((person) => (
               <button
                 key={person.id}
                 type="button"
                 className="w-full text-left px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--cardHover)]"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleSelect(person as PersonOption);
+                  handleSelect(person);
                 }}
                 disabled={saving}
               >

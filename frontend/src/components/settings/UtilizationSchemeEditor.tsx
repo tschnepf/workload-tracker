@@ -158,6 +158,7 @@ export const UtilizationSchemeEditor: React.FC<Props> = ({ readOnly }) => {
           green_min: form.green_min, green_max: form.green_max,
           orange_min: form.orange_min, orange_max: form.orange_max,
           red_min: form.red_min,
+          full_capacity_hours: form.full_capacity_hours,
           zero_is_blank: form.zero_is_blank,
         } as const;
         const fixedShell = 'inline-flex flex-col items-center justify-center gap-0.5 py-1 px-2 min-w-[46px] rounded-full text-xs font-medium text-center';
