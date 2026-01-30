@@ -54,7 +54,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   return (
     <div ref={headerRef} className="sticky top-0 bg-[var(--bg)] border-b border-[var(--border)] z-30 px-6 py-4">
       <div className="flex items-start justify-between gap-6">
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold text-[var(--text)]">{title}</h1>
           <div className="flex items-center gap-3">
             <p className="text-[var(--muted)] text-sm">Manage team workload allocation across {weeksCount} weeks</p>
@@ -69,24 +69,26 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
               {isSnapshotMode ? 'Snapshot Mode' : 'Legacy Mode'}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-            <span>Weeks</span>
-            {[8, 12, 16, 20].map((n) => (
-              <button
-                key={n}
-                onClick={() => setWeeksHorizon(n)}
-                className={`px-2 py-0.5 rounded border ${
-                  weeksHorizon === n
-                    ? 'border-[var(--primary)] text-[var(--text)] bg-[var(--surfaceHover)]'
-                    : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 text-xs text-[var(--muted)] min-w-0">
+            <span className="shrink-0">Weeks</span>
+            <div className="flex items-center gap-2 overflow-x-auto min-w-0 flex-1 pb-1 scrollbar-theme">
+              {[8, 12, 16, 20, 26, 52].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setWeeksHorizon(n)}
+                  className={`shrink-0 px-2 py-0.5 rounded border ${
+                    weeksHorizon === n
+                      ? 'border-[var(--primary)] text-[var(--text)] bg-[var(--surfaceHover)]'
+                      : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
             <a
               href={projectViewHref}
-              className="ml-2 px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+              className="shrink-0 ml-2 px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
             >
               Project View
             </a>

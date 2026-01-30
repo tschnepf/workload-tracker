@@ -228,7 +228,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             "metrics: { projectsCount, peopleAssignedCount, totalHours } }"
         ),
         parameters=[
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),
@@ -311,8 +311,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = 12
         if weeks < 1:
             weeks = 1
-        if weeks > 26:
-            weeks = 26
+        if weeks > 52:
+            weeks = 52
         try:
             maybe_sync_overhead_assignments(weeks=weeks)
         except Exception:  # nosec B110
@@ -1400,7 +1400,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         description="Return authoritative totals for specific projects over current horizon.",
         parameters=[
             OpenApiParameter(name='project_ids', type=str, required=True, description='CSV of project IDs'),
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),
@@ -1417,8 +1417,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = 12
         if weeks < 1:
             weeks = 1
-        if weeks > 26:
-            weeks = 26
+        if weeks > 52:
+            weeks = 52
 
         ids = request.query_params.get('project_ids')
         if not ids:
@@ -1585,7 +1585,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             "Response: { clients: [{ label: string, hours: number }] }"
         ),
         parameters=[
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
         ],
@@ -1705,7 +1705,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         ),
         parameters=[
             OpenApiParameter(name='client', type=str, required=True),
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
         ],
@@ -1829,7 +1829,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             "Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }"
         ),
         parameters=[
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
         ],
@@ -1972,7 +1972,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             "Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }"
         ),
         parameters=[
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='include_active_ca', type=int, required=False, description='0|1 include active_ca status in addition to active (default 0)')
@@ -2263,7 +2263,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         description="Return compact pre-aggregated grid data for N weeks ahead (default 12).\n\n"
                     "Response shape: { weekKeys: [YYYY-MM-DD], people: [{id, name, weeklyCapacity, department}], hoursByPerson: { <personId>: { <weekKey>: hours } } }",
         parameters=[
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
         ],
@@ -2295,8 +2295,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = 12
         if weeks < 1:
             weeks = 1
-        if weeks > 26:
-            weeks = 26
+        if weeks > 52:
+            weeks = 52
         try:
             maybe_sync_overhead_assignments(weeks=weeks)
         except Exception:  # nosec B110
@@ -2471,7 +2471,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @extend_schema(
         description="Start async grid snapshot job and return task ID for polling.",
         parameters=[
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
         ],
@@ -2776,7 +2776,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         "projects list, and deliverables within the visible weeks."
     ),
     parameters=[
-        OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-26), default 12'),
+        OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
         OpenApiParameter(name='department', type=int, required=False),
         OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
         OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),

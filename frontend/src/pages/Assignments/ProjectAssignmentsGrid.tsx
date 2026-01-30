@@ -172,7 +172,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       const w = query.get('weeks');
       if (w) {
         const n = parseInt(w, 10);
-        if (!Number.isNaN(n) && n >= 1 && n <= 26) setWeeksHorizon(n);
+        if (!Number.isNaN(n) && n >= 1 && n <= 52) setWeeksHorizon(n);
       }
     } catch {}
   }, []);
@@ -1400,7 +1400,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
             <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
           ) : null}
         </div>
-        <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        <div className="min-w-0 flex-1">
+          <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        </div>
         <HeaderActions
           onExpandAll={() => {
             const next = new Set(
@@ -1438,8 +1440,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         <div
           ref={bodyScrollRef}
           onScroll={handleBodyScroll}
-          className="overflow-x-auto overflow-y-visible"
-          style={{ minWidth: totalMinWidth }}
+          className="overflow-x-auto overflow-y-visible scrollbar-theme"
         >
           <div style={{ minWidth: totalMinWidth, paddingLeft: weekPaddingLeft, paddingRight: weekPaddingRight }}>
             {visibleProjects.map((project) => (

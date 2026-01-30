@@ -21,8 +21,8 @@ def generate_grid_snapshot_async(self, weeks: int = 12, department: Optional[int
     from departments.models import Department
     from assignments.models import Assignment
 
-    # clamp weeks 1..26
-    weeks = max(1, min(int(weeks or 12), 26))
+    # clamp weeks 1..52
+    weeks = max(1, min(int(weeks or 12), 52))
 
     people_qs = Person.objects.filter(is_active=True).select_related('department')
     if department is not None:

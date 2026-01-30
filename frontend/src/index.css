@@ -15,6 +15,30 @@
     background-color: var(--bg);
     color: var(--text);
   }
+
+  /* Theme-aware scrollbars (default to current theme tokens) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) var(--card);
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--card);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 6px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+  }
 }
 
 /* Custom scrollbar for dark mode */

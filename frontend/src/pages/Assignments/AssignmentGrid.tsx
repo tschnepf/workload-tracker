@@ -672,7 +672,7 @@ const AssignmentGrid: React.FC = () => {
       const w = url.get('weeks');
       if (w) {
         const n = parseInt(w, 10);
-        if (!Number.isNaN(n) && n >= 1 && n <= 26) setWeeksHorizon(n);
+        if (!Number.isNaN(n) && n >= 1 && n <= 52) setWeeksHorizon(n);
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1679,7 +1679,9 @@ const AssignmentGrid: React.FC = () => {
             <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
           ) : null}
         </div>
-        <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        <div className="min-w-0 flex-1">
+          <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        </div>
         <HeaderActions
           onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
           onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
@@ -1726,7 +1728,9 @@ const AssignmentGrid: React.FC = () => {
   const mobileToolbar = (
     <div className="md:hidden sticky top-0 z-30 bg-[var(--bg)] border border-[var(--border)] rounded-lg shadow-sm px-3 py-2 space-y-2">
       <div className="flex items-center justify-between gap-1">
-        <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        <div className="min-w-0 flex-1">
+          <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        </div>
         <button
           type="button"
           className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
@@ -1812,7 +1816,7 @@ const AssignmentGrid: React.FC = () => {
           />
           <DeliverableLegendFloating top={(compact ? 0 : headerHeight) + 8} />
           <div
-            className={`flex-1 overflow-x-auto bg-[var(--bg)] ${isMobileLayout ? 'snap-x snap-mandatory' : ''}`}
+            className={`flex-1 overflow-x-auto bg-[var(--bg)] scrollbar-theme ${isMobileLayout ? 'snap-x snap-mandatory' : ''}`}
             ref={bodyScrollRef}
             onScroll={handleBodyScroll}
           >
