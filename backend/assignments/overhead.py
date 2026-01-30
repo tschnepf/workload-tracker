@@ -37,6 +37,17 @@ def _normalize_hours(value) -> float:
         return 0.0
 
 
+def _is_missing_weekly_value(weekly: dict, week_key: str) -> bool:
+    if week_key not in weekly:
+        return True
+    value = weekly.get(week_key)
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip() == '':
+        return True
+    return False
+
+
 def _week_keys(weeks: int, start_date: date | None = None) -> list[str]:
     from core.week_utils import sunday_of_week
 
@@ -112,7 +123,7 @@ def sync_overhead_assignments(
                     changed = False
                     new_weekly = dict(assignment.weekly_hours or {})
                     for wk in week_keys:
-                        if _normalize_hours(new_weekly.get(wk)) != desired_hours:
+                        if _is_missing_weekly_value(new_weekly, wk):
                             new_weekly[wk] = desired_hours
                             changed = True
                     if assignment.is_active is False:
