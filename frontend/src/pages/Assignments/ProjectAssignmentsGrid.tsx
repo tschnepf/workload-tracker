@@ -1079,6 +1079,18 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [projectsData.length, deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, snapshot.loadData, refreshAllAssignments]);
 
   const toggleProjectExpanded = (projectId: number) => {
+    const getMainScrollContainer = () => bodyScrollRef.current?.closest('main') as HTMLElement | null;
+    const capturedScrollTop = getMainScrollContainer()?.scrollTop ?? null;
+    const scheduleScrollRestore = () => {
+      if (capturedScrollTop == null || capturedScrollTop <= 8 || typeof window === 'undefined') return;
+      window.requestAnimationFrame(() => {
+        const main = getMainScrollContainer();
+        if (!main) return;
+        if (main.scrollTop <= 2) {
+          main.scrollTop = capturedScrollTop;
+        }
+      });
+    };
     const willExpand = !expandedProjectIds.has(projectId);
     setExpandedProjectIds((prev) => {
       const next = new Set(prev);
@@ -1086,7 +1098,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
       else next.delete(projectId);
       return next;
     });
-    if (willExpand) void ensureAssignmentsLoaded(projectId);
+    scheduleScrollRestore();
+    if (willExpand) {
+      void ensureAssignmentsLoaded(projectId).finally(() => {
+        scheduleScrollRestore();
+      });
+    }
   };
 
   const removeAssignment = async (projectId: number, assignmentId: number) => {
