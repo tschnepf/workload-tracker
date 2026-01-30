@@ -7,9 +7,14 @@ export function useWeekHeaders() {
   const setFromSnapshot = useCallback((weekKeys: string[]) => {
     try {
       const wk = toWeekHeader(weekKeys || []);
-      setWeeks(wk);
+      setWeeks((prev) => {
+        if (prev.length === wk.length && prev.every((item, idx) => item.date === wk[idx]?.date)) {
+          return prev;
+        }
+        return wk;
+      });
     } catch {
-      setWeeks([]);
+      setWeeks((prev) => (prev.length ? [] : prev));
     }
   }, []);
 
@@ -17,4 +22,3 @@ export function useWeekHeaders() {
 }
 
 export type UseWeekHeadersReturn = ReturnType<typeof useWeekHeaders>;
-

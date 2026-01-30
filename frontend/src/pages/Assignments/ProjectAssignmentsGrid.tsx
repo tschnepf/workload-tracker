@@ -1,2367 +1,1332 @@
-﻿import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { useLocation } from 'react-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '@/components/layout/Layout';
-import GlobalDepartmentFilter from '@/components/filters/GlobalDepartmentFilter';
+import AssignmentsSkeleton from '@/components/skeletons/AssignmentsSkeleton';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
-import { getProjectTotals } from '@/services/projectAssignmentsApi';
-import { toWeekHeader, WeekHeader } from '@/pages/Assignments/grid/utils';
-import { useCellSelection } from '@/pages/Assignments/grid/useCellSelection';
+import { useAssignmentsSnapshot } from '@/pages/Assignments/grid/useAssignmentsSnapshot';
 import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
-import type { Project, Assignment, Person } from '@/types/models';
-import { showToast } from '@/lib/toastBus';
-import { useAbortManager } from '@/utils/useAbortManager';
-import { assignmentsApi, peopleApi } from '@/services/api';
-import { formatDateWithWeekday } from '@/utils/dates';
-import StatusBadge from '@/components/projects/StatusBadge';
-import { useDropdownManager } from '@/components/projects/useDropdownManager';
-import { useProjectStatus } from '@/components/projects/useProjectStatus';
+import { useEditingCell as useEditingCellHook } from '@/pages/Assignments/grid/useEditingCell';
+import { useAssignmentsInteractionStore } from '@/pages/Assignments/grid/useAssignmentsInteractionStore';
+import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeyboardNavigation';
+import { useDeliverablesIndex } from '@/pages/Assignments/grid/useDeliverablesIndex';
+import { useGridColumnWidthsAssign } from '@/pages/Assignments/grid/useGridColumnWidths';
+import { useProjectStatusFilters } from '@/pages/Assignments/grid/useProjectStatusFilters';
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
-import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
-import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
-import { defaultUtilizationScheme, getUtilizationPill } from '@/util/utilization';
-import { listProjectRoles, searchProjectRoles, type ProjectRole } from '@/roles/api';
-import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
-import { getFlag } from '@/lib/flags';
-import { useLayoutDensity } from '@/components/layout/useLayoutDensity';
+import { useStatusControls } from '@/pages/Assignments/grid/useStatusControls';
+import StatusBadge from '@/components/projects/StatusBadge';
+import StatusDropdown from '@/components/projects/StatusDropdown';
+import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
+import { searchProjectRoles, type ProjectRole } from '@/roles/api';
+import RoleDropdown from '@/roles/components/RoleDropdown';
+import RemoveAssignmentButton from '@/pages/Assignments/grid/components/RemoveAssignmentButton';
+import WeekCell from '@/pages/Assignments/grid/components/WeekCell';
+import AutoHoursActionButtons from '@/pages/Assignments/grid/components/AutoHoursActionButtons';
+import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
+import HeaderActions from '@/components/compact/HeaderActions';
 import WeeksSelector from '@/components/compact/WeeksSelector';
 import StatusFilterChips from '@/components/compact/StatusFilterChips';
-import HeaderActions from '@/components/compact/HeaderActions';
-import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
-import { bulkUpdateAssignmentHours, createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
-import { useAssignmentsPageSnapshot } from '@/pages/Assignments/hooks/useAssignmentsPageSnapshot';
-import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
-import {
-  buildFutureDeliverableLookupFromSet,
-  projectMatchesActiveWithDates,
-  projectMatchesActiveWithoutDates,
-} from '@/components/projects/statusFilterUtils';
-import ProjectsSection from '@/pages/Assignments/projectAssignments/components/ProjectsSection';
-import ProjectNameQuickViewButton from '@/pages/Assignments/projectAssignments/components/ProjectNameQuickViewButton';
-import type { DeliverableMarker, ProjectWithAssignments } from '@/pages/Assignments/projectAssignments/types';
+import { useAuth } from '@/hooks/useAuth';
+import { isAdminOrManager } from '@/utils/roleAccess';
+import { showToast as showToastBus } from '@/lib/toastBus';
+import { Assignment, Deliverable, DeliverablePhaseMappingSettings, Person, Project, AutoHoursTemplate } from '@/types/models';
+import { assignmentsApi, autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, peopleApi, type AutoHoursRoleSetting } from '@/services/api';
+import { updateAssignmentRoleAction } from '@/pages/Assignments/grid/useAssignmentRoleUpdate';
+import { bulkUpdateAssignmentHours, createAssignment, updateAssignment, deleteAssignment } from '@/lib/mutations/assignments';
+import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
+import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 
-type AssignmentUpdateInfo = {
-  prev: Record<string, number>;
-  next: Record<string, number>;
-  weeks: Set<string>;
-  personId: number | null;
-  projectId: number;
+interface ProjectWithAssignments extends Project {
+  assignments: Assignment[];
+  isExpanded: boolean;
+}
+
+const AUTO_HOURS_MAX_WEEKS = 8;
+const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
+const roundHours = (value: number) => (Number.isFinite(value) ? Math.ceil(value) : 0);
+const DEFAULT_PHASE_MAPPING: DeliverablePhaseMappingSettings = {
+  useDescriptionMatch: true,
+  phases: [
+    { key: 'sd', label: 'SD', descriptionTokens: ['sd', 'schematic'], rangeMin: 0, rangeMax: 40, sortOrder: 0 },
+    { key: 'dd', label: 'DD', descriptionTokens: ['dd', 'design development'], rangeMin: 41, rangeMax: 89, sortOrder: 1 },
+    { key: 'ifp', label: 'IFP', descriptionTokens: ['ifp'], rangeMin: 90, rangeMax: 99, sortOrder: 2 },
+    { key: 'ifc', label: 'IFC', descriptionTokens: ['ifc'], rangeMin: 100, rangeMax: 100, sortOrder: 3 },
+  ],
 };
-
-const TYPE_COLORS: Record<string, string> = {
-  bulletin: '#3b82f6',
-  cd: '#fb923c',
-  dd: '#818cf8',
-  ifc: '#06b6d4',
-  ifp: '#f472b6',
-  masterplan: '#a78bfa',
-  sd: '#f59e0b',
-  milestone: '#64748b',
+const DEFAULT_AUTO_HOURS_PHASES = ['sd', 'dd', 'ifp', 'ifc'] as const;
+const isDateInWeek = (dateStr: string, weekStartStr: string) => {
+  try {
+    const deliverableDate = new Date(dateStr);
+    const weekStartDate = new Date(weekStartStr);
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    return deliverableDate >= weekStartDate && deliverableDate <= weekEndDate;
+  } catch {
+    return false;
+  }
 };
-const EMPTY_MARKERS: DeliverableMarker[] = [];
-const normalizeSortValue = (value: unknown) => (value ?? '').toString().trim().toLowerCase();
-
-const buildDeliverableTooltip = (weekKey: string, entries: DeliverableMarker[] | undefined): string | undefined => {
-  if (!entries || entries.length === 0) return undefined;
-  const dtHeader = formatDateWithWeekday(weekKey);
-  return entries
-    .flatMap((m) => {
-      const dates = (m as any).dates as string[] | undefined;
-      const base = `${m.percentage != null ? `${m.percentage}% ` : ''}${m.type.toUpperCase()}`;
-      if (dates && dates.length) {
-        return dates.map((d) => `${formatDateWithWeekday(d)} — ${base}`);
-      }
-      return [`${dtHeader} — ${base}`];
-    })
-    .join('\n');
-};
-
-// Project Assignments Grid (scaffold)
-// Prescriptive: lean, best-practice; no client-side week calculations.
-// Week header placeholder only; wired to server weekKeys in Step 4.
 
 const ProjectAssignmentsGrid: React.FC = () => {
   const { state: deptState } = useDepartmentFilter();
-  const [weeks, setWeeks] = useState<WeekHeader[]>([]);
+  const auth = useAuth();
+  const canUseAutoHours = isAdminOrManager(auth.user);
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
-  // Manual sorting state
-  const [sortBy, setSortBy] = useState<'client' | 'project' | 'deliverable'>('client');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [loading, setLoading] = useState<boolean>(true);
-  const [isFetching, setIsFetching] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  // Projects state must be defined before any hook closures that read it
-  const [projects, setProjects] = useState<ProjectWithAssignments[]>([]);
-  const projectsRef = useRef<ProjectWithAssignments[]>([]);
-  const projectIndexByIdRef = useRef<Map<number, number>>(new Map());
-  const lastAssignmentUpdateRef = useRef<Map<number, number>>(new Map());
-  const lastAssignmentUpdateSourceRef = useRef<Map<number, 'event' | 'local'>>(new Map());
-  const assignmentEventQueueRef = useRef<AssignmentEvent[]>([]);
-  const assignmentFlushTimerRef = useRef<number | null>(null);
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const [mobileStatusProjectId, setMobileStatusProjectId] = useState<number | null>(null);
-  const mobileStatusProject = useMemo(
-    () => (mobileStatusProjectId ? projects.find(p => p.id === mobileStatusProjectId) ?? null : null),
-    [projects, mobileStatusProjectId]
-  );
-  const [mobileRoleState, setMobileRoleState] = useState<{
-    projectId: number;
-    assignmentId: number | null;
-    deptId: number | null;
-    currentId: number | null;
-    label: string | null;
-  } | null>(null);
-  const [mobileDeliverableDetail, setMobileDeliverableDetail] = useState<{
-    projectName: string;
-    client?: string;
-    weekLabel: string;
-    entries: DeliverableMarker[];
-  } | null>(null);
-  // Lookup map to avoid rescanning all projects/assignments during apply
-  const assignmentById = React.useMemo(() => {
-    const map = new Map<number, { projectId: number; assignment: Assignment; personId: number | null }>();
-    for (const p of projects) {
-      if (!p?.assignments?.length || !p.id) continue;
-      for (const a of p.assignments) {
-        if (!a?.id) continue;
-        map.set(a.id, {
-          projectId: p.id,
-          assignment: a,
-          personId: (a.person as any) ?? null,
-        });
-      }
-    }
-    return map;
-  }, [projects]);
-  // Build row order for rectangular selection (assignment IDs in render order)
-  const rowOrderAll = React.useMemo(() => {
-    const arr: string[] = [];
-    for (const p of projects) {
-      if (!p.isExpanded) continue;
-      for (const a of p.assignments || []) {
-        if (a?.id != null) arr.push(String(a.id));
-      }
-    }
-    return arr;
-  }, [projects]);
-  const rowOrderByProject = React.useMemo(() => {
-    const map = new Map<number, string[]>();
-    for (const p of projects) {
-      if (!p.isExpanded || !p.id) continue;
-      const rows: string[] = [];
-      for (const a of p.assignments || []) {
-        if (a?.id != null) rows.push(String(a.id));
-      }
-      map.set(p.id, rows);
-    }
-    return map;
-  }, [projects]);
-  const [activeSelectionProjectId, setActiveSelectionProjectId] = useState<number | null>(null);
-  const activeSelectionProjectIdRef = useRef<number | null>(null);
-  const selectionRowOrder = React.useMemo(() => {
-    if (activeSelectionProjectId != null) {
-      return rowOrderByProject.get(activeSelectionProjectId) || [];
-    }
-    return rowOrderAll;
-  }, [activeSelectionProjectId, rowOrderAll, rowOrderByProject]);
-  const rowIndexByKey = React.useMemo(() => {
-    const map = new Map<string, number>();
-    selectionRowOrder.forEach((rk, idx) => { map.set(rk, idx); });
-    return map;
-  }, [selectionRowOrder]);
-  const selection = useCellSelection(weeks.map(w => w.date), selectionRowOrder);
-  const getProjectIdForAssignment = React.useCallback((assignmentId: number) => {
-    const entry = assignmentById.get(assignmentId);
-    return entry?.projectId ?? null;
-  }, [assignmentById]);
-  const aborts = useAbortManager();
-  const url = useGridUrlState();
-  const location = useLocation();
-  const { openId: statusDropdownOpenId, toggle: toggleStatusDropdown, close: closeStatusDropdown } = useDropdownManager<number>();
-  const { emitStatusChange } = useProjectStatusSubscription({ debug: false });
-  const projectStatus = useProjectStatus({
-    onSuccess: (pid, newStatus) => {
-      const p = projects.find(x => x.id === pid);
-      const oldStatus = (p?.status as any) || 'active';
-      emitStatusChange(pid, oldStatus, newStatus);
-    },
-    getCurrentStatus: (pid) => {
-      const p = projects.find(x => x.id === pid);
-      return (p?.status as any) || 'active';
-    }
-  });
-  const { data: schemeData } = useUtilizationScheme({ enabled: false });
-  const scheme = schemeData ?? defaultUtilizationScheme;
-  const legendLabels = React.useMemo(() => {
-    const s = scheme;
-    if (s.mode === 'absolute_hours') {
-      return {
-        green: `${s.green_min}-${s.green_max}h`,
-        blue: `${s.blue_min}-${s.blue_max}h`,
-        orange: `${s.orange_min}-${s.orange_max}h`,
-        red: `${s.red_min}h+`,
-      } as const;
-    }
-    return { green: '70-85%', blue: '=70%', orange: '85-100%', red: '>100%' } as const;
-  }, [scheme]);
+  const query = useGridUrlState();
 
-  const [hoursByProject, setHoursByProject] = useState<Record<number, Record<string, number>>>({});
-  const [loadingTotals, setLoadingTotals] = useState<Set<number>>(new Set());
-  const [deliverablesByProjectWeek, setDeliverablesByProjectWeek] = useState<Record<number, Record<string, number>>>({});
-  // Deliverable types per project/week for vertical bar rendering
-  const [deliverableTypesByProjectWeek, setDeliverableTypesByProjectWeek] = useState<Record<number, Record<string, DeliverableMarker[]>>>({});
-  const [deliverableTooltipsByProjectWeek, setDeliverableTooltipsByProjectWeek] = useState<Record<number, Record<string, string>>>({});
+  const [people, setPeople] = useState<Person[]>([]);
+  const [assignmentsData, setAssignmentsData] = useState<Assignment[]>([]);
+  const [projectsData, setProjectsData] = useState<Project[]>([]);
+  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
+  const [, setHoursByPerson] = useState<Record<number, Record<string, number>>>({});
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(new Set());
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
-  const loadingAssignmentsRef = useRef<Set<number>>(new Set());
-  const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
-  const [editingCell, setEditingCell] = useState<{ rowKey: string; weekKey: string } | null>(null);
-  const [editingValue, setEditingValue] = useState<string>('');
-  const [savingCells, setSavingCells] = useState<Set<string>>(new Set());
-  const applyBatchInFlightRef = useRef(false);
-  // Role dropdown state
-  const [openRoleFor, setOpenRoleFor] = useState<number | null>(null);
-  const roleAnchorRef = useRef<HTMLElement | null>(null);
-  const [rolesByDept, setRolesByDept] = useState<Record<number, ProjectRole[]>>({});
-  const expandedFromUrlRef = useRef<string | null>(null);
-  const editingProjectId = React.useMemo(() => {
-    if (!editingCell) return null;
-    const aid = parseInt(editingCell.rowKey, 10);
-    if (Number.isNaN(aid)) return null;
-    return assignmentById.get(aid)?.projectId ?? null;
-  }, [editingCell, assignmentById]);
-  const openRoleProjectId = React.useMemo(() => {
-    if (!openRoleFor) return null;
-    return assignmentById.get(openRoleFor)?.projectId ?? null;
-  }, [openRoleFor, assignmentById]);
-  const savingCellsByProject = React.useMemo(() => {
-    const map = new Map<number, Set<string>>();
-    for (const key of savingCells) {
-      const [aidRaw] = key.split('-');
-      const aid = parseInt(aidRaw, 10);
-      if (Number.isNaN(aid)) continue;
-      const pid = assignmentById.get(aid)?.projectId;
-      if (pid == null) continue;
-      let set = map.get(pid);
-      if (!set) {
-        set = new Set<string>();
-        map.set(pid, set);
-      }
-      set.add(key);
-    }
-    return map;
-  }, [savingCells, assignmentById]);
-  // Load any missing role catalogs for departments present in rows, then sort by role order
-  const sortRowsByDeptRoles = React.useCallback(async (rows: Assignment[]) => {
-    const deptIds = Array.from(new Set(rows.map(a => (a as any).personDepartmentId as number | null | undefined)))
-      .filter((v): v is number => typeof v === 'number' && v > 0);
-    const missing = deptIds.filter(d => rolesByDept[d] == null);
-    let merged = rolesByDept;
-    if (missing.length > 0) {
-      const fetched = await Promise.all(
-        missing.map(async d => ({ id: d, roles: await listProjectRoles(d).catch(() => []) }))
-      );
-      const next: Record<number, ProjectRole[]> = { ...rolesByDept };
-      for (const f of fetched) next[f.id] = f.roles;
-      setRolesByDept(next);
-      merged = next;
-    }
-    return sortAssignmentsByProjectRole(rows, merged);
-  }, [rolesByDept]);
+  const [loadedProjectIds, setLoadedProjectIds] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    projectsRef.current = projects;
-    const map = new Map<number, number>();
-    projects.forEach((project, index) => {
-      if (project.id != null) map.set(project.id, index);
-    });
-    projectIndexByIdRef.current = map;
-  }, [projects]);
+  const [phaseMapping, setPhaseMapping] = useState<DeliverablePhaseMappingSettings | null>(null);
+  const [phaseMappingError, setPhaseMappingError] = useState<string | null>(null);
+  const phaseMappingEffective = useMemo(() => phaseMapping || DEFAULT_PHASE_MAPPING, [phaseMapping]);
+  const autoHoursPhases = useMemo(() => {
+    const keys = (phaseMappingEffective.phases || []).map(p => p.key).filter(Boolean);
+    return keys.length ? keys : Array.from(DEFAULT_AUTO_HOURS_PHASES);
+  }, [phaseMappingEffective]);
 
-  const updateProjectById = React.useCallback(
-    (projectId: number, updater: (project: ProjectWithAssignments) => ProjectWithAssignments) => {
-      if (!projectId) return;
-      setProjects(prev => {
-        const refIdx = projectIndexByIdRef.current.get(projectId);
-        const idx = refIdx != null ? refIdx : prev.findIndex(project => project.id === projectId);
-        if (idx < 0) return prev;
-        const current = prev[idx];
-        const nextProject = updater(current);
-        if (nextProject === current) return prev;
-        const next = prev.slice();
-        next[idx] = nextProject;
-        return next;
-      });
-    },
-    []
-  );
+  const [autoHoursSettingsByPhase, setAutoHoursSettingsByPhase] = useState<Record<string, AutoHoursRoleSetting[]>>({});
+  const [autoHoursSettingsLoading, setAutoHoursSettingsLoading] = useState(false);
+  const [autoHoursSettingsError, setAutoHoursSettingsError] = useState<string | null>(null);
+  const [autoHoursTemplateSettings, setAutoHoursTemplateSettings] = useState<Record<number, Record<string, AutoHoursRoleSetting[]>>>({});
+  const [autoHoursTemplateSettingsLoading, setAutoHoursTemplateSettingsLoading] = useState<Set<number>>(new Set());
+  const [autoHoursTemplates, setAutoHoursTemplates] = useState<AutoHoursTemplate[]>([]);
 
-  useEffect(() => {
-    loadingAssignmentsRef.current = loadingAssignments;
-  }, [loadingAssignments]);
-
-  useEffect(() => {
-    const deptId = mobileRoleState?.deptId;
-    if (!deptId || rolesByDept[deptId]) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const roles = await listProjectRoles(deptId);
-        if (!cancelled) {
-          setRolesByDept(prev => ({ ...prev, [deptId]: roles }));
-        }
-      } catch {}
-    })();
-    return () => { cancelled = true; };
-  }, [mobileRoleState, rolesByDept]);
-  const [pendingRefresh, setPendingRefresh] = useState<boolean>(false);
-  const isSnapshotMode = true;
-  // Column widths + resizing (parity with person grid)
-  const [clientColumnWidth, setClientColumnWidth] = useState(210);
-  const [projectColumnWidth, setProjectColumnWidth] = useState(353);
-  const [isResizing, setIsResizing] = useState<null | 'client' | 'project'>(null);
-  const [resizeStartX, setResizeStartX] = useState(0);
-  const [resizeStartWidth, setResizeStartWidth] = useState(0);
-  const gridTemplate = useMemo(() => {
-    return `${clientColumnWidth}px ${projectColumnWidth}px 40px repeat(${weeks.length}, 70px)`;
-  }, [clientColumnWidth, projectColumnWidth, weeks.length]);
-  const totalMinWidth = useMemo(() => {
-    return clientColumnWidth + projectColumnWidth + 40 + (weeks.length * 70) + 20;
-  }, [clientColumnWidth, projectColumnWidth, weeks.length]);
-
-  // Persist column widths across views (shared keys with person grid)
-  useEffect(() => {
-    try {
-      const cw = localStorage.getItem('assignGrid:clientColumnWidth');
-      const pw = localStorage.getItem('assignGrid:projectColumnWidth');
-      if (cw) {
-        const n = parseInt(cw, 10); if (!Number.isNaN(n)) setClientColumnWidth(Math.max(80, n));
-      }
-      if (pw) {
-        const n = parseInt(pw, 10); if (!Number.isNaN(n)) setProjectColumnWidth(Math.max(80, n));
-      }
-    } catch {}
-  }, []);
-  // One-time width reduction to 0.75x per request; guards with a migration flag
-  useEffect(() => {
-    try {
-      const mig = localStorage.getItem('projGrid:widthsScaled075');
-      if (!mig) {
-        setClientColumnWidth(w => Math.max(80, Math.round(w * 0.75)));
-        setProjectColumnWidth(w => Math.max(80, Math.round(w * 0.75)));
-        localStorage.setItem('projGrid:widthsScaled075', '1');
-      }
-    } catch {}
-    // run once
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // Production width correction: ensure sensible minimums once
-  useEffect(() => {
-    try {
-      const fix = localStorage.getItem('projGrid:widthsFix_v2025_10');
-      if (!fix) {
-        setClientColumnWidth(w => (w < 180 ? 210 : w));
-        setProjectColumnWidth(w => (w < 260 ? 300 : w));
-        localStorage.setItem('projGrid:widthsFix_v2025_10', '1');
-      }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // Adjustments requested: width migrations
-  useEffect(() => {
-    try {
-      const mig2 = localStorage.getItem('projGrid:widthsFix_projectReset_client06');
-      if (!mig2) {
-        // Revert project width to default 300px (legacy migration)
-        setProjectColumnWidth(300);
-        // Reduce client width by an additional 0.6x
-        setClientColumnWidth(w => Math.max(80, Math.round(w * 0.6)));
-        localStorage.setItem('projGrid:widthsFix_projectReset_client06', '1');
-      }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // Increase project column width by another 8% to ease truncation (one-time)
-  useEffect(() => {
-    try {
-      const mig3 = localStorage.getItem('projGrid:widthsFix_increase_project_8pct_3_2026_01');
-      if (!mig3) {
-        setProjectColumnWidth(w => Math.max(80, Math.round(w * 1.08)));
-        localStorage.setItem('projGrid:widthsFix_increase_project_8pct_3_2026_01', '1');
-      }
-    } catch {}
-  }, []);
-  // Reduce client column width by ~1/3 to reclaim space (one-time)
-  useEffect(() => {
-    try {
-      const mig4 = localStorage.getItem('projGrid:widthsFix_reduce_client_33pct_2026_01');
-      if (!mig4) {
-        setClientColumnWidth(w => Math.max(80, Math.round((w * 2) / 3)));
-        localStorage.setItem('projGrid:widthsFix_reduce_client_33pct_2026_01', '1');
-      }
-    } catch {}
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem('assignGrid:clientColumnWidth', String(clientColumnWidth)); } catch {}
-  }, [clientColumnWidth]);
-  useEffect(() => {
-    try { localStorage.setItem('assignGrid:projectColumnWidth', String(projectColumnWidth)); } catch {}
-  }, [projectColumnWidth]);
-
-  const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
-  const { setMainPadding } = useLayoutDensity();
-  // Snap the sticky week header directly under the app top bar and
-  // flush with the sidebar by removing main padding in compact mode.
-  useLayoutEffect(() => {
-    if (compact) setMainPadding('compact');
-    return () => setMainPadding('default');
-  }, [compact, setMainPadding]);
-
-  // Measure sticky header height (legacy); compact mode snaps under top bar
-  const headerRef = useRef<HTMLDivElement | null>(null);
-  const [headerHeight, setHeaderHeight] = useState<number>(88);
-  const headerScrollRef = useRef<HTMLDivElement | null>(null);
-  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (compact) return;
-    function measure() {
-      if (headerRef.current) {
-        setHeaderHeight(headerRef.current.getBoundingClientRect().height);
-      }
-    }
-    measure();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
-    if (ro && headerRef.current) ro.observe(headerRef.current);
-    window.addEventListener('resize', measure);
-    return () => {
-      window.removeEventListener('resize', measure);
-      if (ro && headerRef.current) ro.unobserve(headerRef.current);
-    };
-  }, [compact]);
-
-  // Sync horizontal scroll between sticky week header and grid body
-  useEffect(() => {
-    const h = headerScrollRef.current;
-    const b = bodyScrollRef.current;
-    if (!h || !b) return;
-    let syncing = false;
-    const sync = (src: HTMLElement, dst: HTMLElement) => {
-      if (syncing) return;
-      syncing = true;
-      if (dst.scrollLeft !== src.scrollLeft) dst.scrollLeft = src.scrollLeft;
-      syncing = false;
-    };
-    const onHeaderScroll = () => sync(h, b);
-    const onBodyScroll = () => sync(b, h);
-    h.addEventListener('scroll', onHeaderScroll);
-    b.addEventListener('scroll', onBodyScroll);
-    return () => {
-      h.removeEventListener('scroll', onHeaderScroll);
-      b.removeEventListener('scroll', onBodyScroll);
-    };
-  }, [headerHeight, totalMinWidth]);
-  // Add person combobox state
-  const [isAddingForProject, setIsAddingForProject] = useState<number | null>(null);
-  const [addMode, setAddMode] = useState<'person' | 'role'>('person');
-  const [personQuery, setPersonQuery] = useState<string>('');
-  const [personResults, setPersonResults] = useState<Person[]>([]);
-  const [selectedPersonIndex, setSelectedPersonIndex] = useState<number>(-1);
-  const [roleDeptId, setRoleDeptId] = useState<number | null>(null);
-  const [roleQuery, setRoleQuery] = useState<string>('');
-  const [selectedRoleIndex, setSelectedRoleIndex] = useState<number>(-1);
-  const [showPlaceholdersOnly, setShowPlaceholdersOnly] = useState(false);
-  const roleResults = React.useMemo(() => {
-    if (!roleDeptId) return [];
-    const roles = rolesByDept[roleDeptId] || [];
-    const q = roleQuery.trim().toLowerCase();
-    if (!q) return [];
-    return roles.filter((r) => r.name.toLowerCase().includes(q));
-  }, [roleDeptId, roleQuery, rolesByDept]);
-  React.useEffect(() => {
-    if (!roleDeptId || rolesByDept[roleDeptId]) return;
-    listProjectRoles(roleDeptId)
-      .then((roles) => setRolesByDept((prev) => ({ ...prev, [roleDeptId]: roles })))
-      .catch(() => {});
-  }, [roleDeptId, rolesByDept]);
-  React.useEffect(() => {
-    if (roleResults.length > 0) {
-      setSelectedRoleIndex((idx) => (idx >= 0 ? Math.min(idx, roleResults.length - 1) : 0));
-    } else {
-      setSelectedRoleIndex(-1);
-    }
-  }, [roleResults]);
-  // Status filter chips
-  const statusFilterOptions = [
-    'active',
-    'active_ca',
-    'active_with_dates',
-    'active_no_deliverables',
-    'on_hold',
-    'completed',
-    'cancelled',
-    'Show All',
-  ] as const;
-  type StatusFilter = typeof statusFilterOptions[number];
-  const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<StatusFilter>>(() => {
-    try {
-      const raw = localStorage.getItem('projGrid:statusFilters');
-      if (!raw) return new Set<StatusFilter>(['active','active_ca']);
-      const parsed = JSON.parse(raw);
-      const arr = Array.isArray(parsed) ? parsed : ['active','active_ca'];
-      const set = new Set<StatusFilter>();
-      arr.forEach((s: any) => { if (statusFilterOptions.includes(s)) set.add(s); });
-      return set.size > 0 ? set : new Set<StatusFilter>(['active','active_ca']);
-    } catch { return new Set<StatusFilter>(['active','active_ca']); }
-  });
-  const statusParams = useMemo(() => {
-    const statuses = Array.from(selectedStatusFilters);
-    const hasShowAll = statuses.includes('Show All');
-    const hasNoDelivs = statuses.includes('active_no_deliverables');
-    const hasFutureWithDates = statuses.includes('active_with_dates');
-    const normalizedForApi = hasShowAll
-      ? []
-      : statuses
-          .filter((s) => s !== 'Show All' && s !== 'active_no_deliverables')
-          .map((s) => (s === 'active_with_dates' ? 'active' : s));
-    const statusIn = hasShowAll
-      ? undefined
-      : (normalizedForApi.length > 0 ? Array.from(new Set(normalizedForApi)).join(',') : undefined);
-    let hasFutureParam: 0 | 1 | undefined;
-    if (!hasShowAll && statuses.length === 1) {
-      if (hasNoDelivs) hasFutureParam = 0;
-      else if (hasFutureWithDates) hasFutureParam = 1;
-    }
-    return { statuses, hasShowAll, hasNoDelivs, hasFutureWithDates, normalizedForApi, statusIn, hasFutureParam };
-  }, [selectedStatusFilters]);
-
-  // Consistent human-friendly labels for filter buttons
-  const formatStatusLabel = (status: StatusFilter): string => {
-    switch (status) {
-      case 'active': return 'Active';
-      case 'active_ca': return 'Active CA';
-      case 'active_with_dates': return 'Active - With Dates';
-      case 'on_hold': return 'On-Hold';
-      case 'completed': return 'Completed';
-      case 'cancelled': return 'Cancelled';
-      case 'active_no_deliverables': return 'Active - No Deliverables';
-      case 'Show All': return 'Show All';
-      default: return String(status);
-    }
-  };
-
-  const toggleStatusFilter = (status: StatusFilter) => {
-    setSelectedStatusFilters(prev => {
-      const next = new Set<StatusFilter>(prev);
-      if (status === 'Show All') {
-        return new Set<StatusFilter>(['Show All']);
-      }
-      next.delete('Show All');
-      if (next.has(status)) next.delete(status); else next.add(status);
-      if (next.size === 0) return new Set<StatusFilter>(['Show All']);
-      try { localStorage.setItem('projGrid:statusFilters', JSON.stringify(Array.from(next))); } catch {}
-      return next;
-    });
-  };
-
-  const snapshotQuery = useAssignmentsPageSnapshot({
-    weeks: weeksHorizon,
-    department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
+  const [weeksHorizon, setWeeksHorizon] = useState(20);
+  const snapshot = useAssignmentsSnapshot({
+    weeksHorizon,
+    departmentId: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
     includeChildren: deptState.includeChildren,
-    includePlaceholders: true,
-    statusIn: statusParams.statusIn,
-    hasFutureDeliverables: statusParams.hasFutureParam,
-    include: 'project',
+    setPeople: setPeople as any,
+    setAssignmentsData,
+    setProjectsData: setProjectsData as any,
+    setDeliverables,
+    setHoursByPerson,
+    getHasData: () => projectsData.length > 0 || assignmentsData.length > 0,
+    setIsFetching,
+    subscribeGridRefresh,
+    showToast: (msg, type) => showToastBus(msg, type),
+    setError,
+    setLoading,
   });
-  const departments = snapshotQuery.data?.departments || [];
-  const roleSearchQuery = personQuery.trim();
-  const [roleSearchMatches, setRoleSearchMatches] = React.useState<ProjectRole[]>([]);
-  const roleSearchRequestRef = React.useRef(0);
-  const deptNameById = React.useMemo(() => {
-    const map: Record<number, string> = {};
-    departments.forEach((dept) => {
-      if (dept.id == null) return;
-      map[dept.id as number] = dept.name || `Dept #${dept.id}`;
+
+  const { weeks, departments } = snapshot;
+  const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
+  const weekVirtualization = useWeekVirtualization(weeks, 70, 2);
+  const visibleWeeks = isMobileLayout ? weekVirtualization.visibleWeeks : weeks;
+  const weekPaddingLeft = isMobileLayout ? weekVirtualization.paddingLeft : 0;
+  const weekPaddingRight = isMobileLayout ? weekVirtualization.paddingRight : 0;
+
+  const peopleById = useMemo(() => {
+    const map = new Map<number, Person>();
+    (people || []).forEach(p => { if (p?.id != null) map.set(p.id, p); });
+    return map;
+  }, [people]);
+
+  const projectsById = useMemo(() => {
+    const map = new Map<number, Project & { isUpdating?: boolean }>();
+    (projectsData || []).forEach(p => { if (p?.id != null) map.set(p.id, { ...p, isUpdating: false }); });
+    return map;
+  }, [projectsData]);
+
+  const departmentNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    (departments || []).forEach((dept: any) => {
+      if (dept?.id != null) map.set(dept.id, dept.name || '');
     });
     return map;
   }, [departments]);
-  React.useEffect(() => {
-    if (!isAddingForProject || roleSearchQuery.length < 2) {
-      setRoleSearchMatches([]);
-      return;
-    }
-    const requestId = ++roleSearchRequestRef.current;
-    const timer = window.setTimeout(() => {
-      searchProjectRoles(roleSearchQuery)
-        .then((roles) => {
-          if (requestId === roleSearchRequestRef.current) {
-            setRoleSearchMatches(roles || []);
-          }
-        })
-        .catch(() => {
-          if (requestId === roleSearchRequestRef.current) {
-            setRoleSearchMatches([]);
-          }
-        });
-    }, 200);
-    return () => window.clearTimeout(timer);
-  }, [isAddingForProject, roleSearchQuery]);
-  const roleMatches = React.useMemo(() => {
-    if (!roleSearchQuery) return [];
-    return roleSearchMatches.map((role) => ({
-      role,
-      deptId: role.department_id,
-      deptName: deptNameById[role.department_id] || `Dept #${role.department_id}`,
-    }));
-  }, [deptNameById, roleSearchMatches, roleSearchQuery]);
-
-  const loadProjectAssignments = React.useCallback(async (projectId: number) => {
-    if (!projectId) return;
-    if (loadingAssignmentsRef.current.has(projectId)) return;
-    setLoadingAssignments(prev => new Set(prev).add(projectId));
-    try {
-      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, include_placeholders: 1, page_size: 200 } as any);
-      const rows = ((resp as any).results || []) as Assignment[];
-      const sorted = await sortRowsByDeptRoles(rows);
-      updateProjectById(projectId, (project) => ({ ...project, assignments: sorted, isExpanded: true }));
-    } catch {
-      showToast('Failed to load assignments', 'error');
-      updateProjectById(projectId, (project) => ({ ...project, isExpanded: false }));
-    } finally {
-      setLoadingAssignments(prev => { const n = new Set(prev); n.delete(projectId); return n; });
-    }
-  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, sortRowsByDeptRoles, showToast, updateProjectById]);
-
-  const toggleProjectExpanded = React.useCallback(async (project: ProjectWithAssignments) => {
-    if (!project.id) return;
-    const willExpand = !project.isExpanded;
-    updateProjectById(project.id, (projectRow) => ({ ...projectRow, isExpanded: !projectRow.isExpanded }));
-    try {
-      const expandedIds = new Set<number>(projects.filter(x => x.isExpanded).map(x => x.id!).filter(Boolean));
-      if (willExpand) expandedIds.add(project.id); else expandedIds.delete(project.id);
-      url.set('expanded', expandedIds.size > 0 ? Array.from(expandedIds).join(',') : null);
-    } catch {}
-    if (willExpand && project.assignments.length === 0) {
-      await loadProjectAssignments(project.id);
-    }
-  }, [projects, url, loadProjectAssignments, updateProjectById]);
-
-  const handleMobileStatusChange = React.useCallback(async (projectId: number, newStatus: Project['status']) => {
-    try {
-      await projectStatus.updateStatus(projectId, newStatus);
-      updateProjectById(projectId, (projectRow) => ({ ...projectRow, status: newStatus }));
-      showToast('Status updated', 'success');
-    } catch (error: any) {
-      showToast(error?.message || 'Failed to update status', 'error');
-    }
-  }, [projectStatus, showToast, updateProjectById]);
-
-  const handleMobileRoleChange = React.useCallback(async (params: {
-    projectId: number;
-    assignmentId: number;
-    roleId: number | null;
-    roleName: string | null;
-    previousId: number | null;
-    previousName: string | null;
-  }) => {
-    const { projectId, assignmentId, roleId, roleName, previousId, previousName } = params;
-    updateProjectById(projectId, (projectRow) => {
-      const updated = projectRow.assignments.map(a => (a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName: roleName ?? undefined } : a));
-      return { ...projectRow, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
-    });
-    try {
-      await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
-      showToast('Role updated', 'success');
-    } catch (error: any) {
-      updateProjectById(projectId, (projectRow) => {
-        const rolledBack = projectRow.assignments.map(a => (a.id === assignmentId ? { ...a, roleOnProjectId: previousId, roleName: previousName ?? undefined } : a));
-        return { ...projectRow, assignments: sortAssignmentsByProjectRole(rolledBack, rolesByDept) };
-      });
-      showToast(error?.message || 'Failed to update role', 'error');
-    }
-  }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole, updateProjectById]);
-
-  const handleAddPersonClick = React.useCallback((projectId: number) => {
-    setIsAddingForProject(prev => prev === projectId ? null : projectId);
-    setAddMode('person');
-    setPersonQuery('');
-    setPersonResults([]);
-    setSelectedPersonIndex(-1);
-    setRoleQuery('');
-    setSelectedRoleIndex(-1);
-    setRoleDeptId(deptState.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : null);
-  }, [deptState.selectedDepartmentId]);
-
-  const handleAddModeChange = React.useCallback((mode: 'person' | 'role') => {
-    setAddMode(mode);
-    if (mode === 'role' && roleDeptId == null && deptState.selectedDepartmentId != null) {
-      setRoleDeptId(Number(deptState.selectedDepartmentId));
-    }
-  }, [deptState.selectedDepartmentId, roleDeptId]);
-
-  const handleRoleDeptChange = React.useCallback((deptId: number | null) => {
-    setRoleDeptId(deptId);
-    setRoleQuery('');
-    setSelectedRoleIndex(-1);
-  }, []);
-
-  const handlePersonQueryChange = React.useCallback(async (query: string) => {
-    const q = query;
-    setPersonQuery(q);
-    if (q.trim().length === 0) {
-      setPersonResults([]);
-      setSelectedPersonIndex(-1);
-      return;
-    }
-    try {
-      const res = await peopleApi.autocomplete(q, 20);
-      setPersonResults(res || []);
-      setSelectedPersonIndex(res && res.length > 0 ? 0 : -1);
-    } catch {}
-  }, []);
-
-  const handlePersonKeyDown = React.useCallback(async (e: React.KeyboardEvent<HTMLInputElement>, projectId: number) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedPersonIndex(i => Math.min(i + 1, personResults.length - 1));
-      return;
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedPersonIndex(i => Math.max(i - 1, 0));
-      return;
-    }
-    if (e.key === 'Escape') {
-      setIsAddingForProject(null);
-      setPersonQuery('');
-      setPersonResults([]);
-      setSelectedPersonIndex(-1);
-      return;
-    }
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const sel = selectedPersonIndex >= 0 ? personResults[selectedPersonIndex] : null;
-    if (!sel || !projectId) return;
-    try {
-      const created = await createAssignment({ person: sel.id, project: projectId, weeklyHours: {} }, assignmentsApi);
-      updateProjectById(projectId, (projectRow) => ({
-        ...projectRow,
-        assignments: sortAssignmentsByProjectRole([...(projectRow.assignments || []), created], rolesByDept),
-      }));
-      await refreshTotalsForProject(projectId);
-      showToast('Person added to project', 'success');
-      setIsAddingForProject(null);
-      setAddMode('person');
-      setPersonQuery('');
-      setPersonResults([]);
-      setSelectedPersonIndex(-1);
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to add person', 'error');
-    }
-  }, [personResults, selectedPersonIndex, assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
-
-  const handlePersonSelect = React.useCallback(async (projectId: number, person: Person) => {
-    if (!projectId) return;
-    try {
-      const created = await createAssignment({ person: person.id, project: projectId, weeklyHours: {} }, assignmentsApi);
-      updateProjectById(projectId, (projectRow) => ({
-        ...projectRow,
-        assignments: sortAssignmentsByProjectRole([...(projectRow.assignments || []), created], rolesByDept),
-      }));
-      await refreshTotalsForProject(projectId);
-      showToast('Person added to project', 'success');
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to add person', 'error');
-    } finally {
-      setIsAddingForProject(null);
-      setAddMode('person');
-      setPersonQuery('');
-      setPersonResults([]);
-      setSelectedPersonIndex(-1);
-    }
-  }, [assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
-
-  const handleRoleQueryChange = React.useCallback((query: string) => {
-    setRoleQuery(query);
-  }, []);
-
-  const handleRoleKeyDown = React.useCallback(async (e: React.KeyboardEvent<HTMLInputElement>, projectId: number) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedRoleIndex(i => Math.min(i + 1, roleResults.length - 1));
-      return;
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedRoleIndex(i => Math.max(i - 1, 0));
-      return;
-    }
-    if (e.key === 'Escape') {
-      setIsAddingForProject(null);
-      setRoleQuery('');
-      setSelectedRoleIndex(-1);
-      return;
-    }
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const sel = selectedRoleIndex >= 0 ? roleResults[selectedRoleIndex] : null;
-    if (!sel || !projectId) return;
-    try {
-      const created = await createAssignment({ person: null, project: projectId, roleOnProjectId: sel.id, weeklyHours: {} }, assignmentsApi);
-      updateProjectById(projectId, (projectRow) => ({
-        ...projectRow,
-        assignments: sortAssignmentsByProjectRole([...(projectRow.assignments || []), created], rolesByDept),
-      }));
-      await refreshTotalsForProject(projectId);
-      showToast(`${sel.name} added`, 'success');
-      setIsAddingForProject(null);
-      setAddMode('person');
-      setRoleQuery('');
-      setSelectedRoleIndex(-1);
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to add role', 'error');
-    }
-  }, [assignmentsApi, roleResults, rolesByDept, selectedRoleIndex, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
-
-  const handleRoleSelect = React.useCallback(async (projectId: number, role: ProjectRole) => {
-    if (!projectId) return;
-    try {
-      const created = await createAssignment({ person: null, project: projectId, roleOnProjectId: role.id, weeklyHours: {} }, assignmentsApi);
-      updateProjectById(projectId, (projectRow) => ({
-        ...projectRow,
-        assignments: sortAssignmentsByProjectRole([...(projectRow.assignments || []), created], rolesByDept),
-      }));
-      await refreshTotalsForProject(projectId);
-      showToast(`${role.name} added`, 'success');
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to add role', 'error');
-    } finally {
-      setIsAddingForProject(null);
-      setAddMode('person');
-      setRoleQuery('');
-      setSelectedRoleIndex(-1);
-    }
-  }, [assignmentsApi, rolesByDept, refreshTotalsForProject, showToast, sortAssignmentsByProjectRole, updateProjectById]);
-
-  const handleSwapPlaceholder = React.useCallback(async (
-    projectId: number,
-    assignmentId: number,
-    person: { id: number; name: string; department?: number | null }
-  ) => {
-    if (!projectId || !assignmentId) return;
-    try {
-      await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
-      await loadProjectAssignments(projectId);
-      await refreshTotalsForProject(projectId);
-      showToast('Assignment updated', 'success');
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to replace placeholder', 'error');
-    }
-  }, [assignmentsApi, loadProjectAssignments, refreshTotalsForProject, showToast]);
-
-  const handleRemoveAssignment = React.useCallback(async (projectId: number, assignmentId: number, personId: number | null) => {
-    if (!assignmentId || !projectId) return;
-    try {
-      await deleteAssignment(assignmentId, assignmentsApi, {
-        projectId,
-        personId,
-        updatedAt: new Date().toISOString(),
-      });
-      updateProjectById(projectId, (projectRow) => ({
-        ...projectRow,
-        assignments: projectRow.assignments.filter(a => a.id !== assignmentId),
-      }));
-      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const res = await getProjectTotals([projectId], { weeks: weeks.length, department: dept, include_children: inc, include_placeholders: 1 });
-      setHoursByProject(prev => ({ ...prev, [projectId]: res.hoursByProject[String(projectId)] || {} }));
-      showToast('Assignment removed', 'success');
-    } catch (e: any) {
-      showToast('Failed to remove assignment', 'error');
-    }
-  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, weeks.length, showToast, updateProjectById]);
-
-  const handleToggleRole = React.useCallback(async (assignmentId: number, deptId: number | null, anchor: HTMLElement) => {
-    if (!deptId) return;
-    roleAnchorRef.current = anchor;
-    setOpenRoleFor(prev => prev === assignmentId ? null : assignmentId);
-    if (!rolesByDept[deptId]) {
-      try {
-        const roles = await listProjectRoles(deptId);
-        setRolesByDept(prev => ({ ...prev, [deptId]: roles }));
-      } catch {}
-    }
-  }, [rolesByDept]);
-
-  const handleSelectRole = React.useCallback(async (
-    projectId: number,
-    assignmentId: number,
-    deptId: number | null,
-    roleId: number | null,
-    roleName: string | null,
-    previousId: number | null,
-    previousName: string | null
-  ) => {
-    if (!assignmentId || !projectId) return;
-    updateProjectById(projectId, (projectRow) => {
-      const updated = projectRow.assignments.map(a => a.id === assignmentId ? { ...a, roleOnProjectId: roleId, roleName } : a);
-      return { ...projectRow, assignments: sortAssignmentsByProjectRole(updated, rolesByDept) };
-    });
-    try {
-      await updateAssignment(assignmentId, { roleOnProjectId: roleId }, assignmentsApi);
-      showToast('Role updated', 'success');
-    } catch (e: any) {
-      updateProjectById(projectId, (projectRow) => {
-        const rolled = projectRow.assignments.map(a => a.id === assignmentId ? { ...a, roleOnProjectId: previousId, roleName: previousName ?? undefined } : a);
-        return { ...projectRow, assignments: sortAssignmentsByProjectRole(rolled, rolesByDept) };
-      });
-      showToast(e?.message || 'Failed to update role', 'error');
-    } finally {
-      setOpenRoleFor(null);
-    }
-  }, [assignmentsApi, rolesByDept, showToast, sortAssignmentsByProjectRole, updateProjectById]);
-
-  const handleCloseRole = React.useCallback(() => {
-    setOpenRoleFor(null);
-  }, []);
-
-  const handleProjectStatusSelect = React.useCallback(async (projectId: number, newStatus: Project['status']) => {
-    if (!projectId) return;
-    try {
-      await projectStatus.updateStatus(projectId, newStatus);
-      updateProjectById(projectId, (projectRow) => ({ ...projectRow, status: newStatus }));
-      closeStatusDropdown();
-    } catch (e: any) {
-      showToast(e?.message || 'Failed to update status', 'error');
-    }
-  }, [projectStatus, closeStatusDropdown, showToast, updateProjectById]);
-
-  // Compact header slot injection (after filter state is defined)
-  const topBarHeader = (
-    <div className="flex items-center gap-4 min-w-0">
-      <div className="min-w-0">
-        <div className="text-lg font-semibold text-[var(--text)] leading-tight">Project Assignments</div>
-        <div className="text-[var(--muted)] text-xs">Manage team workload allocation across {weeks.length} weeks</div>
-        {isFetching ? (
-          <div className="text-[10px] text-[var(--muted)] mt-1">Refreshing…</div>
-        ) : null}
-      </div>
-      <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
-      <HeaderActions
-        onExpandAll={async () => { try { setProjects(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
-        onCollapseAll={() => setProjects(prev => prev.map(p => ({...p,isExpanded:false})))}
-        onRefreshAll={() => refreshAllAssignments()}
-        disabled={loading || loadingAssignments.size > 0}
-      />
-      <StatusFilterChips
-        options={statusFilterOptions}
-        selected={selectedStatusFilters as unknown as Set<string>}
-        format={(s) => formatStatusLabel(s as any)}
-        onToggle={(s) => toggleStatusFilter(s as any)}
-      />
-      <button
-        onClick={() => setShowPlaceholdersOnly((v) => !v)}
-        className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-          showPlaceholdersOnly
-            ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-            : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
-        }`}
-        aria-pressed={showPlaceholdersOnly}
-        aria-label="Filter: projects with placeholders"
-        title="Show projects with placeholders"
-      >
-        W/Placeholders
-      </button>
-      <a
-        href={buildAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
-        className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
-      >
-        People View
-      </a>
-    </div>
-  );
-
-  const deliverableIndexByProject = React.useMemo(() => {
-    const map = new Map<number, number>();
-    if (weeks.length === 0) return map;
-    Object.entries(deliverableTypesByProjectWeek || {}).forEach(([pidRaw, weekMap]) => {
-      const pid = Number(pidRaw);
-      if (!pid || !weekMap) return;
-      let idx = Number.POSITIVE_INFINITY;
-      for (let i = 0; i < weeks.length; i++) {
-        const wk = weeks[i]?.date;
-        const entries = wk ? (weekMap as Record<string, DeliverableMarker[]>)[wk] : undefined;
-        if (entries && entries.length > 0) {
-          idx = i;
-          break;
-        }
-      }
-      map.set(pid, idx);
-    });
-    return map;
-  }, [deliverableTypesByProjectWeek, weeks]);
-
-  const projectSortKeys = React.useMemo(() => {
-    const map = new Map<number, { clientKey: string; projectKey: string }>();
-    for (const project of projects) {
-      if (project.id == null) continue;
-      map.set(project.id, {
-        clientKey: normalizeSortValue(project.client),
-        projectKey: normalizeSortValue(project.name),
-      });
-    }
-    return map;
-  }, [projects]);
-
-  const getNextDeliverableIndex = React.useCallback((projectId?: number | null) => {
-    if (!projectId) return Number.POSITIVE_INFINITY;
-    return deliverableIndexByProject.get(projectId) ?? Number.POSITIVE_INFINITY;
-  }, [deliverableIndexByProject]);
-
-  const sortedProjects = React.useMemo(() => {
-    const list = [...projects];
-    const factor = sortDir === 'asc' ? 1 : -1;
-    list.sort((a, b) => {
-      const aKeys = a.id != null ? projectSortKeys.get(a.id) : null;
-      const bKeys = b.id != null ? projectSortKeys.get(b.id) : null;
-      const ac = aKeys?.clientKey ?? normalizeSortValue(a.client);
-      const bc = bKeys?.clientKey ?? normalizeSortValue(b.client);
-      const an = aKeys?.projectKey ?? normalizeSortValue(a.name);
-      const bn = bKeys?.projectKey ?? normalizeSortValue(b.name);
-      if (sortBy === 'client') {
-        if (ac !== bc) {
-          if (!ac && bc) return 1 * factor;
-          if (ac && !bc) return -1 * factor;
-          return ac.localeCompare(bc) * factor;
-        }
-        return an.localeCompare(bn) * factor;
-      }
-      if (sortBy === 'project') {
-        if (an !== bn) return an.localeCompare(bn) * factor;
-        return ac.localeCompare(bc) * factor;
-      }
-      const ai = getNextDeliverableIndex(a.id);
-      const bi = getNextDeliverableIndex(b.id);
-      if (ai !== bi) return (ai - bi) * factor;
-      if (ac !== bc) return ac.localeCompare(bc) * factor;
-      return an.localeCompare(bn) * factor;
-    });
-    return list;
-  }, [projects, sortBy, sortDir, getNextDeliverableIndex, projectSortKeys]);
-
-  const typeColors = TYPE_COLORS;
-
-  const sparkWeeks = React.useMemo(() => weeks.slice(0, Math.min(6, weeks.length)), [weeks]);
-
-  const mobileView = (
-    <>
-      <div className="flex-1 flex flex-col gap-4 px-3 py-4">
-        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-3 flex items-center justify-between">
-          <div>
-            <div className="text-xs text-[var(--muted)] uppercase tracking-wide">Project Assignments</div>
-            <div className="text-lg font-semibold text-[var(--text)]">{weeks.length} weeks</div>
-          </div>
-          <button
-            type="button"
-            className="px-3 py-1.5 rounded-full border border-[var(--border)] text-[var(--text)] text-sm"
-            onClick={() => setMobileFilterOpen(true)}
-          >
-            Open Filters
-          </button>
-        </div>
-        <div className="flex flex-col gap-3">
-          {sortedProjects.map((project) => {
-            const weeklyHours = weeks.map((week) => (project.id ? (hoursByProject[project.id] || {})[week.date] : 0) || 0);
-            const maxWeeklyHours = Math.max(...weeklyHours, 1);
-            return (
-            <div key={project.id || project.name} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-sm">
-              <div
-                role="button"
-                tabIndex={0}
-                className="w-full flex items-center justify-between px-4 py-3 text-left cursor-pointer"
-                onClick={() => void toggleProjectExpanded(project)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    void toggleProjectExpanded(project);
-                  }
-                }}
-              >
-                <div className="min-w-0">
-                  <div className="text-[10px] uppercase text-[var(--muted)] truncate">{project.client || '—'}</div>
-                  <div className="text-base font-semibold text-[var(--text)] truncate">
-                    {project.id ? (
-                      <ProjectNameQuickViewButton projectId={project.id}>{project.name}</ProjectNameQuickViewButton>
-                    ) : (
-                      project.name
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 ml-3" onClick={(e) => e.stopPropagation()}>
-                  <StatusBadge
-                    status={(project.status as any) || 'active'}
-                    variant="editable"
-                    onClick={() => {
-                      if (project.id) setMobileStatusProjectId(project.id);
-                    }}
-                    isUpdating={project.id ? projectStatus.isUpdating(project.id) : false}
-                  />
-                  <svg className={`w-4 h-4 transition-transform ${project.isExpanded ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M8 5l8 7-8 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-              </div>
-              <div className="px-4 pb-4 space-y-3">
-                <div className="overflow-x-auto">
-                  <div className="flex gap-1 min-w-full px-0.5">
-                    {weeks.map((week, index) => {
-                      const hours = weeklyHours[index];
-                      const deliverables = project.id ? (deliverableTypesByProjectWeek[project.id]?.[week.date] ?? EMPTY_MARKERS) : EMPTY_MARKERS;
-                      const barHeight = Math.max(6, Math.round((hours / maxWeeklyHours) * 48));
-                      const deliverableTitle = deliverables.map((d) => `${d.percentage != null ? `${d.percentage}% ` : ''}${(d.type || '').toUpperCase()}`).join(', ');
-                      const weekLabelFull = formatDateWithWeekday(week.date);
-                      const handleDeliverableTap = () => {
-                        if (!deliverables.length) return;
-                        setMobileDeliverableDetail({
-                          projectName: project.name,
-                          client: project.client ?? undefined,
-                          weekLabel: weekLabelFull,
-                          entries: deliverables,
-                        });
-                      };
-                      const hasDeliverables = deliverables.length > 0;
-                      const ColumnTag: React.ElementType = hasDeliverables ? 'button' : 'div';
-                      return (
-                        <ColumnTag
-                          key={week.date}
-                          type={hasDeliverables ? 'button' : undefined}
-                          className={`flex flex-col items-center min-w-[32px] ${hasDeliverables ? 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]' : ''}`}
-                          aria-label={`${weekLabelFull} • ${hours} hours${hasDeliverables ? ` • ${deliverableTitle}` : ''}`}
-                          onClick={hasDeliverables ? handleDeliverableTap : undefined}
-                        >
-                          <div className="text-[10px] text-[var(--muted)] truncate" title={formatDateWithWeekday(week.date)}>
-                            {(() => {
-                              const d = new Date(week.date);
-                              const month = String(d.getMonth() + 1).padStart(2, '0');
-                              const day = String(d.getDate()).padStart(2, '0');
-                              return `${month}/${day}`;
-                            })()}
-                          </div>
-                          <div className="h-16 flex items-end justify-center w-full mt-1">
-                            <div
-                              className="w-[10px] rounded-full bg-emerald-500 transition-all"
-                              style={{ height: `${barHeight}px`, opacity: hours > 0 ? 1 : 0.25 }}
-                              title={`${formatDateWithWeekday(week.date)} — ${hours}h`}
-                            />
-                          </div>
-                          {hasDeliverables && (
-                            <div className="w-full mt-2">
-                              <div
-                                className="h-[5px] rounded-full"
-                                style={{ background: typeColors[deliverables[0].type] || 'var(--primary)' }}
-                                title={deliverableTitle}
-                              />
-                            </div>
-                          )}
-                        </ColumnTag>
-                      );
-                    })}
-                  </div>
-                </div>
-                {project.isExpanded && (
-                  <div className="space-y-2">
-                    {project.assignments.map((asn) => {
-                      const deptId = (asn as any).personDepartmentId as number | null | undefined;
-                      const label = (asn as any).roleName as string | null | undefined;
-                      const currentId = (asn as any).roleOnProjectId as number | null | undefined;
-                      const personCapacity = (asn as any).personWeeklyCapacity as number | undefined;
-                      const isPlaceholder = asn.person == null && !!label;
-                      const assignmentSparkWeeks = sparkWeeks.length > 0 ? sparkWeeks : weeks;
-                      const weekHours = assignmentSparkWeeks.map((week) => Number(((asn.weeklyHours as any) || {})[week.date] || 0));
-                      const maxHour = Math.max(...weekHours, personCapacity || 0, 1);
-                      return (
-                        <div key={asn.id} className="p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-medium text-[var(--text)]">
-                                {isPlaceholder ? (
-                                  <PlaceholderPersonSwap
-                                    label={asn.roleName ? `<${asn.roleName}>` : 'Unassigned'}
-                                    deptId={deptId ?? null}
-                                    className="text-sm font-medium text-[var(--text)]"
-                                    onSelect={(person) => handleSwapPlaceholder(project.id!, asn.id!, person)}
-                                  />
-                                ) : (
-                                  asn.personName || (asn.person != null ? `Person #${asn.person}` : (asn.roleName ? `<${asn.roleName}>` : 'Unassigned'))
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                className={`text-xs text-[var(--muted)] bg-transparent border-none p-0 ${
-                                  project.id && deptId
-                                    ? 'hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--primary)]'
-                                    : 'opacity-50 cursor-not-allowed'
-                                }`}
-                                onClick={() => {
-                                  if (!project.id || !deptId) return;
-                                  setMobileRoleState({
-                                    projectId: project.id,
-                                    assignmentId: asn.id!,
-                                    deptId,
-                                    currentId: currentId ?? null,
-                                    label: label ?? null,
-                                  });
-                                }}
-                                disabled={!project.id || !deptId}
-                              >
-                                {label || 'No role'}
-                              </button>
-                            </div>
-                            <div className="flex items-end gap-1 min-w-[56px]" aria-hidden="true">
-                              {assignmentSparkWeeks.map((week, idx) => {
-                                const value = weekHours[idx] || 0;
-                                const height = Math.max(4, Math.round((value / maxHour) * 32));
-                                const pill = getUtilizationPill({
-                                  hours: value,
-                                  capacity: personCapacity ?? null,
-                                  scheme,
-                                  output: 'token',
-                                });
-                                const color = pill.tokens?.bg || 'var(--primary)';
-                                return (
-                                  <div
-                                    key={`${asn.id}-spark-${week.date}`}
-                                    className="w-1.5 rounded-full transition-all"
-                                    style={{ height, background: color, opacity: value > 0 ? 1 : 0.2 }}
-                                    title={`${week.display}: ${value}h`}
-                                  />
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <div className="mt-2 text-xs text-[var(--muted)]">{personCapacity ? `Capacity ${personCapacity}h/wk` : 'Capacity unavailable'}</div>
-                        </div>
-                      );
-                    })}
-                    {project.assignments.length === 0 && (
-                      <div className="text-xs text-[var(--muted)] italic px-2">No assignments</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          );})}
-          {sortedProjects.length === 0 && !loading && (
-            <div className="text-center text-[var(--muted)] text-sm py-6">No projects match the current filters.</div>
-          )}
-        </div>
-      </div>
-      <MobileSheet open={mobileFilterOpen} title="Project Filters" onClose={() => setMobileFilterOpen(false)}>
-        <div className="space-y-4">
-          <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
-          <StatusFilterChips
-            options={statusFilterOptions}
-            selected={selectedStatusFilters as unknown as Set<string>}
-            format={(status) => formatStatusLabel(status as StatusFilter)}
-            onToggle={(status) => toggleStatusFilter(status as StatusFilter)}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPlaceholdersOnly((v) => !v)}
-            className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-              showPlaceholdersOnly
-                ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
-            }`}
-            aria-pressed={showPlaceholdersOnly}
-          >
-            W/Placeholders
-          </button>
-          <HeaderActions
-            onExpandAll={async () => { try { setProjects(prev => prev.map(p => ({ ...p, isExpanded: true }))); await refreshAllAssignments(); } catch {} }}
-            onCollapseAll={() => { setProjects(prev => prev.map(p => ({ ...p, isExpanded: false }))); url.set('expanded', null); }}
-            onRefreshAll={refreshAllAssignments}
-            disabled={loading || loadingAssignments.size > 0}
-          />
-        </div>
-      </MobileSheet>
-      <MobileSheet open={!!mobileStatusProject} title="Update Status" onClose={() => setMobileStatusProjectId(null)}>
-        <div className="space-y-2">
-          {statusFilterOptions.filter((s) => s !== 'Show All').map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              className={`w-full px-3 py-2 rounded border text-left ${mobileStatusProject?.status === opt ? 'border-[var(--primary)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--muted)]'}`}
-              onClick={async () => {
-                if (!mobileStatusProject?.id) return;
-                await handleMobileStatusChange(mobileStatusProject.id, opt as Project['status']);
-                setMobileStatusProjectId(null);
-              }}
-            >
-              {formatStatusLabel(opt as StatusFilter)}
-            </button>
-          ))}
-        </div>
-      </MobileSheet>
-      <MobileSheet open={!!mobileRoleState} title="Select Role" onClose={() => setMobileRoleState(null)}>
-        {mobileRoleState?.deptId ? (
-          <div className="space-y-2">
-            <button
-              type="button"
-              className={`w-full px-3 py-2 rounded border text-left text-sm ${mobileRoleState.currentId == null ? 'border-[var(--primary)] text-[var(--text)] bg-[var(--surfaceOverlay)]' : 'border-[var(--border)] text-[var(--muted)]'}`}
-              onClick={async () => {
-                if (!mobileRoleState?.projectId || !mobileRoleState.assignmentId) return;
-                await handleMobileRoleChange({
-                  projectId: mobileRoleState.projectId,
-                  assignmentId: mobileRoleState.assignmentId,
-                  roleId: null,
-                  roleName: null,
-                  previousId: mobileRoleState.currentId ?? null,
-                  previousName: mobileRoleState.label ?? null,
-                });
-                setMobileRoleState(null);
-              }}
-            >
-              Clear role
-            </button>
-            {(rolesByDept[mobileRoleState.deptId] || []).map((role) => {
-              const selected = role.id === (mobileRoleState.currentId ?? undefined);
-              return (
-                <button
-                  key={role.id}
-                  type="button"
-                  className={`w-full px-3 py-2 rounded border text-left text-sm ${selected ? 'border-[var(--primary)] text-[var(--text)] bg-[var(--surfaceOverlay)]' : 'border-[var(--border)] text-[var(--muted)]'}`}
-                  onClick={async () => {
-                    if (!mobileRoleState?.projectId || !mobileRoleState.assignmentId) return;
-                    await handleMobileRoleChange({
-                      projectId: mobileRoleState.projectId,
-                      assignmentId: mobileRoleState.assignmentId,
-                      roleId: role.id,
-                      roleName: role.name,
-                      previousId: mobileRoleState.currentId ?? null,
-                      previousName: mobileRoleState.label ?? null,
-                    });
-                    setMobileRoleState(null);
-                  }}
-                >
-                  {role.name}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-sm text-[var(--muted)]">No role catalog available.</div>
-        )}
-      </MobileSheet>
-      <MobileSheet
-        open={!!mobileDeliverableDetail}
-        title={mobileDeliverableDetail ? 'Deliverables' : 'Deliverable Details'}
-        onClose={() => setMobileDeliverableDetail(null)}
-      >
-        {mobileDeliverableDetail ? (
-          <div className="space-y-3">
-            <div className="text-sm text-[var(--muted)]">
-              {mobileDeliverableDetail.projectName}
-              {mobileDeliverableDetail.client ? ` • ${mobileDeliverableDetail.client}` : ''}
-            </div>
-            {mobileDeliverableDetail.entries.map((entry, idx) => (
-              <div key={`${entry.type}-${idx}-${entry.description || ''}`} className="border border-[var(--border)] rounded-lg p-3 bg-[var(--card)]">
-                <div className="text-sm font-semibold">{entry.description || entry.type.toUpperCase()}</div>
-                {entry.percentage != null && (
-                  <div className="text-xs text-[var(--muted)] mt-1">{entry.percentage}% milestone</div>
-                )}
-                {entry.dates?.length ? (
-                  <div className="text-xs mt-1">
-                    Dates: {entry.dates.map((dateStr) => formatDateWithWeekday(dateStr)).join(', ')}
-                  </div>
-                ) : null}
-                {entry.note ? (
-                  <div className="text-xs mt-2 text-[var(--muted)] whitespace-pre-wrap">{entry.note}</div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </MobileSheet>
-    </>
-  );
-
-  // Helper: refresh totals for project from server
-  async function refreshTotalsForProject(projectId: number) {
-    try {
-      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const res = await getProjectTotals([projectId], { weeks: weeks.length, department: dept, include_children: inc, include_placeholders: 1 });
-      setHoursByProject(prev => ({ ...prev, [projectId]: res.hoursByProject[String(projectId)] || {} }));
-    } catch (e:any) {
-      showToast('Failed to refresh totals: ' + (e?.message || 'Unknown error'), 'error');
-    }
-  }
-
-  // Refresh assignments for a specific project
-  const refreshProjectAssignments = async (projectId: number) => {
-    setLoadingAssignments(prev => new Set(prev).add(projectId));
-    try {
-      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const resp = await assignmentsApi.list({ project: projectId, department: dept, include_children: inc, include_placeholders: 1, page_size: 200 } as any);
-      const rows = ((resp as any).results || []) as Assignment[];
-      // Ensure role catalogs for departments present
-      const deptIds = Array.from(new Set(rows.map(a => (a as any).personDepartmentId as number | null | undefined)))
-        .filter((v): v is number => typeof v === 'number' && v > 0);
-      const missing = deptIds.filter(d => rolesByDept[d] == null);
-      let merged = rolesByDept;
-      if (missing.length > 0) {
-        const fetched = await Promise.all(missing.map(async d => ({ id: d, roles: await listProjectRoles(d).catch(() => []) })));
-        const next: Record<number, ProjectRole[]> = { ...rolesByDept };
-        for (const f of fetched) next[f.id] = f.roles;
-        setRolesByDept(next);
-        merged = next;
-      }
-      const sorted = sortAssignmentsByProjectRole(rows, merged);
-      updateProjectById(projectId, (projectRow) => ({ ...projectRow, assignments: sorted }));
-      showToast('Project assignments refreshed', 'success');
-    } catch (e: any) {
-      showToast('Failed to refresh project assignments: ' + (e?.message || 'Unknown error'), 'error');
-    } finally {
-      setLoadingAssignments(prev => { const n = new Set(prev); n.delete(projectId); return n; });
-    }
-  };
-
-  // Refresh assignments for all projects (both expanded and collapsed)
-  async function refreshAllAssignments() {
-    if (projects.length === 0) {
-      showToast('No projects available to refresh', 'warning');
-      return;
-    }
-
-    try {
-      const projectIds = projects.map(p => p.id!).filter((id): id is number => typeof id === 'number');
-      if (projectIds.length === 0) {
-        showToast('No projects available to refresh', 'warning');
-        return;
-      }
-
-      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const bulk = await assignmentsApi.listAll({ department: dept, include_children: dept != null ? inc : undefined, include_placeholders: 1 } as any);
-      const allAssignments = Array.isArray(bulk) ? bulk : [];
-
-      const byProject = new Map<number, Assignment[]>();
-      for (const a of allAssignments) {
-        const pid = (a.project as number | undefined) ?? ((a as any).projectId as number | undefined);
-        if (!pid) continue;
-        const current = byProject.get(pid) || [];
-        current.push(a);
-        byProject.set(pid, current);
-      }
-
-      const updates: Array<{ projectId: number; assignments: Assignment[] }> = [];
-      for (const projectId of projectIds) {
-        const rows = byProject.get(projectId) || [];
-        const sorted = rows.length > 0 ? await sortRowsByDeptRoles(rows) : [];
-        updates.push({ projectId, assignments: sorted });
-      }
-
-      setProjects(prev =>
-        prev.map(p => {
-          const update = updates.find(u => u.projectId === p.id);
-          return update ? { ...p, assignments: update.assignments } : p;
-        })
-      );
-
-      showToast(`Refreshed assignments for all ${projects.length} projects`, 'success');
-    } catch (error: any) {
-      showToast(error?.message || 'Failed to refresh some project assignments', 'error');
-    }
-  }
-
-  const applyAssignmentEvent = React.useCallback(async (event: AssignmentEvent) => {
-    if (!event?.assignmentId) return;
-    if (editingCell && event.fields?.includes('weeklyHours')) {
-      if (String(editingCell.rowKey) === String(event.assignmentId)) return;
-    }
-    const eventTs = event.updatedAt ? Date.parse(event.updatedAt) : 0;
-    const lastTs = lastAssignmentUpdateRef.current.get(event.assignmentId) || 0;
-    const lastSource = lastAssignmentUpdateSourceRef.current.get(event.assignmentId);
-    if (eventTs && lastTs && lastSource === 'event' && eventTs < lastTs) return;
-
-    if (event.type === 'deleted') {
-      if (eventTs) {
-        lastAssignmentUpdateRef.current.set(event.assignmentId, eventTs);
-        lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'event');
-      } else {
-        lastAssignmentUpdateRef.current.set(event.assignmentId, Date.now());
-        lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'local');
-      }
-      const deletedProjectId = assignmentById.get(event.assignmentId)?.projectId ?? event.projectId ?? null;
-      if (deletedProjectId) {
-        updateProjectById(deletedProjectId, (projectRow) => ({
-          ...projectRow,
-          assignments: (projectRow.assignments || []).filter(a => a.id !== event.assignmentId),
-        }));
-      } else {
-        setProjects(prev => prev.map(project => ({
-          ...project,
-          assignments: (project.assignments || []).filter(a => a.id !== event.assignmentId),
-        })));
-      }
-      return;
-    }
-
-    let assignment = event.assignment || null;
-    if (!assignment) {
-      try {
-        assignment = await assignmentsApi.get(event.assignmentId);
-      } catch {
-        return;
-      }
-    }
-    if (!assignment?.id) return;
-    const assignmentTs = assignment.updatedAt ? Date.parse(assignment.updatedAt) : 0;
-    if (eventTs || assignmentTs) {
-      const nextTs = eventTs || assignmentTs;
-      lastAssignmentUpdateRef.current.set(assignment.id, nextTs);
-      lastAssignmentUpdateSourceRef.current.set(assignment.id, 'event');
-    } else {
-      lastAssignmentUpdateRef.current.set(assignment.id, Date.now());
-      lastAssignmentUpdateSourceRef.current.set(assignment.id, 'local');
-    }
-
-    const projectId = assignment.project ?? event.projectId ?? null;
-    if (!projectId) return;
-    const projectExists = projectsRef.current.some((p) => p.id === projectId);
-    if (!projectExists) return;
-
-    const updatedAssignments = (() => {
-      const current = (projectsRef.current.find(p => p.id === projectId)?.assignments || []) as Assignment[];
-      const exists = current.some(a => a.id === assignment!.id);
-      const next = exists
-        ? current.map(a => (a.id === assignment!.id ? { ...a, ...assignment } : a))
-        : [...current, assignment as Assignment];
-      return next;
-    })();
-
-    const sorted = await sortRowsByDeptRoles(updatedAssignments);
-    updateProjectById(projectId, (projectRow) => ({ ...projectRow, assignments: sorted }));
-
-    if (event.fields?.includes('weeklyHours')) {
-      try { await refreshTotalsForProject(projectId); } catch {}
-    }
-  }, [assignmentsApi, sortRowsByDeptRoles, refreshTotalsForProject, editingCell, assignmentById, updateProjectById]);
-
-  const enqueueAssignmentEvent = React.useCallback((event: AssignmentEvent) => {
-    assignmentEventQueueRef.current.push(event);
-    if (assignmentFlushTimerRef.current) return;
-    assignmentFlushTimerRef.current = window.setTimeout(async () => {
-      const queued = assignmentEventQueueRef.current.splice(0, assignmentEventQueueRef.current.length);
-      assignmentFlushTimerRef.current = null;
-      const coalesced = new Map<number, AssignmentEvent>();
-      queued.forEach((evt) => {
-        if (!evt?.assignmentId) return;
-        const existing = coalesced.get(evt.assignmentId);
-        if (!existing) {
-          coalesced.set(evt.assignmentId, evt);
-          return;
-        }
-        const existingTs = existing.updatedAt ? Date.parse(existing.updatedAt) : 0;
-        const nextTs = evt.updatedAt ? Date.parse(evt.updatedAt) : 0;
-        if (!existingTs || (nextTs && nextTs >= existingTs)) {
-          coalesced.set(evt.assignmentId, evt);
-        }
-      });
-      for (const evt of coalesced.values()) {
-        await applyAssignmentEvent(evt);
-      }
-    }, 60);
-  }, [applyAssignmentEvent]);
-
-  useEffect(() => {
-    const unsubscribe = subscribeAssignmentsRefresh((event) => {
-      enqueueAssignmentEvent(event);
-    });
-    return () => {
-      unsubscribe();
-      if (assignmentFlushTimerRef.current) {
-        window.clearTimeout(assignmentFlushTimerRef.current);
-        assignmentFlushTimerRef.current = null;
-      }
-    };
-  }, [enqueueAssignmentEvent]);
-
-  // Initialize from URL params once
-  React.useEffect(() => {
-    try {
-      // view param
-      url.set('view', 'project');
-      const w = url.get('weeks');
-      if (w) {
-        const n = parseInt(w, 10); if (!Number.isNaN(n) && n >= 1 && n <= 26) setWeeksHorizon(n);
-      }
-      const s = url.get('status');
-      if (s && s.length > 0) {
-        const toks = s.split(',');
-        const set = new Set<StatusFilter>();
-        for (const t of toks) {
-          const tok = t as StatusFilter;
-          if ((['active','active_ca','on_hold','completed','cancelled','active_no_deliverables','active_with_dates','Show All'] as const).includes(tok)) set.add(tok);
-        }
-        if (set.size > 0) setSelectedStatusFilters(set);
-      } else {
-        // Default filters in URL to reduce initial payload
-        url.set('status', 'active,active_ca');
-      }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     let mounted = true;
-    const data = snapshotQuery.data;
-    const snap = data?.projectGridSnapshot;
-    if (!snap) return () => { mounted = false; };
+    (async () => {
+      try {
+        const mapping = await deliverablePhaseMappingApi.get();
+        if (!mounted || !mapping) return;
+        setPhaseMapping(mapping);
+      } catch (e: any) {
+        if (mounted) setPhaseMappingError(e?.message || 'Failed to load deliverable phase mapping');
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
-    const { statuses, hasShowAll, hasNoDelivs, hasFutureWithDates, normalizedForApi } = statusParams;
-
-    setWeeks(toWeekHeader(snap.weekKeys || []));
-    // Normalize projects from snapshot
-    const fromSnapshot: ProjectWithAssignments[] = (snap.projects || [])
-      .map(p => ({ id: p.id, name: p.name, client: p.client ?? undefined, status: p.status ?? undefined, assignments: [], isExpanded: false }));
-
-    // Augment with projects that match filters even if they currently have no assignments in the snapshot
-    // When the filter relies on deliverable metadata exclusively we rely on the snapshot (needs server data)
-    let augmented: ProjectWithAssignments[] = fromSnapshot;
+  useEffect(() => {
     try {
-      const onlySpecialFilter =
-        (!hasShowAll && hasNoDelivs && statuses.length === 1) ||
-        (!hasShowAll && hasFutureWithDates && statuses.length === 1);
-      if (!onlySpecialFilter) {
-        const allProjects = data?.projects || [];
-        const allowAllStatuses = hasShowAll || statuses.length === 0;
-        const allowed = new Set(
-          (statuses || [])
-            .filter((s) => s !== 'Show All' && s !== 'active_no_deliverables')
-            .map((s) => (s === 'active_with_dates' ? 'active' : s))
-            .map((s) => s.toLowerCase())
-        );
-        const seen = new Set(fromSnapshot.map(p => p.id));
-        const extras = (allProjects || [])
-          .filter(p => !seen.has(p.id!))
-          .filter(p => allowAllStatuses ? true : allowed.has((p.status || '').toLowerCase()))
-          .map(p => ({ id: p.id!, name: p.name, client: (p as any).client ?? undefined, status: (p.status as any) ?? undefined, assignments: [], isExpanded: false }));
-        augmented = [...fromSnapshot, ...extras];
+      query.set('view', 'project');
+      const w = query.get('weeks');
+      if (w) {
+        const n = parseInt(w, 10);
+        if (!Number.isNaN(n) && n >= 1 && n <= 26) setWeeksHorizon(n);
       }
     } catch {}
+  }, []);
+  useEffect(() => { query.set('weeks', String(weeksHorizon)); }, [weeksHorizon]);
 
-    // Default sort: client name, then project name
-    const proj: ProjectWithAssignments[] = augmented.sort((a, b) => {
-      const ac = (a.client || '').toString().trim().toLowerCase();
-      const bc = (b.client || '').toString().trim().toLowerCase();
-      if (ac !== bc) {
-        if (!ac && bc) return 1;
-        if (ac && !bc) return -1;
-        return ac.localeCompare(bc);
+  const projectsWithAssignments = useMemo(() => {
+    const grouped = new Map<number, Assignment[]>();
+    (assignmentsData || []).forEach((assignment) => {
+      if (!assignment?.project) return;
+      const list = grouped.get(assignment.project) || [];
+      list.push(assignment);
+      grouped.set(assignment.project, list);
+    });
+    return (projectsData || []).map((project) => ({
+      ...project,
+      assignments: grouped.get(project.id!) || [],
+      isExpanded: expandedProjectIds.has(project.id!),
+    }));
+  }, [assignmentsData, projectsData, expandedProjectIds]);
+
+  useEffect(() => {
+    setLoadedProjectIds(new Set());
+    setLoadingAssignments(new Set());
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon]);
+
+  const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter, matchesStatusFilters } = useProjectStatusFilters(deliverables);
+
+  const getVisibleAssignments = useCallback((project: ProjectWithAssignments) => {
+    const projectStatusMatch = matchesStatusFilters(project as any);
+    if (!projectStatusMatch) return [];
+    return project.assignments || [];
+  }, [matchesStatusFilters]);
+
+  const visibleProjects = useMemo(
+    () => projectsWithAssignments.filter(project => matchesStatusFilters(project as any)),
+    [projectsWithAssignments, matchesStatusFilters]
+  );
+
+  const rowOrder = useMemo(() => {
+    const out: string[] = [];
+    for (const project of visibleProjects) {
+      if (!project?.id || !project.isExpanded) continue;
+      if (loadingAssignments.has(project.id)) continue;
+      const list = getVisibleAssignments(project);
+      for (const a of list) {
+        if (a?.id != null) out.push(`${project.id}:${a.id}`);
       }
-      const an = (a.name || '').toString().trim().toLowerCase();
-      const bn = (b.name || '').toString().trim().toLowerCase();
-      return an.localeCompare(bn);
+    }
+    return out;
+  }, [visibleProjects, loadingAssignments, getVisibleAssignments]);
+
+  const interaction = useAssignmentsInteractionStore({ weeks: weekKeys, rowOrder });
+  const {
+    selection: {
+      selectedCell: selCell,
+      onCellMouseDown: csMouseDown,
+      onCellMouseEnter: csMouseEnter,
+      onCellSelect: csSelect,
+      getSelectedCells,
+      isCellSelected: csIsSelected,
+    },
+    scroll: { headerRef: headerScrollRef, bodyRef: bodyScrollRef, onHeaderScroll, onBodyScroll },
+  } = interaction;
+
+  const { editingCell, setEditingCell, editingValue, setEditingValue, startEditing, cancelEdit, sanitizeHours } = useEditingCellHook();
+
+  const handleHeaderScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      if (isMobileLayout) {
+        weekVirtualization.updateRange(e.currentTarget.scrollLeft, e.currentTarget.clientWidth);
+      }
+      onHeaderScroll(e);
+    },
+    [weekVirtualization, onHeaderScroll, isMobileLayout]
+  );
+
+  const handleBodyScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      if (isMobileLayout) {
+        weekVirtualization.updateRange(e.currentTarget.scrollLeft, e.currentTarget.clientWidth);
+      }
+      onBodyScroll(e);
+    },
+    [weekVirtualization, onBodyScroll, isMobileLayout]
+  );
+
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    const node = bodyScrollRef.current;
+    if (!node) return;
+    const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    weekVirtualization.updateRange(node.scrollLeft, node.clientWidth || fallbackWidth);
+  }, [bodyScrollRef, weekVirtualization, weeks.length, isMobileLayout]);
+
+  const selectedCell = useMemo(() => {
+    if (!selCell) return null;
+    const [projectId, assignmentId] = selCell.rowKey.split(':');
+    return { projectId: Number(projectId), assignmentId: Number(assignmentId), week: selCell.weekKey };
+  }, [selCell]);
+
+  const selectedCells = useMemo(() => {
+    const cells = getSelectedCells();
+    return cells.map(cell => {
+      const [projectId, assignmentId] = cell.rowKey.split(':');
+      return { projectId: Number(projectId), assignmentId: Number(assignmentId), week: cell.weekKey };
     });
-    const future = new Set<number>();
-    Object.entries(snap.hasFutureDeliverablesByProject || {}).forEach(([pid, val]) => { if (val) future.add(Number(pid)); });
-    const futureLookup = buildFutureDeliverableLookupFromSet(future);
-    const showAllSelected = hasShowAll || statuses.length === 0;
-    const allowedStatusSet = new Set(
-      normalizedForApi.map((s) => s.toLowerCase())
-    );
-    const filteredProjects = showAllSelected
-      ? proj
-      : proj.filter((project) => {
-          const status = (project.status || '').toLowerCase();
-          const baseMatch = allowedStatusSet.has(status);
-          const withDatesMatch = hasFutureWithDates && projectMatchesActiveWithDates(project, futureLookup);
-          const noDatesMatch = hasNoDelivs && projectMatchesActiveWithoutDates(project, futureLookup);
-          return baseMatch || withDatesMatch || noDatesMatch;
-        });
-    const placeholderSet = new Set<number>();
-    const placeholderEntries = Object.entries(snap.hasPlaceholdersByProject || {});
-    placeholderEntries.forEach(([pid, count]) => {
-      if (count) placeholderSet.add(Number(pid));
+  }, [getSelectedCells]);
+
+  const findAssignment = useCallback((projectId: number, assignmentId: number) => {
+    const project = projectsWithAssignments.find(p => p.id === projectId);
+    return !!project?.assignments?.some(a => a.id === assignmentId);
+  }, [projectsWithAssignments]);
+
+  useGridKeyboardNavigation({
+    selectedCell: selectedCell
+      ? { personId: selectedCell.projectId, assignmentId: selectedCell.assignmentId, week: selectedCell.week }
+      : null,
+    editingCell,
+    isAddingAssignment: false,
+    weeks,
+    csSelect,
+    setEditingCell,
+    setEditingValue,
+    findAssignment: (pid, aid) => findAssignment(pid, aid),
+  });
+
+  const { emitStatusChange } = useProjectStatusSubscription({ debug: false });
+  const { statusDropdown, projectStatus, getProjectStatus, handleStatusChange } = useStatusControls({
+    projectsById,
+    setProjectsData: setProjectsData as any,
+    emitStatusChange,
+    showToast: (msg, type) => showToastBus(msg, type),
+  });
+
+  const refreshAutoHoursSettings = useCallback(async () => {
+    if (!canUseAutoHours) {
+      setAutoHoursSettingsByPhase({});
+      setAutoHoursSettingsError(null);
+      setAutoHoursSettingsLoading(false);
+      return;
+    }
+    try {
+      setAutoHoursSettingsLoading(true);
+      setAutoHoursSettingsError(null);
+      const results = await Promise.allSettled(
+        autoHoursPhases.map(phase => autoHoursSettingsApi.list(undefined, phase))
+      );
+      const next: Record<string, AutoHoursRoleSetting[]> = {};
+      const failures: string[] = [];
+      results.forEach((res, idx) => {
+        const phase = autoHoursPhases[idx];
+        if (res.status === 'fulfilled') next[phase] = res.value?.settings || [];
+        else failures.push(phase);
+      });
+      setAutoHoursSettingsByPhase(next);
+      if (failures.length) setAutoHoursSettingsError(`Failed to load auto hours for: ${failures.join(', ')}`);
+    } catch (e: any) {
+      setAutoHoursSettingsError(e?.message || 'Failed to load auto hours settings');
+    } finally {
+      setAutoHoursSettingsLoading(false);
+    }
+  }, [autoHoursPhases, canUseAutoHours]);
+
+  useEffect(() => { void refreshAutoHoursSettings(); }, [refreshAutoHoursSettings]);
+
+  useEffect(() => {
+    if (!canUseAutoHours) {
+      setAutoHoursTemplates([]);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const list = await autoHoursTemplatesApi.list();
+        if (mounted) setAutoHoursTemplates(list || []);
+      } catch {
+        if (mounted) setAutoHoursTemplates([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [canUseAutoHours]);
+
+  const autoHoursTemplatePhaseKeysById = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    (autoHoursTemplates || []).forEach((template) => {
+      const keys = (template.phaseKeys && template.phaseKeys.length)
+        ? template.phaseKeys
+        : autoHoursPhases;
+      map.set(template.id, new Set(keys));
     });
-    const canApplyPlaceholderFilter = placeholderEntries.length > 0;
-    const placeholderFiltered = showPlaceholdersOnly && canApplyPlaceholderFilter
-      ? filteredProjects.filter((project) => project.id != null && placeholderSet.has(project.id))
-      : filteredProjects;
-    if (!mounted) return () => { mounted = false; };
-    setProjects(placeholderFiltered);
-    // Coerce hours map keys to numbers
-    const hb: Record<number, Record<string, number>> = {};
-    Object.entries(snap.hoursByProject || {}).forEach(([pid, wk]) => { hb[Number(pid)] = wk; });
-    setHoursByProject(hb);
-    // Deliverables maps (counts + typed markers from snapshot)
-    const dbw: Record<number, Record<string, number>> = {};
-    Object.entries(snap.deliverablesByProjectWeek || {}).forEach(([pid, wk]) => { dbw[Number(pid)] = wk; });
-    setDeliverablesByProjectWeek(dbw);
-    const markersByProject: Record<number, Record<string, DeliverableMarker[]>> = {};
-    const tooltipsByProject: Record<number, Record<string, string>> = {};
-    if (snap.deliverableMarkersByProjectWeek) {
-      Object.entries(snap.deliverableMarkersByProjectWeek).forEach(([pid, weeksMap]) => {
-        const projectId = Number(pid);
-        if (!projectId || !weeksMap) return;
-        const weekMarkers: Record<string, DeliverableMarker[]> = {};
-        const weekTooltips: Record<string, string> = {};
-        Object.entries(weeksMap || {}).forEach(([weekKey, markers]) => {
-          const normalized = (markers || []).map((m: any) => ({
-            type: String(m.type || '').toLowerCase(),
-            percentage: m.percentage == null || Number.isNaN(Number(m.percentage)) ? undefined : Number(m.percentage),
-            dates: Array.isArray(m.dates) && m.dates.length > 0 ? [...m.dates] : undefined,
-            description: m.description ?? null,
-            note: m.note ?? null,
-          })) as DeliverableMarker[];
-          if (normalized.length > 0) {
-            weekMarkers[weekKey] = normalized;
-            const tooltip = buildDeliverableTooltip(weekKey, normalized);
-            if (tooltip) weekTooltips[weekKey] = tooltip;
-          }
+    return map;
+  }, [autoHoursPhases, autoHoursTemplates]);
+
+  const ensureTemplateSettings = useCallback(async (templateIds: number[]) => {
+    const ids = Array.from(new Set(templateIds.filter(id => Number.isFinite(id))));
+    if (ids.length === 0) return;
+    const missing = ids.filter(id => !autoHoursTemplateSettings[id]);
+    if (missing.length === 0) return;
+    setAutoHoursTemplateSettingsLoading(prev => {
+      const next = new Set(prev);
+      missing.forEach(id => next.add(id));
+      return next;
+    });
+    try {
+      await Promise.all(missing.map(async (templateId) => {
+        const phasesToFetch = Array.from(autoHoursTemplatePhaseKeysById.get(templateId) ?? autoHoursPhases);
+        const results = await Promise.allSettled(
+          phasesToFetch.map(phase => autoHoursTemplatesApi.listSettings(templateId, phase))
+        );
+        const phaseMap: Record<string, AutoHoursRoleSetting[]> = {};
+        results.forEach((res, idx) => {
+          const phase = phasesToFetch[idx];
+          if (res.status === 'fulfilled') phaseMap[phase] = res.value || [];
         });
-        if (Object.keys(weekMarkers).length > 0) {
-          markersByProject[projectId] = weekMarkers;
-        }
-        if (Object.keys(weekTooltips).length > 0) {
-          tooltipsByProject[projectId] = weekTooltips;
-        }
+        setAutoHoursTemplateSettings(prev => ({ ...prev, [templateId]: phaseMap }));
+      }));
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to load auto hours templates', 'error');
+    } finally {
+      setAutoHoursTemplateSettingsLoading(prev => {
+        const next = new Set(prev);
+        missing.forEach(id => next.delete(id));
+        return next;
       });
     }
-    setDeliverableTypesByProjectWeek(markersByProject);
-    setDeliverableTooltipsByProjectWeek(tooltipsByProject);
-    return () => { mounted = false; };
-  }, [
-    snapshotQuery.data,
-    statusParams,
-    showPlaceholdersOnly,
-  ]);
+  }, [autoHoursPhases, autoHoursTemplatePhaseKeysById, autoHoursTemplateSettings]);
 
-  useEffect(() => {
-    const snap = snapshotQuery.data?.projectGridSnapshot;
-    if (!snap) return;
-    const expandedParam = new URLSearchParams(location.search).get('expanded') || '';
-    if (!expandedParam) return;
-    if (expandedFromUrlRef.current === expandedParam) return;
-    expandedFromUrlRef.current = expandedParam;
-    const ids = expandedParam.split(',').map(x => parseInt(x, 10)).filter(n => !Number.isNaN(n));
-    if (ids.length === 0) return;
-    setProjects(prev => prev.map(p => ids.includes(p.id!) ? { ...p, isExpanded: true } : p));
-    ids.forEach((pid) => {
-      void loadProjectAssignments(pid);
+  const autoHoursSettingsByPhaseMap = useMemo(() => {
+    const out: Record<string, Map<number, AutoHoursRoleSetting>> = {};
+    autoHoursPhases.forEach((phase) => {
+      const map = new Map<number, AutoHoursRoleSetting>();
+      const rows = autoHoursSettingsByPhase?.[phase] || [];
+      for (const setting of rows) map.set(setting.roleId, setting);
+      out[phase] = map;
     });
-  }, [snapshotQuery.data, location.search, loadProjectAssignments]);
+    return out;
+  }, [autoHoursPhases, autoHoursSettingsByPhase]);
 
-  useEffect(() => {
-    const hasData = projectsRef.current.length > 0;
-    if (snapshotQuery.isLoading && !hasData) {
-      setLoading(true);
-    } else {
-      setLoading(false);
-    }
-    setIsFetching(snapshotQuery.isFetching && hasData);
-    if (snapshotQuery.error) {
-      setError(snapshotQuery.error?.message || 'Failed to load project grid snapshot');
-    } else {
-      setError(null);
-    }
-    if (!snapshotQuery.isFetching && pendingRefresh) {
-      try { showToast('Refresh complete', 'success'); } catch {}
-      setPendingRefresh(false);
-    }
-  }, [snapshotQuery.isLoading, snapshotQuery.isFetching, snapshotQuery.error, pendingRefresh, showToast]);
-
-  // Listen for global grid refresh events and trigger reload
-  useEffect(() => {
-    const unsub = subscribeGridRefresh(() => {
-      setPendingRefresh(true);
-      try { snapshotQuery.refetch(); } catch {}
+  const autoHoursTemplateSettingsByPhaseMap = useMemo(() => {
+    const out: Record<number, Record<string, Map<number, AutoHoursRoleSetting>>> = {};
+    Object.entries(autoHoursTemplateSettings || {}).forEach(([tid, phases]) => {
+      const templateId = Number(tid);
+      const phaseMaps: Record<string, Map<number, AutoHoursRoleSetting>> = {};
+      autoHoursPhases.forEach((phase) => {
+        const map = new Map<number, AutoHoursRoleSetting>();
+        const rows = phases?.[phase] || [];
+        for (const setting of rows) map.set(setting.roleId, setting);
+        phaseMaps[phase] = map;
+      });
+      out[templateId] = phaseMaps;
     });
-    return unsub;
-  }, [snapshotQuery.refetch]);
+    return out;
+  }, [autoHoursPhases, autoHoursTemplateSettings]);
 
+  const classifyDeliverablePhase = useCallback((deliverable: Deliverable): string | null => {
+    const descRaw = (deliverable?.description || '').toLowerCase().trim();
+    const desc = descRaw.replace(/\s+/g, ' ');
+    if (desc.includes('bulletin') || desc.includes('addendum')) return null;
+    if (desc.includes('masterplan') || desc.includes('master plan') || desc.includes('masterplanning')) return null;
 
-  // Global mouse events for column resizing
-  useEffect(() => {
-    const handleMouseUp = () => {
-      if (isResizing) setIsResizing(null);
+    const tokenMatch = (text: string, token: string) => {
+      if (!token) return false;
+      if (token.includes(' ') || token.length > 3) return text.includes(token);
+      return new RegExp(`\\b${token.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`).test(text);
     };
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      const deltaX = e.clientX - resizeStartX;
-      const next = Math.max(80, resizeStartWidth + deltaX);
-      if (isResizing === 'client') setClientColumnWidth(next);
-      if (isResizing === 'project') setProjectColumnWidth(next);
-    };
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [isResizing, resizeStartX, resizeStartWidth]);
 
-  const startColumnResize = (column: 'client' | 'project', e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(column);
-    setResizeStartX(e.clientX);
-    setResizeStartWidth(column === 'client' ? clientColumnWidth : projectColumnWidth);
+    const phases = (phaseMappingEffective.phases || []).slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+    if (phaseMappingEffective.useDescriptionMatch && desc) {
+      for (const phase of phases) {
+        const tokens = phase.descriptionTokens || [];
+        if (tokens.some(t => tokenMatch(desc, t))) return phase.key;
+      }
+    }
+
+    if (deliverable?.percentage != null) {
+      const p = Math.round(Number(deliverable.percentage));
+      if (Number.isFinite(p)) {
+        for (const phase of phases) {
+          const rmin = phase.rangeMin;
+          const rmax = phase.rangeMax;
+          if (rmin == null || rmax == null) continue;
+          if (p >= rmin && p <= rmax) return phase.key;
+        }
+      }
+    }
+    return null;
+  }, [phaseMappingEffective]);
+
+  const deliverableWeekEntriesByProject = useMemo(() => {
+    const map = new Map<number, Array<{ weekIndex: number; phase: string }>>();
+    if (!weeks.length) return map;
+    for (const deliverable of deliverables || []) {
+      const projectId = (deliverable as any).project as number | undefined;
+      const date = (deliverable as any).date as string | null | undefined;
+      if (!projectId || !date) continue;
+      const weekIndex = weeks.findIndex(week => isDateInWeek(date, week.date));
+      if (weekIndex < 0) continue;
+      const phase = classifyDeliverablePhase(deliverable);
+      if (!phase) continue;
+      const list = map.get(projectId) || [];
+      if (!list.some(entry => entry.weekIndex === weekIndex && entry.phase === phase)) {
+        list.push({ weekIndex, phase });
+      }
+      map.set(projectId, list);
+    }
+    return map;
+  }, [classifyDeliverablePhase, deliverables, weeks]);
+
+  const getDeliverablesForProjectWeek = useDeliverablesIndex(deliverables);
+
+  const assignmentById = useMemo(() => {
+    const map = new Map<number, Assignment>();
+    (assignmentsData || []).forEach(a => { if (a?.id != null) map.set(a.id, a); });
+    return map;
+  }, [assignmentsData]);
+
+  const applyAutoHoursUpdates = async (updates: Array<{ assignmentId: number; weeklyHours: Record<string, number> }>) => {
+    if (!updates.length) {
+      showToastBus('No auto hours changes to apply.', 'info');
+      return;
+    }
+    const updatesByAssignmentId = new Map<number, Record<string, number>>();
+    updates.forEach((u) => updatesByAssignmentId.set(u.assignmentId, u.weeklyHours));
+    setAssignmentsData(prev => prev.map(a => updatesByAssignmentId.has(a.id!) ? { ...a, weeklyHours: updatesByAssignmentId.get(a.id!) } : a));
+
+    try {
+      if (updates.length > 1) {
+        await bulkUpdateAssignmentHours(updates, assignmentsApi);
+      } else {
+        await updateAssignment(updates[0].assignmentId, { weeklyHours: updates[0].weeklyHours }, assignmentsApi);
+      }
+      showToastBus(`Auto hours applied to ${updates.length} assignment${updates.length === 1 ? '' : 's'}.`, 'success');
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to apply auto hours.', 'error');
+    }
   };
 
-  // Global keyboard handler: start editing on numeric key when a cell is selected
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      // Ignore if already editing or adding person
-      if (editingCell || isAddingForProject !== null) return;
-      // Ignore if typing in an input/textarea/contenteditable
-      const target = e.target as HTMLElement | null;
-      if (target) {
-        const tag = target.tagName?.toLowerCase();
-        if (tag === 'input' || tag === 'textarea' || (target as any).isContentEditable) return;
-      }
-      const active = selection.selectedCell || selection.selectionStart || null;
-      if (!active) return;
-      if (/^[0-9.]$/.test(e.key)) {
-        e.preventDefault();
-        const seed = e.key === '.' ? '0.' : e.key;
-        setEditingCell({ rowKey: String(active.rowKey), weekKey: active.weekKey });
-        setEditingValue(seed);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [selection.selectedCell, selection.selectionStart, editingCell, isAddingForProject]);
+  const buildAutoHoursUpdatesForAssignments = useCallback((assignments: Assignment[], mode: 'replace' | 'supplement') => {
+    const updates: Array<{ assignmentId: number; weeklyHours: Record<string, number> }> = [];
+    const skipped = { missingRole: 0, missingSettings: 0, missingDeliverables: 0, missingCapacity: 0 };
+    for (const assignment of assignments || []) {
+      if (!assignment?.id) continue;
+      const roleId = assignment.roleOnProjectId ?? null;
+      if (!roleId) { skipped.missingRole += 1; continue; }
+      const projectId = assignment.project ?? null;
+      const project = projectId ? projectsById.get(projectId) : null;
+      const templateId = project?.autoHoursTemplateId ?? null;
+      const deliverableEntries = projectId ? deliverableWeekEntriesByProject.get(projectId) : null;
+      if (!projectId || !deliverableEntries || deliverableEntries.length === 0) { skipped.missingDeliverables += 1; continue; }
+      const person = assignment.person ? peopleById.get(assignment.person) : null;
+      const capacity = person?.weeklyCapacity ?? assignment.personWeeklyCapacity ?? 0;
+      if (!capacity || capacity <= 0) { skipped.missingCapacity += 1; continue; }
 
-  // Sync URL when weeks or status filters change
-  useEffect(() => { url.set('weeks', String(weeksHorizon)); }, [weeksHorizon]);
-  useEffect(() => {
-    const s = Array.from(selectedStatusFilters);
-    const val = s.includes('Show All') && s.length === 1 ? null : s.join(',');
-    url.set('status', val || null);
-  }, [selectedStatusFilters]);
-
-  const runApplyBatch = React.useCallback(async (
-    updatesMap: Map<number, AssignmentUpdateInfo>,
-    touchedProjects: Set<number>,
-    savingKeys: string[],
-  ) => {
-    applyBatchInFlightRef.current = true;
-    // Persist updates
-    try {
-      const updatesArray = Array.from(updatesMap.entries()).map(([aid, info]) => ({ assignmentId: aid, weeklyHours: info.next }));
-      if (updatesArray.length > 1) {
-        await bulkUpdateAssignmentHours(updatesArray, assignmentsApi);
-      } else if (updatesArray.length === 1) {
-        await updateAssignment(updatesArray[0].assignmentId, { weeklyHours: updatesArray[0].weeklyHours }, assignmentsApi);
-      }
-      // Refresh totals
-      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const pidList = Array.from(touchedProjects);
-      if (pidList.length > 0) {
-        const res = await getProjectTotals(pidList, { weeks: weeks.length, department: dept, include_children: inc, include_placeholders: 1 });
-        setHoursByProject(prev => {
-          const next = { ...prev } as any;
-          pidList.forEach(pid => { next[pid] = (res.hoursByProject[String(pid)] || {}); });
-          return next;
-        });
-      }
-    } catch (err:any) {
-      // Rollback
-      setProjects(prevState => prevState.map(x => {
-        if (!touchedProjects.has(x.id!)) return x;
-        return {
-          ...x,
-          assignments: x.assignments.map(a => {
-            if (!a.id || !updatesMap.has(a.id)) return a;
-            const info = updatesMap.get(a.id)!;
-            return { ...a, weeklyHours: info.prev };
-          }),
-        };
-      }));
-      showToast(err?.message || 'Failed to update hours', 'error');
-    } finally {
-      setSavingCells(prevSet => {
-        const s = new Set(prevSet);
-        savingKeys.forEach(k => s.delete(k));
-        return s;
+      const targetWeeks = new Set<string>();
+      const totals = new Map<string, number>();
+      let hasAnySettings = false;
+      deliverableEntries.forEach(({ weekIndex: deliverableIndex, phase }) => {
+        let settings: AutoHoursRoleSetting | undefined;
+        if (templateId) {
+          const allowedPhases = autoHoursTemplatePhaseKeysById.get(templateId);
+          if (allowedPhases && !allowedPhases.has(phase)) {
+            settings = autoHoursSettingsByPhaseMap?.[phase]?.get(roleId);
+          } else {
+            settings = autoHoursTemplateSettingsByPhaseMap?.[templateId]?.[phase]?.get(roleId);
+          }
+        } else {
+          settings = autoHoursSettingsByPhaseMap?.[phase]?.get(roleId);
+        }
+        if (!settings) return;
+        hasAnySettings = true;
+        for (let offset = 0; offset <= AUTO_HOURS_MAX_WEEKS; offset += 1) {
+          const targetIndex = deliverableIndex - offset;
+          if (targetIndex < 0 || targetIndex >= weeks.length) continue;
+          const weekKey = weeks[targetIndex]?.date;
+          if (!weekKey) continue;
+          targetWeeks.add(weekKey);
+          const pct = settings.percentByWeek?.[String(offset)] ?? 0;
+          totals.set(weekKey, (totals.get(weekKey) || 0) + pct);
+        }
       });
-      applyBatchInFlightRef.current = false;
+      if (!hasAnySettings) { skipped.missingSettings += 1; continue; }
+      if (targetWeeks.size === 0) { skipped.missingDeliverables += 1; continue; }
+
+      const nextWeeklyHours = { ...(assignment.weeklyHours || {}) };
+      let changed = false;
+      targetWeeks.forEach((weekKey) => {
+        const pct = clampPercent(totals.get(weekKey) || 0);
+        const hours = roundHours((capacity || 0) * pct / 100);
+        if (mode === 'supplement') {
+          const current = Number(nextWeeklyHours[weekKey] ?? 0) || 0;
+          if (current > 0 || hours <= 0) return;
+          nextWeeklyHours[weekKey] = hours;
+          changed = true;
+          return;
+        }
+        const current = Number(nextWeeklyHours[weekKey] ?? 0) || 0;
+        if (current !== hours) changed = true;
+        nextWeeklyHours[weekKey] = hours;
+      });
+      if (!changed) continue;
+      updates.push({ assignmentId: assignment.id!, weeklyHours: nextWeeklyHours });
     }
-  }, [assignmentsApi, deptState.selectedDepartmentId, deptState.includeChildren, weeks, getProjectTotals]);
+    return { updates, skipped };
+  }, [autoHoursSettingsByPhaseMap, autoHoursTemplatePhaseKeysById, autoHoursTemplateSettingsByPhaseMap, deliverableWeekEntriesByProject, peopleById, projectsById, weeks]);
 
-  // Apply a numeric value to the current selection (or active cell)
-  const applyValueToSelection = React.useCallback((anchorAssignmentId: number, anchorWeekKey: string, value: number) => {
-    const v = value;
-    if (Number.isNaN(v) || v < 0) { showToast('Enter a valid non-negative number', 'warning'); return; }
+  const describeAutoHoursSkip = (skipped: { missingRole: number; missingSettings: number; missingDeliverables: number; missingCapacity: number }) => {
+    const reasons: string[] = [];
+    if (skipped.missingRole) reasons.push('missing project role');
+    if (skipped.missingSettings) reasons.push('missing presets');
+    if (skipped.missingDeliverables) reasons.push('no deliverables in range');
+    if (skipped.missingCapacity) reasons.push('missing capacity');
+    return reasons.length ? `No auto hours changes to apply (${reasons.join(', ')}).` : 'No auto hours changes to apply.';
+  };
 
-    // Avoid overlapping heavy batches; keep UX predictable
-    if (applyBatchInFlightRef.current) {
-      showToast('Updates are still being applied. Please wait a moment and try again.', 'warning');
+  const applyAutoHoursForProject = async (project: ProjectWithAssignments, mode: 'replace' | 'supplement') => {
+    if (!canUseAutoHours) {
+      showToastBus('Auto hours actions are restricted to admins and managers.', 'warning');
       return;
     }
-
-    // Determine target cells
-    const selectedCells = selection.getSelectedCells();
-    const selected = selectedCells.length > 0
-      ? selectedCells
-      : [{ rowKey: String(anchorAssignmentId), weekKey: anchorWeekKey }];
-
-    // Prepare updates
-    const updatesMap = new Map<number, AssignmentUpdateInfo>();
-    const touchedProjects = new Set<number>();
-    for (const c of selected) {
-      const aid = parseInt(c.rowKey, 10);
-      if (Number.isNaN(aid)) continue;
-      const entry = assignmentById.get(aid);
-      if (!entry) continue;
-      touchedProjects.add(entry.projectId);
-      const prev = updatesMap.get(aid)?.prev || { ...(entry.assignment.weeklyHours || {}) };
-      const next = updatesMap.get(aid)?.next || { ...(entry.assignment.weeklyHours || {}) };
-      next[c.weekKey] = v;
-      const weeksSet = updatesMap.get(aid)?.weeks || new Set<string>();
-      weeksSet.add(c.weekKey);
-      updatesMap.set(aid, { prev, next, weeks: weeksSet, personId: entry.personId, projectId: entry.projectId });
-    }
-
-    // Optimistic UI + saving flags
-    const savingKeys: string[] = [];
-    updatesMap.forEach((info, aid) => { info.weeks.forEach(wk => savingKeys.push(`${aid}-${wk}`)); });
-    setSavingCells(prevSet => { const s = new Set(prevSet); savingKeys.forEach(k => s.add(k)); return s; });
-    setProjects(prevState => prevState.map(x => {
-      if (!touchedProjects.has(x.id!)) return x;
-      return { ...x, assignments: x.assignments.map(a => { if (!a.id || !updatesMap.has(a.id)) return a; const info = updatesMap.get(a.id)!; return { ...a, weeklyHours: info.next }; }) };
-    }));
-    setEditingCell(null);
-    setEditingValue('');
-
-    // Kick off heavy work asynchronously
-    void runApplyBatch(updatesMap, touchedProjects, savingKeys);
-  }, [selection.getSelectedCells, projects, runApplyBatch]);
-
-  const handleBeginEditing = React.useCallback((assignmentId: number, weekKey: string, seed?: string) => {
-    setEditingCell({ rowKey: String(assignmentId), weekKey });
-    setEditingValue(seed ?? '');
-  }, []);
-
-  const handleCommitEditing = React.useCallback((assignmentId: number, weekKey: string, value: number) => {
-    applyValueToSelection(assignmentId, weekKey, value);
-  }, [applyValueToSelection]);
-
-  const handleCancelEditing = React.useCallback(() => {
-    setEditingCell(null);
-    setEditingValue('');
-  }, []);
-
-  useEffect(() => {
-    const start = selection.selectionStart;
-    if (!start) {
-      activeSelectionProjectIdRef.current = null;
-      setActiveSelectionProjectId(null);
+    if (phaseMappingError) showToastBus(phaseMappingError, 'warning');
+    if (autoHoursSettingsLoading) {
+      showToastBus('Auto hours settings are still loading.', 'info');
       return;
     }
-    const aid = parseInt(start.rowKey, 10);
-    if (!Number.isNaN(aid)) {
-      const pid = getProjectIdForAssignment(aid);
-      if (pid != null) {
-        activeSelectionProjectIdRef.current = pid;
-        setActiveSelectionProjectId(prev => (prev === pid ? prev : pid));
+    if (autoHoursSettingsError) {
+      showToastBus(autoHoursSettingsError, 'error');
+      return;
+    }
+    if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) return;
+    const templateId = project?.autoHoursTemplateId ?? null;
+    if (templateId) await ensureTemplateSettings([templateId]);
+    const { updates, skipped } = buildAutoHoursUpdatesForAssignments(project.assignments || [], mode);
+    if (updates.length === 0) {
+      showToastBus(describeAutoHoursSkip(skipped), 'info');
+      return;
+    }
+    await applyAutoHoursUpdates(updates);
+  };
+
+  const applyAutoHoursForAssignment = async (assignment: Assignment, mode: 'replace' | 'supplement') => {
+    if (!canUseAutoHours) {
+      showToastBus('Auto hours actions are restricted to admins and managers.', 'warning');
+      return;
+    }
+    if (phaseMappingError) showToastBus(phaseMappingError, 'warning');
+    if (autoHoursSettingsLoading) {
+      showToastBus('Auto hours settings are still loading.', 'info');
+      return;
+    }
+    if (autoHoursSettingsError) {
+      showToastBus(autoHoursSettingsError, 'error');
+      return;
+    }
+    if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) return;
+    const project = assignment.project ? projectsById.get(assignment.project) : null;
+    const templateId = project?.autoHoursTemplateId ?? null;
+    if (templateId) await ensureTemplateSettings([templateId]);
+    const { updates, skipped } = buildAutoHoursUpdatesForAssignments([assignment], mode);
+    if (updates.length === 0) {
+      showToastBus(describeAutoHoursSkip(skipped), 'info');
+      return;
+    }
+    await applyAutoHoursUpdates(updates);
+  };
+
+  const handleAssignmentRoleChange = async (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => {
+    await updateAssignmentRoleAction({ assignmentsApi, setPeople: setPeople as any, setAssignmentsData, people: people as any, personId, assignmentId, roleId, roleName, showToast: (msg, type) => showToastBus(msg, type) });
+  };
+
+  const updateAssignmentHours = async (projectId: number, assignmentId: number, week: string, hours: number) => {
+    const assignment = assignmentById.get(assignmentId);
+    if (!assignment) return;
+    const isPlaceholder = assignment.person == null;
+    const prevWeeklyHours = { ...(assignment.weeklyHours || {}) };
+    const updatedWeeklyHours = { ...prevWeeklyHours, [week]: hours };
+    setAssignmentsData(prev => prev.map(a => a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a));
+    try {
+      await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi, { skipIfMatch: isPlaceholder });
+    } catch (e: any) {
+      setAssignmentsData(prev => prev.map(a => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
+      showToastBus(e?.message || 'Failed to update hours', 'error');
+    }
+  };
+
+  const swapPlaceholderAssignment = async (assignmentId: number, person: { id: number; name: string; department?: number | null }) => {
+    const assignment = assignmentById.get(assignmentId);
+    if (!assignment) return;
+    const prevAssignment = { ...assignment };
+    setAssignmentsData(prev => prev.map(a => a.id === assignmentId ? {
+      ...a,
+      person: person.id,
+      personName: person.name,
+      personDepartmentId: person.department ?? (a as any).personDepartmentId ?? null,
+    } : a));
+    try {
+      await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
+      showToastBus('Assignment updated', 'success');
+    } catch (e: any) {
+      setAssignmentsData(prev => prev.map(a => a.id === assignmentId ? prevAssignment : a));
+      showToastBus(e?.message || 'Failed to replace placeholder', 'error');
+    }
+  };
+
+  const updateMultipleCells = async (cells: Array<{ rowKey: string; weekKey: string }>, hours: number) => {
+    const updates = new Map<number, Record<string, number>>();
+    cells.forEach((cell) => {
+      const [, assignmentIdStr] = cell.rowKey.split(':');
+      const assignmentId = Number(assignmentIdStr);
+      const assignment = assignmentById.get(assignmentId);
+      if (!assignment) return;
+      const next = updates.get(assignmentId) || { ...(assignment.weeklyHours || {}) };
+      next[cell.weekKey] = hours;
+      updates.set(assignmentId, next);
+    });
+    const payload = Array.from(updates.entries()).map(([assignmentId, weeklyHours]) => ({ assignmentId, weeklyHours }));
+    setAssignmentsData(prev => prev.map(a => updates.has(a.id!) ? { ...a, weeklyHours: updates.get(a.id!) } : a));
+    try {
+      if (payload.length > 1) {
+        await bulkUpdateAssignmentHours(payload, assignmentsApi);
+      } else if (payload.length === 1) {
+        const isPlaceholder = assignmentById.get(payload[0].assignmentId)?.person == null;
+        await updateAssignment(payload[0].assignmentId, { weeklyHours: payload[0].weeklyHours }, assignmentsApi, { skipIfMatch: isPlaceholder });
+      }
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to update hours', 'error');
+    }
+  };
+
+  const isContiguousSelection = (): { ok: boolean; reason?: string } => {
+    if (!selectedCells || selectedCells.length <= 1) return { ok: true };
+
+    const projectId = selectedCells[0].projectId;
+    const allSameProject = selectedCells.every(c => c.projectId === projectId);
+    if (!allSameProject) return { ok: false, reason: 'Selection must be within a single project' };
+
+    const weekIndex = (date: string) => weeks.findIndex(w => w.date === date);
+    const uniqueWeekIdx = Array.from(
+      new Set(selectedCells.map(c => weekIndex(c.week)).filter(i => i >= 0))
+    ).sort((a, b) => a - b);
+    if (uniqueWeekIdx.length === 0) return { ok: false, reason: 'Selection must include valid weeks' };
+    const start = uniqueWeekIdx[0];
+    for (let i = 1; i < uniqueWeekIdx.length; i++) {
+      const expected = start + i;
+      if (uniqueWeekIdx[i] !== expected) {
+        return { ok: false, reason: 'Selection must be a contiguous week range' };
       }
     }
-  }, [selection.selectionStart, getProjectIdForAssignment]);
+    return { ok: true };
+  };
 
-  // Commit edits on outside click (mouse only) to mirror Assignments page
+  const saveEditInFlightRef = useRef(false);
+  const saveEdit = async () => {
+    if (!editingCell || saveEditInFlightRef.current) return;
+    saveEditInFlightRef.current = true;
+    const numValue = sanitizeHours(editingValue);
+
+    try {
+      const selectedKeys = getSelectedCells();
+      if (selectedKeys.length > 1) {
+        const check = isContiguousSelection();
+        if (!check.ok) {
+          showToastBus(check.reason || 'Invalid selection for bulk apply', 'warning');
+          setEditingCell(null);
+          return;
+        }
+        await updateMultipleCells(selectedKeys, numValue);
+      } else {
+        await updateAssignmentHours(editingCell.personId, editingCell.assignmentId, editingCell.week, numValue);
+      }
+
+      const currentIdx = weeks.findIndex(w => w.date === editingCell.week);
+      if (currentIdx >= 0 && currentIdx < weeks.length - 1) {
+        const next = { personId: editingCell.personId, assignmentId: editingCell.assignmentId, week: weeks[currentIdx + 1].date };
+        csSelect(`${next.personId}:${next.assignmentId}`, next.week, false);
+      }
+    } catch (err: any) {
+      showToastBus('Failed to save hours: ' + (err?.message || 'Unknown error'), 'error');
+    } finally {
+      saveEditInFlightRef.current = false;
+      setEditingCell(null);
+    }
+  };
+
   useEffect(() => {
     if (!editingCell) return;
     const handleDocMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      if (target.closest('[data-week-cell-editing="true"]')) return;
-      const v = parseFloat(editingValue);
-      handleCommitEditing(parseInt(editingCell.rowKey, 10), editingCell.weekKey, v);
+      if (target.closest('[data-week-cell-editing=\"true\"]')) return;
+      saveEdit();
     };
     document.addEventListener('mousedown', handleDocMouseDown, true);
     return () => document.removeEventListener('mousedown', handleDocMouseDown, true);
-  }, [editingCell, handleCommitEditing, editingValue]);
+  }, [editingCell, saveEdit]);
 
-  const handleCellMouseDown = React.useCallback((assignmentId: number, weekKey: string, e?: MouseEvent | React.MouseEvent) => {
-    const pid = getProjectIdForAssignment(assignmentId);
-    activeSelectionProjectIdRef.current = pid;
-    if (pid != null) setActiveSelectionProjectId(prev => (prev === pid ? prev : pid));
-    selection.onCellMouseDown(String(assignmentId), weekKey, e as any);
-  }, [selection.onCellMouseDown, getProjectIdForAssignment]);
-
-  const handleCellMouseEnter = React.useCallback((assignmentId: number, weekKey: string) => {
-    const pid = getProjectIdForAssignment(assignmentId);
-    const activePid = activeSelectionProjectIdRef.current;
-    if (activePid != null && pid != null && pid !== activePid) return;
-    selection.onCellMouseEnter(String(assignmentId), weekKey);
-  }, [selection.onCellMouseEnter, getProjectIdForAssignment]);
-
-  const handleCellSelect = React.useCallback((assignmentId: number, weekKey: string, isShiftClick?: boolean) => {
-    const pid = getProjectIdForAssignment(assignmentId);
-    if (activeSelectionProjectIdRef.current == null && pid != null) {
-      activeSelectionProjectIdRef.current = pid;
-      setActiveSelectionProjectId(prev => (prev === pid ? prev : pid));
+  const fetchAssignmentsForProject = async (projectId: number): Promise<Assignment[]> => {
+    const pageSize = 200;
+    let page = 1;
+    const all: Assignment[] = [];
+    while (true) {
+      const res = await assignmentsApi.list({ project: projectId, page, page_size: pageSize, include_placeholders: 1 });
+      const rows = Array.isArray((res as any)) ? (res as any) : (res?.results || []);
+      all.push(...rows);
+      if (!res?.next) break;
+      page += 1;
+      if (page > 50) break; // safety valve
     }
-    const activePid = activeSelectionProjectIdRef.current;
-    if (activePid != null && pid != null && pid !== activePid) return;
-    selection.onCellSelect(String(assignmentId), weekKey, isShiftClick);
-  }, [selection.onCellSelect, getProjectIdForAssignment]);
-
-  // Sorting helpers
-  const toggleSort = (key: 'client' | 'project' | 'deliverable') => {
-    setSortBy(prev => {
-      if (prev === key) {
-        setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setSortDir('asc');
-      return key;
-    });
+    return all;
   };
 
-  const desktopView = (
-    <>
-      {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Sticky Header */}
-        {!compact && (
-        <div ref={headerRef} className="sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] z-30 px-6 py-4">
-          {/* Top row: title + subtitle (left), snapshot chip (right) */}
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <h1 className="text-2xl font-bold text-[var(--text)]">Project Assignments</h1>
-              <p className="text-[var(--muted)] text-sm mt-1">Manage team workload allocation across {weeks.length} weeks</p>
-              {/* Weeks selector + People View link (left, under subtitle) */}
-              <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
-                <span>Weeks</span>
-                {[8,12,16,20].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setWeeksHorizon(n)}
-                    className={`px-2 py-0.5 rounded border text-xs transition-colors ${
-                      weeksHorizon===n
-                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                        : 'bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-                {(() => {
-                  const s = Array.from(selectedStatusFilters);
-                  const statusStr = s.includes('Show All') && s.length === 1 ? '' : `&status=${encodeURIComponent(s.join(','))}`;
-                  const href = `/assignments?view=people&weeks=${weeksHorizon}${statusStr}`;
-                  return (
-                    <a
-                      href={href}
-                      className="ml-2 px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                    >
-                      People View
-                    </a>
-                  );
-                })()}
-              </div>
-            </div>
-            <div className="pt-1">
-              <span
-                title={isSnapshotMode ? 'Rendering from server grid snapshot' : 'Server snapshot unavailable; using legacy client aggregation'}
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border ${
-                  isSnapshotMode
-                    ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'
-                    : 'bg-[var(--card)] text-[var(--muted)] border-[var(--border)]'
-                }`}
-              >
-                {isSnapshotMode ? 'Snapshot Mode' : 'Legacy Mode'}
-              </span>
-            </div>
-          </div>
-          {/* Second row: Department filter + project status filters */}
-          <div className="mt-3 flex items-center justify-between gap-6">
-            <div className="flex-1 min-w-[320px]">
-              <GlobalDepartmentFilter
-                showCopyLink={false}
-              departmentsOverride={departments}
-                rightActions={(
-                  <>
-                    <button
-                      className={`px-2 py-0.5 rounded border border-[var(--border)] text-xs transition-colors ${
-                        loadingAssignments.size > 0
-                          ? 'text-[var(--muted)] cursor-wait'
-                          : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
-                      }`}
-                      title="Expand all projects and refresh their assignments"
-                      onClick={async () => {
-                        try {
-                          // Expand all projects first
-                          setProjects(prev => prev.map(p => ({ ...p, isExpanded: true })));
-                          // Update URL expanded list
-                          const ids = projects.map(p => p.id!).filter(Boolean);
-                          if (ids.length > 0) url.set('expanded', ids.join(','));
-                          // Refresh assignments for all projects to ensure up-to-date data
-                          await refreshAllAssignments();
-                        } catch {}
-                      }}
-                      disabled={loadingAssignments.size > 0}
-                    >
-                      {loadingAssignments.size > 0 ? 'Expanding…' : 'Expand All'}
-                    </button>
-                    <button
-                      className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-                      title="Collapse all projects"
-                      onClick={() => {
-                        setProjects(prev => prev.map(p => ({ ...p, isExpanded: false })));
-                        url.set('expanded', null);
-                      }}
-                    >
-                      Collapse All
-                    </button>
-                    <button
-                      className={`px-2 py-0.5 rounded border text-xs transition-colors ${
-                        loading || loadingAssignments.size > 0
-                          ? 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] cursor-wait'
-                          : 'bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
-                      }`}
-                      title="Refresh assignments for all projects"
-                      onClick={refreshAllAssignments}
-                      disabled={loading || loadingAssignments.size > 0}
-                    >
-                      {loadingAssignments.size > 0 ? 'Refreshing…' : 'Refresh All'}
-                    </button>
-                  </>
-                )}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-1">
-              {statusFilterOptions.map((opt) => {
-                const isActive = selectedStatusFilters.has(opt);
-                return (
-                  <button
-                    key={opt}
-                    onClick={() => toggleStatusFilter(opt)}
-                    className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-                      isActive
-                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                        : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
-                    }`}
-                    aria-pressed={isActive}
-                    aria-label={`Filter: ${formatStatusLabel(opt)}`}
-                    title={formatStatusLabel(opt)}
-                  >
-                    {formatStatusLabel(opt)}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => setShowPlaceholdersOnly((v) => !v)}
-                className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-                  showPlaceholdersOnly
-                    ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                    : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
-                }`}
-                aria-pressed={showPlaceholdersOnly}
-                aria-label="Filter: projects with placeholders"
-                title="Show projects with placeholders"
-              >
-                W/Placeholders
-              </button>
-            </div>
-          </div>
-        </div>
-        )}
+  const ensureAssignmentsLoaded = async (projectId: number) => {
+    if (loadedProjectIds.has(projectId) || loadingAssignments.has(projectId)) return;
+    setLoadingAssignments(prev => new Set(prev).add(projectId));
+    try {
+      const rows = await fetchAssignmentsForProject(projectId);
+      setAssignmentsData(prev => {
+        const withoutProject = prev.filter(a => (a.project as number | null | undefined) !== projectId);
+        return [...withoutProject, ...rows];
+      });
+      setLoadedProjectIds(prev => {
+        const next = new Set(prev);
+        next.add(projectId);
+        return next;
+      });
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to load project assignments', 'error');
+    } finally {
+      setLoadingAssignments(prev => {
+        const next = new Set(prev);
+        next.delete(projectId);
+        return next;
+      });
+    }
+  };
 
-        {/* Sticky week header aligned to measured header height */}
-        <div ref={headerScrollRef} className="sticky left-0 right-0 bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto" style={{ top: compact ? 0 : headerHeight }}>
-          <div style={{ minWidth: totalMinWidth }}>
-            <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
-              <div
-                className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group cursor-pointer hover:text-[var(--text)]"
-                onClick={() => toggleSort('client')}
-                role="button"
-                aria-label="Sort by client"
-                aria-pressed={sortBy === 'client'}
-              >
-                Client
-                <div
-                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--primaryHover)] transition-colors"
-                  onMouseDown={(e) => startColumnResize('client', e)}
-                  title="Drag to resize client column"
-                />
-              </div>
-              <div
-                className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group cursor-pointer hover:text-[var(--text)]"
-                onClick={() => toggleSort('project')}
-                role="button"
-                aria-label="Sort by project"
-                aria-pressed={sortBy === 'project'}
-              >
-                Project
-                <div
-                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--primaryHover)] transition-colors"
-                  onMouseDown={(e) => startColumnResize('project', e)}
-                  title="Drag to resize project column"
-                />
-              </div>
-              <div className="text-center text-xs text-[var(--muted)] px-1">+/-</div>
-              {weeks.map((week, index) => (
-                <div
-                  key={week.date}
-                  className="text-center px-1 select-none cursor-pointer hover:text-[var(--text)]"
-                  role="columnheader"
-                  aria-label={`Week starting ${week.display}`}
-                  onClick={() => toggleSort('deliverable')}
-                  title="Sort by next deliverable date"
-                >
-                  <div className="text-xs font-medium text-[var(--text)]">{week.display}</div>
-                  <div className="text-[10px] text-[var(--muted)]">W{index + 1}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+  const refreshAllAssignments = useCallback(async () => {
+    if (projectsData.length === 0) {
+      showToastBus('No projects available to refresh', 'warning');
+      return;
+    }
+    const projectIds = projectsData.map(p => p.id!).filter((id): id is number => typeof id === 'number');
+    setLoadingAssignments(new Set(projectIds));
+    try {
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const bulk = await assignmentsApi.listAll({ department: dept, include_children: dept != null ? inc : undefined, include_placeholders: 1 });
+      const allAssignments = Array.isArray(bulk) ? bulk : [];
+      setAssignmentsData(allAssignments);
+      setLoadedProjectIds(() => new Set(allAssignments.map(a => a.project).filter(Boolean) as number[]));
+      showToastBus('Assignments refreshed', 'success');
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to refresh assignments', 'error');
+    } finally {
+      setLoadingAssignments(new Set());
+    }
+  }, [projectsData, deptState.selectedDepartmentId, deptState.includeChildren]);
 
-        {/* Projects grid (totals by week, server authoritative) */}
-        <div ref={bodyScrollRef} className="px-6 py-4 overflow-x-auto">
-          {!loading && !error && projects.length === 0 && (
-            <div className="text-[var(--muted)]">No projects found in scope.</div>
-          )}
+  const autoRefreshKeyRef = useRef<string>('');
+  useEffect(() => {
+    if (projectsData.length === 0) return;
+    const key = [
+      deptState.selectedDepartmentId ?? 'all',
+      deptState.includeChildren ? 'children' : 'direct',
+      weeksHorizon,
+    ].join(':');
+    if (autoRefreshKeyRef.current === key) return;
+    autoRefreshKeyRef.current = key;
+    (async () => {
+      await snapshot.loadData();
+      await refreshAllAssignments();
+    })();
+  }, [projectsData.length, deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, snapshot.loadData, refreshAllAssignments]);
 
-          {!loading && !error && projects.length > 0 && (
-            <ProjectsSection
-              projects={sortedProjects}
-              weeks={weeks}
-              gridTemplate={gridTemplate}
-              minWidth={totalMinWidth}
-              clientColumnWidth={clientColumnWidth}
-              projectColumnWidth={projectColumnWidth}
-              loadingAssignments={loadingAssignments}
-              hoursByProject={hoursByProject}
-              deliverableTypesByProjectWeek={deliverableTypesByProjectWeek}
-              deliverableTooltipsByProjectWeek={deliverableTooltipsByProjectWeek}
-              typeColors={typeColors}
-              statusDropdownOpenId={statusDropdownOpenId}
-              onToggleStatusDropdown={toggleStatusDropdown}
-              onCloseStatusDropdown={closeStatusDropdown}
-              onStatusSelect={handleProjectStatusSelect}
-              isProjectUpdating={projectStatus.isUpdating}
-              onToggleExpanded={toggleProjectExpanded}
-              onAddPersonClick={handleAddPersonClick}
-              isAddingForProject={isAddingForProject}
-              addMode={addMode}
-              personQuery={personQuery}
-              personResults={personResults}
-              selectedPersonIndex={selectedPersonIndex}
-              onPersonQueryChange={handlePersonQueryChange}
-              onPersonKeyDown={handlePersonKeyDown}
-              onPersonSelect={handlePersonSelect}
-              roleDeptId={roleDeptId}
-              roleQuery={roleQuery}
-              roleResults={roleResults}
-              selectedRoleIndex={selectedRoleIndex}
-              departments={departments}
-              roleMatches={roleMatches}
-              onAddModeChange={handleAddModeChange}
-              onRoleDeptChange={handleRoleDeptChange}
-              onRoleQueryChange={handleRoleQueryChange}
-              onRoleKeyDown={handleRoleKeyDown}
-              onRoleSelect={handleRoleSelect}
-              rowIndexByKey={rowIndexByKey}
-              selectionBounds={selection.selectionBounds}
-              editingCell={editingCell}
-              activeSelectionProjectId={activeSelectionProjectId}
-              editingProjectId={editingProjectId}
-              openRoleProjectId={openRoleProjectId}
-              savingCellsByProject={savingCellsByProject}
-              editingValue={editingValue}
-              onEditValueChange={setEditingValue}
-              onBeginEditing={handleBeginEditing}
-              onCommitEditing={handleCommitEditing}
-              onCancelEditing={handleCancelEditing}
-              onCellMouseDown={handleCellMouseDown}
-              onCellMouseEnter={handleCellMouseEnter}
-              onCellSelect={handleCellSelect}
-              onRemoveAssignment={handleRemoveAssignment}
-              openRoleFor={openRoleFor}
-              roleAnchorRef={roleAnchorRef}
-              rolesByDept={rolesByDept}
-              onToggleRole={handleToggleRole}
-              onSelectRole={handleSelectRole}
-              onCloseRole={handleCloseRole}
-              onSwapPlaceholder={handleSwapPlaceholder}
+  const toggleProjectExpanded = (projectId: number) => {
+    const willExpand = !expandedProjectIds.has(projectId);
+    setExpandedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (willExpand) next.add(projectId);
+      else next.delete(projectId);
+      return next;
+    });
+    if (willExpand) void ensureAssignmentsLoaded(projectId);
+  };
+
+  const removeAssignment = async (projectId: number, assignmentId: number) => {
+    if (!confirm('Are you sure you want to remove this assignment?')) return;
+    const assignment = assignmentById.get(assignmentId);
+    try {
+      await deleteAssignment(assignmentId, assignmentsApi, {
+        projectId,
+        personId: assignment?.person ?? null,
+        updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
+      });
+      setAssignmentsData(prev => prev.filter(a => a.id !== assignmentId));
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to delete assignment', 'error');
+    }
+  };
+
+  const addPersonToProject = async (projectId: number, person: { id: number; name: string; department?: number | null }) => {
+    try {
+      const created = await createAssignment({ person: person.id, project: projectId }, assignmentsApi);
+      setAssignmentsData(prev => [...prev, created as Assignment]);
+      showToastBus('Assignment created', 'success');
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to create assignment', 'error');
+    }
+  };
+
+  const addRolePlaceholderToProject = async (projectId: number, role: ProjectRole & { departmentName?: string }) => {
+    try {
+      const created = await createAssignment({ project: projectId, roleOnProjectId: role.id }, assignmentsApi);
+      const normalized = {
+        ...(created as Assignment),
+        personDepartmentId: (created as any)?.personDepartmentId ?? role.department_id ?? null,
+        roleName: (created as any)?.roleName ?? role.name,
+      } as Assignment;
+      setAssignmentsData(prev => [...prev, normalized]);
+      showToastBus('Placeholder role added', 'success');
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to add placeholder role', 'error');
+    }
+  };
+
+  const addUI = usePersonAssignmentAdd({
+    searchPeople: async (query) => {
+      if (!query.trim()) return [];
+      return peopleApi.search(query, 10, { department: deptState.selectedDepartmentId ?? undefined });
+    },
+    searchRoles: async (query) => {
+      if (!query.trim()) return [];
+      const deptId = deptState.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : undefined;
+      const results = await searchProjectRoles(query, deptId);
+      return (results || []).map((role) => ({
+        ...role,
+        departmentName: departmentNameById.get(role.department_id) || '',
+      }));
+    },
+    onAddPerson: async (projectId, person) => addPersonToProject(projectId, person),
+    onAddRole: async (projectId, role) => addRolePlaceholderToProject(projectId, role),
+  });
+
+  const hoursByProject = useMemo(() => {
+    const map: Record<number, Record<string, number>> = {};
+    projectsWithAssignments.forEach((project) => {
+      const weekTotals: Record<string, number> = {};
+      (project.assignments || []).forEach((assignment) => {
+        Object.entries(assignment.weeklyHours || {}).forEach(([week, value]) => {
+          const v = Number(value) || 0;
+          weekTotals[week] = (weekTotals[week] || 0) + v;
+        });
+      });
+      map[project.id!] = weekTotals;
+    });
+    return map;
+  }, [projectsWithAssignments]);
+
+  const { clientColumnWidth, projectColumnWidth, setClientColumnWidth, setProjectColumnWidth, isResizing, setIsResizing, resizeStartX, setResizeStartX, resizeStartWidth, setResizeStartWidth } = useGridColumnWidthsAssign();
+  const autoHoursColumnWidth = 28;
+  const gridTemplate = useMemo(() => {
+    const count = Math.max(1, visibleWeeks.length);
+    return `${clientColumnWidth}px ${projectColumnWidth}px 40px ${autoHoursColumnWidth}px repeat(${count}, 70px)`;
+  }, [clientColumnWidth, projectColumnWidth, visibleWeeks.length, autoHoursColumnWidth]);
+
+  const totalMinWidth = useMemo(() => clientColumnWidth + projectColumnWidth + 40 + autoHoursColumnWidth + (weeks.length * 70) + 20, [clientColumnWidth, projectColumnWidth, weeks.length, autoHoursColumnWidth]);
+
+  const onStartResize = (column: 'client' | 'project', e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(column);
+    setResizeStartX(e.clientX);
+    const startWidth = column === 'client' ? clientColumnWidth : projectColumnWidth;
+    setResizeStartWidth(startWidth);
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+    const onMove = (e: MouseEvent) => {
+      const delta = e.clientX - resizeStartX;
+      if (isResizing === 'client') {
+        setClientColumnWidth(Math.max(140, resizeStartWidth + delta));
+      } else {
+        setProjectColumnWidth(Math.max(160, resizeStartWidth + delta));
+      }
+    };
+    const onUp = () => setIsResizing(null);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isResizing, resizeStartX, resizeStartWidth, setClientColumnWidth, setProjectColumnWidth, setIsResizing]);
+
+  if (loading) {
+    return (
+      <Layout>
+        <AssignmentsSkeleton />
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <div className="p-6 text-red-400">{error}</div>
+      </Layout>
+    );
+  }
+
+  const ProjectWeekHeader: React.FC = () => (
+    <div
+      ref={headerScrollRef}
+      onScroll={handleHeaderScroll}
+      className="sticky left-0 right-0 bg-[var(--card)] border-b border-[var(--border)] z-20 overflow-x-auto"
+      style={{ top: 0 }}
+    >
+      <div style={{ minWidth: totalMinWidth }}>
+        <div
+          className="grid gap-px p-2"
+          style={{ gridTemplateColumns: gridTemplate, paddingLeft: weekPaddingLeft, paddingRight: weekPaddingRight }}
+        >
+          <div className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group">
+            Person
+            <div
+              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--surfaceHover)]"
+              onMouseDown={(e) => onStartResize('client', e)}
             />
-          )}
-
-          {/* Status Bar (Utilization Legend) */}
-          {false && (
-          <div className="flex justify-between items-center text-xs text-[var(--muted)] px-1 mt-2">
-            <div className="flex gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <span>{`Available (${legendLabels.green})`}</span>
-                <span>Available (â‰¤70%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                <span>{`Busy (${legendLabels.blue})`}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                <span>{`Full (${legendLabels.orange})`}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                <span>{`Overallocated (${legendLabels.red})`}</span>
-              </div>
-            </div>
           </div>
-          )}
-
-          {/* Selection live region for a11y */}
-          <div aria-live="polite" className="sr-only">{selection.selectionSummary}</div>
+          <div className="font-medium text-[var(--text)] text-sm px-2 py-1 relative group">
+            Role
+            <div
+              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-[var(--surfaceHover)]"
+              onMouseDown={(e) => onStartResize('project', e)}
+            />
+          </div>
+          <div className="text-center text-xs text-[var(--muted)] px-1">+/-</div>
+          <div className="text-center text-[10px] text-[var(--muted)] px-1">{canUseAutoHours ? 'R/S' : ''}</div>
+          {visibleWeeks.map((week, index) => (
+            <div key={week.date} className="text-center px-1">
+              <div className="text-xs font-medium text-[var(--text)]">{week.display}</div>
+              <div className="text-[10px] text-[var(--muted)]">W{index + 1}</div>
+            </div>
+          ))}
         </div>
       </div>
-    </>
+    </div>
   );
 
-  let content: React.ReactNode;
-  if (error) {
-    content = (
-      <div className="flex-1 flex items-center justify-center px-6 py-8 text-[var(--muted)]">
-        <div>
-          <p className="text-center text-sm mb-4">{error}</p>
-          <div className="flex justify-center">
+  const ProjectGroupHeader: React.FC<{ project: ProjectWithAssignments }> = ({ project }) => (
+    <div className="col-span-2 flex items-center">
+      <button
+        type="button"
+        onClick={() => project.id && toggleProjectExpanded(project.id)}
+        className="flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left hover:bg-[var(--surfaceHover)] transition-all duration-200 rounded-sm"
+      >
+        <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[var(--muted)]">
+          <svg width="12" height="12" viewBox="0 0 12 12" className={`transition-transform duration-200 ${project.isExpanded ? 'rotate-90' : 'rotate-0'}`}>
+            <path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium text-[var(--text)] text-sm truncate">{project.name}</div>
+          <div className="text-xs text-[var(--muted)]">{project.client || ''}</div>
+        </div>
+      </button>
+      <div className="pr-2 relative">
+        {project.id ? (
+          <>
+            <StatusBadge
+              status={project.id ? getProjectStatus(project.id) : null}
+              variant="editable"
+              onClick={() => project.id && statusDropdown.toggle(String(project.id))}
+              isUpdating={project.id && projectStatus.isUpdating(project.id)}
+            />
+            {project.id && (
+              <StatusDropdown
+                currentStatus={getProjectStatus(project.id)}
+                isOpen={statusDropdown.isOpen(String(project.id))}
+                onSelect={(newStatus) => project.id && handleStatusChange(project.id, newStatus)}
+                onClose={statusDropdown.close}
+                projectId={project.id}
+                disabled={projectStatus.isUpdating(project.id)}
+                closeOnSelect={false}
+              />
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  const PersonCell: React.FC<{ assignment: Assignment }> = ({ assignment }) => {
+    const personId = assignment.person as number | null;
+    const person = personId ? peopleById.get(personId) : null;
+    const placeholderRole = !personId ? assignment.roleName : null;
+    const name = assignment.personName || person?.name || (placeholderRole ? `<${placeholderRole}>` : 'Unassigned');
+    const meta = person?.weeklyCapacity != null ? `${person.weeklyCapacity}h/wk` : '';
+    const deptId = (assignment as any).personDepartmentId as number | null | undefined;
+    const canSwapPlaceholder = !personId && !!placeholderRole;
+    return (
+      <div className="flex items-start pt-0.5 pb-1 pl-[60px] pr-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-[var(--text)] text-xs leading-5" title={name}>
+            {canSwapPlaceholder ? (
+              <PlaceholderPersonSwap
+                label={name}
+                deptId={deptId ?? null}
+                className="text-[var(--text)] text-xs truncate inline-block max-w-full"
+                onSelect={(person) => swapPlaceholderAssignment(assignment.id!, person)}
+              />
+            ) : (
+              <span className="block truncate">{name}</span>
+            )}
+          </div>
+          {meta ? (
+            <div className="mt-0.5 text-[var(--muted)] text-[11px] leading-4">{meta}</div>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
+  const RoleCell: React.FC<{ assignment: Assignment }> = ({ assignment }) => {
+    const personId = assignment.person as number | null;
+    const person = personId ? peopleById.get(personId) : null;
+    const departmentId = person?.department ?? (assignment as any).personDepartmentId ?? null;
+    const roleName = assignment.roleName || 'Set role';
+    const roleOnProjectId = assignment.roleOnProjectId ?? null;
+    const { data: roles = [] } = useProjectRoles(departmentId ?? undefined);
+    const [openRole, setOpenRole] = useState(false);
+    const roleBtnRef = useRef<HTMLButtonElement | null>(null);
+    return (
+      <div className="flex items-start pt-0.5 pb-1 pr-2">
+        <div className="min-w-0 flex-1">
+          <div className="mt-0.5 text-[var(--muted)] text-[11px] leading-4">
             <button
               type="button"
-              className="px-4 py-2 rounded bg-[var(--primary)] text-white text-sm"
-              onClick={() => snapshotQuery.refetch()}
+              className="hover:text-[var(--text)]"
+              onClick={() => setOpenRole(v => !v)}
+              title="Edit role on project"
+              ref={roleBtnRef}
             >
-              Retry
+              {roleName}
             </button>
+            {openRole && (
+              <div className="relative mt-1">
+                <RoleDropdown
+                  roles={roles}
+                  currentId={roleOnProjectId}
+                  onSelect={(id, name) => {
+                    if (personId) {
+                      void handleAssignmentRoleChange(personId, assignment.id!, id, name);
+                    }
+                    setOpenRole(false);
+                  }}
+                  onClose={() => setOpenRole(false)}
+                  anchorRef={roleBtnRef}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
     );
-  } else if (loading && projects.length === 0) {
-    content = (
-      <div className="flex-1 flex items-center justify-center text-[var(--muted)] text-sm">
-        Loading project assignments…
+  };
+
+  const ProjectAssignmentRow: React.FC<{ projectId: number; assignment: Assignment }> = ({ projectId, assignment }) => {
+    const rowKey = `${projectId}:${assignment.id}`;
+    const isSelected = (week: string) => csIsSelected(rowKey, week);
+    const isEditing = (week: string) => editingCell?.personId === projectId && editingCell?.assignmentId === assignment.id && editingCell?.week === week;
+    return (
+      <div className="grid gap-px p-0.5 bg-[var(--surface)] hover:bg-[var(--surfaceHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
+        <PersonCell assignment={assignment} />
+        <RoleCell assignment={assignment} />
+        <div className="flex items-center justify-center">
+          <RemoveAssignmentButton onClick={() => removeAssignment(projectId, assignment.id!)} />
+        </div>
+        <div className="flex items-center justify-center">
+          {canUseAutoHours ? (
+            <AutoHoursActionButtons
+              onReplace={() => void applyAutoHoursForAssignment(assignment, 'replace')}
+              onSupplement={() => void applyAutoHoursForAssignment(assignment, 'supplement')}
+            />
+          ) : null}
+        </div>
+        {visibleWeeks.map((week) => (
+          <WeekCell
+            key={week.date}
+            weekKey={week.date}
+            isSelected={isSelected(week.date)}
+            isEditing={isEditing(week.date)}
+            currentHours={assignment.weeklyHours?.[week.date] || 0}
+            onSelect={(isShift) => csSelect(rowKey, week.date, isShift)}
+            onMouseDown={() => csMouseDown(rowKey, week.date)}
+            onMouseEnter={() => csMouseEnter(rowKey, week.date)}
+            onEditStart={() => startEditing(projectId, assignment.id!, week.date, String(assignment.weeklyHours?.[week.date] || 0))}
+            onEditSave={saveEdit}
+            onEditCancel={() => cancelEdit()}
+            editingValue={editingValue}
+            onEditValueChange={setEditingValue}
+            deliverablesForWeek={assignment.project ? getDeliverablesForProjectWeek(assignment.project, week.date) : []}
+          />
+        ))}
       </div>
     );
-  } else {
-    content = isMobileLayout ? mobileView : desktopView;
-  }
+  };
+
+  const ProjectSection: React.FC<{ project: ProjectWithAssignments }> = ({ project }) => {
+    const visibleAssignments = useMemo(() => {
+      const list = getVisibleAssignments(project);
+      const withPeople: Assignment[] = [];
+      const placeholders: Assignment[] = [];
+      list.forEach((assignment) => {
+        if (assignment?.person != null) withPeople.push(assignment);
+        else placeholders.push(assignment);
+      });
+      return withPeople.concat(placeholders);
+    }, [getVisibleAssignments, project]);
+    const totals = hoursByProject[project.id!] || {};
+    return (
+      <div className="border-b border-[var(--border)] last:border-b-0">
+        <div className="grid gap-px p-2 hover:bg-[var(--surfaceHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
+          <ProjectGroupHeader project={project} />
+          <div className="flex items-center justify-center gap-1">
+            <button
+              className="w-5 h-5 rounded bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] text-xs font-medium transition-colors flex items-center justify-center"
+              title="Add person"
+              onClick={() => addUI.open(project.id!)}
+            >
+              +
+            </button>
+          </div>
+          <div className="flex items-center justify-center">
+            {canUseAutoHours ? (
+              <AutoHoursActionButtons
+                onReplace={() => void applyAutoHoursForProject(project, 'replace')}
+                onSupplement={() => void applyAutoHoursForProject(project, 'supplement')}
+              />
+            ) : null}
+          </div>
+          {visibleWeeks.map((week) => {
+            const totalHours = totals?.[week.date] || 0;
+            const labelValue = Number.isFinite(totalHours)
+              ? (Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(1))
+              : 0;
+            const aria = `${labelValue} hours`;
+            const pillClasses = totalHours > 0
+              ? 'bg-[var(--surfaceHover)] text-[var(--text)] border border-[var(--border)]'
+              : 'bg-transparent text-[var(--muted)] border border-[var(--borderSubtle)]';
+            return (
+              <div key={week.date} className="flex items-center justify-center px-1">
+                <div className={`inline-flex items-center justify-center h-6 px-2 leading-none rounded-full text-xs font-medium min-w-[40px] text-center ${pillClasses}`} aria-label={aria}>
+                  {totalHours > 0 ? `${labelValue}h` : ''}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {project.isExpanded && loadingAssignments.has(project.id!) && (
+          <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
+            <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
+              <div className="text-[var(--muted)] text-xs">Loading assignments...</div>
+            </div>
+            <div></div>
+            <div></div>
+            {visibleWeeks.map((week) => (
+              <div key={week.date} className="flex items-center justify-center">
+                <div className="w-12 h-6" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {project.isExpanded && visibleAssignments.map((assignment) => (
+          <ProjectAssignmentRow key={assignment.id} projectId={project.id!} assignment={assignment} />
+        ))}
+
+        {project.isExpanded && addUI.isAddingFor === project.id && (
+          <AddPersonRow
+            weeks={visibleWeeks}
+            gridTemplate={gridTemplate}
+            newPersonName={addUI.newPersonName}
+            onSearchChange={addUI.onSearchChange}
+            personResults={addUI.personResults}
+            roleResults={addUI.roleResults}
+            selectedDropdownIndex={addUI.selectedDropdownIndex}
+            setSelectedDropdownIndex={addUI.setSelectedDropdownIndex}
+            showPersonDropdown={addUI.showPersonDropdown}
+            setShowPersonDropdown={addUI.setShowPersonDropdown}
+            selectedPerson={addUI.selectedPerson}
+            selectedRole={addUI.selectedRole}
+            onPersonSelect={addUI.onPersonSelect}
+            onRoleSelect={addUI.onRoleSelect}
+            onAddPerson={(person) => addUI.addPerson(project.id!, person)}
+            onAddRole={(role) => addUI.addRole(project.id!, role)}
+            onAddSelected={() => addUI.addSelected(project.id!)}
+            onCancel={addUI.cancel}
+          />
+        )}
+      </div>
+    );
+  };
+
+  const topBarHeader = (
+    <div className="flex flex-col gap-2 min-w-0 w-full">
+      <div className="flex flex-wrap items-center gap-3 min-w-0">
+        <div className="min-w-[120px]">
+          <div className="text-lg font-semibold text-[var(--text)] leading-tight">Project Assignments</div>
+          {isFetching ? (
+            <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
+          ) : null}
+        </div>
+        <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+        <HeaderActions
+          onExpandAll={() => {
+            const next = new Set(
+              (projectsData || [])
+                .map(p => p.id)
+                .filter((id): id is number => typeof id === 'number')
+            );
+            setExpandedProjectIds(next);
+            void refreshAllAssignments();
+          }}
+          onCollapseAll={() => setExpandedProjectIds(new Set())}
+          onRefreshAll={async () => {
+            await snapshot.loadData();
+            await refreshAllAssignments();
+          }}
+          disabled={loading}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <StatusFilterChips
+          options={statusFilterOptions as unknown as readonly string[]}
+          selected={selectedStatusFilters as unknown as Set<string>}
+          format={formatFilterStatus as any}
+          onToggle={(s) => toggleStatusFilter(s as any)}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <Layout>
-      <div className="flex flex-col flex-1 min-h-0">
-        {content}
+      <div className="p-4">
+        <TopBarPortal side="right">{topBarHeader}</TopBarPortal>
+        <ProjectWeekHeader />
+        <div
+          ref={bodyScrollRef}
+          onScroll={handleBodyScroll}
+          className="overflow-x-auto"
+          style={{ minWidth: totalMinWidth }}
+        >
+          <div style={{ minWidth: totalMinWidth, paddingLeft: weekPaddingLeft, paddingRight: weekPaddingRight }}>
+            {visibleProjects.map((project) => (
+              <ProjectSection key={project.id} project={project} />
+            ))}
+          </div>
+        </div>
       </div>
     </Layout>
   );
@@ -2369,49 +1334,294 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
 export default ProjectAssignmentsGrid;
 
-const MobileSheet: React.FC<{ open: boolean; title: string; onClose: () => void; children: React.ReactNode }> = ({ open, title, onClose, children }) => {
-  const dialogRef = React.useRef<HTMLDivElement | null>(null);
-  const [supportsSVH, setSupportsSVH] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined' || typeof window.CSS === 'undefined') return false;
-    return window.CSS.supports('height: 100svh');
-  });
-  useEffect(() => {
-    if (supportsSVH || typeof window === 'undefined' || typeof window.CSS === 'undefined') return;
-    setSupportsSVH(window.CSS.supports('height: 100svh'));
-  }, [supportsSVH]);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    setTimeout(() => dialogRef.current?.focus(), 0);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-  if (!open) return null;
-  const overlayStyle: React.CSSProperties = supportsSVH ? { minHeight: '100svh' } : undefined;
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      className="fixed inset-0 z-[1000] bg-black/60 flex items-end justify-center"
-      style={overlayStyle}
-    >
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        className="w-full max-w-md rounded-t-2xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] shadow-2xl max-h-[85vh] overflow-auto px-4"
-        style={{
-          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
-        }}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-          <div className="font-semibold">{title}</div>
-          <button type="button" onClick={onClose} aria-label="Close sheet" className="text-lg leading-none text-[var(--muted)]">×</button>
-        </div>
-        <div className="p-4">{children}</div>
+function usePersonAssignmentAdd({
+  searchPeople,
+  searchRoles,
+  onAddPerson,
+  onAddRole,
+}: {
+  searchPeople: (query: string) => Promise<Array<{ id: number; name: string; department?: number | null }>>;
+  searchRoles: (query: string) => Promise<Array<ProjectRole & { departmentName?: string }>>;
+  onAddPerson: (projectId: number, person: { id: number; name: string; department?: number | null }) => Promise<void> | void;
+  onAddRole: (projectId: number, role: ProjectRole & { departmentName?: string }) => Promise<void> | void;
+}) {
+  const [isAddingFor, setIsAddingFor] = useState<number | null>(null);
+  const [newPersonName, setNewPersonName] = useState('');
+  const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string; department?: number | null } | null>(null);
+  const [selectedRole, setSelectedRole] = useState<(ProjectRole & { departmentName?: string }) | null>(null);
+  const [personResults, setPersonResults] = useState<Array<{ id: number; name: string; department?: number | null }>>([]);
+  const [roleResults, setRoleResults] = useState<Array<ProjectRole & { departmentName?: string }>>([]);
+  const [showPersonDropdown, setShowPersonDropdown] = useState(false);
+  const [selectedDropdownIndex, setSelectedDropdownIndex] = useState(-1);
+  const latestQueryRef = useRef('');
+
+  const open = useCallback((projectId: number) => {
+    setIsAddingFor(projectId);
+    setNewPersonName('');
+    setSelectedPerson(null);
+    setSelectedRole(null);
+    setPersonResults([]);
+    setRoleResults([]);
+    setShowPersonDropdown(false);
+    setSelectedDropdownIndex(-1);
+  }, []);
+
+  const reset = useCallback(() => {
+    setIsAddingFor(null);
+    setNewPersonName('');
+    setSelectedPerson(null);
+    setSelectedRole(null);
+    setPersonResults([]);
+    setRoleResults([]);
+    setShowPersonDropdown(false);
+    setSelectedDropdownIndex(-1);
+  }, []);
+
+  const cancel = useCallback(() => reset(), [reset]);
+
+  const onSearchChange = useCallback(async (value: string) => {
+    setNewPersonName(value);
+    latestQueryRef.current = value;
+    if (!value.trim()) {
+      setPersonResults([]);
+      setRoleResults([]);
+      setShowPersonDropdown(false);
+      setSelectedPerson(null);
+      setSelectedRole(null);
+      return;
+    }
+    const [peopleResults, rolesResults] = await Promise.all([
+      searchPeople(value),
+      searchRoles(value),
+    ]);
+    if (latestQueryRef.current !== value) return;
+    setPersonResults(peopleResults || []);
+    setRoleResults(rolesResults || []);
+    setShowPersonDropdown((peopleResults || []).length > 0 || (rolesResults || []).length > 0);
+    setSelectedPerson(null);
+    setSelectedRole(null);
+    setSelectedDropdownIndex(-1);
+  }, [searchPeople, searchRoles]);
+
+  const onPersonSelect = useCallback((person: { id: number; name: string; department?: number | null }) => {
+    setSelectedPerson(person);
+    setSelectedRole(null);
+    setNewPersonName(person.name);
+    setShowPersonDropdown(false);
+    setPersonResults([]);
+    setRoleResults([]);
+    setSelectedDropdownIndex(-1);
+  }, []);
+
+  const onRoleSelect = useCallback((role: ProjectRole & { departmentName?: string }) => {
+    setSelectedRole(role);
+    setSelectedPerson(null);
+    setNewPersonName(role.name);
+    setShowPersonDropdown(false);
+    setPersonResults([]);
+    setRoleResults([]);
+    setSelectedDropdownIndex(-1);
+  }, []);
+
+  const addSelected = useCallback(async (projectId: number) => {
+    if (selectedPerson) {
+      await onAddPerson(projectId, selectedPerson);
+      reset();
+      return;
+    }
+    if (selectedRole) {
+      await onAddRole(projectId, selectedRole);
+      reset();
+    }
+  }, [onAddPerson, onAddRole, reset, selectedPerson, selectedRole]);
+
+  const addPerson = useCallback(async (projectId: number, person: { id: number; name: string; department?: number | null }) => {
+    await onAddPerson(projectId, person);
+    reset();
+  }, [onAddPerson, reset]);
+
+  const addRole = useCallback(async (projectId: number, role: ProjectRole & { departmentName?: string }) => {
+    await onAddRole(projectId, role);
+    reset();
+  }, [onAddRole, reset]);
+
+  return {
+    isAddingFor,
+    newPersonName,
+    selectedPerson,
+    selectedRole,
+    personResults,
+    roleResults,
+    showPersonDropdown,
+    selectedDropdownIndex,
+    setSelectedDropdownIndex,
+    setShowPersonDropdown,
+    open,
+    reset,
+    cancel,
+    onSearchChange,
+    onPersonSelect,
+    onRoleSelect,
+    addSelected,
+    addPerson,
+    addRole,
+  } as const;
+}
+
+function AddPersonRow({
+  weeks,
+  gridTemplate,
+  newPersonName,
+  onSearchChange,
+  personResults,
+  roleResults,
+  selectedDropdownIndex,
+  setSelectedDropdownIndex,
+  showPersonDropdown,
+  setShowPersonDropdown,
+  selectedPerson,
+  selectedRole,
+  onPersonSelect,
+  onRoleSelect,
+  onAddPerson,
+  onAddRole,
+  onAddSelected,
+  onCancel,
+}: {
+  weeks: { date: string; display: string; fullDisplay: string }[];
+  gridTemplate: string;
+  newPersonName: string;
+  onSearchChange: (value: string) => void;
+  personResults: Array<{ id: number; name: string; department?: number | null }>;
+  roleResults: Array<ProjectRole & { departmentName?: string }>;
+  selectedDropdownIndex: number;
+  setSelectedDropdownIndex: React.Dispatch<React.SetStateAction<number>>;
+  showPersonDropdown: boolean;
+  setShowPersonDropdown: React.Dispatch<React.SetStateAction<boolean>>;
+  selectedPerson: { id: number; name: string; department?: number | null } | null;
+  selectedRole: (ProjectRole & { departmentName?: string }) | null;
+  onPersonSelect: (person: { id: number; name: string; department?: number | null }) => void;
+  onRoleSelect: (role: ProjectRole & { departmentName?: string }) => void;
+  onAddPerson: (person: { id: number; name: string; department?: number | null }) => void;
+  onAddRole: (role: ProjectRole & { departmentName?: string }) => void;
+  onAddSelected: () => void;
+  onCancel: () => void;
+}) {
+  const combinedCount = personResults.length + roleResults.length;
+  const hasResults = combinedCount > 0;
+  return (
+    <div className="grid gap-px p-1 bg-[var(--card)] border border-[var(--border)]" style={{ gridTemplateColumns: gridTemplate }}>
+      <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2 relative">
+        <input
+          type="text"
+          value={newPersonName}
+          onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (selectedDropdownIndex >= 0 && selectedDropdownIndex < combinedCount) {
+                if (selectedDropdownIndex < personResults.length) {
+                  const person = personResults[selectedDropdownIndex];
+                  onPersonSelect(person);
+                  onAddPerson(person);
+                } else {
+                  const roleIndex = selectedDropdownIndex - personResults.length;
+                  const role = roleResults[roleIndex];
+                  if (role) {
+                    onRoleSelect(role);
+                    onAddRole(role);
+                  }
+                }
+              } else if (selectedPerson || selectedRole) {
+                onAddSelected();
+              }
+            } else if (e.key === 'Escape') {
+              onCancel();
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              if (hasResults) {
+                setShowPersonDropdown(true);
+                setSelectedDropdownIndex((prev) => (prev < combinedCount - 1 ? prev + 1 : prev));
+              }
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              if (showPersonDropdown && hasResults) {
+                setSelectedDropdownIndex((prev) => (prev > -1 ? prev - 1 : -1));
+              }
+            }
+          }}
+          placeholder="Search people or roles..."
+          className="w-full px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
+          autoFocus
+        />
+        {showPersonDropdown && hasResults && (
+          <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg z-50 max-h-48 overflow-y-auto">
+            {personResults.length > 0 && (
+              <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                People
+              </div>
+            )}
+            {personResults.map((person, index) => (
+              <button
+                key={person.id}
+                onClick={() => onPersonSelect(person)}
+                className={`w-full text-left px-2 py-1 text-xs transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
+                  selectedDropdownIndex === index ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : 'hover:bg-[var(--surface)]'
+                }`}
+              >
+                <div className="font-medium">{person.name}</div>
+              </button>
+            ))}
+            {roleResults.length > 0 && (
+              <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                Roles
+              </div>
+            )}
+            {roleResults.map((role, index) => {
+              const combinedIndex = personResults.length + index;
+              return (
+                <button
+                  key={role.id}
+                  onClick={() => onRoleSelect(role)}
+                  className={`w-full text-left px-2 py-1 text-xs transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
+                    selectedDropdownIndex === combinedIndex ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : 'hover:bg-[var(--surface)]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{role.name}</span>
+                    {role.departmentName ? (
+                      <span className="text-[10px] text-[var(--muted)]">{role.departmentName}</span>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
-    </div>,
-    document.body
+      <div className="flex items-center justify-center gap-1">
+        <button
+          className="w-5 h-5 rounded bg-green-600 hover:bg-green-500 text-white text-xs font-medium transition-colors flex items-center justify-center"
+          title="Save assignment"
+          onClick={onAddSelected}
+          disabled={!selectedPerson && !selectedRole}
+        >
+          ✓
+        </button>
+        <button
+          className="w-5 h-5 rounded bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] text-xs font-medium transition-colors flex items-center justify-center"
+          title="Cancel"
+          onClick={onCancel}
+        >
+          ✕
+        </button>
+      </div>
+      <div></div>
+      {weeks.map((week) => (
+        <div key={week.date} className="flex items-center justify-center">
+          <div className="w-12 h-6" />
+        </div>
+      ))}
+    </div>
   );
-};
+}

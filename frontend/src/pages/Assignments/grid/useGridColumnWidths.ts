@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export function useGridColumnWidthsAssign() {
-  const defaultClientWidth = Math.round(210 * 0.6);
+  const defaultClientWidth = 220;
   const [clientColumnWidth, setClientColumnWidth] = useState(defaultClientWidth);
   const [projectColumnWidth, setProjectColumnWidth] = useState(300);
   const [isResizing, setIsResizing] = useState<'client' | 'project' | null>(null);
@@ -23,11 +23,11 @@ export function useGridColumnWidthsAssign() {
 
   useEffect(() => {
     try {
-      const fix = localStorage.getItem('assignGrid:widthsFix_v2025_10');
+      const fix = localStorage.getItem('assignGrid:widthsFix_v2026_01');
       if (!fix) {
         setClientColumnWidth(w => (w < defaultClientWidth ? defaultClientWidth : w));
         setProjectColumnWidth(w => (w < 260 ? 300 : w));
-        localStorage.setItem('assignGrid:widthsFix_v2025_10', '1');
+        localStorage.setItem('assignGrid:widthsFix_v2026_01', '1');
       }
     } catch {}
   }, []);

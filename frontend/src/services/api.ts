@@ -1011,8 +1011,13 @@ export const assignmentsApi = {
   },
 
   // Update assignment
-  update: async (id: number, data: Partial<Assignment>) => {
-    const res = await apiClient.PATCH('/assignments/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+  update: async (id: number, data: Partial<Assignment>, opts?: { skipIfMatch?: boolean }) => {
+    const res = await apiClient.PATCH('/assignments/{id}/' as any, {
+      params: { path: { id } },
+      body: data as any,
+      headers: authHeaders(),
+      skipIfMatch: opts?.skipIfMatch,
+    });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);

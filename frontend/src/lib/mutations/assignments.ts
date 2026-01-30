@@ -26,8 +26,9 @@ export async function updateAssignment(
   id: number,
   data: Partial<Assignment>,
   api: typeof assignmentsApi = assignmentsApi,
+  opts?: { skipIfMatch?: boolean },
 ) {
-  const updated = await api.update(id, data as any);
+  const updated = await (api.update as any)(id, data as any, opts);
   const fields = Object.keys(data || {});
   const merged = { ...(updated || {}), ...(data || {}) } as Assignment;
   const event: AssignmentEvent = {

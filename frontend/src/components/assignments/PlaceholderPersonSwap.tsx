@@ -19,11 +19,16 @@ const PlaceholderPersonSwap: React.FC<Props> = ({ label, deptId, onSelect, class
   const [query, setQuery] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const boxRef = React.useRef<HTMLDivElement | null>(null);
-  const canOpen = !disabled && !!deptId;
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const canOpen = !disabled;
   const { people, loading } = usePeopleAutocomplete(query, deptId ? { department: deptId } : undefined);
 
   React.useEffect(() => {
     if (!open) return;
+    const focusTimer = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
     const onDocClick = (e: MouseEvent) => {
       const target = e.target as Node | null;
       if (boxRef.current && target && !boxRef.current.contains(target)) {
@@ -32,7 +37,10 @@ const PlaceholderPersonSwap: React.FC<Props> = ({ label, deptId, onSelect, class
       }
     };
     document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
+    return () => {
+      cancelAnimationFrame(focusTimer);
+      document.removeEventListener('mousedown', onDocClick);
+    };
   }, [open]);
 
   const handleSelect = async (person: PersonOption) => {
@@ -57,7 +65,7 @@ const PlaceholderPersonSwap: React.FC<Props> = ({ label, deptId, onSelect, class
           if (!canOpen) return;
           setOpen((v) => !v);
         }}
-        title={canOpen ? 'Replace placeholder with a person' : 'No department set'}
+        title={canOpen ? 'Replace placeholder with a person' : 'Replace placeholder with a person'}
       >
         {label}
       </button>
@@ -69,7 +77,7 @@ const PlaceholderPersonSwap: React.FC<Props> = ({ label, deptId, onSelect, class
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search people..."
             className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-            autoFocus
+            ref={inputRef}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
