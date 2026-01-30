@@ -15,7 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePeopleAutocomplete } from '@/hooks/usePeople';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
-import { listProjectRoles } from '@/roles/api';
+import { listProjectRoles, type ProjectRole } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
 import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
@@ -103,7 +103,7 @@ const ProjectDashboard: React.FC = () => {
     historicalDepartmentIds.forEach((deptId) => ids.add(deptId));
     return Array.from(ids).sort((a, b) => a - b);
   }, [assignments, historicalDepartmentIds]);
-  const rolesByDeptQuery = useQuery({
+  const rolesByDeptQuery = useQuery<Record<number, ProjectRole[]>, Error>({
     queryKey: ['project-dashboard', 'project-roles', departmentIds.join(',')],
     queryFn: async () => {
       const entries = await Promise.all(
@@ -116,7 +116,7 @@ const ProjectDashboard: React.FC = () => {
           }
         })
       );
-      return Object.fromEntries(entries);
+      return Object.fromEntries(entries) as Record<number, ProjectRole[]>;
     },
     enabled: hasValidId && departmentIds.length > 0,
     staleTime: 5 * 60_000,
