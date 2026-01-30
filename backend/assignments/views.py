@@ -12,7 +12,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
-from django.db.models import Sum, Max, Prefetch, Value, Count, Q  # noqa: F401
+from django.db.models import Sum, Max, Min, Prefetch, Value, Count, Q  # noqa: F401
 from core.deliverable_phase import build_project_week_classification
 from core.choices import MembershipEventType
 from django.db.models.functions import Coalesce, Lower
@@ -38,7 +38,7 @@ from datetime import date, timedelta
 import hashlib
 import os
 import time
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Optional
 import logging
 from roles.models import Role
 try:
@@ -1294,6 +1294,10 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'people': serializers.ListField(child=inline_serializer(name='PSTPerson', fields={
                     'personId': serializers.IntegerField(),
                     'personName': serializers.CharField(),
+                    'departmentId': serializers.IntegerField(required=False, allow_null=True),
+                    'firstWeek': serializers.CharField(required=False, allow_null=True),
+                    'lastWeek': serializers.CharField(required=False, allow_null=True),
+                    'totalWeeks': serializers.IntegerField(required=False, allow_null=True),
                     'roles': serializers.ListField(child=inline_serializer(name='PSTPersonRole', fields={
                         'roleId': serializers.IntegerField(allow_null=True),
                         'weeks': serializers.IntegerField(),
@@ -1334,6 +1338,29 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if s1:
             qs = qs.filter(week_start__lte=s1)
 
+        # Latest department per person based on most recent week in the window.
+        dept_map: dict[int, Optional[int]] = {}
+        for row in qs.order_by('-week_start').values('person_id', 'department_id'):
+            pid = row['person_id']
+            if pid is None or pid in dept_map:
+                continue
+            dept_map[int(pid)] = row['department_id']
+
+        person_bounds: dict[int, dict] = {}
+        for row in qs.values('person_id').annotate(
+            first_week=Min('week_start'),
+            last_week=Max('week_start'),
+            weeks=Count('week_start', distinct=True),
+        ):
+            pid = row['person_id']
+            if pid is None:
+                continue
+            person_bounds[int(pid)] = {
+                'firstWeek': row['first_week'].isoformat() if row['first_week'] else None,
+                'lastWeek': row['last_week'].isoformat() if row['last_week'] else None,
+                'totalWeeks': int(row['weeks'] or 0) if row.get('weeks') is not None else None,
+            }
+
         # Validators
         try:
             aggr = qs.aggregate(last_modified=Max('updated_at'))
@@ -1356,7 +1383,16 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             pid = row['person_id']
             if pid is None:
                 continue
-            rec = people.setdefault(pid, {'personId': pid, 'personName': row['person_name'] or '', 'roles': []})
+            bounds = person_bounds.get(int(pid), {})
+            rec = people.setdefault(pid, {
+                'personId': pid,
+                'personName': row['person_name'] or '',
+                'departmentId': dept_map.get(int(pid)),
+                'firstWeek': bounds.get('firstWeek'),
+                'lastWeek': bounds.get('lastWeek'),
+                'totalWeeks': bounds.get('totalWeeks'),
+                'roles': [],
+            })
             rid = row['role_on_project_id']
             rec['roles'].append({'roleId': rid, 'weeks': int(row['weeks'] or 0), 'hours': round(float(row['hours'] or 0.0), 2)})
             ra = role_aggr.setdefault(rid, {'roleId': rid, 'peopleCount': 0, 'weeks': 0, 'hours': 0.0})

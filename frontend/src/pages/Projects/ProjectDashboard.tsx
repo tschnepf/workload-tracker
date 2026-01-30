@@ -5,6 +5,7 @@ import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import { useProject } from '@/hooks/useProjects';
 import { assignmentsApi, departmentsApi, projectRisksApi, projectsApi, deliverableTasksApi, deliverableQaTasksApi, peopleApi } from '@/services/api';
+import { fetchProjectStaffingTimeline } from '@/services/experienceApi';
 import { createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import { formatUtcToLocal } from '@/utils/dates';
 import StatusBadge from '@/components/projects/StatusBadge';
@@ -19,7 +20,10 @@ import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
 import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
-import type { Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
+import TooltipPortal from '@/components/ui/TooltipPortal';
+import type { Assignment, Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
+
+type AssignmentListItem = Assignment & { isHistorical?: boolean };
 
 const ProjectDashboard: React.FC = () => {
   const params = useParams<{ id?: string }>();
@@ -47,6 +51,12 @@ const ProjectDashboard: React.FC = () => {
     enabled: hasValidId,
     staleTime: 30_000,
   });
+  const staffingTimelineQuery = useQuery({
+    queryKey: ['project-dashboard', 'staffing-timeline', projectId],
+    queryFn: () => fetchProjectStaffingTimeline({ projectId }),
+    enabled: hasValidId,
+    staleTime: 5 * 60_000,
+  });
   const deliverableTasksQuery = useQuery({
     queryKey: ['project-dashboard', 'deliverable-tasks', projectId],
     queryFn: () => projectsApi.deliverableTasks(projectId),
@@ -60,6 +70,7 @@ const ProjectDashboard: React.FC = () => {
     staleTime: 30_000,
   });
   const assignments = assignmentsQuery.data?.results ?? [];
+  const staffingTimeline = staffingTimelineQuery.data;
   const deliverableTasks = deliverableTasksQuery.data ?? [];
   const qaTasks = qaTasksQuery.data ?? [];
   const assignmentsTotal = assignmentsQuery.data?.count ?? assignments.length;
@@ -76,14 +87,22 @@ const ProjectDashboard: React.FC = () => {
     enabled: hasValidId,
     staleTime: 30_000,
   });
+  const historicalDepartmentIds = useMemo(() => {
+    const ids = new Set<number>();
+    staffingTimeline?.people?.forEach((person) => {
+      if (person.departmentId != null) ids.add(person.departmentId);
+    });
+    return Array.from(ids).sort((a, b) => a - b);
+  }, [staffingTimeline?.people]);
   const departmentIds = useMemo(() => {
     const ids = new Set<number>();
     assignments.forEach((assignment) => {
       const deptId = assignment.personDepartmentId;
       if (typeof deptId === 'number' && deptId > 0) ids.add(deptId);
     });
+    historicalDepartmentIds.forEach((deptId) => ids.add(deptId));
     return Array.from(ids).sort((a, b) => a - b);
-  }, [assignments]);
+  }, [assignments, historicalDepartmentIds]);
   const rolesByDeptQuery = useQuery({
     queryKey: ['project-dashboard', 'project-roles', departmentIds.join(',')],
     queryFn: async () => {
@@ -275,20 +294,114 @@ const ProjectDashboard: React.FC = () => {
     return map;
   }, [departmentsQuery.data]);
   const assignmentGroups = useMemo(() => {
-    const groups = new Map<string, typeof assignments>();
+    const roleNameById = new Map<number, string>();
+    Object.values(rolesByDeptQuery.data ?? {}).forEach((roles) => {
+      roles.forEach((role) => {
+        roleNameById.set(role.id, role.name);
+      });
+    });
+
+    const activePersonIds = new Set<number>();
+    assignments.forEach((assignment) => {
+      if (assignment.person != null) activePersonIds.add(assignment.person);
+    });
+
+    const historicalAssignments: AssignmentListItem[] = [];
+    staffingTimeline?.people?.forEach((person) => {
+      if (person.personId == null || activePersonIds.has(person.personId)) return;
+      const topRole = [...(person.roles || [])].sort((a, b) => (b.hours || 0) - (a.hours || 0))[0];
+      const roleId = topRole?.roleId ?? null;
+      const roleName = roleId != null ? roleNameById.get(roleId) ?? null : null;
+      historicalAssignments.push({
+        person: person.personId,
+        personName: person.personName || '',
+        personDepartmentId: person.departmentId ?? null,
+        roleOnProjectId: roleId ?? null,
+        roleName,
+        weeklyHours: {},
+        isHistorical: true,
+      });
+    });
+
+    const groups = new Map<string, { active: AssignmentListItem[]; historical: AssignmentListItem[] }>();
     assignments.forEach((assignment) => {
       const deptId = assignment.personDepartmentId ?? null;
       const deptName = deptId != null ? (departmentNameById.get(deptId) || `Dept #${deptId}`) : 'Unassigned';
-      if (!groups.has(deptName)) groups.set(deptName, []);
-      groups.get(deptName)!.push(assignment);
+      if (!groups.has(deptName)) groups.set(deptName, { active: [], historical: [] });
+      groups.get(deptName)!.active.push(assignment);
+    });
+    historicalAssignments.forEach((assignment) => {
+      const deptId = assignment.personDepartmentId ?? null;
+      const deptName = deptId != null ? (departmentNameById.get(deptId) || `Dept #${deptId}`) : 'Unassigned';
+      if (!groups.has(deptName)) groups.set(deptName, { active: [], historical: [] });
+      groups.get(deptName)!.historical.push(assignment);
     });
     const rolesByDept = rolesByDeptQuery.data ?? {};
-    const entries = Array.from(groups.entries()).map(([name, items]) => {
-      const sorted = sortAssignmentsByProjectRole(items, rolesByDept);
-      return { name, items: sorted };
+    const entries = Array.from(groups.entries()).map(([name, group]) => {
+      const sortedActive = sortAssignmentsByProjectRole(group.active, rolesByDept);
+      const sortedHistorical = [...group.historical].sort((a, b) => {
+        const an = (a.personName || '').toLowerCase();
+        const bn = (b.personName || '').toLowerCase();
+        if (an < bn) return -1;
+        if (an > bn) return 1;
+        return (a.person || 0) - (b.person || 0);
+      });
+      return { name, items: [...sortedActive, ...sortedHistorical] };
     });
     return entries.sort((a, b) => a.name.localeCompare(b.name));
-  }, [assignments, departmentNameById, rolesByDeptQuery.data]);
+  }, [assignments, departmentNameById, rolesByDeptQuery.data, staffingTimeline?.people]);
+
+  const historicalTooltipByPersonId = useMemo(() => {
+    const map = new Map<number, { title: string; description: string }>();
+    staffingTimeline?.people?.forEach((person) => {
+      const events = [...(person.events || [])].sort((a, b) => a.week_start.localeCompare(b.week_start));
+      let currentStart: string | null = null;
+      const ranges: Array<{ start: string; end: string; weeks: number }> = [];
+      let lastLeft: string | null = null;
+      const weekMs = 7 * 24 * 60 * 60 * 1000;
+      const calcWeeks = (start: string, end: string) => {
+        const s = Date.parse(`${start}T00:00:00Z`);
+        const e = Date.parse(`${end}T00:00:00Z`);
+        if (!Number.isFinite(s) || !Number.isFinite(e)) return 0;
+        const diff = Math.round((e - s) / weekMs);
+        return Math.max(1, diff + 1);
+      };
+      events.forEach((event) => {
+        if (event.event_type === 'joined') {
+          currentStart = event.week_start;
+          return;
+        }
+        if (event.event_type === 'left') {
+          const start = currentStart ?? event.week_start;
+          ranges.push({ start, end: event.week_start, weeks: calcWeeks(start, event.week_start) });
+          currentStart = null;
+          lastLeft = event.week_start;
+        }
+      });
+      if (!ranges.length && person.firstWeek && person.lastWeek) {
+        const weeks = person.totalWeeks ?? calcWeeks(person.firstWeek, person.lastWeek);
+        ranges.push({ start: person.firstWeek, end: person.lastWeek, weeks });
+      }
+      const removedAt = lastLeft ?? person.lastWeek ?? null;
+      const totalWeeks = person.totalWeeks ?? (person.roles || []).reduce((sum, role) => sum + (role.weeks || 0), 0);
+      const formatWeek = (week?: string | null) => (week ? (formatUtcToLocal(week, { dateStyle: 'medium' }) || week) : 'Unknown');
+      const lines: string[] = [];
+      if (ranges.length) {
+        ranges.forEach((range) => {
+          const weeksLabel = range.weeks ? ` (${range.weeks} week${range.weeks === 1 ? '' : 's'})` : '';
+          lines.push(`Assigned: ${formatWeek(range.start)} → ${formatWeek(range.end)}${weeksLabel}`);
+        });
+      } else if (totalWeeks) {
+        lines.push(`Assigned: ${totalWeeks} week${totalWeeks === 1 ? '' : 's'}`);
+      }
+      if (removedAt) {
+        lines.push(`Removed: ${formatWeek(removedAt)}`);
+      }
+      if (!lines.length) return;
+      map.set(person.personId, { title: 'Historical assignment', description: lines.join('\n') });
+    });
+    return map;
+  }, [staffingTimeline?.people]);
 
   const projectMembers = useMemo(() => {
     const map = new Map<number, string>();
@@ -1216,7 +1329,7 @@ const ProjectDashboard: React.FC = () => {
                 <div className="text-xs text-[var(--muted)]">Loading assignments...</div>
               ) : assignmentsQuery.isError ? (
                 <div className="text-xs text-red-300">Failed to load assignments.</div>
-              ) : assignments.length === 0 ? (
+              ) : assignmentGroups.length === 0 ? (
                 <div className="text-xs text-[var(--muted)]">No assignments yet.</div>
               ) : (
                 <div className="space-y-2">
@@ -1229,15 +1342,19 @@ const ProjectDashboard: React.FC = () => {
                       <div className="px-2 pb-1.5">
                         <ul className="space-y-1">
                           {group.items.map((assignment) => {
+                            const isHistorical = (assignment as AssignmentListItem).isHistorical;
+                            const rowKey = assignment.id ?? `hist-${assignment.person ?? 'none'}-${assignment.roleOnProjectId ?? 'none'}`;
                             const personId = Number.isFinite(assignment.person) ? assignment.person : null;
                             const roleLabel = assignment.roleName || null;
                             const personLabel = assignment.personName
                               || (personId != null ? `Person #${personId}` : (roleLabel ? `<${roleLabel}>` : 'Unassigned'));
-                            const canSwapPlaceholder = personId == null && !!roleLabel;
+                            const canSwapPlaceholder = !isHistorical && personId == null && !!roleLabel;
+                            const showTooltip = (isHistorical || assignment.isActive === false) && personId != null;
+                            const tooltip = showTooltip ? historicalTooltipByPersonId.get(personId as number) : null;
                             return (
-                              <li key={assignment.id} className="py-1.5 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3 items-center pl-3">
+                              <li key={rowKey} className="py-1.5 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3 items-center pl-3">
                                 <div className="min-w-0">
-                                  <div className="text-xs text-[var(--text)] truncate">
+                                  <div className={`text-xs truncate ${isHistorical ? 'text-[var(--muted)] italic' : 'text-[var(--text)]'}`}>
                                     {canSwapPlaceholder ? (
                                       <PlaceholderPersonSwap
                                         label={personLabel}
@@ -1246,16 +1363,22 @@ const ProjectDashboard: React.FC = () => {
                                         onSelect={(person) => handleSwapPlaceholder(assignment.id!, person)}
                                       />
                                     ) : (
-                                      personLabel
+                                      tooltip ? (
+                                        <TooltipPortal title={tooltip.title} description={tooltip.description} placement="right">
+                                          <span className="inline-flex cursor-help">{personLabel}</span>
+                                        </TooltipPortal>
+                                      ) : (
+                                        personLabel
+                                      )
                                     )}
                                   </div>
-                                  {assignment.isActive === false ? (
+                                  {!isHistorical && assignment.isActive === false ? (
                                     <div className="text-[11px] text-[var(--muted)]">Inactive</div>
                                   ) : null}
                                 </div>
                                 <div className="flex items-center justify-between gap-2 min-w-0">
-                                  <div className="text-[11px] text-[var(--muted)] truncate">{roleLabel || 'Role not set'}</div>
-                                  {assignment.id && (
+                                  <div className={`text-[11px] truncate ${isHistorical ? 'text-[var(--muted)] italic' : 'text-[var(--muted)]'}`}>{roleLabel || 'Role not set'}</div>
+                                  {assignment.id && !isHistorical && (
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteAssignment(assignment.id!)}

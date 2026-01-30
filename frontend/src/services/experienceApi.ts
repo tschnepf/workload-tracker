@@ -91,7 +91,7 @@ export async function fetchPersonProjectTimeline(params: { personId: number; pro
 }
 
 export type ProjectStaffingTimeline = {
-  people: Array<{ personId: number; personName: string; roles: Array<{ roleId: number | null; weeks: number; hours: number }>; events: Array<{ week_start: string; event_type: 'joined' | 'left' }> }>;
+  people: Array<{ personId: number; personName: string; departmentId?: number | null; firstWeek?: string | null; lastWeek?: string | null; totalWeeks?: number | null; roles: Array<{ roleId: number | null; weeks: number; hours: number }>; events: Array<{ week_start: string; event_type: 'joined' | 'left' }> }>;
   roleAggregates: Array<{ roleId: number | null; peopleCount: number; weeks: number; hours: number }>;
 };
 
