@@ -365,8 +365,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
-        def _compute_from_assignments():
-            qs = Assignment.objects.filter(is_active=True).select_related('project', 'person')
+        def _assignment_scope_queryset(project_ids: set[int] | None = None):
+            qs = Assignment.objects.filter(is_active=True).exclude(project_id__isnull=True)
             if include_placeholders:
                 qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
             else:
@@ -378,6 +378,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     qs = qs.filter(person__department_id__in=dept_ids)
             if scope_set:
                 qs = qs.filter(project_id__in=scope_set)
+            if project_ids:
+                qs = qs.filter(project_id__in=project_ids)
+            return qs
+
+        def _compute_from_assignments(project_ids: set[int] | None = None):
+            qs = _assignment_scope_queryset(project_ids).select_related('project', 'person')
 
             project_hours_local: dict[int, dict[str, float]] = {}
             people_counts: dict[int, int] = {}
@@ -443,16 +449,59 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         counts_rows = counts_qs.values('project_id').annotate(
             people_count=Sum('people_count'),
             placeholder_count=Sum('placeholder_count'),
+            last_updated=Max('updated_at'),
         )
+        rollup_last_by_project = {}
         for row in counts_rows:
             pid = row['project_id']
             if pid is None:
                 continue
             people_per_project[pid] = int(row.get('people_count') or 0)
+            if row.get('last_updated'):
+                rollup_last_by_project[pid] = row['last_updated']
             if include_placeholders:
                 placeholders = int(row.get('placeholder_count') or 0)
                 if placeholders:
                     placeholders_per_project[pid] = placeholders
+
+        assignment_last_by_project = {}
+        expected_projects: set[int] = set(scope_set or [])
+        try:
+            for row in _assignment_scope_queryset().values('project_id').annotate(last=Max('updated_at')):
+                pid = row.get('project_id')
+                if pid is None:
+                    continue
+                assignment_last_by_project[pid] = row.get('last')
+            if not scope_set:
+                expected_projects = set(assignment_last_by_project.keys())
+        except Exception:  # nosec B110
+            assignment_last_by_project = {}
+
+        missing_or_stale: set[int] = set()
+        if expected_projects and assignment_last_by_project:
+            for pid in expected_projects:
+                last_assignment = assignment_last_by_project.get(pid)
+                if not last_assignment:
+                    continue
+                last_rollup = rollup_last_by_project.get(pid)
+                if not last_rollup or last_rollup < last_assignment:
+                    missing_or_stale.add(pid)
+
+        if missing_or_stale:
+            hours_missing, people_missing, placeholders_missing = _compute_from_assignments(missing_or_stale)
+            for pid, hours in hours_missing.items():
+                project_hours[pid] = hours
+            for pid, count in people_missing.items():
+                people_per_project[pid] = count
+            if include_placeholders:
+                for pid, count in placeholders_missing.items():
+                    if count:
+                        placeholders_per_project[pid] = count
+            try:
+                from assignments.rollup_service import queue_project_rollup_refresh
+                queue_project_rollup_refresh(missing_or_stale)
+            except Exception:  # nosec B110
+                pass
 
         project_ids = list(set(project_hours.keys()) | set(people_per_project.keys()) | set(placeholders_per_project.keys()))
         if not project_ids and scope_set:
@@ -1409,12 +1458,62 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
 
+        project_id_set = set(project_ids)
+
+        def _assignment_scope_queryset(project_ids_scope: set[int] | None = None):
+            ids = project_ids_scope or project_id_set
+            qs = Assignment.objects.filter(is_active=True, project_id__in=ids)
+            if include_placeholders:
+                qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
+            else:
+                qs = qs.filter(person__is_active=True)
+            if dept_ids:
+                if include_placeholders:
+                    qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
+                else:
+                    qs = qs.filter(person__department_id__in=dept_ids)
+            return qs
+
+        def _compute_hours_from_assignments(project_ids_scope: set[int]):
+            qs = _assignment_scope_queryset(project_ids_scope).select_related('person', 'project')
+            project_hours_local: dict[int, dict[str, float]] = {}
+
+            def hours_for_week_from_json(weekly_hours, sunday_key):
+                try:
+                    v = weekly_hours.get(sunday_key)
+                    return float(v or 0)
+                except Exception:
+                    return 0.0
+
+            for a in qs:
+                pid = a.project_id
+                if pid is None:
+                    continue
+                project_hours_local.setdefault(pid, {})
+                wh = a.weekly_hours or {}
+                for wk in week_keys:
+                    h = hours_for_week_from_json(wh, wk)
+                    if h:
+                        project_hours_local[pid][wk] = round(project_hours_local[pid].get(wk, 0.0) + h, 2)
+            return project_hours_local
+
         project_hours: dict[int, dict[str, float]] = {}
 
         counts_qs = ProjectAssignmentCountsRollup.objects.filter(project_id__in=project_ids)
         if dept_ids:
             counts_qs = counts_qs.filter(department_id__in=dept_ids)
-        count_project_ids = list(counts_qs.values_list('project_id', flat=True).distinct())
+        counts_rows = counts_qs.values('project_id').annotate(
+            last_updated=Max('updated_at'),
+        )
+        rollup_last_by_project = {}
+        count_project_ids = []
+        for row in counts_rows:
+            pid = row.get('project_id')
+            if pid is None:
+                continue
+            count_project_ids.append(pid)
+            if row.get('last_updated'):
+                rollup_last_by_project[pid] = row.get('last_updated')
         for pid in count_project_ids:
             project_hours.setdefault(pid, {})
 
@@ -1436,36 +1535,39 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             if total:
                 project_hours[pid][row['week_start'].isoformat()] = round(total, 2)
 
-        if not project_hours:
-            # Fallback to live aggregation if rollups are missing
-            qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).select_related('person', 'project')
-            if include_placeholders:
-                qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
-            else:
-                qs = qs.filter(person__is_active=True)
-            if dept_ids:
-                if include_placeholders:
-                    qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
-                else:
-                    qs = qs.filter(person__department_id__in=dept_ids)
-
-            def hours_for_week_from_json(weekly_hours, sunday_key):
-                try:
-                    v = weekly_hours.get(sunday_key)
-                    return float(v or 0)
-                except Exception:
-                    return 0.0
-
-            for a in qs:
-                pid = a.project_id
+        assignment_last_by_project = {}
+        try:
+            for row in _assignment_scope_queryset().values('project_id').annotate(last=Max('updated_at')):
+                pid = row.get('project_id')
                 if pid is None:
                     continue
-                project_hours.setdefault(pid, {})
-                wh = a.weekly_hours or {}
-                for wk in week_keys:
-                    h = hours_for_week_from_json(wh, wk)
-                    if h:
-                        project_hours[pid][wk] = round(project_hours[pid].get(wk, 0.0) + h, 2)
+                assignment_last_by_project[pid] = row.get('last')
+        except Exception:  # nosec B110
+            assignment_last_by_project = {}
+
+        missing_or_stale: set[int] = set()
+        if assignment_last_by_project:
+            for pid in project_id_set:
+                last_assignment = assignment_last_by_project.get(pid)
+                if not last_assignment:
+                    continue
+                last_rollup = rollup_last_by_project.get(pid)
+                if not last_rollup or last_rollup < last_assignment:
+                    missing_or_stale.add(pid)
+
+        if missing_or_stale:
+            hours_missing = _compute_hours_from_assignments(missing_or_stale)
+            for pid, hours in hours_missing.items():
+                project_hours[pid] = hours
+            try:
+                from assignments.rollup_service import queue_project_rollup_refresh
+                queue_project_rollup_refresh(missing_or_stale)
+            except Exception:  # nosec B110
+                pass
+
+        if not project_hours:
+            # Fallback to live aggregation if rollups are missing
+            project_hours = _compute_hours_from_assignments(project_id_set)
             if project_hours:
                 try:
                     from assignments.rollup_service import queue_project_rollup_refresh

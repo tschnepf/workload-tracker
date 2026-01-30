@@ -43,6 +43,7 @@ if os.getenv('ENABLE_AUTOMATION', 'false').lower() == 'true':
     beat_entries = {}
     backup_cron = _parse_cron(os.getenv('BACKUP_SCHEDULE_CRON', '0 2 * * *'))
     cleanup_cron = _parse_cron(os.getenv('CLEANUP_SCHEDULE_CRON', '30 2 * * *'))
+    rollup_cron = _parse_cron(os.getenv('ROLLUP_REBUILD_SCHEDULE_CRON', '0 4 * * *'))
 
     # Nightly backup
     if backup_cron is not None:
@@ -73,6 +74,13 @@ if os.getenv('ENABLE_AUTOMATION', 'false').lower() == 'true':
                 'dry_run': False,
             },
             'options': {'queue': 'db_maintenance'},
+        }
+
+    # Nightly rollup rebuild
+    if rollup_cron is not None:
+        beat_entries['nightly-rollup-rebuild'] = {
+            'task': 'assignments.tasks.nightly_rebuild_project_rollups_task',
+            'schedule': rollup_cron,
         }
 
     # Optional offsite sync schedule (03:00 UTC by default when enabled)

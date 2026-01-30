@@ -42,9 +42,15 @@ interface ProjectWithAssignments extends Project {
   isExpanded: boolean;
 }
 
-const AUTO_HOURS_MAX_WEEKS = 8;
+const DEFAULT_AUTO_HOURS_WEEKS_COUNT = 6;
+const MAX_AUTO_HOURS_WEEKS_COUNT = 18;
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
 const roundHours = (value: number) => (Number.isFinite(value) ? Math.ceil(value) : 0);
+const normalizeWeeksCount = (value: unknown, fallback = DEFAULT_AUTO_HOURS_WEEKS_COUNT) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(n, MAX_AUTO_HOURS_WEEKS_COUNT));
+};
 const DEFAULT_PHASE_MAPPING: DeliverablePhaseMappingSettings = {
   useDescriptionMatch: true,
   phases: [
@@ -421,6 +427,41 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return out;
   }, [autoHoursPhases, autoHoursTemplateSettings]);
 
+  const autoHoursWeeksCountByPhase = useMemo(() => {
+    const out: Record<string, number> = {};
+    autoHoursPhases.forEach((phase) => {
+      const rows = autoHoursSettingsByPhase?.[phase] || [];
+      const weeksCount = rows.find(row => row.weeksCount != null)?.weeksCount;
+      out[phase] = normalizeWeeksCount(weeksCount);
+    });
+    return out;
+  }, [autoHoursPhases, autoHoursSettingsByPhase]);
+
+  const autoHoursTemplateWeeksCountByPhase = useMemo(() => {
+    const out: Record<number, Record<string, number>> = {};
+    Object.entries(autoHoursTemplateSettings || {}).forEach(([tid, phases]) => {
+      const templateId = Number(tid);
+      const perPhase: Record<string, number> = {};
+      autoHoursPhases.forEach((phase) => {
+        const rows = phases?.[phase] || [];
+        const weeksCount = rows.find(row => row.weeksCount != null)?.weeksCount;
+        perPhase[phase] = normalizeWeeksCount(weeksCount);
+      });
+      out[templateId] = perPhase;
+    });
+    return out;
+  }, [autoHoursPhases, autoHoursTemplateSettings]);
+
+  const getWeeksCountForPhase = useCallback((phase: string, templateId?: number | null) => {
+    if (templateId != null) {
+      const templateCount = autoHoursTemplateWeeksCountByPhase?.[templateId]?.[phase];
+      if (Number.isFinite(templateCount)) return normalizeWeeksCount(templateCount);
+    }
+    const globalCount = autoHoursWeeksCountByPhase?.[phase];
+    if (Number.isFinite(globalCount)) return normalizeWeeksCount(globalCount);
+    return DEFAULT_AUTO_HOURS_WEEKS_COUNT;
+  }, [autoHoursTemplateWeeksCountByPhase, autoHoursWeeksCountByPhase]);
+
   const classifyDeliverablePhase = useCallback((deliverable: Deliverable): string | null => {
     const descRaw = (deliverable?.description || '').toLowerCase().trim();
     const desc = descRaw.replace(/\s+/g, ' ');
@@ -546,7 +587,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
         }
         if (!settings) return;
         hasAnySettings = true;
-        for (let offset = 0; offset <= AUTO_HOURS_MAX_WEEKS; offset += 1) {
+        const weeksCount = getWeeksCountForPhase(phase, templateId);
+        const maxOffset = Math.max(0, weeksCount - 1);
+        for (let offset = 0; offset <= maxOffset; offset += 1) {
           const targetIndex = deliverableIndex - offset;
           if (targetIndex < 0 || targetIndex >= weeks.length) continue;
           const weekKey = weeks[targetIndex]?.date;
@@ -579,7 +622,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       updates.push({ assignmentId: assignment.id!, weeklyHours: nextWeeklyHours });
     }
     return { updates, skipped };
-  }, [autoHoursSettingsByPhaseMap, autoHoursTemplatePhaseKeysById, autoHoursTemplateSettingsByPhaseMap, deliverableWeekEntriesByProject, peopleById, projectsById, weeks]);
+  }, [autoHoursSettingsByPhaseMap, autoHoursTemplatePhaseKeysById, autoHoursTemplateSettingsByPhaseMap, deliverableWeekEntriesByProject, getWeeksCountForPhase, peopleById, projectsById, weeks]);
 
   const describeAutoHoursSkip = (skipped: { missingRole: number; missingSettings: number; missingDeliverables: number; missingCapacity: number }) => {
     const reasons: string[] = [];
@@ -1395,7 +1438,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         <div
           ref={bodyScrollRef}
           onScroll={handleBodyScroll}
-          className="overflow-x-auto"
+          className="overflow-x-auto overflow-y-visible"
           style={{ minWidth: totalMinWidth }}
         >
           <div style={{ minWidth: totalMinWidth, paddingLeft: weekPaddingLeft, paddingRight: weekPaddingRight }}>
