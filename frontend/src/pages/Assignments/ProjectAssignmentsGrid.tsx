@@ -8,6 +8,7 @@ import { useEditingCell as useEditingCellHook } from '@/pages/Assignments/grid/u
 import { useAssignmentsInteractionStore } from '@/pages/Assignments/grid/useAssignmentsInteractionStore';
 import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeyboardNavigation';
 import { useDeliverablesIndex } from '@/pages/Assignments/grid/useDeliverablesIndex';
+import { useDeliverableBars } from '@/pages/Assignments/grid/useDeliverableBars';
 import { useGridColumnWidthsAssign } from '@/pages/Assignments/grid/useGridColumnWidths';
 import { useProjectStatusFilters } from '@/pages/Assignments/grid/useProjectStatusFilters';
 import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
@@ -91,6 +92,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchTokens, setSearchTokens] = useState<Array<{ id: string; term: string; op: 'or' | 'and' | 'not' }>>([]);
+  const [searchOp, setSearchOp] = useState<'or' | 'and' | 'not'>('or');
+  const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
+  const searchTokenSeq = useRef(0);
 
   const [phaseMapping, setPhaseMapping] = useState<DeliverablePhaseMappingSettings | null>(null);
   const [phaseMappingError, setPhaseMappingError] = useState<string | null>(null);
@@ -143,6 +149,20 @@ const ProjectAssignmentsGrid: React.FC = () => {
     (projectsData || []).forEach(p => { if (p?.id != null) map.set(p.id, { ...p, isUpdating: false }); });
     return map;
   }, [projectsData]);
+
+  const assignmentNamesByProjectId = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    (assignmentsData || []).forEach((assignment) => {
+      const projectId = assignment?.project ?? null;
+      if (!projectId) return;
+      const name = assignment.personName || (assignment.person ? peopleById.get(assignment.person)?.name : null);
+      if (!name) return;
+      const set = map.get(projectId) || new Set<string>();
+      set.add(name);
+      map.set(projectId, set);
+    });
+    return map;
+  }, [assignmentsData, peopleById]);
 
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -200,15 +220,113 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter, matchesStatusFilters } = useProjectStatusFilters(deliverables);
 
+  const normalizedSearchTokens = useMemo(() => {
+    return searchTokens
+      .map((token) => ({ ...token, term: token.term.trim().toLowerCase() }))
+      .filter((token) => token.term.length > 0);
+  }, [searchTokens]);
+
+  const matchesSearchTokens = useCallback((project: ProjectWithAssignments) => {
+    if (!normalizedSearchTokens.length) return true;
+    const assignedNames = project.id ? Array.from(assignmentNamesByProjectId.get(project.id) || []) : [];
+    const haystack = [
+      project.name,
+      project.client,
+      project.projectNumber,
+      project.description,
+      assignedNames.length ? assignedNames.join(' ') : null,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    let hasOr = false;
+    let orMatched = false;
+
+    for (const token of normalizedSearchTokens) {
+      const match = haystack.includes(token.term);
+      if (token.op === 'not') {
+        if (match) return false;
+        continue;
+      }
+      if (token.op === 'and') {
+        if (!match) return false;
+        continue;
+      }
+      hasOr = true;
+      if (match) orMatched = true;
+    }
+
+    if (hasOr && !orMatched) return false;
+    return true;
+  }, [normalizedSearchTokens, assignmentNamesByProjectId]);
+
+  const matchesProjectFilters = useCallback((project: ProjectWithAssignments) => {
+    return matchesStatusFilters(project as any) && matchesSearchTokens(project);
+  }, [matchesStatusFilters, matchesSearchTokens]);
+
+  const activeToken = useMemo(() => (
+    activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null
+  ), [activeTokenId, searchTokens]);
+
+  useEffect(() => {
+    if (activeTokenId && !activeToken) {
+      setActiveTokenId(null);
+    }
+  }, [activeTokenId, activeToken]);
+
+  const addSearchToken = useCallback(() => {
+    const term = searchInput.trim();
+    if (!term) return;
+    const normalized = term.toLowerCase();
+    setSearchTokens((prev) => {
+      const alreadyExists = prev.some((token) => token.term.trim().toLowerCase() === normalized && token.op === searchOp);
+      if (alreadyExists) return prev;
+      const nextId = `search-${searchTokenSeq.current += 1}`;
+      return [...prev, { id: nextId, term, op: searchOp }];
+    });
+    setSearchInput('');
+    setActiveTokenId(null);
+  }, [searchInput, searchOp]);
+
+  const removeSearchToken = useCallback((id: string) => {
+    setSearchTokens((prev) => prev.filter((token) => token.id !== id));
+    if (activeTokenId === id) setActiveTokenId(null);
+  }, [activeTokenId]);
+
+  const handleSearchOpChange = useCallback((value: 'or' | 'and' | 'not') => {
+    if (activeToken) {
+      setSearchTokens((prev) => prev.map((token) => token.id === activeToken.id ? { ...token, op: value } : token));
+    } else {
+      setSearchOp(value);
+    }
+  }, [activeToken]);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSearchToken();
+      return;
+    }
+    if (e.key === 'Backspace' && searchInput.length === 0 && searchTokens.length > 0) {
+      e.preventDefault();
+      setSearchTokens((prev) => prev.slice(0, -1));
+      return;
+    }
+    if (e.key === 'Escape') {
+      setSearchInput('');
+      setActiveTokenId(null);
+    }
+  }, [addSearchToken, searchInput.length, searchTokens.length]);
+
   const getVisibleAssignments = useCallback((project: ProjectWithAssignments) => {
-    const projectStatusMatch = matchesStatusFilters(project as any);
-    if (!projectStatusMatch) return [];
+    if (!matchesProjectFilters(project)) return [];
     return project.assignments || [];
-  }, [matchesStatusFilters]);
+  }, [matchesProjectFilters]);
 
   const visibleProjects = useMemo(
-    () => projectsWithAssignments.filter(project => matchesStatusFilters(project as any)),
-    [projectsWithAssignments, matchesStatusFilters]
+    () => projectsWithAssignments.filter(project => matchesProjectFilters(project)),
+    [projectsWithAssignments, matchesProjectFilters]
   );
 
   const rowOrder = useMemo(() => {
@@ -1294,6 +1412,31 @@ const ProjectAssignmentsGrid: React.FC = () => {
     );
   };
 
+  const ProjectTotalsCell: React.FC<{ totalHours: number; deliverablesForWeek: Deliverable[] }> = ({ totalHours, deliverablesForWeek }) => {
+    const { entries, hasDeliverable, tooltip, colorFor } = useDeliverableBars(deliverablesForWeek);
+    const labelValue = Number.isFinite(totalHours)
+      ? (Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(1))
+      : 0;
+    const aria = `${labelValue} hours`;
+    const pillClasses = totalHours > 0
+      ? 'bg-[var(--surfaceHover)] text-[var(--text)] border border-[var(--border)]'
+      : 'bg-transparent text-[var(--muted)] border border-[var(--borderSubtle)]';
+    return (
+      <div className="relative flex items-center justify-center px-1" title={tooltip} aria-label={aria}>
+        <div className={`inline-flex items-center justify-center h-6 px-2 leading-none rounded-full text-xs font-medium min-w-[40px] text-center ${pillClasses}`}>
+          {totalHours > 0 ? `${labelValue}h` : ''}
+        </div>
+        {hasDeliverable && (
+          <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px] pointer-events-none">
+            {entries.slice(0, 3).map((entry, idx) => (
+              <div key={idx} className="w-[3px] rounded" style={{ background: colorFor(entry.type) }} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const ProjectSection: React.FC<{ project: ProjectWithAssignments }> = ({ project }) => {
     const visibleAssignments = useMemo(() => {
       const list = getVisibleAssignments(project);
@@ -1329,19 +1472,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
           </div>
           {visibleWeeks.map((week) => {
             const totalHours = totals?.[week.date] || 0;
-            const labelValue = Number.isFinite(totalHours)
-              ? (Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(1))
-              : 0;
-            const aria = `${labelValue} hours`;
-            const pillClasses = totalHours > 0
-              ? 'bg-[var(--surfaceHover)] text-[var(--text)] border border-[var(--border)]'
-              : 'bg-transparent text-[var(--muted)] border border-[var(--borderSubtle)]';
+            const deliverablesForWeek = project.id ? getDeliverablesForProjectWeek(project.id, week.date) : [];
             return (
-              <div key={week.date} className="flex items-center justify-center px-1">
-                <div className={`inline-flex items-center justify-center h-6 px-2 leading-none rounded-full text-xs font-medium min-w-[40px] text-center ${pillClasses}`} aria-label={aria}>
-                  {totalHours > 0 ? `${labelValue}h` : ''}
-                </div>
-              </div>
+              <ProjectTotalsCell
+                key={week.date}
+                totalHours={totalHours}
+                deliverablesForWeek={deliverablesForWeek}
+              />
             );
           })}
         </div>
@@ -1428,6 +1565,68 @@ const ProjectAssignmentsGrid: React.FC = () => {
           format={formatFilterStatus as any}
           onToggle={(s) => toggleStatusFilter(s as any)}
         />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[240px]">
+          <label className="sr-only" htmlFor="project-assignments-search">Search projects</label>
+          <div className="flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
+            <div className="flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
+              <select
+                className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+                value={activeToken?.op ?? searchOp}
+                onChange={(e) => handleSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
+                aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
+              >
+                <option value="or">OR</option>
+                <option value="and">AND</option>
+                <option value="not">NOT</option>
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 px-2 py-1 flex-1 min-w-0">
+              {searchTokens.map((token) => {
+                const isActive = token.id === activeTokenId;
+                return (
+                  <div
+                    key={token.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setActiveTokenId(token.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTokenId(token.id); } }}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] ${
+                      isActive
+                        ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                        : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                    title={`${token.op.toUpperCase()} ${token.term}`}
+                  >
+                    <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
+                    <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
+                    <button
+                      type="button"
+                      className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSearchToken(token.id);
+                      }}
+                      aria-label={`Remove ${token.term}`}
+                    >
+                      x
+                    </button>
+                  </div>
+                );
+              })}
+              <input
+                id="project-assignments-search"
+                type="text"
+                value={searchInput}
+                onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
+                onKeyDown={handleSearchKeyDown}
+                placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client or name (Enter)'}
+                className="flex-1 min-w-[140px] px-1 py-0.5 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

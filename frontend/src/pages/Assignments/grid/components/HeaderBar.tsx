@@ -25,6 +25,7 @@ export interface HeaderBarProps {
   formatFilterStatus: (s: string) => string;
   toggleStatusFilter: (s: string) => void;
   departmentsOverride?: Department[];
+  searchBar?: React.ReactNode;
 }
 
 const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -50,6 +51,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   formatFilterStatus,
   toggleStatusFilter,
   departmentsOverride,
+  searchBar,
 }) => {
   return (
     <div ref={headerRef} className="sticky top-0 bg-[var(--bg)] border-b border-[var(--border)] z-30 px-6 py-4">
@@ -175,6 +177,11 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             );
           })}
         </div>
+        {searchBar ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {searchBar}
+          </div>
+        ) : null}
       </div>
     </div>
   );

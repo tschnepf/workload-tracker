@@ -150,6 +150,14 @@ const AssignmentGrid: React.FC = () => {
     }
     return m;
   }, [projectsData]);
+
+  const peopleById = useMemo(() => {
+    const map = new Map<number, PersonWithAssignments>();
+    for (const person of people || []) {
+      if (person?.id != null) map.set(person.id, person);
+    }
+    return map;
+  }, [people]);
   
   // Toast state (used by status controls)
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
@@ -165,6 +173,11 @@ const AssignmentGrid: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchTokens, setSearchTokens] = useState<Array<{ id: string; term: string; op: 'or' | 'and' | 'not' }>>([]);
+  const [searchOp, setSearchOp] = useState<'or' | 'and' | 'not'>('or');
+  const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
+  const searchTokenSeq = useRef(0);
   const addUI = useProjectAssignmentAdd({
     search: (query) => searchProjects(query),
     onAdd: (personId, project) => addAssignment(personId, project),
@@ -177,6 +190,110 @@ const AssignmentGrid: React.FC = () => {
   // async job state provided by useAssignmentsSnapshot
   // New multi-select project status filters (aggregate selection)
   const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter, matchesStatusFilters } = useProjectStatusFilters(deliverables);
+
+  const normalizedSearchTokens = useMemo(() => {
+    return searchTokens
+      .map((token) => ({ ...token, term: token.term.trim().toLowerCase() }))
+      .filter((token) => token.term.length > 0);
+  }, [searchTokens]);
+
+  const matchesTokensText = useCallback((text: string) => {
+    if (!normalizedSearchTokens.length) return true;
+    const haystack = (text || '').toLowerCase();
+    let hasOr = false;
+    let orMatched = false;
+
+    for (const token of normalizedSearchTokens) {
+      const match = haystack.includes(token.term);
+      if (token.op === 'not') {
+        if (match) return false;
+        continue;
+      }
+      if (token.op === 'and') {
+        if (!match) return false;
+        continue;
+      }
+      hasOr = true;
+      if (match) orMatched = true;
+    }
+
+    if (hasOr && !orMatched) return false;
+    return true;
+  }, [normalizedSearchTokens]);
+
+  const matchesSearchTokensAssignment = useCallback((assignment: Assignment) => {
+    if (!normalizedSearchTokens.length) return true;
+    const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
+    const personName = assignment.personName
+      || (assignment.person ? peopleById.get(assignment.person)?.name : '')
+      || '';
+    const haystack = [
+      personName,
+      assignment.roleName,
+      assignment.projectDisplayName,
+      project?.name,
+      project?.client,
+      project?.projectNumber,
+      project?.description,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return matchesTokensText(haystack);
+  }, [normalizedSearchTokens.length, projectsById, peopleById, matchesTokensText]);
+
+  const activeToken = useMemo(() => (
+    activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null
+  ), [activeTokenId, searchTokens]);
+
+  useEffect(() => {
+    if (activeTokenId && !activeToken) {
+      setActiveTokenId(null);
+    }
+  }, [activeTokenId, activeToken]);
+
+  const addSearchToken = useCallback(() => {
+    const term = searchInput.trim();
+    if (!term) return;
+    const normalized = term.toLowerCase();
+    setSearchTokens((prev) => {
+      const alreadyExists = prev.some((token) => token.term.trim().toLowerCase() === normalized && token.op === searchOp);
+      if (alreadyExists) return prev;
+      const nextId = `search-${searchTokenSeq.current += 1}`;
+      return [...prev, { id: nextId, term, op: searchOp }];
+    });
+    setSearchInput('');
+    setActiveTokenId(null);
+  }, [searchInput, searchOp]);
+
+  const removeSearchToken = useCallback((id: string) => {
+    setSearchTokens((prev) => prev.filter((token) => token.id !== id));
+    if (activeTokenId === id) setActiveTokenId(null);
+  }, [activeTokenId]);
+
+  const handleSearchOpChange = useCallback((value: 'or' | 'and' | 'not') => {
+    if (activeToken) {
+      setSearchTokens((prev) => prev.map((token) => token.id === activeToken.id ? { ...token, op: value } : token));
+    } else {
+      setSearchOp(value);
+    }
+  }, [activeToken]);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSearchToken();
+      return;
+    }
+    if (e.key === 'Backspace' && searchInput.length === 0 && searchTokens.length > 0) {
+      e.preventDefault();
+      setSearchTokens((prev) => prev.slice(0, -1));
+      return;
+    }
+    if (e.key === 'Escape') {
+      setSearchInput('');
+      setActiveTokenId(null);
+    }
+  }, [addSearchToken, searchInput.length, searchTokens.length]);
 
   const handleAssignmentRoleChange = async (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => {
     await updateAssignmentRoleAction({
@@ -362,13 +479,15 @@ const AssignmentGrid: React.FC = () => {
   }, [deliverables]);
 
   // Filter + sort assignments based on status filters and current sort mode
-  const getVisibleAssignments = (assignments: Assignment[]): Assignment[] => {
+  const getVisibleAssignments = useCallback((assignments: Assignment[]): Assignment[] => {
     try {
       if (!assignments?.length) return [];
 
       const filteredAssignments = assignments.filter(assignment => {
         const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
-        return matchesStatusFilters(project as Project);
+        if (!matchesStatusFilters(project as Project)) return false;
+        if (!matchesSearchTokensAssignment(assignment)) return false;
+        return true;
       });
 
       // Sort within person based on active mode
@@ -407,11 +526,32 @@ const AssignmentGrid: React.FC = () => {
       console.error('Error filtering/sorting assignments:', error);
       return assignments || []; // Safe fallback - show all on error
     }
-  };
+  }, [matchesStatusFilters, matchesSearchTokensAssignment, personSortMode, nextDeliverableByProject, projectsById]);
+
+  const visiblePeople = useMemo(() => {
+    if (!normalizedSearchTokens.length) return people;
+    return (people || []).filter((person) => {
+      const name = person?.name || '';
+      if (matchesTokensText(name)) return true;
+      const assignments = person.assignments || [];
+      return getVisibleAssignments(assignments).length > 0;
+    });
+  }, [people, normalizedSearchTokens.length, matchesTokensText, getVisibleAssignments]);
+
+  const visiblePeopleWithAssignments = useMemo(() => {
+    return (visiblePeople || []).map((person) => ({
+      ...person,
+      assignments: getVisibleAssignments(person.assignments || []),
+    }));
+  }, [visiblePeople, getVisibleAssignments]);
+
+  const visibleAssignmentsCount = useMemo(() => {
+    return (visiblePeople || []).reduce((total, person) => total + getVisibleAssignments(person.assignments || []).length, 0);
+  }, [visiblePeople, getVisibleAssignments]);
   const rowOrder = useMemo(() => {
     const out: string[] = [];
     try {
-      for (const person of people || []) {
+      for (const person of visiblePeople || []) {
         if (!person?.isExpanded) continue;
         if (loadingAssignments.has(person.id!)) continue;
         const assignments = getVisibleAssignments(person.assignments || []);
@@ -421,7 +561,7 @@ const AssignmentGrid: React.FC = () => {
       }
     } catch {}
     return out;
-  }, [people, loadingAssignments, getVisibleAssignments]);
+  }, [visiblePeople, loadingAssignments, getVisibleAssignments]);
 
   const peopleRef = useRef<PersonWithAssignments[]>([]);
   const assignmentsRef = useRef<Assignment[]>([]);
@@ -1670,6 +1810,71 @@ const AssignmentGrid: React.FC = () => {
 
   const { data: schemeData } = useUtilizationScheme({ enabled: false });
   const scheme = schemeData ?? defaultUtilizationScheme;
+  const searchBar = (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex-1 min-w-[240px]">
+        <label className="sr-only" htmlFor="assignments-search">Search assignments</label>
+        <div className="flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
+          <div className="flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
+            <select
+              className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+              value={activeToken?.op ?? searchOp}
+              onChange={(e) => handleSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
+              aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
+            >
+              <option value="or">OR</option>
+              <option value="and">AND</option>
+              <option value="not">NOT</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-1 px-2 py-1 flex-1 min-w-0">
+            {searchTokens.map((token) => {
+              const isActive = token.id === activeTokenId;
+              return (
+                <div
+                  key={token.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setActiveTokenId(token.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTokenId(token.id); } }}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] ${
+                    isActive
+                      ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                      : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
+                  }`}
+                  title={`${token.op.toUpperCase()} ${token.term}`}
+                >
+                  <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
+                  <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
+                  <button
+                    type="button"
+                    className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeSearchToken(token.id);
+                    }}
+                    aria-label={`Remove ${token.term}`}
+                  >
+                    x
+                  </button>
+                </div>
+              );
+            })}
+            <input
+              id="assignments-search"
+              type="text"
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
+              onKeyDown={handleSearchKeyDown}
+              placeholder={searchTokens.length ? 'Add another filter...' : 'Search people, projects, or clients (Enter)'}
+              className="flex-1 min-w-[140px] px-1 py-0.5 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const topBarHeader = (
     <div className="flex flex-col gap-2 min-w-0 w-full">
       <div className="flex flex-wrap items-center gap-3 min-w-0">
@@ -1703,6 +1908,7 @@ const AssignmentGrid: React.FC = () => {
           onToggle={(s) => toggleStatusFilter(s as any)}
         />
       </div>
+      {searchBar}
     </div>
   );
 
@@ -1748,6 +1954,67 @@ const AssignmentGrid: React.FC = () => {
           onToggle={(s) => toggleStatusFilter(s as any)}
         />
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[200px]">
+          <div className="flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
+            <div className="flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
+              <select
+                className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+                value={activeToken?.op ?? searchOp}
+                onChange={(e) => handleSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
+                aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
+              >
+                <option value="or">OR</option>
+                <option value="and">AND</option>
+                <option value="not">NOT</option>
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 px-2 py-1 flex-1 min-w-0">
+              {searchTokens.map((token) => {
+                const isActive = token.id === activeTokenId;
+                return (
+                  <div
+                    key={token.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setActiveTokenId(token.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTokenId(token.id); } }}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] ${
+                      isActive
+                        ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                        : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                    title={`${token.op.toUpperCase()} ${token.term}`}
+                  >
+                    <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
+                    <span className="max-w-[120px] truncate text-[var(--text)]">{token.term}</span>
+                    <button
+                      type="button"
+                      className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSearchToken(token.id);
+                      }}
+                      aria-label={`Remove ${token.term}`}
+                    >
+                      x
+                    </button>
+                  </div>
+                );
+              })}
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
+                onKeyDown={handleSearchKeyDown}
+                placeholder={searchTokens.length ? 'Add filter...' : 'Search (Enter)'}
+                aria-label="Search assignments"
+                className="flex-1 min-w-[120px] px-1 py-0.5 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
       {!canEditAssignments && (
         <div className="text-xs text-[var(--muted)]">Editing disabled for your role. You can still view assignments.</div>
       )}
@@ -1761,7 +2028,7 @@ const AssignmentGrid: React.FC = () => {
         <div className="flex-1 flex flex-col min-w-0 px-4 py-4 space-y-4">
           {mobileToolbar}
           <MobilePersonAccordions
-            people={people as any}
+            people={visiblePeopleWithAssignments as any}
             weeks={weeks}
             hoursByPerson={hoursByPerson}
             onExpand={(pid) => ensureAssignmentsLoaded(pid)}
@@ -1783,8 +2050,8 @@ const AssignmentGrid: React.FC = () => {
               weeksHorizon={weeksHorizon}
               setWeeksHorizon={setWeeksHorizon}
               projectViewHref={(function(){ const s=selectedStatusFilters; const statusStr = (s.size===0 || s.has('Show All')) ? '' : `&status=${encodeURIComponent(Array.from(s).join(','))}`; return `/project-assignments?view=project&weeks=${weeksHorizon}${statusStr}`; })()}
-              peopleCount={people.length}
-              assignmentsCount={people.reduce((total,p)=> total + p.assignments.length, 0)}
+              peopleCount={visiblePeople.length}
+              assignmentsCount={visibleAssignmentsCount}
               asyncJobId={asyncJob.id}
               asyncProgress={asyncJob.progress}
               asyncMessage={asyncJob.message}
@@ -1798,6 +2065,7 @@ const AssignmentGrid: React.FC = () => {
               formatFilterStatus={(status) => formatFilterStatus(status as any)}
               toggleStatusFilter={(status) => toggleStatusFilter(status as any)}
               departmentsOverride={departments}
+              searchBar={searchBar}
             />
           )}
           <WeekHeaderComp
@@ -1823,7 +2091,7 @@ const AssignmentGrid: React.FC = () => {
             <div style={{ minWidth: totalMinWidth }}>
               <div>
                 <PeopleSection
-                  people={people as any}
+                  people={visiblePeople as any}
                   weeks={isMobileLayout ? mobileWeeks : weeks}
                   gridTemplate={gridTemplate}
                   loadingAssignments={loadingAssignments}
