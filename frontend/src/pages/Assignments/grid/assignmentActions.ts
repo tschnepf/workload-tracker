@@ -67,7 +67,15 @@ export async function updateAssignmentHoursAction(params: {
     setHoursByPerson(nextMap);
   } catch {}
   try {
-    await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi);
+    try {
+      await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi);
+    } catch (err: any) {
+      if (err?.status === 412) {
+        await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi, { skipIfMatch: true });
+      } else {
+        throw err;
+      }
+    }
     queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
     queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
     // refresh signal emitted in updateAssignment
@@ -165,7 +173,16 @@ export async function updateMultipleCellsAction(params: {
       results = updatesArray.map(() => ({ status: 'rejected', reason: e })) as PromiseSettledResult<any>[];
     }
   } else {
-    results = await Promise.allSettled(updatesArray.map(u => updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi)));
+    results = await Promise.allSettled(updatesArray.map(async (u) => {
+      try {
+        return await updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi);
+      } catch (err: any) {
+        if (err?.status === 412) {
+          return await updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi, { skipIfMatch: true });
+        }
+        throw err;
+      }
+    }));
   }
   const failed: typeof updatesArray = [];
   results.forEach((res, idx) => { if (res.status === 'rejected') failed.push(updatesArray[idx]); });

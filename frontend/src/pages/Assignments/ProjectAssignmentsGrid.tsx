@@ -35,6 +35,7 @@ import { updateAssignmentRoleAction } from '@/pages/Assignments/grid/useAssignme
 import { bulkUpdateAssignmentHours, createAssignment, updateAssignment, deleteAssignment } from '@/lib/mutations/assignments';
 import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
+import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
 
 interface ProjectWithAssignments extends Project {
   assignments: Assignment[];
@@ -483,6 +484,14 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return map;
   }, [assignmentsData]);
 
+  const assignmentsRef = useRef<Assignment[]>([]);
+  const assignmentEventQueueRef = useRef<AssignmentEvent[]>([]);
+  const assignmentFlushTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    assignmentsRef.current = assignmentsData;
+  }, [assignmentsData]);
+
   const applyAutoHoursUpdates = async (updates: Array<{ assignmentId: number; weeklyHours: Record<string, number> }>) => {
     if (!updates.length) {
       showToastBus('No auto hours changes to apply.', 'info');
@@ -669,6 +678,74 @@ const ProjectAssignmentsGrid: React.FC = () => {
       showToastBus(e?.message || 'Failed to replace placeholder', 'error');
     }
   };
+
+  const applyAssignmentEvent = useCallback(async (event: AssignmentEvent) => {
+    if (!event?.assignmentId) return;
+    if (event.type === 'deleted') {
+      setAssignmentsData(prev => prev.filter(a => a.id !== event.assignmentId));
+      return;
+    }
+    let assignment = event.assignment || null;
+    if (!assignment) {
+      try {
+        assignment = await assignmentsApi.get(event.assignmentId);
+      } catch {
+        return;
+      }
+    }
+    if (!assignment?.id) return;
+    setAssignmentsData(prev => {
+      let found = false;
+      const next = prev.map(a => {
+        if (a.id === assignment!.id) {
+          found = true;
+          return { ...a, ...assignment };
+        }
+        return a;
+      });
+      if (!found) next.push(assignment as Assignment);
+      return next;
+    });
+  }, [setAssignmentsData]);
+
+  const enqueueAssignmentEvent = useCallback((event: AssignmentEvent) => {
+    assignmentEventQueueRef.current.push(event);
+    if (assignmentFlushTimerRef.current) return;
+    assignmentFlushTimerRef.current = window.setTimeout(async () => {
+      const queued = assignmentEventQueueRef.current.splice(0, assignmentEventQueueRef.current.length);
+      assignmentFlushTimerRef.current = null;
+      const coalesced = new Map<number, AssignmentEvent>();
+      queued.forEach((evt) => {
+        if (!evt?.assignmentId) return;
+        const existing = coalesced.get(evt.assignmentId);
+        if (!existing) {
+          coalesced.set(evt.assignmentId, evt);
+          return;
+        }
+        const existingTs = existing.updatedAt ? Date.parse(existing.updatedAt) : 0;
+        const nextTs = evt.updatedAt ? Date.parse(evt.updatedAt) : 0;
+        if (!existingTs || (nextTs && nextTs >= existingTs)) {
+          coalesced.set(evt.assignmentId, evt);
+        }
+      });
+      for (const evt of coalesced.values()) {
+        await applyAssignmentEvent(evt);
+      }
+    }, 60);
+  }, [applyAssignmentEvent]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeAssignmentsRefresh((event) => {
+      enqueueAssignmentEvent(event);
+    });
+    return () => {
+      unsubscribe();
+      if (assignmentFlushTimerRef.current) {
+        window.clearTimeout(assignmentFlushTimerRef.current);
+        assignmentFlushTimerRef.current = null;
+      }
+    };
+  }, [enqueueAssignmentEvent]);
 
   const updateMultipleCells = async (cells: Array<{ rowKey: string; weekKey: string }>, hours: number) => {
     const updates = new Map<number, Record<string, number>>();
