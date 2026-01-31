@@ -239,7 +239,7 @@ const AssignmentGrid: React.FC = () => {
       page_size: overrides?.page_size,
       department: dept,
       include_children: includeChildren,
-      include_placeholders: 0,
+      include_placeholders: 0 as 0,
       status_in: statusIn,
       search_tokens: searchTokensPayload,
       project: overrides?.project,
