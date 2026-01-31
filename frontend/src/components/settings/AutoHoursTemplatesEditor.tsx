@@ -155,6 +155,18 @@ const AutoHoursTemplatesEditor: React.FC = () => {
 
   const [selectedCells, setSelectedCells] = React.useState<Set<string>>(new Set());
   const selectedCellsRef = React.useRef<Set<string>>(new Set());
+  const activeCellKeyRef = React.useRef<string | null>(null);
+  const setSelectedCellsState = React.useCallback((next: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+    setSelectedCells((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      selectedCellsRef.current = resolved;
+      return resolved;
+    });
+  }, []);
+  const [focusedCellKey, setFocusedCellKey] = React.useState<string | null>(null);
+  const [editingCellKey, setEditingCellKey] = React.useState<string | null>(null);
+  const editingCellKeyRef = React.useRef<string | null>(null);
+  const [editingValue, setEditingValue] = React.useState<string>('');
   const anchorRef = React.useRef<{ rowIndex: number; weekIndex: number } | null>(null);
   const dragStartRef = React.useRef<{ rowIndex: number; weekIndex: number } | null>(null);
   const draggingRef = React.useRef(false);
@@ -163,6 +175,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const bulkEditActiveRef = React.useRef(false);
   const bulkEditValueRef = React.useRef('');
   const bulkEditSnapshotRef = React.useRef<Map<string, number>>(new Map());
+  const [, forceBulkEditRender] = React.useReducer((v) => v + 1, 0);
 
   React.useEffect(() => {
     selectedCellsRef.current = selectedCells;
@@ -244,7 +257,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const displayValueFromPercent = React.useCallback((value: number) => {
     if (!Number.isFinite(value)) return 0;
     if (inputMode === 'hours') {
-      return Number(((value / 100) * fullCapacityHours).toFixed(2));
+      return Math.round((value / 100) * fullCapacityHours);
     }
     return Math.round(value);
   }, [fullCapacityHours, inputMode]);
@@ -315,7 +328,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   }, [restoreSnapshot]);
 
   const clearSelection = React.useCallback(() => {
-    setSelectedCells(new Set());
+    setSelectedCellsState(new Set());
     anchorRef.current = null;
     bulkEditActiveRef.current = false;
     bulkEditValueRef.current = '';
@@ -337,16 +350,23 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     if (rowIndex == null || weekIndex == null) return;
     const isCtrl = ev.ctrlKey || ev.metaKey;
     const isShift = ev.shiftKey;
+    if (isCtrl || isShift) {
+      const active = document.activeElement as HTMLElement | null;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || (active as any).isContentEditable)) {
+        active.blur();
+      }
+    }
 
     if (isShift && anchorRef.current) {
       const range = buildRangeSelection(anchorRef.current, { rowIndex, weekIndex });
       const next = isCtrl ? mergeSelection(selectedCellsRef.current, range) : range;
-      setSelectedCells(next);
+      setSelectedCellsState(next);
       anchorRef.current = { rowIndex, weekIndex };
       return;
     }
 
     const key = cellKey(rowKey, weekKey);
+    activeCellKeyRef.current = key;
     const isAlreadySelected = selectedCellsRef.current.has(key);
     const hasMultiSelection = selectedCellsRef.current.size > 1;
     anchorRef.current = { rowIndex, weekIndex };
@@ -356,7 +376,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     dragBaseSelectionRef.current = isCtrl ? new Set(selectedCellsRef.current) : new Set();
 
     if (isCtrl) {
-      setSelectedCells(prev => {
+      setSelectedCellsState(prev => {
         const next = new Set(prev);
         if (next.has(key)) next.delete(key);
         else next.add(key);
@@ -367,7 +387,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     if (isAlreadySelected && hasMultiSelection) {
       return;
     }
-    setSelectedCells(new Set([key]));
+    setSelectedCellsState(new Set([key]));
   }, [buildRangeSelection, cellKey, finalizeBulkEdit, mergeSelection, rowIndexMap, weekIndexMap]);
 
   const handleCellMouseEnter = React.useCallback((rowKey: string, weekKey: string) => {
@@ -375,11 +395,16 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     const rowIndex = rowIndexMap.get(rowKey);
     const weekIndex = weekIndexMap.get(weekKey);
     if (rowIndex == null || weekIndex == null) return;
+    activeCellKeyRef.current = cellKey(rowKey, weekKey);
+    const active = document.activeElement as HTMLElement | null;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || (active as any).isContentEditable)) {
+      active.blur();
+    }
     const range = buildRangeSelection(dragStartRef.current, { rowIndex, weekIndex });
     if (dragAddRef.current) {
-      setSelectedCells(mergeSelection(dragBaseSelectionRef.current, range));
+      setSelectedCellsState(mergeSelection(dragBaseSelectionRef.current, range));
     } else {
-      setSelectedCells(range);
+      setSelectedCellsState(range);
     }
   }, [buildRangeSelection, mergeSelection, rowIndexMap, weekIndexMap]);
 
@@ -391,9 +416,10 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     const isShift = ev.shiftKey;
     if (isShift || isCtrl) return;
     const key = cellKey(rowKey, weekKey);
+    activeCellKeyRef.current = key;
     const isAlreadySelected = selectedCellsRef.current.has(key);
     if (!isAlreadySelected || selectedCellsRef.current.size <= 1) {
-      setSelectedCells(new Set([key]));
+      setSelectedCellsState(new Set([key]));
     }
     anchorRef.current = { rowIndex, weekIndex };
   }, [cellKey, rowIndexMap, weekIndexMap]);
@@ -404,18 +430,25 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       bulkEditValueRef.current = '';
       bulkEditSnapshotRef.current = new Map();
     }
-  }, [selectedCells.size]);
+    if (editingCellKeyRef.current && !selectedCells.has(editingCellKeyRef.current)) {
+      editingCellKeyRef.current = null;
+      setEditingCellKey(null);
+      setEditingValue('');
+    }
+  }, [editingCellKey, selectedCells]);
 
   React.useEffect(() => {
     const onKeyDown = (ev: KeyboardEvent) => {
       if (selectedCellsRef.current.size === 0) return;
       const target = ev.target as HTMLElement | null;
+      const allowBulkEdit = selectedCellsRef.current.size > 1;
       const isEditable = !!target && (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
         (target as any).isContentEditable
       );
-      if (isEditable) return;
+      if (isEditable && !allowBulkEdit) return;
+      if (!allowBulkEdit) return;
       if (ev.key === 'Escape') {
         ev.preventDefault();
         cancelBulkEdit();
@@ -446,11 +479,24 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       } else {
         bulkEditValueRef.current += ev.key;
       }
-
-      const parsed = Number(bulkEditValueRef.current);
-      if (Number.isFinite(parsed)) {
-        applyValueToSelection(parsed);
+      if (allowBulkEdit) {
+        const current = selectedCellsRef.current;
+        const activeKey = activeCellKeyRef.current;
+        const lastEditingKey = editingCellKeyRef.current;
+        const nextKey = (activeKey && current.has(activeKey))
+          ? activeKey
+          : (lastEditingKey && current.has(lastEditingKey))
+            ? lastEditingKey
+            : Array.from(current)[0] || null;
+        if (nextKey) {
+          editingCellKeyRef.current = nextKey;
+          setEditingCellKey(nextKey);
+          setEditingValue(bulkEditValueRef.current);
+          forceBulkEditRender();
+        }
       }
+
+      // Do not apply on every keystroke; wait for Enter to commit.
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -1304,9 +1350,15 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                               const week = Number(weekKey);
                               const value = row.percentByWeek?.[weekKey] ?? 0;
                               const rowKey = String(row.roleId);
-                              const isSelected = selectedCells.has(cellKey(rowKey, weekKey));
+                              const key = cellKey(rowKey, weekKey);
+                              const isSelected = selectedCells.has(key);
                               const displayValue = displayValueFromPercent(value);
-                              const hideZero = Number(displayValue) === 0;
+                              const isFocused = focusedCellKey === key;
+                              const isEditing = editingCellKey === key;
+                              const hideZero = !isEditing && !isFocused && Number(displayValue) === 0;
+                              const inputValue = isEditing
+                                ? editingValue
+                                : (hideZero ? '' : String(displayValue));
                               return (
                                 <td
                                   key={week}
@@ -1325,10 +1377,80 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                                       min={0}
                                       max={inputMode === 'hours' ? fullCapacityHours : 100}
                                       step="0.25"
-                                      value={hideZero ? '' : displayValue}
+                                      value={inputValue}
                                       className={`${getCellClasses(value, isSelected)} ${inputMode === 'percent' ? 'pr-3' : ''}`}
-                                      onChange={(e) => updateRowPercent(row.roleId, week, e.currentTarget.value)}
-                                      onFocus={(e) => e.currentTarget.select()}
+                                      onChange={(e) => {
+                                        const nextRaw = e.currentTarget.value;
+                                        editingCellKeyRef.current = key;
+                                        setEditingCellKey(key);
+                                        setEditingValue(nextRaw);
+                                        const isMultiSelection = selectedCellsRef.current.size > 1 && selectedCellsRef.current.has(key);
+                                        const trimmed = nextRaw.trim();
+                                        if (trimmed === '' || trimmed === '.' || trimmed === '-' || trimmed === '-.') {
+                                          return;
+                                        }
+                                        if (Number.isFinite(Number(trimmed)) && !isMultiSelection) {
+                                          updateRowPercent(row.roleId, week, trimmed);
+                                        }
+                                      }}
+                                      onFocus={(e) => {
+                                        setFocusedCellKey(key);
+                                        editingCellKeyRef.current = key;
+                                        setEditingCellKey(key);
+                                        setEditingValue(hideZero ? '' : String(displayValue));
+                                        e.currentTarget.select();
+                                      }}
+                                      onBlur={(e) => {
+                                        setFocusedCellKey((prev) => (prev === key ? null : prev));
+                                        setEditingCellKey((prev) => {
+                                          if (prev === key) {
+                                            editingCellKeyRef.current = null;
+                                            return null;
+                                          }
+                                          return prev;
+                                        });
+                                        const finalRaw = e.currentTarget.value;
+                                        const trimmed = finalRaw.trim();
+                                        const isMultiSelection = selectedCellsRef.current.size > 1 && selectedCellsRef.current.has(key);
+                                        if (!isMultiSelection) {
+                                          if (trimmed === '' || trimmed === '.' || trimmed === '-' || trimmed === '-.') {
+                                            updateRowPercent(row.roleId, week, '0');
+                                          } else if (Number.isFinite(Number(trimmed))) {
+                                            updateRowPercent(row.roleId, week, trimmed);
+                                          }
+                                        }
+                                        setEditingValue('');
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          const trimmed = e.currentTarget.value.trim();
+                                          const isMultiSelection = selectedCellsRef.current.size > 1 && selectedCellsRef.current.has(key);
+                                          if (trimmed !== '' && trimmed !== '.' && trimmed !== '-' && trimmed !== '-.' && Number.isFinite(Number(trimmed))) {
+                                            if (isMultiSelection) {
+                                              applyValueToSelection(Number(trimmed));
+                                            } else {
+                                              updateRowPercent(row.roleId, week, trimmed);
+                                            }
+                                          } else if (!isMultiSelection) {
+                                            updateRowPercent(row.roleId, week, '0');
+                                          }
+                                          editingCellKeyRef.current = null;
+                                          e.currentTarget.blur();
+                                        }
+                                        if (e.key === 'Escape') {
+                                          e.preventDefault();
+                                          setEditingCellKey((prev) => {
+                                            if (prev === key) {
+                                              editingCellKeyRef.current = null;
+                                              return null;
+                                            }
+                                            return prev;
+                                          });
+                                          setEditingValue('');
+                                          e.currentTarget.blur();
+                                        }
+                                      }}
                                       onClick={(e) => {
                                         e.currentTarget.focus();
                                         e.currentTarget.select();
