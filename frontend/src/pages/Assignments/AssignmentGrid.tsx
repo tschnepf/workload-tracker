@@ -233,7 +233,7 @@ const AssignmentGrid: React.FC = () => {
     person: number;
   }>) => {
     const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-    const includeChildren = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+    const includeChildren: 0 | 1 | undefined = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
     return {
       page: overrides?.page,
       page_size: overrides?.page_size,
