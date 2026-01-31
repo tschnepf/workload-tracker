@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
-from django.db.models import Sum, Max, Prefetch
+from django.db.models import Sum, Max, Prefetch, Value
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponseNotModified, StreamingHttpResponse
@@ -34,6 +34,8 @@ from datetime import datetime, timedelta, date
 import os
 from assignments.models import Assignment
 from django.db.models import Q
+from django.db.models.functions import Coalesce, Lower
+from core.search_tokens import parse_search_tokens, apply_token_filter
 from django.conf import settings as django_settings
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
@@ -265,6 +267,184 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             response['Cache-Control'] = 'private, max-age=30'  # 30 seconds cache for authenticated responses
         
         return response
+
+    def _paginate_post_queryset(self, request, queryset, data=None):
+        """Paginate using body-provided page/page_size for POST search endpoints."""
+        from django.core.paginator import Paginator
+        from rest_framework.settings import api_settings
+
+        payload = data or {}
+        try:
+            page_number = int(payload.get('page') or request.query_params.get('page') or 1)
+        except Exception:
+            page_number = 1
+        try:
+            page_size = int(payload.get('page_size') or request.query_params.get('page_size') or api_settings.PAGE_SIZE)
+        except Exception:
+            page_size = api_settings.PAGE_SIZE or 100
+        max_size = getattr(api_settings, 'MAX_PAGE_SIZE', 200) or 200
+        if page_size > max_size:
+            page_size = max_size
+        if page_size <= 0:
+            page_size = api_settings.PAGE_SIZE or 100
+
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        def _page_url(num: int | None) -> str | None:
+            if not num:
+                return None
+            try:
+                params = request.query_params.copy()
+                params['page'] = str(num)
+                params['page_size'] = str(page_size)
+                base = request.build_absolute_uri(request.path)
+                return f"{base}?{params.urlencode()}" if params else base
+            except Exception:
+                return None
+
+        next_url = _page_url(page_obj.next_page_number() if page_obj.has_next() else None)
+        prev_url = _page_url(page_obj.previous_page_number() if page_obj.has_previous() else None)
+
+        return page_obj, paginator, next_url, prev_url
+
+    @extend_schema(
+        description="Search people with tokenized filters and pagination.",
+        request=inline_serializer(
+            name='PeopleSearchRequest',
+            fields={
+                'page': serializers.IntegerField(required=False),
+                'page_size': serializers.IntegerField(required=False),
+                'department': serializers.IntegerField(required=False),
+                'include_children': serializers.IntegerField(required=False),
+                'include_inactive': serializers.IntegerField(required=False),
+                'location': serializers.ListField(child=serializers.CharField(), required=False),
+                'ordering': serializers.CharField(required=False),
+                'search_tokens': serializers.ListField(
+                    child=inline_serializer(
+                        name='SearchTokenPeople',
+                        fields={
+                            'term': serializers.CharField(),
+                            'op': serializers.ChoiceField(choices=['or', 'and', 'not'])
+                        }
+                    ),
+                    required=False
+                ),
+            }
+        ),
+        responses=inline_serializer(
+            name='PeopleSearchResponse',
+            fields={
+                'count': serializers.IntegerField(),
+                'next': serializers.CharField(allow_null=True, required=False),
+                'previous': serializers.CharField(allow_null=True, required=False),
+                'results': PersonSerializer(many=True),
+            }
+        )
+    )
+    @action(detail=False, methods=['post'], url_path='search')
+    def search(self, request):
+        data = request.data or {}
+
+        include_inactive = str(data.get('include_inactive') or request.query_params.get('include_inactive') or '').lower() in ('1', 'true', 'yes', 'on')
+        queryset = (
+            Person.objects
+            .select_related('department', 'role')
+            .only(
+                'id', 'name', 'weekly_capacity', 'role', 'department', 'location', 'notes', 'created_at', 'updated_at',
+                'department__name', 'role__name', 'is_active', 'hire_date'
+            )
+        )
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
+
+        # Department filter with include_children
+        dept_param = data.get('department') if isinstance(data, dict) else None
+        if dept_param is None:
+            dept_param = request.query_params.get('department')
+        include_children = str(data.get('include_children') or request.query_params.get('include_children') or '0') == '1'
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    ids = set()
+                    stack = [dept_id]
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                            if d not in ids:
+                                stack.append(d)
+                    queryset = queryset.filter(department_id__in=list(ids))
+                else:
+                    queryset = queryset.filter(department_id=dept_id)
+            except (TypeError, ValueError):  # nosec B110
+                pass
+
+        # Location filters (Remote substring + Unspecified)
+        locations = data.get('location') if isinstance(data, dict) else None
+        if locations is None:
+            locations = request.query_params.getlist('location')
+        if isinstance(locations, str):
+            locations = [s.strip() for s in locations.split(',') if s.strip()]
+        if isinstance(locations, list) and locations:
+            location_q = Q()
+            for loc in locations:
+                if loc == 'Remote':
+                    location_q |= Q(location__icontains='remote')
+                elif loc == 'unspecified':
+                    location_q |= Q(location__isnull=True) | Q(location__exact='')
+                else:
+                    location_q |= Q(location__iexact=loc)
+            queryset = queryset.filter(location_q)
+
+        # Tokenized search (parity with UI fields)
+        tokens = parse_search_tokens(request=request, data=data)
+        people_fields = ['name', 'role__name', 'department__name', 'location', 'notes']
+        queryset = apply_token_filter(queryset, tokens, people_fields)
+
+        # Ordering parity
+        ordering = data.get('ordering') or request.query_params.get('ordering') or 'name'
+        queryset = queryset.annotate(
+            location_sort=Coalesce(Lower('location'), Value('zzz_unspecified')),
+            department_sort=Coalesce(Lower('department__name'), Value('zzz_unassigned')),
+            role_sort=Coalesce(Lower('role__name'), Value('zzz_no_role')),
+        )
+        ordering_fields = []
+        for raw in str(ordering).split(','):
+            raw = raw.strip()
+            if not raw:
+                continue
+            desc = raw.startswith('-')
+            key = raw[1:] if desc else raw
+            if key == 'location':
+                field = 'location_sort'
+            elif key == 'department':
+                field = 'department_sort'
+            elif key == 'weeklyCapacity':
+                field = 'weekly_capacity'
+            elif key == 'role':
+                field = 'role_sort'
+            else:
+                field = 'name'
+            ordering_fields.append(f"-{field}" if desc else field)
+        if ordering_fields:
+            ordering_fields.append('id')
+            queryset = queryset.order_by(*ordering_fields)
+        else:
+            queryset = queryset.order_by('name', 'id')
+
+        page_obj, paginator, next_url, prev_url = self._paginate_post_queryset(request, queryset, data)
+        serializer = self.get_serializer(page_obj.object_list, many=True)
+
+        return Response({
+            'count': paginator.count,
+            'next': next_url,
+            'previous': prev_url,
+            'results': serializer.data,
+        })
 
     @action(detail=True, methods=['get'], throttle_classes=[HotEndpointThrottle])
     def utilization(self, request, pk=None):

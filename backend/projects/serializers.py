@@ -11,6 +11,7 @@ class ProjectFilterEntrySerializer(serializers.Serializer):
     assignmentCount = serializers.IntegerField()
     hasFutureDeliverables = serializers.BooleanField()
     status = serializers.CharField()
+    missingQa = serializers.BooleanField(required=False)
 
 
 class ProjectFilterMetadataSerializer(serializers.Serializer):

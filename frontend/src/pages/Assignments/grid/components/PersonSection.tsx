@@ -87,7 +87,11 @@ const PersonSection: React.FC<PersonSectionProps> = ({
     <div className="border-b border-[var(--border)] last:border-b-0">
       {/* Person Row */}
       <div className="grid gap-px p-2 hover:bg-[var(--surfaceHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
-        <PersonGroupHeader person={person} onToggle={() => togglePersonExpanded(person.id!)} />
+        <PersonGroupHeader
+          person={person}
+          matchReason={person.matchReason}
+          onToggle={() => togglePersonExpanded(person.id!)}
+        />
         {/* Add Assignment Action (slot) */}
         <div className="flex items-center justify-center gap-1">{renderAddAction ?? null}</div>
         <div className="flex items-center justify-center">{renderAutoHoursAction ?? null}</div>
@@ -114,6 +118,9 @@ const PersonSection: React.FC<PersonSectionProps> = ({
           ))}
         </div>
       )}
+
+      {/* Add Assignment Row (slot) */}
+      {person.isExpanded && showAddRow && renderAddRow}
 
       {/* Assignment Rows */}
       {person.isExpanded && !loadingAssignments && visible.map((assignment) => (
@@ -148,9 +155,6 @@ const PersonSection: React.FC<PersonSectionProps> = ({
           onAutoHoursSupplement={onAutoHoursSupplementAssignment}
         />
       ))}
-
-      {/* Add Assignment Row (slot) */}
-      {person.isExpanded && showAddRow && renderAddRow}
 
       {/* Empty State */}
       {person.isExpanded && visible.length === 0 && (

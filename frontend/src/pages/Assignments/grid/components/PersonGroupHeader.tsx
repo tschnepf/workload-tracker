@@ -4,14 +4,16 @@ import type { Assignment, Person } from '@/types/models';
 export interface PersonWithAssignments extends Person {
   assignments: Assignment[];
   isExpanded: boolean;
+  matchReason?: 'person_name' | 'assignment' | 'both';
 }
 
 export interface PersonGroupHeaderProps {
   person: PersonWithAssignments;
+  matchReason?: 'person_name' | 'assignment' | 'both';
   onToggle: () => void;
 }
 
-const PersonGroupHeader: React.FC<PersonGroupHeaderProps> = ({ person, onToggle }) => (
+const PersonGroupHeader: React.FC<PersonGroupHeaderProps> = ({ person, matchReason, onToggle }) => (
   <div className="col-span-2 flex items-center">
     <button
       onClick={onToggle}
@@ -23,7 +25,14 @@ const PersonGroupHeader: React.FC<PersonGroupHeaderProps> = ({ person, onToggle 
         </svg>
       </div>
       <div className="min-w-0 flex-1">
-        <div className="font-medium text-[var(--text)] text-sm truncate">{person.name}</div>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="font-medium text-[var(--text)] text-sm truncate">{person.name}</div>
+          {matchReason === 'person_name' && (
+            <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--muted)] bg-[var(--surface)]">
+              Matched by name
+            </span>
+          )}
+        </div>
         <div className="text-xs text-[var(--muted)]">
           {[
             person.role || undefined,
@@ -38,4 +47,3 @@ const PersonGroupHeader: React.FC<PersonGroupHeaderProps> = ({ person, onToggle 
 );
 
 export default PersonGroupHeader;
-

@@ -39,6 +39,30 @@ const AddAssignmentRow: React.FC<AddAssignmentRowProps> = ({
   onAddSelected,
   onCancel,
 }) => {
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [dropdownAbove, setDropdownAbove] = React.useState(false);
+  const isDropdownOpen = showProjectDropdown && projectSearchResults.length > 0;
+
+  React.useEffect(() => {
+    if (!isDropdownOpen) return;
+    const updatePlacement = () => {
+      const el = searchInputRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const dropdownHeight = 200;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setDropdownAbove(spaceBelow < dropdownHeight && spaceAbove > spaceBelow);
+    };
+    updatePlacement();
+    window.addEventListener('resize', updatePlacement);
+    window.addEventListener('scroll', updatePlacement, true);
+    return () => {
+      window.removeEventListener('resize', updatePlacement);
+      window.removeEventListener('scroll', updatePlacement, true);
+    };
+  }, [isDropdownOpen, projectSearchResults.length]);
+
   return (
     <div className="grid gap-px p-1 bg-[var(--card)] border border-[var(--border)]" style={{ gridTemplateColumns: gridTemplate }}>
       <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2 relative">
@@ -74,9 +98,10 @@ const AddAssignmentRow: React.FC<AddAssignmentRowProps> = ({
           placeholder="Search projects (name, client, number)..."
           className="w-full px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
           autoFocus
+          ref={searchInputRef}
         />
-        {showProjectDropdown && projectSearchResults.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg z-50 max-h-48 overflow-y-auto">
+        {isDropdownOpen && (
+          <div className={`absolute left-0 right-0 z-50 ${dropdownAbove ? 'bottom-full mb-1' : 'top-full mt-1'} bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-48 overflow-y-auto`}>
             {projectSearchResults.map((project, index) => (
               <button
                 key={project.id}

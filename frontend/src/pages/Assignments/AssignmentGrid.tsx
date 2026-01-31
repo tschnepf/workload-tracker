@@ -75,6 +75,7 @@ import { isAdminOrManager } from '@/utils/roleAccess';
 interface PersonWithAssignments extends Person {
   assignments: Assignment[];
   isExpanded: boolean;
+  matchReason?: 'person_name' | 'assignment' | 'both';
 }
 // Removed local Monday computation - weeks come from server snapshot only.
 
@@ -161,7 +162,9 @@ const AssignmentGrid: React.FC = () => {
   
   // Toast state (used by status controls)
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
-  const showToast = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => { setToast({ message, type }); };
+  const showToast = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    setToast({ message, type });
+  }, []);
 
   // Status controls (dropdown + project status updates)
   const { statusDropdown, projectStatus, getProjectStatus, handleStatusChange } = useStatusControls({
@@ -178,6 +181,21 @@ const AssignmentGrid: React.FC = () => {
   const [searchOp, setSearchOp] = useState<'or' | 'and' | 'not'>('or');
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
   const searchTokenSeq = useRef(0);
+  const normalizedSearchTokens = useMemo(() => {
+    return searchTokens
+      .map((token) => ({ ...token, term: token.term.trim().toLowerCase() }))
+      .filter((token) => token.term.length > 0);
+  }, [searchTokens]);
+  const [searchMeta, setSearchMeta] = useState<{
+    people: Person[];
+    assignmentCountsByPerson: Record<string, number>;
+    peopleMatchReason: Record<string, 'person_name' | 'assignment' | 'both'>;
+    filteredTotals: Record<string, Record<string, number>>;
+  } | null>(null);
+  const [searchMetaLoading, setSearchMetaLoading] = useState(false);
+  const searchMetaRequestIdRef = useRef(0);
+  const [filteredAssignmentsByPerson, setFilteredAssignmentsByPerson] = useState<Record<number, Assignment[]>>({});
+  const [filteredAssignmentsLoaded, setFilteredAssignmentsLoaded] = useState<Set<number>>(new Set());
   const addUI = useProjectAssignmentAdd({
     search: (query) => searchProjects(query),
     onAdd: (personId, project) => addAssignment(personId, project),
@@ -190,12 +208,55 @@ const AssignmentGrid: React.FC = () => {
   // async job state provided by useAssignmentsSnapshot
   // New multi-select project status filters (aggregate selection)
   const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter, matchesStatusFilters } = useProjectStatusFilters(deliverables);
+  const statusFilterList = useMemo(
+    () => Array.from(selectedStatusFilters).filter((s) => s !== 'Show All'),
+    [selectedStatusFilters]
+  );
+  const statusIn = useMemo(
+    () => (statusFilterList.length ? statusFilterList.join(',') : undefined),
+    [statusFilterList]
+  );
+  const searchTokensActive = useMemo(
+    () => normalizedSearchTokens.length > 0,
+    [normalizedSearchTokens.length]
+  );
+  const serverFilterActive = searchTokensActive;
+  const searchTokensPayload = useMemo(
+    () => normalizedSearchTokens.map(({ term, op }) => ({ term, op })),
+    [normalizedSearchTokens]
+  );
 
-  const normalizedSearchTokens = useMemo(() => {
-    return searchTokens
-      .map((token) => ({ ...token, term: token.term.trim().toLowerCase() }))
-      .filter((token) => token.term.length > 0);
-  }, [searchTokens]);
+  const buildSearchPayload = useCallback((overrides?: Partial<{
+    page: number;
+    page_size: number;
+    project: number;
+    person: number;
+  }>) => {
+    const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+    const includeChildren = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+    return {
+      page: overrides?.page,
+      page_size: overrides?.page_size,
+      department: dept,
+      include_children: includeChildren,
+      include_placeholders: 0,
+      status_in: statusIn,
+      search_tokens: searchTokensPayload,
+      project: overrides?.project,
+      person: overrides?.person,
+    };
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, searchTokensPayload, statusIn]);
+  const hoursByPersonView = useMemo(() => {
+    if (!serverFilterActive) return hoursByPerson;
+    if (!searchMeta?.filteredTotals) return {};
+    const next: Record<number, Record<string, number>> = {};
+    Object.entries(searchMeta.filteredTotals).forEach(([pid, map]) => {
+      const personId = Number(pid);
+      if (!Number.isFinite(personId)) return;
+      next[personId] = map as Record<string, number>;
+    });
+    return next;
+  }, [serverFilterActive, hoursByPerson, searchMeta?.filteredTotals]);
 
   const matchesTokensText = useCallback((text: string) => {
     if (!normalizedSearchTokens.length) return true;
@@ -294,6 +355,43 @@ const AssignmentGrid: React.FC = () => {
       setActiveTokenId(null);
     }
   }, [addSearchToken, searchInput.length, searchTokens.length]);
+
+  const fetchSearchMeta = useCallback(async () => {
+    const requestId = (searchMetaRequestIdRef.current += 1);
+    setSearchMetaLoading(true);
+    try {
+      const res = await assignmentsApi.search(buildSearchPayload({ page: 1, page_size: 1 }));
+      if (searchMetaRequestIdRef.current !== requestId) return;
+      setSearchMeta({
+        people: res.people || [],
+        assignmentCountsByPerson: res.assignmentCountsByPerson || {},
+        peopleMatchReason: res.peopleMatchReason || {},
+        filteredTotals: res.filteredTotals || {},
+      });
+    } catch (e: any) {
+      if (searchMetaRequestIdRef.current !== requestId) return;
+      showToast(e?.message || 'Failed to apply search filters', 'error');
+    } finally {
+      if (searchMetaRequestIdRef.current === requestId) {
+        setSearchMetaLoading(false);
+      }
+    }
+  }, [buildSearchPayload, showToast]);
+
+  useEffect(() => {
+    if (serverFilterActive) return;
+    setSearchMeta((prev) => (prev ? null : prev));
+    setSearchMetaLoading((prev) => (prev ? false : prev));
+    setFilteredAssignmentsByPerson((prev) => (Object.keys(prev).length ? {} : prev));
+    setFilteredAssignmentsLoaded((prev) => (prev.size ? new Set() : prev));
+  }, [serverFilterActive]);
+
+  useEffect(() => {
+    if (!serverFilterActive) return;
+    setFilteredAssignmentsByPerson({});
+    setFilteredAssignmentsLoaded(new Set());
+    void fetchSearchMeta();
+  }, [serverFilterActive, fetchSearchMeta]);
 
   const handleAssignmentRoleChange = async (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => {
     await updateAssignmentRoleAction({
@@ -478,90 +576,129 @@ const AssignmentGrid: React.FC = () => {
     return map;
   }, [deliverables]);
 
+  const filterAssignments = useCallback((assignments: Assignment[]): Assignment[] => {
+    if (!assignments?.length) return [];
+    return assignments.filter((assignment) => {
+      const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
+      if (!matchesStatusFilters(project as Project)) return false;
+      if (!matchesSearchTokensAssignment(assignment)) return false;
+      return true;
+    });
+  }, [matchesStatusFilters, matchesSearchTokensAssignment, projectsById]);
+
+  const sortAssignments = useCallback((assignments: Assignment[]): Assignment[] => {
+    const list = [...assignments];
+    if (list.length <= 1) return list;
+    if (personSortMode === 'deliverable') {
+      list.sort((a, b) => {
+        const ad = a?.project ? nextDeliverableByProject.get(a.project) : undefined;
+        const bd = b?.project ? nextDeliverableByProject.get(b.project) : undefined;
+        if (ad && bd) return ad.localeCompare(bd);
+        if (ad && !bd) return -1;
+        if (!ad && bd) return 1;
+        const ap = a?.project ? projectsById.get(a.project) : undefined;
+        const bp = b?.project ? projectsById.get(b.project) : undefined;
+        const ac = (ap?.client || '').toString().trim().toLowerCase();
+        const bc = (bp?.client || '').toString().trim().toLowerCase();
+        if (ac !== bc) return ac.localeCompare(bc);
+        const an = (ap?.name || '').toString().trim().toLowerCase();
+        const bn = (bp?.name || '').toString().trim().toLowerCase();
+        return an.localeCompare(bn);
+      });
+    } else {
+      list.sort((a, b) => {
+        const ap = a?.project ? projectsById.get(a.project) : undefined;
+        const bp = b?.project ? projectsById.get(b.project) : undefined;
+        const ac = (ap?.client || '').toString().trim().toLowerCase();
+        const bc = (bp?.client || '').toString().trim().toLowerCase();
+        if (ac !== bc) return ac.localeCompare(bc);
+        const an = (ap?.name || '').toString().trim().toLowerCase();
+        const bn = (bp?.name || '').toString().trim().toLowerCase();
+        return an.localeCompare(bn);
+      });
+    }
+    return list;
+  }, [personSortMode, nextDeliverableByProject, projectsById]);
+
   // Filter + sort assignments based on status filters and current sort mode
   const getVisibleAssignments = useCallback((assignments: Assignment[]): Assignment[] => {
     try {
       if (!assignments?.length) return [];
-
-      const filteredAssignments = assignments.filter(assignment => {
-        const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
-        if (!matchesStatusFilters(project as Project)) return false;
-        if (!matchesSearchTokensAssignment(assignment)) return false;
-        return true;
-      });
-
-      // Sort within person based on active mode
-      const list = [...filteredAssignments];
-      if (personSortMode === 'deliverable') {
-        list.sort((a, b) => {
-          const ad = a?.project ? nextDeliverableByProject.get(a.project) : undefined;
-          const bd = b?.project ? nextDeliverableByProject.get(b.project) : undefined;
-          if (ad && bd) return ad.localeCompare(bd);
-          if (ad && !bd) return -1;
-          if (!ad && bd) return 1;
-          // fallback deterministic by client->project
-          const ap = a?.project ? projectsById.get(a.project) : undefined;
-          const bp = b?.project ? projectsById.get(b.project) : undefined;
-          const ac = (ap?.client || '').toString().trim().toLowerCase();
-          const bc = (bp?.client || '').toString().trim().toLowerCase();
-          if (ac !== bc) return ac.localeCompare(bc);
-          const an = (ap?.name || '').toString().trim().toLowerCase();
-          const bn = (bp?.name || '').toString().trim().toLowerCase();
-          return an.localeCompare(bn);
-        });
-      } else {
-        list.sort((a, b) => {
-          const ap = a?.project ? projectsById.get(a.project) : undefined;
-          const bp = b?.project ? projectsById.get(b.project) : undefined;
-          const ac = (ap?.client || '').toString().trim().toLowerCase();
-          const bc = (bp?.client || '').toString().trim().toLowerCase();
-          if (ac !== bc) return ac.localeCompare(bc);
-          const an = (ap?.name || '').toString().trim().toLowerCase();
-          const bn = (bp?.name || '').toString().trim().toLowerCase();
-          return an.localeCompare(bn);
-        });
-      }
-      return list;
+      return sortAssignments(filterAssignments(assignments));
     } catch (error) {
       console.error('Error filtering/sorting assignments:', error);
       return assignments || []; // Safe fallback - show all on error
     }
-  }, [matchesStatusFilters, matchesSearchTokensAssignment, personSortMode, nextDeliverableByProject, projectsById]);
+  }, [filterAssignments, sortAssignments]);
+
+  const peopleMatchReasonById = useMemo(
+    () => searchMeta?.peopleMatchReason || {},
+    [searchMeta?.peopleMatchReason]
+  );
 
   const visiblePeople = useMemo(() => {
-    if (!normalizedSearchTokens.length) return people;
-    return (people || []).filter((person) => {
-      const name = person?.name || '';
-      if (matchesTokensText(name)) return true;
-      const assignments = person.assignments || [];
-      return getVisibleAssignments(assignments).length > 0;
+    if (!serverFilterActive) return people;
+    const matches = searchMeta?.people || [];
+    if (!matches.length) return [];
+    return matches.map((p) => {
+      const existing = peopleById.get(p.id);
+      if (existing) {
+        return {
+          ...existing,
+          name: p.name ?? existing.name,
+          weeklyCapacity: p.weeklyCapacity ?? existing.weeklyCapacity,
+          department: p.department ?? existing.department,
+        };
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        weeklyCapacity: p.weeklyCapacity ?? null,
+        department: p.department ?? null,
+        assignments: [],
+        isExpanded: false,
+      };
     });
-  }, [people, normalizedSearchTokens.length, matchesTokensText, getVisibleAssignments]);
+  }, [serverFilterActive, people, peopleById, searchMeta?.people]);
+
+  const resolvePersonAssignments = useCallback((person: PersonWithAssignments): Assignment[] => {
+    if (serverFilterActive && filteredAssignmentsLoaded.has(person.id!)) {
+      const rows = filteredAssignmentsByPerson[person.id!] || [];
+      return sortAssignments(rows);
+    }
+    return getVisibleAssignments(person.assignments || []);
+  }, [serverFilterActive, filteredAssignmentsLoaded, filteredAssignmentsByPerson, sortAssignments, getVisibleAssignments]);
 
   const visiblePeopleWithAssignments = useMemo(() => {
     return (visiblePeople || []).map((person) => ({
       ...person,
-      assignments: getVisibleAssignments(person.assignments || []),
+      assignments: resolvePersonAssignments(person as PersonWithAssignments),
+      matchReason: peopleMatchReasonById?.[String(person.id)],
     }));
-  }, [visiblePeople, getVisibleAssignments]);
+  }, [visiblePeople, resolvePersonAssignments, peopleMatchReasonById]);
 
   const visibleAssignmentsCount = useMemo(() => {
+    if (serverFilterActive && searchMeta) {
+      const counts = searchMeta.assignmentCountsByPerson || {};
+      return (visiblePeople || []).reduce((total, person) => total + (counts[String(person.id)] || 0), 0);
+    }
     return (visiblePeople || []).reduce((total, person) => total + getVisibleAssignments(person.assignments || []).length, 0);
-  }, [visiblePeople, getVisibleAssignments]);
+  }, [serverFilterActive, searchMeta, visiblePeople, getVisibleAssignments]);
+
   const rowOrder = useMemo(() => {
     const out: string[] = [];
     try {
       for (const person of visiblePeople || []) {
         if (!person?.isExpanded) continue;
         if (loadingAssignments.has(person.id!)) continue;
-        const assignments = getVisibleAssignments(person.assignments || []);
+        const assignments = resolvePersonAssignments(person as PersonWithAssignments);
         for (const a of assignments) {
           if (a?.id != null) out.push(`${person.id!}:${a.id!}`);
         }
       }
     } catch {}
     return out;
-  }, [visiblePeople, loadingAssignments, getVisibleAssignments]);
+  }, [visiblePeople, loadingAssignments, resolvePersonAssignments]);
 
   const peopleRef = useRef<PersonWithAssignments[]>([]);
   const assignmentsRef = useRef<Assignment[]>([]);
@@ -996,7 +1133,7 @@ const AssignmentGrid: React.FC = () => {
     return map;
   }, [classifyDeliverablePhase, deliverables, weeks]);
 
-  // Smart project search (kept as-is; independent of status filters)
+  // Smart project search (respects current project status filters)
   const searchProjects = (query: string): Project[] => {
     try {
       if (!projectsData?.length) return [];
@@ -1008,6 +1145,7 @@ const AssignmentGrid: React.FC = () => {
       const searchWords = query.trim().toLowerCase().split(/\s+/);
       
       let results = projectsData.filter(project => {
+        if (!matchesStatusFilters(project as Project)) return false;
         // Null/undefined safety for project properties
         const searchableText = [
           project?.name || '',
@@ -1155,9 +1293,10 @@ const AssignmentGrid: React.FC = () => {
     setEditingCell,
     setEditingValue,
     findAssignment: (personId: number, assignmentId: number) => {
-      const person = people.find(p => p.id === personId);
-      const assignment = person?.assignments.find(a => a.id === assignmentId);
-      return Boolean(person && assignment);
+      const person = peopleById.get(personId) || visiblePeople.find(p => p.id === personId);
+      if (!person) return false;
+      const assignments = resolvePersonAssignments(person as PersonWithAssignments);
+      return assignments.some(a => a.id === assignmentId);
     }
   });
 
@@ -1206,12 +1345,61 @@ const AssignmentGrid: React.FC = () => {
 
   // Load a person's assignments once when expanding.
   // Prefer already-loaded assignments from state to avoid redundant network calls.
-  const ensureAssignmentsLoaded = async (personId: number): Promise<Assignment[]> => {
+  type AssignmentLoadMode = 'full' | 'filtered';
+
+  const fetchFilteredAssignmentsForPerson = useCallback(async (personId: number): Promise<Assignment[]> => {
+    const pageSize = 200;
+    let page = 1;
+    let count = 0;
+    let results: Assignment[] = [];
+
+    while (true) {
+      const res = await assignmentsApi.search(buildSearchPayload({ page, page_size: pageSize, person: personId }));
+      const rows = res.results || [];
+      results = results.concat(rows);
+      count = res.count ?? results.length;
+      if (results.length >= count || rows.length === 0) break;
+      page += 1;
+      if (page > 50) break;
+    }
+    return results;
+  }, [buildSearchPayload]);
+
+  const ensureAssignmentsLoaded = async (
+    personId: number,
+    opts?: { mode?: AssignmentLoadMode; force?: boolean }
+  ): Promise<Assignment[]> => {
     const person = people.find(p => p.id === personId);
-    if (loadedAssignmentIds.has(personId) || loadingAssignments.has(personId)) {
+    const mode = opts?.mode ?? (serverFilterActive ? 'filtered' : 'full');
+    const force = opts?.force ?? false;
+
+    if (mode === 'filtered') {
+      if (!force && (filteredAssignmentsLoaded.has(personId) || loadingAssignments.has(personId))) {
+        return filteredAssignmentsByPerson[personId] || [];
+      }
+      setLoadingAssignments(prev => new Set(prev).add(personId));
+      try {
+        const rows = await fetchFilteredAssignmentsForPerson(personId);
+        setFilteredAssignmentsByPerson(prev => ({ ...prev, [personId]: rows }));
+        setFilteredAssignmentsLoaded(prev => {
+          const next = new Set(prev);
+          next.add(personId);
+          return next;
+        });
+        return rows || [];
+      } catch (e: any) {
+        showToast('Failed to load filtered assignments: ' + (e?.message || 'Unknown error'), 'error');
+        setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: false } : p)));
+        return [];
+      } finally {
+        setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
+      }
+    }
+
+    if (!force && (loadedAssignmentIds.has(personId) || loadingAssignments.has(personId))) {
       return person?.assignments || [];
     }
-    if (person && Array.isArray(person.assignments) && person.assignments.length > 0) {
+    if (!force && person && Array.isArray(person.assignments) && person.assignments.length > 0) {
       setLoadedAssignmentIds(prev => {
         const next = new Set(prev);
         next.add(personId);
@@ -1257,42 +1445,52 @@ const AssignmentGrid: React.FC = () => {
     } finally {
       setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
     }
-    return person?.assignments || [];
   };
 
   // Manual refresh for a person's assignments on demand
   const refreshPersonAssignments = async (personId: number) => {
     setLoadingAssignments(prev => new Set(prev).add(personId));
     try {
-      const rows = await assignmentsApi.byPerson(personId);
-      setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
-      setLoadedAssignmentIds(prev => {
-        const next = new Set(prev);
-        next.add(personId);
-        return next;
-      });
-      // Recompute aggregated totals for this person from refreshed rows
-      try {
-        const weekKeys = weeks.map(w => w.date);
-        setHoursByPerson(prev => {
-          const next = { ...prev } as Record<number, Record<string, number>>;
-          const totals: Record<string, number> = {};
-          for (const wk of weekKeys) {
-            let sum = 0;
-            for (const a of rows) {
-              const wh = (a as any).weeklyHours || {};
-              const v = parseFloat((wh[wk] ?? 0).toString()) || 0;
-              sum += v;
-            }
-            if (sum !== 0) totals[wk] = sum;
-          }
-          if (Object.keys(totals).length > 0) {
-            next[personId] = { ...(next[personId] || {}), ...totals };
-          }
+      if (serverFilterActive) {
+        const rows = await fetchFilteredAssignmentsForPerson(personId);
+        setFilteredAssignmentsByPerson(prev => ({ ...prev, [personId]: rows }));
+        setFilteredAssignmentsLoaded(prev => {
+          const next = new Set(prev);
+          next.add(personId);
           return next;
         });
-      } catch {}
-      showToast('Assignments refreshed', 'success');
+        showToast('Filtered assignments refreshed', 'success');
+      } else {
+        const rows = await assignmentsApi.byPerson(personId);
+        setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
+        setLoadedAssignmentIds(prev => {
+          const next = new Set(prev);
+          next.add(personId);
+          return next;
+        });
+        // Recompute aggregated totals for this person from refreshed rows
+        try {
+          const weekKeys = weeks.map(w => w.date);
+          setHoursByPerson(prev => {
+            const next = { ...prev } as Record<number, Record<string, number>>;
+            const totals: Record<string, number> = {};
+            for (const wk of weekKeys) {
+              let sum = 0;
+              for (const a of rows) {
+                const wh = (a as any).weeklyHours || {};
+                const v = parseFloat((wh[wk] ?? 0).toString()) || 0;
+                sum += v;
+              }
+              if (sum !== 0) totals[wk] = sum;
+            }
+            if (Object.keys(totals).length > 0) {
+              next[personId] = { ...(next[personId] || {}), ...totals };
+            }
+            return next;
+          });
+        } catch {}
+        showToast('Assignments refreshed', 'success');
+      }
     } catch (e: any) {
       showToast('Failed to refresh assignments: ' + (e?.message || 'Unknown error'), 'error');
     } finally {
@@ -1364,6 +1562,11 @@ const AssignmentGrid: React.FC = () => {
       } catch {}
 
       setLoadedAssignmentIds(() => new Set(personIds));
+      if (serverFilterActive) {
+        setFilteredAssignmentsByPerson({});
+        setFilteredAssignmentsLoaded(new Set());
+        void fetchSearchMeta();
+      }
       showToast(`Refreshed assignments for all ${people.length} people`, 'success');
     } catch (error) {
       showToast('Failed to refresh some assignments', 'error');
@@ -1398,8 +1601,7 @@ const AssignmentGrid: React.FC = () => {
   // Calculate person total using filtered assignments with null safety
   const calculatePersonTotal = (assignments: Assignment[], week: string): number => {
     try {
-      const visibleAssignments = getVisibleAssignments(assignments);
-      return visibleAssignments.reduce((sum, assignment) => {
+      return (assignments || []).reduce((sum, assignment) => {
         const hours = parseFloat(assignment?.weeklyHours?.[week]?.toString() || '0') || 0;
         return sum + hours;
       }, 0);
@@ -1411,11 +1613,12 @@ const AssignmentGrid: React.FC = () => {
 
   // Get person's total hours for a specific week (updated to use filtered assignments)
   const getPersonTotalHours = (person: PersonWithAssignments, week: string) => {
-    const byWeek = hoursByPerson[person.id!];
+    const byWeek = hoursByPersonView[person.id!];
     if (byWeek && Object.prototype.hasOwnProperty.call(byWeek, week)) {
       return byWeek[week] || 0;
     }
-    return calculatePersonTotal(person.assignments, week);
+    const assignments = resolvePersonAssignments(person);
+    return calculatePersonTotal(assignments, week);
   };
 
   // Add new assignment
@@ -1467,7 +1670,63 @@ const AssignmentGrid: React.FC = () => {
 
   // Update assignment hours
   const updateAssignmentHours = async (personId: number, assignmentId: number, week: string, hours: number) => {
-    await updateAssignmentHoursAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, personId, assignmentId, week, hours, showToast });
+    if (!serverFilterActive) {
+      await updateAssignmentHoursAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, personId, assignmentId, week, hours, showToast });
+      return;
+    }
+
+    const rows = filteredAssignmentsByPerson[personId] || [];
+    const assignment = rows.find((a) => a.id === assignmentId);
+    if (!assignment) return;
+
+    const prevWeeklyHours = { ...(assignment.weeklyHours || {}) };
+    const updatedWeeklyHours = { ...prevWeeklyHours, [week]: hours };
+
+    const updateFilteredTotalsForPerson = (assignments: Assignment[]) => {
+      const totals: Record<string, number> = {};
+      assignments.forEach((a) => {
+        const wh = (a as any).weeklyHours || {};
+        Object.entries(wh).forEach(([wk, val]) => {
+          const v = parseFloat((val as any)?.toString?.() || '0') || 0;
+          if (!v) return;
+          totals[wk] = (totals[wk] || 0) + v;
+        });
+      });
+      setSearchMeta((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          filteredTotals: {
+            ...(prev.filteredTotals || {}),
+            [String(personId)]: totals,
+          },
+        };
+      });
+    };
+
+    const nextRows = rows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a));
+    setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+    updateFilteredTotalsForPerson(nextRows);
+
+    try {
+      try {
+        await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi);
+      } catch (err: any) {
+        if (err?.status === 412) {
+          await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi, { skipIfMatch: true });
+        } else {
+          throw err;
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+    } catch (err: any) {
+      const revertedRows = rows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
+      setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: revertedRows }));
+      updateFilteredTotalsForPerson(revertedRows);
+      console.error('Failed to update assignment hours:', err);
+      showToast('Failed to update hours: ' + (err?.message || 'Unknown error'), 'error');
+    }
   };
 
   // Helper function to check if a cell is in the selected cells array
@@ -1481,7 +1740,121 @@ const AssignmentGrid: React.FC = () => {
 
   // Update multiple cells at once (for bulk editing)
   const updateMultipleCells = async (cells: { personId: number, assignmentId: number, week: string }[], hours: number) => {
-    await updateMultipleCellsAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, cells, hours, showToast });
+    if (!serverFilterActive) {
+      await updateMultipleCellsAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, cells, hours, showToast });
+      return;
+    }
+
+    const updatesByAssignmentId = new Map<number, { personId: number; assignmentId: number; weeklyHours: Record<string, number>; prevWeeklyHours: Record<string, number>; }>();
+    cells.forEach((cell) => {
+      const rows = filteredAssignmentsByPerson[cell.personId] || [];
+      const assignment = rows.find((a) => a.id === cell.assignmentId);
+      if (!assignment) return;
+      if (!updatesByAssignmentId.has(cell.assignmentId)) {
+        updatesByAssignmentId.set(cell.assignmentId, {
+          personId: cell.personId,
+          assignmentId: cell.assignmentId,
+          weeklyHours: { ...(assignment.weeklyHours || {}) },
+          prevWeeklyHours: { ...(assignment.weeklyHours || {}) },
+        });
+      }
+      const update = updatesByAssignmentId.get(cell.assignmentId);
+      if (update) update.weeklyHours[cell.week] = hours;
+    });
+
+    const updatesArray = Array.from(updatesByAssignmentId.values());
+    if (updatesArray.length === 0) return;
+
+    const touchedPeople = new Set(updatesArray.map((u) => u.personId));
+    const updateFilteredTotalsForPerson = (personId: number, assignments: Assignment[]) => {
+      const totals: Record<string, number> = {};
+      assignments.forEach((a) => {
+        const wh = (a as any).weeklyHours || {};
+        Object.entries(wh).forEach(([wk, val]) => {
+          const v = parseFloat((val as any)?.toString?.() || '0') || 0;
+          if (!v) return;
+          totals[wk] = (totals[wk] || 0) + v;
+        });
+      });
+      setSearchMeta((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          filteredTotals: {
+            ...(prev.filteredTotals || {}),
+            [String(personId)]: totals,
+          },
+        };
+      });
+    };
+
+    setFilteredAssignmentsByPerson((prev) => {
+      const next = { ...prev };
+      updatesArray.forEach((u) => {
+        const rows = next[u.personId] || [];
+        next[u.personId] = rows.map((a) => (a.id === u.assignmentId ? { ...a, weeklyHours: u.weeklyHours } : a));
+      });
+      return next;
+    });
+    touchedPeople.forEach((pid) => {
+      const rows = (filteredAssignmentsByPerson[pid] || []).map((a) => {
+        const u = updatesByAssignmentId.get(a.id!);
+        return u ? { ...a, weeklyHours: u.weeklyHours } : a;
+      });
+      updateFilteredTotalsForPerson(pid, rows);
+    });
+
+    let results: PromiseSettledResult<any>[] = [];
+    if (updatesArray.length > 1) {
+      try {
+        const bulk = await bulkUpdateAssignmentHours(
+          updatesArray.map((u) => ({ assignmentId: u.assignmentId, weeklyHours: u.weeklyHours })),
+          assignmentsApi
+        );
+        const ok = (bulk?.results || []).map((r: any) => ({ status: 'fulfilled', value: r })) as PromiseSettledResult<any>[];
+        results = ok;
+      } catch (e) {
+        results = updatesArray.map(() => ({ status: 'rejected', reason: e })) as PromiseSettledResult<any>[];
+      }
+    } else {
+      results = await Promise.allSettled(
+        updatesArray.map(async (u) => {
+          try {
+            return await updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi);
+          } catch (err: any) {
+            if (err?.status === 412) {
+              return await updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi, { skipIfMatch: true });
+            }
+            throw err;
+          }
+        })
+      );
+    }
+
+    const failed = updatesArray.filter((_, idx) => results[idx]?.status === 'rejected');
+    const succeeded = results.some((r) => r.status === 'fulfilled');
+    if (succeeded) {
+      queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+    }
+    if (failed.length > 0) {
+      setFilteredAssignmentsByPerson((prev) => {
+        const next = { ...prev };
+        failed.forEach((f) => {
+          const rows = next[f.personId] || [];
+          next[f.personId] = rows.map((a) => (a.id === f.assignmentId ? { ...a, weeklyHours: f.prevWeeklyHours } : a));
+        });
+        return next;
+      });
+      failed.forEach((f) => {
+        const rows = (filteredAssignmentsByPerson[f.personId] || []).map((a) => {
+          if (a.id === f.assignmentId) return { ...a, weeklyHours: f.prevWeeklyHours };
+          return a;
+        });
+        updateFilteredTotalsForPerson(f.personId, rows);
+      });
+      showToast(`Failed to update ${failed.length} assignment${failed.length === 1 ? '' : 's'}.`, 'error');
+    }
   };
 
   type AutoHoursUpdate = {
@@ -1750,7 +2123,7 @@ const AssignmentGrid: React.FC = () => {
     if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) {
       return;
     }
-    const assignments = await ensureAssignmentsLoaded(person.id!);
+    const assignments = await ensureAssignmentsLoaded(person.id!, { mode: 'full' });
     if (!assignments || assignments.length === 0) {
       showToast('No assignments found for this person.', 'info');
       return;
@@ -2030,7 +2403,7 @@ const AssignmentGrid: React.FC = () => {
           <MobilePersonAccordions
             people={visiblePeopleWithAssignments as any}
             weeks={weeks}
-            hoursByPerson={hoursByPerson}
+            hoursByPerson={hoursByPersonView}
             onExpand={(pid) => ensureAssignmentsLoaded(pid)}
             onAssignmentPress={handleMobileAssignmentPress}
             canEditAssignments={canEditAssignments}
@@ -2091,12 +2464,11 @@ const AssignmentGrid: React.FC = () => {
             <div style={{ minWidth: totalMinWidth }}>
               <div>
                 <PeopleSection
-                  people={visiblePeople as any}
+                  people={visiblePeopleWithAssignments as any}
                   weeks={isMobileLayout ? mobileWeeks : weeks}
                   gridTemplate={gridTemplate}
                   loadingAssignments={loadingAssignments}
                   projectsById={projectsById as any}
-                  getVisibleAssignments={getVisibleAssignments}
                   togglePersonExpanded={(pid) => togglePersonExpanded(pid)}
                   addAssignment={addAssignment}
                   removeAssignment={(assignmentId, personId) => removeAssignment(assignmentId, personId)}

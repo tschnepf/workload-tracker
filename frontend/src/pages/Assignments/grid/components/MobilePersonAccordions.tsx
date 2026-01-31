@@ -4,7 +4,7 @@ import type { WeekHeader } from '@/pages/Assignments/grid/utils';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, getUtilizationPill, type UtilizationScheme } from '@/util/utilization';
 
-type PersonWithHours = Person & { assignments?: any[]; isExpanded?: boolean };
+type PersonWithHours = Person & { assignments?: any[]; isExpanded?: boolean; matchReason?: 'person_name' | 'assignment' | 'both' };
 
 type Props = {
   people: PersonWithHours[];
@@ -57,7 +57,14 @@ const MobilePersonAccordions: React.FC<Props> = ({
               aria-expanded={isOpen}
             >
               <div className="text-left">
-                <div className="text-base font-semibold text-[var(--text)]">{person.name}</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-base font-semibold text-[var(--text)]">{person.name}</div>
+                  {person.matchReason === 'person_name' ? (
+                    <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--muted)] bg-[var(--surface)]">
+                      Matched by name
+                    </span>
+                  ) : null}
+                </div>
                 {person.weeklyCapacity ? (
                   <div className="text-xs text-[var(--muted)]">Capacity {person.weeklyCapacity}h</div>
                 ) : null}

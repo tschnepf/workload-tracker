@@ -12,7 +12,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
-from django.db.models import Sum, Max, Min, Prefetch, Value, Count, Q  # noqa: F401
+from django.db.models import Sum, Max, Min, Prefetch, Value, Count, Q, Exists, OuterRef  # noqa: F401
 from core.deliverable_phase import build_project_week_classification
 from core.choices import MembershipEventType
 from django.db.models.functions import Coalesce, Lower
@@ -33,6 +33,7 @@ from .services import WorkloadRebalancingService
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponseNotModified
+from django.utils import timezone
 from django.utils.http import http_date
 from datetime import date, timedelta
 import hashlib
@@ -41,6 +42,7 @@ import time
 from typing import List, Dict, Tuple, Set, Optional
 import logging
 from roles.models import Role
+from core.search_tokens import parse_search_tokens, apply_token_filter, build_token_query
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
@@ -87,6 +89,126 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return qs.filter(person__is_active=True)
         # For detail and non-list actions, allow placeholder rows but exclude inactive people.
         return qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
+
+    def _apply_department_filter(self, queryset, dept_param, include_children, include_placeholders):
+        """Apply department scoping for assignment/person filters."""
+        if dept_param in (None, ""):
+            return queryset
+        try:
+            dept_id = int(dept_param)
+            if include_children:
+                ids = set()
+                stack = [dept_id]
+                while stack:
+                    current = stack.pop()
+                    if current in ids:
+                        continue
+                    ids.add(current)
+                    for d in (
+                        Department.objects
+                        .filter(parent_department_id=current)
+                        .values_list('id', flat=True)
+                    ):
+                        if d not in ids:
+                            stack.append(d)
+                if include_placeholders:
+                    return queryset.filter(
+                        Q(person__department_id__in=list(ids)) | Q(department_id__in=list(ids))
+                    )
+                return queryset.filter(person__department_id__in=list(ids))
+            if include_placeholders:
+                return queryset.filter(Q(person__department_id=dept_id) | Q(department_id=dept_id))
+            return queryset.filter(person__department_id=dept_id)
+        except (TypeError, ValueError):  # nosec B110
+            return queryset
+
+    def _apply_common_filters(self, request, queryset, data=None, apply_status_filter: bool = True):
+        """Apply shared filters for list/search endpoints."""
+        include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
+        if isinstance(data, dict) and data.get('include_placeholders') is not None:
+            include_placeholders = str(data.get('include_placeholders')).lower() in ('1', 'true', 'yes')
+
+        project_id = request.query_params.get('project')
+        if isinstance(data, dict) and data.get('project') is not None:
+            project_id = data.get('project')
+        if project_id:
+            try:
+                project_id = int(project_id)
+                queryset = queryset.filter(project_id=project_id)
+            except ValueError:
+                pass
+
+        person_id = request.query_params.get('person')
+        if isinstance(data, dict) and data.get('person') is not None:
+            person_id = data.get('person')
+        if person_id:
+            try:
+                person_id = int(person_id)
+                queryset = queryset.filter(person_id=person_id)
+            except ValueError:
+                pass
+
+        dept_param = request.query_params.get('department')
+        if isinstance(data, dict) and data.get('department') is not None:
+            dept_param = data.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        if isinstance(data, dict) and data.get('include_children') is not None:
+            include_children = str(data.get('include_children')) == '1'
+        queryset = self._apply_department_filter(queryset, dept_param, include_children, include_placeholders)
+
+        if apply_status_filter:
+            status_in = request.query_params.get('status_in')
+            if isinstance(data, dict) and data.get('status_in') is not None:
+                status_in = data.get('status_in')
+            if status_in:
+                try:
+                    statuses = [s.strip() for s in str(status_in).split(',') if s.strip()]
+                    if statuses:
+                        queryset = queryset.filter(project__status__in=statuses)
+                except Exception:
+                    pass
+
+        return queryset
+
+    def _paginate_post_queryset(self, request, queryset, data=None):
+        """Paginate using body-provided page/page_size for POST search endpoints."""
+        from django.core.paginator import Paginator
+        from rest_framework.settings import api_settings
+
+        payload = data or {}
+        try:
+            page_number = int(payload.get('page') or request.query_params.get('page') or 1)
+        except Exception:
+            page_number = 1
+        try:
+            page_size = int(payload.get('page_size') or request.query_params.get('page_size') or api_settings.PAGE_SIZE)
+        except Exception:
+            page_size = api_settings.PAGE_SIZE or 100
+        max_size = getattr(api_settings, 'MAX_PAGE_SIZE', 200) or 200
+        if page_size > max_size:
+            page_size = max_size
+        if page_size <= 0:
+            page_size = api_settings.PAGE_SIZE or 100
+
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        def _page_url(num: int | None) -> str | None:
+            if not num:
+                return None
+            try:
+                params = request.query_params.copy()
+                params['page'] = str(num)
+                params['page_size'] = str(page_size)
+                base = request.build_absolute_uri(request.path)
+                return f"{base}?{params.urlencode()}" if params else base
+            except Exception:
+                return None
+
+        next_url = _page_url(page_obj.next_page_number() if page_obj.has_next() else None)
+        prev_url = _page_url(page_obj.previous_page_number() if page_obj.has_previous() else None)
+
+        return page_obj, paginator, next_url, prev_url
     
     def list(self, request, *args, **kwargs):
         """
@@ -98,66 +220,18 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         except Exception:  # nosec B110
             pass
         queryset = self.get_queryset()
-        include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
-
-        # Filter by project if specified
-        project_id = request.query_params.get('project')
-        if project_id:
-            try:
-                project_id = int(project_id)
-                queryset = queryset.filter(project_id=project_id)
-            except ValueError:
-                return Response({
-                    'error': 'Invalid project ID format'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        # Optional department filter via person.department (with
-        # include_children)
-        dept_param = request.query_params.get('department')
-        include_children = request.query_params.get('include_children') == '1'
-        if dept_param not in (None, ""):
-            try:
-                dept_id = int(dept_param)
-                if include_children:
-                    ids = set()
-                    stack = [dept_id]
-                    while stack:
-                        current = stack.pop()
-                        if current in ids:
-                            continue
-                        ids.add(current)
-                        for d in (
-                            Department.objects
-                            .filter(parent_department_id=current)
-                            .values_list('id', flat=True)
-                        ):
-                            if d not in ids:
-                                stack.append(d)
-                    if include_placeholders:
-                        queryset = queryset.filter(
-                            Q(person__department_id__in=list(ids)) | Q(department_id__in=list(ids))
-                        )
-                    else:
-                        queryset = queryset.filter(
-                            person__department_id__in=list(ids)
-                        )
-                else:
-                    if include_placeholders:
-                        queryset = queryset.filter(Q(person__department_id=dept_id) | Q(department_id=dept_id))
-                    else:
-                        queryset = queryset.filter(person__department_id=dept_id)
-            except (TypeError, ValueError):  # nosec B110
-                # Ignore invalid department filter; return unfiltered
-                pass
+        queryset = self._apply_common_filters(request, queryset)
 
         # Apply stable DB-level ordering: client asc (nulls last), then project name asc (case-insensitive)
         try:
             queryset = queryset.order_by(
                 Coalesce(Lower('project__client'), Value('zzzz_no_client')),
                 Lower('project__name'),
+                'id',
             )
         except Exception:
             # Fallback to basic ordering if DB backend lacks functions
-            queryset = queryset.order_by('project__client', 'project__name')
+            queryset = queryset.order_by('project__client', 'project__name', 'id')
 
         # Compute validators for conditional GET on list
         try:
@@ -206,17 +280,241 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 response['Cache-Control'] = 'private, max-age=30'
             return response
 
-        serializer = self.get_serializer(queryset, many=True)
-        response = Response({
-            'results': serializer.data,
-            'count': len(serializer.data)
-        })
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            response = self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+            response = Response({
+                'results': serializer.data,
+                'count': len(serializer.data)
+            })
         if etag:
             response['ETag'] = f'"{etag}"'
         if last_modified:
             response['Last-Modified'] = http_date(last_modified.timestamp())
             response['Cache-Control'] = 'private, max-age=30'
         return response
+
+    @extend_schema(
+        description="Search assignments with tokenized filters and return people match metadata.",
+        request=inline_serializer(
+            name='AssignmentSearchRequest',
+            fields={
+                'page': serializers.IntegerField(required=False),
+                'page_size': serializers.IntegerField(required=False),
+                'department': serializers.IntegerField(required=False),
+                'include_children': serializers.IntegerField(required=False),
+                'status_in': serializers.CharField(required=False),
+                'include_placeholders': serializers.IntegerField(required=False),
+                'project': serializers.IntegerField(required=False),
+                'person': serializers.IntegerField(required=False),
+                'search_tokens': serializers.ListField(
+                    child=inline_serializer(
+                        name='SearchToken',
+                        fields={
+                            'term': serializers.CharField(),
+                            'op': serializers.ChoiceField(choices=['or', 'and', 'not'])
+                        }
+                    ),
+                    required=False
+                )
+            }
+        ),
+        responses=inline_serializer(
+            name='AssignmentSearchResponse',
+            fields={
+                'count': serializers.IntegerField(),
+                'next': serializers.CharField(allow_null=True, required=False),
+                'previous': serializers.CharField(allow_null=True, required=False),
+                'results': AssignmentSerializer(many=True),
+                'people': serializers.ListField(child=inline_serializer(name='PersonLite', fields={
+                    'id': serializers.IntegerField(),
+                    'name': serializers.CharField(),
+                    'weeklyCapacity': serializers.IntegerField(source='weekly_capacity', required=False),
+                    'department': serializers.IntegerField(required=False, allow_null=True),
+                })),
+                'assignmentCountsByPerson': serializers.DictField(child=serializers.IntegerField()),
+                'peopleMatchReason': serializers.DictField(child=serializers.CharField()),
+                'filteredTotals': serializers.DictField(child=serializers.DictField(child=serializers.FloatField())),
+            }
+        )
+    )
+    @action(detail=False, methods=['post'], url_path='search')
+    def search(self, request):
+        data = request.data or {}
+        queryset = self.get_queryset()
+        queryset = self._apply_common_filters(request, queryset, data=data, apply_status_filter=False)
+
+        tokens = parse_search_tokens(request=request, data=data)
+        assignment_fields = [
+            'person__name',
+            'role_on_project_ref__name',
+            'role_on_project',
+            'project__name',
+            'project__client',
+            'project__project_number',
+            'project__description',
+            'project_name',
+        ]
+        queryset = apply_token_filter(queryset, tokens, assignment_fields)
+
+        # Status filtering with derived modes (active_with_dates / active_no_deliverables)
+        status_in = data.get('status_in') if isinstance(data, dict) else None
+        if status_in is None:
+            status_in = request.query_params.get('status_in')
+        if status_in:
+            try:
+                statuses = [s.strip().lower() for s in str(status_in).split(',') if s.strip()]
+            except Exception:
+                statuses = []
+            if statuses:
+                base_statuses = [s for s in statuses if s not in ('active_with_dates', 'active_no_deliverables', 'show all', 'show_all')]
+                wants_with_dates = 'active_with_dates' in statuses
+                wants_no_dates = 'active_no_deliverables' in statuses
+
+                status_q = Q()
+                if base_statuses:
+                    status_q |= Q(project__status__in=base_statuses)
+                if wants_with_dates or wants_no_dates:
+                    today = timezone.now().date()
+                    has_future = Exists(
+                        Deliverable.objects.filter(
+                            project=OuterRef('project_id'),
+                            date__gt=today,
+                            date__isnull=False,
+                            is_completed=False,
+                        )
+                    )
+                    if wants_with_dates:
+                        status_q |= (Q(project__status__iexact='active') & has_future)
+                    if wants_no_dates:
+                        status_q |= (Q(project__status__iexact='active') & ~has_future)
+                if status_q:
+                    queryset = queryset.filter(status_q)
+
+        # Stable ordering for pagination
+        try:
+            queryset = queryset.order_by(
+                Coalesce(Lower('project__client'), Value('zzzz_no_client')),
+                Lower('project__name'),
+                'id',
+            )
+        except Exception:
+            queryset = queryset.order_by('project__client', 'project__name', 'id')
+
+        # People matching (person name only) + assignment matches
+        people_qs = Person.objects.filter(is_active=True)
+        dept_param = data.get('department') if isinstance(data, dict) else None
+        if dept_param is None:
+            dept_param = request.query_params.get('department')
+        include_children = str(data.get('include_children') if isinstance(data, dict) else request.query_params.get('include_children') or '0') == '1'
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    ids = set()
+                    stack = [dept_id]
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                            if d not in ids:
+                                stack.append(d)
+                    people_qs = people_qs.filter(department_id__in=list(ids))
+                else:
+                    people_qs = people_qs.filter(department_id=dept_id)
+            except (TypeError, ValueError):  # nosec B110
+                pass
+
+        person_tokens_q = build_token_query(tokens, ['name'])
+        person_match_ids: Set[int] = set()
+        if person_tokens_q is not None:
+            person_match_ids = set(people_qs.filter(person_tokens_q).values_list('id', flat=True))
+
+        assignment_match_ids = set(
+            queryset.filter(person_id__isnull=False)
+            .values_list('person_id', flat=True)
+            .distinct()
+        )
+
+        people_ids = person_match_ids.union(assignment_match_ids)
+        people_list = []
+        if people_ids:
+            people_list = list(
+                people_qs.filter(id__in=people_ids)
+                .values('id', 'name', 'weekly_capacity', 'department_id')
+                .order_by('name', 'id')
+            )
+
+        assignment_counts_by_person = {
+            str(row['person_id']): row['count']
+            for row in queryset.filter(person_id__isnull=False)
+            .values('person_id')
+            .annotate(count=Count('id'))
+        }
+
+        people_match_reason: Dict[str, str] = {}
+        for person in people_list:
+            pid = person.get('id')
+            if pid is None:
+                continue
+            by_person = pid in person_match_ids
+            by_assignment = pid in assignment_match_ids
+            if by_person and by_assignment:
+                reason = 'both'
+            elif by_person:
+                reason = 'person_name'
+            else:
+                reason = 'assignment'
+            people_match_reason[str(pid)] = reason
+
+        # Filtered totals for visible assignments
+        filtered_totals: Dict[str, Dict[str, float]] = {}
+        for row in queryset.values('person_id', 'weekly_hours'):
+            try:
+                pid = row.get('person_id')
+                if not pid:
+                    continue
+                wk = row.get('weekly_hours') or {}
+                if not isinstance(wk, dict):
+                    continue
+                target = filtered_totals.setdefault(str(pid), {})
+                for key, value in wk.items():
+                    try:
+                        v = float(value or 0)
+                    except Exception:
+                        continue
+                    if v == 0:
+                        continue
+                    target[key] = round(target.get(key, 0.0) + v, 2)
+            except Exception:
+                continue
+
+        page_obj, paginator, next_url, prev_url = self._paginate_post_queryset(request, queryset, data)
+        serializer = self.get_serializer(page_obj.object_list, many=True)
+
+        return Response({
+            'count': paginator.count,
+            'next': next_url,
+            'previous': prev_url,
+            'results': serializer.data,
+            'people': [
+                {
+                    'id': p['id'],
+                    'name': p['name'],
+                    'weeklyCapacity': p.get('weekly_capacity', 0),
+                    'department': p.get('department_id'),
+                }
+                for p in people_list
+            ],
+            'assignmentCountsByPerson': assignment_counts_by_person,
+            'peopleMatchReason': people_match_reason,
+            'filteredTotals': filtered_totals,
+        })
 
     @extend_schema(
         description=(

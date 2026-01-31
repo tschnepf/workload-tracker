@@ -932,6 +932,31 @@ export const assignmentsApi = {
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`, { headers: { 'Cache-Control': 'no-cache' } });
   },
 
+  // Search assignments with tokenized filters (POST)
+  search: async (payload: {
+    page?: number;
+    page_size?: number;
+    department?: number;
+    include_children?: 0 | 1;
+    status_in?: string;
+    include_placeholders?: 0 | 1;
+    project?: number;
+    person?: number;
+    search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
+  }): Promise<PaginatedResponse<Assignment> & {
+    people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null }>;
+    assignmentCountsByPerson: Record<string, number>;
+    peopleMatchReason: Record<string, 'person_name' | 'assignment' | 'both'>;
+    filteredTotals: Record<string, Record<string, number>>;
+  }> => {
+    const res = await apiClient.POST('/assignments/search/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
+
   // Start async grid snapshot job (returns jobId)
   getGridSnapshotAsync: async (
     opts?: { weeks?: number; department?: number; include_children?: 0 | 1 }

@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.filters import OrderingFilter
 from rest_framework.views import APIView
-from django.db.models import Max, Count, Exists, OuterRef, Q, Prefetch
+from django.db.models import Max, Min, Count, Exists, OuterRef, Q, Prefetch
 from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date, parse_http_date
 from django.conf import settings
@@ -30,6 +30,7 @@ from assignments.utils.project_membership import is_current_project_assignee
 from assignments.models import Assignment
 from people.models import Person
 from departments.models import Department
+from core.search_tokens import parse_search_tokens, apply_token_filter
 import hashlib
 import json
 import time
@@ -90,7 +91,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             Project.objects
             .filter(is_active=True)
             .only(
-                'id', 'name', 'status', 'client', 'description', 'project_number',
+                'id', 'name', 'status', 'client', 'description', 'project_number', 'assigned_names_text',
                 'start_date', 'end_date', 'estimated_hours', 'is_active', 'created_at', 'updated_at'
             )
         )
@@ -145,6 +146,155 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             response['Cache-Control'] = 'private, max-age=30'  # 30 seconds cache for authenticated responses
 
         return response
+
+    @extend_schema(
+        description="Search projects with tokenized filters and pagination.",
+        request=inline_serializer(
+            name='ProjectSearchRequest',
+            fields={
+                'page': serializers.IntegerField(required=False),
+                'page_size': serializers.IntegerField(required=False),
+                'ordering': serializers.CharField(required=False),
+                'status_in': serializers.CharField(required=False),
+                'search_tokens': serializers.ListField(
+                    child=inline_serializer(
+                        name='SearchTokenProject',
+                        fields={
+                            'term': serializers.CharField(),
+                            'op': serializers.ChoiceField(choices=['or', 'and', 'not'])
+                        }
+                    ),
+                    required=False
+                ),
+                'include_deliverable_dates': serializers.BooleanField(required=False),
+            }
+        ),
+        responses=inline_serializer(
+            name='ProjectSearchResponse',
+            fields={
+                'count': serializers.IntegerField(),
+                'next': serializers.CharField(allow_null=True, required=False),
+                'previous': serializers.CharField(allow_null=True, required=False),
+                'results': serializers.ListField(child=serializers.DictField()),
+            }
+        )
+    )
+    @action(detail=False, methods=['post'], url_path='search')
+    def search(self, request):
+        data = request.data or {}
+        queryset = self.get_queryset()
+
+        status_in = data.get('status_in') or request.query_params.get('status_in')
+        if status_in:
+            try:
+                statuses = [s.strip() for s in str(status_in).split(',') if s.strip()]
+                if statuses:
+                    queryset = queryset.filter(status__in=statuses)
+            except Exception:
+                pass
+
+        tokens = parse_search_tokens(request=request, data=data)
+        project_fields = ['name', 'client', 'project_number', 'description', 'assigned_names_text']
+        queryset = apply_token_filter(queryset, tokens, project_fields)
+
+        ordering = data.get('ordering') or request.query_params.get('ordering') or 'client,name'
+        ordering_fields = []
+        needs_deliverable_dates = False
+        for raw in str(ordering).split(','):
+            raw = raw.strip()
+            if not raw:
+                continue
+            desc = raw.startswith('-')
+            key = raw[1:] if desc else raw
+            field = None
+            if key in ('client', 'name', 'status'):
+                field = key
+            elif key in ('projectNumber', 'project_number', 'number'):
+                field = 'project_number'
+            elif key in ('nextDeliverableDate', 'nextDue', 'next_due'):
+                field = 'next_deliverable_date'
+                needs_deliverable_dates = True
+            elif key in ('prevDeliverableDate', 'lastDue', 'prev_due'):
+                field = 'prev_deliverable_date'
+                needs_deliverable_dates = True
+            if field:
+                ordering_fields.append(f"-{field}" if desc else field)
+
+        if needs_deliverable_dates or data.get('include_deliverable_dates'):
+            today = timezone.now().date()
+            queryset = queryset.annotate(
+                next_deliverable_date=Min(
+                    'deliverables__date',
+                    filter=Q(deliverables__date__gte=today, deliverables__date__isnull=False, deliverables__is_completed=False)
+                ),
+                prev_deliverable_date=Max(
+                    'deliverables__date',
+                    filter=Q(deliverables__date__lte=today, deliverables__date__isnull=False)
+                ),
+            )
+            needs_deliverable_dates = True
+
+        if ordering_fields:
+            ordering_fields.append('id')
+            queryset = queryset.order_by(*ordering_fields)
+        else:
+            queryset = queryset.order_by('client', 'name', 'id')
+
+        page_obj, paginator, next_url, prev_url = self._paginate_post_queryset(request, queryset, data)
+        serializer = self.get_serializer(page_obj.object_list, many=True)
+        results = serializer.data
+
+        if needs_deliverable_dates:
+            for item, obj in zip(results, page_obj.object_list):
+                item['nextDeliverableDate'] = getattr(obj, 'next_deliverable_date', None)
+                item['prevDeliverableDate'] = getattr(obj, 'prev_deliverable_date', None)
+
+        return Response({
+            'count': paginator.count,
+            'next': next_url,
+            'previous': prev_url,
+            'results': results,
+        })
+
+    def _paginate_post_queryset(self, request, queryset, data=None):
+        """Paginate using body-provided page/page_size for POST search endpoints."""
+        from django.core.paginator import Paginator
+        from rest_framework.settings import api_settings
+
+        payload = data or {}
+        try:
+            page_number = int(payload.get('page') or request.query_params.get('page') or 1)
+        except Exception:
+            page_number = 1
+        try:
+            page_size = int(payload.get('page_size') or request.query_params.get('page_size') or api_settings.PAGE_SIZE)
+        except Exception:
+            page_size = api_settings.PAGE_SIZE or 100
+        max_size = getattr(api_settings, 'MAX_PAGE_SIZE', 200) or 200
+        if page_size > max_size:
+            page_size = max_size
+        if page_size <= 0:
+            page_size = api_settings.PAGE_SIZE or 100
+
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        def _page_url(num: int | None) -> str | None:
+            if not num:
+                return None
+            try:
+                params = request.query_params.copy()
+                params['page'] = str(num)
+                params['page_size'] = str(page_size)
+                base = request.build_absolute_uri(request.path)
+                return f"{base}?{params.urlencode()}" if params else base
+            except Exception:
+                return None
+
+        next_url = _page_url(page_obj.next_page_number() if page_obj.has_next() else None)
+        prev_url = _page_url(page_obj.previous_page_number() if page_obj.has_previous() else None)
+
+        return page_obj, paginator, next_url, prev_url
 
     def perform_create(self, serializer):
         project = serializer.save()
@@ -608,6 +758,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'assignmentCount': serializers.IntegerField(),
                 'hasFutureDeliverables': serializers.BooleanField(),
                 'status': serializers.CharField(),
+                'missingQa': serializers.BooleanField(required=False),
             }))
         })
     )
@@ -629,6 +780,28 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         today = timezone.now().date()
 
         queryset = self.get_queryset()
+        dept_param = request.query_params.get('department')
+        include_children = request.query_params.get('include_children') == '1'
+        dept_ids: set[int] | None = None
+        if dept_param not in (None, ""):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    ids = set()
+                    stack = [dept_id]
+                    while stack:
+                        current = stack.pop()
+                        if current in ids:
+                            continue
+                        ids.add(current)
+                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                            if d not in ids:
+                                stack.append(d)
+                    dept_ids = ids
+                else:
+                    dept_ids = {dept_id}
+            except (TypeError, ValueError):  # nosec B110
+                dept_ids = None
 
         # Compute conservative cache validators (counts + last modified across related models)
         proj_aggr = queryset.aggregate(
@@ -657,7 +830,8 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
 
         # Build a stable ETag based on totals and last_modified
-        etag_content = f"{proj_aggr.get('total', 0)}-{asn_aggr.get('total', 0)}-{del_aggr.get('total', 0)}-"
+        scope_key = f"dept_{dept_param or 'all'}:{'children' if include_children else 'direct'}"
+        etag_content = f"{proj_aggr.get('total', 0)}-{asn_aggr.get('total', 0)}-{del_aggr.get('total', 0)}-{scope_key}-"
         etag_content += last_modified.isoformat() if last_modified else 'none'
         etag = hashlib.sha256(etag_content.encode()).hexdigest()
 
@@ -684,15 +858,22 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 # Ignore malformed header
                 pass
         payload = None
+        cache_key = f"projects:filter_metadata:{scope_key}"
         if settings.FEATURES.get('SHORT_TTL_AGGREGATES'):
-            payload = cache.get('projects:filter_metadata')
+            payload = cache.get(cache_key)
         if payload is None:
+            assignment_filter = Q(assignment__is_active=True)
+            if dept_ids:
+                assignment_filter &= (
+                    Q(assignment__person__department_id__in=list(dept_ids)) |
+                    Q(assignment__department_id__in=list(dept_ids))
+                )
             projects_data = (
                 queryset
                 .annotate(
                     assignment_count=Count(
                         'assignment',
-                        filter=Q(assignment__is_active=True),
+                        filter=assignment_filter,
                     ),
                     has_future_deliverables=Exists(
                         Deliverable.objects.filter(
@@ -705,12 +886,63 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 )
                 .values('id', 'assignment_count', 'has_future_deliverables', 'status')
             )
+
+            # Compute missing QA per project with dept scoping parity
+            missing_qa_by_project: dict[int, bool] = {}
+            try:
+                assignments_qs = (
+                    Assignment.objects
+                    .filter(project__is_active=True, is_active=True)
+                    .select_related('person', 'role_on_project_ref')
+                    .values(
+                        'project_id',
+                        'person__department_id',
+                        'department_id',
+                        'role_on_project_ref__department_id',
+                        'role_on_project_ref__name',
+                        'role_on_project',
+                    )
+                )
+                if dept_ids:
+                    assignments_qs = assignments_qs.filter(
+                        Q(person__department_id__in=list(dept_ids)) |
+                        Q(department_id__in=list(dept_ids)) |
+                        Q(role_on_project_ref__department_id__in=list(dept_ids))
+                    )
+
+                assignments_by_project: dict[int, set[int]] = {}
+                qa_by_project: dict[int, set[int]] = {}
+                for row in assignments_qs:
+                    pid = row.get('project_id')
+                    if not pid:
+                        continue
+                    dept_id = row.get('person__department_id') or row.get('department_id') or row.get('role_on_project_ref__department_id')
+                    if not dept_id:
+                        continue
+                    assignments_by_project.setdefault(pid, set()).add(dept_id)
+                    role_name = (row.get('role_on_project_ref__name') or row.get('role_on_project') or '').lower()
+                    if 'qa' in role_name or 'quality' in role_name:
+                        qa_by_project.setdefault(pid, set()).add(dept_id)
+
+                for pid, dept_set in assignments_by_project.items():
+                    qa_depts = qa_by_project.get(pid, set())
+                    if dept_ids:
+                        relevant = dept_set.intersection(dept_ids)
+                        if not relevant:
+                            continue
+                        missing_qa_by_project[pid] = any(d not in qa_depts for d in relevant)
+                    else:
+                        missing_qa_by_project[pid] = any(d not in qa_depts for d in dept_set)
+            except Exception:
+                missing_qa_by_project = {}
+
             # Build mapping and validate via serializer to enforce naming discipline
             mapping = {
                 str(p['id']): {
                     'assignmentCount': p['assignment_count'],
                     'hasFutureDeliverables': p['has_future_deliverables'],
                     'status': p['status'],
+                    'missingQa': missing_qa_by_project.get(p['id'], False),
                 }
                 for p in projects_data
             }
@@ -718,7 +950,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             ser.is_valid(raise_exception=True)
             payload = ser.validated_data
             if settings.FEATURES.get('SHORT_TTL_AGGREGATES'):
-                cache.set('projects:filter_metadata', payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '15')))
+                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '15')))
 
         response = Response(payload)
 

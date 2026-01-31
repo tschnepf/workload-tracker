@@ -9,6 +9,7 @@ export interface PersonWithAssignmentsMinimal {
   weeklyCapacity?: number | null;
   assignments: Assignment[];
   isExpanded: boolean;
+  matchReason?: 'person_name' | 'assignment' | 'both';
 }
 
 export interface PeopleSectionProps {
@@ -17,7 +18,6 @@ export interface PeopleSectionProps {
   gridTemplate: string;
   loadingAssignments: Set<number>;
   projectsById: Map<number, any>;
-  getVisibleAssignments: (assignments: Assignment[]) => Assignment[];
   togglePersonExpanded: (personId: number) => void;
   addAssignment: (personId: number, project: Project) => void;
   removeAssignment: (assignmentId: number, personId: number) => void;
@@ -56,7 +56,6 @@ const PeopleSection: React.FC<PeopleSectionProps> = (props) => {
     gridTemplate,
     loadingAssignments,
     projectsById,
-    getVisibleAssignments,
     renderAddAction,
     renderAutoHoursAction,
     renderAddRow,
@@ -69,7 +68,7 @@ const PeopleSection: React.FC<PeopleSectionProps> = (props) => {
   return (
     <div style={{ paddingLeft: virtualPaddingLeft, paddingRight: virtualPaddingRight }}>
       {people.map((person) => {
-        const visibleAssignments = getVisibleAssignments(person.assignments);
+        const visibleAssignments = person.assignments || [];
         const isLoading = loadingAssignments.has(person.id!);
         return (
           <PersonSection

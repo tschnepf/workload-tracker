@@ -27,6 +27,8 @@ class Project(models.Model):
     ], default='active')
     client = models.CharField(max_length=100, blank=True, default='Internal')
     description = models.TextField(blank=True)
+    # Denormalized searchable text of assigned people names (for fast project search)
+    assigned_names_text = models.TextField(blank=True, default='')
     # Rich text scratch pad / notes (HTML stored as text)
     notes = models.TextField(blank=True)
     # Canonical TipTap ProseMirror JSON representation

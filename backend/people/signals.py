@@ -6,6 +6,7 @@ from django.core.cache import cache
 from .models import Person
 from assignments.rollup_service import queue_project_rollup_refresh
 from assignments.models import Assignment
+from projects.assigned_names import enqueue_assigned_names_rebuild_on_commit
 
 
 def _bump_analytics_cache_version():
@@ -40,6 +41,29 @@ def capture_person_department(sender, instance: Person, **kwargs):
         instance._previous_department_id = None
 
 
+@receiver(pre_save, sender=Person)
+def capture_person_name(sender, instance: Person, **kwargs):
+    if not instance.pk:
+        instance._previous_name = None
+        instance._previous_is_active = None
+        return
+    try:
+        row = (
+            Person.objects.filter(pk=instance.pk)
+            .values_list('name', 'is_active')
+            .first()
+        )
+        if row:
+            instance._previous_name = row[0]
+            instance._previous_is_active = row[1]
+        else:
+            instance._previous_name = None
+            instance._previous_is_active = None
+    except Exception:  # nosec B110
+        instance._previous_name = None
+        instance._previous_is_active = None
+
+
 @receiver(post_save, sender=Person)
 def refresh_rollups_on_department_change(sender, instance: Person, **kwargs):
     prev = getattr(instance, '_previous_department_id', None)
@@ -54,6 +78,25 @@ def refresh_rollups_on_department_change(sender, instance: Person, **kwargs):
         project_ids = [pid for pid in project_ids if pid]
         if project_ids:
             queue_project_rollup_refresh(project_ids)
+    except Exception:  # nosec B110
+        pass
+
+
+@receiver(post_save, sender=Person)
+def refresh_assigned_names_on_name_change(sender, instance: Person, **kwargs):
+    prev = getattr(instance, '_previous_name', None)
+    prev_active = getattr(instance, '_previous_is_active', None)
+    if prev == instance.name and (prev_active is None or prev_active == instance.is_active):
+        return
+    try:
+        project_ids = list(
+            Assignment.objects.filter(person_id=instance.id, is_active=True)
+            .values_list('project_id', flat=True)
+            .distinct()
+        )
+        project_ids = [pid for pid in project_ids if pid]
+        if project_ids:
+            enqueue_assigned_names_rebuild_on_commit(project_ids)
     except Exception:  # nosec B110
         pass
 

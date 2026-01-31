@@ -1,11 +1,12 @@
 from django.db import transaction
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.core.cache import cache
 from django.utils import timezone
 
 from assignments.models import Assignment
 from assignments.rollup_service import queue_project_rollup_refresh
+from projects.assigned_names import enqueue_assigned_names_rebuild_on_commit
 from deliverables.models import DeliverableAssignment, DeliverableTask
 from deliverables.services import DeliverableQATaskService
 from core.choices import DeliverableTaskCompletionStatus
@@ -22,12 +23,38 @@ def _bump_analytics_cache_version():
         cache.set(key, current + 1, None)
 
 
+@receiver(pre_save, sender=Assignment)
+def capture_assignment_project(sender, instance, **kwargs):
+    if not instance.pk:
+        instance._previous_project_id = None
+        return
+    try:
+        instance._previous_project_id = (
+            Assignment.objects.filter(pk=instance.pk)
+            .values_list('project_id', flat=True)
+            .first()
+        )
+    except Exception:  # nosec B110
+        instance._previous_project_id = None
+
+
 @receiver([post_save, post_delete], sender=Assignment)
 def invalidate_on_assignment_change(sender, instance, **kwargs):
     _bump_analytics_cache_version()
     try:
         if instance.project_id:
             transaction.on_commit(lambda: queue_project_rollup_refresh([instance.project_id]))
+    except Exception:  # nosec B110
+        pass
+    try:
+        project_ids = []
+        if instance.project_id:
+            project_ids.append(instance.project_id)
+        prev = getattr(instance, '_previous_project_id', None)
+        if prev and prev != instance.project_id:
+            project_ids.append(prev)
+        if project_ids:
+            enqueue_assigned_names_rebuild_on_commit(project_ids)
     except Exception:  # nosec B110
         pass
 

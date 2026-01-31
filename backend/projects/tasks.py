@@ -11,6 +11,7 @@ from django.core.files.storage import default_storage
 
 from .models import Project
 from .utils.excel_handler import export_projects_to_excel
+from .assigned_names import rebuild_assigned_names_for_project
 
 
 def _export_filename(prefix: str = 'projects_export', ext: str = 'xlsx') -> str:
@@ -58,3 +59,9 @@ def export_projects_excel_task(self, filters: Dict[str, Any] | None = None) -> D
     self.update_state(state='PROGRESS', meta={'progress': 95, 'message': 'Finalizing'})
     return meta
 
+
+@shared_task(bind=True)
+def rebuild_project_assigned_names_task(self, project_id: int) -> Dict[str, Any]:
+    """Rebuild denormalized assigned names for a project."""
+    rebuild_assigned_names_for_project(project_id)
+    return {"project_id": project_id, "status": "ok"}
