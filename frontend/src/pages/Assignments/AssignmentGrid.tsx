@@ -164,7 +164,7 @@ const AssignmentGrid: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
   const showToast = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     setToast({ message, type });
-  }, []);
+  }, [setToast]);
 
   // Status controls (dropdown + project status updates)
   const { statusDropdown, projectStatus, getProjectStatus, handleStatusChange } = useStatusControls({
@@ -662,12 +662,12 @@ const AssignmentGrid: React.FC = () => {
   }, [serverFilterActive, people, peopleById, searchMeta?.people]);
 
   const resolvePersonAssignments = useCallback((person: PersonWithAssignments): Assignment[] => {
-    if (serverFilterActive && filteredAssignmentsLoaded.has(person.id!)) {
+    if (serverFilterActive && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, person.id!)) {
       const rows = filteredAssignmentsByPerson[person.id!] || [];
       return sortAssignments(rows);
     }
     return getVisibleAssignments(person.assignments || []);
-  }, [serverFilterActive, filteredAssignmentsLoaded, filteredAssignmentsByPerson, sortAssignments, getVisibleAssignments]);
+  }, [serverFilterActive, filteredAssignmentsByPerson, sortAssignments, getVisibleAssignments]);
 
   const visiblePeopleWithAssignments = useMemo(() => {
     return (visiblePeople || []).map((person) => ({
@@ -953,7 +953,7 @@ const AssignmentGrid: React.FC = () => {
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [setSearchMeta]);
   // Persist weeks in URL
   useEffect(() => { url.set('weeks', String(weeksHorizon)); }, [weeksHorizon]);
 
@@ -1579,6 +1579,32 @@ const AssignmentGrid: React.FC = () => {
     }
   };
 
+  // Ensure expanded rows stay populated when server-side filters are active.
+  useEffect(() => {
+    if (!serverFilterActive) return;
+    const expanded = (visiblePeople || []).filter(p => p?.id != null && p.isExpanded);
+    if (!expanded.length) return;
+    expanded.forEach((person) => {
+      const personId = person.id as number;
+      if (loadingAssignments.has(personId)) return;
+      if (Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, personId)) return;
+      if (loadedAssignmentIds.has(personId) && (person.assignments || []).length > 0) {
+        const localFiltered = getVisibleAssignments(person.assignments || []);
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: localFiltered }));
+        return;
+      }
+      void ensureAssignmentsLoaded(personId, { mode: 'filtered', force: true });
+    });
+  }, [
+    serverFilterActive,
+    visiblePeople,
+    filteredAssignmentsByPerson,
+    loadingAssignments,
+    loadedAssignmentIds,
+    getVisibleAssignments,
+    ensureAssignmentsLoaded,
+  ]);
+
   // Toggle person expansion
   const togglePersonExpanded = (personId: number) => {
     const person = people.find(p => p.id === personId);
@@ -1613,6 +1639,10 @@ const AssignmentGrid: React.FC = () => {
 
   // Get person's total hours for a specific week (updated to use filtered assignments)
   const getPersonTotalHours = (person: PersonWithAssignments, week: string) => {
+    if (serverFilterActive && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, person.id!)) {
+      const rows = filteredAssignmentsByPerson[person.id!] || [];
+      return calculatePersonTotal(rows, week);
+    }
     const byWeek = hoursByPersonView[person.id!];
     if (byWeek && Object.prototype.hasOwnProperty.call(byWeek, week)) {
       return byWeek[week] || 0;
@@ -1636,6 +1666,29 @@ const AssignmentGrid: React.FC = () => {
           : person
       ));
       setAssignmentsData(prev => [...prev, newAssignment]);
+    if (serverFilterActive) {
+      const matchesFilters = matchesStatusFilters(project as Project)
+        && matchesSearchTokensAssignment(newAssignment as Assignment);
+      if (matchesFilters && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, personId)) {
+        setFilteredAssignmentsByPerson((prev) => {
+          const rows = prev[personId] || [];
+          if (rows.some((a) => a.id === newAssignment.id)) return prev;
+          return { ...prev, [personId]: [...rows, newAssignment as Assignment] };
+        });
+      }
+      if (matchesFilters) {
+        setSearchMeta((prev) => {
+          if (!prev) return prev;
+          const key = String(personId);
+            const counts = prev.assignmentCountsByPerson || {};
+            const nextCount = (counts[key] || 0) + 1;
+            return {
+              ...prev,
+              assignmentCountsByPerson: { ...counts, [key]: nextCount },
+            };
+          });
+        }
+      }
       // Show notification about assignment creation and potential overallocation risk
       const person = people.find(p => p.id === personId);
       if (person) {
@@ -1662,10 +1715,72 @@ const AssignmentGrid: React.FC = () => {
     }
   };
 
+  const updateFilteredTotalsForPerson = useCallback((personId: number, assignments: Assignment[]) => {
+    const totals: Record<string, number> = {};
+    assignments.forEach((a) => {
+      const wh = (a as any).weeklyHours || {};
+      Object.entries(wh).forEach(([wk, val]) => {
+        const v = parseFloat((val as any)?.toString?.() || '0') || 0;
+        if (!v) return;
+        totals[wk] = (totals[wk] || 0) + v;
+      });
+    });
+    setSearchMeta((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        filteredTotals: {
+          ...(prev.filteredTotals || {}),
+          [String(personId)]: totals,
+        },
+      };
+    });
+  }, []);
+
+  const adjustFilteredAssignmentCount = useCallback((personId: number, delta: number) => {
+    if (!delta) return;
+    setSearchMeta((prev) => {
+      if (!prev) return prev;
+      const key = String(personId);
+      const counts = prev.assignmentCountsByPerson || {};
+      const current = counts[key] || 0;
+      const nextCount = Math.max(0, current + delta);
+      if (nextCount === current) return prev;
+      return {
+        ...prev,
+        assignmentCountsByPerson: {
+          ...counts,
+          [key]: nextCount,
+        },
+      };
+    });
+  }, []);
+
   // Remove assignment
   const removeAssignment = async (assignmentId: number, personId: number) => {
     if (!confirm('Are you sure you want to remove this assignment?')) return;
-    await removeAssignmentAction({ assignmentsApi, setPeople, people, personId, assignmentId, showToast });
+    let prevFilteredRows: Assignment[] | null = null;
+    let didOptimisticFilteredUpdate = false;
+    if (serverFilterActive) {
+      const rows = filteredAssignmentsByPerson[personId] || [];
+      const nextRows = rows.filter((a) => a.id !== assignmentId);
+      if (nextRows.length !== rows.length) {
+        prevFilteredRows = rows;
+        didOptimisticFilteredUpdate = true;
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+        updateFilteredTotalsForPerson(personId, nextRows);
+        adjustFilteredAssignmentCount(personId, -1);
+      }
+    }
+    try {
+      await removeAssignmentAction({ assignmentsApi, setPeople, people, personId, assignmentId, showToast });
+    } catch {
+      if (serverFilterActive && didOptimisticFilteredUpdate && prevFilteredRows) {
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: prevFilteredRows as Assignment[] }));
+        updateFilteredTotalsForPerson(personId, prevFilteredRows);
+        adjustFilteredAssignmentCount(personId, 1);
+      }
+    }
   };
 
   // Update assignment hours
@@ -1674,39 +1789,44 @@ const AssignmentGrid: React.FC = () => {
       await updateAssignmentHoursAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, personId, assignmentId, week, hours, showToast });
       return;
     }
-
-    const rows = filteredAssignmentsByPerson[personId] || [];
-    const assignment = rows.find((a) => a.id === assignmentId);
+    const person = peopleById.get(personId) || (visiblePeople || []).find(p => p.id === personId);
+    const visibleRows = person ? resolvePersonAssignments(person as PersonWithAssignments) : [];
+    const assignment = visibleRows.find((a) => a.id === assignmentId)
+      || (person?.assignments || []).find((a: any) => a.id === assignmentId);
     if (!assignment) return;
 
     const prevWeeklyHours = { ...(assignment.weeklyHours || {}) };
     const updatedWeeklyHours = { ...prevWeeklyHours, [week]: hours };
 
-    const updateFilteredTotalsForPerson = (assignments: Assignment[]) => {
-      const totals: Record<string, number> = {};
-      assignments.forEach((a) => {
-        const wh = (a as any).weeklyHours || {};
-        Object.entries(wh).forEach(([wk, val]) => {
-          const v = parseFloat((val as any)?.toString?.() || '0') || 0;
-          if (!v) return;
-          totals[wk] = (totals[wk] || 0) + v;
+    const nextRows = visibleRows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a));
+    const isFilteredLoaded = filteredAssignmentsLoaded.has(personId);
+    if (isFilteredLoaded) {
+      setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+    }
+    setPeople(prev => prev.map(p => p.id === personId
+      ? { ...p, assignments: (p.assignments || []).map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a) }
+      : p
+    ));
+    setAssignmentsData(prev => prev.map(a =>
+      a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a
+    ));
+    updateFilteredTotalsForPerson(personId, nextRows);
+    try {
+      // Keep unfiltered totals in sync for when filters are cleared.
+      if (person && loadedAssignmentIds.has(personId)) {
+        const total = (person.assignments || []).reduce((sum: number, a: any) => {
+          const wh = a.id === assignmentId ? updatedWeeklyHours : (a.weeklyHours || {});
+          const v = parseFloat((wh?.[week] as any)?.toString?.() || '0') || 0;
+          return sum + v;
+        }, 0);
+        setHoursByPerson(prev => {
+          const next = { ...prev };
+          next[personId] = { ...(next[personId] || {}) };
+          next[personId][week] = total;
+          return next;
         });
-      });
-      setSearchMeta((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          filteredTotals: {
-            ...(prev.filteredTotals || {}),
-            [String(personId)]: totals,
-          },
-        };
-      });
-    };
-
-    const nextRows = rows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a));
-    setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
-    updateFilteredTotalsForPerson(nextRows);
+      }
+    } catch {}
 
     try {
       try {
@@ -1721,9 +1841,33 @@ const AssignmentGrid: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
       queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
     } catch (err: any) {
-      const revertedRows = rows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
-      setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: revertedRows }));
-      updateFilteredTotalsForPerson(revertedRows);
+      const revertedRows = visibleRows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
+      if (isFilteredLoaded) {
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: revertedRows }));
+      }
+      setPeople(prev => prev.map(p => p.id === personId
+        ? { ...p, assignments: (p.assignments || []).map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a) }
+        : p
+      ));
+      setAssignmentsData(prev => prev.map(a =>
+        a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a
+      ));
+      updateFilteredTotalsForPerson(personId, revertedRows);
+      try {
+        if (person && loadedAssignmentIds.has(personId)) {
+          const total = (person.assignments || []).reduce((sum: number, a: any) => {
+            const wh = a.id === assignmentId ? prevWeeklyHours : (a.weeklyHours || {});
+            const v = parseFloat((wh?.[week] as any)?.toString?.() || '0') || 0;
+            return sum + v;
+          }, 0);
+          setHoursByPerson(prev => {
+            const next = { ...prev };
+            next[personId] = { ...(next[personId] || {}) };
+            next[personId][week] = total;
+            return next;
+          });
+        }
+      } catch {}
       console.error('Failed to update assignment hours:', err);
       showToast('Failed to update hours: ' + (err?.message || 'Unknown error'), 'error');
     }
@@ -1994,6 +2138,27 @@ const AssignmentGrid: React.FC = () => {
       const u = updatesByAssignmentId.get(a.id as number);
       return u ? { ...a, weeklyHours: u } : a;
     }));
+    if (serverFilterActive) {
+      const byPerson = new Map<number, AutoHoursUpdate[]>();
+      updates.forEach((u) => {
+        if (!filteredAssignmentsLoaded.has(u.personId)) return;
+        const list = byPerson.get(u.personId) || [];
+        list.push(u);
+        byPerson.set(u.personId, list);
+      });
+      byPerson.forEach((list, personId) => {
+        const rows = filteredAssignmentsByPerson[personId] || [];
+        if (!rows.length) return;
+        const map = new Map<number, AutoHoursUpdate>();
+        list.forEach((u) => map.set(u.assignmentId, u));
+        const nextRows = rows.map((a) => {
+          const u = map.get(a.id as number);
+          return u ? { ...a, weeklyHours: u.weeklyHours } : a;
+        });
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+        updateFilteredTotalsForPerson(personId, nextRows);
+      });
+    }
 
     try {
       setHoursByPerson(prev => {
@@ -2064,6 +2229,27 @@ const AssignmentGrid: React.FC = () => {
         const f = failedByAssignmentId.get(a.id as number);
         return f ? { ...a, weeklyHours: f.prevWeeklyHours } : a;
       }));
+      if (serverFilterActive) {
+        const byPerson = new Map<number, AutoHoursUpdate[]>();
+        failed.forEach((u) => {
+          if (!filteredAssignmentsLoaded.has(u.personId)) return;
+          const list = byPerson.get(u.personId) || [];
+          list.push(u);
+          byPerson.set(u.personId, list);
+        });
+        byPerson.forEach((list, personId) => {
+          const rows = filteredAssignmentsByPerson[personId] || [];
+          if (!rows.length) return;
+          const map = new Map<number, AutoHoursUpdate>();
+          list.forEach((u) => map.set(u.assignmentId, u));
+          const nextRows = rows.map((a) => {
+            const u = map.get(a.id as number);
+            return u ? { ...a, weeklyHours: u.prevWeeklyHours } : a;
+          });
+          setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+          updateFilteredTotalsForPerson(personId, nextRows);
+        });
+      }
       try {
         setHoursByPerson(prev => {
           const next: Record<number, Record<string, number>> = { ...prev };

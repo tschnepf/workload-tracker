@@ -28,6 +28,7 @@ export async function removeAssignmentAction(params: {
   } catch (err: any) {
     console.error('Failed to delete assignment:', err);
     showToast('Failed to delete assignment: ' + (err?.message || 'Unknown error'), 'error');
+    throw err;
   }
 }
 
