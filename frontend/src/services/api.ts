@@ -733,6 +733,21 @@ export const projectsApi = {
     return fetchApi<Project[]>(`/projects/?all=true`);
   },
 
+  // Search projects with tokenized filters and pagination
+  search: async (payload: {
+    page?: number;
+    page_size?: number;
+    ordering?: string;
+    status_in?: string;
+    search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
+  }) => {
+    return fetchApi<PaginatedResponse<Project>>('/projects/search/', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
   // Get single project
   get: async (id: number) => {
     const res = await apiClient.GET('/projects/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
@@ -919,11 +934,12 @@ export const departmentsApi = {
 // Assignment API
 export const assignmentsApi = {
   // Get all assignments with pagination support and optional project filtering
-  list: (params?: { page?: number; page_size?: number; project?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1 }) => {
+  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1 }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     if (params?.project) queryParams.set('project', params.project.toString());
+    if (params?.project_ids && params.project_ids.length) queryParams.set('project_ids', params.project_ids.join(','));
     if (params?.department != null) queryParams.set('department', String(params.department));
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     if (params?.include_placeholders != null) queryParams.set('include_placeholders', String(params.include_placeholders));
@@ -996,11 +1012,12 @@ export const assignmentsApi = {
 
   // Get all assignments (bulk API - Phase 2 optimization)
   listAll: async (
-    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1 },
+    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[] },
     options?: { noCache?: boolean }
   ): Promise<Assignment[]> => {
     const sp = new URLSearchParams();
     sp.set('all', 'true');
+    if (filters?.project_ids && filters.project_ids.length) sp.set('project_ids', filters.project_ids.join(','));
     if (filters?.department != null) sp.set('department', String(filters.department));
     if (filters?.include_children != null) sp.set('include_children', String(filters.include_children));
     if (filters?.include_placeholders != null) sp.set('include_placeholders', String(filters.include_placeholders));

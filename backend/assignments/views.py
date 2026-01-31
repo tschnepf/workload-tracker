@@ -137,6 +137,20 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 queryset = queryset.filter(project_id=project_id)
             except ValueError:
                 pass
+        else:
+            project_ids = request.query_params.get('project_ids')
+            if isinstance(data, dict) and data.get('project_ids') is not None:
+                project_ids = data.get('project_ids')
+            try:
+                ids_list = None
+                if isinstance(project_ids, (list, tuple, set)):
+                    ids_list = [int(x) for x in project_ids if str(x).strip().isdigit()]
+                elif isinstance(project_ids, str):
+                    ids_list = [int(x) for x in project_ids.split(',') if x.strip().isdigit()]
+                if ids_list:
+                    queryset = queryset.filter(project_id__in=ids_list)
+            except Exception:
+                pass
 
         person_id = request.query_params.get('person')
         if isinstance(data, dict) and data.get('person') is not None:

@@ -31,7 +31,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
 import { showToast as showToastBus } from '@/lib/toastBus';
 import { Assignment, Deliverable, DeliverablePhaseMappingSettings, Person, Project, AutoHoursTemplate } from '@/types/models';
-import { assignmentsApi, autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, peopleApi, type AutoHoursRoleSetting } from '@/services/api';
+import { assignmentsApi, autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, peopleApi, projectsApi, type AutoHoursRoleSetting } from '@/services/api';
 import { updateAssignmentRoleAction } from '@/pages/Assignments/grid/useAssignmentRoleUpdate';
 import { bulkUpdateAssignmentHours, createAssignment, updateAssignment, deleteAssignment } from '@/lib/mutations/assignments';
 import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
@@ -97,6 +97,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [searchOp, setSearchOp] = useState<'or' | 'and' | 'not'>('or');
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
   const searchTokenSeq = useRef(0);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [projectsCount, setProjectsCount] = useState(0);
+  const [projectsPage, setProjectsPage] = useState(1);
+  const [projectsPageSize] = useState(50);
+  const [hasMoreProjects, setHasMoreProjects] = useState(false);
 
   const [phaseMapping, setPhaseMapping] = useState<DeliverablePhaseMappingSettings | null>(null);
   const [phaseMappingError, setPhaseMappingError] = useState<string | null>(null);
@@ -114,13 +120,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [autoHoursTemplates, setAutoHoursTemplates] = useState<AutoHoursTemplate[]>([]);
 
   const [weeksHorizon, setWeeksHorizon] = useState(20);
+  const setProjectsDataFromSnapshot = useCallback(() => {
+    // Keep project list controlled by paged search results to avoid snapshot overrides.
+  }, []);
   const snapshot = useAssignmentsSnapshot({
     weeksHorizon,
     departmentId: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
     includeChildren: deptState.includeChildren,
     setPeople: setPeople as any,
     setAssignmentsData,
-    setProjectsData: setProjectsData as any,
+    setProjectsData: setProjectsDataFromSnapshot as any,
     setDeliverables,
     setHoursByPerson,
     getHasData: () => projectsData.length > 0 || assignmentsData.length > 0,
@@ -149,20 +158,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     (projectsData || []).forEach(p => { if (p?.id != null) map.set(p.id, { ...p, isUpdating: false }); });
     return map;
   }, [projectsData]);
-
-  const assignmentNamesByProjectId = useMemo(() => {
-    const map = new Map<number, Set<string>>();
-    (assignmentsData || []).forEach((assignment) => {
-      const projectId = assignment?.project ?? null;
-      if (!projectId) return;
-      const name = assignment.personName || (assignment.person ? peopleById.get(assignment.person)?.name : null);
-      if (!name) return;
-      const set = map.get(projectId) || new Set<string>();
-      set.add(name);
-      map.set(projectId, set);
-    });
-    return map;
-  }, [assignmentsData, peopleById]);
 
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -218,7 +213,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     setLoadingAssignments(new Set());
   }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon]);
 
-  const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter, matchesStatusFilters } = useProjectStatusFilters(deliverables);
+  const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter } = useProjectStatusFilters(deliverables);
 
   const normalizedSearchTokens = useMemo(() => {
     return searchTokens
@@ -226,44 +221,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
       .filter((token) => token.term.length > 0);
   }, [searchTokens]);
 
-  const matchesSearchTokens = useCallback((project: ProjectWithAssignments) => {
-    if (!normalizedSearchTokens.length) return true;
-    const assignedNames = project.id ? Array.from(assignmentNamesByProjectId.get(project.id) || []) : [];
-    const haystack = [
-      project.name,
-      project.client,
-      project.projectNumber,
-      project.description,
-      assignedNames.length ? assignedNames.join(' ') : null,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+  const statusFilterCsv = useMemo(() => {
+    const values = Array.from(selectedStatusFilters || []).filter((s) => s !== 'Show All');
+    return values.length ? values.join(',') : null;
+  }, [selectedStatusFilters]);
 
-    let hasOr = false;
-    let orMatched = false;
-
-    for (const token of normalizedSearchTokens) {
-      const match = haystack.includes(token.term);
-      if (token.op === 'not') {
-        if (match) return false;
-        continue;
-      }
-      if (token.op === 'and') {
-        if (!match) return false;
-        continue;
-      }
-      hasOr = true;
-      if (match) orMatched = true;
-    }
-
-    if (hasOr && !orMatched) return false;
-    return true;
-  }, [normalizedSearchTokens, assignmentNamesByProjectId]);
-
-  const matchesProjectFilters = useCallback((project: ProjectWithAssignments) => {
-    return matchesStatusFilters(project as any) && matchesSearchTokens(project);
-  }, [matchesStatusFilters, matchesSearchTokens]);
+  const searchTokenPayload = useMemo(
+    () => normalizedSearchTokens.map((token) => ({ term: token.term, op: token.op })),
+    [normalizedSearchTokens]
+  );
 
   const activeToken = useMemo(() => (
     activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null
@@ -319,14 +285,68 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
   }, [addSearchToken, searchInput.length, searchTokens.length]);
 
+  const resetProjectAssignmentsState = useCallback(() => {
+    setExpandedProjectIds(new Set());
+    setLoadedProjectIds(new Set());
+    setLoadingAssignments(new Set());
+    setAssignmentsData([]);
+  }, []);
+
+  const fetchProjectsPage = useCallback(async (page: number, opts?: { append?: boolean; resetAssignments?: boolean }) => {
+    setProjectsLoading(true);
+    setProjectsError(null);
+    try {
+      const res = await projectsApi.search({
+        page,
+        page_size: projectsPageSize,
+        ordering: 'client,name',
+        ...(statusFilterCsv ? { status_in: statusFilterCsv } : {}),
+        ...(searchTokenPayload.length ? { search_tokens: searchTokenPayload } : {}),
+      });
+      const rows = res?.results || [];
+      setProjectsCount(res?.count ?? rows.length);
+      setHasMoreProjects(Boolean(res?.next));
+      if (opts?.resetAssignments) resetProjectAssignmentsState();
+      setProjectsData(prev => {
+        if (!opts?.append) return rows;
+        const seen = new Set(prev.map((p) => p.id));
+        const merged = [...prev];
+        rows.forEach((p) => {
+          if (!seen.has(p.id)) {
+            seen.add(p.id);
+            merged.push(p);
+          }
+        });
+        return merged;
+      });
+      setProjectsPage(page);
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to load projects';
+      setProjectsError(msg);
+      showToastBus(msg, 'error');
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, [projectsPageSize, resetProjectAssignmentsState, searchTokenPayload, statusFilterCsv]);
+
+  useEffect(() => {
+    void fetchProjectsPage(1, { append: false, resetAssignments: true });
+  }, [fetchProjectsPage, statusFilterCsv, searchTokenPayload]);
+
   const getVisibleAssignments = useCallback((project: ProjectWithAssignments) => {
-    if (!matchesProjectFilters(project)) return [];
-    return project.assignments || [];
-  }, [matchesProjectFilters]);
+    const list = project.assignments || [];
+    const withPeople: Assignment[] = [];
+    const placeholders: Assignment[] = [];
+    list.forEach((assignment) => {
+      if (assignment?.person != null) withPeople.push(assignment);
+      else placeholders.push(assignment);
+    });
+    return withPeople.concat(placeholders);
+  }, []);
 
   const visibleProjects = useMemo(
-    () => projectsWithAssignments.filter(project => matchesProjectFilters(project)),
-    [projectsWithAssignments, matchesProjectFilters]
+    () => projectsWithAssignments,
+    [projectsWithAssignments]
   );
 
   const rowOrder = useMemo(() => {
@@ -1050,17 +1070,25 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const bulk = await assignmentsApi.listAll({ department: dept, include_children: dept != null ? inc : undefined, include_placeholders: 1 });
+      const bulk = await assignmentsApi.listAll({
+        project_ids: projectIds,
+        department: dept,
+        include_children: dept != null ? inc : undefined,
+        include_placeholders: 1,
+      }, { noCache: true });
       const allAssignments = Array.isArray(bulk) ? bulk : [];
-      setAssignmentsData(allAssignments);
-      setLoadedProjectIds(() => new Set(allAssignments.map(a => a.project).filter(Boolean) as number[]));
+      setAssignmentsData(prev => {
+        const withoutVisible = prev.filter(a => !projectIds.includes(a.project as number));
+        return [...withoutVisible, ...allAssignments];
+      });
+      setLoadedProjectIds(() => new Set(projectIds));
       showToastBus('Assignments refreshed', 'success');
     } catch (e: any) {
       showToastBus(e?.message || 'Failed to refresh assignments', 'error');
     } finally {
       setLoadingAssignments(new Set());
     }
-  }, [projectsData, deptState.selectedDepartmentId, deptState.includeChildren]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, projectsData]);
 
   const autoRefreshKeyRef = useRef<string>('');
   useEffect(() => {
@@ -1148,13 +1176,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   const addUI = usePersonAssignmentAdd({
     searchPeople: async (query) => {
-      if (!query.trim()) return [];
+      const trimmed = query.trim();
+      if (trimmed.length < 2) return [];
       return peopleApi.search(query, 10, { department: deptState.selectedDepartmentId ?? undefined });
     },
     searchRoles: async (query) => {
-      if (!query.trim()) return [];
+      const trimmed = query.trim();
+      if (trimmed.length < 2) return [];
       const deptId = deptState.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : undefined;
-      const results = await searchProjectRoles(query, deptId);
+      const results = await searchProjectRoles(trimmed, deptId);
       return (results || []).map((role) => ({
         ...role,
         departmentName: departmentNameById.get(role.department_id) || '',
@@ -1215,7 +1245,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
     };
   }, [isResizing, resizeStartX, resizeStartWidth, setClientColumnWidth, setProjectColumnWidth, setIsResizing]);
 
-  if (loading) {
+  const initialProjectsLoading = projectsLoading && projectsData.length === 0;
+
+  if (loading || initialProjectsLoading) {
     return (
       <Layout>
         <AssignmentsSkeleton />
@@ -1223,10 +1255,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error || projectsError) {
     return (
       <Layout>
-        <div className="p-6 text-red-400">{error}</div>
+        <div className="p-6 text-red-400">{error || projectsError}</div>
       </Layout>
     );
   }
@@ -1456,14 +1488,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   const ProjectSection: React.FC<{ project: ProjectWithAssignments }> = ({ project }) => {
     const visibleAssignments = useMemo(() => {
-      const list = getVisibleAssignments(project);
-      const withPeople: Assignment[] = [];
-      const placeholders: Assignment[] = [];
-      list.forEach((assignment) => {
-        if (assignment?.person != null) withPeople.push(assignment);
-        else placeholders.push(assignment);
-      });
-      return withPeople.concat(placeholders);
+      return getVisibleAssignments(project);
     }, [getVisibleAssignments, project]);
     const totals = hoursByProject[project.id!] || {};
     return (
@@ -1550,7 +1575,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       <div className="flex flex-wrap items-center gap-3 min-w-0">
         <div className="min-w-[120px]">
           <div className="text-lg font-semibold text-[var(--text)] leading-tight">Project Assignments</div>
-          {isFetching ? (
+          {isFetching || projectsLoading ? (
             <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
           ) : null}
         </div>
@@ -1570,6 +1595,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
           onCollapseAll={() => setExpandedProjectIds(new Set())}
           onRefreshAll={async () => {
             await snapshot.loadData();
+            await fetchProjectsPage(1, { append: false });
             await refreshAllAssignments();
           }}
           disabled={loading}
@@ -1664,6 +1690,21 @@ const ProjectAssignmentsGrid: React.FC = () => {
             ))}
           </div>
         </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-[var(--muted)]">
+          <div>
+            {projectsCount > 0 ? `Showing ${visibleProjects.length} of ${projectsCount} projects` : 'No projects found'}
+          </div>
+          {hasMoreProjects && (
+            <button
+              type="button"
+              onClick={() => { void fetchProjectsPage(projectsPage + 1, { append: true }); }}
+              disabled={projectsLoading}
+              className="px-3 py-1 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {projectsLoading ? 'Loading…' : 'Load more'}
+            </button>
+          )}
+        </div>
       </div>
     </Layout>
   );
@@ -1719,7 +1760,8 @@ function usePersonAssignmentAdd({
   const onSearchChange = useCallback(async (value: string) => {
     setNewPersonName(value);
     latestQueryRef.current = value;
-    if (!value.trim()) {
+    const trimmed = value.trim();
+    if (!trimmed) {
       setPersonResults([]);
       setRoleResults([]);
       setShowPersonDropdown(false);
@@ -1727,14 +1769,24 @@ function usePersonAssignmentAdd({
       setSelectedRole(null);
       return;
     }
-    const [peopleResults, rolesResults] = await Promise.all([
-      searchPeople(value),
-      searchRoles(value),
+    if (trimmed.length < 2) {
+      setPersonResults([]);
+      setRoleResults([]);
+      setShowPersonDropdown(false);
+      setSelectedPerson(null);
+      setSelectedRole(null);
+      return;
+    }
+    const [peopleResults, rolesResults] = await Promise.allSettled([
+      searchPeople(trimmed),
+      searchRoles(trimmed),
     ]);
     if (latestQueryRef.current !== value) return;
-    setPersonResults(peopleResults || []);
-    setRoleResults(rolesResults || []);
-    setShowPersonDropdown((peopleResults || []).length > 0 || (rolesResults || []).length > 0);
+    const nextPeople = peopleResults.status === 'fulfilled' ? (peopleResults.value || []) : [];
+    const nextRoles = rolesResults.status === 'fulfilled' ? (rolesResults.value || []) : [];
+    setPersonResults(nextPeople);
+    setRoleResults(nextRoles);
+    setShowPersonDropdown(nextPeople.length > 0 || nextRoles.length > 0);
     setSelectedPerson(null);
     setSelectedRole(null);
     setSelectedDropdownIndex(-1);

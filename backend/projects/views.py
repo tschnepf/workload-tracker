@@ -187,9 +187,33 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         status_in = data.get('status_in') or request.query_params.get('status_in')
         if status_in:
             try:
-                statuses = [s.strip() for s in str(status_in).split(',') if s.strip()]
+                raw_statuses = [s.strip().lower() for s in str(status_in).split(',') if s.strip()]
+                statuses = [s for s in raw_statuses if s not in ('show all', 'show_all', 'showall')]
                 if statuses:
-                    queryset = queryset.filter(status__in=statuses)
+                    wants_with_dates = 'active_with_dates' in statuses
+                    wants_no_dates = 'active_no_deliverables' in statuses
+                    base_statuses = [
+                        s for s in statuses
+                        if s not in ('active_with_dates', 'active_no_deliverables')
+                    ]
+                    if wants_with_dates or wants_no_dates:
+                        today = timezone.now().date()
+                        future_deliverables = Deliverable.objects.filter(
+                            project_id=OuterRef('pk'),
+                            date__gte=today,
+                        )
+                        queryset = queryset.annotate(has_future_deliverables=Exists(future_deliverables))
+                        status_q = Q()
+                        if base_statuses:
+                            status_q |= Q(status__in=base_statuses)
+                        if wants_with_dates:
+                            status_q |= Q(status='active', has_future_deliverables=True)
+                        if wants_no_dates:
+                            status_q |= Q(status='active', has_future_deliverables=False)
+                        if status_q:
+                            queryset = queryset.filter(status_q)
+                    else:
+                        queryset = queryset.filter(status__in=base_statuses)
             except Exception:
                 pass
 

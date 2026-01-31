@@ -13,7 +13,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
     """Assignment serializer with weekly hours support"""
     
     # Weekly hours as the primary field (replaces allocationPercentage)
-    weeklyHours = serializers.JSONField(source='weekly_hours')
+    weeklyHours = serializers.JSONField(source='weekly_hours', required=False)
     projectName = serializers.CharField(source='project_name', max_length=200, required=False)
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all(), required=False, allow_null=True)
     projectDisplayName = serializers.CharField(source='project_display', read_only=True)

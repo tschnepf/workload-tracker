@@ -6,9 +6,13 @@ export async function createAssignment(
   data: Partial<Assignment>,
   api: typeof assignmentsApi = assignmentsApi,
 ) {
-  const created = await api.create(data as any);
-  const fields = Object.keys(data || {});
-  const merged = { ...(created || {}), ...(data || {}) } as Assignment;
+  const payload = { ...(data || {}) } as Record<string, unknown>;
+  if (payload.weeklyHours == null) {
+    payload.weeklyHours = {};
+  }
+  const created = await api.create(payload as any);
+  const fields = Object.keys(payload || {});
+  const merged = { ...(created || {}), ...(payload || {}) } as Assignment;
   const event: AssignmentEvent = {
     type: 'created',
     assignmentId: merged?.id as number,
