@@ -24,7 +24,7 @@ const MobileAddAssignmentSheet: React.FC<Props> = ({ addController, people, canE
   return (
     <Modal
       isOpen={Boolean(targetId)}
-      onClose={() => addController.cancel()}
+      onClose={addController.cancel}
       title={person ? `Add Assignment • ${person.name}` : 'Add Assignment'}
       width={420}
     >

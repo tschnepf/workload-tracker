@@ -7,6 +7,7 @@ import type { WeekHeader } from '@/pages/Assignments/grid/utils';
 type Props = {
   target: { personId: number; assignmentId: number } | null;
   people: Person[];
+  assignmentsByPerson?: Record<number, Assignment[]>;
   weeks: WeekHeader[];
   onClose: () => void;
   onSaveHours: (personId: number, assignmentId: number, week: string, hours: number) => Promise<void>;
@@ -18,6 +19,7 @@ type Props = {
 const MobileAssignmentSheet: React.FC<Props> = ({
   target,
   people,
+  assignmentsByPerson,
   weeks,
   onClose,
   onSaveHours,
@@ -32,9 +34,9 @@ const MobileAssignmentSheet: React.FC<Props> = ({
 
   const assignment = React.useMemo(() => {
     if (!person || !target) return null;
-    const list = (person as any).assignments as Assignment[] | undefined;
+    const list = assignmentsByPerson?.[person.id!] || ((person as any).assignments as Assignment[] | undefined) || [];
     return list?.find((a) => a.id === target.assignmentId) ?? null;
-  }, [person, target]);
+  }, [person, target, assignmentsByPerson]);
 
   const [localHours, setLocalHours] = React.useState<Record<string, string>>({});
   const [saving, setSaving] = React.useState(false);
@@ -96,7 +98,7 @@ const MobileAssignmentSheet: React.FC<Props> = ({
       width={420}
     >
       {!assignment ? (
-        <div className="text-sm text-[var(--muted)]">Loading assignment…</div>
+        <div className="text-sm text-[var(--muted)]">Loading assignment...</div>
       ) : (
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
@@ -149,7 +151,7 @@ const MobileAssignmentSheet: React.FC<Props> = ({
               className="px-4 py-1.5 rounded bg-[var(--primary)] text-white text-sm disabled:opacity-60"
               disabled={saving || !canEditAssignments}
             >
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
         </form>

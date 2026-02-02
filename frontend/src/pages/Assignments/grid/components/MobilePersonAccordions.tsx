@@ -10,8 +10,13 @@ type Props = {
   people: PersonWithHours[];
   weeks: WeekHeader[];
   hoursByPerson: Record<number, Record<string, number>>;
+  assignmentCountByPerson?: Record<string, number> | Record<number, number>;
+  hasMoreAssignmentsByPerson?: Record<number, boolean>;
+  loadingMoreByPerson?: Set<number>;
+  onLoadMoreAssignments?: (personId: number) => void;
   onExpand?: (personId: number) => void;
   onAssignmentPress?: (personId: number, assignmentId: number) => void;
+  onRemoveAssignment?: (personId: number, assignmentId: number) => void;
   canEditAssignments?: boolean;
   onAddAssignment?: (personId: number) => void;
   activeAddPersonId?: number | null;
@@ -24,21 +29,59 @@ const MobilePersonAccordions: React.FC<Props> = ({
   people,
   weeks,
   hoursByPerson,
+  assignmentCountByPerson,
+  hasMoreAssignmentsByPerson,
+  loadingMoreByPerson,
+  onLoadMoreAssignments,
   onExpand,
   onAssignmentPress,
+  onRemoveAssignment,
   canEditAssignments = true,
   onAddAssignment,
   activeAddPersonId,
   scheme,
 }) => {
   const [expanded, setExpanded] = React.useState<number | null>(null);
+  const [openDeleteId, setOpenDeleteId] = React.useState<number | null>(null);
   const sparkWeeks = React.useMemo(() => weeks.slice(0, MAX_WEEKS_IN_SPARK), [weeks]);
   const { data: schemeData } = useUtilizationScheme({ enabled: !scheme });
   const resolvedScheme = scheme || schemeData || defaultUtilizationScheme;
+  const touchRef = React.useRef<{ id: number; startX: number; startY: number } | null>(null);
+  const recentSwipeRef = React.useRef<number>(0);
 
   const toggle = (personId: number) => {
     setExpanded((prev) => (prev === personId ? null : personId));
     if (expanded !== personId) onExpand?.(personId);
+  };
+
+  const handleTouchStart = (assignmentId: number, e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchRef.current = { id: assignmentId, startX: touch.clientX, startY: touch.clientY };
+  };
+
+  const handleTouchEnd = (assignmentId: number, e: React.TouchEvent) => {
+    const state = touchRef.current;
+    touchRef.current = null;
+    if (!state || state.id !== assignmentId) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - state.startX;
+    const dy = touch.clientY - state.startY;
+    if (Math.abs(dx) <= Math.abs(dy) || Math.abs(dx) < 40) return;
+    if (dx < 0) {
+      setOpenDeleteId(assignmentId);
+    } else {
+      setOpenDeleteId(null);
+    }
+    recentSwipeRef.current = Date.now();
+  };
+
+  const handleAssignmentPress = (personId: number, assignmentId: number) => {
+    if (openDeleteId === assignmentId) {
+      setOpenDeleteId(null);
+      return;
+    }
+    if (Date.now() - recentSwipeRef.current < 350) return;
+    onAssignmentPress?.(personId, assignmentId);
   };
 
   return (
@@ -48,6 +91,14 @@ const MobilePersonAccordions: React.FC<Props> = ({
         const isOpen = expanded === person.id;
         const weekHours = sparkWeeks.map((week) => hoursByPerson?.[person.id!]?.[week.date] ?? 0);
         const maxHour = Math.max(...weekHours, person.weeklyCapacity || 0, 1);
+        const assignments = person.assignments || [];
+        const totalCount = assignmentCountByPerson
+          ? (assignmentCountByPerson[person.id] ?? assignmentCountByPerson[String(person.id)])
+          : undefined;
+        const hasMore = typeof hasMoreAssignmentsByPerson?.[person.id!] === 'boolean'
+          ? hasMoreAssignmentsByPerson?.[person.id!]
+          : (typeof totalCount === 'number' ? assignments.length < totalCount : false);
+        const isLoadingMore = loadingMoreByPerson?.has(person.id!) ?? false;
         return (
           <div key={person.id} className="bg-[var(--card)] border border-[var(--border)] rounded-lg overflow-hidden">
             <button
@@ -92,30 +143,58 @@ const MobilePersonAccordions: React.FC<Props> = ({
             </button>
             {isOpen ? (
               <div className="px-4 pb-4 space-y-3 text-sm text-[var(--text)]">
-                {(person.assignments || []).length === 0 ? (
+                {assignments.length === 0 ? (
                   <div className="text-[var(--muted)]">No assignments loaded for this person.</div>
                 ) : (
                   <ul className="space-y-2">
-                    {person.assignments!.map((assignment) => (
+                    {assignments.map((assignment) => (
                       <li key={assignment.id}>
-                        <button
-                          type="button"
-                          className={`w-full text-left flex flex-col rounded border border-[var(--border)] p-3 bg-[var(--surface)] transition-colors ${canEditAssignments ? 'hover:border-[var(--primary)]' : 'opacity-60 cursor-not-allowed'}`}
-                          onClick={() => canEditAssignments && onAssignmentPress?.(person.id!, assignment.id!)}
-                          aria-disabled={!canEditAssignments}
-                        >
-                          <span className="font-medium">{assignment.projectDisplayName || `Project ${assignment.project}`}</span>
-                          <span className="text-xs text-[var(--muted)]">
-                            Current week: {assignment.weeklyHours?.[weeks[0]?.date] ?? 0}h
-                          </span>
-                          {!canEditAssignments && (
-                            <span className="text-[10px] text-[var(--muted)] mt-1">Editing disabled for your role</span>
-                          )}
-                        </button>
+                        <div className="relative overflow-hidden rounded border border-[var(--border)] bg-[var(--surface)]">
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+                            <button
+                              type="button"
+                              className="w-20 h-9 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-500 disabled:opacity-60"
+                              onClick={() => onRemoveAssignment?.(person.id!, assignment.id!)}
+                              disabled={!canEditAssignments}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className={`w-full text-left flex flex-col rounded border border-transparent p-3 bg-[var(--surface)] transition-transform ${openDeleteId === assignment.id ? '-translate-x-20' : 'translate-x-0'} ${canEditAssignments ? 'hover:border-[var(--primary)]' : 'opacity-60 cursor-not-allowed'}`}
+                            onClick={() => canEditAssignments && handleAssignmentPress(person.id!, assignment.id!)}
+                            onTouchStart={(e) => handleTouchStart(assignment.id!, e)}
+                            onTouchEnd={(e) => handleTouchEnd(assignment.id!, e)}
+                            aria-disabled={!canEditAssignments}
+                          >
+                            <span className="font-medium">{assignment.projectDisplayName || `Project ${assignment.project}`}</span>
+                            <span className="text-xs text-[var(--muted)]">
+                              Current week: {assignment.weeklyHours?.[weeks[0]?.date] ?? 0}h
+                            </span>
+                            {!canEditAssignments && (
+                              <span className="text-[10px] text-[var(--muted)] mt-1">Editing disabled for your role</span>
+                            )}
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
                 )}
+                {hasMore ? (
+                  <button
+                    type="button"
+                    className="w-full rounded border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--surfaceHover)] disabled:opacity-60"
+                    onClick={() => onLoadMoreAssignments?.(person.id!)}
+                    disabled={isLoadingMore}
+                  >
+                    {isLoadingMore
+                      ? 'Loading...'
+                      : (typeof totalCount === 'number'
+                        ? `Load more assignments (${assignments.length}/${totalCount})`
+                        : 'Load more assignments')}
+                  </button>
+                ) : null}
                 <div className="pt-2">
                   <button
                     type="button"
@@ -125,7 +204,7 @@ const MobilePersonAccordions: React.FC<Props> = ({
                     onClick={() => canEditAssignments && onAddAssignment?.(person.id!)}
                     disabled={!canEditAssignments}
                   >
-                    {activeAddPersonId === person.id ? 'Choose a project…' : 'Add Assignment'}
+                    {activeAddPersonId === person.id ? 'Choose a project...' : 'Add Assignment'}
                   </button>
                 </div>
               </div>

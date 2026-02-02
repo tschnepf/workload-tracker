@@ -71,6 +71,8 @@ import { isAdminOrManager } from '@/utils/roleAccess';
 
 // (WeekCell moved to grid/components/WeekCell)
 
+const MOBILE_FILTERED_PAGE_SIZE = 50;
+
 
 interface PersonWithAssignments extends Person {
   assignments: Assignment[];
@@ -196,6 +198,10 @@ const AssignmentGrid: React.FC = () => {
   const searchMetaRequestIdRef = useRef(0);
   const [filteredAssignmentsByPerson, setFilteredAssignmentsByPerson] = useState<Record<number, Assignment[]>>({});
   const [filteredAssignmentsLoaded, setFilteredAssignmentsLoaded] = useState<Set<number>>(new Set());
+  const [mobileAssignmentPageByPerson, setMobileAssignmentPageByPerson] = useState<Record<number, number>>({});
+  const [mobileHasMoreAssignmentsByPerson, setMobileHasMoreAssignmentsByPerson] = useState<Record<number, boolean>>({});
+  const [mobileLoadingMoreByPerson, setMobileLoadingMoreByPerson] = useState<Set<number>>(new Set());
+  const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   const addUI = useProjectAssignmentAdd({
     search: (query) => searchProjects(query),
     onAdd: (personId, project) => addAssignment(personId, project),
@@ -204,6 +210,7 @@ const AssignmentGrid: React.FC = () => {
   const caps = useCapabilities({ enabled: false });
   const auth = useAuth();
   const canUseAutoHours = isAdminOrManager(auth.user);
+  const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   // Async job state for snapshot generation
   // async job state provided by useAssignmentsSnapshot
   // New multi-select project status filters (aggregate selection)
@@ -231,6 +238,7 @@ const AssignmentGrid: React.FC = () => {
     page_size: number;
     project: number;
     person: number;
+    meta_only: boolean;
   }>) => {
     const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
     const includeChildren: 0 | 1 | undefined = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
@@ -244,6 +252,7 @@ const AssignmentGrid: React.FC = () => {
       search_tokens: searchTokensPayload,
       project: overrides?.project,
       person: overrides?.person,
+      meta_only: overrides?.meta_only,
     };
   }, [deptState.selectedDepartmentId, deptState.includeChildren, searchTokensPayload, statusIn]);
   const hoursByPersonView = useMemo(() => {
@@ -360,7 +369,7 @@ const AssignmentGrid: React.FC = () => {
     const requestId = (searchMetaRequestIdRef.current += 1);
     setSearchMetaLoading(true);
     try {
-      const res = await assignmentsApi.search(buildSearchPayload({ page: 1, page_size: 1 }));
+      const res = await assignmentsApi.search(buildSearchPayload({ page: 1, page_size: 1, meta_only: true }));
       if (searchMetaRequestIdRef.current !== requestId) return;
       setSearchMeta({
         people: res.people || [],
@@ -384,6 +393,9 @@ const AssignmentGrid: React.FC = () => {
     setSearchMetaLoading((prev) => (prev ? false : prev));
     setFilteredAssignmentsByPerson((prev) => (Object.keys(prev).length ? {} : prev));
     setFilteredAssignmentsLoaded((prev) => (prev.size ? new Set() : prev));
+    setMobileAssignmentPageByPerson((prev) => (Object.keys(prev).length ? {} : prev));
+    setMobileHasMoreAssignmentsByPerson((prev) => (Object.keys(prev).length ? {} : prev));
+    setMobileLoadingMoreByPerson((prev) => (prev.size ? new Set() : prev));
   }, [serverFilterActive]);
 
   useEffect(() => {
@@ -392,6 +404,25 @@ const AssignmentGrid: React.FC = () => {
     setFilteredAssignmentsLoaded(new Set());
     void fetchSearchMeta();
   }, [serverFilterActive, fetchSearchMeta]);
+
+  useEffect(() => {
+    if (!isMobileLayout || !serverFilterActive) return;
+    setFilteredAssignmentsByPerson({});
+    setFilteredAssignmentsLoaded(new Set());
+    setMobileAssignmentPageByPerson({});
+    setMobileHasMoreAssignmentsByPerson({});
+    setMobileLoadingMoreByPerson(new Set());
+    void fetchSearchMeta();
+  }, [
+    isMobileLayout,
+    serverFilterActive,
+    fetchSearchMeta,
+    deptState.selectedDepartmentId,
+    deptState.includeChildren,
+    statusIn,
+    searchTokensPayload,
+    weeksHorizon,
+  ]);
 
   const handleAssignmentRoleChange = async (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => {
     await updateAssignmentRoleAction({
@@ -406,8 +437,6 @@ const AssignmentGrid: React.FC = () => {
       showToast,
     });
   };
-
-  const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
   // Weeks header: from grid snapshot when available (server weekKeys only)
   const snapshot = useAssignmentsSnapshot({
     weeksHorizon,
@@ -428,7 +457,6 @@ const AssignmentGrid: React.FC = () => {
   });
   const { weeks, isSnapshotMode, loadData, asyncJob, departments } = snapshot;
   const canEditAssignments = caps.data?.aggregates?.gridSnapshot !== false;
-  const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
   const weekVirtualization = useWeekVirtualization(weeks, 70, 2);
   const mobileWeeks = isMobileLayout ? weekVirtualization.visibleWeeks : weeks;
@@ -1365,6 +1393,48 @@ const AssignmentGrid: React.FC = () => {
     return results;
   }, [buildSearchPayload]);
 
+  const fetchFilteredAssignmentsPage = useCallback(async (personId: number, page: number): Promise<{ rows: Assignment[]; hasMore: boolean; }> => {
+    const res = await assignmentsApi.search(buildSearchPayload({ page, page_size: MOBILE_FILTERED_PAGE_SIZE, person: personId }));
+    const rows = res.results || [];
+    const hasMore = Boolean(res.next);
+    return { rows, hasMore };
+  }, [buildSearchPayload]);
+
+  const loadFilteredAssignmentsPage = useCallback(async (personId: number, page: number, opts?: { append?: boolean }) => {
+    setMobileLoadingMoreByPerson(prev => new Set(prev).add(personId));
+    try {
+      const { rows, hasMore } = await fetchFilteredAssignmentsPage(personId, page);
+      let nextRows: Assignment[] = [];
+      setFilteredAssignmentsByPerson((prev) => {
+        const existing = prev[personId] || [];
+        nextRows = opts?.append
+          ? (() => {
+            const seen = new Set(existing.map((a) => a.id));
+            const merged = [...existing];
+            rows.forEach((a) => {
+              if (!seen.has(a.id)) merged.push(a);
+            });
+            return merged;
+          })()
+          : rows;
+        return { ...prev, [personId]: nextRows };
+      });
+      setFilteredAssignmentsLoaded(prev => {
+        const next = new Set(prev);
+        next.add(personId);
+        return next;
+      });
+      setMobileAssignmentPageByPerson(prev => ({ ...prev, [personId]: page }));
+      setMobileHasMoreAssignmentsByPerson(prev => ({ ...prev, [personId]: hasMore }));
+      return nextRows;
+    } catch (e: any) {
+      showToast('Failed to load assignments: ' + (e?.message || 'Unknown error'), 'error');
+      return [];
+    } finally {
+      setMobileLoadingMoreByPerson(prev => { const next = new Set(prev); next.delete(personId); return next; });
+    }
+  }, [fetchFilteredAssignmentsPage, showToast]);
+
   const ensureAssignmentsLoaded = async (
     personId: number,
     opts?: { mode?: AssignmentLoadMode; force?: boolean }
@@ -1374,6 +1444,22 @@ const AssignmentGrid: React.FC = () => {
     const force = opts?.force ?? false;
 
     if (mode === 'filtered') {
+      if (isMobileLayout) {
+        if (!force && (filteredAssignmentsLoaded.has(personId) || loadingAssignments.has(personId))) {
+          return filteredAssignmentsByPerson[personId] || [];
+        }
+        setLoadingAssignments(prev => new Set(prev).add(personId));
+        try {
+          const rows = await loadFilteredAssignmentsPage(personId, 1, { append: false });
+          return rows || [];
+        } catch (e: any) {
+          showToast('Failed to load filtered assignments: ' + (e?.message || 'Unknown error'), 'error');
+          setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: false } : p)));
+          return [];
+        } finally {
+          setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
+        }
+      }
       if (!force && (filteredAssignmentsLoaded.has(personId) || loadingAssignments.has(personId))) {
         return filteredAssignmentsByPerson[personId] || [];
       }
@@ -1446,6 +1532,15 @@ const AssignmentGrid: React.FC = () => {
       setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
     }
   };
+
+  const loadMoreFilteredAssignmentsForPerson = useCallback(async (personId: number) => {
+    if (!serverFilterActive) return;
+    if (!mobileHasMoreAssignmentsByPerson[personId]) return;
+    if (mobileLoadingMoreByPerson.has(personId)) return;
+    const currentPage = mobileAssignmentPageByPerson[personId] || 1;
+    const nextPage = currentPage + 1;
+    await loadFilteredAssignmentsPage(personId, nextPage, { append: true });
+  }, [serverFilterActive, mobileHasMoreAssignmentsByPerson, mobileLoadingMoreByPerson, mobileAssignmentPageByPerson, loadFilteredAssignmentsPage]);
 
   // Manual refresh for a person's assignments on demand
   const refreshPersonAssignments = async (personId: number) => {
@@ -1666,20 +1761,20 @@ const AssignmentGrid: React.FC = () => {
           : person
       ));
       setAssignmentsData(prev => [...prev, newAssignment]);
-    if (serverFilterActive) {
-      const matchesFilters = matchesStatusFilters(project as Project)
-        && matchesSearchTokensAssignment(newAssignment as Assignment);
-      if (matchesFilters && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, personId)) {
-        setFilteredAssignmentsByPerson((prev) => {
-          const rows = prev[personId] || [];
-          if (rows.some((a) => a.id === newAssignment.id)) return prev;
-          return { ...prev, [personId]: [...rows, newAssignment as Assignment] };
-        });
-      }
-      if (matchesFilters) {
-        setSearchMeta((prev) => {
-          if (!prev) return prev;
-          const key = String(personId);
+      if (serverFilterActive) {
+        const matchesFilters = matchesStatusFilters(project as Project)
+          && matchesSearchTokensAssignment(newAssignment as Assignment);
+        if (matchesFilters && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, personId)) {
+          setFilteredAssignmentsByPerson((prev) => {
+            const rows = prev[personId] || [];
+            if (rows.some((a) => a.id === newAssignment.id)) return prev;
+            return { ...prev, [personId]: [...rows, newAssignment as Assignment] };
+          });
+        }
+        if (matchesFilters) {
+          setSearchMeta((prev) => {
+            if (!prev) return prev;
+            const key = String(personId);
             const counts = prev.assignmentCountsByPerson || {};
             const nextCount = (counts[key] || 0) + 1;
             return {
@@ -1737,6 +1832,46 @@ const AssignmentGrid: React.FC = () => {
     });
   }, []);
 
+  const applyFilteredTotalsDelta = useCallback((personId: number, deltas: Record<string, number>) => {
+    if (!deltas || Object.keys(deltas).length === 0) return;
+    setSearchMeta((prev) => {
+      if (!prev) return prev;
+      const key = String(personId);
+      const current = { ...(prev.filteredTotals?.[key] || {}) };
+      Object.entries(deltas).forEach(([week, delta]) => {
+        const next = (current[week] || 0) + delta;
+        if (Math.abs(next) < 0.001) {
+          delete current[week];
+        } else {
+          current[week] = Math.round(next * 100) / 100;
+        }
+      });
+      return {
+        ...prev,
+        filteredTotals: {
+          ...(prev.filteredTotals || {}),
+          [key]: current,
+        },
+      };
+    });
+  }, []);
+
+  const shouldUseFilteredTotalsDelta = useCallback((personId: number) => {
+    if (!isMobileLayout || !serverFilterActive) return false;
+    return Boolean(mobileHasMoreAssignmentsByPerson[personId]);
+  }, [isMobileLayout, serverFilterActive, mobileHasMoreAssignmentsByPerson]);
+
+  const buildWeeklyDeltas = useCallback((weeklyHours: Record<string, number> | undefined, multiplier = 1) => {
+    const deltas: Record<string, number> = {};
+    if (!weeklyHours) return deltas;
+    Object.entries(weeklyHours).forEach(([week, value]) => {
+      const v = parseFloat((value as any)?.toString?.() || '0') || 0;
+      if (!v) return;
+      deltas[week] = (deltas[week] || 0) + (v * multiplier);
+    });
+    return deltas;
+  }, []);
+
   const adjustFilteredAssignmentCount = useCallback((personId: number, delta: number) => {
     if (!delta) return;
     setSearchMeta((prev) => {
@@ -1760,15 +1895,22 @@ const AssignmentGrid: React.FC = () => {
   const removeAssignment = async (assignmentId: number, personId: number) => {
     if (!confirm('Are you sure you want to remove this assignment?')) return;
     let prevFilteredRows: Assignment[] | null = null;
+    let removedAssignment: Assignment | null = null;
     let didOptimisticFilteredUpdate = false;
     if (serverFilterActive) {
       const rows = filteredAssignmentsByPerson[personId] || [];
+      const removed = rows.find((a) => a.id === assignmentId) || null;
+      removedAssignment = removed;
       const nextRows = rows.filter((a) => a.id !== assignmentId);
       if (nextRows.length !== rows.length) {
         prevFilteredRows = rows;
         didOptimisticFilteredUpdate = true;
         setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
-        updateFilteredTotalsForPerson(personId, nextRows);
+        if (shouldUseFilteredTotalsDelta(personId) && removed) {
+          applyFilteredTotalsDelta(personId, buildWeeklyDeltas(removed.weeklyHours, -1));
+        } else {
+          updateFilteredTotalsForPerson(personId, nextRows);
+        }
         adjustFilteredAssignmentCount(personId, -1);
       }
     }
@@ -1777,7 +1919,11 @@ const AssignmentGrid: React.FC = () => {
     } catch {
       if (serverFilterActive && didOptimisticFilteredUpdate && prevFilteredRows) {
         setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: prevFilteredRows as Assignment[] }));
-        updateFilteredTotalsForPerson(personId, prevFilteredRows);
+        if (shouldUseFilteredTotalsDelta(personId) && removedAssignment) {
+          applyFilteredTotalsDelta(personId, buildWeeklyDeltas(removedAssignment.weeklyHours, 1));
+        } else {
+          updateFilteredTotalsForPerson(personId, prevFilteredRows);
+        }
         adjustFilteredAssignmentCount(personId, 1);
       }
     }
@@ -1810,7 +1956,12 @@ const AssignmentGrid: React.FC = () => {
     setAssignmentsData(prev => prev.map(a =>
       a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a
     ));
-    updateFilteredTotalsForPerson(personId, nextRows);
+    if (shouldUseFilteredTotalsDelta(personId)) {
+      const delta = (hours || 0) - (prevWeeklyHours[week] || 0);
+      applyFilteredTotalsDelta(personId, { [week]: delta });
+    } else {
+      updateFilteredTotalsForPerson(personId, nextRows);
+    }
     try {
       // Keep unfiltered totals in sync for when filters are cleared.
       if (person && loadedAssignmentIds.has(personId)) {
@@ -1852,7 +2003,12 @@ const AssignmentGrid: React.FC = () => {
       setAssignmentsData(prev => prev.map(a =>
         a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a
       ));
-      updateFilteredTotalsForPerson(personId, revertedRows);
+      if (shouldUseFilteredTotalsDelta(personId)) {
+        const delta = (prevWeeklyHours[week] || 0) - (hours || 0);
+        applyFilteredTotalsDelta(personId, { [week]: delta });
+      } else {
+        updateFilteredTotalsForPerson(personId, revertedRows);
+      }
       try {
         if (person && loadedAssignmentIds.has(personId)) {
           const total = (person.assignments || []).reduce((sum: number, a: any) => {
@@ -1910,28 +2066,6 @@ const AssignmentGrid: React.FC = () => {
     if (updatesArray.length === 0) return;
 
     const touchedPeople = new Set(updatesArray.map((u) => u.personId));
-    const updateFilteredTotalsForPerson = (personId: number, assignments: Assignment[]) => {
-      const totals: Record<string, number> = {};
-      assignments.forEach((a) => {
-        const wh = (a as any).weeklyHours || {};
-        Object.entries(wh).forEach(([wk, val]) => {
-          const v = parseFloat((val as any)?.toString?.() || '0') || 0;
-          if (!v) return;
-          totals[wk] = (totals[wk] || 0) + v;
-        });
-      });
-      setSearchMeta((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          filteredTotals: {
-            ...(prev.filteredTotals || {}),
-            [String(personId)]: totals,
-          },
-        };
-      });
-    };
-
     setFilteredAssignmentsByPerson((prev) => {
       const next = { ...prev };
       updatesArray.forEach((u) => {
@@ -1941,11 +2075,27 @@ const AssignmentGrid: React.FC = () => {
       return next;
     });
     touchedPeople.forEach((pid) => {
-      const rows = (filteredAssignmentsByPerson[pid] || []).map((a) => {
-        const u = updatesByAssignmentId.get(a.id!);
-        return u ? { ...a, weeklyHours: u.weeklyHours } : a;
-      });
-      updateFilteredTotalsForPerson(pid, rows);
+      if (shouldUseFilteredTotalsDelta(pid)) {
+        const deltas: Record<string, number> = {};
+        updatesArray
+          .filter((u) => u.personId === pid)
+          .forEach((u) => {
+            Object.entries(u.weeklyHours || {}).forEach(([wk, val]) => {
+              const nextVal = parseFloat((val as any)?.toString?.() || '0') || 0;
+              const prevVal = parseFloat((u.prevWeeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+              const delta = nextVal - prevVal;
+              if (!delta) return;
+              deltas[wk] = (deltas[wk] || 0) + delta;
+            });
+          });
+        applyFilteredTotalsDelta(pid, deltas);
+      } else {
+        const rows = (filteredAssignmentsByPerson[pid] || []).map((a) => {
+          const u = updatesByAssignmentId.get(a.id!);
+          return u ? { ...a, weeklyHours: u.weeklyHours } : a;
+        });
+        updateFilteredTotalsForPerson(pid, rows);
+      }
     });
 
     let results: PromiseSettledResult<any>[] = [];
@@ -1991,11 +2141,23 @@ const AssignmentGrid: React.FC = () => {
         return next;
       });
       failed.forEach((f) => {
-        const rows = (filteredAssignmentsByPerson[f.personId] || []).map((a) => {
-          if (a.id === f.assignmentId) return { ...a, weeklyHours: f.prevWeeklyHours };
-          return a;
-        });
-        updateFilteredTotalsForPerson(f.personId, rows);
+        if (shouldUseFilteredTotalsDelta(f.personId)) {
+          const deltas: Record<string, number> = {};
+          Object.entries(f.prevWeeklyHours || {}).forEach(([wk, val]) => {
+            const prevVal = parseFloat((val as any)?.toString?.() || '0') || 0;
+            const nextVal = parseFloat((updatesByAssignmentId.get(f.assignmentId)?.weeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+            const delta = prevVal - nextVal;
+            if (!delta) return;
+            deltas[wk] = (deltas[wk] || 0) + delta;
+          });
+          applyFilteredTotalsDelta(f.personId, deltas);
+        } else {
+          const rows = (filteredAssignmentsByPerson[f.personId] || []).map((a) => {
+            if (a.id === f.assignmentId) return { ...a, weeklyHours: f.prevWeeklyHours };
+            return a;
+          });
+          updateFilteredTotalsForPerson(f.personId, rows);
+        }
       });
       showToast(`Failed to update ${failed.length} assignment${failed.length === 1 ? '' : 's'}.`, 'error');
     }
@@ -2156,7 +2318,21 @@ const AssignmentGrid: React.FC = () => {
           return u ? { ...a, weeklyHours: u.weeklyHours } : a;
         });
         setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
-        updateFilteredTotalsForPerson(personId, nextRows);
+        if (shouldUseFilteredTotalsDelta(personId)) {
+          const deltas: Record<string, number> = {};
+          list.forEach((u) => {
+            Object.entries(u.weeklyHours || {}).forEach(([wk, val]) => {
+              const nextVal = parseFloat((val as any)?.toString?.() || '0') || 0;
+              const prevVal = parseFloat((u.prevWeeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+              const delta = nextVal - prevVal;
+              if (!delta) return;
+              deltas[wk] = (deltas[wk] || 0) + delta;
+            });
+          });
+          applyFilteredTotalsDelta(personId, deltas);
+        } else {
+          updateFilteredTotalsForPerson(personId, nextRows);
+        }
       });
     }
 
@@ -2247,7 +2423,21 @@ const AssignmentGrid: React.FC = () => {
             return u ? { ...a, weeklyHours: u.prevWeeklyHours } : a;
           });
           setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
-          updateFilteredTotalsForPerson(personId, nextRows);
+          if (shouldUseFilteredTotalsDelta(personId)) {
+            const deltas: Record<string, number> = {};
+            list.forEach((u) => {
+              Object.entries(u.prevWeeklyHours || {}).forEach(([wk, val]) => {
+                const prevVal = parseFloat((val as any)?.toString?.() || '0') || 0;
+                const nextVal = parseFloat((u.weeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+                const delta = prevVal - nextVal;
+                if (!delta) return;
+                deltas[wk] = (deltas[wk] || 0) + delta;
+              });
+            });
+            applyFilteredTotalsDelta(personId, deltas);
+          } else {
+            updateFilteredTotalsForPerson(personId, nextRows);
+          }
         });
       }
       try {
@@ -2426,7 +2616,7 @@ const AssignmentGrid: React.FC = () => {
               onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
               onKeyDown={handleSearchKeyDown}
               placeholder={searchTokens.length ? 'Add another filter...' : 'Search people, projects, or clients (Enter)'}
-              className="flex-1 min-w-[140px] px-1 py-0.5 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+              className="flex-1 min-w-[140px] px-1 py-0.5 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
             />
           </div>
         </div>
@@ -2568,7 +2758,7 @@ const AssignmentGrid: React.FC = () => {
                 onKeyDown={handleSearchKeyDown}
                 placeholder={searchTokens.length ? 'Add filter...' : 'Search (Enter)'}
                 aria-label="Search assignments"
-                className="flex-1 min-w-[120px] px-1 py-0.5 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+                className="flex-1 min-w-[120px] px-1 py-0.5 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
               />
             </div>
           </div>
@@ -2590,8 +2780,13 @@ const AssignmentGrid: React.FC = () => {
             people={visiblePeopleWithAssignments as any}
             weeks={weeks}
             hoursByPerson={hoursByPersonView}
+            assignmentCountByPerson={serverFilterActive ? (searchMeta?.assignmentCountsByPerson || {}) : {}}
+            hasMoreAssignmentsByPerson={serverFilterActive ? mobileHasMoreAssignmentsByPerson : {}}
+            loadingMoreByPerson={serverFilterActive ? mobileLoadingMoreByPerson : new Set()}
+            onLoadMoreAssignments={(pid) => { void loadMoreFilteredAssignmentsForPerson(pid); }}
             onExpand={(pid) => ensureAssignmentsLoaded(pid)}
             onAssignmentPress={handleMobileAssignmentPress}
+            onRemoveAssignment={(pid, aid) => { void removeAssignment(aid, pid); }}
             canEditAssignments={canEditAssignments}
             onAddAssignment={(pid) => addUI.open(pid)}
             activeAddPersonId={addUI.isAddingFor}
@@ -2756,6 +2951,7 @@ const AssignmentGrid: React.FC = () => {
       <MobileAssignmentSheet
         target={mobileEditTarget}
         people={people as any}
+        assignmentsByPerson={serverFilterActive ? filteredAssignmentsByPerson : undefined}
         weeks={weeks}
         onClose={() => setMobileEditTarget(null)}
         onSaveHours={updateAssignmentHours}

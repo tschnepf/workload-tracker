@@ -30,6 +30,9 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
 import { showToast as showToastBus } from '@/lib/toastBus';
+import MobileProjectAccordions from '@/pages/Assignments/project/components/MobileProjectAccordions';
+import MobileProjectAddAssignmentSheet from '@/pages/Assignments/project/components/MobileProjectAddAssignmentSheet';
+import MobileProjectAssignmentSheet from '@/pages/Assignments/project/components/MobileProjectAssignmentSheet';
 import { Assignment, Deliverable, DeliverablePhaseMappingSettings, Person, Project, AutoHoursTemplate } from '@/types/models';
 import { assignmentsApi, autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, peopleApi, projectsApi, type AutoHoursRoleSetting } from '@/services/api';
 import { updateAssignmentRoleAction } from '@/pages/Assignments/grid/useAssignmentRoleUpdate';
@@ -62,6 +65,7 @@ const DEFAULT_PHASE_MAPPING: DeliverablePhaseMappingSettings = {
   ],
 };
 const DEFAULT_AUTO_HOURS_PHASES = ['sd', 'dd', 'ifp', 'ifc'] as const;
+const MOBILE_PROJECT_PAGE_SIZE = 50;
 const isDateInWeek = (dateStr: string, weekStartStr: string) => {
   try {
     const deliverableDate = new Date(dateStr);
@@ -78,6 +82,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const { state: deptState } = useDepartmentFilter();
   const auth = useAuth();
   const canUseAutoHours = isAdminOrManager(auth.user);
+  const canEditAssignments = true;
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const query = useGridUrlState();
 
@@ -89,6 +94,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(new Set());
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
   const [loadedProjectIds, setLoadedProjectIds] = useState<Set<number>>(new Set());
+  const [mobileAssignmentPageByProject, setMobileAssignmentPageByProject] = useState<Record<number, number>>({});
+  const [mobileHasMoreAssignmentsByProject, setMobileHasMoreAssignmentsByProject] = useState<Record<number, boolean>>({});
+  const [mobileLoadingMoreByProject, setMobileLoadingMoreByProject] = useState<Set<number>>(new Set());
+  const [mobileAssignmentTarget, setMobileAssignmentTarget] = useState<Assignment | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +239,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
     () => normalizedSearchTokens.map((token) => ({ term: token.term, op: token.op })),
     [normalizedSearchTokens]
   );
+
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    setMobileAssignmentPageByProject({});
+    setMobileHasMoreAssignmentsByProject({});
+    setMobileLoadingMoreByProject(new Set());
+  }, [isMobileLayout, deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, statusFilterCsv, searchTokenPayload]);
 
   const activeToken = useMemo(() => (
     activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null
@@ -841,6 +857,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
   };
 
+  const handleMobileAssignmentPress = (projectId: number, assignmentId: number) => {
+    const assignment = assignmentById.get(assignmentId);
+    if (assignment) setMobileAssignmentTarget(assignment);
+  };
+
+  const handleMobileAssignmentSaveHours = async (assignmentId: number, week: string, hours: number) => {
+    const assignment = assignmentById.get(assignmentId);
+    if (!assignment || assignment.project == null) return;
+    await updateAssignmentHours(assignment.project as number, assignmentId, week, hours);
+  };
+
   const swapPlaceholderAssignment = async (assignmentId: number, person: { id: number; name: string; department?: number | null }) => {
     const assignment = assignmentById.get(assignmentId);
     if (!assignment) return;
@@ -1035,6 +1062,45 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return all;
   };
 
+  const fetchProjectAssignmentsPage = useCallback(async (projectId: number, page: number) => {
+    const res = await assignmentsApi.list({ project: projectId, page, page_size: MOBILE_PROJECT_PAGE_SIZE, include_placeholders: 1 });
+    const rows = Array.isArray(res as any) ? (res as any) : (res?.results || []);
+    const hasMore = Boolean((res as any)?.next);
+    return { rows, hasMore };
+  }, []);
+
+  const loadProjectAssignmentsPage = useCallback(async (projectId: number, page: number, opts?: { append?: boolean }) => {
+    setMobileLoadingMoreByProject(prev => new Set(prev).add(projectId));
+    try {
+      const { rows, hasMore } = await fetchProjectAssignmentsPage(projectId, page);
+      setAssignmentsData(prev => {
+        const existing = prev.filter(a => (a.project as number | null | undefined) === projectId);
+        const rest = prev.filter(a => (a.project as number | null | undefined) !== projectId);
+        const merged = opts?.append ? (() => {
+          const seen = new Set(existing.map(a => a.id));
+          const nextRows = [...existing];
+          rows.forEach((a) => { if (!seen.has(a.id)) nextRows.push(a); });
+          return nextRows;
+        })() : rows;
+        return [...rest, ...merged];
+      });
+      setMobileAssignmentPageByProject(prev => ({ ...prev, [projectId]: page }));
+      setMobileHasMoreAssignmentsByProject(prev => ({ ...prev, [projectId]: hasMore }));
+    } catch (e: any) {
+      showToastBus(e?.message || 'Failed to load project assignments', 'error');
+    } finally {
+      setMobileLoadingMoreByProject(prev => { const next = new Set(prev); next.delete(projectId); return next; });
+    }
+  }, [fetchProjectAssignmentsPage]);
+
+  const loadMoreProjectAssignments = useCallback(async (projectId: number) => {
+    if (!mobileHasMoreAssignmentsByProject[projectId]) return;
+    if (mobileLoadingMoreByProject.has(projectId)) return;
+    const currentPage = mobileAssignmentPageByProject[projectId] || 1;
+    const nextPage = currentPage + 1;
+    await loadProjectAssignmentsPage(projectId, nextPage, { append: true });
+  }, [mobileHasMoreAssignmentsByProject, mobileLoadingMoreByProject, mobileAssignmentPageByProject, loadProjectAssignmentsPage]);
+
   const ensureAssignmentsLoaded = async (projectId: number) => {
     if (loadedProjectIds.has(projectId) || loadingAssignments.has(projectId)) return;
     setLoadingAssignments(prev => new Set(prev).add(projectId));
@@ -1128,9 +1194,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
     scheduleScrollRestore();
     if (willExpand) {
-      void ensureAssignmentsLoaded(projectId).finally(() => {
-        scheduleScrollRestore();
-      });
+      if (isMobileLayout) {
+        if (!mobileAssignmentPageByProject[projectId] && !mobileLoadingMoreByProject.has(projectId)) {
+          void loadProjectAssignmentsPage(projectId, 1, { append: false }).finally(() => {
+            scheduleScrollRestore();
+          });
+        }
+      } else {
+        void ensureAssignmentsLoaded(projectId).finally(() => {
+          scheduleScrollRestore();
+        });
+      }
     }
   };
 
@@ -1149,10 +1223,22 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
   };
 
-  const addPersonToProject = async (projectId: number, person: { id: number; name: string; department?: number | null }) => {
+  const addPersonToProject = async (
+    projectId: number,
+    person: { id: number; name: string; department?: number | null },
+    role?: ProjectRole | null
+  ) => {
     try {
-      const created = await createAssignment({ person: person.id, project: projectId }, assignmentsApi);
-      setAssignmentsData(prev => [...prev, created as Assignment]);
+      const created = await createAssignment({
+        person: person.id,
+        project: projectId,
+        ...(role?.id ? { roleOnProjectId: role.id } : {}),
+      }, assignmentsApi);
+      const normalized = {
+        ...(created as Assignment),
+        roleName: (created as any)?.roleName ?? role?.name ?? null,
+      } as Assignment;
+      setAssignmentsData(prev => [...prev, normalized]);
       showToastBus('Assignment created', 'success');
     } catch (e: any) {
       showToastBus(e?.message || 'Failed to create assignment', 'error');
@@ -1190,7 +1276,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         departmentName: departmentNameById.get(role.department_id) || '',
       }));
     },
-    onAddPerson: async (projectId, person) => addPersonToProject(projectId, person),
+    onAddPerson: async (projectId, person, role) => addPersonToProject(projectId, person, role),
     onAddRole: async (projectId, role) => addRolePlaceholderToProject(projectId, role),
   });
 
@@ -1557,10 +1643,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
             showPersonDropdown={addUI.showPersonDropdown}
             setShowPersonDropdown={addUI.setShowPersonDropdown}
             selectedPerson={addUI.selectedPerson}
+            selectedPersonRole={addUI.selectedPersonRole}
             selectedRole={addUI.selectedRole}
             onPersonSelect={addUI.onPersonSelect}
+            onPersonRoleSelect={addUI.onPersonRoleSelect}
             onRoleSelect={addUI.onRoleSelect}
-            onAddPerson={(person) => addUI.addPerson(project.id!, person)}
+            onAddPerson={(person, role) => addUI.addPerson(project.id!, person, role)}
             onAddRole={(role) => addUI.addRole(project.id!, role)}
             onAddSelected={() => addUI.addSelected(project.id!)}
             onCancel={addUI.cancel}
@@ -1665,7 +1753,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client or name (Enter)'}
-                className="flex-1 min-w-[140px] px-1 py-0.5 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+                className="flex-1 min-w-[140px] px-1 py-0.5 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
               />
             </div>
           </div>
@@ -1676,36 +1764,80 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   return (
     <Layout>
-      <div className="p-4">
-        <TopBarPortal side="right">{topBarHeader}</TopBarPortal>
-        <ProjectWeekHeader />
-        <div
-          ref={bodyScrollRef}
-          onScroll={handleBodyScroll}
-          className="overflow-x-auto overflow-y-visible scrollbar-theme"
-        >
-          <div style={{ minWidth: totalMinWidth, paddingLeft: weekPaddingLeft, paddingRight: weekPaddingRight }}>
-            {visibleProjects.map((project) => (
-              <ProjectSection key={project.id} project={project} />
-            ))}
+      {isMobileLayout ? (
+        <div className="flex-1 flex flex-col min-w-0 px-4 py-4 space-y-4">
+          {topBarHeader}
+          <MobileProjectAccordions
+            projects={visibleProjects as any}
+            weeks={weeks}
+            hoursByProject={hoursByProject}
+            onExpand={(pid) => toggleProjectExpanded(pid)}
+            onAssignmentPress={handleMobileAssignmentPress}
+            onAddAssignment={(pid) => addUI.open(pid)}
+            activeAddProjectId={addUI.isAddingFor}
+            hasMoreAssignmentsByProject={mobileHasMoreAssignmentsByProject}
+            loadingMoreByProject={mobileLoadingMoreByProject}
+            onLoadMoreAssignments={(pid) => { void loadMoreProjectAssignments(pid); }}
+            canEditAssignments={canEditAssignments}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
+            <div>
+              {projectsCount > 0 ? `Showing ${visibleProjects.length} of ${projectsCount} projects` : 'No projects found'}
+            </div>
+            {hasMoreProjects && (
+              <button
+                type="button"
+                onClick={() => { void fetchProjectsPage(projectsPage + 1, { append: true }); }}
+                disabled={projectsLoading}
+                className="px-3 py-1 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {projectsLoading ? 'Loading…' : 'Load more'}
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-[var(--muted)]">
-          <div>
-            {projectsCount > 0 ? `Showing ${visibleProjects.length} of ${projectsCount} projects` : 'No projects found'}
+      ) : (
+        <div className="p-4">
+          <TopBarPortal side="right">{topBarHeader}</TopBarPortal>
+          <ProjectWeekHeader />
+          <div
+            ref={bodyScrollRef}
+            onScroll={handleBodyScroll}
+            className="overflow-x-auto overflow-y-visible scrollbar-theme"
+          >
+            <div style={{ minWidth: totalMinWidth, paddingLeft: weekPaddingLeft, paddingRight: weekPaddingRight }}>
+              {visibleProjects.map((project) => (
+                <ProjectSection key={project.id} project={project} />
+              ))}
+            </div>
           </div>
-          {hasMoreProjects && (
-            <button
-              type="button"
-              onClick={() => { void fetchProjectsPage(projectsPage + 1, { append: true }); }}
-              disabled={projectsLoading}
-              className="px-3 py-1 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {projectsLoading ? 'Loading…' : 'Load more'}
-            </button>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-[var(--muted)]">
+            <div>
+              {projectsCount > 0 ? `Showing ${visibleProjects.length} of ${projectsCount} projects` : 'No projects found'}
+            </div>
+            {hasMoreProjects && (
+              <button
+                type="button"
+                onClick={() => { void fetchProjectsPage(projectsPage + 1, { append: true }); }}
+                disabled={projectsLoading}
+                className="px-3 py-1 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {projectsLoading ? 'Loading…' : 'Load more'}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+      {isMobileLayout ? (
+        <MobileProjectAddAssignmentSheet addController={addUI as any} projects={projectsData} canEditAssignments={canEditAssignments} />
+      ) : null}
+      <MobileProjectAssignmentSheet
+        assignment={mobileAssignmentTarget}
+        weeks={weeks}
+        onClose={() => setMobileAssignmentTarget(null)}
+        onSaveHours={handleMobileAssignmentSaveHours}
+        canEditAssignments={canEditAssignments}
+      />
     </Layout>
   );
 };
@@ -1720,12 +1852,13 @@ function usePersonAssignmentAdd({
 }: {
   searchPeople: (query: string) => Promise<Array<{ id: number; name: string; department?: number | null }>>;
   searchRoles: (query: string) => Promise<Array<ProjectRole & { departmentName?: string }>>;
-  onAddPerson: (projectId: number, person: { id: number; name: string; department?: number | null }) => Promise<void> | void;
+  onAddPerson: (projectId: number, person: { id: number; name: string; department?: number | null }, role?: ProjectRole | null) => Promise<void> | void;
   onAddRole: (projectId: number, role: ProjectRole & { departmentName?: string }) => Promise<void> | void;
 }) {
   const [isAddingFor, setIsAddingFor] = useState<number | null>(null);
   const [newPersonName, setNewPersonName] = useState('');
   const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string; department?: number | null } | null>(null);
+  const [selectedPersonRole, setSelectedPersonRole] = useState<ProjectRole | null>(null);
   const [selectedRole, setSelectedRole] = useState<(ProjectRole & { departmentName?: string }) | null>(null);
   const [personResults, setPersonResults] = useState<Array<{ id: number; name: string; department?: number | null }>>([]);
   const [roleResults, setRoleResults] = useState<Array<ProjectRole & { departmentName?: string }>>([]);
@@ -1737,6 +1870,7 @@ function usePersonAssignmentAdd({
     setIsAddingFor(projectId);
     setNewPersonName('');
     setSelectedPerson(null);
+    setSelectedPersonRole(null);
     setSelectedRole(null);
     setPersonResults([]);
     setRoleResults([]);
@@ -1748,6 +1882,7 @@ function usePersonAssignmentAdd({
     setIsAddingFor(null);
     setNewPersonName('');
     setSelectedPerson(null);
+    setSelectedPersonRole(null);
     setSelectedRole(null);
     setPersonResults([]);
     setRoleResults([]);
@@ -1766,6 +1901,7 @@ function usePersonAssignmentAdd({
       setRoleResults([]);
       setShowPersonDropdown(false);
       setSelectedPerson(null);
+      setSelectedPersonRole(null);
       setSelectedRole(null);
       return;
     }
@@ -1774,6 +1910,7 @@ function usePersonAssignmentAdd({
       setRoleResults([]);
       setShowPersonDropdown(false);
       setSelectedPerson(null);
+      setSelectedPersonRole(null);
       setSelectedRole(null);
       return;
     }
@@ -1788,12 +1925,14 @@ function usePersonAssignmentAdd({
     setRoleResults(nextRoles);
     setShowPersonDropdown(nextPeople.length > 0 || nextRoles.length > 0);
     setSelectedPerson(null);
+    setSelectedPersonRole(null);
     setSelectedRole(null);
     setSelectedDropdownIndex(-1);
   }, [searchPeople, searchRoles]);
 
   const onPersonSelect = useCallback((person: { id: number; name: string; department?: number | null }) => {
     setSelectedPerson(person);
+    setSelectedPersonRole(null);
     setSelectedRole(null);
     setNewPersonName(person.name);
     setShowPersonDropdown(false);
@@ -1805,6 +1944,7 @@ function usePersonAssignmentAdd({
   const onRoleSelect = useCallback((role: ProjectRole & { departmentName?: string }) => {
     setSelectedRole(role);
     setSelectedPerson(null);
+    setSelectedPersonRole(null);
     setNewPersonName(role.name);
     setShowPersonDropdown(false);
     setPersonResults([]);
@@ -1812,9 +1952,13 @@ function usePersonAssignmentAdd({
     setSelectedDropdownIndex(-1);
   }, []);
 
+  const onPersonRoleSelect = useCallback((role: ProjectRole | null) => {
+    setSelectedPersonRole(role);
+  }, []);
+
   const addSelected = useCallback(async (projectId: number) => {
     if (selectedPerson) {
-      await onAddPerson(projectId, selectedPerson);
+      await onAddPerson(projectId, selectedPerson, selectedPersonRole);
       reset();
       return;
     }
@@ -1822,10 +1966,10 @@ function usePersonAssignmentAdd({
       await onAddRole(projectId, selectedRole);
       reset();
     }
-  }, [onAddPerson, onAddRole, reset, selectedPerson, selectedRole]);
+  }, [onAddPerson, onAddRole, reset, selectedPerson, selectedRole, selectedPersonRole]);
 
-  const addPerson = useCallback(async (projectId: number, person: { id: number; name: string; department?: number | null }) => {
-    await onAddPerson(projectId, person);
+  const addPerson = useCallback(async (projectId: number, person: { id: number; name: string; department?: number | null }, role?: ProjectRole | null) => {
+    await onAddPerson(projectId, person, role);
     reset();
   }, [onAddPerson, reset]);
 
@@ -1838,6 +1982,7 @@ function usePersonAssignmentAdd({
     isAddingFor,
     newPersonName,
     selectedPerson,
+    selectedPersonRole,
     selectedRole,
     personResults,
     roleResults,
@@ -1850,6 +1995,7 @@ function usePersonAssignmentAdd({
     cancel,
     onSearchChange,
     onPersonSelect,
+    onPersonRoleSelect,
     onRoleSelect,
     addSelected,
     addPerson,
@@ -1869,8 +2015,10 @@ function AddPersonRow({
   showPersonDropdown,
   setShowPersonDropdown,
   selectedPerson,
+  selectedPersonRole,
   selectedRole,
   onPersonSelect,
+  onPersonRoleSelect,
   onRoleSelect,
   onAddPerson,
   onAddRole,
@@ -1888,19 +2036,22 @@ function AddPersonRow({
   showPersonDropdown: boolean;
   setShowPersonDropdown: React.Dispatch<React.SetStateAction<boolean>>;
   selectedPerson: { id: number; name: string; department?: number | null } | null;
+  selectedPersonRole: ProjectRole | null;
   selectedRole: (ProjectRole & { departmentName?: string }) | null;
   onPersonSelect: (person: { id: number; name: string; department?: number | null }) => void;
+  onPersonRoleSelect: (role: ProjectRole | null) => void;
   onRoleSelect: (role: ProjectRole & { departmentName?: string }) => void;
-  onAddPerson: (person: { id: number; name: string; department?: number | null }) => void;
+  onAddPerson: (person: { id: number; name: string; department?: number | null }, role?: ProjectRole | null) => void;
   onAddRole: (role: ProjectRole & { departmentName?: string }) => void;
   onAddSelected: () => void;
   onCancel: () => void;
 }) {
   const combinedCount = personResults.length + roleResults.length;
   const hasResults = combinedCount > 0;
+  const { data: roleOptions = [] } = useProjectRoles(selectedPerson?.department ?? null, { includeInactive: true });
   return (
     <div className="grid gap-px p-1 bg-[var(--card)] border border-[var(--border)]" style={{ gridTemplateColumns: gridTemplate }}>
-      <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2 relative">
+      <div className="col-span-2 flex flex-col gap-2 py-1 pl-[60px] pr-2 relative">
         <input
           type="text"
           value={newPersonName}
@@ -1912,13 +2063,13 @@ function AddPersonRow({
                 if (selectedDropdownIndex < personResults.length) {
                   const person = personResults[selectedDropdownIndex];
                   onPersonSelect(person);
-                  onAddPerson(person);
+                  setShowPersonDropdown(false);
                 } else {
                   const roleIndex = selectedDropdownIndex - personResults.length;
                   const role = roleResults[roleIndex];
                   if (role) {
                     onRoleSelect(role);
-                    onAddRole(role);
+                    setShowPersonDropdown(false);
                   }
                 }
               } else if (selectedPerson || selectedRole) {
@@ -1987,6 +2138,27 @@ function AddPersonRow({
             })}
           </div>
         )}
+        {selectedPerson ? (
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Role</label>
+            <select
+              className="flex-1 px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)]"
+              value={selectedPersonRole?.id ?? ''}
+              onChange={(e) => {
+                const id = e.target.value ? Number(e.target.value) : null;
+                const role = roleOptions.find((r) => r.id === id) || null;
+                onPersonRoleSelect(role);
+              }}
+            >
+              <option value="">Unassigned</option>
+              {roleOptions.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </div>
       <div className="flex items-center justify-center gap-1">
         <button

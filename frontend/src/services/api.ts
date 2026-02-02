@@ -934,15 +934,17 @@ export const departmentsApi = {
 // Assignment API
 export const assignmentsApi = {
   // Get all assignments with pagination support and optional project filtering
-  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1 }) => {
+  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     if (params?.project) queryParams.set('project', params.project.toString());
     if (params?.project_ids && params.project_ids.length) queryParams.set('project_ids', params.project_ids.join(','));
+    if (params?.person) queryParams.set('person', params.person.toString());
     if (params?.department != null) queryParams.set('department', String(params.department));
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     if (params?.include_placeholders != null) queryParams.set('include_placeholders', String(params.include_placeholders));
+    if (params?.ordering) queryParams.set('ordering', params.ordering);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     // Avoid any intermediate caching layers returning stale data after writes
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`, { headers: { 'Cache-Control': 'no-cache' } });
@@ -958,6 +960,7 @@ export const assignmentsApi = {
     include_placeholders?: 0 | 1;
     project?: number;
     person?: number;
+    meta_only?: boolean;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
   }): Promise<PaginatedResponse<Assignment> & {
     people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null }>;

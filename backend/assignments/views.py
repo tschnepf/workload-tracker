@@ -12,6 +12,8 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.settings import api_settings
 from django.db.models import Sum, Max, Min, Prefetch, Value, Count, Q, Exists, OuterRef  # noqa: F401
 from core.deliverable_phase import build_project_week_classification
 from core.choices import MembershipEventType
@@ -71,6 +73,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     """
     serializer_class = AssignmentSerializer
     queryset = Assignment.objects.all()
+    # Allow optional page_size for list endpoints (opt-in via query param)
+    class AssignmentsPagination(PageNumberPagination):
+        page_size_query_param = 'page_size'
+        max_page_size = getattr(api_settings, 'MAX_PAGE_SIZE', 200) or 200
+    pagination_class = AssignmentsPagination
     # Use global default permissions (IsAuthenticated)
 
     def get_queryset(self):
@@ -236,16 +243,56 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         queryset = self.get_queryset()
         queryset = self._apply_common_filters(request, queryset)
 
-        # Apply stable DB-level ordering: client asc (nulls last), then project name asc (case-insensitive)
-        try:
-            queryset = queryset.order_by(
-                Coalesce(Lower('project__client'), Value('zzzz_no_client')),
-                Lower('project__name'),
-                'id',
-            )
-        except Exception:
-            # Fallback to basic ordering if DB backend lacks functions
-            queryset = queryset.order_by('project__client', 'project__name', 'id')
+        # Optional ordering (opt-in). Defaults remain unchanged.
+        ordering_param = request.query_params.get('ordering')
+        if ordering_param:
+            ordering_fields = []
+            ordering_map = {
+                'project': [
+                    Coalesce(Lower('project__client'), Value('zzzz_no_client')),
+                    Lower('project__name'),
+                ],
+                'client': [
+                    Coalesce(Lower('project__client'), Value('zzzz_no_client')),
+                    Lower('project__name'),
+                ],
+                'person': [
+                    Coalesce(Lower('person__name'), Value('zzzz_no_person')),
+                ],
+                'role': [
+                    Coalesce(Lower('role_on_project_ref__name'), Lower('role_on_project'), Value('zzzz_no_role')),
+                ],
+                'department': [
+                    Coalesce(Lower('person__department__name'), Value('zzzz_no_department')),
+                ],
+            }
+            for raw in str(ordering_param).split(','):
+                raw = raw.strip()
+                if not raw:
+                    continue
+                desc = raw.startswith('-')
+                key = raw[1:] if desc else raw
+                exprs = ordering_map.get(key)
+                if not exprs:
+                    continue
+                for expr in exprs:
+                    ordering_fields.append(expr.desc() if desc else expr)
+            if ordering_fields:
+                ordering_fields.append('id')
+                queryset = queryset.order_by(*ordering_fields)
+            else:
+                ordering_param = None
+        if not ordering_param:
+            # Apply stable DB-level ordering: client asc (nulls last), then project name asc (case-insensitive)
+            try:
+                queryset = queryset.order_by(
+                    Coalesce(Lower('project__client'), Value('zzzz_no_client')),
+                    Lower('project__name'),
+                    'id',
+                )
+            except Exception:
+                # Fallback to basic ordering if DB backend lacks functions
+                queryset = queryset.order_by('project__client', 'project__name', 'id')
 
         # Compute validators for conditional GET on list
         try:
@@ -324,6 +371,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'include_placeholders': serializers.IntegerField(required=False),
                 'project': serializers.IntegerField(required=False),
                 'person': serializers.IntegerField(required=False),
+                'meta_only': serializers.BooleanField(required=False),
                 'search_tokens': serializers.ListField(
                     child=inline_serializer(
                         name='SearchToken',
@@ -360,6 +408,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         data = request.data or {}
         queryset = self.get_queryset()
         queryset = self._apply_common_filters(request, queryset, data=data, apply_status_filter=False)
+        meta_only = str(data.get('meta_only') or request.query_params.get('meta_only') or '').lower() in ('1', 'true', 'yes', 'on')
 
         tokens = parse_search_tokens(request=request, data=data)
         assignment_fields = [
@@ -508,14 +557,26 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 continue
 
-        page_obj, paginator, next_url, prev_url = self._paginate_post_queryset(request, queryset, data)
-        serializer = self.get_serializer(page_obj.object_list, many=True)
+        if meta_only:
+            try:
+                total_count = queryset.count()
+            except Exception:
+                total_count = 0
+            page_obj = None
+            paginator = type('P', (), {'count': total_count})()
+            next_url = None
+            prev_url = None
+            results_payload = []
+        else:
+            page_obj, paginator, next_url, prev_url = self._paginate_post_queryset(request, queryset, data)
+            serializer = self.get_serializer(page_obj.object_list, many=True)
+            results_payload = serializer.data
 
         return Response({
             'count': paginator.count,
             'next': next_url,
             'previous': prev_url,
-            'results': serializer.data,
+            'results': results_payload,
             'people': [
                 {
                     'id': p['id'],
@@ -2934,6 +2995,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @extend_schema(
         parameters=[
             OpenApiParameter(name='person_id', type=int, required=False, description='Filter by person id'),
+            OpenApiParameter(name='page', type=int, required=False, description='Page number (optional pagination)'),
+            OpenApiParameter(name='page_size', type=int, required=False, description='Page size (optional pagination)'),
         ]
     )
     @action(detail=False, methods=['get'])
@@ -2944,9 +3007,52 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             queryset = self.get_queryset().filter(person_id=person_id)
         else:
             queryset = self.get_queryset()
-        
+
+        # Opt-in pagination: only paginate when page/page_size is provided
+        if request.query_params.get('page') or request.query_params.get('page_size'):
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @extend_schema(
+        description="Counts of assignments per person with optional filters.",
+        parameters=[
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project statuses'),
+            OpenApiParameter(name='project', type=int, required=False),
+            OpenApiParameter(name='person', type=int, required=False),
+        ],
+        responses=inline_serializer(
+            name='AssignmentCountsByPersonResponse',
+            fields={
+                'countsByPerson': serializers.DictField(child=serializers.IntegerField()),
+            }
+        )
+    )
+    @action(detail=False, methods=['get'], url_path='counts_by_person')
+    def counts_by_person(self, request):
+        include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
+        queryset = self.get_queryset()
+        if not include_placeholders:
+            queryset = queryset.filter(person__is_active=True, person__isnull=False)
+        queryset = self._apply_common_filters(request, queryset)
+
+        counts = {
+            str(row['person_id']): row['count']
+            for row in (
+                queryset
+                .filter(person_id__isnull=False)
+                .values('person_id')
+                .annotate(count=Count('id'))
+            )
+        }
+        return Response({'countsByPerson': counts})
     
     @action(
         detail=False,
