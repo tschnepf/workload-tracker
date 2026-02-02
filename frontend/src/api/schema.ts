@@ -98,6 +98,10 @@ export interface paths {
      */
     post: operations["assignments_check_conflicts_create"];
   };
+  "/api/assignments/counts_by_person/": {
+    /** @description Counts of assignments per person with optional filters. */
+    get: operations["assignments_counts_by_person_retrieve"];
+  };
   "/api/assignments/experience_by_client/": {
     /**
      * @description Experience by Client: list people with totals and role aggregates in a date window.
@@ -166,6 +170,10 @@ export interface paths {
      * If 'week' is omitted, uses the current week's Sunday. Add 'backfill=1' to use the backfill service (optional 'emit_events' and 'force' flags). Returns summary.
      */
     post: operations["assignments_run_weekly_snapshot_create"];
+  };
+  "/api/assignments/search/": {
+    /** @description Search assignments with tokenized filters and return people match metadata. */
+    post: operations["assignments_search_create"];
   };
   "/api/auth/admin_audit/": {
     /** @description Read-only endpoint for recent admin audit logs (admin only). */
@@ -303,6 +311,31 @@ export interface paths {
     get: operations["core_pre_deliverable_global_settings_list"];
     put: operations["core_pre_deliverable_global_settings_update"];
   };
+  "/api/core/project-template-settings/": {
+    get: operations["core_project_template_settings_retrieve"];
+    put: operations["core_project_template_settings_update"];
+  };
+  "/api/core/project-template-settings/{template_id}/": {
+    get: operations["core_project_template_settings_list"];
+    put: operations["core_project_template_settings_update_2"];
+  };
+  "/api/core/project-templates/": {
+    get: operations["core_project_templates_list"];
+    post: operations["core_project_templates_create"];
+  };
+  "/api/core/project-templates/{template_id}/": {
+    get: operations["core_project_templates_retrieve"];
+    put: operations["core_project_templates_update"];
+    post: operations["core_project_templates_create_2"];
+    delete: operations["core_project_templates_destroy"];
+  };
+  "/api/core/project-templates/{template_id}/duplicate/": {
+    post: operations["core_project_templates_duplicate_create"];
+  };
+  "/api/core/project-templates/duplicate-default/": {
+    get: operations["core_project_templates_duplicate_default_list"];
+    post: operations["core_project_templates_duplicate_default_create"];
+  };
   "/api/core/project_roles/": {
     /**
      * @description List/add project roles for suggestions/settings.
@@ -311,6 +344,10 @@ export interface paths {
      * - POST: admin-only; adds a role to the catalog.
      */
     get: operations["core_project_roles_retrieve"];
+  };
+  "/api/core/qa_task_settings/": {
+    get: operations["core_qa_task_settings_retrieve"];
+    put: operations["core_qa_task_settings_update"];
   };
   "/api/core/utilization_scheme/": {
     /**
@@ -528,6 +565,16 @@ export interface paths {
      *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
      */
     post: operations["deliverables_pre_deliverable_items_bulk_complete_create"];
+  };
+  "/api/deliverables/qa_tasks/": {
+    get: operations["deliverables_qa_tasks_list"];
+    post: operations["deliverables_qa_tasks_create"];
+  };
+  "/api/deliverables/qa_tasks/{id}/": {
+    get: operations["deliverables_qa_tasks_retrieve"];
+    put: operations["deliverables_qa_tasks_update"];
+    delete: operations["deliverables_qa_tasks_destroy"];
+    patch: operations["deliverables_qa_tasks_partial_update"];
   };
   "/api/deliverables/reorder/": {
     /**
@@ -854,6 +901,16 @@ export interface paths {
      */
     put: operations["projects_pre_deliverable_settings_update"];
   };
+  "/api/projects/{id}/qa_tasks/": {
+    /**
+     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+     *
+     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+     */
+    get: operations["projects_qa_tasks_list"];
+  };
   "/api/projects/{project_id}/risks/": {
     get: operations["projects_risks_list"];
     post: operations["projects_risks_create"];
@@ -866,6 +923,10 @@ export interface paths {
   };
   "/api/projects/{project_id}/risks/{risk_id}/attachment/": {
     get: operations["projects_risks_attachment_retrieve"];
+  };
+  "/api/projects/audit/": {
+    /** @description Read-only endpoint for recent project create/delete audit logs (admin only). */
+    get: operations["projects_audit_list"];
   };
   "/api/projects/export_excel/": {
     /** @description Export projects to Excel with streaming response for large datasets */
@@ -912,6 +973,13 @@ export interface paths {
   };
   "/api/projects/project-roles/reorder/": {
     post: operations["projects_project_roles_reorder_create"];
+  };
+  "/api/projects/project-roles/search/": {
+    get: operations["projects_project_roles_search_list"];
+  };
+  "/api/projects/search/": {
+    /** @description Search projects with tokenized filters and pagination. */
+    post: operations["projects_search_create"];
   };
   "/api/reports/pre-deliverable-completion/": {
     get: operations["reports_pre_deliverable_completion_retrieve"];
@@ -1052,6 +1120,10 @@ export interface paths {
      */
     post: operations["token_verify_create"];
   };
+  "/api/ui/assignments-page/": {
+    /** @description Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks. */
+    get: operations["ui_assignments_page_retrieve"];
+  };
 }
 
 export type webhooks = Record<string, never>;
@@ -1101,22 +1173,27 @@ export interface components {
     /** @description Assignment serializer with weekly hours support */
     Assignment: {
       id: number;
-      person: number;
+      person?: number | null;
       personName: string;
       personWeeklyCapacity: number;
-      personDepartmentId: number;
+      personDepartmentId: number | null;
       personSkills: readonly components["schemas"]["PersonSkillSummary"][];
       projectName?: string;
       project?: number | null;
       projectDisplayName: string;
       roleOnProjectId?: number | null;
       roleName: string | null;
-      weeklyHours: unknown;
+      weeklyHours?: unknown;
       allocationPercentage: number;
       /** Format: date-time */
       createdAt: string;
       /** Format: date-time */
       updatedAt: string;
+    };
+    AssignmentCountsByPersonResponse: {
+      countsByPerson: {
+        [key: string]: number;
+      };
     };
     AssignmentHoursUpdateRequest: {
       assignmentId: number;
@@ -1126,11 +1203,274 @@ export interface components {
     };
     /** @description Assignment serializer with weekly hours support */
     AssignmentRequest: {
-      person: number;
+      person?: number | null;
       projectName?: string;
       project?: number | null;
       roleOnProjectId?: number | null;
-      weeklyHours: unknown;
+      weeklyHours?: unknown;
+    };
+    AssignmentSearchRequestRequest: {
+      page?: number;
+      page_size?: number;
+      department?: number;
+      include_children?: number;
+      status_in?: string;
+      include_placeholders?: number;
+      project?: number;
+      person?: number;
+      meta_only?: boolean;
+      search_tokens?: components["schemas"]["SearchTokenRequest"][];
+    };
+    AssignmentSearchResponse: {
+      count: number;
+      next?: string | null;
+      previous?: string | null;
+      results: components["schemas"]["Assignment"][];
+      people: components["schemas"]["PersonLite"][];
+      assignmentCountsByPerson: {
+        [key: string]: number;
+      };
+      peopleMatchReason: {
+        [key: string]: string;
+      };
+      filteredTotals: {
+        [key: string]: {
+          [key: string]: number;
+        };
+      };
+    };
+    AutoHoursRoleSettingItem: {
+      roleId: number;
+      roleName: string;
+      departmentId: number;
+      departmentName: string;
+      percentByWeek: {
+        [key: string]: number;
+      };
+      roleCount: number;
+      weeksCount: number;
+      isActive: boolean;
+      sortOrder: number;
+    };
+    AutoHoursRoleSettingItemResponse: {
+      settings: components["schemas"]["AutoHoursRoleSettingItemResponseItem"][];
+      weekLimits: components["schemas"]["AutoHoursWeekLimitsResponse"];
+    };
+    AutoHoursRoleSettingItemResponseItem: {
+      roleId: number;
+      roleName: string;
+      departmentId: number;
+      departmentName: string;
+      percentByWeek: {
+        [key: string]: number;
+      };
+      roleCount: number;
+      weeksCount: number;
+      isActive: boolean;
+      sortOrder: number;
+    };
+    AutoHoursRoleSettingUpdateItemRequest: {
+      roleId: number;
+      percentByWeek?: {
+        [key: string]: number;
+      };
+      /** Format: double */
+      percentPerWeek?: number;
+      roleCount?: number;
+    };
+    AutoHoursRoleSettingsResponse: {
+      settings: components["schemas"]["AutoHoursRoleSettingItem"][];
+      weekLimits: components["schemas"]["AutoHoursWeekLimits"];
+    };
+    AutoHoursRoleSettingsUpdateRequest: {
+      weeksCount?: number;
+      settings: components["schemas"]["AutoHoursRoleSettingUpdateItemRequest"][];
+    };
+    AutoHoursTemplateCreateRequest: {
+      name: string;
+      description?: string;
+      excludedRoleIds?: number[];
+      excludedDepartmentIds?: number[];
+      isActive?: boolean;
+      phaseKeys?: string[];
+      weeksByPhase?: {
+        [key: string]: number;
+      };
+    };
+    AutoHoursTemplateCreateResponse: {
+      id: number;
+      name: string;
+      description: string;
+      excludedRoleIds: number[];
+      excludedDepartmentIds: number[];
+      isActive: boolean;
+      phaseKeys: string[];
+      weeksByPhase: {
+        [key: string]: number;
+      };
+      maxWeeksCount: number;
+      defaultWeeksCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    AutoHoursTemplateDetail: {
+      id: number;
+      name: string;
+      description: string;
+      excludedRoleIds: number[];
+      excludedDepartmentIds: number[];
+      isActive: boolean;
+      phaseKeys: string[];
+      weeksByPhase: {
+        [key: string]: number;
+      };
+      maxWeeksCount: number;
+      defaultWeeksCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    AutoHoursTemplateDuplicateDefaultRequest: {
+      name: string;
+      description?: string;
+      excludedRoleIds?: number[];
+      excludedDepartmentIds?: number[];
+      isActive?: boolean;
+      phaseKeys?: string[];
+    };
+    AutoHoursTemplateDuplicateDefaultResponse: {
+      id: number;
+      name: string;
+      description: string;
+      excludedRoleIds: number[];
+      excludedDepartmentIds: number[];
+      isActive: boolean;
+      phaseKeys: string[];
+      weeksByPhase: {
+        [key: string]: number;
+      };
+      maxWeeksCount: number;
+      defaultWeeksCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    AutoHoursTemplateDuplicateRequest: {
+      name: string;
+    };
+    AutoHoursTemplateDuplicateResponse: {
+      id: number;
+      name: string;
+      description: string;
+      excludedRoleIds: number[];
+      excludedDepartmentIds: number[];
+      isActive: boolean;
+      phaseKeys: string[];
+      weeksByPhase: {
+        [key: string]: number;
+      };
+      maxWeeksCount: number;
+      defaultWeeksCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    AutoHoursTemplateListItem: {
+      id: number;
+      name: string;
+      description: string;
+      excludedRoleIds: number[];
+      excludedDepartmentIds: number[];
+      isActive: boolean;
+      phaseKeys: string[];
+      weeksByPhase: {
+        [key: string]: number;
+      };
+      maxWeeksCount: number;
+      defaultWeeksCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    AutoHoursTemplateRoleSettingItem: {
+      roleId: number;
+      roleName: string;
+      departmentId: number;
+      departmentName: string;
+      percentByWeek: {
+        [key: string]: number;
+      };
+      roleCount: number;
+      weeksCount: number;
+      isActive: boolean;
+      sortOrder: number;
+    };
+    AutoHoursTemplateRoleSettingItemResponse: {
+      roleId: number;
+      roleName: string;
+      departmentId: number;
+      departmentName: string;
+      percentByWeek: {
+        [key: string]: number;
+      };
+      roleCount: number;
+      weeksCount: number;
+      isActive: boolean;
+      sortOrder: number;
+    };
+    AutoHoursTemplateRoleSettingUpdateItemRequest: {
+      roleId: number;
+      percentByWeek?: {
+        [key: string]: number;
+      };
+      roleCount?: number;
+    };
+    AutoHoursTemplateRoleSettingsUpdateRequest: {
+      weeksCount?: number;
+      settings: components["schemas"]["AutoHoursTemplateRoleSettingUpdateItemRequest"][];
+    };
+    AutoHoursTemplateUpdateRequest: {
+      name?: string;
+      description?: string;
+      excludedRoleIds?: number[];
+      excludedDepartmentIds?: number[];
+      isActive?: boolean;
+      phaseKeys?: string[];
+      weeksByPhase?: {
+        [key: string]: number;
+      };
+    };
+    AutoHoursTemplateUpdateResponse: {
+      id: number;
+      name: string;
+      description: string;
+      excludedRoleIds: number[];
+      excludedDepartmentIds: number[];
+      isActive: boolean;
+      phaseKeys: string[];
+      weeksByPhase: {
+        [key: string]: number;
+      };
+      maxWeeksCount: number;
+      defaultWeeksCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    AutoHoursWeekLimits: {
+      maxWeeksCount: number;
+      defaultWeeksCount: number;
+    };
+    AutoHoursWeekLimitsResponse: {
+      maxWeeksCount: number;
+      defaultWeeksCount: number;
     };
     AvailablePerson: {
       id: number;
@@ -1356,47 +1696,62 @@ export interface components {
       description?: string | null;
       note?: string | null;
     };
-    /**
-     * @description * `sd` - SD
-     * * `dd` - DD
-     * * `ifp` - IFP
-     * * `ifc` - IFC
-     * * `masterplan` - Masterplan
-     * * `bulletins` - Bulletins
-     * * `ca` - CA
-     * * `other` - Other
-     * @enum {string}
-     */
-    DeliverablePhaseEnum: "sd" | "dd" | "ifp" | "ifc" | "masterplan" | "bulletins" | "ca" | "other";
+    DeliverablePhaseDefinition: {
+      key: string;
+      label: string;
+      descriptionTokens?: string[];
+      rangeMin?: number | null;
+      rangeMax?: number | null;
+      sortOrder?: number;
+    };
+    DeliverablePhaseDefinitionRequest: {
+      key: string;
+      label: string;
+      descriptionTokens?: string[];
+      rangeMin?: number | null;
+      rangeMax?: number | null;
+      sortOrder?: number;
+    };
     DeliverablePhaseMappingSettings: {
       useDescriptionMatch: boolean;
-      descSdTokens: unknown;
-      descDdTokens: unknown;
-      descIfpTokens: unknown;
-      descIfcTokens: unknown;
-      rangeSdMin: number;
-      rangeSdMax: number;
-      rangeDdMin: number;
-      rangeDdMax: number;
-      rangeIfpMin: number;
-      rangeIfpMax: number;
-      rangeIfcExact: number;
+      phases: components["schemas"]["DeliverablePhaseDefinition"][];
       /** Format: date-time */
       updatedAt: string;
     };
     DeliverablePhaseMappingSettingsRequest: {
       useDescriptionMatch: boolean;
-      descSdTokens: unknown;
-      descDdTokens: unknown;
-      descIfpTokens: unknown;
-      descIfcTokens: unknown;
-      rangeSdMin: number;
-      rangeSdMax: number;
-      rangeDdMin: number;
-      rangeDdMax: number;
-      rangeIfpMin: number;
-      rangeIfpMax: number;
-      rangeIfcExact: number;
+      phases: components["schemas"]["DeliverablePhaseDefinitionRequest"][];
+    };
+    DeliverableQATask: {
+      id: number;
+      deliverable: number;
+      deliverableInfo: {
+        [key: string]: unknown;
+      };
+      departmentId: number;
+      departmentName: string;
+      qaStatus: components["schemas"]["DeliverableQATaskQaStatusEnum"];
+      qaAssignedTo?: number | null;
+      qaAssignedToName: string;
+      /** Format: date-time */
+      reviewedAt: string | null;
+      dueDate: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    /**
+     * @description * `not_reviewed` - Not Reviewed
+     * * `reviewed` - Reviewed
+     * @enum {string}
+     */
+    DeliverableQATaskQaStatusEnum: "not_reviewed" | "reviewed";
+    DeliverableQATaskRequest: {
+      deliverable: number;
+      departmentId: number;
+      qaStatus: components["schemas"]["DeliverableQATaskQaStatusEnum"];
+      qaAssignedTo?: number | null;
     };
     DeliverableReorderRequestRequest: {
       project: number;
@@ -1455,7 +1810,9 @@ export interface components {
       sheetName?: string | null;
       scopeDescription?: string;
       completionStatus: components["schemas"]["CompletionStatusEnum"];
-      qaStatus: components["schemas"]["QaStatusEnum"];
+      qaStatus: components["schemas"]["QaStatus7bcEnum"];
+      qaAssignedTo?: number | null;
+      qaAssignedToName: string;
       assignedTo?: number | null;
       assignedToName: string;
       completedBy: number | null;
@@ -1475,12 +1832,13 @@ export interface components {
       sheetName?: string | null;
       scopeDescription?: string;
       completionStatus: components["schemas"]["CompletionStatusEnum"];
-      qaStatus: components["schemas"]["QaStatusEnum"];
+      qaStatus: components["schemas"]["QaStatus7bcEnum"];
+      qaAssignedTo?: number | null;
       assignedTo?: number | null;
     };
     DeliverableTaskTemplate: {
       id: number;
-      phase: components["schemas"]["DeliverablePhaseEnum"];
+      phase: string;
       departmentId: number;
       departmentName: string;
       sheetNumber?: string | null;
@@ -1496,7 +1854,7 @@ export interface components {
       updatedAt: string;
     };
     DeliverableTaskTemplateRequest: {
-      phase: components["schemas"]["DeliverablePhaseEnum"];
+      phase: string;
       departmentId: number;
       sheetNumber?: string | null;
       sheetName?: string | null;
@@ -1520,6 +1878,10 @@ export interface components {
       createdAt: string;
       /** Format: date-time */
       updatedAt: string;
+    };
+    DepartmentFilterProjectRequest: {
+      departmentId: number;
+      op: components["schemas"]["OpEnum"];
     };
     /** @description Department serializer with explicit camelCase field mapping */
     DepartmentRequest: {
@@ -1755,7 +2117,7 @@ export interface components {
     MembershipEvent: {
       week_start: string;
       event_type: components["schemas"]["EventTypeEnum"];
-      deliverable_phase: components["schemas"]["DeliverablePhaseEnum"];
+      deliverable_phase: string;
       /** Format: double */
       hours_before: number;
       /** Format: double */
@@ -1777,6 +2139,13 @@ export interface components {
       reminderDaysBefore: number;
       dailyDigest: boolean;
     };
+    /**
+     * @description * `or` - or
+     * * `and` - and
+     * * `not` - not
+     * @enum {string}
+     */
+    OpEnum: "or" | "and" | "not";
     PEPClient: {
       client: string;
       weeks: number;
@@ -1790,7 +2159,7 @@ export interface components {
       };
     };
     PEPClientPhase: {
-      phase: components["schemas"]["DeliverablePhaseEnum"];
+      phase: string;
       weeks: number;
       /** Format: double */
       hours: number;
@@ -1816,7 +2185,7 @@ export interface components {
       };
     };
     PEPProjectPhase: {
-      phase: components["schemas"]["DeliverablePhaseEnum"];
+      phase: string;
       weeks: number;
       /** Format: double */
       hours: number;
@@ -1834,6 +2203,10 @@ export interface components {
     PSTPerson: {
       personId: number;
       personName: string;
+      departmentId?: number | null;
+      firstWeek?: string | null;
+      lastWeek?: string | null;
+      totalWeeks?: number | null;
       roles: components["schemas"]["PSTPersonRole"][];
       events: components["schemas"]["PSTEvent"][];
     };
@@ -1909,6 +2282,21 @@ export interface components {
        */
       previous?: string | null;
       results: components["schemas"]["Deliverable"][];
+    };
+    PaginatedDeliverableQATaskList: {
+      /** @example 123 */
+      count: number;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=4
+       */
+      next?: string | null;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=2
+       */
+      previous?: string | null;
+      results: components["schemas"]["DeliverableQATask"][];
     };
     PaginatedDeliverableTaskList: {
       /** @example 123 */
@@ -2161,7 +2549,7 @@ export interface components {
     };
     /** @description Assignment serializer with weekly hours support */
     PatchedAssignmentRequest: {
-      person?: number;
+      person?: number | null;
       projectName?: string;
       project?: number | null;
       roleOnProjectId?: number | null;
@@ -2180,6 +2568,12 @@ export interface components {
       person?: number;
       roleOnMilestone?: string | null;
       is_active?: boolean;
+    };
+    PatchedDeliverableQATaskRequest: {
+      deliverable?: number;
+      departmentId?: number;
+      qaStatus?: components["schemas"]["DeliverableQATaskQaStatusEnum"];
+      qaAssignedTo?: number | null;
     };
     /** @description Deliverable serializer with snake_case -> camelCase field mapping */
     PatchedDeliverableRequest: {
@@ -2205,11 +2599,12 @@ export interface components {
       sheetName?: string | null;
       scopeDescription?: string;
       completionStatus?: components["schemas"]["CompletionStatusEnum"];
-      qaStatus?: components["schemas"]["QaStatusEnum"];
+      qaStatus?: components["schemas"]["QaStatus7bcEnum"];
+      qaAssignedTo?: number | null;
       assignedTo?: number | null;
     };
     PatchedDeliverableTaskTemplateRequest: {
-      phase?: components["schemas"]["DeliverablePhaseEnum"];
+      phase?: string;
       departmentId?: number;
       sheetNumber?: string | null;
       sheetName?: string | null;
@@ -2294,6 +2689,7 @@ export interface components {
       estimatedHours?: number | null;
       /** @default true */
       isActive?: boolean;
+      autoHoursTemplateId?: number | null;
     };
     PatchedProjectRiskRequest: {
       description?: string;
@@ -2314,6 +2710,11 @@ export interface components {
       name?: string;
       /** @description Optional description of the role responsibilities */
       description?: string;
+      /**
+       * Format: double
+       * @description Default overhead hours per week for people in this role
+       */
+      overheadHoursPerWeek?: number;
       /** @description Whether this role is currently available for assignment */
       isActive?: boolean;
       sortOrder?: number;
@@ -2338,6 +2739,7 @@ export interface components {
       id: number;
       name: string;
       department?: number | null;
+      roleName?: string | null;
     };
     /** @description Person serializer with department and role integration */
     Person: {
@@ -2386,6 +2788,12 @@ export interface components {
       byClient: components["schemas"]["PEPClient"][];
       byProject: components["schemas"]["PEPProject"][];
       eventsCount: number;
+    };
+    PersonLite: {
+      id: number;
+      name: string;
+      weeklyCapacity?: number;
+      department?: number | null;
     };
     PersonProjectTimelineResponse: {
       weeksSummary: components["schemas"]["WeeksSummary"];
@@ -2638,6 +3046,7 @@ export interface components {
       bqeClientName: string;
       bqeClientId: string;
       clientSyncPolicyState: string;
+      autoHoursTemplateId?: number | null;
       /** Format: date-time */
       createdAt: string;
       /** Format: date-time */
@@ -2660,6 +3069,7 @@ export interface components {
       assignmentCount: number;
       hasFutureDeliverables: boolean;
       status: string;
+      missingQa?: boolean;
     };
     ProjectFilterMetadataResponse: {
       projectFilters: {
@@ -2686,6 +3096,9 @@ export interface components {
       };
       hasFutureDeliverablesByProject: {
         [key: string]: boolean;
+      };
+      hasPlaceholdersByProject?: {
+        [key: string]: number;
       };
       metrics: components["schemas"]["ProjectSnapshotMetrics"];
     };
@@ -2721,6 +3134,7 @@ export interface components {
       estimatedHours?: number | null;
       /** @default true */
       isActive?: boolean;
+      autoHoursTemplateId?: number | null;
     };
     ProjectRisk: {
       id: number;
@@ -2822,6 +3236,24 @@ export interface components {
       count: number;
       assignments: components["schemas"]["ProjectRoleUsageAssignment"][];
     };
+    ProjectSearchRequestRequest: {
+      page?: number;
+      page_size?: number;
+      ordering?: string;
+      status_in?: string;
+      include_children?: number;
+      search_tokens?: components["schemas"]["SearchTokenProjectRequest"][];
+      department_filters?: components["schemas"]["DepartmentFilterProjectRequest"][];
+      include_deliverable_dates?: boolean;
+    };
+    ProjectSearchResponse: {
+      count: number;
+      next?: string | null;
+      previous?: string | null;
+      results: {
+          [key: string]: unknown;
+        }[];
+    };
     ProjectSnapshotMetrics: {
       projectsCount: number;
       peopleAssignedCount: number;
@@ -2907,6 +3339,14 @@ export interface components {
     ProviderResetResponse: {
       reset: boolean;
     };
+    QATaskSettings: {
+      defaultDaysBefore: number;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    QATaskSettingsRequest: {
+      defaultDaysBefore: number;
+    };
     /**
      * @description * `not_reviewed` - Not Reviewed
      * * `in_review` - In Review
@@ -2914,7 +3354,7 @@ export interface components {
      * * `changes_required` - Changes Required
      * @enum {string}
      */
-    QaStatusEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
+    QaStatus7bcEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
     RecentAssignment: {
       person: string;
       project: string;
@@ -2927,6 +3367,11 @@ export interface components {
       name: string;
       /** @description Optional description of the role responsibilities */
       description?: string;
+      /**
+       * Format: double
+       * @description Default overhead hours per week for people in this role
+       */
+      overheadHoursPerWeek?: number;
       /** @description Whether this role is currently available for assignment */
       isActive?: boolean;
       sortOrder?: number;
@@ -2958,6 +3403,11 @@ export interface components {
       name: string;
       /** @description Optional description of the role responsibilities */
       description?: string;
+      /**
+       * Format: double
+       * @description Default overhead hours per week for people in this role
+       */
+      overheadHoursPerWeek?: number;
       /** @description Whether this role is currently available for assignment */
       isActive?: boolean;
       sortOrder?: number;
@@ -2978,6 +3428,14 @@ export interface components {
       skipped?: number;
       events_inserted?: number;
       skipped_due_to_lock?: boolean;
+    };
+    SearchTokenProjectRequest: {
+      term: string;
+      op: components["schemas"]["OpEnum"];
+    };
+    SearchTokenRequest: {
+      term: string;
+      op: components["schemas"]["OpEnum"];
     };
     SetPasswordRequestRequest: {
       userId: number;
@@ -3113,6 +3571,7 @@ export interface components {
       orange_min?: number;
       orange_max?: number;
       red_min?: number;
+      full_capacity_hours?: number;
       zero_is_blank?: boolean;
       version: number;
       /** Format: date-time */
@@ -3127,6 +3586,7 @@ export interface components {
       orange_min?: number;
       orange_max?: number;
       red_min?: number;
+      full_capacity_hours?: number;
       zero_is_blank?: boolean;
     };
     WeeksSummary: {
@@ -3172,6 +3632,8 @@ export interface operations {
       query?: {
         /** @description A page number within the paginated result set. */
         page?: number;
+        /** @description Number of results to return per page. */
+        page_size?: number;
       };
     };
     responses: {
@@ -3184,7 +3646,7 @@ export interface operations {
   };
   /** @description Create assignment with validation */
   assignments_create: {
-    requestBody: {
+    requestBody?: {
       content: {
         "application/json": components["schemas"]["AssignmentRequest"];
         "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
@@ -3229,7 +3691,7 @@ export interface operations {
         id: number;
       };
     };
-    requestBody: {
+    requestBody?: {
       content: {
         "application/json": components["schemas"]["AssignmentRequest"];
         "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
@@ -3299,7 +3761,7 @@ export interface operations {
         department?: number;
         /** @description 0|1 */
         include_children?: number;
-        /** @description Number of weeks (1-26), default 12 */
+        /** @description Number of weeks (1-52), default 12 */
         weeks?: number;
       };
     };
@@ -3323,7 +3785,7 @@ export interface operations {
         department?: number;
         /** @description 0|1 */
         include_children?: number;
-        /** @description Number of weeks (1-26), default 12 */
+        /** @description Number of weeks (1-52), default 12 */
         weeks?: number;
       };
     };
@@ -3351,7 +3813,7 @@ export interface operations {
         include_active_ca?: number;
         /** @description 0|1 */
         include_children?: number;
-        /** @description Number of weeks (1-26), default 12 */
+        /** @description Number of weeks (1-52), default 12 */
         weeks?: number;
       };
     };
@@ -3401,7 +3863,7 @@ export interface operations {
         department?: number;
         /** @description 0|1 */
         include_children?: number;
-        /** @description Number of weeks (1-26), default 12 */
+        /** @description Number of weeks (1-52), default 12 */
         weeks?: number;
       };
     };
@@ -3434,6 +3896,10 @@ export interface operations {
   assignments_by_person_retrieve: {
     parameters: {
       query?: {
+        /** @description Page number (optional pagination) */
+        page?: number;
+        /** @description Page size (optional pagination) */
+        page_size?: number;
         /** @description Filter by person id */
         person_id?: number;
       };
@@ -3452,7 +3918,7 @@ export interface operations {
    * in a single query.
    */
   assignments_check_conflicts_create: {
-    requestBody: {
+    requestBody?: {
       content: {
         "application/json": components["schemas"]["AssignmentRequest"];
         "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
@@ -3463,6 +3929,29 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["Assignment"];
+        };
+      };
+    };
+  };
+  /** @description Counts of assignments per person with optional filters. */
+  assignments_counts_by_person_retrieve: {
+    parameters: {
+      query?: {
+        department?: number;
+        /** @description 0|1 */
+        include_children?: number;
+        /** @description 0|1 */
+        include_placeholders?: number;
+        person?: number;
+        project?: number;
+        /** @description CSV of project statuses */
+        status_in?: string;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AssignmentCountsByPersonResponse"];
         };
       };
     };
@@ -3505,7 +3994,7 @@ export interface operations {
         department?: number;
         /** @description 0|1 */
         include_children?: number;
-        /** @description Number of weeks (1-26), default 12 */
+        /** @description Number of weeks (1-52), default 12 */
         weeks?: number;
       };
     };
@@ -3524,7 +4013,7 @@ export interface operations {
         department?: number;
         /** @description 0|1 */
         include_children?: number;
-        /** @description Number of weeks (1-26), default 12 */
+        /** @description Number of weeks (1-52), default 12 */
         weeks?: number;
       };
     };
@@ -3588,11 +4077,13 @@ export interface operations {
         has_future_deliverables?: number;
         /** @description 0|1 */
         include_children?: number;
+        /** @description 0|1 */
+        include_placeholders?: number;
         /** @description CSV of project IDs to scope totals (optional) */
         project_ids?: string;
         /** @description CSV of project status filters */
         status_in?: string;
-        /** @description Number of weeks (1-26), default 12 */
+        /** @description Number of weeks (1-52), default 12 */
         weeks?: number;
       };
     };
@@ -3628,9 +4119,11 @@ export interface operations {
         department?: number;
         /** @description 0|1 */
         include_children?: number;
+        /** @description 0|1 */
+        include_placeholders?: number;
         /** @description CSV of project IDs */
         project_ids: string;
-        /** @description Number of weeks (1-26), default 12 */
+        /** @description Number of weeks (1-52), default 12 */
         weeks?: number;
       };
     };
@@ -3679,7 +4172,7 @@ export interface operations {
         week?: string;
       };
     };
-    requestBody: {
+    requestBody?: {
       content: {
         "application/json": components["schemas"]["AssignmentRequest"];
         "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
@@ -3690,6 +4183,23 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["RunWeeklySnapshotResponse"];
+        };
+      };
+    };
+  };
+  /** @description Search assignments with tokenized filters and return people match metadata. */
+  assignments_search_create: {
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["AssignmentSearchRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AssignmentSearchRequestRequest"];
+        "multipart/form-data": components["schemas"]["AssignmentSearchRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AssignmentSearchResponse"];
         };
       };
     };
@@ -4190,6 +4700,206 @@ export interface operations {
       };
     };
   };
+  core_project_template_settings_retrieve: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursRoleSettingsResponse"];
+        };
+      };
+    };
+  };
+  core_project_template_settings_update: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
+        "multipart/form-data": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursRoleSettingItemResponse"];
+        };
+      };
+    };
+  };
+  core_project_template_settings_list: {
+    parameters: {
+      path: {
+        template_id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateRoleSettingItem"][];
+        };
+      };
+    };
+  };
+  core_project_template_settings_update_2: {
+    parameters: {
+      path: {
+        template_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
+        "multipart/form-data": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateRoleSettingItemResponse"][];
+        };
+      };
+    };
+  };
+  core_project_templates_list: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateListItem"][];
+        };
+      };
+    };
+  };
+  core_project_templates_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AutoHoursTemplateCreateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateCreateRequest"];
+        "multipart/form-data": components["schemas"]["AutoHoursTemplateCreateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateCreateResponse"];
+        };
+      };
+    };
+  };
+  core_project_templates_retrieve: {
+    parameters: {
+      path: {
+        template_id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateDetail"];
+        };
+      };
+    };
+  };
+  core_project_templates_update: {
+    parameters: {
+      path: {
+        template_id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["AutoHoursTemplateUpdateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateUpdateRequest"];
+        "multipart/form-data": components["schemas"]["AutoHoursTemplateUpdateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateUpdateResponse"];
+        };
+      };
+    };
+  };
+  core_project_templates_create_2: {
+    parameters: {
+      path: {
+        template_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AutoHoursTemplateCreateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateCreateRequest"];
+        "multipart/form-data": components["schemas"]["AutoHoursTemplateCreateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateCreateResponse"];
+        };
+      };
+    };
+  };
+  core_project_templates_destroy: {
+    parameters: {
+      path: {
+        template_id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  core_project_templates_duplicate_create: {
+    parameters: {
+      path: {
+        template_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
+        "multipart/form-data": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateDuplicateResponse"];
+        };
+      };
+    };
+  };
+  core_project_templates_duplicate_default_list: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateListItem"][];
+        };
+      };
+    };
+  };
+  core_project_templates_duplicate_default_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
+        "multipart/form-data": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AutoHoursTemplateDuplicateDefaultResponse"];
+        };
+      };
+    };
+  };
   /**
    * @description List/add project roles for suggestions/settings.
    *
@@ -4201,6 +4911,31 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["ProjectRoleListResponse"];
+        };
+      };
+    };
+  };
+  core_qa_task_settings_retrieve: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["QATaskSettings"];
+        };
+      };
+    };
+  };
+  core_qa_task_settings_update: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["QATaskSettingsRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["QATaskSettingsRequest"];
+        "multipart/form-data": components["schemas"]["QATaskSettingsRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["QATaskSettings"];
         };
       };
     };
@@ -4885,6 +5620,110 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["BulkCompleteResponse"];
+        };
+      };
+    };
+  };
+  deliverables_qa_tasks_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
+        };
+      };
+    };
+  };
+  deliverables_qa_tasks_create: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliverableQATaskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeliverableQATaskRequest"];
+        "multipart/form-data": components["schemas"]["DeliverableQATaskRequest"];
+      };
+    };
+    responses: {
+      201: {
+        content: {
+          "application/json": components["schemas"]["DeliverableQATask"];
+        };
+      };
+    };
+  };
+  deliverables_qa_tasks_retrieve: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable QA Task. */
+        id: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableQATask"];
+        };
+      };
+    };
+  };
+  deliverables_qa_tasks_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable QA Task. */
+        id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeliverableQATaskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DeliverableQATaskRequest"];
+        "multipart/form-data": components["schemas"]["DeliverableQATaskRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableQATask"];
+        };
+      };
+    };
+  };
+  deliverables_qa_tasks_destroy: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable QA Task. */
+        id: number;
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        content: never;
+      };
+    };
+  };
+  deliverables_qa_tasks_partial_update: {
+    parameters: {
+      path: {
+        /** @description A unique integer value identifying this Deliverable QA Task. */
+        id: number;
+      };
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["PatchedDeliverableQATaskRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableQATaskRequest"];
+        "multipart/form-data": components["schemas"]["PatchedDeliverableQATaskRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["DeliverableQATask"];
         };
       };
     };
@@ -6129,6 +6968,8 @@ export interface operations {
   people_search_retrieve: {
     parameters: {
       query: {
+        /** @description Filter by department id */
+        department?: number;
         /** @description Max results (1-50) */
         limit?: number;
         /** @description Search query (min length 2) */
@@ -6234,6 +7075,8 @@ export interface operations {
   projects_list: {
     parameters: {
       query?: {
+        /** @description Which field to use when ordering the results. */
+        ordering?: string;
         /** @description A page number within the paginated result set. */
         page?: number;
       };
@@ -6381,6 +7224,8 @@ export interface operations {
         department?: number;
         /** @description Include child departments (0|1) */
         include_children?: number;
+        /** @description Which field to use when ordering the results. */
+        ordering?: string;
         /** @description A page number within the paginated result set. */
         page?: number;
         /** @description YYYY-MM-DD (Sunday key) */
@@ -6408,6 +7253,8 @@ export interface operations {
   projects_deliverable_tasks_list: {
     parameters: {
       query?: {
+        /** @description Which field to use when ordering the results. */
+        ordering?: string;
         /** @description A page number within the paginated result set. */
         page?: number;
       };
@@ -6468,6 +7315,33 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["ProjectPreDeliverableSettingsResponse"];
+        };
+      };
+    };
+  };
+  /**
+   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+   *
+   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+   */
+  projects_qa_tasks_list: {
+    parameters: {
+      query?: {
+        /** @description Which field to use when ordering the results. */
+        ordering?: string;
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+      path: {
+        id: string;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
         };
       };
     };
@@ -6601,6 +7475,21 @@ export interface operations {
       /** @description No attachment found */
       404: {
         content: never;
+      };
+    };
+  };
+  /** @description Read-only endpoint for recent project create/delete audit logs (admin only). */
+  projects_audit_list: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["AdminAuditLog"][];
+        };
       };
     };
   };
@@ -6763,6 +7652,32 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["ProjectRoleReorderResponse"];
+        };
+      };
+    };
+  };
+  projects_project_roles_search_list: {
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectRoleItem"][];
+        };
+      };
+    };
+  };
+  /** @description Search projects with tokenized filters and pagination. */
+  projects_search_create: {
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ProjectSearchRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["ProjectSearchRequestRequest"];
+        "multipart/form-data": components["schemas"]["ProjectSearchRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProjectSearchResponse"];
         };
       };
     };
@@ -7280,6 +8195,34 @@ export interface operations {
         "application/json": components["schemas"]["TokenVerifyRequest"];
         "application/x-www-form-urlencoded": components["schemas"]["TokenVerifyRequest"];
         "multipart/form-data": components["schemas"]["TokenVerifyRequest"];
+      };
+    };
+    responses: {
+      /** @description No response body */
+      200: {
+        content: never;
+      };
+    };
+  };
+  /** @description Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks. */
+  ui_assignments_page_retrieve: {
+    parameters: {
+      query?: {
+        department?: number;
+        /** @description 0|1 (project grid) */
+        has_future_deliverables?: number;
+        /** @description CSV: assignment,project (default both) */
+        include?: string;
+        /** @description 0|1 */
+        include_children?: number;
+        /** @description 0|1 */
+        include_placeholders?: number;
+        /** @description CSV of project IDs to scope totals (project grid) */
+        project_ids?: string;
+        /** @description CSV of project status filters (project grid) */
+        status_in?: string;
+        /** @description Number of weeks (1-52), default 12 */
+        weeks?: number;
       };
     };
     responses: {

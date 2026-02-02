@@ -36,6 +36,12 @@ repos:
   # Frontend hooks - use project's existing ESLint
   - repo: local
     hooks:
+      - id: openapi-updated
+        name: OpenAPI artifacts updated
+        entry: bash scripts/check-openapi-staged.sh
+        language: system
+        pass_filenames: false
+
       - id: eslint
         name: ESLint (Frontend)
         entry: bash -c 'cd frontend && npm run lint'

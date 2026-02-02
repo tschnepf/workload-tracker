@@ -19,6 +19,15 @@
                         "schema": {
                             "type": "integer"
                         }
+                    },
+                    {
+                        "name": "page_size",
+                        "required": false,
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "schema": {
+                            "type": "integer"
+                        }
                     }
                 ],
                 "tags": [
@@ -68,8 +77,7 @@
                                 "$ref": "#/components/schemas/AssignmentRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -166,8 +174,7 @@
                                 "$ref": "#/components/schemas/AssignmentRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -305,7 +312,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Number of weeks (1-26), default 12"
+                        "description": "Number of weeks (1-52), default 12"
                     }
                 ],
                 "tags": [
@@ -367,7 +374,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Number of weeks (1-26), default 12"
+                        "description": "Number of weeks (1-52), default 12"
                     }
                 ],
                 "tags": [
@@ -429,7 +436,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Number of weeks (1-26), default 12"
+                        "description": "Number of weeks (1-52), default 12"
                     }
                 ],
                 "tags": [
@@ -539,7 +546,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Number of weeks (1-26), default 12"
+                        "description": "Number of weeks (1-52), default 12"
                     }
                 ],
                 "tags": [
@@ -622,6 +629,22 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Page number (optional pagination)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Page size (optional pagination)"
+                    },
+                    {
+                        "in": "query",
                         "name": "person_id",
                         "schema": {
                             "type": "integer"
@@ -678,8 +701,7 @@
                                 "$ref": "#/components/schemas/AssignmentRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -695,6 +717,82 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Assignment"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/assignments/counts_by_person/": {
+            "get": {
+                "operationId": "assignments_counts_by_person_retrieve",
+                "description": "Counts of assignments per person with optional filters.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_placeholders",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "person",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "project",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "status_in",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of project statuses"
+                    }
+                ],
+                "tags": [
+                    "assignments"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AssignmentCountsByPersonResponse"
                                 }
                             }
                         },
@@ -805,7 +903,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Number of weeks (1-26), default 12"
+                        "description": "Number of weeks (1-52), default 12"
                     }
                 ],
                 "tags": [
@@ -859,7 +957,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Number of weeks (1-26), default 12"
+                        "description": "Number of weeks (1-52), default 12"
                     }
                 ],
                 "tags": [
@@ -1031,6 +1129,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "include_placeholders",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
                         "name": "project_ids",
                         "schema": {
                             "type": "string"
@@ -1051,7 +1157,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Number of weeks (1-26), default 12"
+                        "description": "Number of weeks (1-52), default 12"
                     }
                 ],
                 "tags": [
@@ -1154,6 +1260,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "include_placeholders",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
                         "name": "project_ids",
                         "schema": {
                             "type": "string"
@@ -1167,7 +1281,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Number of weeks (1-26), default 12"
+                        "description": "Number of weeks (1-52), default 12"
                     }
                 ],
                 "tags": [
@@ -1282,8 +1396,7 @@
                                 "$ref": "#/components/schemas/AssignmentRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -1299,6 +1412,54 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/RunWeeklySnapshotResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/assignments/search/": {
+            "post": {
+                "operationId": "assignments_search_create",
+                "description": "Search assignments with tokenized filters and return people match metadata.",
+                "tags": [
+                    "assignments"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssignmentSearchRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssignmentSearchRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssignmentSearchRequestRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AssignmentSearchResponse"
                                 }
                             }
                         },
@@ -2588,6 +2749,570 @@
                 }
             }
         },
+        "/api/core/project-template-settings/": {
+            "get": {
+                "operationId": "core_project_template_settings_retrieve",
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoHoursRoleSettingsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "core_project_template_settings_update",
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursRoleSettingsUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursRoleSettingsUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursRoleSettingsUpdateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoHoursRoleSettingItemResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/core/project-template-settings/{template_id}/": {
+            "get": {
+                "operationId": "core_project_template_settings_list",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "template_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AutoHoursTemplateRoleSettingItem"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "core_project_template_settings_update_2",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "template_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateRoleSettingsUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateRoleSettingsUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateRoleSettingsUpdateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AutoHoursTemplateRoleSettingItemResponse"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/core/project-templates/": {
+            "get": {
+                "operationId": "core_project_templates_list",
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AutoHoursTemplateListItem"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "core_project_templates_create",
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoHoursTemplateCreateResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/core/project-templates/{template_id}/": {
+            "get": {
+                "operationId": "core_project_templates_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "template_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoHoursTemplateDetail"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "core_project_templates_create_2",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "template_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoHoursTemplateCreateResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "core_project_templates_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "template_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoHoursTemplateUpdateResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "core_project_templates_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "template_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/core/project-templates/{template_id}/duplicate/": {
+            "post": {
+                "operationId": "core_project_templates_duplicate_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "template_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateDuplicateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateDuplicateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateDuplicateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoHoursTemplateDuplicateResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/core/project-templates/duplicate-default/": {
+            "get": {
+                "operationId": "core_project_templates_duplicate_default_list",
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AutoHoursTemplateListItem"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "core_project_templates_duplicate_default_create",
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateDuplicateDefaultRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateDuplicateDefaultRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoHoursTemplateDuplicateDefaultRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoHoursTemplateDuplicateDefaultResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/core/project_roles/": {
             "get": {
                 "operationId": "core_project_roles_retrieve",
@@ -2609,6 +3334,80 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProjectRoleListResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/core/qa_task_settings/": {
+            "get": {
+                "operationId": "core_qa_task_settings_retrieve",
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/QATaskSettings"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "core_qa_task_settings_update",
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QATaskSettingsRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QATaskSettingsRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QATaskSettingsRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/QATaskSettings"
                                 }
                             }
                         },
@@ -4071,6 +4870,273 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/qa_tasks/": {
+            "get": {
+                "operationId": "deliverables_qa_tasks_list",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedDeliverableQATaskList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "deliverables_qa_tasks_create",
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableQATaskRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableQATaskRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableQATaskRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableQATask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/deliverables/qa_tasks/{id}/": {
+            "get": {
+                "operationId": "deliverables_qa_tasks_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable QA Task.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableQATask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "deliverables_qa_tasks_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable QA Task.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableQATaskRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableQATaskRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeliverableQATaskRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableQATask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "deliverables_qa_tasks_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable QA Task.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableQATaskRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableQATaskRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDeliverableQATaskRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeliverableQATask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "deliverables_qa_tasks_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Deliverable QA Task.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "deliverables"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -7232,6 +8298,14 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by department id"
+                    },
+                    {
+                        "in": "query",
                         "name": "limit",
                         "schema": {
                             "type": "integer"
@@ -7519,6 +8593,15 @@
                 "operationId": "projects_list",
                 "description": "Get all projects with conditional request support (ETag/Last-Modified) and bulk loading",
                 "parameters": [
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
                     {
                         "name": "page",
                         "required": false,
@@ -7826,6 +8909,15 @@
                         "description": "Include child departments (0|1)"
                     },
                     {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "page",
                         "required": false,
                         "in": "query",
@@ -7881,6 +8973,15 @@
                             "pattern": "^\\d+$"
                         },
                         "required": true
+                    },
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
                     },
                     {
                         "name": "page",
@@ -8007,6 +9108,64 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProjectPreDeliverableSettingsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/{id}/qa_tasks/": {
+            "get": {
+                "operationId": "projects_qa_tasks_list",
+                "description": "Adds ETag on detail GET and optional If-Match handling on mutations.\n\n- Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.\n- Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.\n  When If-Match is absent, proceeds (frontend can adopt conditionals progressively).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^\\d+$"
+                        },
+                        "required": true
+                    },
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedDeliverableQATaskList"
                                 }
                             }
                         },
@@ -8374,6 +9533,47 @@
                     },
                     "404": {
                         "description": "No attachment found"
+                    }
+                }
+            }
+        },
+        "/api/projects/audit/": {
+            "get": {
+                "operationId": "projects_audit_list",
+                "description": "Read-only endpoint for recent project create/delete audit logs (admin only).",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AdminAuditLog"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -8793,6 +9993,85 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProjectRoleReorderResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/project-roles/search/": {
+            "get": {
+                "operationId": "projects_project_roles_search_list",
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ProjectRoleItem"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/search/": {
+            "post": {
+                "operationId": "projects_search_create",
+                "description": "Search projects with tokenized filters and pagination.",
+                "tags": [
+                    "projects"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectSearchRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectSearchRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectSearchRequestRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectSearchResponse"
                                 }
                             }
                         },
@@ -9974,6 +11253,93 @@
                     }
                 }
             }
+        },
+        "/api/ui/assignments-page/": {
+            "get": {
+                "operationId": "ui_assignments_page_retrieve",
+                "description": "Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "has_future_deliverables",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1 (project grid)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV: assignment,project (default both)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_placeholders",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "project_ids",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of project IDs to scope totals (project grid)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "status_in",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of project status filters (project grid)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of weeks (1-52), default 12"
+                    }
+                ],
+                "tags": [
+                    "ui"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -10133,7 +11499,8 @@
                         "readOnly": true
                     },
                     "person": {
-                        "type": "integer"
+                        "type": "integer",
+                        "nullable": true
                     },
                     "personName": {
                         "type": "string",
@@ -10145,6 +11512,7 @@
                     },
                     "personDepartmentId": {
                         "type": "integer",
+                        "nullable": true,
                         "readOnly": true
                     },
                     "personSkills": {
@@ -10195,15 +11563,27 @@
                     "allocationPercentage",
                     "createdAt",
                     "id",
-                    "person",
                     "personDepartmentId",
                     "personName",
                     "personSkills",
                     "personWeeklyCapacity",
                     "projectDisplayName",
                     "roleName",
-                    "updatedAt",
-                    "weeklyHours"
+                    "updatedAt"
+                ]
+            },
+            "AssignmentCountsByPersonResponse": {
+                "type": "object",
+                "properties": {
+                    "countsByPerson": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "countsByPerson"
                 ]
             },
             "AssignmentHoursUpdateRequest": {
@@ -10230,7 +11610,8 @@
                 "description": "Assignment serializer with weekly hours support",
                 "properties": {
                     "person": {
-                        "type": "integer"
+                        "type": "integer",
+                        "nullable": true
                     },
                     "projectName": {
                         "type": "string",
@@ -10246,10 +11627,986 @@
                         "nullable": true
                     },
                     "weeklyHours": {}
+                }
+            },
+            "AssignmentSearchRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "page": {
+                        "type": "integer"
+                    },
+                    "page_size": {
+                        "type": "integer"
+                    },
+                    "department": {
+                        "type": "integer"
+                    },
+                    "include_children": {
+                        "type": "integer"
+                    },
+                    "status_in": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "include_placeholders": {
+                        "type": "integer"
+                    },
+                    "project": {
+                        "type": "integer"
+                    },
+                    "person": {
+                        "type": "integer"
+                    },
+                    "meta_only": {
+                        "type": "boolean"
+                    },
+                    "search_tokens": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchTokenRequest"
+                        }
+                    }
+                }
+            },
+            "AssignmentSearchResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Assignment"
+                        }
+                    },
+                    "people": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PersonLite"
+                        }
+                    },
+                    "assignmentCountsByPerson": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    },
+                    "peopleMatchReason": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    "filteredTotals": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "number",
+                                "format": "double"
+                            }
+                        }
+                    }
                 },
                 "required": [
-                    "person",
-                    "weeklyHours"
+                    "assignmentCountsByPerson",
+                    "count",
+                    "filteredTotals",
+                    "people",
+                    "peopleMatchReason",
+                    "results"
+                ]
+            },
+            "AutoHoursRoleSettingItem": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "integer"
+                    },
+                    "roleName": {
+                        "type": "string"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "departmentName": {
+                        "type": "string"
+                    },
+                    "percentByWeek": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "roleCount": {
+                        "type": "integer"
+                    },
+                    "weeksCount": {
+                        "type": "integer"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "departmentId",
+                    "departmentName",
+                    "isActive",
+                    "percentByWeek",
+                    "roleCount",
+                    "roleId",
+                    "roleName",
+                    "sortOrder",
+                    "weeksCount"
+                ]
+            },
+            "AutoHoursRoleSettingItemResponse": {
+                "type": "object",
+                "properties": {
+                    "settings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AutoHoursRoleSettingItemResponseItem"
+                        }
+                    },
+                    "weekLimits": {
+                        "$ref": "#/components/schemas/AutoHoursWeekLimitsResponse"
+                    }
+                },
+                "required": [
+                    "settings",
+                    "weekLimits"
+                ]
+            },
+            "AutoHoursRoleSettingItemResponseItem": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "integer"
+                    },
+                    "roleName": {
+                        "type": "string"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "departmentName": {
+                        "type": "string"
+                    },
+                    "percentByWeek": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "roleCount": {
+                        "type": "integer"
+                    },
+                    "weeksCount": {
+                        "type": "integer"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "departmentId",
+                    "departmentName",
+                    "isActive",
+                    "percentByWeek",
+                    "roleCount",
+                    "roleId",
+                    "roleName",
+                    "sortOrder",
+                    "weeksCount"
+                ]
+            },
+            "AutoHoursRoleSettingUpdateItemRequest": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "integer"
+                    },
+                    "percentByWeek": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "percentPerWeek": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "roleCount": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "roleId"
+                ]
+            },
+            "AutoHoursRoleSettingsResponse": {
+                "type": "object",
+                "properties": {
+                    "settings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AutoHoursRoleSettingItem"
+                        }
+                    },
+                    "weekLimits": {
+                        "$ref": "#/components/schemas/AutoHoursWeekLimits"
+                    }
+                },
+                "required": [
+                    "settings",
+                    "weekLimits"
+                ]
+            },
+            "AutoHoursRoleSettingsUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "weeksCount": {
+                        "type": "integer"
+                    },
+                    "settings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AutoHoursRoleSettingUpdateItemRequest"
+                        }
+                    }
+                },
+                "required": [
+                    "settings"
+                ]
+            },
+            "AutoHoursTemplateCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "weeksByPhase": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "AutoHoursTemplateCreateResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "weeksByPhase": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    },
+                    "maxWeeksCount": {
+                        "type": "integer"
+                    },
+                    "defaultWeeksCount": {
+                        "type": "integer"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "defaultWeeksCount",
+                    "description",
+                    "excludedDepartmentIds",
+                    "excludedRoleIds",
+                    "id",
+                    "isActive",
+                    "maxWeeksCount",
+                    "name",
+                    "phaseKeys",
+                    "updatedAt",
+                    "weeksByPhase"
+                ]
+            },
+            "AutoHoursTemplateDetail": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "weeksByPhase": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    },
+                    "maxWeeksCount": {
+                        "type": "integer"
+                    },
+                    "defaultWeeksCount": {
+                        "type": "integer"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "defaultWeeksCount",
+                    "description",
+                    "excludedDepartmentIds",
+                    "excludedRoleIds",
+                    "id",
+                    "isActive",
+                    "maxWeeksCount",
+                    "name",
+                    "phaseKeys",
+                    "updatedAt",
+                    "weeksByPhase"
+                ]
+            },
+            "AutoHoursTemplateDuplicateDefaultRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "AutoHoursTemplateDuplicateDefaultResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "weeksByPhase": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    },
+                    "maxWeeksCount": {
+                        "type": "integer"
+                    },
+                    "defaultWeeksCount": {
+                        "type": "integer"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "defaultWeeksCount",
+                    "description",
+                    "excludedDepartmentIds",
+                    "excludedRoleIds",
+                    "id",
+                    "isActive",
+                    "maxWeeksCount",
+                    "name",
+                    "phaseKeys",
+                    "updatedAt",
+                    "weeksByPhase"
+                ]
+            },
+            "AutoHoursTemplateDuplicateRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "AutoHoursTemplateDuplicateResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "weeksByPhase": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    },
+                    "maxWeeksCount": {
+                        "type": "integer"
+                    },
+                    "defaultWeeksCount": {
+                        "type": "integer"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "defaultWeeksCount",
+                    "description",
+                    "excludedDepartmentIds",
+                    "excludedRoleIds",
+                    "id",
+                    "isActive",
+                    "maxWeeksCount",
+                    "name",
+                    "phaseKeys",
+                    "updatedAt",
+                    "weeksByPhase"
+                ]
+            },
+            "AutoHoursTemplateListItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "weeksByPhase": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    },
+                    "maxWeeksCount": {
+                        "type": "integer"
+                    },
+                    "defaultWeeksCount": {
+                        "type": "integer"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "defaultWeeksCount",
+                    "description",
+                    "excludedDepartmentIds",
+                    "excludedRoleIds",
+                    "id",
+                    "isActive",
+                    "maxWeeksCount",
+                    "name",
+                    "phaseKeys",
+                    "updatedAt",
+                    "weeksByPhase"
+                ]
+            },
+            "AutoHoursTemplateRoleSettingItem": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "integer"
+                    },
+                    "roleName": {
+                        "type": "string"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "departmentName": {
+                        "type": "string"
+                    },
+                    "percentByWeek": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "roleCount": {
+                        "type": "integer"
+                    },
+                    "weeksCount": {
+                        "type": "integer"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "departmentId",
+                    "departmentName",
+                    "isActive",
+                    "percentByWeek",
+                    "roleCount",
+                    "roleId",
+                    "roleName",
+                    "sortOrder",
+                    "weeksCount"
+                ]
+            },
+            "AutoHoursTemplateRoleSettingItemResponse": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "integer"
+                    },
+                    "roleName": {
+                        "type": "string"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "departmentName": {
+                        "type": "string"
+                    },
+                    "percentByWeek": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "roleCount": {
+                        "type": "integer"
+                    },
+                    "weeksCount": {
+                        "type": "integer"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "departmentId",
+                    "departmentName",
+                    "isActive",
+                    "percentByWeek",
+                    "roleCount",
+                    "roleId",
+                    "roleName",
+                    "sortOrder",
+                    "weeksCount"
+                ]
+            },
+            "AutoHoursTemplateRoleSettingUpdateItemRequest": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "integer"
+                    },
+                    "percentByWeek": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "roleCount": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "roleId"
+                ]
+            },
+            "AutoHoursTemplateRoleSettingsUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "weeksCount": {
+                        "type": "integer"
+                    },
+                    "settings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AutoHoursTemplateRoleSettingUpdateItemRequest"
+                        }
+                    }
+                },
+                "required": [
+                    "settings"
+                ]
+            },
+            "AutoHoursTemplateUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "weeksByPhase": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            },
+            "AutoHoursTemplateUpdateResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "excludedRoleIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "excludedDepartmentIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "phaseKeys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "weeksByPhase": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    },
+                    "maxWeeksCount": {
+                        "type": "integer"
+                    },
+                    "defaultWeeksCount": {
+                        "type": "integer"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "defaultWeeksCount",
+                    "description",
+                    "excludedDepartmentIds",
+                    "excludedRoleIds",
+                    "id",
+                    "isActive",
+                    "maxWeeksCount",
+                    "name",
+                    "phaseKeys",
+                    "updatedAt",
+                    "weeksByPhase"
+                ]
+            },
+            "AutoHoursWeekLimits": {
+                "type": "object",
+                "properties": {
+                    "maxWeeksCount": {
+                        "type": "integer"
+                    },
+                    "defaultWeeksCount": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "defaultWeeksCount",
+                    "maxWeeksCount"
+                ]
+            },
+            "AutoHoursWeekLimitsResponse": {
+                "type": "object",
+                "properties": {
+                    "maxWeeksCount": {
+                        "type": "integer"
+                    },
+                    "defaultWeeksCount": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "defaultWeeksCount",
+                    "maxWeeksCount"
                 ]
             },
             "AvailablePerson": {
@@ -11005,19 +13362,72 @@
                     "type"
                 ]
             },
-            "DeliverablePhaseEnum": {
-                "enum": [
-                    "sd",
-                    "dd",
-                    "ifp",
-                    "ifc",
-                    "masterplan",
-                    "bulletins",
-                    "ca",
-                    "other"
-                ],
-                "type": "string",
-                "description": "* `sd` - SD\n* `dd` - DD\n* `ifp` - IFP\n* `ifc` - IFC\n* `masterplan` - Masterplan\n* `bulletins` - Bulletins\n* `ca` - CA\n* `other` - Other"
+            "DeliverablePhaseDefinition": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "descriptionTokens": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "rangeMin": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "rangeMax": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "key",
+                    "label"
+                ]
+            },
+            "DeliverablePhaseDefinitionRequest": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "label": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "descriptionTokens": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "rangeMin": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "rangeMax": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "sortOrder": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "key",
+                    "label"
+                ]
             },
             "DeliverablePhaseMappingSettings": {
                 "type": "object",
@@ -11025,30 +13435,11 @@
                     "useDescriptionMatch": {
                         "type": "boolean"
                     },
-                    "descSdTokens": {},
-                    "descDdTokens": {},
-                    "descIfpTokens": {},
-                    "descIfcTokens": {},
-                    "rangeSdMin": {
-                        "type": "integer"
-                    },
-                    "rangeSdMax": {
-                        "type": "integer"
-                    },
-                    "rangeDdMin": {
-                        "type": "integer"
-                    },
-                    "rangeDdMax": {
-                        "type": "integer"
-                    },
-                    "rangeIfpMin": {
-                        "type": "integer"
-                    },
-                    "rangeIfpMax": {
-                        "type": "integer"
-                    },
-                    "rangeIfcExact": {
-                        "type": "integer"
+                    "phases": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeliverablePhaseDefinition"
+                        }
                     },
                     "updatedAt": {
                         "type": "string",
@@ -11057,17 +13448,7 @@
                     }
                 },
                 "required": [
-                    "descDdTokens",
-                    "descIfcTokens",
-                    "descIfpTokens",
-                    "descSdTokens",
-                    "rangeDdMax",
-                    "rangeDdMin",
-                    "rangeIfcExact",
-                    "rangeIfpMax",
-                    "rangeIfpMin",
-                    "rangeSdMax",
-                    "rangeSdMin",
+                    "phases",
                     "updatedAt",
                     "useDescriptionMatch"
                 ]
@@ -11078,45 +13459,115 @@
                     "useDescriptionMatch": {
                         "type": "boolean"
                     },
-                    "descSdTokens": {},
-                    "descDdTokens": {},
-                    "descIfpTokens": {},
-                    "descIfcTokens": {},
-                    "rangeSdMin": {
-                        "type": "integer"
-                    },
-                    "rangeSdMax": {
-                        "type": "integer"
-                    },
-                    "rangeDdMin": {
-                        "type": "integer"
-                    },
-                    "rangeDdMax": {
-                        "type": "integer"
-                    },
-                    "rangeIfpMin": {
-                        "type": "integer"
-                    },
-                    "rangeIfpMax": {
-                        "type": "integer"
-                    },
-                    "rangeIfcExact": {
-                        "type": "integer"
+                    "phases": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeliverablePhaseDefinitionRequest"
+                        }
                     }
                 },
                 "required": [
-                    "descDdTokens",
-                    "descIfcTokens",
-                    "descIfpTokens",
-                    "descSdTokens",
-                    "rangeDdMax",
-                    "rangeDdMin",
-                    "rangeIfcExact",
-                    "rangeIfpMax",
-                    "rangeIfpMin",
-                    "rangeSdMax",
-                    "rangeSdMin",
+                    "phases",
                     "useDescriptionMatch"
+                ]
+            },
+            "DeliverableQATask": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "deliverableInfo": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "readOnly": true
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "departmentName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "qaStatus": {
+                        "$ref": "#/components/schemas/DeliverableQATaskQaStatusEnum"
+                    },
+                    "qaAssignedTo": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "qaAssignedToName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "reviewedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "dueDate": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "deliverable",
+                    "deliverableInfo",
+                    "departmentId",
+                    "departmentName",
+                    "dueDate",
+                    "id",
+                    "qaAssignedToName",
+                    "qaStatus",
+                    "reviewedAt",
+                    "updatedAt"
+                ]
+            },
+            "DeliverableQATaskQaStatusEnum": {
+                "enum": [
+                    "not_reviewed",
+                    "reviewed"
+                ],
+                "type": "string",
+                "description": "* `not_reviewed` - Not Reviewed\n* `reviewed` - Reviewed"
+            },
+            "DeliverableQATaskRequest": {
+                "type": "object",
+                "properties": {
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "qaStatus": {
+                        "$ref": "#/components/schemas/DeliverableQATaskQaStatusEnum"
+                    },
+                    "qaAssignedTo": {
+                        "type": "integer",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "deliverable",
+                    "departmentId",
+                    "qaStatus"
                 ]
             },
             "DeliverableReorderRequestRequest": {
@@ -11337,7 +13788,15 @@
                         "$ref": "#/components/schemas/CompletionStatusEnum"
                     },
                     "qaStatus": {
-                        "$ref": "#/components/schemas/QaStatusEnum"
+                        "$ref": "#/components/schemas/QaStatus7bcEnum"
+                    },
+                    "qaAssignedTo": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "qaAssignedToName": {
+                        "type": "string",
+                        "readOnly": true
                     },
                     "assignedTo": {
                         "type": "integer",
@@ -11385,6 +13844,7 @@
                     "departmentId",
                     "departmentName",
                     "id",
+                    "qaAssignedToName",
                     "qaStatus",
                     "updatedAt"
                 ]
@@ -11417,7 +13877,11 @@
                         "$ref": "#/components/schemas/CompletionStatusEnum"
                     },
                     "qaStatus": {
-                        "$ref": "#/components/schemas/QaStatusEnum"
+                        "$ref": "#/components/schemas/QaStatus7bcEnum"
+                    },
+                    "qaAssignedTo": {
+                        "type": "integer",
+                        "nullable": true
                     },
                     "assignedTo": {
                         "type": "integer",
@@ -11439,7 +13903,7 @@
                         "readOnly": true
                     },
                     "phase": {
-                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                        "type": "string"
                     },
                     "departmentId": {
                         "type": "integer"
@@ -11497,7 +13961,8 @@
                 "type": "object",
                 "properties": {
                     "phase": {
-                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                        "type": "string",
+                        "minLength": 1
                     },
                     "departmentId": {
                         "type": "integer"
@@ -11584,6 +14049,21 @@
                     "managerName",
                     "name",
                     "updatedAt"
+                ]
+            },
+            "DepartmentFilterProjectRequest": {
+                "type": "object",
+                "properties": {
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/OpEnum"
+                    }
+                },
+                "required": [
+                    "departmentId",
+                    "op"
                 ]
             },
             "DepartmentRequest": {
@@ -12398,7 +14878,7 @@
                         "$ref": "#/components/schemas/EventTypeEnum"
                     },
                     "deliverable_phase": {
-                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                        "type": "string"
                     },
                     "hours_before": {
                         "type": "number",
@@ -12465,6 +14945,15 @@
                     "reminderDaysBefore"
                 ]
             },
+            "OpEnum": {
+                "enum": [
+                    "or",
+                    "and",
+                    "not"
+                ],
+                "type": "string",
+                "description": "* `or` - or\n* `and` - and\n* `not` - not"
+            },
             "PEPClient": {
                 "type": "object",
                 "properties": {
@@ -12503,7 +14992,7 @@
                 "type": "object",
                 "properties": {
                     "phase": {
-                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                        "type": "string"
                     },
                     "weeks": {
                         "type": "integer"
@@ -12585,7 +15074,7 @@
                 "type": "object",
                 "properties": {
                     "phase": {
-                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                        "type": "string"
                     },
                     "weeks": {
                         "type": "integer"
@@ -12644,6 +15133,22 @@
                     },
                     "personName": {
                         "type": "string"
+                    },
+                    "departmentId": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "firstWeek": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "lastWeek": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "totalWeeks": {
+                        "type": "integer",
+                        "nullable": true
                     },
                     "roles": {
                         "type": "array",
@@ -12831,6 +15336,37 @@
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/Deliverable"
+                        }
+                    }
+                }
+            },
+            "PaginatedDeliverableQATaskList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeliverableQATask"
                         }
                     }
                 }
@@ -13371,7 +15907,8 @@
                 "description": "Assignment serializer with weekly hours support",
                 "properties": {
                     "person": {
-                        "type": "integer"
+                        "type": "integer",
+                        "nullable": true
                     },
                     "projectName": {
                         "type": "string",
@@ -13428,6 +15965,24 @@
                     },
                     "is_active": {
                         "type": "boolean"
+                    }
+                }
+            },
+            "PatchedDeliverableQATaskRequest": {
+                "type": "object",
+                "properties": {
+                    "deliverable": {
+                        "type": "integer"
+                    },
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "qaStatus": {
+                        "$ref": "#/components/schemas/DeliverableQATaskQaStatusEnum"
+                    },
+                    "qaAssignedTo": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 }
             },
@@ -13500,7 +16055,11 @@
                         "$ref": "#/components/schemas/CompletionStatusEnum"
                     },
                     "qaStatus": {
-                        "$ref": "#/components/schemas/QaStatusEnum"
+                        "$ref": "#/components/schemas/QaStatus7bcEnum"
+                    },
+                    "qaAssignedTo": {
+                        "type": "integer",
+                        "nullable": true
                     },
                     "assignedTo": {
                         "type": "integer",
@@ -13512,7 +16071,8 @@
                 "type": "object",
                 "properties": {
                     "phase": {
-                        "$ref": "#/components/schemas/DeliverablePhaseEnum"
+                        "type": "string",
+                        "minLength": 1
                     },
                     "departmentId": {
                         "type": "integer"
@@ -13764,6 +16324,10 @@
                     "isActive": {
                         "type": "boolean",
                         "default": true
+                    },
+                    "autoHoursTemplateId": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 }
             },
@@ -13822,6 +16386,12 @@
                     "description": {
                         "type": "string",
                         "description": "Optional description of the role responsibilities"
+                    },
+                    "overheadHoursPerWeek": {
+                        "type": "number",
+                        "format": "double",
+                        "minimum": 0.0,
+                        "description": "Default overhead hours per week for people in this role"
                     },
                     "isActive": {
                         "type": "boolean",
@@ -13891,6 +16461,10 @@
                     },
                     "department": {
                         "type": "integer",
+                        "nullable": true
+                    },
+                    "roleName": {
+                        "type": "string",
                         "nullable": true
                     }
                 },
@@ -14057,6 +16631,28 @@
                     "byClient",
                     "byProject",
                     "eventsCount"
+                ]
+            },
+            "PersonLite": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "weeklyCapacity": {
+                        "type": "integer"
+                    },
+                    "department": {
+                        "type": "integer",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
                 ]
             },
             "PersonProjectTimelineResponse": {
@@ -14964,6 +17560,10 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "autoHoursTemplateId": {
+                        "type": "integer",
+                        "nullable": true
+                    },
                     "createdAt": {
                         "type": "string",
                         "format": "date-time",
@@ -15032,6 +17632,9 @@
                     },
                     "status": {
                         "type": "string"
+                    },
+                    "missingQa": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
@@ -15104,6 +17707,12 @@
                         "type": "object",
                         "additionalProperties": {
                             "type": "boolean"
+                        }
+                    },
+                    "hasPlaceholdersByProject": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
                         }
                     },
                     "metrics": {
@@ -15227,6 +17836,10 @@
                     "isActive": {
                         "type": "boolean",
                         "default": true
+                    },
+                    "autoHoursTemplateId": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -15620,6 +18233,70 @@
                     "count"
                 ]
             },
+            "ProjectSearchRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "page": {
+                        "type": "integer"
+                    },
+                    "page_size": {
+                        "type": "integer"
+                    },
+                    "ordering": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "status_in": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "include_children": {
+                        "type": "integer"
+                    },
+                    "search_tokens": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchTokenProjectRequest"
+                        }
+                    },
+                    "department_filters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DepartmentFilterProjectRequest"
+                        }
+                    },
+                    "include_deliverable_dates": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "ProjectSearchResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "results"
+                ]
+            },
             "ProjectSnapshotMetrics": {
                 "type": "object",
                 "properties": {
@@ -15887,7 +18564,39 @@
                     "reset"
                 ]
             },
-            "QaStatusEnum": {
+            "QATaskSettings": {
+                "type": "object",
+                "properties": {
+                    "defaultDaysBefore": {
+                        "type": "integer",
+                        "maximum": 365,
+                        "minimum": 0
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "defaultDaysBefore",
+                    "updatedAt"
+                ]
+            },
+            "QATaskSettingsRequest": {
+                "type": "object",
+                "properties": {
+                    "defaultDaysBefore": {
+                        "type": "integer",
+                        "maximum": 365,
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "defaultDaysBefore"
+                ]
+            },
+            "QaStatus7bcEnum": {
                 "enum": [
                     "not_reviewed",
                     "in_review",
@@ -15932,6 +18641,12 @@
                     "description": {
                         "type": "string",
                         "description": "Optional description of the role responsibilities"
+                    },
+                    "overheadHoursPerWeek": {
+                        "type": "number",
+                        "format": "double",
+                        "minimum": 0.0,
+                        "description": "Default overhead hours per week for people in this role"
                     },
                     "isActive": {
                         "type": "boolean",
@@ -16030,6 +18745,12 @@
                         "type": "string",
                         "description": "Optional description of the role responsibilities"
                     },
+                    "overheadHoursPerWeek": {
+                        "type": "number",
+                        "format": "double",
+                        "minimum": 0.0,
+                        "description": "Default overhead hours per week for people in this role"
+                    },
                     "isActive": {
                         "type": "boolean",
                         "description": "Whether this role is currently available for assignment"
@@ -16112,6 +18833,38 @@
                 "required": [
                     "lock_acquired",
                     "week_start"
+                ]
+            },
+            "SearchTokenProjectRequest": {
+                "type": "object",
+                "properties": {
+                    "term": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/OpEnum"
+                    }
+                },
+                "required": [
+                    "op",
+                    "term"
+                ]
+            },
+            "SearchTokenRequest": {
+                "type": "object",
+                "properties": {
+                    "term": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/OpEnum"
+                    }
+                },
+                "required": [
+                    "op",
+                    "term"
                 ]
             },
             "SetPasswordRequestRequest": {
@@ -16577,6 +19330,11 @@
                         "maximum": 2147483647,
                         "minimum": 0
                     },
+                    "full_capacity_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
                     "zero_is_blank": {
                         "type": "boolean"
                     },
@@ -16632,6 +19390,11 @@
                         "minimum": 0
                     },
                     "red_min": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "full_capacity_hours": {
                         "type": "integer",
                         "maximum": 2147483647,
                         "minimum": 0

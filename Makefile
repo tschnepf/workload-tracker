@@ -109,6 +109,10 @@ openapi-client:
 	@docker-compose exec frontend npx openapi-typescript ../backend/openapi.json -o src/api/schema.ts
 	@echo "Types written to frontend/src/api/schema.ts"
 
+.PHONY: openapi
+openapi: openapi-schema openapi-client
+	@echo "OpenAPI schema + frontend types updated"
+
 .PHONY: test
 test:
 	docker-compose exec backend python manage.py test
