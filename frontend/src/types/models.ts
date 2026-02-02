@@ -429,6 +429,7 @@ export interface ProjectFilterMetadataResponse {
       assignmentCount: number;
       hasFutureDeliverables: boolean;
       status: string;
+      missingQa?: boolean;
     };
   };
 }

@@ -4,8 +4,15 @@ interface Props {
   statusOptions: readonly string[];
   selectedStatusFilters: Set<string>;
   onToggleStatus: (status: string) => void;
-  searchTerm: string;
-  onSearchTerm: (term: string) => void;
+  searchTokens: Array<{ id: string; term: string; op: 'or' | 'and' | 'not' }>;
+  searchInput: string;
+  searchOp: 'or' | 'and' | 'not';
+  activeTokenId: string | null;
+  onSearchInput: (value: string) => void;
+  onSearchKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  onSearchOpChange: (op: 'or' | 'and' | 'not') => void;
+  onSelectToken: (id: string | null) => void;
+  onRemoveToken: (id: string) => void;
   formatFilterStatus: (status: string) => string;
   filterMetaLoading?: boolean;
   filterMetaError?: string | null;
@@ -17,14 +24,23 @@ const FiltersBar: React.FC<Props> = ({
   statusOptions,
   selectedStatusFilters,
   onToggleStatus,
-  searchTerm,
-  onSearchTerm,
+  searchTokens,
+  searchInput,
+  searchOp,
+  activeTokenId,
+  onSearchInput,
+  onSearchKeyDown,
+  onSearchOpChange,
+  onSelectToken,
+  onRemoveToken,
   formatFilterStatus,
   filterMetaLoading,
   filterMetaError,
   onRetryFilterMeta,
   rightSlot,
 }) => {
+  const activeToken = activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null;
+
   return (
     <div className="space-y-2">
       <div>
@@ -52,13 +68,74 @@ const FiltersBar: React.FC<Props> = ({
       </div>
 
       <div className="flex items-center gap-2">
-        <input
-          type="text"
-          placeholder="Search projects"
-          value={searchTerm}
-          onChange={(e) => onSearchTerm(e.target.value)}
-          className="flex-1 min-w-0 px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-        />
+        <div className="flex-1 min-w-0">
+          <label className="sr-only" htmlFor="projects-search">Search projects</label>
+          <div className="flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
+            <div className="flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
+              <select
+                className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+                value={activeToken?.op ?? searchOp}
+                onChange={(e) => onSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
+                aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
+              >
+                <option value="or">OR</option>
+                <option value="and">AND</option>
+                <option value="not">NOT</option>
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 px-2 py-1 flex-1 min-w-0">
+              {searchTokens.map((token) => {
+                const isActive = token.id === activeTokenId;
+                return (
+                  <div
+                    key={token.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onSelectToken(token.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectToken(token.id);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] ${
+                      isActive
+                        ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                        : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                    title={`${token.op.toUpperCase()} ${token.term}`}
+                  >
+                    <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
+                    <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
+                    <button
+                      type="button"
+                      className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveToken(token.id);
+                      }}
+                      aria-label={`Remove ${token.term}`}
+                    >
+                      x
+                    </button>
+                  </div>
+                );
+              })}
+              <input
+                id="projects-search"
+                type="text"
+                value={searchInput}
+                onChange={(e) => {
+                  onSearchInput(e.target.value);
+                  onSelectToken(null);
+                }}
+                onKeyDown={onSearchKeyDown}
+                placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client, name, or number (Enter)'}
+                className="flex-1 min-w-[160px] px-1 py-0.5 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
         {rightSlot ? <div className="shrink-0">{rightSlot}</div> : null}
       </div>
 

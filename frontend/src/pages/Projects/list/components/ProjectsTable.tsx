@@ -42,6 +42,10 @@ interface Props {
   autoScrollProjectId?: number | null;
   onAutoScrollComplete?: () => void;
   showDashboardButton?: boolean;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+  loadMoreOffset?: number;
 }
 
 const ProjectsTable: React.FC<Props> = ({
@@ -70,6 +74,10 @@ const ProjectsTable: React.FC<Props> = ({
   autoScrollProjectId,
   onAutoScrollComplete,
   showDashboardButton = false,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
+  loadMoreOffset = 160,
 }) => {
   const baseGridCols = 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))]';
   const gridColsClass = showDashboardButton
@@ -80,6 +88,7 @@ const ProjectsTable: React.FC<Props> = ({
   const { parentRef, items, totalSize, virtualizer } = useVirtualRows({ count: projects.length, estimateSize: isMobileList ? 116 : 44, overscan: 6, enableVirtual });
   const groupClients = sortBy === 'client';
   const [hoverEnabled, setHoverEnabled] = useState(true);
+  const loadRequestedRef = useRef(false);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -136,6 +145,39 @@ const ProjectsTable: React.FC<Props> = ({
     } catch {}
     try { onAutoScrollComplete?.(); } catch {}
   }, [selectedProjectId, projects, enableVirtual, virtualizer, parentRef, autoScrollProjectId, onAutoScrollComplete, isMobileList]);
+
+  useEffect(() => {
+    if (!onLoadMore) return;
+    const container = parentRef.current;
+    if (!container) return;
+    let raf = 0;
+    const checkAndLoad = () => {
+      if (!hasMore || isLoadingMore) return;
+      if (loadRequestedRef.current) return;
+      const remaining = container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (remaining <= loadMoreOffset) {
+        loadRequestedRef.current = true;
+        onLoadMore();
+      }
+    };
+    const handleScroll = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        checkAndLoad();
+      });
+    };
+    container.addEventListener('scroll', handleScroll);
+    handleScroll();
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [onLoadMore, hasMore, isLoadingMore, loadMoreOffset, isMobileList, enableVirtual, projects.length]);
+
+  useEffect(() => {
+    if (!isLoadingMore) loadRequestedRef.current = false;
+  }, [isLoadingMore]);
 
   const handleRowClick = (project: Project, index: number) => {
     setHoverEnabled(false);

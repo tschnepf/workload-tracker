@@ -15,6 +15,7 @@ export function useProjectFilters(
   options?: {
     customSortGetters?: Record<string, (p: Project) => string | number | Date | null | undefined>;
     extraStatusMatchers?: Record<string, (project: Project, metadata: ProjectFilterMetadataResponse | null) => boolean>;
+    serverSide?: boolean;
   }
 ) {
   // Persisted status filters (default to Active + Active CA)
@@ -113,6 +114,7 @@ export function useProjectFilters(
   }, [futureDeliverableLookup, filterMetadata, options?.extraStatusMatchers]);
 
   const filteredProjects = useMemo(() => {
+    if (options?.serverSide) return projects;
     const tStart = performance.now();
     const activeFilters = Array.from(selectedStatusFilters);
     const useShowAll = activeFilters.length === 0 || activeFilters.includes('Show All');
@@ -133,9 +135,10 @@ export function useProjectFilters(
       statusFilter: activeFilters.join(','),
     });
     return next;
-  }, [projects, selectedStatusFilters, searchTerm, filterMetadata, matchesStatusFilter]);
+  }, [projects, selectedStatusFilters, searchTerm, filterMetadata, matchesStatusFilter, options?.serverSide]);
 
   const sortedProjects = useMemo(() => {
+    if (options?.serverSide) return filteredProjects;
     const getter = options?.customSortGetters?.[sortBy];
     // Normalize with direction-awareness for primary key
     const normalize = (v: any): string => {
@@ -192,7 +195,7 @@ export function useProjectFilters(
 
       return primary;
     });
-  }, [filteredProjects, sortBy, sortDirection, options?.customSortGetters]);
+  }, [filteredProjects, sortBy, sortDirection, options?.customSortGetters, options?.serverSide]);
 
   const onSort = (column: string) => {
     if (sortBy === column) {

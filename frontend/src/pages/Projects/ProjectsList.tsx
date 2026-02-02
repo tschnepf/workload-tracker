@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { Project, Person, Assignment, Department } from '@/types/models';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
@@ -47,19 +46,9 @@ const DeliverablesSection = React.lazy(() => import('@/components/deliverables/D
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
   const [ordering, setOrdering] = useState<string | null>('client,name');
-  const projectsQueryKey = useMemo(() => ['projects', ordering || 'default', 100], [ordering]);
-  const {
-    projects,
-    loading,
-    error: projectsError,
-    refetch: refetchProjects,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useProjects({ ordering });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { people, peopleVersion } = usePeople();
+  const { people } = usePeople();
   const deleteProjectMutation = useDeleteProject();
   const updateProjectMutation = useUpdateProject();
 
@@ -74,10 +63,164 @@ const ProjectsList: React.FC = () => {
   const splitDragRef = useRef<{ active: boolean; startX: number; startPct: number }>({ active: false, startX: 0, startPct: 66 });
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Optimized filter metadata (assignment counts + hasFutureDeliverables)
-  const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata();
   // Derived filters/sort/search via hook
   const { state: deptState, backendParams } = useDepartmentFilter();
+  const filterMetadataParams = useMemo(() => {
+    if (deptState.selectedDepartmentId == null) return undefined;
+    return {
+      department: Number(deptState.selectedDepartmentId),
+      include_children: deptState.includeChildren ? 1 : 0,
+    };
+  }, [deptState.includeChildren, deptState.selectedDepartmentId]);
+  // Optimized filter metadata (assignment counts + hasFutureDeliverables)
+  const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata(filterMetadataParams);
+
+  const {
+    selectedStatusFilters,
+    sortBy,
+    sortDirection,
+    toggleStatusFilter,
+    forceShowAll,
+    onSort,
+    formatFilterStatus,
+  } = useProjectFilters([], filterMetadata, { serverSide: true });
+
+  const [searchInput, setSearchInput] = useState('');
+  const [searchTokens, setSearchTokens] = useState<Array<{ id: string; term: string; op: 'or' | 'and' | 'not' }>>([]);
+  const [searchOp, setSearchOp] = useState<'or' | 'and' | 'not'>('or');
+  const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
+  const searchTokenSeq = useRef(0);
+  const activeToken = useMemo(
+    () => (activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null),
+    [activeTokenId, searchTokens]
+  );
+  const normalizedSearchTokens = useMemo(() => {
+    return searchTokens
+      .map((token) => ({ ...token, term: token.term.trim().toLowerCase() }))
+      .filter((token) => token.term.length > 0);
+  }, [searchTokens]);
+  const pendingSearchToken = useMemo(() => {
+    const term = searchInput.trim().toLowerCase();
+    if (!term) return null;
+    return { term, op: searchOp };
+  }, [searchInput, searchOp]);
+  const searchTokensForApi = useMemo(() => {
+    const tokens = normalizedSearchTokens.map(({ term, op }) => ({ term, op }));
+    if (pendingSearchToken && !tokens.some((token) => token.term === pendingSearchToken.term && token.op === pendingSearchToken.op)) {
+      tokens.push(pendingSearchToken);
+    }
+    return tokens;
+  }, [normalizedSearchTokens, pendingSearchToken]);
+  const addSearchToken = useCallback((value?: string) => {
+    const nextTerm = (value ?? searchInput).trim();
+    if (!nextTerm) return;
+    const normalized = nextTerm.toLowerCase();
+    setSearchTokens((prev) => {
+      const alreadyExists = prev.some((token) => token.term.trim().toLowerCase() === normalized && token.op === searchOp);
+      if (alreadyExists) return prev;
+      const id = `p-${searchTokenSeq.current++}`;
+      return [...prev, { id, term: nextTerm, op: searchOp }];
+    });
+    setSearchInput('');
+    setActiveTokenId(null);
+  }, [searchInput, searchOp]);
+  const removeSearchToken = useCallback((id: string) => {
+    setSearchTokens((prev) => prev.filter((token) => token.id !== id));
+    setActiveTokenId((prev) => (prev === id ? null : prev));
+  }, []);
+  const handleSearchOpChange = useCallback((value: 'or' | 'and' | 'not') => {
+    if (activeToken) {
+      setSearchTokens((prev) => prev.map((token) => (token.id === activeToken.id ? { ...token, op: value } : token)));
+    } else {
+      setSearchOp(value);
+    }
+  }, [activeToken]);
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSearchToken();
+      return;
+    }
+    if (e.key === 'Backspace' && searchInput.length === 0 && searchTokens.length > 0) {
+      const lastTokenId = searchTokens[searchTokens.length - 1]?.id ?? null;
+      setSearchTokens((prev) => prev.slice(0, -1));
+      if (lastTokenId && activeTokenId === lastTokenId) {
+        setActiveTokenId(null);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      setSearchInput('');
+      setActiveTokenId(null);
+    }
+  }, [addSearchToken, searchInput.length, searchTokens, activeTokenId]);
+  const clearSearchTokens = useCallback(() => {
+    setSearchInput('');
+    setSearchTokens([]);
+    setActiveTokenId(null);
+  }, []);
+
+  const serverOrdering = useMemo(() => {
+    const direction = sortDirection === 'desc' ? '-' : '';
+    switch (sortBy) {
+      case 'client':
+        return `${direction}client,name`;
+      case 'name':
+        return `${direction}name`;
+      case 'number':
+      case 'projectNumber':
+        return `${direction}project_number`;
+      case 'status':
+        return `${direction}status,name`;
+      case 'lastDue':
+        return `${direction}lastDue`;
+      case 'nextDue':
+        return `${direction}nextDue`;
+      default:
+        return null;
+    }
+  }, [sortBy, sortDirection]);
+  useEffect(() => {
+    if (!serverOrdering) return;
+    setOrdering((prev) => (prev === serverOrdering ? prev : serverOrdering));
+  }, [serverOrdering]);
+
+  const statusIn = useMemo(() => {
+    const items = Array.from(selectedStatusFilters);
+    if (!items.length || items.includes('Show All')) return null;
+    return items
+      .filter((s) => s && s !== 'Show All')
+      .sort()
+      .join(',');
+  }, [selectedStatusFilters]);
+  const departmentFilters = useMemo(() => (deptState.filters ?? [])
+    .map((f) => ({
+      departmentId: Number(f.departmentId),
+      op: f.op,
+    }))
+    .filter((f) => Number.isFinite(f.departmentId) && f.departmentId > 0), [deptState.filters]);
+  const includeChildren = useMemo(
+    () => (deptState.selectedDepartmentId != null && deptState.includeChildren ? 1 : 0),
+    [deptState.includeChildren, deptState.selectedDepartmentId]
+  );
+
+  const {
+    projects,
+    totalCount,
+    loading,
+    error: projectsError,
+    refetch: refetchProjects,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    queryKey: projectsQueryKey,
+  } = useProjects({
+    ordering,
+    statusIn,
+    searchTokens: searchTokensForApi,
+    departmentFilters,
+    includeChildren,
+  });
 
   // Next Deliverables map for list column + sorting
   const { nextMap: nextDeliverablesMap, prevMap: prevDeliverablesMap, refreshOne: refreshDeliverablesFor } = useProjectDeliverablesBulk(projects);
@@ -94,99 +237,6 @@ const ProjectsList: React.FC = () => {
   });
   const leadAssignments = leadAssignmentsQuery.data ?? [];
   const departmentFilterId = deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : null;
-  const missingQaProjectIds = useMemo(() => {
-    const ids = new Set<number>();
-    if (!filterMetadata || projects.length === 0) return ids;
-    const assignmentsByProject = new Map<number, Set<number>>();
-    const qaByProject = new Map<number, Set<number>>();
-    leadAssignments.forEach((assignment) => {
-      const projectId = assignment.project;
-      const deptId = assignment.personDepartmentId;
-      if (!projectId || deptId == null) return;
-      const deptSet = assignmentsByProject.get(projectId) ?? new Set<number>();
-      deptSet.add(deptId);
-      assignmentsByProject.set(projectId, deptSet);
-      const roleName = (assignment.roleName || '').toLowerCase();
-      if (roleName.includes('qa') || roleName.includes('quality')) {
-        const qaSet = qaByProject.get(projectId) ?? new Set<number>();
-        qaSet.add(deptId);
-        qaByProject.set(projectId, qaSet);
-      }
-    });
-    projects.forEach((project) => {
-      if (!project?.id) return;
-      const meta = filterMetadata.projectFilters?.[String(project.id)];
-      if (!meta?.hasFutureDeliverables) return;
-      const deptSet = assignmentsByProject.get(project.id) ?? new Set<number>();
-      if (deptSet.size === 0) return;
-      const qaSet = qaByProject.get(project.id) ?? new Set<number>();
-      if (departmentFilterId != null) {
-        if (deptSet.has(departmentFilterId) && !qaSet.has(departmentFilterId)) {
-          ids.add(project.id);
-        }
-        return;
-      }
-      for (const deptId of deptSet.values()) {
-        if (!qaSet.has(deptId)) {
-          ids.add(project.id);
-          break;
-        }
-      }
-    });
-    return ids;
-  }, [filterMetadata, projects, leadAssignments, departmentFilterId]);
-
-  // Recompute filters with custom sort getter when needed (stable ID mapping)
-  const {
-    selectedStatusFilters,
-    sortBy,
-    sortDirection,
-    searchTerm,
-    setSearchTerm,
-    toggleStatusFilter,
-    forceShowAll,
-    onSort,
-    formatFilterStatus,
-    filteredProjects,
-    sortedProjects,
-  } = useProjectFilters(projects, filterMetadata, {
-    extraStatusMatchers: {
-      missing_qa: (project: Project) => {
-        if (!project?.id) return false;
-        return missingQaProjectIds.has(project.id);
-      },
-    },
-    customSortGetters: {
-      nextDue: (p) => {
-        const d = p.id != null ? nextDeliverablesMap.get(p.id) : null;
-        return d?.date || null;
-      },
-      lastDue: (p) => {
-        const d = p.id != null ? prevDeliverablesMap.get(p.id) : null;
-        return d?.date || null;
-      },
-    },
-  });
-  const serverOrdering = useMemo(() => {
-    const direction = sortDirection === 'desc' ? '-' : '';
-    switch (sortBy) {
-      case 'client':
-        return `${direction}client,name`;
-      case 'name':
-        return `${direction}name`;
-      case 'number':
-      case 'projectNumber':
-        return `${direction}project_number`;
-      case 'status':
-        return `${direction}status,name`;
-      default:
-        return null;
-    }
-  }, [sortBy, sortDirection]);
-  useEffect(() => {
-    if (!serverOrdering) return;
-    setOrdering((prev) => (prev === serverOrdering ? prev : serverOrdering));
-  }, [serverOrdering]);
   const refetchProjectsSafe = useCallback(async () => {
     try { await refetchProjects(); } catch {}
   }, [refetchProjects]);
@@ -220,88 +270,8 @@ const ProjectsList: React.FC = () => {
     return map;
   }, [leadAssignments]);
 
-  const deptFilteredSortedProjects = useMemo(() => {
-    const filters = deptState.filters ?? [];
-    if (filters.length === 0) return sortedProjects;
-    if (leadAssignmentsQuery.isLoading) return sortedProjects;
-
-    const includeAll = new Set<number>();
-    const includeAny = new Set<number>();
-    const excludeOnly = new Set<number>();
-
-    filters.forEach((filter) => {
-      if (filter.op === 'not') {
-        excludeOnly.add(filter.departmentId);
-        return;
-      }
-      if (filter.op === 'or') {
-        includeAny.add(filter.departmentId);
-        return;
-      }
-      includeAll.add(filter.departmentId);
-    });
-
-    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
-      const expanded = new Set<number>();
-      const stack = [deptState.selectedDepartmentId];
-      while (stack.length > 0) {
-        const current = stack.pop()!;
-        if (expanded.has(current)) continue;
-        expanded.add(current);
-        departments.forEach((dept) => {
-          if (dept.parentDepartment === current && dept.id != null) {
-            stack.push(dept.id);
-          }
-        });
-      }
-      includeAll.clear();
-      includeAny.clear();
-      expanded.forEach((id) => includeAny.add(id));
-    }
-
-    return sortedProjects.filter((project) => {
-      if (project?.id == null) return false;
-      const deptSet = projectAssignmentDepartments.get(project.id) ?? new Set<number>();
-
-      if (includeAll.size > 0) {
-        for (const id of includeAll) {
-          if (!deptSet.has(id)) return false;
-        }
-      }
-
-      if (includeAny.size > 0) {
-        let hasAny = false;
-        for (const id of includeAny) {
-          if (deptSet.has(id)) {
-            hasAny = true;
-            break;
-          }
-        }
-        if (!hasAny) return false;
-      }
-
-      if (excludeOnly.size > 0 && deptSet.size > 0) {
-        let allExcluded = true;
-        for (const id of deptSet) {
-          if (!excludeOnly.has(id)) {
-            allExcluded = false;
-            break;
-          }
-        }
-        if (allExcluded) return false;
-      }
-
-      return true;
-    });
-  }, [
-    deptState.filters,
-    deptState.includeChildren,
-    deptState.selectedDepartmentId,
-    departments,
-    leadAssignmentsQuery.isLoading,
-    projectAssignmentDepartments,
-    sortedProjects,
-  ]);
+  const deptFilteredSortedProjects = useMemo(() => projects, [projects]);
+  const resultsCount = totalCount || deptFilteredSortedProjects.length;
 
   // Selection (single source of truth)
   // Use the dept-filtered list for selection and table
@@ -366,7 +336,7 @@ const ProjectsList: React.FC = () => {
     const idx = deptFilteredSortedProjects.findIndex(p => p.id === pendingProjectId);
     if (idx < 0) {
       // Ensure it is visible: clear search + show all once
-      setSearchTerm('');
+      clearSearchTokens();
       forceShowAll();
       return;
     }
@@ -386,7 +356,7 @@ const ProjectsList: React.FC = () => {
     if (nextSearch !== currentSearch) {
       navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
     }
-  }, [pendingProjectId, deptFilteredSortedProjects, location.pathname, location.search, navigate, setSelectedProject, setSelectedIndex, setSearchTerm, forceShowAll]);
+  }, [pendingProjectId, deptFilteredSortedProjects, location.pathname, location.search, navigate, setSelectedProject, setSelectedIndex, clearSearchTokens, forceShowAll]);
 
   // If returning from dashboard without a query param, restore last viewed project.
   useEffect(() => {
@@ -924,8 +894,15 @@ const ProjectsList: React.FC = () => {
             statusOptions={statusOptions}
             selectedStatusFilters={selectedStatusFilters}
             onToggleStatus={toggleStatusFilter}
-            searchTerm={searchTerm}
-            onSearchTerm={setSearchTerm}
+            searchTokens={searchTokens}
+            searchInput={searchInput}
+            searchOp={searchOp}
+            activeTokenId={activeTokenId}
+            onSearchInput={setSearchInput}
+            onSearchKeyDown={handleSearchKeyDown}
+            onSearchOpChange={handleSearchOpChange}
+            onSelectToken={setActiveTokenId}
+            onRemoveToken={removeSearchToken}
             formatFilterStatus={formatFilterStatus}
             filterMetaLoading={filterMetaLoading}
             filterMetaError={filterMetaError}
@@ -981,6 +958,9 @@ const ProjectsList: React.FC = () => {
           showDashboardButton={!detailsPaneOpen}
           autoScrollProjectId={autoScrollProjectId}
           onAutoScrollComplete={() => setAutoScrollProjectId(null)}
+          hasMore={!!hasNextPage}
+          isLoadingMore={isFetchingNextPage}
+          onLoadMore={() => fetchNextPage()}
         />
         {hasNextPage && (
           <div className="p-3 flex justify-center border-t border-[var(--border)] bg-[var(--surface)]">
@@ -1137,7 +1117,7 @@ const ProjectsList: React.FC = () => {
       <div className="p-3 border-b border-[var(--border)] bg-[var(--surface)] flex items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
-          <p className="text-xs text-[var(--muted)]">{deptFilteredSortedProjects.length} results</p>
+          <p className="text-xs text-[var(--muted)]">{resultsCount} results</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1181,6 +1161,9 @@ const ProjectsList: React.FC = () => {
         isMobileList
         autoScrollProjectId={autoScrollProjectId}
         onAutoScrollComplete={() => setAutoScrollProjectId(null)}
+        hasMore={!!hasNextPage}
+        isLoadingMore={isFetchingNextPage}
+        onLoadMore={() => fetchNextPage()}
       />
       {hasNextPage && (
         <div className="p-3 flex justify-center border-t border-[var(--border)] bg-[var(--surface)]">
@@ -1205,8 +1188,15 @@ const ProjectsList: React.FC = () => {
           statusOptions={statusOptions}
           selectedStatusFilters={selectedStatusFilters}
           onToggleStatus={toggleStatusFilter}
-          searchTerm={searchTerm}
-          onSearchTerm={setSearchTerm}
+          searchTokens={searchTokens}
+          searchInput={searchInput}
+          searchOp={searchOp}
+          activeTokenId={activeTokenId}
+          onSearchInput={setSearchInput}
+          onSearchKeyDown={handleSearchKeyDown}
+          onSearchOpChange={handleSearchOpChange}
+          onSelectToken={setActiveTokenId}
+          onRemoveToken={removeSearchToken}
           formatFilterStatus={formatFilterStatus}
           filterMetaLoading={filterMetaLoading}
           filterMetaError={filterMetaError}
@@ -1218,7 +1208,7 @@ const ProjectsList: React.FC = () => {
             className="flex-1 px-3 py-2 rounded border border-[var(--border)] text-[var(--text)]"
             onClick={() => {
               forceShowAll();
-              setSearchTerm('');
+              clearSearchTokens();
             }}
           >
             Reset Filters

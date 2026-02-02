@@ -5,15 +5,23 @@ import { trackPerformanceEvent } from '@/utils/monitoring';
 
 export const PROJECT_FILTER_METADATA_KEY = ['projectFilterMetadata'] as const;
 
-export function useProjectFilterMetadata() {
+export function buildProjectFilterMetadataKey(params?: { department?: number; include_children?: 0 | 1 }) {
+  return [
+    ...PROJECT_FILTER_METADATA_KEY,
+    params?.department ?? 'all',
+    params?.include_children ?? 0,
+  ] as const;
+}
+
+export function useProjectFilterMetadata(params?: { department?: number; include_children?: 0 | 1 }) {
   const queryClient = useQueryClient();
 
   const query = useQuery<ProjectFilterMetadataResponse, Error>({
-    queryKey: PROJECT_FILTER_METADATA_KEY,
+    queryKey: buildProjectFilterMetadataKey(params),
     queryFn: async () => {
       const start = performance.now();
       try {
-        const data = await projectsApi.getFilterMetadata();
+        const data = await projectsApi.getFilterMetadata(params);
         const duration = performance.now() - start;
         // Non-noisy metric; only logs if VITE_MONITORING_DEBUG=true
         trackPerformanceEvent('projects.filterMetadata.fetch', duration, 'ms');

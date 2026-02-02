@@ -3,20 +3,131 @@ import { projectsApi } from '@/services/api';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { Project } from '@/types/models';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createProject, deleteProject, updateProject } from '@/lib/mutations/projects';
 
+export type ProjectsSearchToken = { term: string; op: 'or' | 'and' | 'not' };
+export type ProjectsDepartmentFilter = { departmentId: number; op: 'or' | 'and' | 'not' };
+export type ProjectsQueryOptions = {
+  ordering?: string | null;
+  pageSize?: number;
+  statusIn?: string | null;
+  searchTokens?: ProjectsSearchToken[];
+  departmentFilters?: ProjectsDepartmentFilter[];
+  includeChildren?: 0 | 1;
+  useSearch?: boolean;
+};
+
+function stableStringify(value: any): string {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+}
+
+function hashString(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) + hash) + input.charCodeAt(i);
+    hash &= 0xffffffff;
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function normalizeSearchTokens(tokens?: ProjectsSearchToken[]): ProjectsSearchToken[] {
+  if (!tokens || tokens.length === 0) return [];
+  return tokens
+    .map((token) => ({
+      term: (token?.term || '').trim(),
+      op: token?.op === 'not' || token?.op === 'and' ? token.op : 'or',
+    }))
+    .filter((token) => token.term.length > 0);
+}
+
+function normalizeDepartmentFilters(filters?: ProjectsDepartmentFilter[]): ProjectsDepartmentFilter[] {
+  if (!filters || filters.length === 0) return [];
+  const seen = new Set<number>();
+  const cleaned: ProjectsDepartmentFilter[] = [];
+  filters.forEach((filter) => {
+    const id = Number(filter?.departmentId);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) return;
+    const op = filter?.op === 'not' || filter?.op === 'or' ? filter.op : 'and';
+    cleaned.push({ departmentId: id, op });
+    seen.add(id);
+  });
+  return cleaned.sort((a, b) => (a.departmentId - b.departmentId) || a.op.localeCompare(b.op));
+}
+
+export function buildProjectsSearchPayloadBase(options: ProjectsQueryOptions) {
+  const pageSize = options.pageSize ?? 100;
+  const ordering = options.ordering ?? null;
+  const statusIn = options.statusIn ?? null;
+  const includeChildren = options.includeChildren;
+  const searchTokens = normalizeSearchTokens(options.searchTokens);
+  const departmentFilters = normalizeDepartmentFilters(options.departmentFilters);
+  const payload: Record<string, any> = {
+    page_size: pageSize,
+  };
+  if (ordering) payload.ordering = ordering;
+  if (statusIn) payload.status_in = statusIn;
+  if (searchTokens.length) payload.search_tokens = searchTokens;
+  if (departmentFilters.length) payload.department_filters = departmentFilters;
+  if (departmentFilters.length && includeChildren != null) payload.include_children = includeChildren;
+  return payload;
+}
+
+export function buildProjectsQueryKey(options: ProjectsQueryOptions) {
+  const useSearch = options.useSearch ?? true;
+  if (!useSearch) {
+    const pageSize = options.pageSize ?? 100;
+    return ['projects', options.ordering || 'default', pageSize] as const;
+  }
+  const payload = buildProjectsSearchPayloadBase(options);
+  const hash = hashString(stableStringify(payload));
+  return ['projects', 'search', hash] as const;
+}
+
 // Projects query hook with state adapter for existing code compatibility
-export function useProjects(options?: { ordering?: string | null; pageSize?: number }) {
-  const pageSize = options?.pageSize ?? 100;
-  const ordering = options?.ordering ?? null;
+export function useProjects(options: ProjectsQueryOptions = {}) {
+  const pageSize = options.pageSize ?? 100;
+  const ordering = options.ordering ?? null;
+  const useSearch = options.useSearch ?? true;
+  const statusIn = options.statusIn ?? null;
+  const searchTokens = options.searchTokens ?? [];
+  const departmentFilters = options.departmentFilters ?? [];
+  const includeChildren = options.includeChildren;
+  const searchPayloadBase = useMemo(() => buildProjectsSearchPayloadBase({
+    pageSize,
+    ordering,
+    statusIn,
+    searchTokens,
+    departmentFilters,
+    includeChildren,
+  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren]);
+  const queryKey = useMemo(() => buildProjectsQueryKey({
+    pageSize,
+    ordering,
+    statusIn,
+    searchTokens,
+    departmentFilters,
+    includeChildren,
+    useSearch,
+  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, useSearch]);
   const query = useInfiniteQuery({
-    queryKey: ['projects', ordering || 'default', pageSize],
-    queryFn: ({ pageParam = 1 }) => projectsApi.list({
-      page: pageParam,
-      page_size: pageSize,
-      ordering: ordering || undefined,
-    }),
+    queryKey,
+    queryFn: ({ pageParam = 1 }) => {
+      if (useSearch) {
+        return projectsApi.search({ ...searchPayloadBase, page: pageParam });
+      }
+      return projectsApi.list({
+        page: pageParam,
+        page_size: pageSize,
+        ordering: ordering || undefined,
+      });
+    },
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
       if (!lastPage?.next) return undefined;
@@ -76,11 +187,15 @@ export function useProjects(options?: { ordering?: string | null; pageSize?: num
   const refreshing = query.isFetching && !query.isLoading;
   const error = query.error ? (query.error as any).message : null;
 
+  const totalCount = query.data?.pages?.[0]?.count ?? 0;
+
   return {
     projects,
+    totalCount,
     loading,
     refreshing,
     error,
+    queryKey,
     refetch: refetchProjects,
     fetchNextPage: query.fetchNextPage,
     hasNextPage: query.hasNextPage,

@@ -5,7 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.filters import OrderingFilter
 from rest_framework.views import APIView
-from django.db.models import Max, Min, Count, Exists, OuterRef, Q, Prefetch
+from django.db.models import Max, Min, Count, Exists, OuterRef, Q, Prefetch, F
+from django.db.models.functions import Coalesce
 from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date, parse_http_date
 from django.conf import settings
@@ -156,11 +157,22 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'page_size': serializers.IntegerField(required=False),
                 'ordering': serializers.CharField(required=False),
                 'status_in': serializers.CharField(required=False),
+                'include_children': serializers.IntegerField(required=False),
                 'search_tokens': serializers.ListField(
                     child=inline_serializer(
                         name='SearchTokenProject',
                         fields={
                             'term': serializers.CharField(),
+                            'op': serializers.ChoiceField(choices=['or', 'and', 'not'])
+                        }
+                    ),
+                    required=False
+                ),
+                'department_filters': serializers.ListField(
+                    child=inline_serializer(
+                        name='DepartmentFilterProject',
+                        fields={
+                            'departmentId': serializers.IntegerField(),
                             'op': serializers.ChoiceField(choices=['or', 'and', 'not'])
                         }
                     ),
@@ -184,6 +196,143 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         data = request.data or {}
         queryset = self.get_queryset()
 
+        # Department filters (AND/OR/NOT)
+        dept_filters_raw = (
+            data.get('department_filters')
+            or data.get('departmentFilters')
+            or request.query_params.get('department_filters')
+        )
+        include_children = str(data.get('include_children') or request.query_params.get('include_children') or '0') == '1'
+        dept_filters: list[dict[str, object]] = []
+        if isinstance(dept_filters_raw, str):
+            try:
+                dept_filters_raw = json.loads(dept_filters_raw)
+            except Exception:
+                dept_filters_raw = []
+        if isinstance(dept_filters_raw, list):
+            seen = set()
+            for raw in dept_filters_raw:
+                if not isinstance(raw, dict):
+                    continue
+                try:
+                    dept_id = int(raw.get('departmentId') or raw.get('department_id') or raw.get('id') or 0)
+                except Exception:
+                    dept_id = 0
+                if dept_id <= 0 or dept_id in seen:
+                    continue
+                op = str(raw.get('op') or 'and').lower()
+                if op not in ('and', 'or', 'not'):
+                    op = 'and'
+                dept_filters.append({'departmentId': dept_id, 'op': op})
+                seen.add(dept_id)
+
+        missing_qa_dept_ids: set[int] | None = None
+        if len(dept_filters) == 1 and dept_filters[0].get('op') != 'not':
+            try:
+                missing_qa_dept_ids = {int(dept_filters[0]['departmentId'])}
+            except Exception:
+                missing_qa_dept_ids = None
+
+        include_all: set[int] = set()
+        include_any: set[int] = set()
+        exclude_only: set[int] = set()
+        for f in dept_filters:
+            try:
+                dept_id = int(f.get('departmentId') or 0)
+            except Exception:
+                continue
+            op = str(f.get('op') or 'and').lower()
+            if op == 'not':
+                exclude_only.add(dept_id)
+            elif op == 'or':
+                include_any.add(dept_id)
+            else:
+                include_all.add(dept_id)
+
+        if include_children and len(dept_filters) == 1 and dept_filters[0].get('op') != 'not':
+            try:
+                root_id = int(dept_filters[0]['departmentId'])
+                expanded: set[int] = set()
+                stack = [root_id]
+                while stack:
+                    current = stack.pop()
+                    if current in expanded:
+                        continue
+                    expanded.add(current)
+                    for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                        if d not in expanded:
+                            stack.append(d)
+                include_all.clear()
+                exclude_only.clear()
+                include_any = expanded
+            except Exception:
+                pass
+
+        # Apply search tokens early to reduce scope
+        tokens = parse_search_tokens(request=request, data=data)
+        project_fields = ['name', 'client', 'project_number', 'description', 'assigned_names_text']
+        queryset = apply_token_filter(queryset, tokens, project_fields)
+
+        # Department filter application (assignment-driven, parity with UI)
+        if include_all or include_any or exclude_only:
+            dept_expr = Coalesce(
+                'assignment__person__department_id',
+                'assignment__department_id',
+                'assignment__role_on_project_ref__department_id',
+            )
+            base_assignment_filter = Q(assignment__is_active=True) & (
+                Q(assignment__person__isnull=True) | Q(assignment__person__is_active=True)
+            )
+
+            def dept_match_q(ids: set[int]) -> Q:
+                if not ids:
+                    return Q(pk__in=[])
+                return (
+                    Q(assignment__person__department_id__in=ids)
+                    | (Q(assignment__person__department_id__isnull=True) & Q(assignment__department_id__in=ids))
+                    | (
+                        Q(assignment__person__department_id__isnull=True)
+                        & Q(assignment__department_id__isnull=True)
+                        & Q(assignment__role_on_project_ref__department_id__in=ids)
+                    )
+                )
+
+            annotations: dict[str, object] = {}
+            if include_all:
+                annotations['dept_all_count'] = Count(
+                    dept_expr,
+                    filter=base_assignment_filter & dept_match_q(include_all),
+                    distinct=True,
+                )
+            if include_any:
+                annotations['dept_any_count'] = Count(
+                    dept_expr,
+                    filter=base_assignment_filter & dept_match_q(include_any),
+                    distinct=True,
+                )
+            if exclude_only:
+                annotations['dept_total_count'] = Count(
+                    dept_expr,
+                    filter=base_assignment_filter,
+                    distinct=True,
+                )
+                annotations['dept_excluded_count'] = Count(
+                    dept_expr,
+                    filter=base_assignment_filter & dept_match_q(exclude_only),
+                    distinct=True,
+                )
+            if annotations:
+                queryset = queryset.annotate(**annotations)
+            if include_all:
+                queryset = queryset.filter(dept_all_count=len(include_all))
+            if include_any:
+                queryset = queryset.filter(dept_any_count__gt=0)
+            if exclude_only:
+                queryset = queryset.exclude(
+                    dept_total_count__gt=0,
+                    dept_total_count=F('dept_excluded_count'),
+                )
+
         status_in = data.get('status_in') or request.query_params.get('status_in')
         if status_in:
             try:
@@ -192,34 +341,110 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 if statuses:
                     wants_with_dates = 'active_with_dates' in statuses
                     wants_no_dates = 'active_no_deliverables' in statuses
+                    wants_missing_qa = 'missing_qa' in statuses
+                    wants_no_assignments = 'no_assignments' in statuses
                     base_statuses = [
                         s for s in statuses
-                        if s not in ('active_with_dates', 'active_no_deliverables')
+                        if s not in (
+                            'active_with_dates',
+                            'active_no_deliverables',
+                            'missing_qa',
+                            'no_assignments',
+                        )
                     ]
-                    if wants_with_dates or wants_no_dates:
+
+                    needs_future_deliverables = wants_with_dates or wants_no_dates or wants_missing_qa
+                    if needs_future_deliverables:
                         today = timezone.now().date()
                         future_deliverables = Deliverable.objects.filter(
                             project_id=OuterRef('pk'),
                             date__gte=today,
                         )
                         queryset = queryset.annotate(has_future_deliverables=Exists(future_deliverables))
-                        status_q = Q()
-                        if base_statuses:
-                            status_q |= Q(status__in=base_statuses)
-                        if wants_with_dates:
-                            status_q |= Q(status='active', has_future_deliverables=True)
-                        if wants_no_dates:
-                            status_q |= Q(status='active', has_future_deliverables=False)
-                        if status_q:
-                            queryset = queryset.filter(status_q)
-                    else:
-                        queryset = queryset.filter(status__in=base_statuses)
+
+                    if wants_no_assignments:
+                        queryset = queryset.annotate(
+                            assignment_count=Count('assignment', filter=Q(assignment__is_active=True), distinct=True)
+                        )
+
+                    missing_qa_ids: set[int] = set()
+                    if wants_missing_qa:
+                        try:
+                            project_ids = queryset.values_list('id', flat=True)
+                            assignments_qs = (
+                                Assignment.objects
+                                .filter(project_id__in=project_ids, project__is_active=True, is_active=True)
+                                .select_related('person', 'role_on_project_ref')
+                                .values(
+                                    'project_id',
+                                    'person__department_id',
+                                    'department_id',
+                                    'role_on_project_ref__department_id',
+                                    'role_on_project_ref__name',
+                                    'role_on_project',
+                                )
+                            )
+                            assignments_qs = assignments_qs.filter(
+                                Q(person__is_active=True) | Q(person__isnull=True)
+                            )
+                            if missing_qa_dept_ids:
+                                ids_list = list(missing_qa_dept_ids)
+                                assignments_qs = assignments_qs.filter(
+                                    Q(person__department_id__in=ids_list)
+                                    | Q(department_id__in=ids_list)
+                                    | Q(role_on_project_ref__department_id__in=ids_list)
+                                )
+
+                            assignments_by_project: dict[int, set[int]] = {}
+                            qa_by_project: dict[int, set[int]] = {}
+                            for row in assignments_qs:
+                                pid = row.get('project_id')
+                                if not pid:
+                                    continue
+                                dept_id = (
+                                    row.get('person__department_id')
+                                    or row.get('department_id')
+                                    or row.get('role_on_project_ref__department_id')
+                                )
+                                if not dept_id:
+                                    continue
+                                assignments_by_project.setdefault(pid, set()).add(dept_id)
+                                role_name = (row.get('role_on_project_ref__name') or row.get('role_on_project') or '').lower()
+                                if 'qa' in role_name or 'quality' in role_name:
+                                    qa_by_project.setdefault(pid, set()).add(dept_id)
+
+                            for pid, dept_set in assignments_by_project.items():
+                                qa_depts = qa_by_project.get(pid, set())
+                                if missing_qa_dept_ids:
+                                    relevant = dept_set.intersection(missing_qa_dept_ids)
+                                    if not relevant:
+                                        continue
+                                    if any(d not in qa_depts for d in relevant):
+                                        missing_qa_ids.add(pid)
+                                else:
+                                    if any(d not in qa_depts for d in dept_set):
+                                        missing_qa_ids.add(pid)
+                        except Exception:
+                            missing_qa_ids = set()
+
+                    status_q = Q()
+                    if base_statuses:
+                        status_q |= Q(status__in=base_statuses)
+                    if wants_with_dates:
+                        status_q |= Q(status='active', has_future_deliverables=True)
+                    if wants_no_dates:
+                        status_q |= Q(status='active', has_future_deliverables=False)
+                    if wants_no_assignments:
+                        status_q |= Q(assignment_count=0)
+                    if wants_missing_qa:
+                        if missing_qa_ids:
+                            status_q |= Q(id__in=missing_qa_ids, has_future_deliverables=True)
+                        else:
+                            status_q |= Q(id__in=[])
+                    if status_q:
+                        queryset = queryset.filter(status_q)
             except Exception:
                 pass
-
-        tokens = parse_search_tokens(request=request, data=data)
-        project_fields = ['name', 'client', 'project_number', 'description', 'assigned_names_text']
-        queryset = apply_token_filter(queryset, tokens, project_fields)
 
         ordering = data.get('ordering') or request.query_params.get('ordering') or 'client,name'
         ordering_fields = []

@@ -2,6 +2,7 @@ import { queryClient } from '@/lib/queryClient';
 import { getFlag } from '@/lib/flags';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { projectsApi, peopleApi } from '@/services/api';
+import { buildProjectsQueryKey, buildProjectsSearchPayloadBase } from '@/hooks/useProjects';
 
 function connectionAllowsPrefetch(): boolean {
   try {
@@ -20,9 +21,11 @@ export async function prefetchDataForRoute(path: string): Promise<void> {
   const p = path.replace(/\/$/, '') || '/';
   try {
     if (p.startsWith('/projects')) {
+      const searchOptions = { ordering: 'client,name', pageSize: 100, useSearch: true };
+      const searchPayloadBase = buildProjectsSearchPayloadBase(searchOptions);
       await queryClient.prefetchInfiniteQuery({
-        queryKey: ['projects', 'client,name', 100],
-        queryFn: ({ pageParam = 1 }) => projectsApi.list({ page: pageParam, page_size: 100, ordering: 'client,name' }),
+        queryKey: buildProjectsQueryKey(searchOptions),
+        queryFn: ({ pageParam = 1 }) => projectsApi.search({ ...searchPayloadBase, page: pageParam }),
         initialPageParam: 1,
       });
       trackPerformanceEvent('prefetch.data.ok', performance.now() - start, 'ms', { path: '/projects', key: 'projects' });

@@ -739,7 +739,9 @@ export const projectsApi = {
     page_size?: number;
     ordering?: string;
     status_in?: string;
+    include_children?: 0 | 1;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
+    department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
   }) => {
     return fetchApi<PaginatedResponse<Project>>('/projects/search/', {
       method: 'POST',
@@ -811,11 +813,15 @@ export const projectsApi = {
    * Returns per-project assignment counts and future deliverables flags.
    * Includes a 30s timeout and leverages server-side ETag/Last-Modified.
    */
-  getFilterMetadata: async (): Promise<ProjectFilterMetadataResponse> => {
+  getFilterMetadata: async (params?: { department?: number; include_children?: 0 | 1 }): Promise<ProjectFilterMetadataResponse> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
-      const res = await apiClient.GET('/projects/filter-metadata/' as any, { headers: authHeaders(), signal: controller.signal });
+      const sp = new URLSearchParams();
+      if (params?.department != null) sp.set('department', String(params.department));
+      if (params?.include_children != null) sp.set('include_children', String(params.include_children));
+      const qs = sp.toString() ? `?${sp.toString()}` : '';
+      const res = await apiClient.GET(`/projects/filter-metadata/${qs}` as any, { headers: authHeaders(), signal: controller.signal });
       if (!res.data) {
         const status = res.response?.status ?? 500;
         throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
