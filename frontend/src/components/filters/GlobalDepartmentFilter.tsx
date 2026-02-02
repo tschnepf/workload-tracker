@@ -2,11 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 // Tokenized: use CSS variables (themes.css) instead of fixed dark theme
 import type { Department } from '@/types/models';
-import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useDepartmentFilter, type DepartmentFilterOp } from '@/hooks/useDepartmentFilter';
 import { useDepartments } from '@/hooks/useDepartments';
 
 const INPUT_ID = 'global-dept-filter-input';
-const DESC_ID = 'global-dept-filter-include-children-help';
 const LIVE_ID = 'global-dept-filter-live';
 
 type Props = {
@@ -17,7 +16,7 @@ type Props = {
 };
 
 export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = false, expand = true, departmentsOverride }) => {
-  const { state, setDepartment, clearDepartment, setIncludeChildren } = useDepartmentFilter();
+  const { state, addDepartmentFilter, removeDepartmentFilter, clearDepartment } = useDepartmentFilter();
 
   const { departments: fetchedDepartments, isLoading: loading, error } = useDepartments({ enabled: !departmentsOverride });
   const departments = departmentsOverride ?? fetchedDepartments;
@@ -28,6 +27,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [showAll, setShowAll] = useState(false);
+  const [selectedOp, setSelectedOp] = useState<DepartmentFilterOp>('and');
   const liveRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -65,11 +65,11 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
   }
 
   function handleSelect(dep: Department) {
-    setDepartment(dep.id!);
+    addDepartmentFilter(dep.id!, selectedOp);
     setOpen(false);
     setQuery('');
     setShowAll(false);
-    announce(`Department filter set to ${dep.name}`);
+    announce(`Added ${selectedOp.toUpperCase()} ${dep.name}`);
   }
 
   function handleClear() {
@@ -151,11 +151,13 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
     borderRadius: '6px',
     boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
   };
-  const selectedDeptName = useMemo(() => {
-    if (state.selectedDepartmentId == null) return null;
-    const dep = departments.find(d => d.id === state.selectedDepartmentId);
-    return dep?.name ?? `#${state.selectedDepartmentId}`;
-  }, [state.selectedDepartmentId, departments]);
+  const departmentNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    (departments || []).forEach((d) => {
+      if (d.id != null) map.set(d.id, d.name || `#${d.id}`);
+    });
+    return map;
+  }, [departments]);
 
   useEffect(() => {
     if (open && inputRef.current) {
@@ -172,24 +174,51 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
       aria-label="Global department filter area"
       style={{ position: 'relative' }}
     >
-      {/* Active badge with clear */}
-      {state.selectedDepartmentId != null && (
-        <div
-          className="flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)] text-xs sm:text-sm text-[var(--text)] shrink-0"
-        >
-          <span>Dept: {selectedDeptName}</span>
+      {/* Active filters */}
+      {state.filters.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {state.filters.map((filter) => {
+            const name = departmentNameById.get(filter.departmentId) || `#${filter.departmentId}`;
+            return (
+              <div
+                key={`${filter.op}-${filter.departmentId}`}
+                className="flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)] text-xs sm:text-sm text-[var(--text)] shrink-0"
+              >
+                <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{filter.op}</span>
+                <span className="max-w-[160px] truncate">{name}</span>
+                <button
+                  onClick={() => removeDepartmentFilter(filter.departmentId)}
+                  aria-label={`Remove ${filter.op.toUpperCase()} ${name}`}
+                  className="text-[var(--muted)] hover:text-[var(--text)] focus:outline-none"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
           <button
             onClick={handleClear}
-            aria-label="Clear department filter"
-            className="text-[var(--muted)] hover:text-[var(--text)] focus:outline-none"
+            aria-label="Clear department filters"
+            className="px-2 py-1 text-xs border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text)]"
           >
-            ×
+            Clear
           </button>
         </div>
       )}
 
       {/* Combobox */}
-      <div className={`relative ${expand ? 'min-w-[120px] flex-1 max-w-[240px]' : 'w-[80px] max-w-[120px] shrink-0 sm:w-[160px] sm:max-w-[200px]'}`}>
+      <div className="flex items-center gap-2">
+        <select
+          aria-label="Department filter operation"
+          value={selectedOp}
+          onChange={(e) => setSelectedOp(e.target.value as DepartmentFilterOp)}
+          className="bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+        >
+          <option value="and">AND</option>
+          <option value="or">OR</option>
+          <option value="not">NOT</option>
+        </select>
+        <div className={`relative ${expand ? 'min-w-[120px] flex-1 max-w-[240px]' : 'w-[80px] max-w-[120px] shrink-0 sm:w-[160px] sm:max-w-[200px]'}`}>
         <input
           id={INPUT_ID}
           ref={inputRef}
@@ -246,6 +275,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
             </div>,
             document.body
           )}
+        </div>
       </div>
 
       {/* Include sub-departments removed per request */}

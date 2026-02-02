@@ -7,9 +7,14 @@ import {
   setDepartment,
   clearDepartment,
   setIncludeChildren,
+  addDepartmentFilter,
+  removeDepartmentFilter,
+  setDepartmentFilters,
   buildDeptUiParams,
   buildDeptBackendParams,
   type DepartmentFilterState,
+  type DepartmentFilterClause,
+  type DepartmentFilterOp,
 } from '../store/departmentFilter';
 
 export function useDepartmentFilter() {
@@ -18,7 +23,14 @@ export function useDepartmentFilter() {
   const state = useSyncExternalStore(subscribe, getState, getState);
 
   const actions = useMemo(
-    () => ({ setDepartment, clearDepartment, setIncludeChildren }),
+    () => ({
+      setDepartment,
+      clearDepartment,
+      setIncludeChildren,
+      addDepartmentFilter,
+      removeDepartmentFilter,
+      setDepartmentFilters,
+    }),
     []
   );
 
@@ -33,4 +45,4 @@ export function useDepartmentFilter() {
   };
 }
 
-export type { DepartmentFilterState } from '../store/departmentFilter';
+export type { DepartmentFilterState, DepartmentFilterClause, DepartmentFilterOp } from '../store/departmentFilter';

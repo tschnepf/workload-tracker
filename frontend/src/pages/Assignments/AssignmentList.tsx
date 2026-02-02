@@ -50,45 +50,90 @@ const AssignmentList: React.FC = () => {
     })();
   }, [deptState.selectedDepartmentId, deptState.includeChildren]);
 
-  // Helper: compute allowed department ids including children
-  const allowedDepartmentIds = useMemo(() => {
-    if (deptState.selectedDepartmentId == null) return null;
-    const rootId = Number(deptState.selectedDepartmentId);
-    if (!deptState.includeChildren) return new Set<number>([rootId]);
-    const result = new Set<number>();
-    const stack = [rootId];
-    while (stack.length) {
-      const current = stack.pop()!;
-      result.add(current);
-      for (const d of departments) {
-        if (d.parentDepartment === current && d.id != null && !result.has(d.id)) {
-          stack.push(d.id);
-        }
-      }
+  const globalDeptFilter = useMemo(() => {
+    const filters = deptState.filters ?? [];
+    if (filters.length === 0) {
+      return { enabled: false, includeAll: new Set<number>(), includeAny: new Set<number>(), excludeOnly: new Set<number>() };
     }
-    return result;
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, departments]);
+    const includeAll = new Set<number>();
+    const includeAny = new Set<number>();
+    const excludeOnly = new Set<number>();
+    filters.forEach((filter) => {
+      if (filter.op === 'not') {
+        excludeOnly.add(filter.departmentId);
+        return;
+      }
+      if (filter.op === 'or') {
+        includeAny.add(filter.departmentId);
+        return;
+      }
+      includeAll.add(filter.departmentId);
+    });
+
+    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
+      const expanded = new Set<number>();
+      const stack = [deptState.selectedDepartmentId];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        if (expanded.has(current)) continue;
+        expanded.add(current);
+        departments.forEach((dept) => {
+          if (dept.parentDepartment === current && dept.id != null) {
+            stack.push(dept.id);
+          }
+        });
+      }
+      includeAll.clear();
+      includeAny.clear();
+      expanded.forEach((id) => includeAny.add(id));
+    }
+
+    return { enabled: true, includeAll, includeAny, excludeOnly };
+  }, [deptState.filters, deptState.includeChildren, deptState.selectedDepartmentId, departments]);
 
   // Derive filtered assignments based on global department filter
   useEffect(() => {
-    if (deptState.selectedDepartmentId == null) {
+    if (!globalDeptFilter.enabled) {
       setFilteredAssignments(assignments);
       return;
     }
-    if (!allowedDepartmentIds) {
-      setFilteredAssignments(assignments);
-      return;
-    }
-    // Build allowed person id set
-    const allowedPersonIds = new Set<number>();
-    peopleById.forEach((person, id) => {
-      if (person.department != null && allowedDepartmentIds.has(Number(person.department))) {
-        allowedPersonIds.add(id);
+    const filtered = assignments.filter((assignment) => {
+      const deptId = assignment.personDepartmentId
+        ?? (assignment.person != null ? peopleById.get(Number(assignment.person))?.department ?? null : null);
+      const deptSet = deptId != null ? new Set<number>([Number(deptId)]) : new Set<number>();
+
+      if (globalDeptFilter.includeAll.size > 0) {
+        for (const id of globalDeptFilter.includeAll) {
+          if (!deptSet.has(id)) return false;
+        }
       }
+
+      if (globalDeptFilter.includeAny.size > 0) {
+        let hasAny = false;
+        for (const id of globalDeptFilter.includeAny) {
+          if (deptSet.has(id)) {
+            hasAny = true;
+            break;
+          }
+        }
+        if (!hasAny) return false;
+      }
+
+      if (globalDeptFilter.excludeOnly.size > 0 && deptSet.size > 0) {
+        let allExcluded = true;
+        for (const id of deptSet) {
+          if (!globalDeptFilter.excludeOnly.has(id)) {
+            allExcluded = false;
+            break;
+          }
+        }
+        if (allExcluded) return false;
+      }
+
+      return true;
     });
-    const filtered = assignments.filter(a => a.person != null && allowedPersonIds.has(Number(a.person)));
     setFilteredAssignments(filtered);
-  }, [assignments, peopleById, allowedDepartmentIds, deptState.selectedDepartmentId]);
+  }, [assignments, peopleById, globalDeptFilter]);
 
   const loadAssignments = async () => {
     try {

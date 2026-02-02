@@ -176,6 +176,47 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return map;
   }, [departments]);
 
+  const globalDeptFilter = useMemo(() => {
+    const filters = deptState.filters ?? [];
+    if (filters.length === 0) {
+      return { enabled: false, includeAll: new Set<number>(), includeAny: new Set<number>(), excludeOnly: new Set<number>() };
+    }
+    const includeAll = new Set<number>();
+    const includeAny = new Set<number>();
+    const excludeOnly = new Set<number>();
+    filters.forEach((filter) => {
+      if (filter.op === 'not') {
+        excludeOnly.add(filter.departmentId);
+        return;
+      }
+      if (filter.op === 'or') {
+        includeAny.add(filter.departmentId);
+        return;
+      }
+      includeAll.add(filter.departmentId);
+    });
+
+    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
+      const expanded = new Set<number>();
+      const stack = [deptState.selectedDepartmentId];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        if (expanded.has(current)) continue;
+        expanded.add(current);
+        (departments || []).forEach((dept: any) => {
+          if (dept?.parentDepartment === current && dept?.id != null) {
+            stack.push(dept.id);
+          }
+        });
+      }
+      includeAll.clear();
+      includeAny.clear();
+      expanded.forEach((id) => includeAny.add(id));
+    }
+
+    return { enabled: true, includeAll, includeAny, excludeOnly };
+  }, [deptState.filters, deptState.includeChildren, deptState.selectedDepartmentId, departments]);
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -216,6 +257,66 @@ const ProjectAssignmentsGrid: React.FC = () => {
       isExpanded: expandedProjectIds.has(project.id!),
     }));
   }, [assignmentsData, projectsData, expandedProjectIds]);
+
+  const deptFilteredProjectsWithAssignments = useMemo(() => {
+    if (!globalDeptFilter.enabled) return projectsWithAssignments;
+    const allowSet = new Set<number>([
+      ...Array.from(globalDeptFilter.includeAll),
+      ...Array.from(globalDeptFilter.includeAny),
+    ]);
+
+    const filtered: ProjectWithAssignments[] = [];
+    projectsWithAssignments.forEach((project) => {
+      const deptSet = new Set<number>();
+      (project.assignments || []).forEach((assignment) => {
+        const deptId = assignment.personDepartmentId
+          ?? (assignment.person != null ? peopleById.get(Number(assignment.person))?.department ?? null : null);
+        if (deptId != null) deptSet.add(Number(deptId));
+      });
+
+      if (globalDeptFilter.includeAll.size > 0) {
+        for (const id of globalDeptFilter.includeAll) {
+          if (!deptSet.has(id)) return;
+        }
+      }
+
+      if (globalDeptFilter.includeAny.size > 0) {
+        let hasAny = false;
+        for (const id of globalDeptFilter.includeAny) {
+          if (deptSet.has(id)) {
+            hasAny = true;
+            break;
+          }
+        }
+        if (!hasAny) return;
+      }
+
+      if (globalDeptFilter.excludeOnly.size > 0 && deptSet.size > 0) {
+        let allExcluded = true;
+        for (const id of deptSet) {
+          if (!globalDeptFilter.excludeOnly.has(id)) {
+            allExcluded = false;
+            break;
+          }
+        }
+        if (allExcluded) return;
+      }
+
+      const filteredAssignments = (project.assignments || []).filter((assignment) => {
+        const deptId = assignment.personDepartmentId
+          ?? (assignment.person != null ? peopleById.get(Number(assignment.person))?.department ?? null : null);
+        if (deptId != null && globalDeptFilter.excludeOnly.has(Number(deptId))) return false;
+        if (allowSet.size > 0) {
+          if (deptId == null) return false;
+          if (!allowSet.has(Number(deptId))) return false;
+        }
+        return true;
+      });
+      if (filteredAssignments.length === 0) return;
+      filtered.push({ ...project, assignments: filteredAssignments });
+    });
+    return filtered;
+  }, [globalDeptFilter, projectsWithAssignments, peopleById]);
 
   useEffect(() => {
     setLoadedProjectIds(new Set());
@@ -361,8 +462,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, []);
 
   const visibleProjects = useMemo(
-    () => projectsWithAssignments,
-    [projectsWithAssignments]
+    () => deptFilteredProjectsWithAssignments,
+    [deptFilteredProjectsWithAssignments]
   );
 
   const rowOrder = useMemo(() => {
@@ -436,9 +537,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [getSelectedCells]);
 
   const findAssignment = useCallback((projectId: number, assignmentId: number) => {
-    const project = projectsWithAssignments.find(p => p.id === projectId);
+    const project = visibleProjects.find(p => p.id === projectId);
     return !!project?.assignments?.some(a => a.id === assignmentId);
-  }, [projectsWithAssignments]);
+  }, [visibleProjects]);
 
   useGridKeyboardNavigation({
     selectedCell: selectedCell
@@ -1282,7 +1383,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   const hoursByProject = useMemo(() => {
     const map: Record<number, Record<string, number>> = {};
-    projectsWithAssignments.forEach((project) => {
+    visibleProjects.forEach((project) => {
       const weekTotals: Record<string, number> = {};
       (project.assignments || []).forEach((assignment) => {
         Object.entries(assignment.weeklyHours || {}).forEach(([week, value]) => {
@@ -1293,7 +1394,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       map[project.id!] = weekTotals;
     });
     return map;
-  }, [projectsWithAssignments]);
+  }, [visibleProjects]);
 
   const { clientColumnWidth, projectColumnWidth, setClientColumnWidth, setProjectColumnWidth, isResizing, setIsResizing, resizeStartX, setResizeStartX, resizeStartWidth, setResizeStartWidth } = useGridColumnWidthsAssign();
   const autoHoursColumnWidth = 28;

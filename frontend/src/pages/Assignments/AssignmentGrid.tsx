@@ -664,30 +664,109 @@ const AssignmentGrid: React.FC = () => {
     [searchMeta?.peopleMatchReason]
   );
 
-  const visiblePeople = useMemo(() => {
-    if (!serverFilterActive) return people;
-    const matches = searchMeta?.people || [];
-    if (!matches.length) return [];
-    return matches.map((p) => {
-      const existing = peopleById.get(p.id);
-      if (existing) {
-        return {
-          ...existing,
-          name: p.name ?? existing.name,
-          weeklyCapacity: p.weeklyCapacity ?? existing.weeklyCapacity,
-          department: p.department ?? existing.department,
-        };
+  const globalDeptFilter = useMemo(() => {
+    const filters = deptState.filters ?? [];
+    if (filters.length === 0) {
+      return { enabled: false, includeAll: new Set<number>(), includeAny: new Set<number>(), excludeOnly: new Set<number>() };
+    }
+    const includeAll = new Set<number>();
+    const includeAny = new Set<number>();
+    const excludeOnly = new Set<number>();
+    filters.forEach((filter) => {
+      if (filter.op === 'not') {
+        excludeOnly.add(filter.departmentId);
+        return;
       }
-      return {
-        id: p.id,
-        name: p.name,
-        weeklyCapacity: p.weeklyCapacity ?? null,
-        department: p.department ?? null,
-        assignments: [],
-        isExpanded: false,
-      };
+      if (filter.op === 'or') {
+        includeAny.add(filter.departmentId);
+        return;
+      }
+      includeAll.add(filter.departmentId);
     });
-  }, [serverFilterActive, people, peopleById, searchMeta?.people]);
+
+    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
+      const expanded = new Set<number>();
+      const stack = [deptState.selectedDepartmentId];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        if (expanded.has(current)) continue;
+        expanded.add(current);
+        (departments || []).forEach((dept: any) => {
+          if (dept?.parentDepartment === current && dept?.id != null) {
+            stack.push(dept.id);
+          }
+        });
+      }
+      includeAll.clear();
+      includeAny.clear();
+      expanded.forEach((id) => includeAny.add(id));
+    }
+
+    return { enabled: true, includeAll, includeAny, excludeOnly };
+  }, [deptState.filters, deptState.includeChildren, deptState.selectedDepartmentId, departments]);
+
+  const visiblePeople = useMemo(() => {
+    const base = (() => {
+      if (!serverFilterActive) return people;
+      const matches = searchMeta?.people || [];
+      if (!matches.length) return [];
+      return matches.map((p) => {
+        const existing = peopleById.get(p.id);
+        if (existing) {
+          return {
+            ...existing,
+            name: p.name ?? existing.name,
+            weeklyCapacity: p.weeklyCapacity ?? existing.weeklyCapacity,
+            department: p.department ?? existing.department,
+          };
+        }
+        return {
+          id: p.id,
+          name: p.name,
+          weeklyCapacity: p.weeklyCapacity ?? null,
+          department: p.department ?? null,
+          assignments: [],
+          isExpanded: false,
+        };
+      });
+    })();
+
+    if (!globalDeptFilter.enabled) return base;
+    return (base || []).filter((person) => {
+      const deptId = person?.department != null ? Number(person.department) : null;
+      const deptSet = deptId != null ? new Set<number>([deptId]) : new Set<number>();
+
+      if (globalDeptFilter.includeAll.size > 0) {
+        for (const id of globalDeptFilter.includeAll) {
+          if (!deptSet.has(id)) return false;
+        }
+      }
+
+      if (globalDeptFilter.includeAny.size > 0) {
+        let hasAny = false;
+        for (const id of globalDeptFilter.includeAny) {
+          if (deptSet.has(id)) {
+            hasAny = true;
+            break;
+          }
+        }
+        if (!hasAny) return false;
+      }
+
+      if (globalDeptFilter.excludeOnly.size > 0 && deptSet.size > 0) {
+        let allExcluded = true;
+        for (const id of deptSet) {
+          if (!globalDeptFilter.excludeOnly.has(id)) {
+            allExcluded = false;
+            break;
+          }
+        }
+        if (allExcluded) return false;
+      }
+
+      return true;
+    });
+  }, [serverFilterActive, people, peopleById, searchMeta?.people, globalDeptFilter]);
 
   const resolvePersonAssignments = useCallback((person: PersonWithAssignments): Assignment[] => {
     if (serverFilterActive && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, person.id!)) {

@@ -20,7 +20,7 @@ export function useDeptServerDefaultsOnce() {
 
     // Respect URL precedence
     const urlParams = typeof window !== 'undefined' ? parseDeptFromSearch(window.location.search) : null;
-    if (urlParams && (urlParams.selectedDepartmentId != null)) {
+    if (urlParams && (urlParams.filters?.length || urlParams.selectedDepartmentId != null)) {
       appliedRef.current = true;
       return;
     }
@@ -35,4 +35,3 @@ export function useDeptServerDefaultsOnce() {
     appliedRef.current = true;
   }, [auth.hydrating, auth.accessToken, auth.settings?.defaultDepartmentId, auth.settings?.includeChildren]);
 }
-

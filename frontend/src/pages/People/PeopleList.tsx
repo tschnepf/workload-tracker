@@ -92,6 +92,47 @@ const PeopleList: React.FC = () => {
     }
   }, [deptState.selectedDepartmentId]);
 
+  const globalDeptFilter = React.useMemo(() => {
+    const filters = deptState.filters ?? [];
+    if (filters.length === 0) {
+      return { enabled: false, includeAll: new Set<number>(), includeAny: new Set<number>(), excludeOnly: new Set<number>() };
+    }
+    const includeAll = new Set<number>();
+    const includeAny = new Set<number>();
+    const excludeOnly = new Set<number>();
+    filters.forEach((filter) => {
+      if (filter.op === 'not') {
+        excludeOnly.add(filter.departmentId);
+        return;
+      }
+      if (filter.op === 'or') {
+        includeAny.add(filter.departmentId);
+        return;
+      }
+      includeAll.add(filter.departmentId);
+    });
+
+    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
+      const expanded = new Set<number>();
+      const stack = [deptState.selectedDepartmentId];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        if (expanded.has(current)) continue;
+        expanded.add(current);
+        departments.forEach((dept) => {
+          if (dept.parentDepartment === current && dept.id != null) {
+            stack.push(dept.id);
+          }
+        });
+      }
+      includeAll.clear();
+      includeAny.clear();
+      expanded.forEach((id) => includeAny.add(id));
+    }
+
+    return { enabled: true, includeAll, includeAny, excludeOnly };
+  }, [deptState.filters, deptState.includeChildren, deptState.selectedDepartmentId, departments]);
+
   const handleColumnSort = (column: 'name' | 'location' | 'department' | 'weeklyCapacity' | 'role') => {
     if (sortBy === column) {
       // Toggle direction if clicking the same column
@@ -177,10 +218,46 @@ const PeopleList: React.FC = () => {
         person.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         person.notes?.toLowerCase().includes(searchTerm.toLowerCase());
 
-      // Department filter - Multi-select
+      // Department filter - Multi-select (page-local)
       const matchesDepartment = departmentFilter.length === 0 ||
         departmentFilter.includes(person.department?.toString() || '') ||
         (departmentFilter.includes('unassigned') && !person.department);
+
+      const matchesGlobalDepartment = (() => {
+        if (!globalDeptFilter.enabled) return true;
+        const deptId = person.department != null ? Number(person.department) : null;
+        const deptSet = deptId != null ? new Set<number>([deptId]) : new Set<number>();
+
+        if (globalDeptFilter.includeAll.size > 0) {
+          for (const id of globalDeptFilter.includeAll) {
+            if (!deptSet.has(id)) return false;
+          }
+        }
+
+        if (globalDeptFilter.includeAny.size > 0) {
+          let hasAny = false;
+          for (const id of globalDeptFilter.includeAny) {
+            if (deptSet.has(id)) {
+              hasAny = true;
+              break;
+            }
+          }
+          if (!hasAny) return false;
+        }
+
+        if (globalDeptFilter.excludeOnly.size > 0 && deptSet.size > 0) {
+          let allExcluded = true;
+          for (const id of deptSet) {
+            if (!globalDeptFilter.excludeOnly.has(id)) {
+              allExcluded = false;
+              break;
+            }
+          }
+          if (allExcluded) return false;
+        }
+
+        return true;
+      })();
 
       // Location filter - Multi-select with special Remote handling
       const matchesLocation = locationFilter.length === 0 ||
@@ -200,7 +277,7 @@ const PeopleList: React.FC = () => {
       // Status filter: hide inactive unless explicitly shown
       const matchesStatus = showInactive ? true : (person.isActive !== false);
 
-      return matchesSearch && matchesDepartment && matchesLocation && matchesStatus;
+      return matchesSearch && matchesDepartment && matchesGlobalDepartment && matchesLocation && matchesStatus;
     })
     .sort((a, b) => {
       let comparison = 0;

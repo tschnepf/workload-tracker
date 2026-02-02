@@ -48,7 +48,15 @@ const ProjectsList: React.FC = () => {
   // React Query hooks for data management
   const [ordering, setOrdering] = useState<string | null>('client,name');
   const projectsQueryKey = useMemo(() => ['projects', ordering || 'default', 100], [ordering]);
-  const { projects, loading, error: projectsError, refetch: refetchProjects } = useProjects({ ordering });
+  const {
+    projects,
+    loading,
+    error: projectsError,
+    refetch: refetchProjects,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useProjects({ ordering });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { people, peopleVersion } = usePeople();
@@ -183,9 +191,121 @@ const ProjectsList: React.FC = () => {
     try { await refetchProjects(); } catch {}
   }, [refetchProjects]);
 
+  const { data: departments = [] } = useQuery<Department[], Error>({
+    queryKey: ['departmentsAll'],
+    queryFn: () => departmentsApi.listAll(),
+    staleTime: 60_000,
+  });
+
+  const departmentLabelMap = useMemo(() => {
+    const map = new Map<number, string>();
+    departments.forEach((dept) => {
+      if (dept.id != null) {
+        map.set(dept.id, dept.shortName || dept.name || '');
+      }
+    });
+    return map;
+  }, [departments]);
+
+  const projectAssignmentDepartments = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    leadAssignments.forEach((assignment) => {
+      const projectId = assignment.project;
+      const deptId = assignment.personDepartmentId;
+      if (!projectId || deptId == null) return;
+      const deptSet = map.get(projectId) ?? new Set<number>();
+      deptSet.add(deptId);
+      map.set(projectId, deptSet);
+    });
+    return map;
+  }, [leadAssignments]);
+
+  const deptFilteredSortedProjects = useMemo(() => {
+    const filters = deptState.filters ?? [];
+    if (filters.length === 0) return sortedProjects;
+    if (leadAssignmentsQuery.isLoading) return sortedProjects;
+
+    const includeAll = new Set<number>();
+    const includeAny = new Set<number>();
+    const excludeOnly = new Set<number>();
+
+    filters.forEach((filter) => {
+      if (filter.op === 'not') {
+        excludeOnly.add(filter.departmentId);
+        return;
+      }
+      if (filter.op === 'or') {
+        includeAny.add(filter.departmentId);
+        return;
+      }
+      includeAll.add(filter.departmentId);
+    });
+
+    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
+      const expanded = new Set<number>();
+      const stack = [deptState.selectedDepartmentId];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        if (expanded.has(current)) continue;
+        expanded.add(current);
+        departments.forEach((dept) => {
+          if (dept.parentDepartment === current && dept.id != null) {
+            stack.push(dept.id);
+          }
+        });
+      }
+      includeAll.clear();
+      includeAny.clear();
+      expanded.forEach((id) => includeAny.add(id));
+    }
+
+    return sortedProjects.filter((project) => {
+      if (project?.id == null) return false;
+      const deptSet = projectAssignmentDepartments.get(project.id) ?? new Set<number>();
+
+      if (includeAll.size > 0) {
+        for (const id of includeAll) {
+          if (!deptSet.has(id)) return false;
+        }
+      }
+
+      if (includeAny.size > 0) {
+        let hasAny = false;
+        for (const id of includeAny) {
+          if (deptSet.has(id)) {
+            hasAny = true;
+            break;
+          }
+        }
+        if (!hasAny) return false;
+      }
+
+      if (excludeOnly.size > 0 && deptSet.size > 0) {
+        let allExcluded = true;
+        for (const id of deptSet) {
+          if (!excludeOnly.has(id)) {
+            allExcluded = false;
+            break;
+          }
+        }
+        if (allExcluded) return false;
+      }
+
+      return true;
+    });
+  }, [
+    deptState.filters,
+    deptState.includeChildren,
+    deptState.selectedDepartmentId,
+    departments,
+    leadAssignmentsQuery.isLoading,
+    projectAssignmentDepartments,
+    sortedProjects,
+  ]);
+
   // Selection (single source of truth)
-  // Use the enhanced sortedProjects for selection and table
-  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(sortedProjects);
+  // Use the dept-filtered list for selection and table
+  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(deptFilteredSortedProjects);
   const [autoScrollProjectId, setAutoScrollProjectId] = useState<number | null>(null);
   const handleResponsiveProjectClick = useCallback((project: Project, index: number) => {
     handleProjectClick(project, index);
@@ -242,15 +362,15 @@ const ProjectsList: React.FC = () => {
 
   useEffect(() => {
     if (!pendingProjectId) return;
-    if (!sortedProjects || sortedProjects.length === 0) return;
-    const idx = sortedProjects.findIndex(p => p.id === pendingProjectId);
+    if (!deptFilteredSortedProjects || deptFilteredSortedProjects.length === 0) return;
+    const idx = deptFilteredSortedProjects.findIndex(p => p.id === pendingProjectId);
     if (idx < 0) {
       // Ensure it is visible: clear search + show all once
       setSearchTerm('');
       forceShowAll();
       return;
     }
-    setSelectedProject(sortedProjects[idx]);
+    setSelectedProject(deptFilteredSortedProjects[idx]);
     setSelectedIndex(idx);
     setAutoScrollProjectId(pendingProjectId);
     setPendingProjectId(null);
@@ -266,13 +386,13 @@ const ProjectsList: React.FC = () => {
     if (nextSearch !== currentSearch) {
       navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
     }
-  }, [pendingProjectId, sortedProjects, location.pathname, location.search, navigate, setSelectedProject, setSelectedIndex, setSearchTerm, forceShowAll]);
+  }, [pendingProjectId, deptFilteredSortedProjects, location.pathname, location.search, navigate, setSelectedProject, setSelectedIndex, setSearchTerm, forceShowAll]);
 
   // If returning from dashboard without a query param, restore last viewed project.
   useEffect(() => {
     const sp = new URLSearchParams(location.search || '');
     if (sp.get('projectId')) return;
-    if (sortedProjects.length === 0) return;
+    if (deptFilteredSortedProjects.length === 0) return;
     try {
       const rawId = sessionStorage.getItem('projects.lastViewedProjectId');
       const rawAt = sessionStorage.getItem('projects.lastViewedProjectIdAt');
@@ -281,15 +401,15 @@ const ProjectsList: React.FC = () => {
       const ts = Number(rawAt);
       if (!Number.isFinite(pid) || !Number.isFinite(ts)) return;
       if (Date.now() - ts > 5 * 60_000) return;
-      const idx = sortedProjects.findIndex((p) => p.id === pid);
+      const idx = deptFilteredSortedProjects.findIndex((p) => p.id === pid);
       if (idx < 0) return;
-      setSelectedProject(sortedProjects[idx]);
+      setSelectedProject(deptFilteredSortedProjects[idx]);
       setSelectedIndex(idx);
       setAutoScrollProjectId(pid);
       sessionStorage.removeItem('projects.lastViewedProjectId');
       sessionStorage.removeItem('projects.lastViewedProjectIdAt');
     } catch {}
-  }, [location.search, sortedProjects, setSelectedProject, setSelectedIndex]);
+  }, [location.search, deptFilteredSortedProjects, setSelectedProject, setSelectedIndex]);
 
   // Pre-compute person skills map for performance
   const precomputePersonSkills = useCallback(() => {
@@ -321,34 +441,6 @@ const ProjectsList: React.FC = () => {
     includeChildren: deptState?.includeChildren,
     candidatesOnly,
   });
-  const { data: departments = [] } = useQuery<Department[], Error>({
-    queryKey: ['departmentsAll'],
-    queryFn: () => departmentsApi.listAll(),
-    staleTime: 60_000,
-  });
-
-  const departmentLabelMap = useMemo(() => {
-    const map = new Map<number, string>();
-    departments.forEach((dept) => {
-      if (dept.id != null) {
-        map.set(dept.id, dept.shortName || dept.name || '');
-      }
-    });
-    return map;
-  }, [departments]);
-
-  const projectAssignmentDepartments = useMemo(() => {
-    const map = new Map<number, Set<number>>();
-    leadAssignments.forEach((assignment) => {
-      const projectId = assignment.project;
-      const deptId = assignment.personDepartmentId;
-      if (!projectId || deptId == null) return;
-      const deptSet = map.get(projectId) ?? new Set<number>();
-      deptSet.add(deptId);
-      map.set(projectId, deptSet);
-    });
-    return map;
-  }, [leadAssignments]);
 
   const qaPrefetchByDept = useMemo(() => {
     const map = new Map<number, Array<{ id: number; name: string; roleName?: string | null; department?: number | null }>>();
@@ -865,7 +957,7 @@ const ProjectsList: React.FC = () => {
         {error && (<ErrorBanner message={error} />)}
         {warnings.length > 0 && (<WarningsBanner warnings={warnings} />)}
         <ProjectsTable
-          projects={sortedProjects}
+          projects={deptFilteredSortedProjects}
           selectedProjectId={selectedProject?.id ?? null}
           onSelect={handleResponsiveProjectClick}
           sortBy={sortBy}
@@ -890,6 +982,18 @@ const ProjectsList: React.FC = () => {
           autoScrollProjectId={autoScrollProjectId}
           onAutoScrollComplete={() => setAutoScrollProjectId(null)}
         />
+        {hasNextPage && (
+          <div className="p-3 flex justify-center border-t border-[var(--border)] bg-[var(--surface)]">
+            <button
+              type="button"
+              className="px-3 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+            >
+              {isFetchingNextPage ? 'Loading...' : 'Load more'}
+            </button>
+          </div>
+        )}
       </div>
       {detailsPaneOpen && (
         <div
@@ -1033,7 +1137,7 @@ const ProjectsList: React.FC = () => {
       <div className="p-3 border-b border-[var(--border)] bg-[var(--surface)] flex items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
-          <p className="text-xs text-[var(--muted)]">{sortedProjects.length} results</p>
+          <p className="text-xs text-[var(--muted)]">{deptFilteredSortedProjects.length} results</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1053,7 +1157,7 @@ const ProjectsList: React.FC = () => {
       {error && (<ErrorBanner message={error} />)}
       {warnings.length > 0 && (<WarningsBanner warnings={warnings} />)}
       <ProjectsTable
-        projects={sortedProjects}
+        projects={deptFilteredSortedProjects}
         selectedProjectId={selectedProject?.id ?? null}
         onSelect={handleResponsiveProjectClick}
         sortBy={sortBy}
@@ -1078,6 +1182,18 @@ const ProjectsList: React.FC = () => {
         autoScrollProjectId={autoScrollProjectId}
         onAutoScrollComplete={() => setAutoScrollProjectId(null)}
       />
+      {hasNextPage && (
+        <div className="p-3 flex justify-center border-t border-[var(--border)] bg-[var(--surface)]">
+          <button
+            type="button"
+            className="px-3 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] disabled:opacity-60 disabled:cursor-not-allowed"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? 'Loading...' : 'Load more'}
+          </button>
+        </div>
+      )}
     </div>
   );
 
