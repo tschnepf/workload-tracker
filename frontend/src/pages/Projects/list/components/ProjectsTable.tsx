@@ -1128,6 +1128,7 @@ const ProjectsTable: React.FC<Props> = ({
               aria-label={nextDeliverable?.id ? 'Edit next deliverable notes' : undefined}
               onKeyDown={(e) => {
                 if (!nextDeliverable?.id) return;
+                if (isEditingNotes) return;
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   startEditingNotes(project.id!, nextDeliverable);
@@ -1497,6 +1498,7 @@ const ProjectsTable: React.FC<Props> = ({
                 aria-label={nextDeliverable?.id ? 'Edit next deliverable notes' : undefined}
                 onKeyDown={(e) => {
                   if (!nextDeliverable?.id) return;
+                  if (isEditingNotes2) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     startEditingNotes(project.id!, nextDeliverable);
