@@ -19,6 +19,20 @@ jobs:
   backend-check:
     name: Backend Checks (Django)
     runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:17.6
+        env:
+          POSTGRES_DB: workload_tracker
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d workload_tracker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/workload_tracker
     steps:
       - name: Checkout
         uses: actions/checkout@v4
