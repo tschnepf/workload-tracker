@@ -184,8 +184,10 @@ services:
     depends_on:
       migrator:
         condition: service_completed_successfully
-      - db
-      - redis
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
     networks:
       - tracker-network
 
@@ -220,8 +222,10 @@ services:
     depends_on:
       migrator:
         condition: service_completed_successfully
-      - db
-      - redis
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
 
   # Optional: Celery beat scheduler (for scheduled backups/retention)
   worker_beat:
@@ -257,8 +261,10 @@ services:
     depends_on:
       migrator:
         condition: service_completed_successfully
-      - db
-      - redis
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
 
 volumes:
   postgres_data_v17:

@@ -65,15 +65,6 @@ const ProjectsList: React.FC = () => {
 
   // Derived filters/sort/search via hook
   const { state: deptState, backendParams } = useDepartmentFilter();
-  const filterMetadataParams = useMemo(() => {
-    if (deptState.selectedDepartmentId == null) return undefined;
-    return {
-      department: Number(deptState.selectedDepartmentId),
-      include_children: deptState.includeChildren ? 1 : 0,
-    };
-  }, [deptState.includeChildren, deptState.selectedDepartmentId]);
-  // Optimized filter metadata (assignment counts + hasFutureDeliverables)
-  const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata(filterMetadataParams);
 
   const {
     selectedStatusFilters,
@@ -83,7 +74,7 @@ const ProjectsList: React.FC = () => {
     forceShowAll,
     onSort,
     formatFilterStatus,
-  } = useProjectFilters([], filterMetadata, { serverSide: true });
+  } = useProjectFilters([], null, { serverSide: true });
 
   const [searchInput, setSearchInput] = useState('');
   const [searchTokens, setSearchTokens] = useState<Array<{ id: string; term: string; op: 'or' | 'and' | 'not' }>>([]);
@@ -203,6 +194,27 @@ const ProjectsList: React.FC = () => {
     () => (deptState.selectedDepartmentId != null && deptState.includeChildren ? 1 : 0),
     [deptState.includeChildren, deptState.selectedDepartmentId]
   );
+
+  const filterMetadataParams = useMemo(() => {
+    const params: {
+      department?: number;
+      include_children?: 0 | 1;
+      status_in?: string;
+      search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
+      department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+    } = {};
+    if (departmentFilters.length) params.department_filters = departmentFilters;
+    if (deptState.selectedDepartmentId != null) {
+      params.department = Number(deptState.selectedDepartmentId);
+      params.include_children = includeChildren;
+    }
+    if (statusIn) params.status_in = statusIn;
+    if (searchTokensForApi.length) params.search_tokens = searchTokensForApi;
+    return Object.keys(params).length ? params : undefined;
+  }, [departmentFilters, deptState.selectedDepartmentId, includeChildren, statusIn, searchTokensForApi]);
+
+  // Optimized filter metadata (assignment counts + hasFutureDeliverables)
+  const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata(filterMetadataParams);
 
   const {
     projects,

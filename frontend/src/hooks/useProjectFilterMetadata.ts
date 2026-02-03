@@ -5,15 +5,75 @@ import { trackPerformanceEvent } from '@/utils/monitoring';
 
 export const PROJECT_FILTER_METADATA_KEY = ['projectFilterMetadata'] as const;
 
-export function buildProjectFilterMetadataKey(params?: { department?: number; include_children?: 0 | 1 }) {
+export type ProjectFilterMetadataParams = {
+  department?: number;
+  include_children?: 0 | 1;
+  status_in?: string;
+  search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
+  department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+};
+
+function stableStringify(value: any): string {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+}
+
+function hashString(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) + hash) + input.charCodeAt(i);
+    hash &= 0xffffffff;
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function normalizeSearchTokens(tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>) {
+  if (!tokens || tokens.length === 0) return [];
+  return tokens
+    .map((token) => ({
+      term: (token?.term || '').trim().toLowerCase(),
+      op: token?.op === 'not' || token?.op === 'and' ? token.op : 'or',
+    }))
+    .filter((token) => token.term.length > 0);
+}
+
+function normalizeDepartmentFilters(filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>) {
+  if (!filters || filters.length === 0) return [];
+  const seen = new Set<number>();
+  const cleaned: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> = [];
+  filters.forEach((filter) => {
+    const id = Number(filter?.departmentId);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) return;
+    const op = filter?.op === 'not' || filter?.op === 'or' ? filter.op : 'and';
+    cleaned.push({ departmentId: id, op });
+    seen.add(id);
+  });
+  return cleaned.sort((a, b) => (a.departmentId - b.departmentId) || a.op.localeCompare(b.op));
+}
+
+export function buildProjectFilterMetadataKey(params?: ProjectFilterMetadataParams) {
+  const searchTokens = normalizeSearchTokens(params?.search_tokens);
+  const departmentFilters = normalizeDepartmentFilters(params?.department_filters);
+  const keyPayload = {
+    department: params?.department ?? null,
+    include_children: params?.include_children ?? 0,
+    status_in: params?.status_in ?? null,
+    search_tokens: searchTokens,
+    department_filters: departmentFilters,
+  };
+  const hash = hashString(stableStringify(keyPayload));
   return [
     ...PROJECT_FILTER_METADATA_KEY,
-    params?.department ?? 'all',
-    params?.include_children ?? 0,
+    hash,
   ] as const;
 }
 
-export function useProjectFilterMetadata(params?: { department?: number; include_children?: 0 | 1 }) {
+export function useProjectFilterMetadata(params?: ProjectFilterMetadataParams) {
   const queryClient = useQueryClient();
 
   const query = useQuery<ProjectFilterMetadataResponse, Error>({

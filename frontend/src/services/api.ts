@@ -813,13 +813,26 @@ export const projectsApi = {
    * Returns per-project assignment counts and future deliverables flags.
    * Includes a 30s timeout and leverages server-side ETag/Last-Modified.
    */
-  getFilterMetadata: async (params?: { department?: number; include_children?: 0 | 1 }): Promise<ProjectFilterMetadataResponse> => {
+  getFilterMetadata: async (params?: {
+    department?: number;
+    include_children?: 0 | 1;
+    status_in?: string;
+    search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
+    department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+  }): Promise<ProjectFilterMetadataResponse> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
       const sp = new URLSearchParams();
       if (params?.department != null) sp.set('department', String(params.department));
       if (params?.include_children != null) sp.set('include_children', String(params.include_children));
+      if (params?.status_in) sp.set('status_in', params.status_in);
+      if (params?.search_tokens && params.search_tokens.length) {
+        sp.set('search_tokens', JSON.stringify(params.search_tokens));
+      }
+      if (params?.department_filters && params.department_filters.length) {
+        sp.set('department_filters', JSON.stringify(params.department_filters));
+      }
       const qs = sp.toString() ? `?${sp.toString()}` : '';
       const res = await apiClient.GET(`/projects/filter-metadata/${qs}` as any, { headers: authHeaders(), signal: controller.signal });
       if (!res.data) {
