@@ -69,6 +69,10 @@ jobs:
         run: |
           echo "Prod config checks passed." 
 
+      - name: Prepare .env for compose
+        run: |
+          cp .env.example .env
+
       - name: Check for pending migrations (dry-run)
         run: |
           docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python manage.py makemigrations --check --dry-run
