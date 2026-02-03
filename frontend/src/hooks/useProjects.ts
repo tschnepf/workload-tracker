@@ -39,12 +39,15 @@ function hashString(input: string): string {
 
 function normalizeSearchTokens(tokens?: ProjectsSearchToken[]): ProjectsSearchToken[] {
   if (!tokens || tokens.length === 0) return [];
-  return tokens
-    .map((token) => ({
-      term: (token?.term || '').trim(),
-      op: token?.op === 'not' || token?.op === 'and' ? token.op : 'or',
-    }))
-    .filter((token) => token.term.length > 0);
+  const cleaned: ProjectsSearchToken[] = [];
+  tokens.forEach((token) => {
+    const term = (token?.term || '').trim();
+    if (!term) return;
+    const op: ProjectsSearchToken['op'] =
+      token?.op === 'not' || token?.op === 'and' ? token.op : 'or';
+    cleaned.push({ term, op });
+  });
+  return cleaned;
 }
 
 function normalizeDepartmentFilters(filters?: ProjectsDepartmentFilter[]): ProjectsDepartmentFilter[] {
