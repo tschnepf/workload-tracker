@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listProjectRoles, createProjectRole, updateProjectRole, deleteProjectRole, ProjectRole } from '../api';
+import { listProjectRoles, createProjectRole, updateProjectRole, deleteProjectRole, ProjectRole, clearProjectRolesCache } from '../api';
 
 export function useProjectRoles(departmentId: number | null | undefined, opts?: { includeInactive?: boolean }) {
   const enabled = !!departmentId && Number(departmentId) > 0;
@@ -17,7 +17,10 @@ export function useProjectRoles(departmentId: number | null | undefined, opts?: 
 
 export function useProjectRoleMutations() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['projectRoles'] }).catch(() => {});
+  const invalidate = () => {
+    clearProjectRolesCache();
+    return qc.invalidateQueries({ queryKey: ['projectRoles'] }).catch(() => {});
+  };
 
   const create = useMutation({
     mutationKey: ['projectRoles:create'],
@@ -45,4 +48,3 @@ export function useProjectRoleMutations() {
 
   return { create, update, remove };
 }
-

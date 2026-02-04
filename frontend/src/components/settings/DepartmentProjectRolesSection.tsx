@@ -2,16 +2,24 @@
 import { departmentsApi } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
 import { useProjectRoles, useProjectRoleMutations } from '@/roles/hooks/useProjectRoles';
-import { reorderProjectRoles, getProjectRoleUsage, clearProjectRoleAssignments, ProjectRole, ProjectRoleUsage } from '@/roles/api';
+import { reorderProjectRoles, getProjectRoleUsage, clearProjectRoleAssignments, clearProjectRolesCache, ProjectRole, ProjectRoleUsage } from '@/roles/api';
 import SortableList from '@/components/common/SortableList';
 import Modal from '@/components/ui/Modal';
 
 type Dept = { id?: number; name: string };
 
 const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boolean }> = ({ enabled, isAdmin }) => {
+  const storageKey = 'settings:departmentProjectRoles:selectedDeptId';
+  const getStoredDeptId = () => {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(storageKey);
+    const id = raw ? Number(raw) : NaN;
+    return Number.isFinite(id) && id > 0 ? id : null;
+  };
+
   const [departments, setDepartments] = React.useState<Dept[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
-  const [selectedDeptId, setSelectedDeptId] = React.useState<number | null>(null);
+  const [selectedDeptId, setSelectedDeptId] = React.useState<number | null>(() => getStoredDeptId());
   const [newRole, setNewRole] = React.useState<string>('');
   const [usageRole, setUsageRole] = React.useState<ProjectRole | null>(null);
   const [usageData, setUsageData] = React.useState<ProjectRoleUsage | null>(null);
@@ -27,8 +35,12 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
         const list = await departmentsApi.listAll();
         if (!mounted) return;
         setDepartments(list || []);
-        if (selectedDeptId == null && list && list.length) {
-          setSelectedDeptId(list[0]?.id ?? null);
+        if (list && list.length) {
+          const storedId = getStoredDeptId();
+          const candidate = [selectedDeptId, storedId].find(id => id != null && list.some(d => d.id === id));
+          setSelectedDeptId(candidate ?? list[0]?.id ?? null);
+        } else {
+          setSelectedDeptId(null);
         }
       } catch (e: any) {
         showToast(e?.message || 'Failed to load departments', 'error');
@@ -42,6 +54,15 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
   const { data: roles = [], refetch, isLoading: rolesLoading } = useProjectRoles(selectedDeptId ?? undefined, { includeInactive: false });
   const { create, remove } = useProjectRoleMutations();
   const canMutate =  !!isAdmin; 
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (selectedDeptId == null) {
+      window.localStorage.removeItem(storageKey);
+    } else {
+      window.localStorage.setItem(storageKey, String(selectedDeptId));
+    }
+  }, [selectedDeptId]);
 
   const openUsageModal = async (role: ProjectRole) => {
     setUsageRole(role);
@@ -70,7 +91,15 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
     <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mt-6">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold text-[var(--text)]">Department Project Roles</h2>
-        <button onClick={() => { void refetch(); }} className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]">Refresh</button>
+        <button
+          onClick={() => {
+            clearProjectRolesCache(selectedDeptId ?? undefined);
+            void refetch();
+          }}
+          className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+        >
+          Refresh
+        </button>
       </div>
 
       {!enabled && (
@@ -97,6 +126,7 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
                 if (!selectedDeptId) return;
                 await reorderProjectRoles(selectedDeptId, orderedIds);
                 showToast('Order saved', 'success');
+                clearProjectRolesCache(selectedDeptId ?? undefined);
                 await refetch();
               } catch (e: any) {
                 showToast(e?.message || 'Failed to save order', 'error');
@@ -224,7 +254,6 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
                   await remove.mutateAsync({ id: usageRole.id });
                   showToast(`Cleared ${res.cleared} assignment(s) and deleted role`, 'success');
                   closeUsageModal();
-                  await refetch();
                 } catch (e: any) {
                   setUsageError(e?.message || 'Failed to clear assignments or delete the role.');
                 } finally {
