@@ -14,9 +14,9 @@ from accounts.permissions import is_admin_or_manager
 from accounts.serializers import AdminAuditLogSerializer
 from django.core.cache import cache
 from django.utils import timezone
-from .models import Project
+from .models import Project, ProjectChangeLog
 from core.etag import ETagConditionalMixin
-from .serializers import ProjectSerializer, ProjectFilterMetadataSerializer, ProjectAvailabilityItemSerializer
+from .serializers import ProjectSerializer, ProjectFilterMetadataSerializer, ProjectAvailabilityItemSerializer, ProjectChangeLogSerializer
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from rest_framework import serializers
 import logging
@@ -32,6 +32,7 @@ from assignments.models import Assignment
 from people.models import Person
 from departments.models import Department
 from core.search_tokens import parse_search_tokens, apply_token_filter
+from django.shortcuts import get_object_or_404
 import hashlib
 import json
 import time
@@ -1552,3 +1553,39 @@ class ProjectAuditLogsView(APIView):
             qs = []
         ser = AdminAuditLogSerializer(qs, many=True)
         return Response(ser.data)
+
+
+class ProjectChangeLogView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
+
+    @extend_schema(
+        parameters=[OpenApiParameter(name='limit', type=int, required=False)],
+        responses=ProjectChangeLogSerializer(many=True),
+    )
+    def get(self, request, project_id: int):
+        """Read-only endpoint for recent project change log entries."""
+        project = get_object_or_404(Project, pk=project_id)
+
+        user = getattr(request, 'user', None)
+        if not is_admin_or_manager(user):
+            try:
+                person_id = getattr(getattr(user, 'profile', None), 'person_id', None)
+            except Exception:
+                person_id = None
+            if not person_id or not is_current_project_assignee(person_id, project.id):
+                return Response({'detail': 'Project access required'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            limit = int(request.query_params.get('limit', '50'))
+        except Exception:
+            limit = 50
+        limit = max(1, min(500, limit))
+
+        qs = (
+            ProjectChangeLog.objects
+            .select_related('actor')
+            .filter(project_id=project.id)
+            .order_by('-created_at')[:limit]
+        )
+        return Response(ProjectChangeLogSerializer(qs, many=True).data)

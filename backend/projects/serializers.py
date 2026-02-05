@@ -3,7 +3,7 @@ from drf_spectacular.utils import extend_schema_field, OpenApiTypes
 from django.http import QueryDict
 from django.urls import reverse
 import json
-from .models import Project, ProjectRisk, ProjectRiskEdit
+from .models import Project, ProjectRisk, ProjectRiskEdit, ProjectChangeLog
 from departments.models import Department
 
 
@@ -100,6 +100,55 @@ class ProjectRiskEditSerializer(serializers.ModelSerializer):
             'actorName',
             'createdAt',
         ]
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_actorName(self, obj):
+        user = getattr(obj, 'actor', None)
+        if not user:
+            return None
+        try:
+            person = getattr(getattr(user, 'profile', None), 'person', None)
+            if person and getattr(person, 'name', None):
+                return person.name
+        except Exception:
+            pass
+        try:
+            name = user.get_full_name()
+            if name:
+                return name
+        except Exception:
+            pass
+        return getattr(user, 'username', None) or str(user)
+
+
+class ProjectChangeLogSerializer(serializers.ModelSerializer):
+    actor = serializers.SerializerMethodField()
+    actorName = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = ProjectChangeLog
+        fields = [
+            'id',
+            'project',
+            'action',
+            'detail',
+            'createdAt',
+            'actor',
+            'actorName',
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_actor(self, obj):
+        user = getattr(obj, 'actor', None)
+        if not user:
+            return None
+        return {
+            'id': getattr(user, 'id', None),
+            'username': getattr(user, 'username', None),
+            'email': getattr(user, 'email', None),
+        }
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_actorName(self, obj):

@@ -24,6 +24,14 @@ import TooltipPortal from '@/components/ui/TooltipPortal';
 import type { Assignment, Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
 
 type AssignmentListItem = Assignment & { isHistorical?: boolean };
+type ProjectChangeLogEntry = {
+  id: number;
+  action: string;
+  detail?: any;
+  createdAt: string;
+  actor?: { id?: number; username?: string; email?: string } | null;
+  actorName?: string | null;
+};
 
 const ProjectDashboard: React.FC = () => {
   const params = useParams<{ id?: string }>();
@@ -84,6 +92,12 @@ const ProjectDashboard: React.FC = () => {
   const risksQuery = useQuery({
     queryKey: ['project-risks', projectId],
     queryFn: () => projectRisksApi.list(projectId),
+    enabled: hasValidId,
+    staleTime: 30_000,
+  });
+  const changeLogQuery = useQuery({
+    queryKey: ['project-dashboard', 'change-log', projectId],
+    queryFn: () => projectsApi.listProjectChangeLog(projectId, 50),
     enabled: hasValidId,
     staleTime: 30_000,
   });
@@ -157,7 +171,8 @@ const ProjectDashboard: React.FC = () => {
     pending: boolean;
     deliverables: boolean;
     project: boolean;
-  }>({ timer: null, inFlight: false, pending: false, deliverables: false, project: false });
+    changeLog: boolean;
+  }>({ timer: null, inFlight: false, pending: false, deliverables: false, project: false, changeLog: false });
   const scheduleDashboardRefresh = React.useCallback(() => {
     if (!hasValidId) return;
     const queue = dashboardRefreshQueueRef.current;
@@ -172,8 +187,10 @@ const ProjectDashboard: React.FC = () => {
       queue.pending = false;
       const refreshDeliverables = queue.deliverables;
       const refreshProject = queue.project;
+      const refreshChangeLog = queue.changeLog;
       queue.deliverables = false;
       queue.project = false;
+      queue.changeLog = false;
       try {
         const tasks: Array<Promise<unknown>> = [];
         if (refreshDeliverables) {
@@ -183,6 +200,9 @@ const ProjectDashboard: React.FC = () => {
         }
         if (refreshProject) {
           tasks.push(queryClient.invalidateQueries({ queryKey: ['projects', projectId] }));
+        }
+        if (refreshChangeLog) {
+          tasks.push(queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'change-log', projectId] }));
         }
         if (tasks.length) await Promise.all(tasks);
       } finally {
@@ -234,6 +254,7 @@ const ProjectDashboard: React.FC = () => {
     const unsubscribeDeliverables = subscribeDeliverablesRefresh(() => {
       const queue = dashboardRefreshQueueRef.current;
       queue.deliverables = true;
+      queue.changeLog = true;
       scheduleDashboardRefresh();
     });
     const unsubscribeProjects = subscribeProjectsRefresh(() => {
@@ -251,6 +272,7 @@ const ProjectDashboard: React.FC = () => {
       queue.pending = false;
       queue.deliverables = false;
       queue.project = false;
+      queue.changeLog = false;
     };
   }, [hasValidId, projectId, scheduleDashboardRefresh]);
 
@@ -533,6 +555,7 @@ const ProjectDashboard: React.FC = () => {
         } as any, assignmentsApi);
       }
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
+      await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'change-log', projectId] });
       resetAddAssignment();
       setShowAddAssignment(false);
     } finally {
@@ -553,6 +576,7 @@ const ProjectDashboard: React.FC = () => {
         updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
       });
       await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'assignments', projectId] });
+      await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'change-log', projectId] });
     } finally {
       setDeletingAssignmentId(null);
     }
@@ -594,6 +618,7 @@ const ProjectDashboard: React.FC = () => {
   };
 
   const risks = (risksQuery.data?.results || []) as ProjectRisk[];
+  const changeLogEntries = (changeLogQuery.data || []) as ProjectChangeLogEntry[];
 
   const toggleDepartment = (deptId: number, current: number[], setNext: (v: number[]) => void) => {
     if (current.includes(deptId)) {
@@ -761,6 +786,74 @@ const ProjectDashboard: React.FC = () => {
         text: `Updated ${label} from ${from} to ${to}`,
       };
     });
+  };
+
+  const formatChangeLogLines = (entry: ProjectChangeLogEntry): Array<{ key: string; text: string }> => {
+    const action = entry.action;
+    const detail = entry.detail || {};
+
+    const formatDeliverableValue = (field: string, value: any) => {
+      if (field === 'date') {
+        if (!value) return '—';
+        return formatUtcToLocal(String(value), { dateStyle: 'medium' }) || String(value);
+      }
+      if (field === 'percentage') {
+        if (value === null || value === undefined || value === '') return '—';
+        return `${value}%`;
+      }
+      if (value === null || value === undefined || value === '') return '—';
+      return String(value);
+    };
+
+    if (action.startsWith('assignment.')) {
+      const assignment = detail.assignment || {};
+      const personLabel = assignment.personName || (assignment.personId ? `Person #${assignment.personId}` : null);
+      const roleLabel = assignment.roleName || (assignment.roleId ? `Role #${assignment.roleId}` : null);
+      let label = personLabel || roleLabel || 'Assignment';
+      if (personLabel && roleLabel) {
+        label = `${personLabel} (${roleLabel})`;
+      }
+      const verb = action === 'assignment.added' ? 'Added' : action === 'assignment.removed' ? 'Removed' : 'Updated';
+      return [{ key: `${entry.id}-assignment`, text: `${verb} assignment: ${label}` }];
+    }
+
+    if (action.startsWith('deliverable.')) {
+      const deliverable = detail.deliverable || {};
+      const label = deliverable.description
+        || (deliverable.percentage != null ? `${deliverable.percentage}%` : null)
+        || (deliverable.id ? `Deliverable #${deliverable.id}` : 'Deliverable');
+      const dateLabel = deliverable.date
+        ? (formatUtcToLocal(String(deliverable.date), { dateStyle: 'medium' }) || String(deliverable.date))
+        : '';
+
+      if (action === 'deliverable.created') {
+        const suffix = dateLabel ? ` (${dateLabel})` : '';
+        return [{ key: `${entry.id}-deliverable-created`, text: `Added deliverable ${label}${suffix}` }];
+      }
+      if (action === 'deliverable.deleted') {
+        const suffix = dateLabel ? ` (${dateLabel})` : '';
+        return [{ key: `${entry.id}-deliverable-deleted`, text: `Removed deliverable ${label}${suffix}` }];
+      }
+      if (action === 'deliverable.updated') {
+        const changes = detail.changes || {};
+        const fields = Object.keys(changes || {});
+        if (fields.length === 0) {
+          return [{ key: `${entry.id}-deliverable-updated`, text: `Updated deliverable ${label}` }];
+        }
+        return fields.map((field) => {
+          const entryChange = changes[field] || {};
+          const from = formatDeliverableValue(field, entryChange.from);
+          const to = formatDeliverableValue(field, entryChange.to);
+          const fieldLabel = field === 'percentage' ? 'Percent' : field === 'description' ? 'Description' : 'Date';
+          return {
+            key: `${entry.id}-deliverable-${field}`,
+            text: `Deliverable ${label}: Updated ${fieldLabel} from ${from} to ${to}`,
+          };
+        });
+      }
+    }
+
+    return [{ key: `${entry.id}-fallback`, text: action || 'Updated item' }];
   };
 
   const handleDownloadAttachment = async (risk: ProjectRisk) => {
@@ -1418,6 +1511,62 @@ const ProjectDashboard: React.FC = () => {
                   compact
                 />
               ) : null}
+
+              <Card className="p-3">
+                <div className="relative flex items-center justify-center mb-2">
+                  <div className="text-[13px] font-semibold text-[var(--text)] text-center">Change Log</div>
+                  <button
+                    type="button"
+                    onClick={() => changeLogQuery.refetch()}
+                    className="absolute right-0 text-[11px] px-2 py-1 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                <div className="border-t border-[#4a4f57]/60 mb-2" />
+
+                {changeLogQuery.isLoading ? (
+                  <div className="text-[11px] text-[var(--muted)]">Loading change log…</div>
+                ) : changeLogQuery.isError ? (
+                  <div className="text-[11px] text-red-300">Unable to load change log.</div>
+                ) : changeLogEntries.length === 0 ? (
+                  <div className="text-[11px] text-[var(--muted)]">No recent changes.</div>
+                ) : (
+                  <div className="overflow-auto">
+                    <table className="min-w-full text-[11px] text-left">
+                      <thead className="text-[var(--muted)]">
+                        <tr>
+                          <th className="py-1 pr-3">When</th>
+                          <th className="py-1 pr-3">Who</th>
+                          <th className="py-1 pr-3">Change</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-[var(--text)]">
+                        {changeLogEntries.map((entry) => {
+                          const lines = formatChangeLogLines(entry);
+                          const whenLabel =
+                            formatUtcToLocal(entry.createdAt, { dateStyle: 'medium', timeStyle: 'short' })
+                            || new Date(entry.createdAt).toLocaleString();
+                          const actorLabel = entry.actorName || entry.actor?.username || '—';
+                          return (
+                            <tr key={entry.id} className="border-t border-[var(--border)] align-top">
+                              <td className="py-2 pr-3 whitespace-nowrap">{whenLabel}</td>
+                              <td className="py-2 pr-3 whitespace-nowrap">{actorLabel}</td>
+                              <td className="py-2 pr-3">
+                                <div className="space-y-1">
+                                  {lines.map((line) => (
+                                    <div key={line.key}>{line.text}</div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
 
               <Card className="p-2">
               <div className="relative flex items-center justify-center mb-2">

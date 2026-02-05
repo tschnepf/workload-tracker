@@ -40,6 +40,7 @@ from .permissions import DeliverableTaskPermission
 from accounts.permissions import is_admin_or_manager, IsAdminOrManager
 from assignments.utils.project_membership import current_project_ids
 from rest_framework.permissions import IsAdminUser
+from projects.change_log import record_project_change
 try:
     from core.tasks import backfill_pre_deliverables_async  # type: ignore
 except Exception:
@@ -78,6 +79,34 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Use default pagination
         return super().list(request, *args, **kwargs)
 
+    def _deliverable_log_fields(self, instance: Deliverable) -> dict:
+        return {
+            'description': (instance.description or None),
+            'percentage': instance.percentage,
+            'date': instance.date.isoformat() if instance.date else None,
+        }
+
+    def _deliverable_log_payload(self, instance: Deliverable) -> dict:
+        data = self._deliverable_log_fields(instance)
+        data['id'] = instance.id
+        return data
+
+    def _deliverable_log_changes(self, before: dict, after: dict) -> dict:
+        changes = {}
+        for key in ('description', 'percentage', 'date'):
+            if before.get(key) != after.get(key):
+                changes[key] = {'from': before.get(key), 'to': after.get(key)}
+        return changes
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        record_project_change(
+            project=instance.project,
+            actor=getattr(self.request, 'user', None),
+            action='deliverable.created',
+            detail={'deliverable': self._deliverable_log_payload(instance)},
+        )
+
     def partial_update(self, request, *args, **kwargs):
         """PATCH deliverable. If date changes and feature flag enabled, reallocate hours.
 
@@ -85,6 +114,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         { deltaWeeks, assignmentsChanged, touchedWeekKeys }
         """
         instance: Deliverable = self.get_object()
+        old_values = self._deliverable_log_fields(instance)
         old_date = instance.date
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -129,6 +159,8 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             with transaction.atomic():
                 # Save deliverable first to persist date change in the same transaction
                 instance = serializer.save()
+                new_values = self._deliverable_log_fields(instance)
+                changes = self._deliverable_log_changes(old_values, new_values)
                 audit_snapshot = {}
                 for a in assignments.select_for_update():
                     wh_before = dict(a.weekly_hours or {})
@@ -178,6 +210,17 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     # Non-blocking: failure to persist audit must not fail request
                     pass
 
+                if changes:
+                    record_project_change(
+                        project=instance.project,
+                        actor=getattr(request, 'user', None),
+                        action='deliverable.updated',
+                        detail={
+                            'deliverable': self._deliverable_log_payload(instance),
+                            'changes': changes,
+                        },
+                    )
+
             realloc_summary = {
                 'deltaWeeks': dw,
                 'assignmentsChanged': changed_count,
@@ -203,7 +246,30 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         # Default path: just save and return
         instance = serializer.save()
+        new_values = self._deliverable_log_fields(instance)
+        changes = self._deliverable_log_changes(old_values, new_values)
+        if changes:
+            record_project_change(
+                project=instance.project,
+                actor=getattr(request, 'user', None),
+                action='deliverable.updated',
+                detail={
+                    'deliverable': self._deliverable_log_payload(instance),
+                    'changes': changes,
+                },
+            )
         return Response(self.get_serializer(instance).data)
+
+    def perform_destroy(self, instance):
+        detail = {'deliverable': self._deliverable_log_payload(instance)}
+        project = instance.project
+        super().perform_destroy(instance)
+        record_project_change(
+            project=project,
+            actor=getattr(self.request, 'user', None),
+            action='deliverable.deleted',
+            detail=detail,
+        )
     
     @extend_schema(
         request=inline_serializer(name='DeliverableReorderRequest', fields={

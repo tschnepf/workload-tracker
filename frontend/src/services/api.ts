@@ -800,6 +800,20 @@ export const projectsApi = {
     return res.data as Array<{ id: number; action: string; created_at: string; detail: any; actor?: { username?: string } }>;
   },
 
+  // Project change log (per project)
+  listProjectChangeLog: async (projectId: number, limit = 50) => {
+    const qs = limit ? `?limit=${encodeURIComponent(String(limit))}` : '';
+    return fetchApi<Array<{
+      id: number;
+      project: number;
+      action: string;
+      detail: any;
+      createdAt: string;
+      actor?: { id?: number; username?: string; email?: string } | null;
+      actorName?: string | null;
+    }>>(`/projects/${projectId}/change_log/${qs}`, { headers: authHeaders() });
+  },
+
   // Get unique clients for autocomplete
   getClients: async (): Promise<string[]> => {
     // Use first page to avoid heavy bulk fetch; adjust if needed

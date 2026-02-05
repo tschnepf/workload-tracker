@@ -27,6 +27,7 @@ from .serializers import AssignmentSerializer
 from people.models import Person
 from projects.models import Project  # noqa: F401
 from projects.models import ProjectRole
+from projects.change_log import record_project_change
 from projects.roles_serializers import ProjectRoleItemSerializer
 from core.models import UtilizationScheme
 from core.serializers import UtilizationSchemeSerializer
@@ -96,6 +97,31 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return qs.filter(person__is_active=True)
         # For detail and non-list actions, allow placeholder rows but exclude inactive people.
         return qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
+
+    def _assignment_log_payload(self, assignment: Assignment) -> dict:
+        role_name = None
+        try:
+            if assignment.role_on_project_ref and assignment.role_on_project_ref.name:
+                role_name = assignment.role_on_project_ref.name
+        except Exception:  # nosec B110
+            role_name = None
+        if not role_name:
+            role_name = assignment.role_on_project
+        person_name = None
+        try:
+            if assignment.person and assignment.person.name:
+                person_name = assignment.person.name
+        except Exception:  # nosec B110
+            person_name = None
+        return {
+            'id': assignment.id,
+            'personId': assignment.person_id,
+            'personName': person_name,
+            'roleId': assignment.role_on_project_ref_id,
+            'roleName': role_name,
+            'departmentId': assignment.department_id,
+            'isPlaceholder': assignment.person_id is None,
+        }
 
     def _apply_department_filter(self, queryset, dept_param, include_children, include_placeholders):
         """Apply department scoping for assignment/person filters."""
@@ -2986,11 +3012,32 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             assignment = serializer.save()
+            if assignment.project_id:
+                record_project_change(
+                    project=assignment.project,
+                    actor=getattr(request, 'user', None),
+                    action='assignment.added',
+                    detail={'assignment': self._assignment_log_payload(assignment)},
+                )
             return Response(
                 self.get_serializer(assignment).data,
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        project = instance.project
+        detail = {'assignment': self._assignment_log_payload(instance)}
+        response = super().destroy(request, *args, **kwargs)
+        if project and instance.project_id:
+            record_project_change(
+                project=project,
+                actor=getattr(request, 'user', None),
+                action='assignment.removed',
+                detail=detail,
+            )
+        return response
     
     @extend_schema(
         parameters=[

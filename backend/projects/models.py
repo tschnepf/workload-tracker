@@ -70,6 +70,31 @@ class Project(models.Model):
         return self.name
 
 
+class ProjectChangeLog(models.Model):
+    """Project-level change log entries for key events (deliverables, assignments, etc.)."""
+
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='change_logs')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='project_change_logs',
+    )
+    action = models.CharField(max_length=100)
+    detail = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['project', 'created_at'], name='idx_pcl_proj_created'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.created_at:%Y-%m-%d %H:%M:%S} {self.action} (project {self.project_id})"
+
+
 class ProjectPreDeliverableSettings(models.Model):
     """Per-project customization of pre-deliverable generation rules."""
 
