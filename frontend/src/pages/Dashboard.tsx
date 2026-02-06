@@ -3,53 +3,33 @@
  * Chunk 4: Real dashboard with team metrics and VSCode dark theme
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useLayoutEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
-import Modal from '@/components/ui/Modal';
-import UtilizationBadge from '../components/ui/UtilizationBadge';
-import { utilizationLevelToClasses, getUtilizationPill, defaultUtilizationScheme, utilizationLevelToTokens } from '@/util/utilization';
-import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
-import { dashboardApi, departmentsApi, projectsApi, peopleApi, rolesApi } from '../services/api';
+import { dashboardApi, departmentsApi, projectsApi, peopleApi } from '../services/api';
 import { useAuth } from '@/hooks/useAuth';
-import { formatUtcToLocal } from '@/utils/dates';
-import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
-import { DashboardData, Department, Role } from '../types/models';
+import { DashboardData, Department } from '../types/models';
 import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
-import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
-import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
-import AssignedHoursTimelineCard from '@/components/analytics/AssignedHoursTimelineCard';
-import RoleCapacityCard from '@/components/analytics/RoleCapacityCard';
-import { useMobileUiFlag } from '@/mobile/mobileFlags';
-import {
-  useDashboardHeatmapView,
-  getDashboardSummaryTiles,
-  DASHBOARD_ANALYTICS_CARD_SPECS,
-  type DashboardAnalyticsCardSpec,
-  type DashboardSummaryTile,
-  type DashboardHeatmapRow,
-} from '@/mobile/dashboardAdapters';
-import TeamMembersCard from '@/components/dashboard/TeamMembersCard';
+import { useDashboardHeatmapView, type DashboardHeatmapRow } from '@/mobile/dashboardAdapters';
 import { FullCalendarWrapper, mapCapacityHeatmapToEvents, mapDeliverableCalendarToEvents, formatDeliverableInlineLabel } from '@/features/fullcalendar';
-import { useDeliverablesCalendar, buildCalendarRange, subtractOneDay, toIsoDate } from '@/hooks/useDeliverablesCalendar';
+import { useDeliverablesCalendar, subtractOneDay, toIsoDate } from '@/hooks/useDeliverablesCalendar';
 import type { CalendarRange } from '@/hooks/useDeliverablesCalendar';
 import type { DeliverableCalendarUnion } from '@/features/fullcalendar/eventAdapters';
 import type { EventContentArg, DatesSetArg } from '@fullcalendar/core';
 import SearchTokenBar from '@/components/filters/SearchTokenBar';
 import { useSearchTokens } from '@/hooks/useSearchTokens';
 import { useDeliverablesSearchIndex } from '@/hooks/useDeliverablesSearchIndex';
-
-const PRIMARY_ANALYTICS_CARDS = DASHBOARD_ANALYTICS_CARD_SPECS.filter(
-  (card) => (card.section ?? 'primary') === 'primary'
-);
-const ANALYTICS_BEFORE_AVAILABILITY = PRIMARY_ANALYTICS_CARDS.filter((card) => card.key !== 'role-capacity');
-const ANALYTICS_AFTER_AVAILABILITY = PRIMARY_ANALYTICS_CARDS.filter((card) => card.key === 'role-capacity');
-const SECONDARY_ANALYTICS_CARDS = DASHBOARD_ANALYTICS_CARD_SPECS.filter(
-  (card) => card.section === 'secondary'
-);
+import StatusStrip from '@/components/dashboard/StatusStrip';
+import KpiCard from '@/components/dashboard/KpiCard';
+import StackedDistributionBar from '@/components/dashboard/StackedDistributionBar';
+import BarListCard, { type BarListRow } from '@/components/dashboard/BarListCard';
+import PersonAlertList, { type PersonAlertItem, type PersonAlertFilter } from '@/components/dashboard/PersonAlertList';
+import RoleCapacitySummary from '@/components/dashboard/RoleCapacitySummary';
+import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
+import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -64,32 +44,13 @@ const Dashboard: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
   
   // Heatmap + project summary state
-  const [heatWeeks, setHeatWeeks] = useState<number>(20);
+  const heatWeeks = 12;
   const [projectCounts, setProjectCounts] = useState<Record<string, number>>({});
   const [projectsTotal, setProjectsTotal] = useState<number>(0);
-  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const deliverablesListRef = React.useRef<HTMLDivElement | null>(null);
+  const [showDeliverablesScrollHint, setShowDeliverablesScrollHint] = useState(false);
   // People metadata (hire date, active) for availability filtering
   const [peopleMeta, setPeopleMeta] = useState<Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>>(new Map());
-  // Roles (ordered by settings sort_order)
-  const [roles, setRoles] = useState<Role[]>([]);
-  const mobileDashboardEnabled = useMobileUiFlag('dashboard');
-  const [toolbarOffset, setToolbarOffset] = useState(0);
-  const [heatmapDetailPerson, setHeatmapDetailPerson] = useState<DashboardHeatmapRow | null>(null);
-  const [teamCalendarRange, setTeamCalendarRange] = useState<CalendarRange>(() => buildCalendarRange(Math.min(heatWeeks, 12)));
-
-  // Display helper to format project status labels nicely
-  const formatStatusLabel = (raw: string | undefined | null): string => {
-    const s = (raw || 'Unknown').toString();
-    const words = s.replace(/_/g, ' ').split(' ').filter(Boolean);
-    return words
-      .map((w) => {
-        const lower = w.toLowerCase();
-        if (lower === 'ca') return 'CA';
-        if (lower.length <= 2) return lower.toUpperCase();
-        return lower.charAt(0).toUpperCase() + lower.slice(1);
-      })
-      .join(' ');
-  };
 
   // Load dashboard when weeks or global department changes
   useAuthenticatedEffect(() => {
@@ -134,42 +95,6 @@ const Dashboard: React.FC = () => {
     })();
   }, [auth.accessToken, deptState.selectedDepartmentId, deptState.includeChildren, verticalState.selectedVerticalId]);
 
-  // Load ordered roles for grouping
-  useAuthenticatedEffect(() => {
-    if (!auth.accessToken) return;
-    (async () => {
-      try {
-        const list = await rolesApi.listAll();
-        setRoles(Array.isArray(list) ? list : []);
-      } catch (err) {
-        console.warn('Failed to load roles for availability grouping:', err);
-        setRoles([]);
-      }
-    })();
-  }, [auth.accessToken]);
-
-  useEffect(() => {
-    setTeamCalendarRange((prev) => buildCalendarRange(Math.min(heatWeeks, 12), new Date(prev.start)));
-  }, [heatWeeks]);
-
-  useEffect(() => {
-    if (!mobileDashboardEnabled) return;
-    if (typeof window === 'undefined') return;
-    const topbar = document.getElementById('app-topbar');
-    if (!topbar) return;
-    const updateOffset = () => setToolbarOffset(topbar.getBoundingClientRect().height || 0);
-    updateOffset();
-    let resizeObserver: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(() => updateOffset());
-      resizeObserver.observe(topbar);
-    }
-    window.addEventListener('resize', updateOffset);
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', updateOffset);
-    };
-  }, [mobileDashboardEnabled]);
 
   const heatQuery = useCapacityHeatmap(
     {
@@ -180,54 +105,173 @@ const Dashboard: React.FC = () => {
     heatWeeks,
     !loading && !!auth.accessToken
   );
-  const heatLoading = heatQuery.isLoading;
-  const heatFetching = heatQuery.isFetching;
+  const heatLoading = heatQuery.isLoading || heatQuery.isFetching || loading;
   const heatmapView = useDashboardHeatmapView(heatQuery.data ?? [], peopleMeta);
   const heatData = heatmapView.rows;
-  const weekKeys = heatmapView.weekKeys;
   const currentWeekKey = heatmapView.currentWeekKey;
-  const nextWeekKey = heatmapView.nextWeekKey;
-  const teamDeliverablesQuery = useDeliverablesCalendar(teamCalendarRange, { mineOnly: false, vertical: verticalState.selectedVerticalId ?? undefined });
-  const teamDeliverables = teamDeliverablesQuery.data ?? [];
-  const teamDeliverablesLoading = teamDeliverablesQuery.isLoading;
-  const { data: utilScheme } = useUtilizationScheme();
-  const summaryTiles = useMemo(() => getDashboardSummaryTiles(data), [data]);
-  const availabilityRows = useMemo(() => {
+
+
+  const upcomingRange = useMemo((): CalendarRange => {
+    const start = new Date();
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start: toIsoDate(start), end: toIsoDate(end) };
+  }, []);
+
+  const upcomingDeliverablesQuery = useDeliverablesCalendar(upcomingRange, {
+    mineOnly: false,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
+  const upcomingDeliverables = useMemo(() => {
+    const items = upcomingDeliverablesQuery.data ?? [];
+    const start = new Date(`${upcomingRange.start}T00:00:00`);
+    const end = new Date(`${upcomingRange.end}T23:59:59`);
+    return items
+      .filter((item) => {
+        const raw = item as any;
+        const itemType = raw.itemType ?? raw.kind;
+        if (itemType && itemType !== 'deliverable') return false;
+        if (raw.preDeliverableType != null || raw.preDeliverableTypeId != null) return false;
+        const title = typeof raw.title === 'string' ? raw.title.trim() : '';
+        if (!itemType && title.toLowerCase().startsWith('pre:')) return false;
+        const date = (item as any).date;
+        if (!date) return false;
+        const d = new Date(`${date}T00:00:00`);
+        return d >= start && d <= end;
+      })
+      .sort((a, b) => {
+        const da = new Date(`${(a as any).date}T00:00:00`).getTime();
+        const db = new Date(`${(b as any).date}T00:00:00`).getTime();
+        return da - db;
+      });
+  }, [upcomingDeliverablesQuery.data, upcomingRange.end, upcomingRange.start]);
+
+  const updateDeliverablesScrollHint = React.useCallback(() => {
+    const node = deliverablesListRef.current;
+    if (!node) return;
+    const canScroll = node.scrollHeight > node.clientHeight + 4;
+    const atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 4;
+    setShowDeliverablesScrollHint(canScroll && !atBottom);
+  }, []);
+
+  useLayoutEffect(() => {
+    updateDeliverablesScrollHint();
+    const node = deliverablesListRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => updateDeliverablesScrollHint());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [updateDeliverablesScrollHint, upcomingDeliverables.length, upcomingDeliverablesQuery.isLoading]);
+
+  const totalMembers = useMemo(() => {
+    if (!data) return 0;
+    const dist = data.utilization_distribution;
+    const sum = dist.underutilized + dist.optimal + dist.high + dist.overallocated;
+    return data.summary.total_people || sum;
+  }, [data]);
+
+  const activeProjects = useMemo(() => {
+    const entries = Object.entries(projectCounts);
+    if (!entries.length) return projectsTotal;
+    const activeCount = entries
+      .filter(([status]) => status.toLowerCase().startsWith('active'))
+      .reduce((sum, [, count]) => sum + count, 0);
+    return activeCount || projectsTotal;
+  }, [projectCounts, projectsTotal]);
+
+  const overallocatedItems = useMemo<PersonAlertItem[]>(() => {
+    if (!data) return [];
+    return data.team_overview
+      .filter((person) => person.is_overallocated || person.utilization_percent > 100)
+      .sort((a, b) => b.utilization_percent - a.utilization_percent)
+      .slice(0, 8)
+      .map((person) => ({
+        id: person.id,
+        name: person.name,
+        role: person.role,
+        statusLabel: `${person.utilization_percent}%`,
+        tone: 'danger',
+        assigned: person.allocated_hours,
+        capacity: person.capacity,
+      }));
+  }, [data]);
+
+  const availabilityItems = useMemo<PersonAlertItem[]>(() => {
     if (!currentWeekKey) return [];
     const today = new Date();
     const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const rows = heatData
-      .map((row) => {
-        const weeklyCapacity = Number(row.weeklyCapacity || 0);
-        const currentHours = Number(row.weekTotals?.[currentWeekKey] || 0);
-        const nextHours = nextWeekKey ? Number(row.weekTotals?.[nextWeekKey] || 0) : 0;
-        const curAvail = Math.max(
-          0,
-          row.availableByWeek?.[currentWeekKey] ?? (weeklyCapacity - currentHours)
-        );
-        const nextAvail = nextWeekKey
-          ? Math.max(0, row.availableByWeek?.[nextWeekKey] ?? (weeklyCapacity - nextHours))
-          : 0;
-        const roleId = row.personMeta?.roleId ?? null;
-        return { row, curAvail, nextAvail, roleId };
-      })
-      .filter(({ row, curAvail, nextAvail }) => {
+    return heatData
+      .filter((row) => {
         const meta = row.personMeta;
         if (meta?.isActive === false) return false;
         if (meta?.hireDate) {
           const hireDate = new Date(`${meta.hireDate}T00:00:00`);
           if (hireDate > todayMidnight) return false;
         }
-        return curAvail > 0 || nextAvail > 0;
+        return true;
       })
-      .sort((a, b) => b.curAvail - a.curAvail || b.nextAvail - a.nextAvail);
+      .map((row) => {
+        const meta = row.personMeta;
+        const weeklyCapacity = Number(row.weeklyCapacity || 0);
+        const currentHours = Number(row.weekTotals?.[currentWeekKey] || 0);
+        const utilization = weeklyCapacity > 0 ? Math.round((currentHours / weeklyCapacity) * 100) : 0;
+        const status =
+          utilization > 100
+            ? { label: 'Overallocated', tone: 'danger' as const }
+            : utilization > 85
+              ? { label: 'Tight', tone: 'warning' as const }
+              : utilization >= 70
+                ? { label: 'Optimal', tone: 'success' as const }
+                : { label: 'Available', tone: 'info' as const };
+        return {
+          id: row.id,
+          name: row.name,
+          role: meta?.roleName ?? row.department ?? undefined,
+          statusLabel: status.label,
+          tone: status.tone,
+          utilizationPercent: utilization,
+          assigned: currentHours,
+          capacity: weeklyCapacity,
+        };
+      })
+      .sort((a, b) => (a.utilizationPercent ?? 0) - (b.utilizationPercent ?? 0));
+  }, [heatData, currentWeekKey]);
 
-    return rows;
-  }, [heatData, currentWeekKey, nextWeekKey]);
-  const toolbarClassName = mobileDashboardEnabled
-    ? 'sticky z-20 -mx-4 px-4 py-3 bg-[var(--surface)]/95 backdrop-blur-lg border-b border-[var(--border)] shadow-sm lg:static lg:mx-0 lg:px-0 lg:py-0 lg:border-none lg:bg-transparent lg:shadow-none'
-    : '';
-  const toolbarStyle = mobileDashboardEnabled ? { top: (toolbarOffset || 0) + 8 } : undefined;
+  const availabilityFilters = useMemo<PersonAlertFilter[]>(() => {
+    return [
+      {
+        key: 'under',
+        label: 'Under threshold',
+        predicate: (item) => (item.utilizationPercent ?? 0) < 70,
+      },
+      {
+        key: 'over',
+        label: 'Overallocated',
+        predicate: (item) => (item.utilizationPercent ?? 0) > 100,
+      },
+      {
+        key: 'tight',
+        label: 'Tight',
+        predicate: (item) => (item.utilizationPercent ?? 0) > 85 && (item.utilizationPercent ?? 0) <= 100,
+      },
+      {
+        key: 'all',
+        label: 'All',
+        predicate: () => true,
+      },
+    ];
+  }, []);
+
+  const utilizationRows = useMemo<BarListRow[]>(() => {
+    if (!data || totalMembers === 0) return [];
+    const dist = data.utilization_distribution;
+    const pct = (value: number) => Math.round((value / totalMembers) * 100);
+    return [
+      { key: 'optimal', label: 'Optimal', percent: pct(dist.optimal), color: '#34d399' },
+      { key: 'high', label: 'High', percent: pct(dist.high), color: '#f59e0b' },
+      { key: 'over', label: 'Over', percent: pct(dist.overallocated), color: '#ef4444' },
+    ];
+  }, [data, totalMembers]);
   
   const loadDepartments = async () => {
     try {
@@ -240,7 +284,6 @@ const Dashboard: React.FC = () => {
 
   const loadProjects = async () => {
     try {
-      setProjectsError(null);
       const list = await projectsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined });
       setProjectsTotal(list.length);
       const counts: Record<string, number> = {};
@@ -250,7 +293,7 @@ const Dashboard: React.FC = () => {
       }
       setProjectCounts(counts);
     } catch (err: any) {
-      setProjectsError(err.message || 'Failed to load projects');
+      console.warn('Failed to load projects:', err);
     }
   };
 
@@ -311,39 +354,72 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  const distribution = data.utilization_distribution;
+  const underCount = distribution.underutilized;
+  const optimalCount = distribution.optimal;
+  const highCount = distribution.high;
+  const overCount = distribution.overallocated;
+  const weekLabel = weeksPeriod === 1 ? 'this week' : `over the last ${weeksPeriod} weeks`;
+  const statusTone: 'danger' | 'warning' | 'info' = overCount > 0 ? 'danger' : underCount > 0 ? 'warning' : 'info';
+  const statusMessage =
+    overCount > 0 || underCount > 0
+      ? `${overCount} people are overallocated; ${underCount} are underutilized ${weekLabel}.`
+      : `All team members are within healthy utilization ${weekLabel}.`;
+  const avgUtil = data.summary.avg_utilization;
+  const avgAccent = avgUtil <= 70 ? 'blue' : avgUtil <= 85 ? 'green' : avgUtil <= 100 ? 'amber' : 'red';
+  const distributionSegments = [
+    { key: 'under', label: 'Under', range: '<70%', value: underCount, color: '#60a5fa' },
+    { key: 'optimal', label: 'Optimal', range: '70-85%', value: optimalCount, color: '#34d399' },
+    { key: 'high', label: 'High', range: '85-100%', value: highCount, color: '#f59e0b' },
+    { key: 'over', label: 'Over', range: '>100%', value: overCount, color: '#ef4444' },
+  ];
+
   return (
     <Layout>
-      <div className="space-y-6" data-mobile-ui={mobileDashboardEnabled ? 'true' : 'false'}>
-        {/* Quick Actions moved inline into header */}
-
-        {/* Header */}
-        <div
-          className={`${toolbarClassName} flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between`}
-          style={toolbarStyle}
-          role="region"
-          aria-label="Dashboard overview and filters"
-        >
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between" role="region" aria-label="Dashboard overview and filters">
           <div className="min-w-0">
-            <h1 className="text-3xl font-bold text-[var(--text)]">
-              Team Dashboard
-            </h1>
-            <p className="text-[var(--muted)] mt-2">
-              Overview of team utilization and workload allocation
-              {weeksPeriod === 1 ? ' (current week)' : ` (${weeksPeriod} week average)`}
-              {deptState.selectedDepartmentId != null && (
-                <span className="block mt-1">
-                  Filtered by:{' '}
-                  {departments.find((d) => d.id === deptState.selectedDepartmentId)?.name || 'Unknown Department'}
-                </span>
-              )}
+            <h1 className="text-3xl font-semibold text-[var(--text)]">Team Dashboard</h1>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Overview of team utilization: workload allocation ({weeksPeriod === 1 ? 'current week' : `${weeksPeriod} week average`}).
             </p>
           </div>
-
-          {/* Department and Time Selectors + Quick Actions */}
-          <div className="flex flex-col gap-3 lg:min-w-[360px]">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <label className="text-sm text-[var(--muted)]" htmlFor="dashboard-dept-select">
-                Department:
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wide text-[var(--muted)]">Time Period</span>
+              <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)]/60 p-1">
+                {[1, 2, 4, 8, 12].map((weeks) => (
+                  <button
+                    key={weeks}
+                    onClick={() => handleWeeksPeriodChange(weeks)}
+                    className={`px-3 py-1 text-[11px] rounded-full transition-colors ${
+                      weeksPeriod === weeks
+                        ? 'bg-[var(--primary)] text-white'
+                        : 'text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                    type="button"
+                    aria-pressed={weeksPeriod === weeks}
+                  >
+                    {weeks}w
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)]/60 px-2 py-1">
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={weeksPeriod}
+                  onChange={(e) => handleWeeksPeriodChange(parseInt(e.target.value, 10) || 1)}
+                  className="w-12 bg-transparent text-[11px] text-[var(--text)] focus:outline-none"
+                  aria-label="Custom weeks"
+                />
+                <span className="text-[11px] text-[var(--muted)]">w</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs uppercase tracking-wide text-[var(--muted)]" htmlFor="dashboard-dept-select">
+                Department
               </label>
               <select
                 id="dashboard-dept-select"
@@ -352,7 +428,7 @@ const Dashboard: React.FC = () => {
                   const val = e.target.value;
                   setDepartment(val ? Number(val) : null);
                 }}
-                className="px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[#007acc] focus:outline-none min-w-[140px] w-full sm:w-[220px]"
+                className="min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:border-[var(--primary)]"
               >
                 <option value="">All Departments</option>
                 {departments.map((dept) => (
@@ -362,450 +438,87 @@ const Dashboard: React.FC = () => {
                 ))}
               </select>
             </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <div className="flex items-center gap-2 flex-wrap">
-                <label className="text-sm text-[var(--muted)]" htmlFor="dashboard-weeks-input">
-                  Time Period:
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="dashboard-weeks-input"
-                    type="number"
-                    min="1"
-                    max="12"
-                    value={weeksPeriod}
-                    onChange={(e) => handleWeeksPeriodChange(parseInt(e.target.value) || 1)}
-                    className="w-20 px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[#007acc] focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
-                  />
-                  <span className="text-sm text-[var(--muted)]">
-                    {weeksPeriod === 1 ? 'week' : 'weeks'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2" aria-label="Quick weeks selection">
-                {[1, 2, 4, 8, 12].map((weeks) => (
-                  <button
-                    key={weeks}
-                    onClick={() => handleWeeksPeriodChange(weeks)}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                      weeksPeriod === weeks
-                        ? 'bg-[var(--primary)] text-white'
-                        : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
-                    }`}
-                    type="button"
-                  >
-                    {weeks}w
-                  </button>
-                ))}
-                <div className="flex-1 min-w-[120px] sm:min-w-[160px]">
-                  <QuickActionsInline />
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
-        {mobileDashboardEnabled ? renderAnalyticsCarousel(PRIMARY_ANALYTICS_CARDS, 'Analytics overview') : null}
+        <StatusStrip tone={statusTone}>{statusMessage}</StatusStrip>
 
-        {/* Summary Stats + Analytics */}
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* Consolidated summary card (narrow, vertical list) */}
-            <Card className="bg-[var(--card)] border-[var(--border)] w-full h-full col-span-12 sm:col-span-6 lg:col-span-2 min-w-[14rem]">
-              <div className="flex flex-col gap-6">
-                {summaryTiles.map((tile) => (
-                  <div key={tile.key}>
-                    <div className="text-[var(--muted)] text-sm">{tile.label}</div>
-                    <div className={`text-2xl font-bold ${getSummaryValueClass(tile.accent)}`}>{tile.value}</div>
-                    {tile.description ? (
-                      <div className="text-xs text-[var(--muted)] mt-1">{tile.description}</div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </Card>
-            {/* Project Summary */}
-            <Card className="bg-[var(--card)] border-[var(--border)] h-full col-span-12 sm:col-span-6 lg:col-span-2 min-w-[14rem]">
-              <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Project Summary</h3>
-              {projectsError ? (
-                <div className="text-red-400 text-sm">{projectsError}</div>
-              ) : (
-                <div className="text-sm">
-                  {(() => {
-                    const items = Object.entries(projectCounts).sort((a, b) => b[1] - a[1]);
-                    if (!items.length) return <div className="text-[var(--muted)]">No data</div>;
-                    return (
-                      <div className="space-y-1">
-                        {items.slice(0, 6).map(([status, count]) => (
-                          <div key={status} className="flex justify-between">
-                            <span className="text-[var(--text)]">{formatStatusLabel(status)}</span>
-                            <span className="text-[var(--muted)]">{count}</span>
-                          </div>
-                        ))}
-                        <div className="mt-3 border-t border-[var(--border)] pt-2 flex justify-between font-medium">
-                          <span className="text-[var(--text)]">Total</span>
-                          <span className="text-[var(--text)]">{projectsTotal}</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </Card>
-
-            {/* Utilization Distribution */}
-            <Card className="bg-[var(--card)] border-[var(--border)] w-full h-full col-span-12 sm:col-span-6 lg:col-span-3 min-w-[16rem]">
-              <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Utilization Distribution</h3>
-              <div className="flex flex-col gap-6">
-                <div>
-                  <div className="text-[var(--muted)] text-sm">Underutilized (&lt;70%)</div>
-                  <div className="text-2xl font-bold text-emerald-400">{data.utilization_distribution.underutilized}</div>
-                </div>
-                <div>
-                  <div className="text-[var(--muted)] text-sm">Optimal (70-85%)</div>
-                  <div className="text-2xl font-bold text-blue-400">{data.utilization_distribution.optimal}</div>
-                </div>
-                <div>
-                  <div className="text-[var(--muted)] text-sm">High (85-100%)</div>
-                  <div className="text-2xl font-bold text-amber-400">{data.utilization_distribution.high}</div>
-                </div>
-                <div>
-                  <div className="text-[var(--muted)] text-sm">Overallocated (&gt;100%)</div>
-                  <div className="text-2xl font-bold text-red-400">{data.utilization_distribution.overallocated}</div>
-                </div>
-              </div>
-            </Card>
-            {ANALYTICS_BEFORE_AVAILABILITY.map((card) => (
-              <div
-                key={card.key}
-                className={`${card.gridClass ?? 'col-span-12'} ${
-                  mobileDashboardEnabled ? 'hidden lg:block' : ''
-                }`}
-              >
-                {renderAnalyticsCard(card)}
-              </div>
-            ))}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+          <div className="col-span-12 grid grid-cols-1 gap-4 lg:col-span-4 lg:grid-cols-2 lg:self-start">
+            <KpiCard
+              label="Average Utilization"
+              value={`${avgUtil}%`}
+              accent={avgAccent}
+              subtext={weeksPeriod === 1 ? 'This week' : `${weeksPeriod} week average`}
+            />
+            <KpiCard
+              label="Active Projects"
+              value={activeProjects}
+              accent="green"
+              subtext={projectsTotal ? `Total: ${projectsTotal}` : 'Current period'}
+            />
           </div>
+          <div className="col-span-12 lg:col-span-4 lg:col-start-5">
+            <AssignedHoursByClientCard className="w-full h-full" responsive />
+          </div>
+          <UpcomingDeliverablesCard
+            deliverables={upcomingDeliverables}
+            isLoading={upcomingDeliverablesQuery.isLoading}
+            listRef={deliverablesListRef}
+            onScroll={updateDeliverablesScrollHint}
+            showScrollHint={showDeliverablesScrollHint}
+          />
+        </div>
 
-          <div className="grid grid-cols-12 gap-6">
-            {/* Availability, Role Capacity, and Heat Map row */}
-            <div className="col-span-12 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,28rem)_minmax(0,48rem)_minmax(0,1fr)] lg:items-start">
-            <Card className="bg-[var(--card)] border-[var(--border)] flex-1 min-w-[16rem] lg:flex-none lg:max-w-[40rem]">
-              <h3 className="text-lg font-semibold text-[var(--text)] mb-3">Availability</h3>
-              {heatData && heatData.length > 0 && currentWeekKey ? (
-                <>
-                  <div className={mobileDashboardEnabled ? 'hidden lg:block' : ''}>
-                    {availabilityRows.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-sm" style={{ borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr className="text-[var(--muted)]">
-                            <th className="text-left py-1 pr-2">Name</th>
-                            <th className="text-right py-1 px-2">Current Week</th>
-                            <th className="text-right py-1 pl-2">Next Week</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(() => {
-                            const grouped = new Map<number | null, typeof availabilityRows>();
-                            availabilityRows.forEach((entry) => {
-                              const key = entry.roleId ?? null;
-                              const arr = grouped.get(key) || [];
-                              arr.push(entry);
-                              grouped.set(key, arr);
-                            });
-                            const roleOrder: Array<number | null> = [...roles.map((role) => role.id ?? null), null];
-                            const rows: React.ReactElement[] = [];
-                            for (const rid of roleOrder) {
-                              const group = grouped.get(rid) || [];
-                              if (!group.length) continue;
-                              const roleName =
-                                rid == null ? 'Unassigned' : (roles.find((role) => role.id === rid)?.name || 'Unknown');
-                              rows.push(
-                                <tr key={`availability-role-${rid ?? 'none'}`}>
-                                  <td colSpan={3} className="pt-2 font-semibold text-[var(--text)]">
-                                    {roleName}
-                                  </td>
-                                </tr>
-                              );
-                              group
-                                .sort((a, b) => b.curAvail - a.curAvail || b.nextAvail - a.nextAvail)
-                                .forEach(({ row, curAvail, nextAvail }) => {
-                                  rows.push(
-                                    <tr
-                                      key={`availability-${rid ?? 'none'}-${row.id}`}
-                                      className="border-t border-[var(--border)] hover:bg-[var(--surface)]/30"
-                                    >
-                                      <td className="py-1 pr-2 text-[var(--text)] max-w-[12rem] truncate" title={row.name}>
-                                        {row.name}
-                                      </td>
-                                      <td className="py-1 px-2 text-right text-emerald-400">{curAvail.toFixed(0)}h</td>
-                                      <td className="py-1 pl-2 text-right text-emerald-400">{nextAvail.toFixed(0)}h</td>
-                                    </tr>
-                                  );
-                                });
-                            }
-                            return rows;
-                          })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-[var(--muted)] text-sm">{heatLoading ? 'Loading…' : 'No data'}</div>
-                  )}
-                </div>
-                {mobileDashboardEnabled ? (
-                  availabilityRows.length > 0 ? (
-                    <div className="lg:hidden max-h-[420px] overflow-y-auto space-y-3 pr-1" role="list" aria-label="Team availability cards">
-                      {availabilityRows.map(({ row, curAvail, nextAvail }) => (
-                        <div key={`availability-card-${row.id}`} className="border border-[var(--border)] rounded-lg p-3 bg-[var(--surface)]/40" role="listitem">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-[var(--text)] font-semibold truncate">{row.name}</div>
-                              {row.personMeta?.roleName ? (
-                                <div className="text-xs text-[var(--muted)] truncate">{row.personMeta.roleName}</div>
-                              ) : null}
-                            </div>
-                            <div className="text-right text-xs text-[var(--muted)]">
-                              <div><span className="text-[var(--text)] font-semibold">{curAvail.toFixed(0)}h</span> now</div>
-                              {nextWeekKey ? (
-                                <div><span className="text-[var(--text)] font-semibold">{nextAvail.toFixed(0)}h</span> next</div>
-                              ) : null}
-                            </div>
-                          </div>
-                          <HeatmapSparkline row={row} weekKeys={weekKeys} />
-                          <div className="mt-2 flex items-center justify-between text-xs text-[var(--muted)]">
-                            <span>Tap for full schedule</span>
-                            <button
-                              type="button"
-                              className="text-[var(--primary)] hover:underline font-semibold"
-                              onClick={() => setHeatmapDetailPerson(row)}
-                            >
-                              View details
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="lg:hidden text-[var(--muted)] text-sm">{heatLoading ? 'Loading…' : 'No data'}</div>
-                  )
-                ) : null}
-              </>
-              ) : (
-                <div className="text-[var(--muted)] text-sm">{heatLoading ? 'Loading…' : 'No data'}</div>
-              )}
-            </Card>
-            <div className="space-y-6 lg:max-w-[48rem]">
-              {ANALYTICS_AFTER_AVAILABILITY.map((card) => (
-                <div
-                  key={card.key}
-                  className={`${card.gridClass ?? 'col-span-12'} ${
-                    mobileDashboardEnabled ? 'hidden lg:block' : ''
-                  }`}
-                >
-                  {renderAnalyticsCard(card)}
-                </div>
-              ))}
-              <div className="hidden lg:block">
-                <TeamMembersCard rows={heatData} loading={heatLoading} />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <Card className="col-span-12 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] lg:col-span-8">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-semibold text-[var(--text)]">Utilization Distribution</h3>
+                <p className="text-xs text-[var(--muted)]">Buckets for the current period</p>
               </div>
-              <Card className="hidden lg:block bg-[var(--card)] border-[var(--border)]">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-[var(--text)]">Team Overview</h3>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-[var(--muted)]">Heat:</span>
-                    {[4, 8, 12, 20].map((w) => (
-                      <button
-                        key={w}
-                        onClick={() => setHeatWeeks(w)}
-                        className={`px-2 py-0.5 rounded ${heatWeeks === w ? 'bg-[var(--primary)] text-white' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'}`}
-                        aria-pressed={heatWeeks === w}
-                      >
-                        {w}w
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-                  {data.team_overview.map((person) => (
-                    <div key={person.id} className="flex items-center justify-between p-3 bg-[var(--surface)]/50 rounded-lg">
-                      <div className="flex-1">
-                        <div className="font-medium text-[var(--text)]">{person.name}</div>
-                        <div className="text-sm text-[var(--muted)]">
-                          {person.role} - {person.allocated_hours}h / {person.capacity}h
-                        </div>
-                        {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (
-                          <div className="text-xs text-amber-400 mt-1">
-                            Peak: {person.peak_utilization_percent}%
-                            {person.is_peak_overallocated && ' over'}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <UtilizationBadge percentage={person.utilization_percent} />
-                        {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (() => {
-                          const pct = person.peak_utilization_percent || 0;
-                          const level = pct <= 70 ? 'blue' : pct <= 85 ? 'green' : pct <= 100 ? 'orange' : 'red';
-                          const classes = utilizationLevelToClasses(level as any);
-                          return (
-                            <div className={`text-xs px-2 py-1 rounded border ${classes}`}>
-                              Peak: {pct}%
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+              <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
+                <span>
+                  Total Team Members: <span className="text-[var(--text)] font-semibold">{totalMembers}</span>
+                </span>
+              </div>
             </div>
-            <div className="col-span-12">
-              <TeamCapacityCalendarCard
-                rows={heatData}
-                loading={heatLoading}
-                deliverables={teamDeliverables}
-                deliverablesLoading={teamDeliverablesLoading}
-                onRangeChange={setTeamCalendarRange}
-                verticalId={verticalState.selectedVerticalId ?? null}
+            <div className="mt-5">
+              <StackedDistributionBar
+                segments={distributionSegments}
+                total={totalMembers}
+                leftValue={underCount}
+                rightValue={overCount}
               />
             </div>
-          </div>
-        </div>
-
-        <div className="lg:hidden">
-          <TeamMembersCard rows={heatData} loading={heatLoading} />
-        </div>
-
-        {/* Team Overview (mobile) */}
-        <Card className="bg-[var(--card)] border-[var(--border)] lg:hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-[var(--text)]">Team Overview</h3>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-[var(--muted)]">Heat:</span>
-              {[4, 8, 12, 20].map((w) => (
-                <button
-                  key={w}
-                  onClick={() => setHeatWeeks(w)}
-                  className={`px-2 py-0.5 rounded ${heatWeeks === w ? 'bg-[var(--primary)] text-white' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'}`}
-                  aria-pressed={heatWeeks === w}
-                >
-                  {w}w
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-            {data.team_overview.map((person) => (
-              <div key={person.id} className="flex items-center justify-between p-3 bg-[var(--surface)]/50 rounded-lg">
-                <div className="flex-1">
-                  <div className="font-medium text-[var(--text)]">{person.name}</div>
-                  <div className="text-sm text-[var(--muted)]">
-                    {person.role} - {person.allocated_hours}h / {person.capacity}h
-                  </div>
-                  {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (
-                    <div className="text-xs text-amber-400 mt-1">
-                      Peak: {person.peak_utilization_percent}%
-                      {person.is_peak_overallocated && ' over'}
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <UtilizationBadge percentage={person.utilization_percent} />
-                  {weeksPeriod > 1 && person.peak_utilization_percent !== person.utilization_percent && (() => {
-                    const pct = person.peak_utilization_percent || 0;
-                    const level = pct <= 70 ? 'blue' : pct <= 85 ? 'green' : pct <= 100 ? 'orange' : 'red';
-                    const classes = utilizationLevelToClasses(level as any);
-                    return (
-                      <div className={`text-xs px-2 py-1 rounded border ${classes}`}>
-                        Peak: {pct}%
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {mobileDashboardEnabled ? renderAnalyticsCarousel(SECONDARY_ANALYTICS_CARDS, 'Timeline analytics') : null}
-        {SECONDARY_ANALYTICS_CARDS.map((card) => (
-          <div key={card.key} className={mobileDashboardEnabled ? 'hidden lg:block' : ''}>
-            {renderAnalyticsCard(card)}
-          </div>
-        ))}
-
-        {/* Utilization Distribution moved to top row */}
-
-        {/* Recent Assignments */}
-        {data.recent_assignments.length > 0 && (
-          <Card className="bg-[var(--card)] border-[var(--border)]">
-            <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Recent Assignments</h3>
-            <div className="space-y-2">
-              {data.recent_assignments.map((assignment, index) => (
-                <div key={index} className="flex items-center justify-between p-2 bg-[var(--surface)]/30 rounded">
-                  <div>
-                    <span className="text-[var(--text)] font-medium">{assignment.person}</span>
-                    <span className="text-[var(--muted)]"> assigned to </span>
-                    <span className="text-[var(--text)]">{assignment.project}</span>
-                  </div>
-                  <div className="text-[var(--muted)] text-sm">
-                    {formatUtcToLocal(assignment.created)}
-                  </div>
-                </div>
-              ))}
-            </div>
           </Card>
-        )}
-      </div>
+          <div className="col-span-12 lg:col-span-4">
+            <BarListCard
+              extraRows={utilizationRows}
+              showSecondaryCategories
+              title="Assigned Hours"
+              subtitle="Active projects and utilization mix"
+            />
+          </div>
+        </div>
 
-      {heatmapDetailPerson ? (
-        <Modal
-          isOpen={!!heatmapDetailPerson}
-          title={`${heatmapDetailPerson.name} availability`}
-          width={520}
-          onClose={() => setHeatmapDetailPerson(null)}
-          >
-            <div className="space-y-4 text-[var(--text)]">
-              <div className="text-sm text-[var(--muted)]">
-                Weekly capacity: {heatmapDetailPerson.weeklyCapacity ?? 0}h
-              </div>
-              <HeatmapSparkline row={heatmapDetailPerson} />
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr className="text-[var(--muted)]">
-                      <th className="text-left py-1 pr-2">Week</th>
-                      <th className="text-right py-1 pr-2">Allocated</th>
-                      <th className="text-right py-1 pr-2">Utilization</th>
-                      <th className="text-right py-1">Available</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {heatmapDetailPerson.weekKeys.map((wk) => {
-                      const hours = Number(heatmapDetailPerson.weekTotals?.[wk] || 0);
-                      const capacity = Number(heatmapDetailPerson.weeklyCapacity || 0);
-                      const pct = capacity ? Math.round((hours / capacity) * 100) : 0;
-                      const available =
-                        typeof heatmapDetailPerson.availableByWeek?.[wk] === 'number'
-                          ? Number(heatmapDetailPerson.availableByWeek?.[wk])
-                          : Math.max(0, capacity - hours);
-                      return (
-                        <tr key={`detail-${wk}`} className="border-t border-[var(--border)]">
-                          <td className="py-1 pr-2">{wk}</td>
-                          <td className="py-1 pr-2 text-right">{hours.toFixed(1)}h</td>
-                          <td className="py-1 pr-2 text-right">{pct}%</td>
-                          <td className="py-1 text-right">{available.toFixed(1)}h</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </Modal>
-        ) : null}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <PersonAlertList
+            className="col-span-12 lg:col-span-4"
+            title="Overallocated Team Members"
+            items={overallocatedItems}
+            maxItems={overallocatedItems.length}
+          />
+          <RoleCapacitySummary className="col-span-12 lg:col-span-4" />
+          <PersonAlertList
+            className="col-span-12 lg:col-span-4"
+            title="Availability & Alerting"
+            items={availabilityItems}
+            filters={availabilityFilters}
+            defaultFilterKey="under"
+            loading={heatLoading}
+          />
+        </div>
       </div>
     </Layout>
   );
@@ -813,63 +526,99 @@ const Dashboard: React.FC = () => {
 
 export default Dashboard;
 
-function getSummaryValueClass(accent?: DashboardSummaryTile['accent']): string {
-  switch (accent) {
-    case 'info':
-      return 'text-blue-400';
-    case 'warning':
-      return 'text-amber-400';
-    case 'danger':
-      return 'text-red-400';
-    default:
-      return 'text-[var(--text)]';
-  }
-}
+type UpcomingDeliverablesCardProps = {
+  deliverables: DeliverableCalendarUnion[];
+  isLoading: boolean;
+  listRef: React.RefObject<HTMLDivElement>;
+  onScroll: () => void;
+  showScrollHint: boolean;
+};
 
-function renderAnalyticsCard(spec: DashboardAnalyticsCardSpec) {
-  switch (spec.component) {
-    case 'AssignedHoursBreakdownCard': {
-      const breakdownProps = (spec.props ?? {}) as React.ComponentProps<typeof AssignedHoursBreakdownCard>;
-      return (
-        <AssignedHoursBreakdownCard {...breakdownProps} />
-      );
-    }
-    case 'AssignedHoursByClientCard': {
-      const clientProps = (spec.props ?? {}) as React.ComponentProps<typeof AssignedHoursByClientCard>;
-      return (
-        <AssignedHoursByClientCard {...clientProps} />
-      );
-    }
-    case 'RoleCapacityCard': {
-      const roleProps = (spec.props ?? {}) as React.ComponentProps<typeof RoleCapacityCard>;
-      return (
-        <RoleCapacityCard {...roleProps} />
-      );
-    }
-    case 'AssignedHoursTimelineCard':
-    default: {
-      const timelineProps = (spec.props ?? {}) as React.ComponentProps<typeof AssignedHoursTimelineCard>;
-      return (
-        <AssignedHoursTimelineCard {...timelineProps} />
-      );
-    }
-  }
-}
-
-function renderAnalyticsCarousel(cards: DashboardAnalyticsCardSpec[], ariaLabel: string) {
-  if (!cards.length) return null;
+const UpcomingDeliverablesCard: React.FC<UpcomingDeliverablesCardProps> = ({
+  deliverables,
+  isLoading,
+  listRef,
+  onScroll,
+  showScrollHint,
+}) => {
+  const { open: openProjectDetails } = useProjectDetailsDrawer();
   return (
-    <div className="-mx-4 px-4 lg:hidden" role="region" aria-label={ariaLabel}>
-      <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4">
-        {cards.map((card) => (
-          <div key={`carousel-${card.key}`} className="min-w-[16rem] flex-none snap-start">
-            {renderAnalyticsCard(card)}
-          </div>
-        ))}
+    <Card
+      className="col-span-12 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[0_10px_28px_rgba(0,0,0,0.25)] lg:col-span-4 lg:col-start-9"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-[var(--text)]">Upcoming Deliverables</h3>
+          <p className="text-xs text-[var(--muted)]">Next 7 days</p>
+        </div>
+        <span className="text-xs text-[var(--muted)]">{deliverables.length}</span>
       </div>
-    </div>
+      <div className="mt-4 grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.6fr)_auto] items-center gap-3 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+        <div>Client</div>
+        <div>Project</div>
+        <div>Deliverable</div>
+        <div className="text-right">Date</div>
+      </div>
+      <div ref={listRef} onScroll={onScroll} className="mt-3 h-[420px] space-y-3 overflow-y-auto pr-2">
+        {isLoading ? (
+          <div className="text-sm text-[var(--muted)]">Loading deliverables…</div>
+        ) : deliverables.length === 0 ? (
+          <div className="text-sm text-[var(--muted)]">No upcoming deliverables.</div>
+        ) : (
+          deliverables.map((item) => {
+            const raw = item as any;
+            const date = raw.date as string | null;
+            const label = raw.title as string;
+            const projectId = raw.project as number | null;
+            const projectName = raw.projectName as string | null;
+            const clientName = raw.projectClient as string | null;
+            const displayDate = date
+              ? new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : 'TBD';
+            return (
+              <div
+                key={`${raw.itemType || 'deliverable'}-${raw.id}`}
+                className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.6fr)_auto] items-center gap-3 border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
+              >
+                <div className="min-w-0 truncate text-sm font-semibold text-[var(--text)]">{clientName || '—'}</div>
+                <div className="min-w-0 truncate text-sm font-semibold text-[var(--text)]">
+                  {projectId != null ? (
+                    <button
+                      type="button"
+                      className="min-w-0 truncate text-left hover:underline focus-visible:underline"
+                      onClick={() => openProjectDetails(projectId)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openProjectDetails(projectId);
+                        }
+                      }}
+                    >
+                      {projectName || '—'}
+                    </button>
+                  ) : (
+                    <span className="truncate">{projectName || '—'}</span>
+                  )}
+                </div>
+                <div className="min-w-0 truncate text-sm text-[var(--text)]">{label}</div>
+                <div className="text-xs text-[var(--muted)] whitespace-nowrap">{displayDate}</div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      {showScrollHint ? (
+        <div className="pointer-events-none mt-2 flex justify-center">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] shadow-sm">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 16.5 5 9.5l1.4-1.4L12 13.7l5.6-5.6L19 9.5z" />
+            </svg>
+          </div>
+        </div>
+      ) : null}
+    </Card>
   );
-}
+};
 
 export const TeamCapacityCalendarCard: React.FC<{
   rows: DashboardHeatmapRow[];
@@ -1036,41 +785,5 @@ export const TeamCapacityCalendarCard: React.FC<{
         eventOrder={['extendedProps.sortPriority', 'start']}
       />
     </Card>
-  );
-};
-
-const HeatmapSparkline: React.FC<{ row: DashboardHeatmapRow; weekKeys?: string[] }> = ({ row, weekKeys }) => {
-  const keys = weekKeys && weekKeys.length > 0 ? weekKeys : row.weekKeys;
-  if (!keys.length) return null;
-  const width = Math.max(140, keys.length * 16);
-  const height = 40;
-  const padding = 4;
-  const pathPoints = keys.map((wk, index) => {
-    const hours = Number(row.weekTotals?.[wk] || 0);
-    const pct = row.weeklyCapacity ? Math.min(1.2, hours / row.weeklyCapacity) : 0;
-    const x =
-      padding +
-      (keys.length === 1 ? 0 : (index / (keys.length - 1)) * (width - padding * 2));
-    const y = height - padding - Math.min(1, pct) * (height - padding * 2);
-    return `${x},${y}`;
-  });
-
-  return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={`Utilization trend for ${row.name}`}
-    >
-      <polyline
-        fill="none"
-        stroke="var(--primary)"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={pathPoints.join(' ')}
-      />
-    </svg>
   );
 };
