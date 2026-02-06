@@ -36,17 +36,20 @@ const RecentAssignmentsCard: React.FC<{
         <span className="text-xs text-[var(--muted)]">{items.length}</span>
       </div>
 
-      <div className="mt-4 flex-1 min-h-0 overflow-y-auto pr-2">
+      <div className="mt-4">
+        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_auto] items-center gap-3 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+          <div>Name</div>
+          <div>Project</div>
+          <div>Project Role</div>
+          <div className="text-right">Date</div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex-1 min-h-0 max-h-[360px] overflow-y-auto pr-2">
         {items.length === 0 ? (
           <div className="text-sm text-[var(--muted)]">No assignments in the last 7 days.</div>
         ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_auto] items-center gap-3 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-              <div>Name</div>
-              <div>Project</div>
-              <div>Project Role</div>
-              <div className="text-right">Date</div>
-            </div>
             {items.map((item, idx) => (
               <div
                 key={`${item.person}-${item.project}-${item.created}-${idx}`}

@@ -200,8 +200,7 @@ class DashboardView(APIView):
         # Recent assignments (last 7 days), optionally filtered by department
         recent_assignments = []
         recent_assignment_qs = Assignment.objects.filter(
-            created_at__gte=today - timedelta(days=7),
-            person__is_active=True
+            created_at__gte=today - timedelta(days=7)
         ).select_related('person', 'project', 'role_on_project_ref')
         
         if department_filter:
@@ -220,8 +219,9 @@ class DashboardView(APIView):
                     role_name = assignment.role_on_project
             except Exception:
                 role_name = None
+            person_name = assignment.person.name if assignment.person else 'Unassigned'
             recent_assignments.append({
-                'person': assignment.person.name,
+                'person': person_name,
                 'project': assignment.project_display,
                 'role': role_name,
                 'created': assignment.created_at.isoformat()
