@@ -1,8 +1,6 @@
 import React from 'react';
-import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
-import { assignmentsApi, deliverableAssignmentsApi, peopleApi } from '@/services/api';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { FullCalendarWrapper, mapDeliverableCalendarToEvents, formatDeliverableInlineLabel } from '@/features/fullcalendar';
 import {
@@ -15,6 +13,9 @@ import {
 import type { CalendarRange } from '@/hooks/useDeliverablesCalendar';
 import { useProjectQuickViewPopover } from '@/components/projects/quickview';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useSearchTokens } from '@/hooks/useSearchTokens';
+import SearchTokenBar from '@/components/filters/SearchTokenBar';
+import { useDeliverablesSearchIndex } from '@/hooks/useDeliverablesSearchIndex';
 import type { DatesSetArg, EventContentArg, EventClickArg } from '@fullcalendar/core';
 import type { DeliverableEventMeta } from '@/features/fullcalendar';
 
@@ -25,18 +26,30 @@ export const DeliverablesCalendarContent: React.FC = () => {
   const [weeks, setWeeks] = React.useState(DEFAULT_WEEKS);
   const [range, setRange] = React.useState<CalendarRange>(() => buildCalendarRange(DEFAULT_WEEKS));
   const [showPre, setShowPre] = React.useState(false);
-  const [personQuery, setPersonQuery] = React.useState('');
-  const [personResults, setPersonResults] = React.useState<Array<{ id: number; name: string }>>([]);
-  const [selectedPersonIndex, setSelectedPersonIndex] = React.useState(-1);
-  const [selectedPerson, setSelectedPerson] = React.useState<{ id: number; name: string } | null>(null);
-  const [allowedDeliverableIds, setAllowedDeliverableIds] = React.useState<Set<number> | null>(null);
-  const [allowedProjectIds, setAllowedProjectIds] = React.useState<Set<number> | null>(null);
-  const [filterLoading, setFilterLoading] = React.useState(false);
+  const {
+    searchInput,
+    setSearchInput,
+    searchTokens,
+    searchOp,
+    activeTokenId,
+    setActiveTokenId,
+    normalizedSearchTokens,
+    removeSearchToken,
+    handleSearchOpChange,
+    handleSearchKeyDown,
+    matchesTokensText,
+  } = useSearchTokens();
   const { open } = useProjectQuickViewPopover();
   const { state: verticalState } = useVerticalFilter();
 
   const calendarQuery = useDeliverablesCalendar(range, { mineOnly: false, vertical: verticalState.selectedVerticalId ?? undefined });
   const { data, isLoading, error, refetch } = calendarQuery;
+  const searchTokensActive = normalizedSearchTokens.length > 0;
+  const searchIndexQuery = useDeliverablesSearchIndex(data ?? [], {
+    enabled: searchTokensActive,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
+  const searchIndex = searchIndexQuery.data;
 
   React.useEffect(() => {
     const unsub = subscribeGridRefresh((payload) => {
@@ -47,70 +60,32 @@ export const DeliverablesCalendarContent: React.FC = () => {
     return unsub;
   }, [refetch]);
 
-  useAuthenticatedEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        if (!selectedPerson) {
-          setAllowedDeliverableIds(null);
-          setAllowedProjectIds(null);
-          return;
-        }
-        setFilterLoading(true);
-        const [links, projects] = await Promise.all([
-          (async () => {
-            try {
-              return await deliverableAssignmentsApi.byPerson(selectedPerson.id);
-            } catch {
-              return [] as any[];
-            }
-          })(),
-          (async () => {
-            try {
-              return await assignmentsApi.byPerson(selectedPerson.id, { vertical: verticalState.selectedVerticalId ?? undefined });
-            } catch {
-              return [] as any[];
-            }
-          })(),
-        ]);
-        if (!active) return;
-        const deliverableSet = new Set<number>(
-          (links as any[]).map((l: any) => l.deliverable).filter((id: any) => Number.isFinite(id))
-        );
-        const projectSet = new Set<number>(
-          (projects as any[]).map((p: any) => p.project).filter((id: any) => Number.isFinite(id))
-        );
-        setAllowedDeliverableIds(deliverableSet.size ? deliverableSet : null);
-        setAllowedProjectIds(projectSet.size ? projectSet : null);
-      } finally {
-        if (active) setFilterLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [selectedPerson, verticalState.selectedVerticalId]);
-
   const filteredItems = React.useMemo(() => {
     const items = data ?? [];
-    if (!selectedPerson) return items;
-    if (!allowedDeliverableIds && !allowedProjectIds) return [];
+    if (!searchTokensActive) return items;
     return items.filter((item) => {
-      const projectId = (item as any).project as number | undefined;
-      const deliverableId = (item as any).id as number | undefined;
-      if (item.itemType === 'pre_deliverable') {
-        const parentId = (item as any).parentDeliverableId as number | undefined;
-        return (
-          (parentId != null && allowedDeliverableIds?.has(parentId)) ||
-          (projectId != null && allowedProjectIds?.has(projectId))
-        );
-      }
-      return (
-        (deliverableId != null && allowedDeliverableIds?.has(deliverableId)) ||
-        (projectId != null && allowedProjectIds?.has(projectId))
-      );
+      const projectId = (item as any)?.project as number | undefined;
+      const people = projectId != null ? Array.from(searchIndex?.projectPeople.get(projectId) ?? []) : [];
+      const departments = projectId != null ? Array.from(searchIndex?.projectDepartments.get(projectId) ?? []) : [];
+      const haystack = [
+        (item as any)?.title,
+        (item as any)?.projectName,
+        (item as any)?.projectClient,
+        (item as any)?.preDeliverableType,
+        ...people,
+        ...departments,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return matchesTokensText(haystack);
     });
-  }, [data, selectedPerson, allowedDeliverableIds, allowedProjectIds]);
+  }, [
+    data,
+    searchTokensActive,
+    searchIndex?.projectPeople,
+    searchIndex?.projectDepartments,
+    matchesTokensText,
+  ]);
 
   const events = React.useMemo(
     () => mapDeliverableCalendarToEvents(filteredItems, { includePreDeliverables: showPre }),
@@ -193,92 +168,24 @@ export const DeliverablesCalendarContent: React.FC = () => {
             <p className="text-[#969696] mt-1">Milestones and pre-deliverables with list view on mobile.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2">
-              <label className="text-sm text-[var(--muted)] whitespace-nowrap">Person Filter</label>
-              <div className="relative">
-                {selectedPerson ? (
-                  <div className="flex items-center gap-2 border rounded px-2 py-1 text-sm bg-[var(--card)] border-[var(--border)] text-[var(--text)]">
-                    <span>{selectedPerson.name}</span>
-                    <button
-                      className="text-[var(--muted)] hover:text-[var(--text)]"
-                      onClick={() => {
-                        setSelectedPerson(null);
-                        setPersonQuery('');
-                        setPersonResults([]);
-                        setSelectedPersonIndex(-1);
-                      }}
-                      title="Clear person filter"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      className="w-56 bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] text-sm px-2 py-1"
-                      placeholder="Type a name…"
-                      value={personQuery}
-                      onChange={async (e) => {
-                        const q = e.currentTarget.value;
-                        setPersonQuery(q);
-                        if (!q || q.trim().length === 0) {
-                          setPersonResults([]);
-                          setSelectedPersonIndex(-1);
-                          return;
-                        }
-                        try {
-                          const res = await peopleApi.autocomplete(q, 20, verticalState.selectedVerticalId ?? undefined);
-                          setPersonResults(res || []);
-                          setSelectedPersonIndex(res && res.length > 0 ? 0 : -1);
-                        } catch {
-                          setPersonResults([]);
-                          setSelectedPersonIndex(-1);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setSelectedPersonIndex((idx) => Math.min(idx + 1, personResults.length - 1));
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setSelectedPersonIndex((idx) => Math.max(idx - 1, 0));
-                        } else if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const pick = selectedPersonIndex >= 0 ? personResults[selectedPersonIndex] : null;
-                          if (pick) {
-                            setSelectedPerson(pick);
-                            setPersonResults([]);
-                          }
-                        }
-                      }}
-                    />
-                    {personResults.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-56 max-h-64 overflow-auto border border-[var(--border)] bg-[var(--card)] rounded shadow">
-                        {personResults.map((p, idx) => (
-                          <div
-                            key={p.id}
-                            className={`px-2 py-1 text-sm cursor-pointer ${
-                              idx === selectedPersonIndex
-                                ? 'bg-[var(--cardHover)] text-[var(--text)]'
-                                : 'text-[var(--muted)] hover:bg-[var(--cardHover)] hover:text-[var(--text)]'
-                            }`}
-                            onMouseEnter={() => setSelectedPersonIndex(idx)}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setSelectedPerson(p);
-                              setPersonResults([]);
-                            }}
-                          >
-                            {p.name}
-                          </div>
-                        ))}
-                        {filterLoading && <div className="px-2 py-1 text-xs text-[var(--muted)]">Loading…</div>}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+            <div className="w-full sm:w-auto min-w-[280px]">
+              <SearchTokenBar
+                id="deliverables-calendar-search"
+                label="Search deliverables"
+                placeholder={searchTokens.length ? 'Add another filter...' : 'Search people, projects, clients, or departments (Enter)'}
+                tokens={searchTokens}
+                activeTokenId={activeTokenId}
+                searchOp={searchOp}
+                searchInput={searchInput}
+                onInputChange={(value) => { setSearchInput(value); setActiveTokenId(null); }}
+                onInputKeyDown={handleSearchKeyDown}
+                onTokenSelect={setActiveTokenId}
+                onTokenRemove={removeSearchToken}
+                onSearchOpChange={handleSearchOpChange}
+              />
+              {searchTokensActive && searchIndexQuery.isLoading ? (
+                <div className="text-[10px] text-[var(--muted)] mt-1">Loading search data…</div>
+              ) : null}
             </div>
             <label className="inline-flex items-center gap-2 text-sm text-[var(--muted)]">
               <input type="checkbox" checked={showPre} onChange={(e) => setShowPre(e.currentTarget.checked)} />

@@ -1,5 +1,4 @@
 import React from 'react';
-import { render } from '@testing-library/react';
 import { renderWithProviders } from '@/test-utils';
 import { describe, it, beforeAll, beforeEach, vi, expect } from 'vitest';
 import PersonalDashboard from '@/pages/Personal/PersonalDashboard';
@@ -116,7 +115,8 @@ vi.mock('@/lib/gridRefreshBus', () => ({
 }));
 
 vi.mock('@/services/api', () => ({
-  assignmentsApi: { byPerson: vi.fn(async () => []) },
+  assignmentsApi: { byPerson: vi.fn(async () => []), listAll: vi.fn(async () => []) },
+  departmentsApi: { listAll: vi.fn(async () => []) },
   deliverableAssignmentsApi: { byPerson: vi.fn(async () => []) },
   peopleApi: { autocomplete: vi.fn(async () => []) },
 }));
@@ -189,7 +189,7 @@ describe('FullCalendar integration points', () => {
         weekTotals: { '2025-11-24': 36, '2025-12-01': 28 },
       },
     ];
-    render(
+    renderWithProviders(
       <TeamCapacityCalendarCard
         rows={rows as any}
         loading={false}
@@ -208,7 +208,7 @@ describe('FullCalendar integration points', () => {
   });
 
   it('renders the deliverables calendar with the multi-week responsive view', () => {
-    render(<DeliverablesCalendarContent />);
+    renderWithProviders(<DeliverablesCalendarContent />);
     expect(recordedCalendarProps).toHaveLength(1);
     const props = recordedCalendarProps[0];
     expect(props.initialView).toBe('deliverablesMultiWeek');

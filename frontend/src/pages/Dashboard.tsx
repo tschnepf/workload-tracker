@@ -38,6 +38,9 @@ import { useDeliverablesCalendar, buildCalendarRange, subtractOneDay, toIsoDate 
 import type { CalendarRange } from '@/hooks/useDeliverablesCalendar';
 import type { DeliverableCalendarUnion } from '@/features/fullcalendar/eventAdapters';
 import type { EventContentArg, DatesSetArg } from '@fullcalendar/core';
+import SearchTokenBar from '@/components/filters/SearchTokenBar';
+import { useSearchTokens } from '@/hooks/useSearchTokens';
+import { useDeliverablesSearchIndex } from '@/hooks/useDeliverablesSearchIndex';
 
 const PRIMARY_ANALYTICS_CARDS = DASHBOARD_ANALYTICS_CARD_SPECS.filter(
   (card) => (card.section ?? 'primary') === 'primary'
@@ -665,6 +668,7 @@ const Dashboard: React.FC = () => {
                 deliverables={teamDeliverables}
                 deliverablesLoading={teamDeliverablesLoading}
                 onRangeChange={setTeamCalendarRange}
+                verticalId={verticalState.selectedVerticalId ?? null}
               />
             </div>
           </div>
@@ -873,11 +877,63 @@ export const TeamCapacityCalendarCard: React.FC<{
   deliverables: DeliverableCalendarUnion[];
   deliverablesLoading: boolean;
   onRangeChange: (range: CalendarRange) => void;
-}> = ({ rows, loading, deliverables, deliverablesLoading, onRangeChange }) => {
-  const capacityEvents = React.useMemo(() => mapCapacityHeatmapToEvents(rows as any[], { clampWeeks: 12 }), [rows]);
+  verticalId?: number | null;
+}> = ({ rows, loading, deliverables, deliverablesLoading, onRangeChange, verticalId }) => {
+  const {
+    searchInput,
+    setSearchInput,
+    searchTokens,
+    searchOp,
+    activeTokenId,
+    setActiveTokenId,
+    normalizedSearchTokens,
+    removeSearchToken,
+    handleSearchOpChange,
+    handleSearchKeyDown,
+    matchesTokensText,
+  } = useSearchTokens();
+  const searchTokensActive = normalizedSearchTokens.length > 0;
+  const searchIndexQuery = useDeliverablesSearchIndex(deliverables, {
+    enabled: searchTokensActive,
+    vertical: verticalId ?? undefined,
+  });
+  const searchIndex = searchIndexQuery.data;
+
+  const filteredRows = React.useMemo(() => {
+    if (!searchTokensActive) return rows;
+    return rows.filter((row) => {
+      const haystack = [row.name, row.department].filter(Boolean).join(' ');
+      return matchesTokensText(haystack);
+    });
+  }, [rows, searchTokensActive, matchesTokensText]);
+
+  const filteredDeliverables = React.useMemo(() => {
+    if (!searchTokensActive) return deliverables;
+    return deliverables.filter((item) => {
+      const projectId = (item as any)?.project as number | undefined;
+      const people = projectId != null ? Array.from(searchIndex?.projectPeople.get(projectId) ?? []) : [];
+      const departments = projectId != null ? Array.from(searchIndex?.projectDepartments.get(projectId) ?? []) : [];
+      const haystack = [
+        (item as any)?.title,
+        (item as any)?.projectName,
+        (item as any)?.projectClient,
+        (item as any)?.preDeliverableType,
+        ...people,
+        ...departments,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return matchesTokensText(haystack);
+    });
+  }, [deliverables, searchTokensActive, searchIndex?.projectPeople, searchIndex?.projectDepartments, matchesTokensText]);
+
+  const capacityEvents = React.useMemo(
+    () => mapCapacityHeatmapToEvents(filteredRows as any[], { clampWeeks: 12 }),
+    [filteredRows]
+  );
   const deliverableEvents = React.useMemo(
-    () => mapDeliverableCalendarToEvents(deliverables, { includePreDeliverables: true }),
-    [deliverables]
+    () => mapDeliverableCalendarToEvents(filteredDeliverables, { includePreDeliverables: true }),
+    [filteredDeliverables]
   );
   const events = React.useMemo(() => [...capacityEvents, ...deliverableEvents], [capacityEvents, deliverableEvents]);
   const combinedLoading = loading || deliverablesLoading;
@@ -936,9 +992,32 @@ export const TeamCapacityCalendarCard: React.FC<{
 
   return (
     <Card className="bg-[var(--card)] border-[var(--border)]">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-[var(--text)]">Capacity & Deliverables Timeline</h3>
-        <span className="text-xs text-[var(--muted)] hidden sm:inline">List view available on mobile</span>
+      <div className="flex flex-col gap-3 mb-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-[var(--text)]">Capacity & Deliverables Timeline</h3>
+          <span className="text-xs text-[var(--muted)] hidden sm:inline">List view available on mobile</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex-1 min-w-[240px]">
+            <SearchTokenBar
+              id="dashboard-calendar-search"
+              label="Search calendar"
+              placeholder={searchTokens.length ? 'Add another filter...' : 'Search people, projects, clients, or departments (Enter)'}
+              tokens={searchTokens}
+              activeTokenId={activeTokenId}
+              searchOp={searchOp}
+              searchInput={searchInput}
+              onInputChange={(value) => { setSearchInput(value); setActiveTokenId(null); }}
+              onInputKeyDown={handleSearchKeyDown}
+              onTokenSelect={setActiveTokenId}
+              onTokenRemove={removeSearchToken}
+              onSearchOpChange={handleSearchOpChange}
+            />
+            {searchTokensActive && searchIndexQuery.isLoading ? (
+              <div className="text-[10px] text-[var(--muted)] mt-1">Loading search data…</div>
+            ) : null}
+          </div>
+        </div>
       </div>
       <FullCalendarWrapper
         className="min-h-[520px]"
