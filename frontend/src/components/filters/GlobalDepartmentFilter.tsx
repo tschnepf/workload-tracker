@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import type { Department } from '@/types/models';
 import { useDepartmentFilter, type DepartmentFilterOp } from '@/hooks/useDepartmentFilter';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 const INPUT_ID = 'global-dept-filter-input';
 const LIVE_ID = 'global-dept-filter-live';
@@ -17,8 +18,12 @@ type Props = {
 
 export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopyLink = false, expand = true, departmentsOverride }) => {
   const { state, addDepartmentFilter, removeDepartmentFilter, clearDepartment } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
 
-  const { departments: fetchedDepartments, isLoading: loading, error } = useDepartments({ enabled: !departmentsOverride });
+  const { departments: fetchedDepartments, isLoading: loading, error } = useDepartments({
+    enabled: !departmentsOverride,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
   const departments = departmentsOverride ?? fetchedDepartments;
 
   // Combobox state

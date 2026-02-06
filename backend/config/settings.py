@@ -57,6 +57,7 @@ LOCAL_APPS = [
     'assignments',
     'deliverables',
     'departments',
+    'verticals',
     'dashboard',
     'skills',
     'monitoring',

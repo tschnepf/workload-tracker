@@ -7,6 +7,8 @@ export interface Person {
   weeklyCapacity?: number;
   department?: number | null; // Department ID (Phase 2)
   departmentName?: string; // Read-only department name (Phase 2)
+  vertical?: number | null; // Derived from department
+  verticalName?: string; // Read-only vertical name
   role?: number | null; // Role ID (ForeignKey)
   roleName?: string; // Read-only role name for display
   email?: string;
@@ -44,6 +46,8 @@ export interface Project {
   estimatedHours?: number;
   projectNumber?: string;
   autoHoursTemplateId?: number | null;
+  vertical?: number | null;
+  verticalName?: string;
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -99,8 +103,20 @@ export interface Department {
   name: string;
   shortName?: string;
   parentDepartment?: number | null; // Department ID
+  vertical?: number | null; // Vertical ID
+  verticalName?: string;
   manager?: number | null; // Person ID
   managerName?: string; // Read-only manager name
+  description?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Vertical {
+  id?: number;
+  name: string;
+  shortName?: string;
   description?: string;
   isActive?: boolean;
   createdAt?: string;

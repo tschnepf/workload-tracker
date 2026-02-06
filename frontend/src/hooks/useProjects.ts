@@ -16,6 +16,7 @@ export type ProjectsQueryOptions = {
   departmentFilters?: ProjectsDepartmentFilter[];
   includeChildren?: 0 | 1;
   useSearch?: boolean;
+  vertical?: number | null;
 };
 
 function stableStringify(value: any): string {
@@ -69,6 +70,7 @@ export function buildProjectsSearchPayloadBase(options: ProjectsQueryOptions) {
   const ordering = options.ordering ?? null;
   const statusIn = options.statusIn ?? null;
   const includeChildren = options.includeChildren;
+  const vertical = options.vertical ?? null;
   const searchTokens = normalizeSearchTokens(options.searchTokens);
   const departmentFilters = normalizeDepartmentFilters(options.departmentFilters);
   const payload: Record<string, any> = {
@@ -76,6 +78,7 @@ export function buildProjectsSearchPayloadBase(options: ProjectsQueryOptions) {
   };
   if (ordering) payload.ordering = ordering;
   if (statusIn) payload.status_in = statusIn;
+  if (vertical != null) payload.vertical = vertical;
   if (searchTokens.length) payload.search_tokens = searchTokens;
   if (departmentFilters.length) payload.department_filters = departmentFilters;
   if (departmentFilters.length && includeChildren != null) payload.include_children = includeChildren;
@@ -86,7 +89,7 @@ export function buildProjectsQueryKey(options: ProjectsQueryOptions) {
   const useSearch = options.useSearch ?? true;
   if (!useSearch) {
     const pageSize = options.pageSize ?? 100;
-    return ['projects', options.ordering || 'default', pageSize] as const;
+    return ['projects', options.ordering || 'default', pageSize, options.vertical ?? null] as const;
   }
   const payload = buildProjectsSearchPayloadBase(options);
   const hash = hashString(stableStringify(payload));
@@ -102,6 +105,7 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
   const searchTokens = options.searchTokens ?? [];
   const departmentFilters = options.departmentFilters ?? [];
   const includeChildren = options.includeChildren;
+  const vertical = options.vertical ?? null;
   const searchPayloadBase = useMemo(() => buildProjectsSearchPayloadBase({
     pageSize,
     ordering,
@@ -109,7 +113,8 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
     searchTokens,
     departmentFilters,
     includeChildren,
-  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren]);
+    vertical,
+  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, vertical]);
   const queryKey = useMemo(() => buildProjectsQueryKey({
     pageSize,
     ordering,
@@ -118,7 +123,8 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
     departmentFilters,
     includeChildren,
     useSearch,
-  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, useSearch]);
+    vertical,
+  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, useSearch, vertical]);
   const query = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam = 1 }) => {
@@ -129,6 +135,7 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
         page: pageParam,
         page_size: pageSize,
         ordering: ordering || undefined,
+        vertical: vertical ?? undefined,
       });
     },
     initialPageParam: 1,

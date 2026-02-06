@@ -15,9 +15,10 @@ type Args = {
   weeks: HorizonWeeks;
   departmentId?: number | null;
   includeChildren?: boolean;
+  vertical?: number | null;
 };
 
-export function useAssignedHoursBreakdown({ weeks, departmentId, includeChildren }: Args) {
+export function useAssignedHoursBreakdown({ weeks, departmentId, includeChildren, vertical }: Args) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [slices, setSlices] = useState<Slice[]>([
@@ -37,6 +38,7 @@ export function useAssignedHoursBreakdown({ weeks, departmentId, includeChildren
           weeks,
           department: departmentId != null ? Number(departmentId) : undefined,
           include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
+          vertical: vertical ?? undefined,
         } as any);
         if (!mounted) return;
 
@@ -76,9 +78,8 @@ export function useAssignedHoursBreakdown({ weeks, departmentId, includeChildren
     return () => {
       mounted = false;
     };
-  }, [weeks, departmentId, includeChildren]);
+  }, [weeks, departmentId, includeChildren, vertical]);
 
   const total = Math.max(0, slices.reduce((s, x) => s + x.value, 0));
   return { loading, error, slices, total };
 }
-

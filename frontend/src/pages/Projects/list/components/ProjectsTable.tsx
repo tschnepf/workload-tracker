@@ -15,6 +15,7 @@ import { createAssignment, deleteAssignment, updateAssignment } from '@/lib/muta
 import { useUpdateProject } from '@/hooks/useProjects';
 import { useDebounce } from '@/hooks/useDebounce';
 import { listProjectRoles } from '@/roles/api';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 interface Props {
   projects: Project[];
@@ -79,6 +80,7 @@ const ProjectsTable: React.FC<Props> = ({
   onLoadMore,
   loadMoreOffset = 160,
 }) => {
+  const { state: verticalState } = useVerticalFilter();
   const baseGridCols = 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))]';
   const gridColsClass = showDashboardButton
     ? 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))_minmax(0,0.35fr)]'
@@ -814,7 +816,10 @@ const ProjectsTable: React.FC<Props> = ({
     }
     const seq = ++qaSearchSeq.current;
     setQaSearching(true);
-    peopleApi.search(term, 20, qaEditor.departmentId != null ? { department: qaEditor.departmentId } : undefined)
+    peopleApi.search(term, 20, {
+      department: qaEditor.departmentId != null ? qaEditor.departmentId : undefined,
+      vertical: verticalState.selectedVerticalId ?? undefined,
+    })
       .then((results) => {
         if (qaSearchSeq.current === seq) setQaResults(results || []);
       })
@@ -824,7 +829,7 @@ const ProjectsTable: React.FC<Props> = ({
       .finally(() => {
         if (qaSearchSeq.current === seq) setQaSearching(false);
       });
-  }, [debouncedQaSearch, qaEditor]);
+  }, [debouncedQaSearch, qaEditor, verticalState.selectedVerticalId]);
 
   useEffect(() => {
     if (!qaEditor) return;

@@ -1,6 +1,7 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { useAssignedHoursBreakdownData, type HorizonWeeks, type Slice } from '@/hooks/useAssignedHoursBreakdownData';
 
@@ -85,9 +86,15 @@ const AssignedHoursBreakdownCard: React.FC<Props> = ({
   const { width } = useContainerWidth(rootRef);
   const [weeks, setWeeks] = React.useState<HorizonWeeks>(initialWeeks);
   const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
   const includeChildren = useGlobalDepartmentFilter ? deptState.includeChildren : !!includeChildrenOverride;
-  const { loading, error, slices, total } = useAssignedHoursBreakdownData({ weeks, departmentId, includeChildren });
+  const { loading, error, slices, total } = useAssignedHoursBreakdownData({
+    weeks,
+    departmentId,
+    includeChildren,
+    vertical: verticalState.selectedVerticalId ?? null,
+  });
 
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 

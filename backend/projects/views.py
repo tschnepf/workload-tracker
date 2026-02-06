@@ -89,14 +89,27 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     
     def get_queryset(self):
         # Phase 3: tighten fields to reduce payload
-        return (
+        qs = (
             Project.objects
             .filter(is_active=True)
+            .select_related('vertical')
             .only(
                 'id', 'name', 'status', 'client', 'description', 'project_number', 'assigned_names_text',
-                'start_date', 'end_date', 'estimated_hours', 'is_active', 'created_at', 'updated_at'
+                'start_date', 'end_date', 'estimated_hours', 'is_active', 'created_at', 'updated_at',
+                'vertical_id', 'vertical__name'
             )
         )
+        # Optional vertical filter
+        try:
+            vertical_param = self.request.query_params.get('vertical') if self.request else None
+        except Exception:
+            vertical_param = None
+        if vertical_param not in (None, ""):
+            try:
+                qs = qs.filter(vertical_id=int(vertical_param))
+            except Exception:
+                pass
+        return qs
     
     def list(self, request, *args, **kwargs):
         """Get all projects with conditional request support (ETag/Last-Modified) and bulk loading"""
@@ -157,6 +170,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'page': serializers.IntegerField(required=False),
                 'page_size': serializers.IntegerField(required=False),
                 'ordering': serializers.CharField(required=False),
+                'vertical': serializers.IntegerField(required=False),
                 'status_in': serializers.CharField(required=False),
                 'include_children': serializers.IntegerField(required=False),
                 'search_tokens': serializers.ListField(
@@ -196,6 +210,14 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     def search(self, request):
         data = request.data or {}
         queryset = self.get_queryset()
+        vertical_param = data.get('vertical')
+        if vertical_param is None:
+            vertical_param = request.query_params.get('vertical')
+        if vertical_param not in (None, ""):
+            try:
+                queryset = queryset.filter(vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
 
         # Department filters (AND/OR/NOT)
         dept_filters_raw = (
@@ -675,6 +697,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Sunday key)'),
             OpenApiParameter(name='department', type=int, required=False, description='Filter people by department id'),
             OpenApiParameter(name='include_children', type=int, required=False, description='Include child departments (0|1)'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='candidates_only', type=int, required=False, description='Limit to departments already staffing this project (0|1)')
         ],
         responses=ProjectAvailabilityItemSerializer(many=True)
@@ -704,6 +727,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         candidates_only = request.query_params.get('candidates_only') == '1'
+        vertical_param = request.query_params.get('vertical')
 
         # Build people queryset
         people_qs = (
@@ -747,6 +771,12 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     cache_scope = f'dept_{dept_id}'
             except (TypeError, ValueError):  # nosec B110
                 pass
+        if vertical_param not in (None, ""):
+            try:
+                people_qs = people_qs.filter(department__vertical_id=int(vertical_param))
+                cache_scope = f"{cache_scope}_v{int(vertical_param)}"
+            except Exception:  # nosec B110
+                pass
 
         # Candidate department ids for this project
         cand_dept_ids = list(
@@ -755,6 +785,12 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             .exclude(person__department_id__isnull=True)
             .distinct()
         )
+        if vertical_param not in (None, ""):
+            try:
+                allowed = set(Department.objects.filter(vertical_id=int(vertical_param)).values_list('id', flat=True))
+                cand_dept_ids = [d for d in cand_dept_ids if d in allowed]
+            except Exception:  # nosec B110
+                pass
         if candidates_only:
             if cand_dept_ids:
                 people_qs = people_qs.filter(department_id__in=cand_dept_ids)
@@ -764,7 +800,13 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 people_qs = people_qs.filter(department_id__in=cand_dept_ids)
 
         # Prefetch active assignments for availability computation
-        asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id')
+        asn_qs = Assignment.objects.filter(is_active=True)
+        if vertical_param not in (None, ""):
+            try:
+                asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
+        asn_qs = asn_qs.only('weekly_hours', 'person_id')
         people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
 
         # Short TTL caching + ETag/Last-Modified

@@ -1,11 +1,13 @@
 ﻿﻿import React, { useEffect, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { darkTheme } from '../../../theme/tokens';
 import { deliverablesApi, deliverableAssignmentsApi, peopleApi } from '../../../services/api';
 
 interface Props { onClose: () => void }
 
 const MilestoneReviewTool: React.FC<Props> = () => {
+  const { state: verticalState } = useVerticalFilter();
   const [items, setItems] = useState<any[]>([]);
   const [selectedDeliverableId, setSelectedDeliverableId] = useState<number | null>(null);
   const [staff, setStaff] = useState<any[]>([]);
@@ -19,7 +21,7 @@ const MilestoneReviewTool: React.FC<Props> = () => {
         const today = new Date();
         const start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
         const end = new Date(today.getFullYear(), today.getMonth()+1, 0).toISOString().slice(0,10);
-        const data = await deliverablesApi.calendar(start, end);
+        const data = await deliverablesApi.calendar(start, end, verticalState.selectedVerticalId ?? undefined);
         setItems(data);
         if (data.length > 0) setSelectedDeliverableId(data[0].id);
       } finally {
@@ -27,7 +29,7 @@ const MilestoneReviewTool: React.FC<Props> = () => {
       }
     };
     run();
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   useEffect(() => {
     const loadAssignments = async () => {
@@ -48,14 +50,14 @@ const MilestoneReviewTool: React.FC<Props> = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const first = await peopleApi.autocomplete('', 50);
+        const first = await peopleApi.autocomplete('', 50, verticalState.selectedVerticalId ?? undefined);
         setPeople(first);
       } catch (e) {
         console.error('Failed to load people', e);
       }
     };
     load();
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   const refreshSummary = async () => {
     if (!selectedDeliverableId) return;
@@ -246,4 +248,3 @@ const MilestoneReviewTool: React.FC<Props> = () => {
 };
 
 export default MilestoneReviewTool;
-

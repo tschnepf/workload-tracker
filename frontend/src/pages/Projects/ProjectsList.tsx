@@ -10,6 +10,7 @@ import { deleteAssignment, updateAssignment } from '@/lib/mutations/assignments'
 import { showToast } from '@/lib/toastBus';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useProjectFilterMetadata } from '@/hooks/useProjectFilterMetadata';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 
@@ -48,7 +49,8 @@ const ProjectsList: React.FC = () => {
   const [ordering, setOrdering] = useState<string | null>('client,name');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { people } = usePeople();
+  const { state: verticalState } = useVerticalFilter();
+  const { people } = usePeople({ vertical: verticalState.selectedVerticalId ?? undefined });
   const deleteProjectMutation = useDeleteProject();
   const updateProjectMutation = useUpdateProject();
 
@@ -200,9 +202,11 @@ const ProjectsList: React.FC = () => {
       department?: number;
       include_children?: 0 | 1;
       status_in?: string;
+      vertical?: number;
       search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
       department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
     } = {};
+    if (verticalState.selectedVerticalId != null) params.vertical = Number(verticalState.selectedVerticalId);
     if (departmentFilters.length) params.department_filters = departmentFilters;
     if (deptState.selectedDepartmentId != null) {
       params.department = Number(deptState.selectedDepartmentId);
@@ -211,7 +215,7 @@ const ProjectsList: React.FC = () => {
     if (statusIn) params.status_in = statusIn;
     if (searchTokensForApi.length) params.search_tokens = searchTokensForApi;
     return Object.keys(params).length ? params : undefined;
-  }, [departmentFilters, deptState.selectedDepartmentId, includeChildren, statusIn, searchTokensForApi]);
+  }, [departmentFilters, deptState.selectedDepartmentId, includeChildren, statusIn, searchTokensForApi, verticalState.selectedVerticalId]);
 
   // Optimized filter metadata (assignment counts + hasFutureDeliverables)
   const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata(filterMetadataParams);
@@ -232,18 +236,24 @@ const ProjectsList: React.FC = () => {
     searchTokens: searchTokensForApi,
     departmentFilters,
     includeChildren,
+    vertical: verticalState.selectedVerticalId ?? undefined,
   });
 
   // Next Deliverables map for list column + sorting
   const { nextMap: nextDeliverablesMap, prevMap: prevDeliverablesMap, refreshOne: refreshDeliverablesFor } = useProjectDeliverablesBulk(projects);
 
   const leadAssignmentsKey = useMemo(
-    () => ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null],
-    [backendParams.department, backendParams.include_children]
+    () => ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null, verticalState.selectedVerticalId ?? null],
+    [backendParams.department, backendParams.include_children, verticalState.selectedVerticalId]
   );
   const leadAssignmentsQuery = useQuery<Assignment[], Error>({
     queryKey: leadAssignmentsKey,
-    queryFn: () => assignmentsApi.listAll({ ...backendParams, include_placeholders: 1 }),
+    queryFn: () => assignmentsApi.listAll({
+      ...backendParams,
+      include_placeholders: 1,
+      vertical: verticalState.selectedVerticalId ?? undefined,
+      department_filters: deptState.selectedDepartmentId == null ? departmentFilters : undefined,
+    }),
     enabled: projects.length > 0,
     staleTime: 30_000,
   });
@@ -254,8 +264,8 @@ const ProjectsList: React.FC = () => {
   }, [refetchProjects]);
 
   const { data: departments = [] } = useQuery<Department[], Error>({
-    queryKey: ['departmentsAll'],
-    queryFn: () => departmentsApi.listAll(),
+    queryKey: ['departmentsAll', verticalState.selectedVerticalId ?? null],
+    queryFn: () => departmentsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined }),
     staleTime: 60_000,
   });
 
@@ -422,6 +432,7 @@ const ProjectsList: React.FC = () => {
     departmentId: deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : undefined,
     includeChildren: deptState?.includeChildren,
     candidatesOnly,
+    vertical: verticalState.selectedVerticalId ?? null,
   });
 
   const qaPrefetchByDept = useMemo(() => {
@@ -620,7 +631,7 @@ const ProjectsList: React.FC = () => {
     onFocus: onPersonSearchFocus,
     onKeyDown: onPersonSearchKeyDown,
     onSelect: onPersonSearchSelect,
-  } = usePersonSearch({ people, availabilityMap, deptState, candidatesOnly, caps });
+  } = usePersonSearch({ people, availabilityMap, deptState, candidatesOnly, caps, vertical: verticalState.selectedVerticalId ?? null });
 
   const handlePersonSelect = (person: Person) => {
     onPersonSearchSelect(person);

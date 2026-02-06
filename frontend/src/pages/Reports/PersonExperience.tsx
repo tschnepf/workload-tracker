@@ -2,6 +2,7 @@ import React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from '@/utils/useDebounce';
 import { usePeopleAutocomplete } from '@/hooks/usePeople';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { usePersonExperienceProfile, usePersonProjectTimeline } from '@/hooks/useExperience';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
@@ -31,9 +32,10 @@ function fmtDate(d: Date) {
 const DEFAULT_MONTHS = 6;
 
 export default function PersonExperienceReport() {
+  const { state: verticalState } = useVerticalFilter();
   const [search, setSearch] = React.useState('');
   const debounced = useDebounce(search, 200);
-  const { people, loading: loadingPeople } = usePeopleAutocomplete(debounced);
+  const { people, loading: loadingPeople } = usePeopleAutocomplete(debounced, { vertical: verticalState.selectedVerticalId ?? undefined });
   const [selectedPersonId, setSelectedPersonId] = React.useState<number | null>(null);
   const queryClient = useQueryClient();
 

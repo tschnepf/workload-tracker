@@ -54,13 +54,15 @@ class PersonSerializer(serializers.ModelSerializer):
     
     # Department fields (Phase 2)
     departmentName = serializers.CharField(source='department.name', read_only=True)
+    vertical = serializers.IntegerField(source='department.vertical_id', read_only=True, allow_null=True)
+    verticalName = serializers.CharField(source='department.vertical.name', read_only=True, allow_null=True)
     
     # Role fields - proper implementation without workarounds
     roleName = serializers.CharField(source='role.name', read_only=True)
     
     class Meta:
         model = Person
-        fields = ['id', 'name', 'weeklyCapacity', 'role', 'roleName', 'department', 'departmentName', 'location', 'hireDate', 'isActive', 'notes', 'createdAt', 'updatedAt']
+        fields = ['id', 'name', 'weeklyCapacity', 'role', 'roleName', 'department', 'departmentName', 'vertical', 'verticalName', 'location', 'hireDate', 'isActive', 'notes', 'createdAt', 'updatedAt']
         extra_kwargs = {
             'createdAt': {'source': 'created_at', 'read_only': True},
             'updatedAt': {'source': 'updated_at', 'read_only': True},

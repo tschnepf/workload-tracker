@@ -2,6 +2,7 @@ import React from 'react';
 import Card from '@/components/ui/Card';
 import MultiRoleCapacityChart, { type ChartMode, roleColorForId } from '@/components/charts/MultiRoleCapacityChart';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { rolesApi, departmentsApi } from '@/services/api';
 import { getRoleCapacityTimeline } from '@/services/analyticsApi';
 import type { Department } from '@/types/models';
@@ -43,6 +44,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const isMobile = useMediaQuery('(max-width: 767px)');
   const { state: globalDept } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   const effectiveDeptId = (departmentId ?? globalDept.selectedDepartmentId) ?? null;
 
   const [weeks, setWeeks] = React.useState<number>(defaultWeeks);
@@ -76,14 +78,14 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
     let mounted = true;
     (async () => {
       try {
-        const page = await departmentsApi.list({ page: 1, page_size: 500 });
+        const page = await departmentsApi.list({ page: 1, page_size: 500, vertical: verticalState.selectedVerticalId ?? undefined });
         if (mounted) setDepartments((page.results || []) as Department[]);
       } catch {
         if (mounted) setDepartments([]);
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   // Initialize selection to all roles (or provided initial ids) once roles load
   React.useEffect(() => {
@@ -102,7 +104,12 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
     setError(null);
     try {
       const roleIdsCsv = (selectedRoleIds && selectedRoleIds.size > 0) ? Array.from(selectedRoleIds).join(',') : undefined;
-      const res = await getRoleCapacityTimeline({ department: effectiveDeptId != null ? Number(effectiveDeptId) : undefined, weeks, roleIdsCsv });
+      const res = await getRoleCapacityTimeline({
+        department: effectiveDeptId != null ? Number(effectiveDeptId) : undefined,
+        weeks,
+        roleIdsCsv,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      });
       setWeekKeys(res.weekKeys || []);
       setSeries(res.series || []);
     } catch (e: any) {
@@ -112,7 +119,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [canQuery, effectiveDeptId, weeks, selectedRoleIds]);
+  }, [canQuery, effectiveDeptId, weeks, selectedRoleIds, verticalState.selectedVerticalId]);
 
   React.useEffect(() => { if (canQuery) refresh(); }, [canQuery, refresh]);
 

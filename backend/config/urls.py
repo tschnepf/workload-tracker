@@ -178,6 +178,7 @@ urlpatterns = [
     path('api/ui/assignments-page/', AssignmentsPageSnapshotView.as_view(), name='assignments_page_snapshot'),
     path('api/deliverables/', include('deliverables.urls')),
     path('api/departments/', include('departments.urls')),
+    path('api/verticals/', include('verticals.urls')),
     path('api/skills/', include('skills.urls')),
     path('api/personal/', include('personal.urls')),
     path('api/core/', include('core.urls')),

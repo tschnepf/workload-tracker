@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Layout from '@/components/layout/Layout';
 import AssignmentsSkeleton from '@/components/skeletons/AssignmentsSkeleton';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useAssignmentsSnapshot } from '@/pages/Assignments/grid/useAssignmentsSnapshot';
 import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
 import { useEditingCell as useEditingCellHook } from '@/pages/Assignments/grid/useEditingCell';
@@ -80,11 +81,19 @@ const isDateInWeek = (dateStr: string, weekStartStr: string) => {
 
 const ProjectAssignmentsGrid: React.FC = () => {
   const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   const auth = useAuth();
   const canUseAutoHours = isAdminOrManager(auth.user);
   const canEditAssignments = true;
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const query = useGridUrlState();
+  const departmentFilters = useMemo(() => (deptState.filters ?? [])
+    .map((f) => ({ departmentId: Number(f.departmentId), op: f.op }))
+    .filter((f) => Number.isFinite(f.departmentId) && f.departmentId > 0), [deptState.filters]);
+  const departmentFiltersPayload = useMemo(
+    () => (deptState.selectedDepartmentId == null ? departmentFilters : []),
+    [deptState.selectedDepartmentId, departmentFilters]
+  );
 
   const [people, setPeople] = useState<Person[]>([]);
   const [assignmentsData, setAssignmentsData] = useState<Assignment[]>([]);
@@ -136,6 +145,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
     weeksHorizon,
     departmentId: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
     includeChildren: deptState.includeChildren,
+    departmentFilters: deptState.selectedDepartmentId == null ? departmentFiltersPayload : undefined,
+    vertical: verticalState.selectedVerticalId ?? undefined,
     setPeople: setPeople as any,
     setAssignmentsData,
     setProjectsData: setProjectsDataFromSnapshot as any,
@@ -175,47 +186,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
     return map;
   }, [departments]);
-
-  const globalDeptFilter = useMemo(() => {
-    const filters = deptState.filters ?? [];
-    if (filters.length === 0) {
-      return { enabled: false, includeAll: new Set<number>(), includeAny: new Set<number>(), excludeOnly: new Set<number>() };
-    }
-    const includeAll = new Set<number>();
-    const includeAny = new Set<number>();
-    const excludeOnly = new Set<number>();
-    filters.forEach((filter) => {
-      if (filter.op === 'not') {
-        excludeOnly.add(filter.departmentId);
-        return;
-      }
-      if (filter.op === 'or') {
-        includeAny.add(filter.departmentId);
-        return;
-      }
-      includeAll.add(filter.departmentId);
-    });
-
-    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
-      const expanded = new Set<number>();
-      const stack = [deptState.selectedDepartmentId];
-      while (stack.length > 0) {
-        const current = stack.pop()!;
-        if (expanded.has(current)) continue;
-        expanded.add(current);
-        (departments || []).forEach((dept: any) => {
-          if (dept?.parentDepartment === current && dept?.id != null) {
-            stack.push(dept.id);
-          }
-        });
-      }
-      includeAll.clear();
-      includeAny.clear();
-      expanded.forEach((id) => includeAny.add(id));
-    }
-
-    return { enabled: true, includeAll, includeAny, excludeOnly };
-  }, [deptState.filters, deptState.includeChildren, deptState.selectedDepartmentId, departments]);
 
   useEffect(() => {
     let mounted = true;
@@ -257,71 +227,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
       isExpanded: expandedProjectIds.has(project.id!),
     }));
   }, [assignmentsData, projectsData, expandedProjectIds]);
-
-  const deptFilteredProjectsWithAssignments = useMemo(() => {
-    if (!globalDeptFilter.enabled) return projectsWithAssignments;
-    const allowSet = new Set<number>([
-      ...Array.from(globalDeptFilter.includeAll),
-      ...Array.from(globalDeptFilter.includeAny),
-    ]);
-
-    const filtered: ProjectWithAssignments[] = [];
-    projectsWithAssignments.forEach((project) => {
-      const deptSet = new Set<number>();
-      (project.assignments || []).forEach((assignment) => {
-        const deptId = assignment.personDepartmentId
-          ?? (assignment.person != null ? peopleById.get(Number(assignment.person))?.department ?? null : null);
-        if (deptId != null) deptSet.add(Number(deptId));
-      });
-
-      if (globalDeptFilter.includeAll.size > 0) {
-        for (const id of globalDeptFilter.includeAll) {
-          if (!deptSet.has(id)) return;
-        }
-      }
-
-      if (globalDeptFilter.includeAny.size > 0) {
-        let hasAny = false;
-        for (const id of globalDeptFilter.includeAny) {
-          if (deptSet.has(id)) {
-            hasAny = true;
-            break;
-          }
-        }
-        if (!hasAny) return;
-      }
-
-      if (globalDeptFilter.excludeOnly.size > 0 && deptSet.size > 0) {
-        let allExcluded = true;
-        for (const id of deptSet) {
-          if (!globalDeptFilter.excludeOnly.has(id)) {
-            allExcluded = false;
-            break;
-          }
-        }
-        if (allExcluded) return;
-      }
-
-      const filteredAssignments = (project.assignments || []).filter((assignment) => {
-        const deptId = assignment.personDepartmentId
-          ?? (assignment.person != null ? peopleById.get(Number(assignment.person))?.department ?? null : null);
-        if (deptId != null && globalDeptFilter.excludeOnly.has(Number(deptId))) return false;
-        if (allowSet.size > 0) {
-          if (deptId == null) return false;
-          if (!allowSet.has(Number(deptId))) return false;
-        }
-        return true;
-      });
-      if (filteredAssignments.length === 0) return;
-      filtered.push({ ...project, assignments: filteredAssignments });
-    });
-    return filtered;
-  }, [globalDeptFilter, projectsWithAssignments, peopleById]);
+  const visibleProjects = useMemo(() => projectsWithAssignments, [projectsWithAssignments]);
 
   useEffect(() => {
     setLoadedProjectIds(new Set());
     setLoadingAssignments(new Set());
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, deptState.filters, verticalState.selectedVerticalId, weeksHorizon]);
 
   const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter } = useProjectStatusFilters(deliverables);
 
@@ -340,13 +251,12 @@ const ProjectAssignmentsGrid: React.FC = () => {
     () => normalizedSearchTokens.map((token) => ({ term: token.term, op: token.op })),
     [normalizedSearchTokens]
   );
-
   useEffect(() => {
     if (!isMobileLayout) return;
     setMobileAssignmentPageByProject({});
     setMobileHasMoreAssignmentsByProject({});
     setMobileLoadingMoreByProject(new Set());
-  }, [isMobileLayout, deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, statusFilterCsv, searchTokenPayload]);
+  }, [isMobileLayout, deptState.selectedDepartmentId, deptState.includeChildren, deptState.filters, verticalState.selectedVerticalId, weeksHorizon, statusFilterCsv, searchTokenPayload]);
 
   const activeToken = useMemo(() => (
     activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null
@@ -413,12 +323,18 @@ const ProjectAssignmentsGrid: React.FC = () => {
     setProjectsLoading(true);
     setProjectsError(null);
     try {
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const deptFilters = dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined;
       const res = await projectsApi.search({
         page,
         page_size: projectsPageSize,
         ordering: 'client,name',
         ...(statusFilterCsv ? { status_in: statusFilterCsv } : {}),
         ...(searchTokenPayload.length ? { search_tokens: searchTokenPayload } : {}),
+        ...(dept != null ? { department: dept, include_children: inc } : {}),
+        ...(deptFilters ? { department_filters: deptFilters } : {}),
+        ...(verticalState.selectedVerticalId != null ? { vertical: Number(verticalState.selectedVerticalId) } : {}),
       });
       const rows = res?.results || [];
       setProjectsCount(res?.count ?? rows.length);
@@ -444,7 +360,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } finally {
       setProjectsLoading(false);
     }
-  }, [projectsPageSize, resetProjectAssignmentsState, searchTokenPayload, statusFilterCsv]);
+  }, [
+    projectsPageSize,
+    resetProjectAssignmentsState,
+    searchTokenPayload,
+    statusFilterCsv,
+    deptState.selectedDepartmentId,
+    deptState.includeChildren,
+    departmentFiltersPayload,
+    verticalState.selectedVerticalId,
+  ]);
 
   useEffect(() => {
     void fetchProjectsPage(1, { append: false, resetAssignments: true });
@@ -460,11 +385,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
     return withPeople.concat(placeholders);
   }, []);
-
-  const visibleProjects = useMemo(
-    () => deptFilteredProjectsWithAssignments,
-    [deptFilteredProjectsWithAssignments]
-  );
 
   const rowOrder = useMemo(() => {
     const out: string[] = [];
@@ -1153,7 +1073,19 @@ const ProjectAssignmentsGrid: React.FC = () => {
     let page = 1;
     const all: Assignment[] = [];
     while (true) {
-      const res = await assignmentsApi.list({ project: projectId, page, page_size: pageSize, include_placeholders: 1 });
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const deptFilters = dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined;
+      const res = await assignmentsApi.list({
+        project: projectId,
+        page,
+        page_size: pageSize,
+        include_placeholders: 1,
+        department: dept,
+        include_children: inc,
+        department_filters: deptFilters,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      });
       const rows = Array.isArray((res as any)) ? (res as any) : (res?.results || []);
       all.push(...rows);
       if (!res?.next) break;
@@ -1164,7 +1096,19 @@ const ProjectAssignmentsGrid: React.FC = () => {
   };
 
   const fetchProjectAssignmentsPage = useCallback(async (projectId: number, page: number) => {
-    const res = await assignmentsApi.list({ project: projectId, page, page_size: MOBILE_PROJECT_PAGE_SIZE, include_placeholders: 1 });
+    const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+    const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+    const deptFilters = dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined;
+    const res = await assignmentsApi.list({
+      project: projectId,
+      page,
+      page_size: MOBILE_PROJECT_PAGE_SIZE,
+      include_placeholders: 1,
+      department: dept,
+      include_children: inc,
+      department_filters: deptFilters,
+      vertical: verticalState.selectedVerticalId ?? undefined,
+    });
     const rows = Array.isArray(res as any) ? (res as any) : (res?.results || []);
     const hasMore = Boolean((res as any)?.next);
     return { rows, hasMore };
@@ -1237,11 +1181,14 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const deptFilters = dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined;
       const bulk = await assignmentsApi.listAll({
         project_ids: projectIds,
         department: dept,
         include_children: dept != null ? inc : undefined,
+        department_filters: deptFilters,
         include_placeholders: 1,
+        vertical: verticalState.selectedVerticalId ?? undefined,
       }, { noCache: true });
       const allAssignments = Array.isArray(bulk) ? bulk : [];
       setAssignmentsData(prev => {
@@ -1255,15 +1202,18 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } finally {
       setLoadingAssignments(new Set());
     }
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, projectsData]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, projectsData]);
 
   const autoRefreshKeyRef = useRef<string>('');
   useEffect(() => {
     if (projectsData.length === 0) return;
+    const deptFiltersKey = departmentFiltersPayload.length ? JSON.stringify(departmentFiltersPayload) : 'none';
     const key = [
       deptState.selectedDepartmentId ?? 'all',
       deptState.includeChildren ? 'children' : 'direct',
       weeksHorizon,
+      verticalState.selectedVerticalId ?? 'all',
+      deptFiltersKey,
     ].join(':');
     if (autoRefreshKeyRef.current === key) return;
     autoRefreshKeyRef.current = key;
@@ -1271,7 +1221,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       await snapshot.loadData();
       await refreshAllAssignments();
     })();
-  }, [projectsData.length, deptState.selectedDepartmentId, deptState.includeChildren, weeksHorizon, snapshot.loadData, refreshAllAssignments]);
+  }, [projectsData.length, deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, weeksHorizon, snapshot.loadData, refreshAllAssignments]);
 
   const toggleProjectExpanded = (projectId: number) => {
     const getMainScrollContainer = () => bodyScrollRef.current?.closest('main') as HTMLElement | null;
@@ -1365,7 +1315,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
     searchPeople: async (query) => {
       const trimmed = query.trim();
       if (trimmed.length < 2) return [];
-      return peopleApi.search(query, 10, { department: deptState.selectedDepartmentId ?? undefined });
+      return peopleApi.search(query, 10, {
+        department: deptState.selectedDepartmentId ?? undefined,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      });
     },
     searchRoles: async (query) => {
       const trimmed = query.trim();

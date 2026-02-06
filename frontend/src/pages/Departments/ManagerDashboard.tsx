@@ -10,8 +10,10 @@ import Card from '@/components/ui/Card';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
 import { dashboardApi, departmentsApi, peopleApi } from '@/services/api';
 import { DashboardData, Department, Person } from '@/types/models';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 const ManagerDashboard: React.FC = () => {
+  const { state: verticalState } = useVerticalFilter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -22,18 +24,18 @@ const ManagerDashboard: React.FC = () => {
 
   useAuthenticatedEffect(() => {
     loadDepartments();
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   useAuthenticatedEffect(() => {
     if (selectedDepartment) {
       loadDepartmentData();
       loadDepartmentPeople();
     }
-  }, [selectedDepartment, weeksPeriod]);
+  }, [selectedDepartment, weeksPeriod, verticalState.selectedVerticalId]);
 
   const loadDepartments = async () => {
     try {
-      const response = await departmentsApi.list();
+      const response = await departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
       const depts = response.results || [];
       setDepartments(depts);
       
@@ -51,7 +53,7 @@ const ManagerDashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await dashboardApi.getDashboard(weeksPeriod, selectedDepartment);
+      const response = await dashboardApi.getDashboard(weeksPeriod, selectedDepartment, verticalState.selectedVerticalId ?? undefined);
       setDashboardData(response);
     } catch (err: any) {
       setError(err.message || 'Failed to load department data');
@@ -62,12 +64,12 @@ const ManagerDashboard: React.FC = () => {
 
   const loadDepartmentPeople = async () => {
     try {
-      const response = await peopleApi.list();
-      const allPeople = response.results || [];
-      const deptPeople = allPeople.filter(person => 
-        person.department?.toString() === selectedDepartment
-      );
-      setDepartmentPeople(deptPeople);
+      const list = await peopleApi.listAll({
+        department: Number(selectedDepartment),
+        include_children: 0,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      });
+      setDepartmentPeople(list || []);
     } catch (err) {
       console.error('Error loading department people:', err);
     }
@@ -272,6 +274,5 @@ const ManagerDashboard: React.FC = () => {
 };
 
 export default ManagerDashboard;
-
 
 

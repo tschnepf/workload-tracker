@@ -6,6 +6,7 @@ import type { CalendarRange } from '@/hooks/useDeliverablesCalendar';
 import { buildCalendarRange, subtractOneDay, toIsoDate, useDeliverablesCalendar } from '@/hooks/useDeliverablesCalendar';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import type { DatesSetArg, EventContentArg, EventClickArg } from '@fullcalendar/core';
 import type { DeliverableEventMeta } from '@/features/fullcalendar';
 
@@ -15,10 +16,15 @@ const PERSONAL_WEEKS = 8;
 
 const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
   const auth = useAuth();
+  const { state: verticalState } = useVerticalFilter();
   const personId = auth?.person?.id ?? null;
   const [showPre, setShowPre] = React.useState(false);
   const [range, setRange] = React.useState<CalendarRange>(() => buildCalendarRange(PERSONAL_WEEKS));
-  const { data, isLoading, error, refetch } = useDeliverablesCalendar(personId ? range : null, { mineOnly: true, personId });
+  const { data, isLoading, error, refetch } = useDeliverablesCalendar(personId ? range : null, {
+    mineOnly: true,
+    personId,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
   const { open } = useProjectQuickViewPopover();
 
   React.useEffect(() => {

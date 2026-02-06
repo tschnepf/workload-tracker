@@ -9,6 +9,7 @@ import { useLocation, useNavigation, useNavigate } from 'react-router';
 import { LayoutContext } from './LayoutContext';
 import Sidebar from './Sidebar';
 import { GlobalDepartmentFilter } from '@/components/filters/GlobalDepartmentFilter';
+import GlobalVerticalFilter from '@/components/filters/GlobalVerticalFilter';
 import TopProgress from '@/components/ui/TopProgress';
 import GlobalNavPending from '@/components/ui/GlobalNavPending';
 import { setPendingPath } from '@/lib/navFeedback';
@@ -20,6 +21,9 @@ import { TopBarSlotsProvider, useTopBarSlotValues } from '@/components/layout/To
 import { LayoutDensityProvider, useLayoutDensity } from '@/components/layout/useLayoutDensity';
 import { ProjectQuickViewPopoverProvider } from '@/components/projects/quickview';
 import { ProjectDetailsDrawerProvider } from '@/components/projects/detailsDrawer';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useDepartments } from '@/hooks/useDepartments';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,6 +38,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const auth = useAuth();
+  const { state: verticalState } = useVerticalFilter();
+  const { state: deptState, setDepartmentFilters, clearDepartment } = useDepartmentFilter();
+  const { departments: verticalDepartments, isLoading: departmentsLoading } = useDepartments({
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
+
+  // Ensure global department filters stay within the selected vertical
+  useEffect(() => {
+    if (verticalState.selectedVerticalId == null) return;
+    if (departmentsLoading) return;
+    const filters = deptState.filters || [];
+    if (!filters.length) return;
+    const allowed = new Set<number>((verticalDepartments || []).map((d) => d.id!).filter((id) => id != null));
+    const next = filters.filter((f) => allowed.has(f.departmentId));
+    if (next.length === filters.length) return;
+    if (next.length === 0) {
+      clearDepartment();
+    } else {
+      setDepartmentFilters(next);
+    }
+  }, [verticalState.selectedVerticalId, departmentsLoading, verticalDepartments, deptState.filters, clearDepartment, setDepartmentFilters]);
   useEffect(() => {
     function onKeydown(e: KeyboardEvent) {
       // Don't hijack when typing in inputs/textareas/contenteditable
@@ -228,6 +253,7 @@ const TopBarInner: React.FC<{
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
+        <GlobalVerticalFilter />
         <GlobalDepartmentFilter expand={false} />
         {/* Explicit portal mount points for page headers */}
         <div id="topbar-left-mount" className="min-w-0" />

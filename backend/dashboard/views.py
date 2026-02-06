@@ -21,6 +21,7 @@ class DashboardView(APIView):
         parameters=[
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks to aggregate (1-12)'),
             OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=DashboardResponseSerializer
     )
@@ -38,12 +39,24 @@ class DashboardView(APIView):
             except (ValueError, TypeError):
                 department_filter = None
 
+        vertical_id = request.GET.get('vertical')
+        vertical_filter = None
+        if vertical_id:
+            try:
+                vertical_filter = int(vertical_id)
+            except (ValueError, TypeError):
+                vertical_filter = None
+
         # Short-TTL cache wrapper (feature-flagged)
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
         cache_key = None
         if use_cache:
             # Keyed by weeks + department (None -> 'all')
-            cache_key = f"dashboard_v1:{weeks}:{department_filter if department_filter is not None else 'all'}"
+            cache_key = (
+                f"dashboard_v1:{weeks}:"
+                f"{department_filter if department_filter is not None else 'all'}:"
+                f"{vertical_filter if vertical_filter is not None else 'all'}"
+            )
             try:
                 cached = cache.get(cache_key)
             except Exception:
@@ -59,6 +72,8 @@ class DashboardView(APIView):
         active_people = Person.objects.filter(is_active=True)
         if department_filter:
             active_people = active_people.filter(department_id=department_filter)
+        if vertical_filter:
+            active_people = active_people.filter(department__vertical_id=vertical_filter)
         total_people = active_people.count()
         
         # Calculate utilization distribution
@@ -178,6 +193,8 @@ class DashboardView(APIView):
         assignments_qs = Assignment.objects.filter(is_active=True, person__is_active=True)
         if department_filter:
             assignments_qs = assignments_qs.filter(person__department_id=department_filter)
+        if vertical_filter:
+            assignments_qs = assignments_qs.filter(project__vertical_id=vertical_filter)
         total_assignments = assignments_qs.count()
         
         # Recent assignments (last 7 days), optionally filtered by department
@@ -189,6 +206,8 @@ class DashboardView(APIView):
         
         if department_filter:
             recent_assignment_qs = recent_assignment_qs.filter(person__department_id=department_filter)
+        if vertical_filter:
+            recent_assignment_qs = recent_assignment_qs.filter(project__vertical_id=vertical_filter)
             
         recent_assignment_qs = recent_assignment_qs.order_by('-created_at')[:5]
         

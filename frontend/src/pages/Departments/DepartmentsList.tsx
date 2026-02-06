@@ -17,9 +17,11 @@ import Input from '@/components/ui/Input';
 import DepartmentForm from './DepartmentForm';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 const DepartmentsList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
+  const { state: verticalState } = useVerticalFilter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
@@ -43,7 +45,7 @@ const DepartmentsList: React.FC = () => {
       const hasData = departmentsRef.current.length > 0;
       setIsLoading(!hasData);
       setIsFetching(hasData);
-      const response = await departmentsApi.list();
+      const response = await departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
       setDepartments(response.results || []);
     } catch (err: any) {
       setError('Failed to load departments');
@@ -53,16 +55,16 @@ const DepartmentsList: React.FC = () => {
       setIsFetching(false);
       loadingRef.current = false;
     }
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   const loadPeople = useCallback(async () => {
     try {
-      const response = await peopleApi.list();
+      const response = await peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
       setPeople(response.results || []);
     } catch (err) {
       console.error('Error loading people:', err);
     }
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   useAuthenticatedEffect(() => {
     loadDepartments();

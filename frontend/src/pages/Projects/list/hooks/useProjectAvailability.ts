@@ -7,9 +7,10 @@ interface Params {
   departmentId?: number | null;
   includeChildren?: boolean;
   candidatesOnly?: boolean;
+  vertical?: number | null;
 }
 
-export function useProjectAvailability({ projectId, departmentId, includeChildren, candidatesOnly }: Params) {
+export function useProjectAvailability({ projectId, departmentId, includeChildren, candidatesOnly, vertical }: Params) {
   const [availabilityMap, setAvailabilityMap] = useState<Record<number, { availableHours: number; utilizationPercent: number; totalHours: number; capacity: number }>>({});
 
   // Compute Monday anchor (canonical week) per existing behavior
@@ -33,6 +34,7 @@ export function useProjectAvailability({ projectId, departmentId, includeChildre
           candidates_only: candidatesOnly ? 1 : 0,
           department: dept,
           include_children: inc,
+          vertical: vertical ?? undefined,
         });
         const map: Record<number, { availableHours: number; utilizationPercent: number; totalHours: number; capacity: number }> = {};
         for (const it of items) {
@@ -50,8 +52,7 @@ export function useProjectAvailability({ projectId, departmentId, includeChildre
       }
     };
     load();
-  }, [projectId, departmentId, includeChildren, candidatesOnly, mondayIso]);
+  }, [projectId, departmentId, includeChildren, candidatesOnly, mondayIso, vertical]);
 
   return { availabilityMap } as const;
 }
-

@@ -399,7 +399,8 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     )
     @extend_schema(
         parameters=[OpenApiParameter(name='start', type=str, required=False, description='YYYY-MM-DD'),
-                    OpenApiParameter(name='end', type=str, required=False, description='YYYY-MM-DD')],
+                    OpenApiParameter(name='end', type=str, required=False, description='YYYY-MM-DD'),
+                    OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id')],
         responses=DeliverableCalendarItemSerializer(many=True)
     )
     @action(detail=False, methods=['get'])
@@ -412,6 +413,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         """
         start_str = request.query_params.get('start')
         end_str = request.query_params.get('end')
+        vertical_param = request.query_params.get('vertical')
         start_date = parse_date(start_str) if start_str else None
         end_date = parse_date(end_str) if end_str else None
 
@@ -426,6 +428,11 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 )
             )
         )
+        if vertical_param not in (None, ""):
+            try:
+                qs = qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
 
         # Apply date filters if provided; otherwise return dated items only
         if start_date:
@@ -443,7 +450,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         )
         last_updated = agg['max_assign'] or agg['max_deliv']
         count = agg['total'] or 0
-        etag_val = f"W/\"calendar:{start_str or ''}:{end_str or ''}:{(last_updated.isoformat() if last_updated else '')}:{count}\""
+        etag_val = f"W/\"calendar:{start_str or ''}:{end_str or ''}:{vertical_param or ''}:{(last_updated.isoformat() if last_updated else '')}:{count}\""
         if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
         if if_none_match and if_none_match == etag_val:
             return Response(status=status.HTTP_304_NOT_MODIFIED)
@@ -461,6 +468,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='end', type=str, required=False, description='YYYY-MM-DD'),
             OpenApiParameter(name='mine_only', type=bool, required=False),
             OpenApiParameter(name='type_id', type=int, required=False),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
     )
     @action(detail=False, methods=['get'])
@@ -478,6 +486,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         end_str = request.query_params.get('end')
         mine_only = request.query_params.get('mine_only') in ('1', 'true', 'True')
         type_id = request.query_params.get('type_id')
+        vertical_param = request.query_params.get('vertical')
         start_date = parse_date(start_str) if start_str else None
         end_date = parse_date(end_str) if end_str else None
 
@@ -511,6 +520,11 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         # Build deliverables queryset
         base_qs = Deliverable.objects.all().select_related('project')
+        if vertical_param not in (None, ""):
+            try:
+                base_qs = base_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
 
         # Apply person scoping to deliverables when mine_only is requested
         allowed_deliverable_ids = None
@@ -594,6 +608,11 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 pre_qs = pre_qs.filter(deliverable_id__in=Subquery(allowed_ids_subq))
             else:
                 pre_qs = pre_qs.none()
+        if vertical_param not in (None, ""):
+            try:
+                pre_qs = pre_qs.filter(deliverable__project__vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
 
         pre_items = [{
             'itemType': 'pre_deliverable',
@@ -812,6 +831,11 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if 'project' in params:
             try:
                 qs = qs.filter(deliverable__project_id=int(params.get('project')))
+            except ValueError:  # nosec B110
+                pass
+        if 'vertical' in params:
+            try:
+                qs = qs.filter(deliverable__project__vertical_id=int(params.get('vertical')))
             except ValueError:  # nosec B110
                 pass
         if 'type_id' in params:

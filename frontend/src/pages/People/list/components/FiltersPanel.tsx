@@ -1,11 +1,11 @@
 import React from 'react';
-import type { Department, Person } from '@/types/models';
+import type { Department } from '@/types/models';
 
 export interface FiltersPanelProps {
   searchTerm: string;
   setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
-  people: Person[];
   departments: Department[];
+  locations: string[];
   departmentFilter: string[];
   setDepartmentFilter: React.Dispatch<React.SetStateAction<string[]>>;
   locationFilter: string[];
@@ -22,8 +22,8 @@ export default function FiltersPanel(props: FiltersPanelProps) {
   const {
     searchTerm,
     setSearchTerm,
-    people,
     departments,
+    locations,
     departmentFilter,
     setDepartmentFilter,
     locationFilter,
@@ -37,25 +37,21 @@ export default function FiltersPanel(props: FiltersPanelProps) {
   } = props;
 
   const getLocationOptions = () => {
-    const locationCounts = new Map<string, number>();
+    const unique = new Set<string>();
     const remoteLocations = new Set<string>();
-
-    people.forEach(person => {
-      const location = person.location?.trim();
+    locations.forEach((loc) => {
+      const location = (loc || '').trim();
       if (!location) return;
-
       if (location.toLowerCase().includes('remote')) {
+        unique.add('Remote');
         remoteLocations.add(location);
-        locationCounts.set('Remote', (locationCounts.get('Remote') || 0) + 1);
       } else {
-        locationCounts.set(location, (locationCounts.get(location) || 0) + 1);
+        unique.add(location);
       }
     });
-
-    return Array.from(locationCounts.entries())
-      .map(([location, count]) => ({
+    return Array.from(unique)
+      .map((location) => ({
         location,
-        count,
         isConsolidated: location === 'Remote' && remoteLocations.size > 1,
       }))
       .sort((a, b) => a.location.localeCompare(b.location));
@@ -136,7 +132,7 @@ export default function FiltersPanel(props: FiltersPanelProps) {
               }`}
               disabled={departmentFilter.includes('unassigned')}
             >
-              Not Assigned ({people.filter(p => !p.department).length})
+              Not Assigned
             </button>
             {departments.map((dept) => (
               <button
@@ -152,7 +148,7 @@ export default function FiltersPanel(props: FiltersPanelProps) {
                 }`}
                 disabled={departmentFilter.includes(dept.id?.toString() || '')}
               >
-                {dept.name} ({people.filter(p => (p.department?.toString() || '') === (dept.id?.toString() || '')).length})
+                {dept.name}
               </button>
             ))}
           </div>
@@ -220,9 +216,9 @@ export default function FiltersPanel(props: FiltersPanelProps) {
               }`}
               disabled={locationFilter.includes('unspecified')}
             >
-              Not Specified ({people.filter(p => !p.location || p.location.trim() === '').length})
+              Not Specified
             </button>
-            {getLocationOptions().map(({ location, count, isConsolidated }) => (
+            {getLocationOptions().map(({ location, isConsolidated }) => (
               <button
                 key={location}
                 onClick={() => {
@@ -235,7 +231,7 @@ export default function FiltersPanel(props: FiltersPanelProps) {
                 }`}
                 disabled={locationFilter.includes(location)}
               >
-                {location} ({count})
+                {location}
                 {isConsolidated && (
                   <span className="text-xs opacity-75 ml-1">- includes all remote</span>
                 )}

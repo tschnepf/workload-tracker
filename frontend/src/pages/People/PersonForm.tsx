@@ -14,6 +14,7 @@ import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 interface PersonFormData {
   name: string;
@@ -50,6 +51,7 @@ const PersonForm: React.FC = () => {
   const updatePersonMutation = useUpdatePerson();
   const createPersonMutation = useCreatePerson();
   const [advancedOpen, setAdvancedOpen] = useState<boolean>(true);
+  const { state: verticalState } = useVerticalFilter();
 
   useAuthenticatedEffect(() => {
     loadDepartments(); // Phase 2: Always load departments
@@ -57,12 +59,12 @@ const PersonForm: React.FC = () => {
     if (isEditing && id) {
       loadPerson(parseInt(id));
     }
-  }, [isEditing, id]);
+  }, [isEditing, id, verticalState.selectedVerticalId]);
 
   // Phase 2: Load departments for dropdown
   const loadDepartments = async () => {
     try {
-      const response = await departmentsApi.list();
+      const response = await departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
       setDepartments(response.results || []);
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error loading departments:', err);
@@ -436,5 +438,4 @@ const PersonForm: React.FC = () => {
 };
 
 export default PersonForm;
-
 

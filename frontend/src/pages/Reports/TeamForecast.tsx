@@ -11,6 +11,7 @@ import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 function fmt(date: Date): string { return date.toISOString().slice(0,10); }
 
@@ -18,6 +19,7 @@ const TeamForecastPage: React.FC = () => {
   const [weeks, setWeeks] = useState<number>(12);
   const [scale, setScale] = useState<'week'|'month'|'quarter'|'year'>('month');
   const { state: deptState, setDepartment } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [forecast, setForecast] = useState<WorkloadForecastItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -65,6 +67,7 @@ const TeamForecastPage: React.FC = () => {
         weeks,
         department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
         include_children: deptState.includeChildren ? 1 : 0,
+        vertical: verticalState.selectedVerticalId ?? undefined,
       });
       if (requestId === forecastRequestIdRef.current) setForecast(data || []);
     } catch (e: any) {
@@ -75,7 +78,7 @@ const TeamForecastPage: React.FC = () => {
         setIsFetching(false);
       }
     }
-  }, [weeks, deptState.selectedDepartmentId, deptState.includeChildren]);
+  }, [weeks, deptState.selectedDepartmentId, deptState.includeChildren, verticalState.selectedVerticalId]);
 
   useAuthenticatedEffect(() => {
     loadForecast();
@@ -84,18 +87,18 @@ const TeamForecastPage: React.FC = () => {
   const loadProjects = useCallback(async () => {
     const requestId = ++projectsRequestIdRef.current;
     try {
-      const p = await projectsApi.list({ page: 1, page_size: 200 });
+      const p = await projectsApi.list({ page: 1, page_size: 200, vertical: verticalState.selectedVerticalId ?? undefined });
       if (requestId === projectsRequestIdRef.current) setProjects(p.results || []);
     } catch {}
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   const loadDepartments = useCallback(async () => {
     const requestId = ++departmentsRequestIdRef.current;
     try {
-      const p = await departmentsApi.list({ page: 1, page_size: 500 });
+      const p = await departmentsApi.list({ page: 1, page_size: 500, vertical: verticalState.selectedVerticalId ?? undefined });
       if (requestId === departmentsRequestIdRef.current) setDepts(p.results || []);
     } catch {}
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   useAuthenticatedEffect(() => {
     loadProjects();
@@ -116,7 +119,12 @@ const TeamForecastPage: React.FC = () => {
     const inc = deptState.includeChildren ? 1 : 0;
     try {
       const [assigns, dels] = await Promise.all([
-        assignmentsApi.list({ project: Number(selectedProject), department: dept, include_children: dept != null ? inc : undefined }).then(r => r.results || []),
+        assignmentsApi.list({
+          project: Number(selectedProject),
+          department: dept,
+          include_children: dept != null ? inc : undefined,
+          vertical: verticalState.selectedVerticalId ?? undefined,
+        }).then(r => r.results || []),
         deliverablesApi.list(Number(selectedProject), { page: 1, page_size: 1000 }).then(r => r.results || [])
       ]);
       if (requestId === projectDetailsRequestIdRef.current) {
@@ -126,7 +134,7 @@ const TeamForecastPage: React.FC = () => {
     } finally {
       if (requestId === projectDetailsRequestIdRef.current) setProjLoading(false);
     }
-  }, [selectedProject, deptState.selectedDepartmentId, deptState.includeChildren]);
+  }, [selectedProject, deptState.selectedDepartmentId, deptState.includeChildren, verticalState.selectedVerticalId]);
 
   useAuthenticatedEffect(() => {
     loadProjectDetails();

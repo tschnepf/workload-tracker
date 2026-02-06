@@ -18,9 +18,10 @@ interface Params {
   deptState: { selectedDepartmentId?: number | null; includeChildren?: boolean } | null | undefined;
   candidatesOnly: boolean;
   caps: { data?: { asyncJobs?: boolean } | null };
+  vertical?: number | null;
 }
 
-export function usePersonSearch({ people, availabilityMap, deptState, candidatesOnly, caps }: Params) {
+export function usePersonSearch({ people, availabilityMap, deptState, candidatesOnly, caps, vertical }: Params) {
   const [text, setText] = useState('');
   const [results, setResults] = useState<PersonWithAvailability[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -61,12 +62,12 @@ export function usePersonSearch({ people, availabilityMap, deptState, candidates
         const include_children = department != null ? (deptState?.includeChildren ? 1 : 0) : undefined;
         const isGlobal = department == null || people.length > 500; // heuristic aligned with prior
         if (isGlobal && (caps.data?.asyncJobs ?? false)) {
-          const { jobId } = await peopleApi.skillMatchAsync(detectedSkills, { department, include_children, limit: 2000 });
+          const { jobId } = await peopleApi.skillMatchAsync(detectedSkills, { department, include_children, limit: 2000, vertical: vertical ?? undefined });
           const status = await jobsApi.pollStatus(jobId, { intervalMs: 1200, timeoutMs: 90000 });
           const srv = (status.result || []) as Array<{ personId: number; score: number }>;
           srv.forEach(r => { if (r.personId != null) scoreMap[r.personId] = r.score || 0; });
         } else {
-          const srv = await peopleApi.skillMatch(detectedSkills, { department, include_children, limit: 2000 });
+          const srv = await peopleApi.skillMatch(detectedSkills, { department, include_children, limit: 2000, vertical: vertical ?? undefined });
           srv.forEach((r: any) => { if (r.personId != null) scoreMap[r.personId] = r.score || 0; });
         }
       } catch {
@@ -96,7 +97,7 @@ export function usePersonSearch({ people, availabilityMap, deptState, candidates
     if (!areResultsEqual(results, sorted)) setResults(sorted);
     const announcement = `Found ${sorted.length} people matching your search. ${sorted.filter(p => p.hasSkillMatch).length} with skill matches.`;
     if (srAnnouncement !== announcement) setSrAnnouncement(announcement);
-  }, [people, availabilityMap, caps.data, deptState?.selectedDepartmentId, deptState?.includeChildren, candidatesOnly, results, srAnnouncement]);
+  }, [people, availabilityMap, caps.data, deptState?.selectedDepartmentId, deptState?.includeChildren, candidatesOnly, results, srAnnouncement, vertical]);
 
   const availabilityVersion = useMemo(() => Object.keys(availabilityMap).length, [availabilityMap]);
 
@@ -143,4 +144,3 @@ export function usePersonSearch({ people, availabilityMap, deptState, candidates
 
   return { results, selectedIndex, setSelectedIndex, srAnnouncement, onChange, onFocus, onKeyDown, onSelect } as const;
 }
-

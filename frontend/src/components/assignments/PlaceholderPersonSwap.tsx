@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePeopleAutocomplete } from '@/hooks/usePeople';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 type PersonOption = {
   id: number;
@@ -22,7 +23,11 @@ const PlaceholderPersonSwap: React.FC<Props> = ({ label, deptId, onSelect, class
   const boxRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const canOpen = !disabled;
-  const { people, loading } = usePeopleAutocomplete(query, deptId ? { department: deptId } : undefined);
+  const { state: verticalState } = useVerticalFilter();
+  const { people, loading } = usePeopleAutocomplete(query, {
+    department: deptId ?? undefined,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
   const peopleOptions = React.useMemo(
     () => (people || [])
       .filter((person) => person?.id != null)

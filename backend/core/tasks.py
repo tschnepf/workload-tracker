@@ -12,7 +12,13 @@ from django.db.models import Prefetch
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=2, retry_kwargs={"max_retries": 3}, soft_time_limit=120)
-def generate_grid_snapshot_async(self, weeks: int = 12, department: Optional[int] = None, include_children: int = 0) -> Dict[str, Any]:
+def generate_grid_snapshot_async(
+    self,
+    weeks: int = 12,
+    department: Optional[int] = None,
+    include_children: int = 0,
+    vertical: Optional[int] = None,
+) -> Dict[str, Any]:
     """Generate the same payload as /assignments/grid_snapshot/ in the background.
 
     Returns a dict with keys: { weekKeys, people, hoursByPerson }.
@@ -45,8 +51,19 @@ def generate_grid_snapshot_async(self, weeks: int = 12, department: Optional[int
                 people_qs = people_qs.filter(department_id__in=list(ids))
             else:
                 people_qs = people_qs.filter(department_id=dept_id)
+    if vertical is not None:
+        try:
+            people_qs = people_qs.filter(department__vertical_id=int(vertical))
+        except Exception:
+            pass
 
-    asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id')
+    asn_qs = Assignment.objects.filter(is_active=True)
+    if vertical is not None:
+        try:
+            asn_qs = asn_qs.filter(project__vertical_id=int(vertical))
+        except Exception:
+            pass
+    asn_qs = asn_qs.only('weekly_hours', 'person_id')
     people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
 
     # Sundays for requested horizon (Sunday-only policy)
@@ -134,6 +151,7 @@ def bulk_skill_matching_async(self, skills: List[str], filters: Dict[str, Any]) 
     people_qs = Person.objects.filter(is_active=True).select_related('department', 'role')
     dept_param = filters.get('department')
     include_children = int(filters.get('include_children') or 0) == 1
+    vertical_param = filters.get('vertical')
     if dept_param not in (None, ""):
         try:
             dept_id = int(dept_param)
@@ -153,11 +171,22 @@ def bulk_skill_matching_async(self, skills: List[str], filters: Dict[str, Any]) 
                 people_qs = people_qs.filter(department_id=dept_id)
         except Exception:  # nosec B110
             pass
+    if vertical_param not in (None, ""):
+        try:
+            people_qs = people_qs.filter(department__vertical_id=int(vertical_param))
+        except Exception:  # nosec B110
+            pass
 
     skill_qs = PersonSkill.objects.select_related('skill_tag')
     prefetches = [Prefetch('skills', queryset=skill_qs)]
     if week_monday is not None:
-        asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id')
+        asn_qs = Assignment.objects.filter(is_active=True)
+        if vertical_param not in (None, ""):
+            try:
+                asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
+        asn_qs = asn_qs.only('weekly_hours', 'person_id')
         prefetches.append(Prefetch('assignments', queryset=asn_qs))
     people_qs = people_qs.prefetch_related(*prefetches)
 

@@ -10,6 +10,8 @@ type Params = {
   weeks: number;
   department?: number;
   includeChildren?: boolean;
+  departmentFilters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+  vertical?: number;
   includePlaceholders?: boolean;
   statusIn?: string;
   hasFutureDeliverables?: 0 | 1;
@@ -21,6 +23,14 @@ export function useAssignmentsPageSnapshot(params: Params) {
   const qc = useQueryClient();
   const dept = params.department ?? null;
   const inc = params.includeChildren ? 1 : 0;
+  const deptFiltersKey = useMemo(
+    () =>
+      params.departmentFilters && params.departmentFilters.length > 0
+        ? JSON.stringify(params.departmentFilters.slice().sort((a, b) => (a.departmentId - b.departmentId) || a.op.localeCompare(b.op)))
+        : null,
+    [params.departmentFilters]
+  );
+  const verticalKey = params.vertical ?? null;
   const projectIdsKey = useMemo(
     () => (params.projectIds && params.projectIds.length > 0 ? params.projectIds.slice().sort((a, b) => a - b).join(',') : null),
     [params.projectIds]
@@ -31,13 +41,15 @@ export function useAssignmentsPageSnapshot(params: Params) {
       params.weeks,
       dept,
       inc,
+      deptFiltersKey,
+      verticalKey,
       params.includePlaceholders ? 1 : 0,
       params.statusIn ?? null,
       params.hasFutureDeliverables ?? null,
       projectIdsKey,
       params.include ?? null,
     ],
-    [params.weeks, dept, inc, params.includePlaceholders, params.statusIn, params.hasFutureDeliverables, projectIdsKey, params.include]
+    [params.weeks, dept, inc, deptFiltersKey, verticalKey, params.includePlaceholders, params.statusIn, params.hasFutureDeliverables, projectIdsKey, params.include]
   );
 
   const query = useQuery<AssignmentsPageSnapshot, Error>({
@@ -47,6 +59,8 @@ export function useAssignmentsPageSnapshot(params: Params) {
         weeks: params.weeks,
         department: params.department,
         include_children: params.includeChildren ? 1 : 0,
+        department_filters: params.departmentFilters,
+        vertical: params.vertical,
         include_placeholders: params.includePlaceholders ? 1 : 0,
         status_in: params.statusIn,
         has_future_deliverables: params.hasFutureDeliverables,

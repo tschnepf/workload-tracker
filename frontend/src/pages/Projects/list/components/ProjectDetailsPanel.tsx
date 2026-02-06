@@ -8,6 +8,8 @@ import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliv
 import ProjectNotesEditor from '@/components/projects/ProjectNotesEditor';
 import { useInlineProjectUpdate } from '@/hooks/useInlineProjectUpdate';
 import { useAuth } from '@/hooks/useAuth';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useVerticals } from '@/hooks/useVerticals';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import { listProjectRoles, type ProjectRole } from '@/roles/api';
 import RoleDropdown from '@/roles/components/RoleDropdown';
@@ -129,6 +131,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   const [openAddRole, setOpenAddRole] = React.useState(false);
   const addRoleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const auth = useAuth();
+  const { state: verticalState } = useVerticalFilter();
+  const { verticals, isLoading: verticalsLoading } = useVerticals({ includeInactive: true });
   const canEdit = !!auth?.accessToken; // general fields editable for signed-in users
   const canEditAutoHoursTemplate = canEdit && isAdminOrManager(auth?.user);
   const { commit } = useInlineProjectUpdate(project.id!);
@@ -137,6 +141,8 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   // Local optimistic patch so values show immediately on commit
   const [localPatch, setLocalPatch] = React.useState<Partial<Project>>({});
   React.useEffect(() => { setLocalPatch({}); }, [project.id]);
+  const currentVerticalId = (localPatch as any).vertical !== undefined ? (localPatch as any).vertical : (project.vertical ?? null);
+  const isVerticalMissing = currentVerticalId != null && !verticals.some(v => v.id === currentVerticalId);
   const refetchProject = React.useCallback(async () => {
     try { await onProjectRefetch?.(); } catch {}
   }, [onProjectRefetch]);
@@ -516,7 +522,7 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                       clearFieldError('client');
                       try {
                         if (!clientOptions) {
-                          const list = await projectsApi.getClients();
+                          const list = await projectsApi.getClients({ vertical: verticalState.selectedVerticalId ?? undefined });
                           setClientOptions(list);
                           setFilteredClients(list);
                         } else {
@@ -574,6 +580,40 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   />
                 </div>
                 {fieldErrors.projectNumber && (<div className="text-red-400 text-xs mt-1">{fieldErrors.projectNumber}</div>)}
+              </div>
+              <div>
+                <div className="text-[var(--muted)] text-xs">Vertical:</div>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="min-w-[220px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)] disabled:opacity-60"
+                    value={currentVerticalId ?? ''}
+                    onChange={async (e) => {
+                      const next = e.target.value ? Number(e.target.value) : null;
+                      await commitField('vertical', next);
+                    }}
+                    disabled={!canEdit || verticalsLoading}
+                    aria-label="Project vertical"
+                  >
+                    <option value="">{verticalsLoading ? 'Loading verticals...' : 'Select vertical'}</option>
+                    {isVerticalMissing && currentVerticalId != null && (
+                      <option value={currentVerticalId}>Unknown vertical</option>
+                    )}
+                    {verticals.map((vertical) => (
+                      <option key={vertical.id} value={vertical.id}>
+                        {vertical.shortName ? `${vertical.name} (${vertical.shortName})` : vertical.name}
+                      </option>
+                    ))}
+                  </select>
+                  {!canEdit && (
+                    <span className="text-xs text-[var(--muted)]">
+                      {project.verticalName || '—'}
+                    </span>
+                  )}
+                  {verticalsLoading && (
+                    <span className="text-xs text-[var(--muted)]">Loading…</span>
+                  )}
+                </div>
+                {fieldErrors.vertical && (<div className="text-red-400 text-xs mt-1">{fieldErrors.vertical}</div>)}
               </div>
             </div>
             {/* Description */}

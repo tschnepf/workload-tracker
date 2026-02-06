@@ -4,20 +4,21 @@ import { useAuth } from '@/hooks/useAuth';
 import { PersonCapacityHeatmapItem } from '../types/models';
 
 export function useCapacityHeatmap(
-  filter: { departmentId: number | null; includeChildren: boolean },
+  filter: { departmentId: number | null; includeChildren: boolean; vertical?: number | null },
   weeks: number,
   enabled: boolean = true
 ) {
   const auth = useAuth();
   const isAuthenticated = !!auth.accessToken;
   return useQuery<PersonCapacityHeatmapItem[], Error>({
-    queryKey: ['capacityHeatmap', filter.departmentId ?? 'all', filter.includeChildren ? 1 : 0, weeks],
+    queryKey: ['capacityHeatmap', filter.departmentId ?? 'all', filter.includeChildren ? 1 : 0, filter.vertical ?? 'all', weeks],
     queryFn: ({ signal }) =>
       peopleApi.capacityHeatmap(
         {
           weeks,
           department: filter.departmentId ?? undefined,
           include_children: filter.includeChildren ? 1 : 0,
+          vertical: filter.vertical ?? undefined,
         },
         { signal }
       ),
@@ -28,4 +29,3 @@ export function useCapacityHeatmap(
     enabled: enabled && weeks > 0 && isAuthenticated,
   });
 }
-

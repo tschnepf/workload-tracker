@@ -41,23 +41,25 @@ type Options = {
   mineOnly?: boolean;
   personId?: number | null;
   typeId?: number | null;
+  vertical?: number | null;
 };
 
 export function useDeliverablesCalendar(range: CalendarRange | null, options?: Options) {
   const mineOnly = options?.mineOnly ?? false;
   const personId = options?.personId ?? null;
+  const vertical = options?.vertical ?? null;
 
   return useQuery<DeliverableCalendarUnion[], Error>({
-    queryKey: ['deliverables-calendar', mineOnly ? personId : 'all', range?.start, range?.end, mineOnly ? 1 : 0, options?.typeId ?? 'all'],
+    queryKey: ['deliverables-calendar', mineOnly ? personId : 'all', range?.start, range?.end, mineOnly ? 1 : 0, options?.typeId ?? 'all', vertical ?? 'all'],
     enabled: Boolean(range?.start && range?.end && (!mineOnly || !!personId)),
-    queryFn: () => fetchDeliverableCalendar(range!, { mineOnly, personId, typeId: options?.typeId }),
+    queryFn: () => fetchDeliverableCalendar(range!, { mineOnly, personId, typeId: options?.typeId, vertical }),
     staleTime: 1000 * 60 * 5,
     retry: 2,
   });
 }
 
 async function fetchDeliverableCalendar(range: CalendarRange, options: Options): Promise<DeliverableCalendarUnion[]> {
-  const { mineOnly, personId, typeId } = options;
+  const { mineOnly, personId, typeId, vertical } = options;
   const params: Record<string, any> = {
     query: {
       start: range.start,
@@ -67,6 +69,7 @@ async function fetchDeliverableCalendar(range: CalendarRange, options: Options):
   };
   if (mineOnly) params.query.mine_only = 1;
   if (typeId != null) params.query.type_id = typeId;
+  if (vertical != null) params.query.vertical = vertical;
   try {
     const res = await apiClient.GET('/deliverables/calendar_with_pre_items/' as any, params);
     const payload = (res as any)?.data ?? res;
@@ -76,15 +79,15 @@ async function fetchDeliverableCalendar(range: CalendarRange, options: Options):
   } catch {
     // swallow and fall back
   }
-  return fallbackDeliverableCalendar(range, { mineOnly, personId });
+  return fallbackDeliverableCalendar(range, { mineOnly, personId, vertical });
 }
 
 async function fallbackDeliverableCalendar(range: CalendarRange, options: Options): Promise<DeliverableCalendarUnion[]> {
-  const { mineOnly, personId } = options;
+  const { mineOnly, personId, vertical } = options;
   const [legacy, links, projAssignments, preItems] = await Promise.all([
     (async () => {
       try {
-        return await deliverablesApi.calendar(range.start, range.end);
+        return await deliverablesApi.calendar(range.start, range.end, vertical ?? undefined);
       } catch {
         return [] as DeliverableCalendarItem[];
       }
@@ -100,8 +103,10 @@ async function fallbackDeliverableCalendar(range: CalendarRange, options: Option
     (async () => {
       if (!mineOnly || !personId) return [] as any[];
       try {
+        const query: Record<string, any> = { person_id: personId };
+        if (vertical != null) query.vertical = vertical;
         const res = await apiClient.GET('/assignments/by_person/' as any, {
-          params: { query: { person_id: personId } },
+          params: { query },
           headers: authHeaders(),
         });
         return (res as any)?.data ?? [];
@@ -112,6 +117,7 @@ async function fallbackDeliverableCalendar(range: CalendarRange, options: Option
     (async () => {
       const query: Record<string, any> = { start: range.start, end: range.end, page_size: 100 };
       if (mineOnly) query.mine_only = 1;
+      if (vertical != null) query.vertical = vertical;
       try {
         const res = await apiClient.GET('/deliverables/pre_deliverable_items/' as any, {
           params: { query },

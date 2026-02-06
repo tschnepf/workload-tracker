@@ -17,6 +17,7 @@ import { DashboardData, Department, Person, PersonSkill } from '@/types/models';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminUser } from '@/utils/roleAccess';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 interface DepartmentReport {
   department: Department;
@@ -119,6 +120,7 @@ const AccordionSection: React.FC<{
 const ReportsView: React.FC = () => {
   const auth = useAuth();
   const isAdmin = isAdminUser(auth.user);
+  const { state: verticalState } = useVerticalFilter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [reports, setReports] = useState<DepartmentReport[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState<number>(4); // weeks
@@ -135,7 +137,7 @@ const ReportsView: React.FC = () => {
 
   useAuthenticatedEffect(() => {
     loadData();
-  }, [selectedTimeframe]);
+  }, [selectedTimeframe, verticalState.selectedVerticalId]);
 
   const loadData = async () => {
     try {
@@ -144,8 +146,8 @@ const ReportsView: React.FC = () => {
       
       // Load departments, people, and skills
       const [deptResponse, peopleResponse, skillsResponse] = await Promise.all([
-        departmentsApi.list(),
-        peopleApi.list(),
+        departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
+        peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
         personSkillsApi.list()
       ]);
       
@@ -163,7 +165,7 @@ const ReportsView: React.FC = () => {
           
           let dashboardData: DashboardData | undefined;
           try {
-            dashboardData = await dashboardApi.getDashboard(selectedTimeframe, dept.id?.toString());
+            dashboardData = await dashboardApi.getDashboard(selectedTimeframe, dept.id?.toString(), verticalState.selectedVerticalId ?? undefined);
           } catch (err) {
             console.error(`Error loading dashboard data for department ${dept.name}:`, err);
           }

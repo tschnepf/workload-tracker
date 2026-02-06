@@ -23,6 +23,7 @@ import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
 import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import Toast from '@/components/ui/Toast';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 // header filter included by HeaderBarComp
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
@@ -108,7 +109,8 @@ const isDateInWeek = (dateStr: string, weekStartStr: string) => {
 
 const AssignmentGrid: React.FC = () => {
   const queryClient = useQueryClient();
-  const { state: deptState, backendParams } = useDepartmentFilter();
+  const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   
   // Pub-sub system for cross-component status updates
   const { emitStatusChange } = useProjectStatusSubscription({
@@ -232,6 +234,13 @@ const AssignmentGrid: React.FC = () => {
     () => normalizedSearchTokens.map(({ term, op }) => ({ term, op })),
     [normalizedSearchTokens]
   );
+  const departmentFilters = useMemo(() => (deptState.filters ?? [])
+    .map((f) => ({ departmentId: Number(f.departmentId), op: f.op }))
+    .filter((f) => Number.isFinite(f.departmentId) && f.departmentId > 0), [deptState.filters]);
+  const departmentFiltersPayload = useMemo(
+    () => (deptState.selectedDepartmentId == null ? departmentFilters : []),
+    [deptState.selectedDepartmentId, departmentFilters]
+  );
 
   const buildSearchPayload = useCallback((overrides?: Partial<{
     page: number;
@@ -247,14 +256,23 @@ const AssignmentGrid: React.FC = () => {
       page_size: overrides?.page_size,
       department: dept,
       include_children: includeChildren,
+      department_filters: dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined,
       include_placeholders: 0 as 0,
       status_in: statusIn,
       search_tokens: searchTokensPayload,
+      vertical: verticalState.selectedVerticalId ?? undefined,
       project: overrides?.project,
       person: overrides?.person,
       meta_only: overrides?.meta_only,
     };
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, searchTokensPayload, statusIn]);
+  }, [
+    deptState.selectedDepartmentId,
+    deptState.includeChildren,
+    departmentFiltersPayload,
+    searchTokensPayload,
+    statusIn,
+    verticalState.selectedVerticalId,
+  ]);
   const hoursByPersonView = useMemo(() => {
     if (!serverFilterActive) return hoursByPerson;
     if (!searchMeta?.filteredTotals) return {};
@@ -442,6 +460,8 @@ const AssignmentGrid: React.FC = () => {
     weeksHorizon,
     departmentId: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
     includeChildren: deptState.includeChildren,
+    departmentFilters: deptState.selectedDepartmentId == null ? departmentFiltersPayload : undefined,
+    vertical: verticalState.selectedVerticalId ?? undefined,
     setPeople,
     setAssignmentsData,
     setProjectsData: setProjectsData as any,
@@ -664,109 +684,30 @@ const AssignmentGrid: React.FC = () => {
     [searchMeta?.peopleMatchReason]
   );
 
-  const globalDeptFilter = useMemo(() => {
-    const filters = deptState.filters ?? [];
-    if (filters.length === 0) {
-      return { enabled: false, includeAll: new Set<number>(), includeAny: new Set<number>(), excludeOnly: new Set<number>() };
-    }
-    const includeAll = new Set<number>();
-    const includeAny = new Set<number>();
-    const excludeOnly = new Set<number>();
-    filters.forEach((filter) => {
-      if (filter.op === 'not') {
-        excludeOnly.add(filter.departmentId);
-        return;
-      }
-      if (filter.op === 'or') {
-        includeAny.add(filter.departmentId);
-        return;
-      }
-      includeAll.add(filter.departmentId);
-    });
-
-    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
-      const expanded = new Set<number>();
-      const stack = [deptState.selectedDepartmentId];
-      while (stack.length > 0) {
-        const current = stack.pop()!;
-        if (expanded.has(current)) continue;
-        expanded.add(current);
-        (departments || []).forEach((dept: any) => {
-          if (dept?.parentDepartment === current && dept?.id != null) {
-            stack.push(dept.id);
-          }
-        });
-      }
-      includeAll.clear();
-      includeAny.clear();
-      expanded.forEach((id) => includeAny.add(id));
-    }
-
-    return { enabled: true, includeAll, includeAny, excludeOnly };
-  }, [deptState.filters, deptState.includeChildren, deptState.selectedDepartmentId, departments]);
-
   const visiblePeople = useMemo(() => {
-    const base = (() => {
-      if (!serverFilterActive) return people;
-      const matches = searchMeta?.people || [];
-      if (!matches.length) return [];
-      return matches.map((p) => {
-        const existing = peopleById.get(p.id);
-        if (existing) {
-          return {
-            ...existing,
-            name: p.name ?? existing.name,
-            weeklyCapacity: p.weeklyCapacity ?? existing.weeklyCapacity,
-            department: p.department ?? existing.department,
-          };
-        }
+    if (!serverFilterActive) return people;
+    const matches = searchMeta?.people || [];
+    if (!matches.length) return [];
+    return matches.map((p) => {
+      const existing = peopleById.get(p.id);
+      if (existing) {
         return {
-          id: p.id,
-          name: p.name,
-          weeklyCapacity: p.weeklyCapacity ?? null,
-          department: p.department ?? null,
-          assignments: [],
-          isExpanded: false,
+          ...existing,
+          name: p.name ?? existing.name,
+          weeklyCapacity: p.weeklyCapacity ?? existing.weeklyCapacity,
+          department: p.department ?? existing.department,
         };
-      });
-    })();
-
-    if (!globalDeptFilter.enabled) return base;
-    return (base || []).filter((person) => {
-      const deptId = person?.department != null ? Number(person.department) : null;
-      const deptSet = deptId != null ? new Set<number>([deptId]) : new Set<number>();
-
-      if (globalDeptFilter.includeAll.size > 0) {
-        for (const id of globalDeptFilter.includeAll) {
-          if (!deptSet.has(id)) return false;
-        }
       }
-
-      if (globalDeptFilter.includeAny.size > 0) {
-        let hasAny = false;
-        for (const id of globalDeptFilter.includeAny) {
-          if (deptSet.has(id)) {
-            hasAny = true;
-            break;
-          }
-        }
-        if (!hasAny) return false;
-      }
-
-      if (globalDeptFilter.excludeOnly.size > 0 && deptSet.size > 0) {
-        let allExcluded = true;
-        for (const id of deptSet) {
-          if (!globalDeptFilter.excludeOnly.has(id)) {
-            allExcluded = false;
-            break;
-          }
-        }
-        if (allExcluded) return false;
-      }
-
-      return true;
+      return {
+        id: p.id,
+        name: p.name,
+        weeklyCapacity: p.weeklyCapacity ?? null,
+        department: p.department ?? null,
+        assignments: [],
+        isExpanded: false,
+      };
     });
-  }, [serverFilterActive, people, peopleById, searchMeta?.people, globalDeptFilter]);
+  }, [serverFilterActive, people, peopleById, searchMeta?.people]);
 
   const resolvePersonAssignments = useCallback((person: PersonWithAssignments): Assignment[] => {
     if (serverFilterActive && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, person.id!)) {
@@ -1574,7 +1515,7 @@ const AssignmentGrid: React.FC = () => {
     }
     setLoadingAssignments(prev => new Set(prev).add(personId));
     try {
-      const rows = await assignmentsApi.byPerson(personId);
+      const rows = await assignmentsApi.byPerson(personId, { vertical: verticalState.selectedVerticalId ?? undefined });
       setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
       setLoadedAssignmentIds(prev => {
         const next = new Set(prev);
@@ -1635,7 +1576,7 @@ const AssignmentGrid: React.FC = () => {
         });
         showToast('Filtered assignments refreshed', 'success');
       } else {
-        const rows = await assignmentsApi.byPerson(personId);
+        const rows = await assignmentsApi.byPerson(personId, { vertical: verticalState.selectedVerticalId ?? undefined });
         setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
         setLoadedAssignmentIds(prev => {
           const next = new Set(prev);
@@ -1694,7 +1635,12 @@ const AssignmentGrid: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-      const bulk = await assignmentsApi.listAll({ department: dept, include_children: dept != null ? inc : undefined });
+      const bulk = await assignmentsApi.listAll({
+        department: dept,
+        include_children: dept != null ? inc : undefined,
+        department_filters: dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      });
       const allAssignments = Array.isArray(bulk) ? bulk : [];
 
       const byPerson = new Map<number, Assignment[]>();

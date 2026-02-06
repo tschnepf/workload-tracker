@@ -14,6 +14,7 @@ import {
 } from '@/hooks/useDeliverablesCalendar';
 import type { CalendarRange } from '@/hooks/useDeliverablesCalendar';
 import { useProjectQuickViewPopover } from '@/components/projects/quickview';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import type { DatesSetArg, EventContentArg, EventClickArg } from '@fullcalendar/core';
 import type { DeliverableEventMeta } from '@/features/fullcalendar';
 
@@ -32,8 +33,9 @@ export const DeliverablesCalendarContent: React.FC = () => {
   const [allowedProjectIds, setAllowedProjectIds] = React.useState<Set<number> | null>(null);
   const [filterLoading, setFilterLoading] = React.useState(false);
   const { open } = useProjectQuickViewPopover();
+  const { state: verticalState } = useVerticalFilter();
 
-  const calendarQuery = useDeliverablesCalendar(range, { mineOnly: false });
+  const calendarQuery = useDeliverablesCalendar(range, { mineOnly: false, vertical: verticalState.selectedVerticalId ?? undefined });
   const { data, isLoading, error, refetch } = calendarQuery;
 
   React.useEffect(() => {
@@ -65,7 +67,7 @@ export const DeliverablesCalendarContent: React.FC = () => {
           })(),
           (async () => {
             try {
-              return await assignmentsApi.byPerson(selectedPerson.id);
+              return await assignmentsApi.byPerson(selectedPerson.id, { vertical: verticalState.selectedVerticalId ?? undefined });
             } catch {
               return [] as any[];
             }
@@ -87,7 +89,7 @@ export const DeliverablesCalendarContent: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [selectedPerson]);
+  }, [selectedPerson, verticalState.selectedVerticalId]);
 
   const filteredItems = React.useMemo(() => {
     const items = data ?? [];
@@ -226,7 +228,7 @@ export const DeliverablesCalendarContent: React.FC = () => {
                           return;
                         }
                         try {
-                          const res = await peopleApi.autocomplete(q, 20);
+                          const res = await peopleApi.autocomplete(q, 20, verticalState.selectedVerticalId ?? undefined);
                           setPersonResults(res || []);
                           setSelectedPersonIndex(res && res.length > 0 ? 0 : -1);
                         } catch {

@@ -3,44 +3,54 @@
  * Chunk 3: Basic assignment CRUD with utilization display
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate } from 'react-router';
-import { Assignment, Person, Department } from '@/types/models';
-import { assignmentsApi, peopleApi, departmentsApi } from '@/services/api';
+import { Assignment, Department } from '@/types/models';
+import { assignmentsApi, departmentsApi } from '@/services/api';
 import { deleteAssignment } from '@/lib/mutations/assignments';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 const AssignmentList: React.FC = () => {
   const navigate = useNavigate();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [filteredAssignments, setFilteredAssignments] = useState<Assignment[]>([]);
-  const [peopleById, setPeopleById] = useState<Map<number, Person>>(new Map());
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
+
+  const departmentFilters = useMemo(() => (deptState.filters ?? [])
+    .map((f) => ({ departmentId: Number(f.departmentId), op: f.op }))
+    .filter((f) => Number.isFinite(f.departmentId) && f.departmentId > 0), [deptState.filters]);
+
+  const buildSearchPayload = useCallback(() => {
+    const payload: any = { page: 1, page_size: 100, include_placeholders: 0 };
+    if (verticalState.selectedVerticalId != null) payload.vertical = Number(verticalState.selectedVerticalId);
+    if (deptState.selectedDepartmentId != null) {
+      payload.department = Number(deptState.selectedDepartmentId);
+      payload.include_children = deptState.includeChildren ? 1 : 0;
+    } else if (departmentFilters.length) {
+      payload.department_filters = departmentFilters;
+    }
+    return payload;
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFilters, verticalState.selectedVerticalId]);
 
   useAuthenticatedEffect(() => {
-    // Load assignments, people, and departments in parallel. Respect global department filter.
     (async () => {
       try {
         setLoading(true);
         setError(null);
-        const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-        const inc = deptState.includeChildren ? 1 : 0;
-        const [assignmentsResp, peoplePage, departmentsPage] = await Promise.all([
-          assignmentsApi.list({ page: 1, page_size: 100, department: dept, include_children: dept != null ? inc : undefined }),
-          peopleApi.list({ page: 1, page_size: 100, department: dept, include_children: dept != null ? inc : undefined }),
-          departmentsApi.list({ page: 1, page_size: 500 }),
+        const [assignmentsResp, departmentsPage] = await Promise.all([
+          assignmentsApi.search(buildSearchPayload()),
+          departmentsApi.list({ page: 1, page_size: 500, vertical: verticalState.selectedVerticalId ?? undefined }),
         ]);
         setAssignments(assignmentsResp.results || []);
-        const peopleList = peoplePage.results || [];
-        setPeopleById(new Map(peopleList.map((p: any) => [p.id!, p])));
         setDepartments(departmentsPage.results || []);
       } catch (err: any) {
         setError(err.message || 'Failed to load assignments');
@@ -48,100 +58,13 @@ const AssignmentList: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [deptState.selectedDepartmentId, deptState.includeChildren]);
-
-  const globalDeptFilter = useMemo(() => {
-    const filters = deptState.filters ?? [];
-    if (filters.length === 0) {
-      return { enabled: false, includeAll: new Set<number>(), includeAny: new Set<number>(), excludeOnly: new Set<number>() };
-    }
-    const includeAll = new Set<number>();
-    const includeAny = new Set<number>();
-    const excludeOnly = new Set<number>();
-    filters.forEach((filter) => {
-      if (filter.op === 'not') {
-        excludeOnly.add(filter.departmentId);
-        return;
-      }
-      if (filter.op === 'or') {
-        includeAny.add(filter.departmentId);
-        return;
-      }
-      includeAll.add(filter.departmentId);
-    });
-
-    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
-      const expanded = new Set<number>();
-      const stack = [deptState.selectedDepartmentId];
-      while (stack.length > 0) {
-        const current = stack.pop()!;
-        if (expanded.has(current)) continue;
-        expanded.add(current);
-        departments.forEach((dept) => {
-          if (dept.parentDepartment === current && dept.id != null) {
-            stack.push(dept.id);
-          }
-        });
-      }
-      includeAll.clear();
-      includeAny.clear();
-      expanded.forEach((id) => includeAny.add(id));
-    }
-
-    return { enabled: true, includeAll, includeAny, excludeOnly };
-  }, [deptState.filters, deptState.includeChildren, deptState.selectedDepartmentId, departments]);
-
-  // Derive filtered assignments based on global department filter
-  useEffect(() => {
-    if (!globalDeptFilter.enabled) {
-      setFilteredAssignments(assignments);
-      return;
-    }
-    const filtered = assignments.filter((assignment) => {
-      const deptId = assignment.personDepartmentId
-        ?? (assignment.person != null ? peopleById.get(Number(assignment.person))?.department ?? null : null);
-      const deptSet = deptId != null ? new Set<number>([Number(deptId)]) : new Set<number>();
-
-      if (globalDeptFilter.includeAll.size > 0) {
-        for (const id of globalDeptFilter.includeAll) {
-          if (!deptSet.has(id)) return false;
-        }
-      }
-
-      if (globalDeptFilter.includeAny.size > 0) {
-        let hasAny = false;
-        for (const id of globalDeptFilter.includeAny) {
-          if (deptSet.has(id)) {
-            hasAny = true;
-            break;
-          }
-        }
-        if (!hasAny) return false;
-      }
-
-      if (globalDeptFilter.excludeOnly.size > 0 && deptSet.size > 0) {
-        let allExcluded = true;
-        for (const id of deptSet) {
-          if (!globalDeptFilter.excludeOnly.has(id)) {
-            allExcluded = false;
-            break;
-          }
-        }
-        if (allExcluded) return false;
-      }
-
-      return true;
-    });
-    setFilteredAssignments(filtered);
-  }, [assignments, peopleById, globalDeptFilter]);
+  }, [buildSearchPayload, verticalState.selectedVerticalId]);
 
   const loadAssignments = async () => {
     try {
       setLoading(true);
       setError(null);
-      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
-      const inc = deptState.includeChildren ? 1 : 0;
-      const response = await assignmentsApi.list({ department: dept, include_children: dept != null ? inc : undefined });
+      const response = await assignmentsApi.search(buildSearchPayload());
       setAssignments(response.results || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load assignments');
@@ -243,7 +166,7 @@ const AssignmentList: React.FC = () => {
 
         {/* Assignments Table */}
         <Card className="bg-[#2d2d30] border-[#3e3e42] overflow-hidden">
-          {filteredAssignments.length === 0 ? (
+          {assignments.length === 0 ? (
             <div className="p-6 text-center">
               <div className="text-[#969696] mb-4">No project assignments yet</div>
               <Button
@@ -276,7 +199,7 @@ const AssignmentList: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-600">
-                  {filteredAssignments.map((assignment) => (
+                {assignments.map((assignment) => (
                     <tr key={assignment.id} className="hover:bg-[#3e3e42]/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="font-medium text-[#cccccc]">
@@ -322,7 +245,7 @@ const AssignmentList: React.FC = () => {
         {/* Summary */}
     <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
           <div className="text-[#969696] text-sm">
-      Total: <span className="text-[#cccccc] font-medium">{filteredAssignments.length}</span> active assignments
+      Total: <span className="text-[#cccccc] font-medium">{assignments.length}</span> active assignments
           </div>
         </Card>
       </div>

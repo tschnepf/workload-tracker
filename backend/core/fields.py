@@ -143,6 +143,13 @@ PROJECT_FIELDS = {
         display_name='Project Number',
         field_type='string'
     ),
+    'vertical': FieldDefinition(
+        python_name='vertical',
+        api_name='vertical',
+        sql_name='vertical_id',
+        display_name='Vertical',
+        field_type='integer'
+    ),
     'is_active': FieldDefinition(
         python_name='is_active',
         api_name='isActive',
@@ -235,6 +242,13 @@ DEPARTMENT_FIELDS = {
         sql_name='description',
         display_name='Description',
         field_type='text'
+    ),
+    'vertical': FieldDefinition(
+        python_name='vertical',
+        api_name='vertical',
+        sql_name='vertical_id',
+        display_name='Vertical',
+        field_type='integer'
     ),
     'is_active': FieldDefinition(
         python_name='is_active',

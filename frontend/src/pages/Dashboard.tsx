@@ -18,6 +18,7 @@ import QuickActionsInline from '../components/quick-actions/QuickActionsInline';
 import { DashboardData, Department, Role } from '../types/models';
 import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import AssignedHoursBreakdownCard from '@/components/analytics/AssignedHoursBreakdownCard';
 import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
 import AssignedHoursTimelineCard from '@/components/analytics/AssignedHoursTimelineCard';
@@ -57,6 +58,7 @@ const Dashboard: React.FC = () => {
   // Department filtering state (global)
   const [departments, setDepartments] = useState<Department[]>([]);
   const { state: deptState, setDepartment } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   
   // Heatmap + project summary state
   const [heatWeeks, setHeatWeeks] = useState<number>(20);
@@ -90,21 +92,21 @@ const Dashboard: React.FC = () => {
   useAuthenticatedEffect(() => {
     if (!auth.accessToken) return;
     loadDashboard();
-  }, [auth.accessToken, weeksPeriod, deptState.selectedDepartmentId]);
+  }, [auth.accessToken, weeksPeriod, deptState.selectedDepartmentId, verticalState.selectedVerticalId]);
 
   // Load static data once
   useAuthenticatedEffect(() => {
     if (!auth.accessToken) return;
     loadDepartments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.accessToken]);
+  }, [auth.accessToken, verticalState.selectedVerticalId]);
 
   // Load project summary once authenticated
   useAuthenticatedEffect(() => {
     if (!auth.accessToken) return;
     loadProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.accessToken]);
+  }, [auth.accessToken, verticalState.selectedVerticalId]);
 
   // Load people metadata for availability filters (respect department scope)
   useAuthenticatedEffect(() => {
@@ -114,6 +116,7 @@ const Dashboard: React.FC = () => {
         const list = await peopleApi.listAll({
           department: deptState.selectedDepartmentId ?? undefined,
           include_children: deptState.includeChildren ? 1 : 0,
+          vertical: verticalState.selectedVerticalId ?? undefined,
         });
         const m = new Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>();
         for (const p of list) {
@@ -126,7 +129,7 @@ const Dashboard: React.FC = () => {
         setPeopleMeta(new Map());
       }
     })();
-  }, [auth.accessToken, deptState.selectedDepartmentId, deptState.includeChildren]);
+  }, [auth.accessToken, deptState.selectedDepartmentId, deptState.includeChildren, verticalState.selectedVerticalId]);
 
   // Load ordered roles for grouping
   useAuthenticatedEffect(() => {
@@ -165,7 +168,15 @@ const Dashboard: React.FC = () => {
     };
   }, [mobileDashboardEnabled]);
 
-  const heatQuery = useCapacityHeatmap({ departmentId: deptState.selectedDepartmentId, includeChildren: deptState.includeChildren }, heatWeeks, !loading && !!auth.accessToken);
+  const heatQuery = useCapacityHeatmap(
+    {
+      departmentId: deptState.selectedDepartmentId,
+      includeChildren: deptState.includeChildren,
+      vertical: verticalState.selectedVerticalId ?? null,
+    },
+    heatWeeks,
+    !loading && !!auth.accessToken
+  );
   const heatLoading = heatQuery.isLoading;
   const heatFetching = heatQuery.isFetching;
   const heatmapView = useDashboardHeatmapView(heatQuery.data ?? [], peopleMeta);
@@ -173,7 +184,7 @@ const Dashboard: React.FC = () => {
   const weekKeys = heatmapView.weekKeys;
   const currentWeekKey = heatmapView.currentWeekKey;
   const nextWeekKey = heatmapView.nextWeekKey;
-  const teamDeliverablesQuery = useDeliverablesCalendar(teamCalendarRange, { mineOnly: false });
+  const teamDeliverablesQuery = useDeliverablesCalendar(teamCalendarRange, { mineOnly: false, vertical: verticalState.selectedVerticalId ?? undefined });
   const teamDeliverables = teamDeliverablesQuery.data ?? [];
   const teamDeliverablesLoading = teamDeliverablesQuery.isLoading;
   const { data: utilScheme } = useUtilizationScheme();
@@ -217,7 +228,7 @@ const Dashboard: React.FC = () => {
   
   const loadDepartments = async () => {
     try {
-      const response = await departmentsApi.list();
+      const response = await departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
       setDepartments(response.results || []);
     } catch (err) {
       console.error('Error loading departments:', err);
@@ -227,7 +238,7 @@ const Dashboard: React.FC = () => {
   const loadProjects = async () => {
     try {
       setProjectsError(null);
-      const list = await projectsApi.listAll();
+      const list = await projectsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined });
       setProjectsTotal(list.length);
       const counts: Record<string, number> = {};
       for (const p of list) {
@@ -246,7 +257,8 @@ const Dashboard: React.FC = () => {
       setError(null);
       const response = await dashboardApi.getDashboard(
         weeksPeriod,
-        deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : undefined
+        deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : undefined,
+        verticalState.selectedVerticalId ?? undefined
       );
       setData(response);
     } catch (err: any) {

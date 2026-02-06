@@ -46,6 +46,13 @@ class Project(models.Model):
     bqe_client_name = models.CharField(max_length=255, blank=True, null=True)
     bqe_client_id = models.CharField(max_length=128, blank=True, null=True)
     client_sync_policy_state = models.CharField(max_length=32, blank=True, default='preserve_local')
+    vertical = models.ForeignKey(
+        'verticals.Vertical',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='projects',
+    )
 
     # System fields
     is_active = models.BooleanField(default=True)
@@ -64,6 +71,7 @@ class Project(models.Model):
         indexes = [
             models.Index(fields=['bqe_client_id'], name='idx_project_bqe_client_id'),
             models.Index(fields=['bqe_client_name'], name='idx_project_bqe_client_name'),
+            models.Index(fields=['vertical'], name='idx_project_vertical'),
         ]
     
     def __str__(self):

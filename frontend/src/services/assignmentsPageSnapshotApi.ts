@@ -42,6 +42,8 @@ export type AssignmentsPageSnapshotParams = {
   weeks?: number;
   department?: number;
   include_children?: 0 | 1;
+  department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+  vertical?: number;
   include_placeholders?: 0 | 1;
   status_in?: string;
   has_future_deliverables?: 0 | 1;
@@ -54,6 +56,10 @@ export async function getAssignmentsPageSnapshot(params?: AssignmentsPageSnapsho
   if (params?.weeks != null) sp.set('weeks', String(params.weeks));
   if (params?.department != null) sp.set('department', String(params.department));
   if (params?.include_children != null) sp.set('include_children', String(params.include_children));
+  if (params?.department_filters && params.department_filters.length) {
+    sp.set('department_filters', JSON.stringify(params.department_filters));
+  }
+  if (params?.vertical != null) sp.set('vertical', String(params.vertical));
   if (params?.include_placeholders != null) sp.set('include_placeholders', String(params.include_placeholders));
   if (params?.status_in) sp.set('status_in', params.status_in);
   if (params?.has_future_deliverables != null) sp.set('has_future_deliverables', String(params.has_future_deliverables));

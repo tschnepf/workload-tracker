@@ -22,6 +22,7 @@ import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
 import TooltipPortal from '@/components/ui/TooltipPortal';
 import type { Assignment, Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 type AssignmentListItem = Assignment & { isHistorical?: boolean };
 type ProjectChangeLogEntry = {
@@ -50,12 +51,13 @@ const ProjectDashboard: React.FC = () => {
   }, [hasValidId, projectId]);
 
   const auth = useAuth();
+  const { state: verticalState } = useVerticalFilter();
   const queryClient = useQueryClient();
   const { project, loading: projectLoading, error: projectError } = useProject(hasValidId ? projectId : 0);
 
   const assignmentsQuery = useQuery({
-    queryKey: ['project-dashboard', 'assignments', projectId],
-    queryFn: () => assignmentsApi.list({ project: projectId, page_size: 200, include_placeholders: 1 }),
+    queryKey: ['project-dashboard', 'assignments', projectId, verticalState.selectedVerticalId ?? null],
+    queryFn: () => assignmentsApi.list({ project: projectId, page_size: 200, include_placeholders: 1, vertical: verticalState.selectedVerticalId ?? undefined }),
     enabled: hasValidId,
     staleTime: 30_000,
   });
@@ -84,8 +86,8 @@ const ProjectDashboard: React.FC = () => {
   const assignmentsTotal = assignmentsQuery.data?.count ?? assignments.length;
   const hasMoreAssignments = !!assignmentsQuery.data?.next;
   const departmentsQuery = useQuery({
-    queryKey: ['project-dashboard', 'departments'],
-    queryFn: () => departmentsApi.listAll(),
+    queryKey: ['project-dashboard', 'departments', verticalState.selectedVerticalId ?? null],
+    queryFn: () => departmentsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined }),
     enabled: hasValidId,
     staleTime: 5 * 60_000,
   });
@@ -149,7 +151,7 @@ const ProjectDashboard: React.FC = () => {
   const [roleOpen, setRoleOpen] = React.useState(false);
   const [roleSelection, setRoleSelection] = React.useState<{ id: number | null; name: string | null }>({ id: null, name: null });
   const roleButtonRef = React.useRef<HTMLButtonElement | null>(null);
-  const { people: peopleResults } = usePeopleAutocomplete(personSearch);
+  const { people: peopleResults } = usePeopleAutocomplete(personSearch, { vertical: verticalState.selectedVerticalId ?? undefined });
   const { data: projectRoles = [] } = useProjectRoles(selectedPerson?.department ?? null);
   const [placeholderDeptId, setPlaceholderDeptId] = React.useState<number | null>(null);
   const [roleSearch, setRoleSearch] = React.useState('');
@@ -497,9 +499,12 @@ const ProjectDashboard: React.FC = () => {
     departmentId: null,
   });
   const qaPeopleQuery = useQuery({
-    queryKey: ['project-dashboard', 'qa-people-search', qaSearchState.value, qaSearchState.departmentId],
+    queryKey: ['project-dashboard', 'qa-people-search', qaSearchState.value, qaSearchState.departmentId, verticalState.selectedVerticalId ?? null],
     queryFn: () =>
-      peopleApi.search(qaSearchState.value.trim(), 20, qaSearchState.departmentId != null ? { department: qaSearchState.departmentId } : undefined),
+      peopleApi.search(qaSearchState.value.trim(), 20, {
+        department: qaSearchState.departmentId != null ? qaSearchState.departmentId : undefined,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      }),
     enabled: qaSearchState.value.trim().length >= 2 && qaSearchState.departmentId != null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,

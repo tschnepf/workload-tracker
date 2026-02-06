@@ -5,11 +5,13 @@ import { Person } from '@/types/models';
 import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
 
 // People query hook with state adapter for existing code compatibility
-export function usePeople(includeInactive = false) {
+export function usePeople(options: { includeInactive?: boolean; vertical?: number } = {}) {
+  const includeInactive = !!options.includeInactive;
+  const vertical = options.vertical ?? undefined;
   const pageSize = 100;
   const query = useInfiniteQuery({
-    queryKey: ['people', includeInactive ? 'all' : 'active'],
-    queryFn: ({ pageParam = 1 }) => peopleApi.list({ page: pageParam, page_size: pageSize, include_inactive: includeInactive ? 1 : undefined }),
+    queryKey: ['people', includeInactive ? 'all' : 'active', vertical ?? 'all'],
+    queryFn: ({ pageParam = 1 }) => peopleApi.list({ page: pageParam, page_size: pageSize, include_inactive: includeInactive ? 1 : undefined, vertical }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
       // If server returned a next URL, infer next page; else stop
@@ -106,10 +108,10 @@ export function usePersonUtilization(personId: number, week?: string) {
 }
 
 // People for autocomplete - optimized with longer cache time
-export function usePeopleAutocomplete(search?: string, options?: { department?: number }) {
+export function usePeopleAutocomplete(search?: string, options?: { department?: number; vertical?: number }) {
   const enabled = !!(search && search.trim().length >= 2);
   const { data, isLoading, error: queryError } = useQuery({
-    queryKey: ['people-autocomplete', search || '', options?.department ?? null],
+    queryKey: ['people-autocomplete', search || '', options?.department ?? null, options?.vertical ?? null],
     queryFn: () => peopleApi.search(search!.trim(), 20, options),
     enabled,
     staleTime: 60 * 1000,

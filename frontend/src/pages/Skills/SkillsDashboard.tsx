@@ -10,6 +10,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { Person, Department, SkillTag, PersonSkill } from '@/types/models';
 import { peopleApi, departmentsApi, skillTagsApi, personSkillsApi } from '@/services/api';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 interface SkillCoverage {
   skillName: string;
@@ -34,6 +35,7 @@ interface DepartmentSkills {
 }
 
 const SkillsDashboard: React.FC = () => {
+  const { state: verticalState } = useVerticalFilter();
   const [people, setPeople] = useState<Person[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [skillTags, setSkillTags] = useState<SkillTag[]>([]);
@@ -50,7 +52,7 @@ const SkillsDashboard: React.FC = () => {
 
   useAuthenticatedEffect(() => {
     loadAllData();
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   const loadAllData = async () => {
     try {
@@ -58,8 +60,8 @@ const SkillsDashboard: React.FC = () => {
       setError(null);
       
       const [peopleResponse, departmentsResponse, skillTagsResponse, peopleSkillsResponse] = await Promise.all([
-        peopleApi.list(),
-        departmentsApi.list(),
+        peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
+        departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
         skillTagsApi.list(),
         personSkillsApi.list()
       ]);
@@ -561,4 +563,3 @@ const SkillsDashboard: React.FC = () => {
 };
 
 export default SkillsDashboard;
-

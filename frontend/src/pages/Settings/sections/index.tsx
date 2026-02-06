@@ -1,6 +1,7 @@
 import type React from 'react';
 import type { Capabilities } from '@/hooks/useCapabilities';
 import RoleManagementSection, { ROLE_MANAGEMENT_SECTION_ID } from './RoleManagementSection';
+import VerticalsSection, { VERTICALS_SECTION_ID } from './VerticalsSection';
 import UtilizationSection, { UTILIZATION_SECTION_ID } from './UtilizationSection';
 import DepartmentRolesSection, { DEPARTMENT_ROLES_SECTION_ID } from './DepartmentRolesSection';
 import PreDeliverablesSection, { PRE_DELIVERABLES_SECTION_ID } from './PreDeliverablesSection';
@@ -29,6 +30,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Role Management',
     requiresAdmin: false,
     component: RoleManagementSection,
+  },
+  {
+    id: VERTICALS_SECTION_ID,
+    title: 'Verticals',
+    requiresAdmin: true,
+    component: VerticalsSection,
   },
   {
     id: DEPARTMENT_ROLES_SECTION_ID,

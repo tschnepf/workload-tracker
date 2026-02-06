@@ -14,6 +14,7 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { getSundaysFrom } from '@/utils/weeks';
 
 interface WeeklyHours {
@@ -67,6 +68,7 @@ const AssignmentForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
   const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
 
   // Server-side skill match scores (by personId) for ranking
   const [skillMatchScores, setSkillMatchScores] = useState<Map<number, number>>(new Map());
@@ -249,7 +251,7 @@ const AssignmentForm: React.FC = () => {
       // Note: For simplicity in Chunk 3, we're not implementing edit mode
       // This would require a get assignment endpoint
     }
-  }, [isEditing, id]);
+  }, [isEditing, id, verticalState.selectedVerticalId]);
 
   // Parse skills from input
   useEffect(() => {
@@ -264,7 +266,12 @@ const AssignmentForm: React.FC = () => {
       try {
         const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
         const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-        const res = await peopleApi.skillMatch(projectSkills, { department: dept, include_children: inc, limit: 200 });
+        const res = await peopleApi.skillMatch(projectSkills, {
+          department: dept,
+          include_children: inc,
+          limit: 200,
+          vertical: verticalState.selectedVerticalId ?? undefined,
+        });
         const map = new Map<number, number>();
         (res || []).forEach(item => { if (item.personId != null) map.set(item.personId, item.score || 0); });
         setSkillMatchScores(map);
@@ -273,7 +280,7 @@ const AssignmentForm: React.FC = () => {
       }
     };
     run();
-  }, [JSON.stringify(projectSkills), deptState.selectedDepartmentId, deptState.includeChildren]);
+  }, [JSON.stringify(projectSkills), deptState.selectedDepartmentId, deptState.includeChildren, verticalState.selectedVerticalId]);
 
   // Fetch server-side skill match scores for current required skills and department scope
   useAuthenticatedEffect(() => {
@@ -282,7 +289,12 @@ const AssignmentForm: React.FC = () => {
       try {
         const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
         const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
-        const res = await peopleApi.skillMatch(projectSkills, { department: dept, include_children: inc, limit: 200 });
+        const res = await peopleApi.skillMatch(projectSkills, {
+          department: dept,
+          include_children: inc,
+          limit: 200,
+          vertical: verticalState.selectedVerticalId ?? undefined,
+        });
         const map = new Map<number, number>();
         (res || []).forEach(item => { if (item.personId != null) map.set(item.personId, item.score || 0); });
         setSkillMatchScores(map);
@@ -291,7 +303,7 @@ const AssignmentForm: React.FC = () => {
       }
     };
     run();
-  }, [JSON.stringify(projectSkills), deptState.selectedDepartmentId, deptState.includeChildren]);
+  }, [JSON.stringify(projectSkills), deptState.selectedDepartmentId, deptState.includeChildren, verticalState.selectedVerticalId]);
 
   // Update filtered people when dependencies change
   useEffect(() => {
@@ -324,7 +336,13 @@ const AssignmentForm: React.FC = () => {
     try {
       const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
       const inc = deptState.includeChildren ? 1 : 0;
-      const page = await peopleApi.list({ page: 1, page_size: 100, department: dept, include_children: dept != null ? inc : undefined });
+      const page = await peopleApi.list({
+        page: 1,
+        page_size: 100,
+        department: dept,
+        include_children: dept != null ? inc : undefined,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      });
       const peopleList = page.results || [];
       setPeople(peopleList);
       setFilteredPeople(sortPeopleByDepartmentAndSkills(peopleList, formData.person, departments, peopleSkills, projectSkills));
@@ -335,7 +353,7 @@ const AssignmentForm: React.FC = () => {
 
   const loadProjects = async () => {
     try {
-      const page = await projectsApi.list({ page: 1, page_size: 100 });
+      const page = await projectsApi.list({ page: 1, page_size: 100, vertical: verticalState.selectedVerticalId ?? undefined });
       setProjects(page.results || []);
     } catch (err: any) {
       setError('Failed to load projects list');
@@ -344,7 +362,7 @@ const AssignmentForm: React.FC = () => {
 
   const loadDepartments = async () => {
     try {
-      const response = await departmentsApi.list();
+      const response = await departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
       setDepartments(response.results || []);
     } catch (err: any) {
       console.error('Failed to load departments list:', err);

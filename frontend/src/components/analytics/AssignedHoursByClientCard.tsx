@@ -1,6 +1,7 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useContainerWidth } from '@/hooks/useContainerWidth';
 import { useAssignedHoursByClientData, type ClientHorizonWeeks } from '@/hooks/useAssignedHoursByClientData';
 import { getAssignedHoursClientProjects } from '@/services/analyticsApi';
@@ -87,9 +88,15 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
   const { width } = useContainerWidth(rootRef);
   const [weeks, setWeeks] = React.useState<ClientHorizonWeeks>(initialWeeks);
   const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
   const includeChildren = useGlobalDepartmentFilter ? deptState.includeChildren : !!includeChildrenOverride;
-  const { loading, error, slices, total } = useAssignedHoursByClientData({ weeks, departmentId, includeChildren });
+  const { loading, error, slices, total } = useAssignedHoursByClientData({
+    weeks,
+    departmentId,
+    includeChildren,
+    vertical: verticalState.selectedVerticalId ?? null,
+  });
 
   const [focusClient, setFocusClient] = React.useState<string | null>(null);
 
@@ -114,6 +121,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
           weeks,
           department: departmentId != null ? Number(departmentId) : undefined,
           include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
+          vertical: verticalState.selectedVerticalId ?? undefined,
         });
         if (cancelled) return;
         const rows = (res.projects || []).map((p, idx) => ({
@@ -132,7 +140,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
     }
     load();
     return () => { cancelled = true; };
-  }, [focusClient, weeks, departmentId, includeChildren]);
+  }, [focusClient, weeks, departmentId, includeChildren, verticalState.selectedVerticalId]);
 
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 

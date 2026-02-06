@@ -40,6 +40,7 @@ from django.utils import timezone
 from django.utils.http import http_date
 from datetime import date, timedelta
 import hashlib
+import json
 import os
 import time
 from typing import List, Dict, Tuple, Set, Optional
@@ -155,6 +156,94 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         except (TypeError, ValueError):  # nosec B110
             return queryset
 
+    def _parse_department_filters(self, raw_filters):
+        if raw_filters is None:
+            return []
+        data = raw_filters
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                return []
+        if not isinstance(data, list):
+            return []
+        cleaned = []
+        for raw in data:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                dept_id = int(raw.get('departmentId') or raw.get('department_id') or raw.get('id') or 0)
+            except Exception:
+                dept_id = 0
+            if dept_id <= 0:
+                continue
+            op = (raw.get('op') or 'and').lower()
+            if op not in ('and', 'or', 'not'):
+                op = 'and'
+            cleaned.append({'departmentId': dept_id, 'op': op})
+        return cleaned
+
+    def _apply_assignment_department_filters(self, queryset, filters, include_placeholders):
+        if not filters:
+            return queryset
+        include_all = set()
+        include_any = set()
+        exclude_only = set()
+        for f in filters:
+            op = f.get('op')
+            dept_id = f.get('departmentId')
+            if not dept_id:
+                continue
+            if op == 'not':
+                exclude_only.add(dept_id)
+            elif op == 'or':
+                include_any.add(dept_id)
+            else:
+                include_all.add(dept_id)
+        if len(include_all) > 1:
+            return queryset.none()
+        if include_placeholders:
+            queryset = queryset.annotate(
+                _dept_expr=Coalesce('person__department_id', 'department_id', 'role_on_project_ref__department_id')
+            )
+            dept_field = '_dept_expr'
+        else:
+            dept_field = 'person__department_id'
+        if include_all:
+            queryset = queryset.filter(**{f"{dept_field}__in": list(include_all)})
+        if include_any:
+            queryset = queryset.filter(**{f"{dept_field}__in": list(include_any)})
+        if exclude_only:
+            queryset = queryset.exclude(**{f"{dept_field}__in": list(exclude_only)})
+        return queryset
+
+    def _apply_people_department_filters(self, queryset, filters):
+        if not filters:
+            return queryset
+        include_all = set()
+        include_any = set()
+        exclude_only = set()
+        for f in filters:
+            op = f.get('op')
+            dept_id = f.get('departmentId')
+            if not dept_id:
+                continue
+            if op == 'not':
+                exclude_only.add(dept_id)
+            elif op == 'or':
+                include_any.add(dept_id)
+            else:
+                include_all.add(dept_id)
+        if len(include_all) > 1:
+            return queryset.none()
+        if include_all:
+            queryset = queryset.filter(department_id__in=list(include_all))
+        if include_any:
+            queryset = queryset.filter(department_id__in=list(include_any))
+        if exclude_only:
+            queryset = queryset.exclude(department_id__in=list(exclude_only))
+        return queryset
+
     def _apply_common_filters(self, request, queryset, data=None, apply_status_filter: bool = True):
         """Apply shared filters for list/search endpoints."""
         include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
@@ -202,6 +291,26 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if isinstance(data, dict) and data.get('include_children') is not None:
             include_children = str(data.get('include_children')) == '1'
         queryset = self._apply_department_filter(queryset, dept_param, include_children, include_placeholders)
+
+        dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
+        if isinstance(data, dict):
+            if data.get('department_filters') is not None:
+                dept_filters_raw = data.get('department_filters')
+            elif data.get('departmentFilters') is not None:
+                dept_filters_raw = data.get('departmentFilters')
+        dept_filters = self._parse_department_filters(dept_filters_raw)
+        if dept_filters:
+            queryset = self._apply_assignment_department_filters(queryset, dept_filters, include_placeholders)
+
+        # Optional vertical filter (scoped by project.vertical)
+        vertical_param = request.query_params.get('vertical')
+        if isinstance(data, dict) and data.get('vertical') is not None:
+            vertical_param = data.get('vertical')
+        if vertical_param not in (None, ""):
+            try:
+                queryset = queryset.filter(project__vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
 
         if apply_status_filter:
             status_in = request.query_params.get('status_in')
@@ -393,6 +502,17 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'page_size': serializers.IntegerField(required=False),
                 'department': serializers.IntegerField(required=False),
                 'include_children': serializers.IntegerField(required=False),
+                'department_filters': serializers.ListField(
+                    child=inline_serializer(
+                        name='AssignmentDepartmentFilter',
+                        fields={
+                            'departmentId': serializers.IntegerField(),
+                            'op': serializers.ChoiceField(choices=['or', 'and', 'not']),
+                        }
+                    ),
+                    required=False
+                ),
+                'vertical': serializers.IntegerField(required=False),
                 'status_in': serializers.CharField(required=False),
                 'include_placeholders': serializers.IntegerField(required=False),
                 'project': serializers.IntegerField(required=False),
@@ -519,6 +639,24 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except (TypeError, ValueError):  # nosec B110
                 pass
 
+        dept_filters_raw = data.get('department_filters') if isinstance(data, dict) else None
+        if dept_filters_raw is None and isinstance(data, dict):
+            dept_filters_raw = data.get('departmentFilters')
+        if dept_filters_raw is None:
+            dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
+        dept_filters = self._parse_department_filters(dept_filters_raw)
+        if dept_filters:
+            people_qs = self._apply_people_department_filters(people_qs, dept_filters)
+
+        vertical_param = data.get('vertical') if isinstance(data, dict) else None
+        if vertical_param is None:
+            vertical_param = request.query_params.get('vertical')
+        if vertical_param not in (None, ""):
+            try:
+                people_qs = people_qs.filter(department__vertical_id=int(vertical_param))
+            except Exception:
+                pass
+
         person_tokens_q = build_token_query(tokens, ['name'])
         person_match_ids: Set[int] = set()
         if person_tokens_q is not None:
@@ -630,6 +768,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='department_filters', type=str, required=False, description='JSON array of department filter clauses'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),
             OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters'),
             OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1'),
@@ -691,6 +831,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     f"w={request.query_params.get('weeks','12')}:"
                     f"d={request.query_params.get('department','')}:"
                     f"c={request.query_params.get('include_children','')}:"
+                    f"df={request.query_params.get('department_filters') or request.query_params.get('departmentFilters') or ''}:"
+                    f"v={request.query_params.get('vertical','')}:"
                     f"p={request.query_params.get('include_placeholders','')}:"
                     f"s={request.query_params.get('status_in','')}:"
                     f"hfd={request.query_params.get('has_future_deliverables','')}:"
@@ -721,6 +863,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
+        vertical_param = request.query_params.get('vertical')
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -742,6 +885,9 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     dept_ids = [root]
             except Exception:
                 dept_ids = None
+
+        dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
+        dept_filters = self._parse_department_filters(dept_filters_raw)
 
         # Optional project scoping
         scope_ids = request.query_params.get('project_ids')
@@ -770,11 +916,18 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
             else:
                 qs = qs.filter(person__is_active=True)
+            if vertical_param not in (None, ""):
+                try:
+                    qs = qs.filter(project__vertical_id=int(vertical_param))
+                except Exception:
+                    pass
             if dept_ids:
                 if include_placeholders:
                     qs = qs.filter(Q(person__department_id__in=dept_ids) | Q(department_id__in=dept_ids))
                 else:
                     qs = qs.filter(person__department_id__in=dept_ids)
+            if dept_filters:
+                qs = self._apply_assignment_department_filters(qs, dept_filters, include_placeholders)
             if scope_set:
                 qs = qs.filter(project_id__in=scope_set)
             if project_ids:
@@ -825,6 +978,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             hours_qs = hours_qs.filter(department_id__in=dept_ids)
         if scope_set:
             hours_qs = hours_qs.filter(project_id__in=scope_set)
+        if vertical_param not in (None, ""):
+            try:
+                hours_qs = hours_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:
+                pass
         hours_rows = hours_qs.values('project_id', 'week_start').annotate(
             person_sum=Sum('person_hours'),
             placeholder_sum=Sum('placeholder_hours'),
@@ -845,6 +1003,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             counts_qs = counts_qs.filter(department_id__in=dept_ids)
         if scope_set:
             counts_qs = counts_qs.filter(project_id__in=scope_set)
+        if vertical_param not in (None, ""):
+            try:
+                counts_qs = counts_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:
+                pass
         counts_rows = counts_qs.values('project_id').annotate(
             people_count=Sum('people_count'),
             placeholder_count=Sum('placeholder_count'),
@@ -923,6 +1086,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         deliverable_markers_by_week = {}
         try:
             deliv_qs = Deliverable.objects.filter(project_id__in=project_ids)
+            if vertical_param not in (None, ""):
+                try:
+                    deliv_qs = deliv_qs.filter(project__vertical_id=int(vertical_param))
+                except Exception:
+                    pass
             now = date.today()
             for d in deliv_qs.only('project_id', 'date', 'description', 'percentage', 'notes'):
                 pid = d.project_id
@@ -1227,6 +1395,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=True, description='Department ID'),
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of future weeks (4,8,12,16,20). Default 12'),
             OpenApiParameter(name='role_ids', type=str, required=False, description='CSV of department ProjectRole IDs to include'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=inline_serializer(
             name='RoleCapacityTimelineResponse',
@@ -1258,6 +1427,13 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 dept_id = int(dept_param)
             except Exception:
                 return Response({'error': 'invalid department'}, status=status.HTTP_400_BAD_REQUEST)
+        vertical_param = request.query_params.get('vertical')
+        vertical_id = None
+        if vertical_param not in (None, ""):
+            try:
+                vertical_id = int(vertical_param)
+            except Exception:
+                vertical_id = None
         try:
             weeks = int(request.query_params.get('weeks', 12))
         except Exception:
@@ -1295,7 +1471,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Short‑TTL cache (acceptable 60s staleness)
         try:
             if request.query_params.get('nocache') != '1':
-                cache_key = f"rc:{'all' if dept_id is None else dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}"
+                cache_key = f"rc:{'all' if dept_id is None else dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}:v{vertical_id if vertical_id is not None else 'all'}"
                 cached = cache.get(cache_key)
                 if cached is not None:
                     return Response(cached)
@@ -1312,6 +1488,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             dept_id=dept_id,
             week_keys=week_keys,
             role_ids=role_ids or None,
+            vertical_id=vertical_id,
         )
         payload = {'weekKeys': wk_strs, 'roles': roles_payload, 'series': series}
         # Set cache (best‑effort)
@@ -1866,6 +2043,13 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
+        vertical_param = request.query_params.get('vertical')
+        vertical_id = None
+        if vertical_param not in (None, ""):
+            try:
+                vertical_id = int(vertical_param)
+            except Exception:
+                vertical_id = None
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -1898,6 +2082,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         def _assignment_scope_queryset(project_ids_scope: set[int] | None = None):
             ids = project_ids_scope or project_id_set
             qs = Assignment.objects.filter(is_active=True, project_id__in=ids)
+            if vertical_id is not None:
+                qs = qs.filter(project__vertical_id=vertical_id)
             if include_placeholders:
                 qs = qs.filter(Q(person__is_active=True) | Q(person__isnull=True))
             else:
@@ -1937,6 +2123,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         counts_qs = ProjectAssignmentCountsRollup.objects.filter(project_id__in=project_ids)
         if dept_ids:
             counts_qs = counts_qs.filter(department_id__in=dept_ids)
+        if vertical_id is not None:
+            counts_qs = counts_qs.filter(project__vertical_id=vertical_id)
         counts_rows = counts_qs.values('project_id').annotate(
             last_updated=Max('updated_at'),
         )
@@ -2023,6 +2211,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=inline_serializer(
             name='AssignedHoursByClientResponse',
@@ -2043,7 +2232,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 f"assignments:analytics_by_client:"
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
-                f"c={request.query_params.get('include_children','')}"
+                f"c={request.query_params.get('include_children','')}:"
+                f"v={request.query_params.get('vertical','')}"
             )
             cached = cache.get(cache_key)
             if cached:
@@ -2061,6 +2251,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -2091,6 +2282,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
+        if vertical_param not in (None, ""):
+            try:
+                qs = qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:
+                pass
 
         # Aggregate hours by project/week
         def hours_for_week_from_json(weekly_hours, sunday_key):
@@ -2143,6 +2339,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=inline_serializer(
             name='AssignedHoursClientProjectsResponse',
@@ -2169,7 +2366,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 f"client={client}:"
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
-                f"c={request.query_params.get('include_children','')}"
+                f"c={request.query_params.get('include_children','')}:"
+                f"v={request.query_params.get('vertical','')}"
             )
             cached = cache.get(cache_key)
             if cached:
@@ -2187,6 +2385,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -2267,6 +2466,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=inline_serializer(
             name='AssignedHoursStatusTimelineResponse',
@@ -2290,7 +2490,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 f"assignments:analytics_status_timeline:"
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
-                f"c={request.query_params.get('include_children','')}"
+                f"c={request.query_params.get('include_children','')}:"
+                f"v={request.query_params.get('vertical','')}"
             )
             cached = cache.get(cache_key)
             if cached:
@@ -2308,6 +2509,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -2338,6 +2540,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
+        if vertical_param not in (None, ""):
+            try:
+                qs = qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:
+                pass
 
         # Aggregate per project per week
         def hours_for_week_from_json(weekly_hours, sunday_key):
@@ -2410,6 +2617,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='include_active_ca', type=int, required=False, description='0|1 include active_ca status in addition to active (default 0)')
         ],
         responses=inline_serializer(
@@ -2454,6 +2662,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     f"w={request.query_params.get('weeks','12')}:"
                     f"d={request.query_params.get('department','')}:"
                     f"c={request.query_params.get('include_children','')}:"
+                    f"v={request.query_params.get('vertical','')}:"
                     f"ac={request.query_params.get('include_active_ca','0')}"
                 )
                 cached = cache.get(cache_key)
@@ -2472,6 +2681,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -2504,6 +2714,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
+        if vertical_param not in (None, ""):
+            try:
+                qs = qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:
+                pass
 
         # Aggregate per project per week
         def hours_for_week_from_json(weekly_hours, sunday_key):
@@ -2701,6 +2916,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='department_filters', type=str, required=False, description='JSON array of department filter clauses'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=inline_serializer(
             name='GridSnapshotResponse',
@@ -2741,6 +2958,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         people_qs = Person.objects.filter(is_active=True).select_related('department')
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
         cache_scope = 'all'
         if dept_param not in (None, ""):
             try:
@@ -2764,9 +2982,30 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     cache_scope = f'dept_{dept_id}'
             except (TypeError, ValueError):  # nosec B110
                 pass
+        dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
+        dept_filters = self._parse_department_filters(dept_filters_raw)
+        if dept_filters:
+            people_qs = self._apply_people_department_filters(people_qs, dept_filters)
+            try:
+                df_key = hashlib.sha256(json.dumps(sorted(dept_filters, key=lambda f: (f['departmentId'], f['op'])), separators=(',', ':'), sort_keys=True).encode()).hexdigest()[:8]
+                cache_scope = f"{cache_scope}_df{df_key}"
+            except Exception:
+                cache_scope = f"{cache_scope}_df"
+        if vertical_param not in (None, ""):
+            try:
+                people_qs = people_qs.filter(department__vertical_id=int(vertical_param))
+                cache_scope = f"{cache_scope}_v{int(vertical_param)}"
+            except Exception:  # nosec B110
+                pass
 
         # Prefetch active assignments with minimal fields
-        asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id', 'updated_at')
+        asn_qs = Assignment.objects.filter(is_active=True)
+        if vertical_param not in (None, ""):
+            try:
+                asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
+        asn_qs = asn_qs.only('weekly_hours', 'person_id', 'updated_at')
         people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
 
         # Build cache key and short-TTL caching
@@ -2928,8 +3167,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 dept = None
         include_children = 1 if request.query_params.get('include_children') == '1' else 0
+        vertical_param = request.query_params.get('vertical')
+        vertical = None
+        if vertical_param not in (None, ""):
+            try:
+                vertical = int(vertical_param)
+            except Exception:
+                vertical = None
         try:
-            job = generate_grid_snapshot_async.delay(weeks, dept, include_children)
+            job = generate_grid_snapshot_async.delay(weeks, dept, include_children, vertical)
         except Exception as e:
             return Response({'detail': f'Failed to enqueue job: {e.__class__.__name__}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({'jobId': job.id}, status=status.HTTP_202_ACCEPTED)
@@ -3044,6 +3290,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='person_id', type=int, required=False, description='Filter by person id'),
             OpenApiParameter(name='page', type=int, required=False, description='Page number (optional pagination)'),
             OpenApiParameter(name='page_size', type=int, required=False, description='Page size (optional pagination)'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ]
     )
     @action(detail=False, methods=['get'])
@@ -3054,6 +3301,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             queryset = self.get_queryset().filter(person_id=person_id)
         else:
             queryset = self.get_queryset()
+        vertical_param = request.query_params.get('vertical')
+        if vertical_param not in (None, ""):
+            try:
+                queryset = queryset.filter(project__vertical_id=int(vertical_param))
+            except Exception:  # nosec B110
+                pass
 
         # Opt-in pagination: only paginate when page/page_size is provided
         if request.query_params.get('page') or request.query_params.get('page_size'):
@@ -3280,6 +3533,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
         OpenApiParameter(name='department', type=int, required=False),
         OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+        OpenApiParameter(name='department_filters', type=str, required=False, description='JSON array of department filter clauses'),
+        OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         OpenApiParameter(name='include_placeholders', type=int, required=False, description='0|1'),
         OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters (project grid)'),
         OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1 (project grid)'),
@@ -3321,6 +3576,12 @@ class AssignmentsPageSnapshotView(APIView):
         # Departments list (active only)
         try:
             departments_qs = Department.objects.filter(is_active=True).order_by('name')
+            vertical_param = request.query_params.get('vertical')
+            if vertical_param not in (None, ""):
+                try:
+                    departments_qs = departments_qs.filter(vertical_id=int(vertical_param))
+                except Exception:
+                    pass
             departments = DepartmentSerializer(departments_qs, many=True).data
         except Exception:
             departments = []

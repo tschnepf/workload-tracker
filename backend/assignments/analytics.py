@@ -14,6 +14,7 @@ def _python_role_capacity(
     dept_id: int | None,
     week_keys: List[date],
     role_ids: List[int] | None,
+    vertical_id: int | None = None,
 ) -> Tuple[List[str], List[Dict], List[Dict]]:
     """Optimized Python implementation (portable across DB vendors).
 
@@ -34,6 +35,8 @@ def _python_role_capacity(
     people_qs: QuerySet[Person] = Person.objects.filter(is_active=True)
     if dept_id is not None:
         people_qs = people_qs.filter(department_id=dept_id)
+    if vertical_id is not None:
+        people_qs = people_qs.filter(department__vertical_id=vertical_id)
     people_qs = people_qs.only('id', 'role_id', 'weekly_capacity', 'hire_date')
     people_by_role: Dict[int, List[Tuple[int, date | None]]] = {}
     for p in people_qs.iterator():
@@ -63,6 +66,8 @@ def _python_role_capacity(
     asn_qs = Asn.objects.filter(is_active=True, person__is_active=True)
     if dept_id is not None:
         asn_qs = asn_qs.filter(person__department_id=dept_id)
+    if vertical_id is not None:
+        asn_qs = asn_qs.filter(project__vertical_id=vertical_id)
     asn_qs = asn_qs.select_related('person').only('id', 'weekly_hours', 'person__id', 'person__role_id', 'person__hire_date', 'person__is_active')
     assigned: Dict[Tuple[str, int], float] = {}
     for a in asn_qs.iterator():
@@ -103,6 +108,7 @@ def _postgres_role_capacity(
     dept_id: int | None,
     week_keys: List[date],
     role_ids: List[int] | None,
+    vertical_id: int | None = None,
 ) -> Tuple[List[str], List[Dict], List[Dict]]:
     """Postgres JSONB implementation using lateral expansion and GIN prefilter.
     If anything goes wrong, callers should fallback to the Python path.
@@ -121,6 +127,8 @@ def _postgres_role_capacity(
     people_qs: QuerySet[Person] = Person.objects.filter(is_active=True)
     if dept_id is not None:
         people_qs = people_qs.filter(department_id=dept_id)
+    if vertical_id is not None:
+        people_qs = people_qs.filter(department__vertical_id=vertical_id)
     people_qs = people_qs.only('id', 'role_id', 'weekly_capacity', 'hire_date')
     people_by_role: Dict[int, List[Tuple[int, date | None]]] = {}
     for p in people_qs.iterator():
@@ -196,14 +204,17 @@ def compute_role_capacity(
     dept_id: int | None,
     week_keys: List[date],
     role_ids: List[int] | None,
+    vertical_id: int | None = None,
 ) -> Tuple[List[str], List[Dict], List[Dict]]:
     """Dispatch to the best implementation based on DB vendor.
     Falls back safely to the Python path if Postgres query fails.
     """
+    if vertical_id is not None:
+        return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=vertical_id)
     if connection.vendor == 'postgresql':
         try:
-            return _postgres_role_capacity(dept_id, week_keys, role_ids)
+            return _postgres_role_capacity(dept_id, week_keys, role_ids, vertical_id=None)
         except Exception:
             # Fall back to Python path on any SQL/driver error
-            return _python_role_capacity(dept_id, week_keys, role_ids)
-    return _python_role_capacity(dept_id, week_keys, role_ids)
+            return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=None)
+    return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=None)

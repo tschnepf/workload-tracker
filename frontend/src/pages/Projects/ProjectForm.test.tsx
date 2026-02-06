@@ -36,6 +36,14 @@ vi.mock('@/hooks/useProjects', () => ({
   useCreateProject: vi.fn(),
 }));
 
+vi.mock('@/hooks/useVerticalFilter', () => ({
+  useVerticalFilter: () => ({ state: { selectedVerticalId: 1 }, setVertical: vi.fn(), clearVertical: vi.fn() }),
+}));
+
+vi.mock('@/hooks/useVerticals', () => ({
+  useVerticals: () => ({ verticals: [{ id: 1, name: 'Architecture', shortName: 'ARCH', isActive: true }], isLoading: false }),
+}));
+
 vi.mock('@/services/api', () => ({
   projectsApi: {
     getClients: vi.fn(),
@@ -113,6 +121,7 @@ describe('ProjectForm responsive flows', () => {
         client: 'Acme Corp',
         description: '',
         startDate: null,
+        vertical: 1,
       }),
     );
     expect(mockedProjectsApi.update).not.toHaveBeenCalled();
@@ -129,6 +138,7 @@ describe('ProjectForm responsive flows', () => {
       estimatedHours: 120,
       projectNumber: 'P-443',
       startDate: '2026-03-27',
+      vertical: 1,
     });
     mockedProjectsApi.update.mockResolvedValue(undefined);
 

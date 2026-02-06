@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
-from django.db.models import Sum, Max, Prefetch, Value
+from django.db.models import Sum, Max, Prefetch, Value, Count
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponseNotModified, StreamingHttpResponse
@@ -85,10 +85,10 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         """
         qs = (
             Person.objects
-            .select_related('department', 'role')
+            .select_related('department', 'department__vertical', 'role')
             .only(
                 'id', 'name', 'weekly_capacity', 'role', 'department', 'location', 'notes', 'created_at', 'updated_at',
-                'department__name', 'role__name', 'is_active', 'hire_date'
+                'department__name', 'department__vertical', 'department__vertical__name', 'role__name', 'is_active', 'hire_date'
             )
             .order_by('name')
         )
@@ -108,6 +108,96 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 qs = qs.filter(is_active=True)
 
         return qs
+
+    def _apply_vertical_filter(self, queryset, vertical_param):
+        if vertical_param in (None, ""):
+            return queryset
+        try:
+            vertical_id = int(vertical_param)
+        except Exception:
+            return queryset
+        return queryset.filter(department__vertical_id=vertical_id)
+
+    def _parse_department_filters(self, raw_filters):
+        if raw_filters is None:
+            return []
+        data = raw_filters
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                return []
+        if not isinstance(data, list):
+            return []
+        cleaned = []
+        for raw in data:
+            if not isinstance(raw, dict):
+                continue
+            raw_id = raw.get('departmentId') or raw.get('department_id') or raw.get('id')
+            dept_id = 0
+            if isinstance(raw_id, str) and raw_id.strip().lower() in ('unassigned', 'none', 'null'):
+                dept_id = 0
+            else:
+                try:
+                    dept_id = int(raw_id or 0)
+                except Exception:
+                    dept_id = 0
+            if dept_id < 0:
+                continue
+            if dept_id == 0 and raw_id not in (0, '0', 'unassigned', 'none', 'null'):
+                continue
+            op = (raw.get('op') or 'and').lower()
+            if op not in ('and', 'or', 'not'):
+                op = 'and'
+            cleaned.append({'departmentId': dept_id, 'op': op})
+        return cleaned
+
+    def _apply_department_filters(self, queryset, filters):
+        if not filters:
+            return queryset
+        include_all = set()
+        include_any = set()
+        exclude_only = set()
+        for f in filters:
+            op = f.get('op')
+            dept_id = f.get('departmentId')
+            if dept_id is None:
+                continue
+            if op == 'not':
+                exclude_only.add(dept_id)
+            elif op == 'or':
+                include_any.add(dept_id)
+            else:
+                include_all.add(dept_id)
+        def dept_q(ids: set[int]) -> Q:
+            if not ids:
+                return Q(pk__in=[])
+            ids = set(ids)
+            include_null = 0 in ids
+            ids.discard(0)
+            q = Q()
+            if ids:
+                q |= Q(department_id__in=list(ids))
+            if include_null:
+                q |= Q(department_id__isnull=True)
+            return q
+
+        if len(include_all) > 1:
+            return queryset.none()
+        if include_all:
+            queryset = queryset.filter(dept_q(include_all))
+        if include_any:
+            queryset = queryset.filter(dept_q(include_any))
+        if exclude_only:
+            q_ex = Q()
+            if 0 in exclude_only:
+                q_ex |= Q(department_id__isnull=True)
+            ex_ids = [d for d in exclude_only if d != 0]
+            if ex_ids:
+                q_ex |= Q(department_id__in=ex_ids)
+            if q_ex:
+                queryset = queryset.exclude(q_ex)
+        return queryset
 
     def update(self, request, *args, **kwargs):
         """Override update to trigger deactivation cleanup when is_active flips to false.
@@ -170,6 +260,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='page_size', type=int, required=False, description='Page size'),
             OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
             OpenApiParameter(name='include_children', type=int, required=False, description='Include child departments (0|1)'),
+            OpenApiParameter(name='department_filters', type=str, required=False, description='JSON array of department filter clauses'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='all', type=str, required=False, description='Return all items without pagination when true'),
             OpenApiParameter(name='include_inactive', type=int, required=False, description='Include inactive people (0|1; default 0)'),
         ]
@@ -220,6 +312,12 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except (TypeError, ValueError):  # nosec B110
                 # Ignore invalid department filter; return unfiltered list
                 pass
+        dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
+        dept_filters = self._parse_department_filters(dept_filters_raw)
+        if dept_filters:
+            queryset = self._apply_department_filters(queryset, dept_filters)
+        # Optional vertical filter
+        queryset = self._apply_vertical_filter(queryset, request.query_params.get('vertical'))
         
         # Check if bulk loading is requested
         if request.query_params.get('all') == 'true':
@@ -317,6 +415,17 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'page_size': serializers.IntegerField(required=False),
                 'department': serializers.IntegerField(required=False),
                 'include_children': serializers.IntegerField(required=False),
+                'department_filters': serializers.ListField(
+                    child=inline_serializer(
+                        name='DepartmentFilterPeople',
+                        fields={
+                            'departmentId': serializers.IntegerField(),
+                            'op': serializers.ChoiceField(choices=['or', 'and', 'not'])
+                        }
+                    ),
+                    required=False
+                ),
+                'vertical': serializers.IntegerField(required=False),
                 'include_inactive': serializers.IntegerField(required=False),
                 'location': serializers.ListField(child=serializers.CharField(), required=False),
                 'ordering': serializers.CharField(required=False),
@@ -382,6 +491,18 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     queryset = queryset.filter(department_id=dept_id)
             except (TypeError, ValueError):  # nosec B110
                 pass
+        dept_filters_raw = data.get('department_filters') if isinstance(data, dict) else None
+        if dept_filters_raw is None and isinstance(data, dict):
+            dept_filters_raw = data.get('departmentFilters')
+        dept_filters = self._parse_department_filters(dept_filters_raw)
+        if dept_filters:
+            queryset = self._apply_department_filters(queryset, dept_filters)
+
+        # Vertical filter
+        vertical_param = data.get('vertical') if isinstance(data, dict) else None
+        if vertical_param is None:
+            vertical_param = request.query_params.get('vertical')
+        queryset = self._apply_vertical_filter(queryset, vertical_param)
 
         # Location filters (Remote substring + Unspecified)
         locations = data.get('location') if isinstance(data, dict) else None
@@ -615,6 +736,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='search', type=str, required=False, description='Substring of name'),
             OpenApiParameter(name='q', type=str, required=False, description='Alias for search'),
             OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-50)'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=inline_serializer(name='PeopleAutocompleteItem', fields={
             'id': serializers.IntegerField(),
@@ -645,6 +767,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         )
         if q:
             qs = qs.filter(name__icontains=q)
+        vertical_param = request.query_params.get('vertical')
+        qs = self._apply_vertical_filter(qs, vertical_param)
         qs = qs[:limit]
         data = [
             {
@@ -661,6 +785,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='q', type=str, required=True, description='Search query (min length 2)'),
             OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-50)'),
             OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=inline_serializer(name='PeopleSearchItem', fields={
             'id': serializers.IntegerField(),
@@ -669,8 +794,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'roleName': serializers.CharField(allow_null=True, required=False),
         })
     )
-    @action(detail=False, methods=['get'], url_path='search', throttle_classes=[HotEndpointThrottle])
-    def search(self, request):
+    @action(detail=False, methods=['get'], url_path='typeahead', throttle_classes=[HotEndpointThrottle])
+    def typeahead(self, request):
         """Server-side typeahead for People.
 
         Params:
@@ -705,6 +830,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         )
         if dept_id is not None:
             qs = qs.filter(department_id=dept_id)
+        vertical_param = request.query_params.get('vertical')
+        qs = self._apply_vertical_filter(qs, vertical_param)
         qs = qs[:limit]
         results = [
             {
@@ -719,10 +846,66 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
     @extend_schema(
         parameters=[
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='include_inactive', type=int, required=False, description='Include inactive people (0|1; default 0)'),
+        ],
+        responses=inline_serializer(name='PeopleFiltersMetadata', fields={
+            'locations': serializers.ListField(child=serializers.CharField()),
+            'departments': serializers.ListField(child=inline_serializer(
+                name='PeopleFiltersDepartment',
+                fields={
+                    'id': serializers.IntegerField(),
+                    'name': serializers.CharField(),
+                }
+            )),
+        })
+    )
+    @action(detail=False, methods=['get'], url_path='filters_metadata')
+    def filters_metadata(self, request):
+        include_inactive = str(request.query_params.get('include_inactive') or '').lower() in ('1', 'true', 'yes', 'on')
+        vertical_param = request.query_params.get('vertical')
+
+        people_qs = Person.objects.all()
+        if not include_inactive:
+            people_qs = people_qs.filter(is_active=True)
+        if vertical_param not in (None, ""):
+            try:
+                people_qs = self._apply_vertical_filter(people_qs, vertical_param)
+                cache_scope = f"{cache_scope}_v{int(vertical_param)}"
+            except Exception:  # nosec B110
+                pass
+        else:
+            people_qs = self._apply_vertical_filter(people_qs, vertical_param)
+
+        locations = list(
+            people_qs
+            .exclude(location__isnull=True)
+            .exclude(location__exact='')
+            .values_list('location', flat=True)
+            .distinct()
+        )
+
+        dept_qs = Department.objects.filter(is_active=True).only('id', 'name')
+        if vertical_param not in (None, ""):
+            try:
+                dept_qs = dept_qs.filter(vertical_id=int(vertical_param))
+            except Exception:
+                pass
+
+        departments = [{'id': d.id, 'name': d.name} for d in dept_qs.order_by('name')]
+
+        return Response({
+            'locations': sorted(set(locations), key=lambda v: (str(v).lower(), str(v))),
+            'departments': departments,
+        })
+
+    @extend_schema(
+        parameters=[
             OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Monday) week key'),
             OpenApiParameter(name='skills', type=str, required=False, description='Comma-separated skill names'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-200), default 100'),
             OpenApiParameter(name='minAvailableHours', type=float, required=False, description='Filter to people with at least this many hours free'),
         ],
@@ -757,6 +940,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
 
         people_qs = Person.objects.filter(is_active=True).select_related('department', 'role')
         cache_scope = 'all'
@@ -797,9 +981,23 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     cache_scope = f'dept_{dept_id}'
             except (TypeError, ValueError):  # nosec B110
                 pass
+        if vertical_param not in (None, ""):
+            try:
+                people_qs = self._apply_vertical_filter(people_qs, vertical_param)
+                cache_scope = f"{cache_scope}_v{int(vertical_param)}"
+            except Exception:  # nosec B110
+                pass
+        else:
+            people_qs = self._apply_vertical_filter(people_qs, vertical_param)
 
         skill_qs = PersonSkill.objects.select_related('skill_tag')
-        asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id')
+        asn_qs = Assignment.objects.filter(is_active=True)
+        if vertical_param not in (None, ""):
+            try:
+                asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:
+                pass
+        asn_qs = asn_qs.only('weekly_hours', 'person_id')
         people_qs = people_qs.prefetch_related(Prefetch('skills', queryset=skill_qs), Prefetch('assignments', queryset=asn_qs))
 
         try:
@@ -811,7 +1009,13 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         ps_lm = PersonSkill.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
         st_lm = SkillTag.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
-        asn_lm = Assignment.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
+        asn_lm_qs = Assignment.objects.all()
+        if vertical_param not in (None, ""):
+            try:
+                asn_lm_qs = asn_lm_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:
+                pass
+        asn_lm = asn_lm_qs.aggregate(last_modified=Max('updated_at')).get('last_modified')
         lm_candidates = [ps_lm, st_lm, asn_lm]
         last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
 
@@ -928,6 +1132,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='skills', type=str, required=True, description='Comma-separated skill names'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-200), default 50'),
             OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Monday) for availability-aware scoring'),
         ],
@@ -960,6 +1165,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
 
         # Optional availability week (normalize to Monday)
         week_str = request.query_params.get('week')
@@ -1014,12 +1220,24 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     cache_scope = f'dept_{dept_id}'
             except (TypeError, ValueError):  # nosec B110
                 pass
+        if vertical_param not in (None, ""):
+            try:
+                people_qs = self._apply_vertical_filter(people_qs, vertical_param)
+                cache_scope = f"{cache_scope}_v{int(vertical_param)}"
+            except Exception:  # nosec B110
+                pass
 
         # Prefetch skills and assignments (if week provided)
         skill_qs = PersonSkill.objects.select_related('skill_tag')
         prefetches = [Prefetch('skills', queryset=skill_qs)]
         if week_monday is not None:
-            asn_qs = Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id')
+            asn_qs = Assignment.objects.filter(is_active=True)
+            if vertical_param not in (None, ""):
+                try:
+                    asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
+                except Exception:
+                    pass
+            asn_qs = asn_qs.only('weekly_hours', 'person_id')
             prefetches.append(Prefetch('assignments', queryset=asn_qs))
         people_qs = people_qs.prefetch_related(*prefetches)
 
@@ -1034,7 +1252,13 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         st_lm = SkillTag.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
         lm_candidates = [ps_lm, st_lm]
         if week_monday is not None:
-            asn_lm = Assignment.objects.aggregate(last_modified=Max('updated_at')).get('last_modified')
+            asn_lm_qs = Assignment.objects.all()
+            if vertical_param not in (None, ""):
+                try:
+                    asn_lm_qs = asn_lm_qs.filter(project__vertical_id=int(vertical_param))
+                except Exception:
+                    pass
+            asn_lm = asn_lm_qs.aggregate(last_modified=Max('updated_at')).get('last_modified')
             lm_candidates.append(asn_lm)
         last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
 
@@ -1163,6 +1387,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='skills', type=str, required=True, description='Comma-separated skill names'),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='limit', type=int, required=False, description='Max results (1-200), default 50'),
             OpenApiParameter(name='week', type=str, required=False, description='YYYY-MM-DD (Monday) for availability-aware scoring'),
         ],
@@ -1177,7 +1402,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return Response({'detail': 'skills is required (comma-separated)'}, status=status.HTTP_400_BAD_REQUEST)
         skills = [s.strip() for s in raw_skills.split(',') if s.strip()]
         filters = {}
-        for key in ('department', 'include_children', 'limit', 'week'):
+        for key in ('department', 'include_children', 'limit', 'week', 'vertical'):
             val = request.query_params.get(key)
             if val not in (None, ""):
                 filters[key] = val
@@ -1350,6 +1575,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=PersonCapacityHeatmapItemSerializer(many=True)
     )
@@ -1364,16 +1590,10 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         people = self.get_queryset()
         # Heatmap must exclude inactive people regardless of detail/list behavior
         people = people.filter(is_active=True)
-        # Prefetch active assignments to avoid N+1 when computing utilization
-        try:
-            people = people.prefetch_related(
-                Prefetch('assignments', queryset=Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id'))
-            )
-        except Exception:  # nosec B110
-            pass
         # Optional department filter with include_children
         department_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
         cache_scope = 'all'
         if department_param not in (None, ""):
             try:
@@ -1396,13 +1616,37 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except (TypeError, ValueError):  # nosec B110
                 # Ignore invalid department filter; return unfiltered list
                 pass
+        if vertical_param not in (None, ""):
+            try:
+                people = self._apply_vertical_filter(people, vertical_param)
+                cache_scope = f"{cache_scope}_v{int(vertical_param)}"
+            except Exception:  # nosec B110
+                pass
+        # Prefetch active assignments to avoid N+1 when computing utilization
+        try:
+            asn_qs = Assignment.objects.filter(is_active=True)
+            if vertical_param not in (None, ""):
+                try:
+                    asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
+                except Exception:
+                    pass
+            asn_qs = asn_qs.only('weekly_hours', 'person_id')
+            people = people.prefetch_related(Prefetch('assignments', queryset=asn_qs))
+        except Exception:  # nosec B110
+            pass
         # Build cache key and short-TTL caching (optional via feature flag)
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
         cache_key = f"people:capacity_heatmap:{weeks}:{cache_scope}"
 
         # Compute conservative validators across People + Assignments
         ppl_aggr = people.aggregate(last_modified=Max('updated_at'), total=Max('id'))  # total not used, but keeps shape
-        asn_aggr = Assignment.objects.filter(person__in=people).aggregate(last_modified=Max('updated_at'))
+        asn_aggr_qs = Assignment.objects.filter(person__in=people)
+        if vertical_param not in (None, ""):
+            try:
+                asn_aggr_qs = asn_aggr_qs.filter(project__vertical_id=int(vertical_param))
+            except Exception:
+                pass
+        asn_aggr = asn_aggr_qs.aggregate(last_modified=Max('updated_at'))
 
         lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
         last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
@@ -1518,6 +1762,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False),
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
         ],
         responses=WorkloadForecastItemSerializer(many=True)
     )
@@ -1533,16 +1778,12 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         except ValueError:
             weeks = 8
 
-        people_qs = (
-            self.get_queryset()
-            .prefetch_related(
-                Prefetch('assignments', queryset=Assignment.objects.filter(is_active=True).only('weekly_hours', 'person_id'))
-            )
-        )
+        people_qs = self.get_queryset()
 
         # Optional department filter
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
+        vertical_param = request.query_params.get('vertical')
         cache_scope = 'all'
         if dept_param not in (None, ""): 
             try:
@@ -1564,6 +1805,23 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 cache_scope = f'dept_{dept_id}{"_children" if include_children else ""}'
             except (TypeError, ValueError):  # nosec B110
                 pass
+        if vertical_param not in (None, ""):
+            try:
+                people_qs = self._apply_vertical_filter(people_qs, vertical_param)
+                cache_scope = f"{cache_scope}_v{int(vertical_param)}"
+            except Exception:  # nosec B110
+                pass
+        try:
+            asn_qs = Assignment.objects.filter(is_active=True)
+            if vertical_param not in (None, ""):
+                try:
+                    asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
+                except Exception:
+                    pass
+            asn_qs = asn_qs.only('weekly_hours', 'person_id')
+            people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
+        except Exception:  # nosec B110
+            pass
 
         result = CapacityAnalysisService.get_workload_forecast(people_qs, weeks, cache_scope=cache_scope)
         return Response(result)

@@ -12,8 +12,10 @@ import DepartmentHierarchy from '@/components/departments/DepartmentHierarchy';
 import { Department, Person } from '@/types/models';
 import { departmentsApi, peopleApi } from '@/services/api';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 const HierarchyView: React.FC = () => {
+  const { state: verticalState } = useVerticalFilter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
@@ -24,7 +26,7 @@ const HierarchyView: React.FC = () => {
 
   useAuthenticatedEffect(() => {
     loadData();
-  }, []);
+  }, [verticalState.selectedVerticalId]);
 
   const loadData = async () => {
     try {
@@ -32,8 +34,8 @@ const HierarchyView: React.FC = () => {
       setError(null);
       
       const [deptResponse, peopleResponse] = await Promise.all([
-        departmentsApi.list(),
-        peopleApi.list()
+        departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
+        peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined })
       ]);
       
       setDepartments(deptResponse.results || []);

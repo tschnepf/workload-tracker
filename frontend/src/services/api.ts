@@ -31,6 +31,7 @@ import {
   ProjectFilterMetadataResponse,
   JobStatus,
   ProjectRisk,
+  Vertical,
 } from '@/types/models';
 import type { BackupListResponse, BackupStatus } from '@/types/backup';
 import { getAccessToken } from '@/utils/auth';
@@ -299,13 +300,14 @@ function appendQueryParams(sp: URLSearchParams, params: Record<string, string | 
 // People API
 export const peopleApi = {
   // Get all people with pagination support
-  list: async (params?: { page?: number; page_size?: number; search?: string; department?: number; include_children?: 0 | 1; include_inactive?: 0 | 1 }) => {
+  list: async (params?: { page?: number; page_size?: number; search?: string; department?: number; include_children?: 0 | 1; include_inactive?: 0 | 1; vertical?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     if (params?.search) queryParams.set('search', params.search);
     if (params?.department != null) queryParams.set('department', String(params.department));
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
     if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
@@ -319,11 +321,12 @@ export const peopleApi = {
 
   // Get all people (bulk API - Phase 2 optimization)
   // NOTE (OpenAPI Phase 0.7): Keep legacy for ?all=true bulk responses until bulk endpoints are annotated.
-  listAll: async (filters?: { department?: number; include_children?: 0 | 1 }): Promise<Person[]> => {
+  listAll: async (filters?: { department?: number; include_children?: 0 | 1; vertical?: number }): Promise<Person[]> => {
     const sp = new URLSearchParams();
     sp.set('all', 'true');
     if (filters?.department != null) sp.set('department', String(filters.department));
     if (filters?.include_children != null) sp.set('include_children', String(filters.include_children));
+    if (filters?.vertical != null) sp.set('vertical', String(filters.vertical));
     const qs = sp.toString();
   return fetchApiCached<Person[]>(`/people/?${qs}`);
   },
@@ -332,12 +335,13 @@ export const peopleApi = {
   search: async (
     q: string,
     limit = 20,
-    filters?: { department?: number }
+    filters?: { department?: number; vertical?: number }
   ): Promise<Array<{ id: number; name: string; department?: number; roleName?: string | null }>> => {
     const query: Record<string, any> = { q };
     if (limit) query.limit = limit;
     if (filters?.department != null) query.department = filters.department;
-    const res = await apiClient.GET('/people/search/' as any, { params: { query }, headers: authHeaders() });
+    if (filters?.vertical != null) query.vertical = filters.vertical;
+    const res = await apiClient.GET('/people/typeahead/' as any, { params: { query }, headers: authHeaders() });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
@@ -345,11 +349,33 @@ export const peopleApi = {
     return res.data as unknown as Array<{ id: number; name: string; department?: number; roleName?: string | null }>;
   },
 
+  // Server-side search with pagination and filters
+  searchList: async (payload: {
+    page?: number;
+    page_size?: number;
+    department?: number;
+    include_children?: 0 | 1;
+    department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+    vertical?: number;
+    include_inactive?: 0 | 1;
+    location?: string[];
+    ordering?: string;
+    search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
+  }): Promise<PaginatedResponse<Person>> => {
+    const res = await apiClient.POST('/people/search/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<Person>;
+  },
+
   // Autocomplete endpoint (Phase 3/4 wiring)
-  autocomplete: async (search?: string, limit?: number): Promise<Array<{ id: number; name: string; department: number | null }>> => {
+  autocomplete: async (search?: string, limit?: number, vertical?: number): Promise<Array<{ id: number; name: string; department: number | null }>> => {
     const sp = new URLSearchParams();
     if (search) sp.set('search', search);
     if (limit != null) sp.set('limit', String(limit));
+    if (vertical != null) sp.set('vertical', String(vertical));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     const res = await apiClient.GET(`/people/autocomplete/${qs}` as any, { headers: authHeaders() });
     if (!res.data) {
@@ -357,6 +383,20 @@ export const peopleApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as unknown as Array<{ id: number; name: string; department: number | null }>;
+  },
+
+  // Filters metadata for People list
+  filtersMetadata: async (opts?: { vertical?: number; include_inactive?: 0 | 1 }): Promise<{ locations: string[]; departments: Array<{ id: number; name: string }> }> => {
+    const sp = new URLSearchParams();
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    const res = await apiClient.GET(`/people/filters_metadata/${qs}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as { locations: string[]; departments: Array<{ id: number; name: string }> };
   },
 
   // Get single person
@@ -427,7 +467,7 @@ export const peopleApi = {
 
   // Capacity heatmap (supports department/include_children)
   capacityHeatmap: (
-    params?: { weeks?: number; department?: string | number; include_children?: 0 | 1 },
+    params?: { weeks?: number; department?: string | number; include_children?: 0 | 1; vertical?: number },
     options?: RequestInit
   ) => {
     const query = new URLSearchParams();
@@ -436,40 +476,44 @@ export const peopleApi = {
       query.set('department', String(params.department));
     }
     if (params?.include_children != null) query.set('include_children', String(params.include_children));
+    if (params?.vertical != null) query.set('vertical', String(params.vertical));
     const qs = query.toString() ? `?${query.toString()}` : '';
     return fetchApi<PersonCapacityHeatmapItem[]>(`/people/capacity_heatmap/${qs}`, options);
   },
 
   // Team workload forecast
-  workloadForecast: (opts?: { weeks?: number; department?: number; include_children?: 0 | 1 }) => {
+  workloadForecast: (opts?: { weeks?: number; department?: number; include_children?: 0 | 1; vertical?: number }) => {
     const sp = new URLSearchParams();
     if (opts?.weeks) sp.set('weeks', String(opts.weeks));
     if (opts?.department != null) sp.set('department', String(opts.department));
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<WorkloadForecastItem[]>(`/people/workload_forecast/${qs}`);
   },
   
   // Skill match (server-side ranking)
-  skillMatch: (skills: string[], opts?: { department?: number; include_children?: 0 | 1; limit?: number; week?: string }) => {
+  skillMatch: (skills: string[], opts?: { department?: number; include_children?: 0 | 1; limit?: number; week?: string; vertical?: number }) => {
     const sp = new URLSearchParams();
     if (skills && skills.length) sp.set('skills', skills.join(','));
     if (opts?.department != null) sp.set('department', String(opts.department));
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
     if (opts?.limit != null) sp.set('limit', String(opts.limit));
     if (opts?.week) sp.set('week', opts.week);
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<Array<{ personId: number; name: string; score: number; matchedSkills: string[]; missingSkills: string[]; departmentId: number | null; roleName?: string | null }>>(`/people/skill_match/${qs}`);
   },
 
   // Async skill match (returns job id)
-  skillMatchAsync: async (skills: string[], opts?: { department?: number; include_children?: 0 | 1; limit?: number; week?: string }) => {
+  skillMatchAsync: async (skills: string[], opts?: { department?: number; include_children?: 0 | 1; limit?: number; week?: string; vertical?: number }) => {
     const sp = new URLSearchParams();
     if (skills && skills.length) sp.set('skills', skills.join(','));
     if (opts?.department != null) sp.set('department', String(opts.department));
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
     if (opts?.limit != null) sp.set('limit', String(opts.limit));
     if (opts?.week) sp.set('week', opts.week);
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<{ jobId: string }>(`/people/skill_match_async/${qs}`);
   },
@@ -477,7 +521,7 @@ export const peopleApi = {
   // Find available (availability + skills)
   findAvailable: (
     skills: string[] | undefined,
-    opts?: { week?: string; department?: number; include_children?: 0 | 1; limit?: number; minAvailableHours?: number }
+    opts?: { week?: string; department?: number; include_children?: 0 | 1; limit?: number; minAvailableHours?: number; vertical?: number }
   ) => {
     const sp = new URLSearchParams();
     if (skills && skills.length) sp.set('skills', skills.join(','));
@@ -486,6 +530,7 @@ export const peopleApi = {
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
     if (opts?.limit != null) sp.set('limit', String(opts.limit));
     if (opts?.minAvailableHours != null) sp.set('minAvailableHours', String(opts.minAvailableHours));
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<Array<{ personId: number; name: string; availableHours: number; capacity: number; utilizationPercent: number; skillScore: number; matchedSkills: string[]; missingSkills: string[]; departmentId: number | null; roleName?: string | null }>>(`/people/find_available/${qs}`);
   },
@@ -678,11 +723,12 @@ export const autoHoursTemplatesApi = {
 // Projects API
 export const projectsApi = {
   // Get all projects with pagination support
-  list: async (params?: { page?: number; page_size?: number; ordering?: string }) => {
+  list: async (params?: { page?: number; page_size?: number; ordering?: string; vertical?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
     if (params?.ordering) queryParams.set('ordering', params.ordering);
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     const res = await apiClient.GET(`/projects/${queryString}` as any, { headers: authHeaders() });
     if (!res.data) {
@@ -696,13 +742,14 @@ export const projectsApi = {
   getAvailability: async (
     projectId: number,
     week?: string,
-    opts?: { department?: number; include_children?: 0 | 1; candidates_only?: 0 | 1 }
+    opts?: { department?: number; include_children?: 0 | 1; candidates_only?: 0 | 1; vertical?: number }
   ) => {
     const sp = new URLSearchParams();
     if (week) sp.set('week', week);
     if (opts?.department != null) sp.set('department', String(opts.department));
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
     if (opts?.candidates_only != null) sp.set('candidates_only', String(opts.candidates_only));
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<Array<{ personId: number; personName: string; totalHours: number; capacity: number; availableHours: number; utilizationPercent: number }>>(`/projects/${projectId}/availability/${qs}`);
   },
@@ -729,8 +776,11 @@ export const projectsApi = {
 
   // Get all projects (bulk API - Phase 2 optimization)
   // NOTE (OpenAPI Phase 0.7): Keep legacy for ?all=true bulk responses until bulk endpoints are annotated.
-  listAll: async (): Promise<Project[]> => {
-    return fetchApi<Project[]>(`/projects/?all=true`);
+  listAll: async (opts?: { vertical?: number }): Promise<Project[]> => {
+    const sp = new URLSearchParams();
+    sp.set('all', 'true');
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    return fetchApi<Project[]>(`/projects/?${sp.toString()}`);
   },
 
   // Search projects with tokenized filters and pagination
@@ -740,6 +790,7 @@ export const projectsApi = {
     ordering?: string;
     status_in?: string;
     include_children?: 0 | 1;
+    vertical?: number;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
     department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
   }) => {
@@ -815,9 +866,9 @@ export const projectsApi = {
   },
 
   // Get unique clients for autocomplete
-  getClients: async (): Promise<string[]> => {
+  getClients: async (opts?: { vertical?: number }): Promise<string[]> => {
     // Use first page to avoid heavy bulk fetch; adjust if needed
-    const page = await projectsApi.list({ page: 1, page_size: 200 });
+    const page = await projectsApi.list({ page: 1, page_size: 200, vertical: opts?.vertical });
     const clients = [...new Set((page.results || []).map(p => p.client).filter(Boolean))];
     return clients.sort();
   },
@@ -831,6 +882,7 @@ export const projectsApi = {
     department?: number;
     include_children?: 0 | 1;
     status_in?: string;
+    vertical?: number;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
     department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
   }): Promise<ProjectFilterMetadataResponse> => {
@@ -841,6 +893,7 @@ export const projectsApi = {
       if (params?.department != null) sp.set('department', String(params.department));
       if (params?.include_children != null) sp.set('include_children', String(params.include_children));
       if (params?.status_in) sp.set('status_in', params.status_in);
+      if (params?.vertical != null) sp.set('vertical', String(params.vertical));
       if (params?.search_tokens && params.search_tokens.length) {
         sp.set('search_tokens', JSON.stringify(params.search_tokens));
       }
@@ -917,13 +970,65 @@ export const projectRisksApi = {
   },
 };
 
-// Departments API
-export const departmentsApi = {
-  // Get all departments with pagination support
-  list: async (params?: { page?: number; page_size?: number }) => {
+// Verticals API
+export const verticalsApi = {
+  // Get all verticals with pagination support
+  list: async (params?: { page?: number; page_size?: number; include_inactive?: 0 | 1 }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const res = await apiClient.GET(`/verticals/${queryString}` as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as PaginatedResponse<Vertical>;
+  },
+
+  // Get all verticals (bulk API)
+  listAll: async (opts?: { include_inactive?: 0 | 1 }): Promise<Vertical[]> => {
+    const sp = new URLSearchParams();
+    sp.set('all', 'true');
+    if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
+    return fetchApiCached<Vertical[]>(`/verticals/?${sp.toString()}`);
+  },
+
+  // Get single vertical
+  get: (id: number) =>
+    fetchApi<Vertical>(`/verticals/${id}/`),
+
+  // Create vertical
+  create: (data: Omit<Vertical, 'id' | 'createdAt' | 'updatedAt'>) =>
+    fetchApi<Vertical>('/verticals/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update vertical
+  update: (id: number, data: Partial<Vertical>) =>
+    fetchApi<Vertical>(`/verticals/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Delete vertical
+  delete: (id: number) =>
+    fetchApi<void>(`/verticals/${id}/`, {
+      method: 'DELETE',
+    }),
+};
+
+// Departments API
+export const departmentsApi = {
+  // Get all departments with pagination support
+  list: async (params?: { page?: number; page_size?: number; vertical?: number; include_inactive?: 0 | 1 }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     const res = await apiClient.GET(`/departments/${queryString}` as any, { headers: authHeaders() });
     if (!res.data) {
@@ -935,8 +1040,12 @@ export const departmentsApi = {
 
   // Get all departments (bulk API - Phase 2 optimization)
   // NOTE (OpenAPI Phase 0.7): Keep legacy for ?all=true bulk responses until bulk endpoints are annotated.
-  listAll: async (): Promise<Department[]> => {
-    return fetchApiCached<Department[]>(`/departments/?all=true`);
+  listAll: async (opts?: { vertical?: number; include_inactive?: 0 | 1 }): Promise<Department[]> => {
+    const sp = new URLSearchParams();
+    sp.set('all', 'true');
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
+    return fetchApiCached<Department[]>(`/departments/?${sp.toString()}`);
   },
 
   // Get single department
@@ -967,7 +1076,7 @@ export const departmentsApi = {
 // Assignment API
 export const assignmentsApi = {
   // Get all assignments with pagination support and optional project filtering
-  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string }) => {
+  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
@@ -978,6 +1087,10 @@ export const assignmentsApi = {
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     if (params?.include_placeholders != null) queryParams.set('include_placeholders', String(params.include_placeholders));
     if (params?.ordering) queryParams.set('ordering', params.ordering);
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.department_filters && params.department_filters.length) {
+      queryParams.set('department_filters', JSON.stringify(params.department_filters));
+    }
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     // Avoid any intermediate caching layers returning stale data after writes
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`, { headers: { 'Cache-Control': 'no-cache' } });
@@ -989,6 +1102,8 @@ export const assignmentsApi = {
     page_size?: number;
     department?: number;
     include_children?: 0 | 1;
+    department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+    vertical?: number;
     status_in?: string;
     include_placeholders?: 0 | 1;
     project?: number;
@@ -1011,25 +1126,33 @@ export const assignmentsApi = {
 
   // Start async grid snapshot job (returns jobId)
   getGridSnapshotAsync: async (
-    opts?: { weeks?: number; department?: number; include_children?: 0 | 1 }
+    opts?: { weeks?: number; department?: number; include_children?: 0 | 1; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> }
   ): Promise<{ jobId: string }> => {
     const sp = new URLSearchParams();
     if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
     if (opts?.department != null) sp.set('department', String(opts.department));
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.department_filters && opts.department_filters.length) {
+      sp.set('department_filters', JSON.stringify(opts.department_filters));
+    }
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<{ jobId: string }>(`/assignments/grid_snapshot_async/${qs}`);
   },
 
   // Grid snapshot (server-side aggregation for grid)
   getGridSnapshot: (
-    opts?: { weeks?: number; department?: number; include_children?: 0 | 1 },
+    opts?: { weeks?: number; department?: number; include_children?: 0 | 1; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> },
     options?: RequestInit
   ) => {
     const sp = new URLSearchParams();
     if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
     if (opts?.department != null) sp.set('department', String(opts.department));
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.department_filters && opts.department_filters.length) {
+      sp.set('department_filters', JSON.stringify(opts.department_filters));
+    }
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<{ weekKeys: string[]; people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null }>; hoursByPerson: Record<string, Record<string, number>> }>(`/assignments/grid_snapshot/${qs}`, options);
   },
@@ -1048,7 +1171,7 @@ export const assignmentsApi = {
 
   // Get all assignments (bulk API - Phase 2 optimization)
   listAll: async (
-    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[] },
+    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[]; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> },
     options?: { noCache?: boolean }
   ): Promise<Assignment[]> => {
     const sp = new URLSearchParams();
@@ -1057,6 +1180,10 @@ export const assignmentsApi = {
     if (filters?.department != null) sp.set('department', String(filters.department));
     if (filters?.include_children != null) sp.set('include_children', String(filters.include_children));
     if (filters?.include_placeholders != null) sp.set('include_placeholders', String(filters.include_placeholders));
+    if (filters?.vertical != null) sp.set('vertical', String(filters.vertical));
+    if (filters?.department_filters && filters.department_filters.length) {
+      sp.set('department_filters', JSON.stringify(filters.department_filters));
+    }
     const qs = sp.toString();
     if (options?.noCache) {
       return fetchApi<Assignment[]>(`/assignments/?${qs}`, { headers: { 'Cache-Control': 'no-cache' } });
@@ -1065,8 +1192,12 @@ export const assignmentsApi = {
   },
 
   // Get assignments for specific person
-  byPerson: (personId: number) => 
-    fetchApi<Assignment[]>(`/assignments/by_person/?person_id=${personId}`),
+  byPerson: (personId: number, opts?: { vertical?: number }) => {
+    const sp = new URLSearchParams();
+    sp.set('person_id', String(personId));
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    return fetchApi<Assignment[]>(`/assignments/by_person/?${sp.toString()}`);
+  },
 
   // Get single assignment (detail) to seed ETag for optimistic concurrency
   get: async (id: number): Promise<Assignment> => {
@@ -1227,10 +1358,11 @@ export const deliverablesApi = {
     }),
 
   // Milestone calendar within date range
-  calendar: async (start?: string, end?: string) => {
+  calendar: async (start?: string, end?: string, vertical?: number) => {
     const params = new URLSearchParams();
     if (start) params.set('start', start);
     if (end) params.set('end', end);
+    if (vertical != null) params.set('vertical', String(vertical));
     const qs = params.toString() ? `?${params.toString()}` : '';
     const res = await apiClient.GET(`/deliverables/calendar/${qs}` as any, { headers: authHeaders() });
     if (!res.data) {
@@ -1345,10 +1477,11 @@ export const deliverableQaTasksApi = {
 // Dashboard API
 export const dashboardApi = {
   // Get dashboard data with optional weeks and department parameters
-  getDashboard: async (weeks?: number, department?: string) => {
+  getDashboard: async (weeks?: number, department?: string, vertical?: number) => {
     const params = new URLSearchParams();
     if (weeks && weeks !== 1) params.set('weeks', weeks.toString());
     if (department) params.set('department', department);
+    if (vertical != null) params.set('vertical', String(vertical));
     const queryString = params.toString() ? `?${params.toString()}` : '';
     const res = await apiClient.GET(`/dashboard/${queryString}` as any, { headers: authHeaders() });
     if (!res.data) {

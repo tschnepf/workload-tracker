@@ -7,6 +7,8 @@ export interface UseAssignmentsSnapshotArgs {
   weeksHorizon: number;
   departmentId?: number;
   includeChildren?: boolean;
+  departmentFilters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+  vertical?: number;
 
   // External state setters (container-owned)
   setPeople: React.Dispatch<React.SetStateAction<any[]>>;
@@ -40,6 +42,8 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
     weeks: args.weeksHorizon,
     department: args.departmentId,
     includeChildren: args.includeChildren,
+    departmentFilters: args.departmentFilters,
+    vertical: args.vertical,
     include: 'assignment',
   });
 
@@ -92,6 +96,7 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
         weeks: (grid.weekKeys || []).length,
         department: args.departmentId ?? null,
         include_children: args.includeChildren ? 1 : 0,
+        vertical: args.vertical ?? null,
       });
     } catch {}
   }, [

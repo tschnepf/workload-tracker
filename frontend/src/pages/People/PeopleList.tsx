@@ -4,12 +4,12 @@
  * Right panel: Person details with skills management
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
 import { Person, Department, Role } from '@/types/models';
-import { departmentsApi, rolesApi } from '@/services/api';
+import { peopleApi, rolesApi } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
 import { showToast } from '@/lib/toastBus';
 import Layout from '@/components/layout/Layout';
@@ -20,17 +20,18 @@ import BulkActionsBar from '@/pages/People/list/components/BulkActionsBar';
 import PeopleListPane from '@/pages/People/list/components/PeopleListPane';
 import { useBulkActions } from '@/pages/People/list/hooks/useBulkActions';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
-import { usePeopleQueryPagination } from '@/pages/People/list/hooks/usePeopleQueryPagination';
+import { usePeopleSearch } from '@/hooks/usePeopleSearch';
 import { usePersonSelection } from '@/pages/People/list/hooks/usePersonSelection';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 const PeopleList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
+  const { state: verticalState } = useVerticalFilter();
   const [showInactive, setShowInactive] = useState(false);
-  const { people, loading: listLoading, error: listError, fetchNextPage, hasNextPage } = usePeopleQueryPagination(showInactive);
   const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
+  const [locations, setLocations] = useState<string[]>([]);
   const [roles, setRoles] = useState<Role[]>([]); // Phase 1: Role management
-  const { selectedPerson, selectedIndex, onRowClick, setSelectedPerson, setSelectedIndex, selectByIndex } = usePersonSelection(people);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]); // Multi-select department filter
   const [locationFilter, setLocationFilter] = useState<string[]>([]); // Multi-select location filter
@@ -56,19 +57,8 @@ const PeopleList: React.FC = () => {
   // Roles are now loaded from API instead of hardcoded
 
   useAuthenticatedEffect(() => {
-    loadDepartments(); // Phase 2: Load departments for filter
     loadRoles(); // Phase 1: Load roles for dropdowns
   }, []);
-
-  // Phase 2: Load departments for filter dropdown
-  const loadDepartments = async () => {
-    try {
-      const page = await departmentsApi.list({ page: 1, page_size: 500 });
-      setDepartments(page.results || []);
-    } catch (err) {
-      console.error('Error loading departments:', err);
-    }
-  };
 
   // Phase 1: Load roles for dropdown
   const loadRoles = async () => {
@@ -82,56 +72,93 @@ const PeopleList: React.FC = () => {
 
   // Right-panel effects moved into PersonDetailsContainer
 
-  // Mirror global department selection into local People list filter
+  const loadFiltersMetadata = async () => {
+    try {
+      const res = await peopleApi.filtersMetadata({
+        vertical: verticalState.selectedVerticalId ?? undefined,
+        include_inactive: showInactive ? 1 : undefined,
+      });
+      setDepartments(res.departments || []);
+      setLocations(res.locations || []);
+    } catch (err) {
+      console.error('Error loading people filter metadata:', err);
+    }
+  };
+
+  useAuthenticatedEffect(() => {
+    loadFiltersMetadata();
+  }, [showInactive, verticalState.selectedVerticalId]);
+
   useEffect(() => {
-    const id = deptState.selectedDepartmentId;
-    if (id == null) {
+    if (deptState.filters.length > 0) {
       setDepartmentFilter([]);
-    } else {
-      setDepartmentFilter([String(id)]);
     }
-  }, [deptState.selectedDepartmentId]);
+  }, [deptState.filters]);
 
-  const globalDeptFilter = React.useMemo(() => {
-    const filters = deptState.filters ?? [];
-    if (filters.length === 0) {
-      return { enabled: false, includeAll: new Set<number>(), includeAny: new Set<number>(), excludeOnly: new Set<number>() };
-    }
-    const includeAll = new Set<number>();
-    const includeAny = new Set<number>();
-    const excludeOnly = new Set<number>();
-    filters.forEach((filter) => {
-      if (filter.op === 'not') {
-        excludeOnly.add(filter.departmentId);
-        return;
-      }
-      if (filter.op === 'or') {
-        includeAny.add(filter.departmentId);
-        return;
-      }
-      includeAll.add(filter.departmentId);
-    });
+  const orderingParam = useMemo(() => {
+    const key = sortBy;
+    const dir = sortDirection === 'desc' ? '-' : '';
+    return `${dir}${key}`;
+  }, [sortBy, sortDirection]);
 
-    if (deptState.includeChildren && deptState.selectedDepartmentId != null) {
-      const expanded = new Set<number>();
-      const stack = [deptState.selectedDepartmentId];
-      while (stack.length > 0) {
-        const current = stack.pop()!;
-        if (expanded.has(current)) continue;
-        expanded.add(current);
-        departments.forEach((dept) => {
-          if (dept.parentDepartment === current && dept.id != null) {
-            stack.push(dept.id);
-          }
-        });
-      }
-      includeAll.clear();
-      includeAny.clear();
-      expanded.forEach((id) => includeAny.add(id));
-    }
+  const globalDepartmentFilters = useMemo(() => (deptState.filters ?? [])
+    .map((f) => ({ departmentId: Number(f.departmentId), op: f.op }))
+    .filter((f) => Number.isFinite(f.departmentId) && f.departmentId > 0), [deptState.filters]);
 
-    return { enabled: true, includeAll, includeAny, excludeOnly };
-  }, [deptState.filters, deptState.includeChildren, deptState.selectedDepartmentId, departments]);
+  const localDepartmentFilters = useMemo(() => {
+    return departmentFilter
+      .map((id) => {
+        if (id === 'unassigned') {
+          return { departmentId: 0, op: 'or' as const };
+        }
+        return { departmentId: Number(id), op: 'or' as const };
+      })
+      .filter((f) => Number.isFinite(f.departmentId) && f.departmentId >= 0);
+  }, [departmentFilter]);
+
+  const useGlobalDepartment = deptState.filters.length > 0;
+  const payloadDepartment =
+    useGlobalDepartment && deptState.selectedDepartmentId != null
+      ? Number(deptState.selectedDepartmentId)
+      : undefined;
+  const payloadIncludeChildren =
+    useGlobalDepartment && deptState.selectedDepartmentId != null
+      ? (deptState.includeChildren ? 1 : 0)
+      : undefined;
+  const payloadDepartmentFilters =
+    useGlobalDepartment && deptState.selectedDepartmentId == null
+      ? globalDepartmentFilters
+      : (!useGlobalDepartment ? localDepartmentFilters : []);
+
+  const peopleSearchOptions = useMemo(() => ({
+    includeInactive: showInactive,
+    searchTerm,
+    department: payloadDepartment,
+    includeChildren: payloadIncludeChildren,
+    departmentFilters: payloadDepartmentFilters,
+    location: locationFilter.length ? locationFilter : undefined,
+    ordering: orderingParam,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  }), [
+    showInactive,
+    searchTerm,
+    payloadDepartment,
+    payloadIncludeChildren,
+    payloadDepartmentFilters,
+    locationFilter,
+    orderingParam,
+    verticalState.selectedVerticalId,
+  ]);
+
+  const {
+    people,
+    loading: listLoading,
+    error: listError,
+    fetchNextPage,
+    hasNextPage,
+  } = usePeopleSearch(peopleSearchOptions);
+
+  const { selectedPerson, selectedIndex, onRowClick, setSelectedPerson, setSelectedIndex, selectByIndex } = usePersonSelection(people);
 
   const handleColumnSort = (column: 'name' | 'location' | 'department' | 'weeklyCapacity' | 'role') => {
     if (sortBy === column) {
@@ -164,7 +191,7 @@ const PeopleList: React.FC = () => {
       });
 
       await Promise.all(updatePromises);
-      await loadDepartments();
+      await loadFiltersMetadata();
 
       const count = selectedPeopleIds.size;
       setSelectedPeopleIds(new Set());
@@ -207,116 +234,16 @@ const PeopleList: React.FC = () => {
     </button>
   );
 
-  // Filter and sort people
-  const filteredAndSortedPeople = people
-    .filter(person => {
-      // Enhanced search filter (includes notes/description + location search)
-      const matchesSearch = !searchTerm ||
-        person.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        person.roleName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        person.departmentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        person.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        person.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      // Department filter - Multi-select (page-local)
-      const matchesDepartment = departmentFilter.length === 0 ||
-        departmentFilter.includes(person.department?.toString() || '') ||
-        (departmentFilter.includes('unassigned') && !person.department);
-
-      const matchesGlobalDepartment = (() => {
-        if (!globalDeptFilter.enabled) return true;
-        const deptId = person.department != null ? Number(person.department) : null;
-        const deptSet = deptId != null ? new Set<number>([deptId]) : new Set<number>();
-
-        if (globalDeptFilter.includeAll.size > 0) {
-          for (const id of globalDeptFilter.includeAll) {
-            if (!deptSet.has(id)) return false;
-          }
-        }
-
-        if (globalDeptFilter.includeAny.size > 0) {
-          let hasAny = false;
-          for (const id of globalDeptFilter.includeAny) {
-            if (deptSet.has(id)) {
-              hasAny = true;
-              break;
-            }
-          }
-          if (!hasAny) return false;
-        }
-
-        if (globalDeptFilter.excludeOnly.size > 0 && deptSet.size > 0) {
-          let allExcluded = true;
-          for (const id of deptSet) {
-            if (!globalDeptFilter.excludeOnly.has(id)) {
-              allExcluded = false;
-              break;
-            }
-          }
-          if (allExcluded) return false;
-        }
-
-        return true;
-      })();
-
-      // Location filter - Multi-select with special Remote handling
-      const matchesLocation = locationFilter.length === 0 ||
-        locationFilter.some(filterLocation => {
-          const personLocation = person.location?.trim() || '';
-
-          // Special case: "Remote" filter includes any location containing "remote" (case-insensitive)
-          if (filterLocation === 'Remote') {
-            return personLocation.toLowerCase().includes('remote');
-          }
-
-          // All other filters use exact matching
-          return filterLocation === personLocation;
-        }) ||
-        (locationFilter.includes('unspecified') && (!person.location || person.location.trim() === ''));
-
-      // Status filter: hide inactive unless explicitly shown
-      const matchesStatus = showInactive ? true : (person.isActive !== false);
-
-      return matchesSearch && matchesDepartment && matchesGlobalDepartment && matchesLocation && matchesStatus;
-    })
-    .sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortBy) {
-        case 'location':
-          const aLoc = a.location?.trim() || 'zzz_unspecified'; // Put unspecified at end
-          const bLoc = b.location?.trim() || 'zzz_unspecified';
-          comparison = aLoc.localeCompare(bLoc);
-          break;
-        case 'department':
-          const aDept = a.departmentName || 'zzz_unassigned';
-          const bDept = b.departmentName || 'zzz_unassigned';
-          comparison = aDept.localeCompare(bDept);
-          break;
-        case 'weeklyCapacity':
-          comparison = (a.weeklyCapacity || 0) - (b.weeklyCapacity || 0);
-          break;
-        case 'role':
-          const aRole = a.roleName || 'zzz_no_role';
-          const bRole = b.roleName || 'zzz_no_role';
-          comparison = aRole.localeCompare(bRole);
-          break;
-        case 'name':
-        default:
-          comparison = a.name.localeCompare(b.name);
-          break;
-      }
-      
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
+  // Server-side filtering + ordering
+  const visiblePeople = people;
 
   // Auto-select first person from filtered list
   useEffect(() => {
-    if (filteredAndSortedPeople.length > 0 && !selectedPerson) {
-      setSelectedPerson(filteredAndSortedPeople[0]);
+    if (visiblePeople.length > 0 && !selectedPerson) {
+      setSelectedPerson(visiblePeople[0]);
       setSelectedIndex(0);
     }
-  }, [filteredAndSortedPeople, selectedPerson]);
+  }, [visiblePeople, selectedPerson]);
 
   const loadingContent = (
     <div className="h-full min-h-0 flex items-center justify-center">
@@ -345,8 +272,8 @@ const PeopleList: React.FC = () => {
             <FiltersPanel
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
-              people={people}
               departments={departments}
+              locations={locations}
               departmentFilter={departmentFilter}
               setDepartmentFilter={setDepartmentFilter}
               locationFilter={locationFilter}
@@ -387,24 +314,24 @@ const PeopleList: React.FC = () => {
 
           {/* People List */}
           <PeopleListPane
-            items={filteredAndSortedPeople}
+            items={visiblePeople}
             bulkMode={bulkMode}
             selectedPersonId={selectedPerson?.id ?? null}
             selectedPeopleIds={selectedPeopleIds}
             onRowClick={onRowClick}
             onArrowKey={(dir) => {
-              if (!filteredAndSortedPeople.length) return;
+              if (!visiblePeople.length) return;
               if (selectedIndex < 0) {
-                onRowClick(filteredAndSortedPeople[0], 0);
+                onRowClick(visiblePeople[0], 0);
                 return;
               }
               const delta = dir === 'down' ? 1 : -1;
               const nextIndex = Math.max(0, Math.min(
-                filteredAndSortedPeople.length - 1,
+                visiblePeople.length - 1,
                 selectedIndex + delta
               ));
               if (nextIndex !== selectedIndex) {
-                const nextPerson = filteredAndSortedPeople[nextIndex];
+                const nextPerson = visiblePeople[nextIndex];
                 onRowClick(nextPerson, nextIndex);
               }
             }}
@@ -499,8 +426,8 @@ const PeopleList: React.FC = () => {
                 <FiltersPanel
                   searchTerm={searchTerm}
                   setSearchTerm={setSearchTerm}
-                  people={people}
                   departments={departments}
+                  locations={locations}
                   departmentFilter={departmentFilter}
                   setDepartmentFilter={setDepartmentFilter}
                   locationFilter={locationFilter}
@@ -516,7 +443,7 @@ const PeopleList: React.FC = () => {
 
               {/* List as mobile-friendly cards */}
               <div className="divide-y divide-[var(--border)]">
-                {filteredAndSortedPeople.map((person, index) => {
+                {visiblePeople.map((person, index) => {
                   const isSelected = selectedPerson?.id === person.id;
                   const isChecked = selectedPeopleIds.has(person.id);
                   return (

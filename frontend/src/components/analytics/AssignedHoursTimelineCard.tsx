@@ -4,6 +4,7 @@ import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useAssignedHoursTimelineData, type TimelineWeeks } from '@/hooks/useAssignedHoursTimelineData';
 import { useAssignedHoursDeliverableTimelineData } from '@/hooks/useAssignedHoursDeliverableTimelineData';
 import { getAssignedHoursDeliverableTimeline } from '@/services/analyticsApi';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 
 type Props = {
   initialWeeks?: TimelineWeeks;
@@ -49,10 +50,11 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   const [weeks, setWeeks] = React.useState<TimelineWeeks>(initialWeeks);
   const [mode, setMode] = React.useState<'status' | 'deliverable'>('status');
   const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
   const includeChildren = useGlobalDepartmentFilter ? deptState.includeChildren : !!includeChildrenOverride;
-  const statusData = useAssignedHoursTimelineData({ weeks, departmentId, includeChildren });
-  const deliverableData = useAssignedHoursDeliverableTimelineData({ weeks, departmentId, includeChildren, includeActiveCa: true });
+  const statusData = useAssignedHoursTimelineData({ weeks, departmentId, includeChildren, vertical: verticalState.selectedVerticalId ?? null });
+  const deliverableData = useAssignedHoursDeliverableTimelineData({ weeks, departmentId, includeChildren, includeActiveCa: true, vertical: verticalState.selectedVerticalId ?? null });
 
   // Category expansion (SD/DD/IFP/IFC/Masterplan/Bulletins/CA)
   const [openCategory, setOpenCategory] = React.useState<null | 'sd' | 'dd' | 'ifp' | 'ifc' | 'masterplan' | 'bulletins' | 'ca'>(null);
@@ -66,6 +68,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
         department: departmentId != null ? Number(departmentId) : undefined,
         include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
         include_active_ca: 1,
+        vertical: verticalState.selectedVerticalId ?? undefined,
         debug: 1,
       });
       const dbg: any[] = (res as any).categoriesDebug || [];
@@ -83,7 +86,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
     } catch (e: any) {
       setCategoryDetails(prev => ({ ...prev, [cat]: { loading: false, error: e?.message || 'Failed to load details', projects: [] } }));
     }
-  }, [weeks, departmentId, includeChildren]);
+  }, [weeks, departmentId, includeChildren, verticalState.selectedVerticalId]);
 
   // Extras expansion (additional breakdown labels including Other)
   const [openExtra, setOpenExtra] = React.useState<string | null>(null);
@@ -97,6 +100,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
         department: departmentId != null ? Number(departmentId) : undefined,
         include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
         include_active_ca: 1,
+        vertical: verticalState.selectedVerticalId ?? undefined,
         debug: 1,
       });
       const rows: any[] = (res as any).extrasDebug || [];
@@ -114,7 +118,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
     } catch (e: any) {
       setExtraDetails(prev => ({ ...prev, [label]: { loading: false, error: e?.message || 'Failed to load details', projects: [] } }));
     }
-  }, [weeks, departmentId, includeChildren]);
+  }, [weeks, departmentId, includeChildren, verticalState.selectedVerticalId]);
 
   // Legacy Unspecified expansion vars retained to satisfy type-checking for an old block we no longer render
   const [unspecOpen, setUnspecOpen] = React.useState(false);

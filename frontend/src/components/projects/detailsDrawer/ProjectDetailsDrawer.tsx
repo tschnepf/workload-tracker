@@ -5,6 +5,7 @@ import { useProject, useDeleteProject } from '@/hooks/useProjects';
 import { usePeople } from '@/hooks/usePeople';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { useProjectAssignments } from '@/pages/Projects/list/hooks/useProjectAssignments';
@@ -34,8 +35,9 @@ const ProjectDetailsDrawer: React.FC<Props> = ({ open, projectId, onClose }) => 
 const ProjectDetailsDrawerContent: React.FC<Props> = ({ open, projectId, onClose }) => {
   const enabled = open && !!projectId;
   const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
   const { project, loading, error: projectError } = useProject(projectId ?? 0);
-  const { people } = usePeople();
+  const { people } = usePeople({ vertical: verticalState.selectedVerticalId ?? undefined });
   const caps = useCapabilities();
   const queryClient = useQueryClient();
   const deleteProjectMutation = useDeleteProject();
@@ -158,10 +160,11 @@ const ProjectDetailsDrawerContent: React.FC<Props> = ({ open, projectId, onClose
     departmentId: deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : undefined,
     includeChildren: deptState?.includeChildren,
     candidatesOnly,
+    vertical: verticalState.selectedVerticalId ?? null,
   });
   const { data: departments = [] } = useQuery<Department[], Error>({
-    queryKey: ['departmentsAll'],
-    queryFn: () => departmentsApi.listAll(),
+    queryKey: ['departmentsAll', verticalState.selectedVerticalId ?? null],
+    queryFn: () => departmentsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined }),
     staleTime: 60_000,
   });
 
@@ -174,7 +177,7 @@ const ProjectDetailsDrawerContent: React.FC<Props> = ({ open, projectId, onClose
     onFocus: onPersonSearchFocus,
     onKeyDown: onPersonSearchKeyDown,
     onSelect: onPersonSearchSelect,
-  } = usePersonSearch({ people, availabilityMap, deptState, candidatesOnly, caps });
+  } = usePersonSearch({ people, availabilityMap, deptState, candidatesOnly, caps, vertical: verticalState.selectedVerticalId ?? null });
 
   const handlePersonSelect = (person: Person) => {
     onPersonSearchSelect(person);

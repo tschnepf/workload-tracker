@@ -3,8 +3,9 @@
  * Following PersonForm.tsx structure with proper field mapping
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Department, Person } from '@/types/models';
+import { useVerticals } from '@/hooks/useVerticals';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
@@ -13,6 +14,7 @@ interface DepartmentFormData {
   name: string;
   shortName: string;
   parentDepartment: number | null;
+  vertical: number | null;
   manager: number | null;
   description: string;
   isActive: boolean;
@@ -39,6 +41,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
     name: '',
     shortName: '',
     parentDepartment: null,
+    vertical: null,
     manager: null,
     description: '',
     isActive: true,
@@ -54,6 +57,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
         name: department.name,
         shortName: department.shortName || '',
         parentDepartment: department.parentDepartment,
+        vertical: department.vertical ?? null,
         manager: department.manager,
         description: department.description || '',
         isActive: department.isActive !== false,
@@ -63,12 +67,26 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
         name: '',
         shortName: '',
         parentDepartment: null,
+        vertical: null,
         manager: null,
         description: '',
         isActive: true,
       });
     }
   }, [department]);
+
+  const { verticals, isLoading: verticalsLoading } = useVerticals({ includeInactive: true });
+  const parentVerticalId = useMemo(() => {
+    if (!formData.parentDepartment) return null;
+    const parent = departments.find(d => d.id === formData.parentDepartment);
+    return parent?.vertical ?? null;
+  }, [formData.parentDepartment, departments]);
+  const verticalLocked = formData.parentDepartment != null;
+
+  useEffect(() => {
+    if (!verticalLocked) return;
+    setFormData(prev => ({ ...prev, vertical: parentVerticalId ?? null }));
+  }, [verticalLocked, parentVerticalId]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -78,6 +96,9 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
     }
     if (formData.shortName && formData.shortName.length > 32) {
       errors.shortName = 'Short name must be 32 characters or less';
+    }
+    if (!formData.parentDepartment && !formData.vertical) {
+      errors.vertical = 'Vertical is required for top-level departments';
     }
 
     // Enhanced circular parent department validation
@@ -121,6 +142,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
         name: formData.name.trim(),
         shortName: formData.shortName.trim(),
         parentDepartment: formData.parentDepartment,
+        vertical: formData.vertical,
         manager: formData.manager,
         description: formData.description.trim(),
         isActive: formData.isActive,
@@ -227,6 +249,33 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
               </select>
               {validationErrors.parentDepartment && (
                 <p className="mt-1 text-sm text-red-400">{validationErrors.parentDepartment}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[var(--text)] mb-1">
+                Vertical {formData.parentDepartment ? '' : '*'}
+              </label>
+              <select
+                value={formData.vertical || ''}
+                onChange={(e) => handleInputChange('vertical', e.target.value ? parseInt(e.target.value) : null)}
+                className={`w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px] ${
+                  validationErrors.vertical ? 'border-red-600' : ''
+                }`}
+                disabled={loading || verticalLocked || verticalsLoading}
+              >
+                <option value="">{verticalsLoading ? 'Loading verticals...' : 'Select vertical'}</option>
+                {verticals.map((vertical) => (
+                  <option key={vertical.id} value={vertical.id}>
+                    {vertical.shortName ? `${vertical.name} (${vertical.shortName})` : vertical.name}
+                  </option>
+                ))}
+              </select>
+              {verticalLocked && (
+                <p className="mt-1 text-xs text-[var(--muted)]">Inherited from parent department</p>
+              )}
+              {validationErrors.vertical && (
+                <p className="mt-1 text-sm text-red-400">{validationErrors.vertical}</p>
               )}
             </div>
 

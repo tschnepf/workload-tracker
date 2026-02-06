@@ -4,6 +4,7 @@ from django.http import QueryDict
 from django.urls import reverse
 import json
 from .models import Project, ProjectRisk, ProjectRiskEdit, ProjectChangeLog
+from verticals.models import Vertical
 from departments.models import Department
 
 
@@ -18,6 +19,8 @@ class ProjectFilterMetadataSerializer(serializers.Serializer):
     projectFilters = serializers.DictField(child=ProjectFilterEntrySerializer())
 
 class ProjectSerializer(serializers.ModelSerializer):
+    vertical = serializers.PrimaryKeyRelatedField(queryset=Vertical.objects.all(), required=False, allow_null=True)
+    verticalName = serializers.CharField(source='vertical.name', read_only=True)
     projectNumber = serializers.CharField(source='project_number', required=False, allow_null=True, allow_blank=True)
     startDate = serializers.DateField(source='start_date', required=False, allow_null=True)
     endDate = serializers.DateField(source='end_date', required=False, allow_null=True) 
@@ -38,7 +41,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = ['id', 'name', 'status', 'client', 'description', 'notes', 'notesJson', 'projectNumber',
                  'startDate', 'endDate', 'estimatedHours', 'isActive', 'bqeClientName', 'bqeClientId',
-                 'clientSyncPolicyState', 'autoHoursTemplateId', 'createdAt', 'updatedAt']
+                 'clientSyncPolicyState', 'autoHoursTemplateId', 'vertical', 'verticalName', 'createdAt', 'updatedAt']
         read_only_fields = ['id', 'createdAt', 'updatedAt']
 
     # Best practice: normalize optional fields and enforce constraints at the

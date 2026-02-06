@@ -15,6 +15,7 @@ from django.db import transaction
 from datetime import datetime
 from ..serializers import ProjectSerializer
 from ..models import Project
+from verticals.models import Vertical
 from people.models import Person
 from people.serializers import PersonSerializer
 from assignments.models import Assignment
@@ -63,7 +64,7 @@ def _create_template_projects_sheet(workbook):
     
     # Excel headers (camelCase to match API)
     headers = [
-        'name', 'projectNumber', 'status', 'client', 'description',
+        'name', 'projectNumber', 'vertical', 'status', 'client', 'description',
         'startDate', 'endDate', 'estimatedHours', 'isActive'
     ]
     
@@ -72,10 +73,10 @@ def _create_template_projects_sheet(workbook):
     
     # Example project data rows
     example_projects = [
-        ['Website Redesign', 'PRJ-2024-001', 'active', 'Acme Corp', 'Complete website overhaul', '2024-01-01', '2024-06-30', 2000, True],
-        ['Mobile App Phase 2', 'PRJ-2024-002', 'planning', 'TechStart', 'iOS and Android app development', '2024-03-01', '2024-12-31', 3500, True],
-        ['Internal Tool Update', '', 'active', 'Internal', 'Update existing dashboard tool', '', '', '', True],
-        ['Quick Fix Project', 'QF-001', 'completed', 'Legacy Client', 'Small bug fixes and updates', '2024-01-15', '2024-02-15', 40, False]
+        ['Website Redesign', 'PRJ-2024-001', 'Architecture', 'active', 'Acme Corp', 'Complete website overhaul', '2024-01-01', '2024-06-30', 2000, True],
+        ['Mobile App Phase 2', 'PRJ-2024-002', 'Technology', 'planning', 'TechStart', 'iOS and Android app development', '2024-03-01', '2024-12-31', 3500, True],
+        ['Internal Tool Update', '', 'Operations', 'active', 'Internal', 'Update existing dashboard tool', '', '', '', True],
+        ['Quick Fix Project', 'QF-001', 'Architecture', 'completed', 'Legacy Client', 'Small bug fixes and updates', '2024-01-15', '2024-02-15', 40, False]
     ]
     
     # Write example data
@@ -161,7 +162,7 @@ def _create_projects_sheet(workbook, queryset):
     
     # Excel headers (camelCase to match API)
     headers = [
-        'name', 'projectNumber', 'status', 'client', 'description',
+        'name', 'projectNumber', 'vertical', 'status', 'client', 'description',
         'startDate', 'endDate', 'estimatedHours', 'isActive'
     ]
     
@@ -176,7 +177,10 @@ def _create_projects_sheet(workbook, queryset):
     for row_idx, project_data in enumerate(serialized_data, start=2):
         for col_idx, header in enumerate(headers, start=1):
             # Use serializer data directly (camelCase already provided by serializer)
-            value = project_data.get(header, '')
+            if header == 'vertical':
+                value = project_data.get('verticalName') or project_data.get('vertical') or ''
+            else:
+                value = project_data.get(header, '')
 
             # Handle None values
             if value is None:
@@ -292,7 +296,7 @@ def _create_projects_template_sheet(workbook):
     template_sheet.cell(row=1, column=1, value="PROJECTS TEMPLATE").font = Font(bold=True, size=14)
     
     projects_headers = [
-        'name', 'projectNumber', 'status', 'client', 'description',
+        'name', 'projectNumber', 'vertical', 'status', 'client', 'description',
         'startDate', 'endDate', 'estimatedHours', 'isActive'
     ]
     
@@ -305,7 +309,7 @@ def _create_projects_template_sheet(workbook):
     
     # Example project data
     example_project = [
-        'Website Redesign', 'PRJ-2024-001', 'Active', 'Acme Corp',
+        'Website Redesign', 'PRJ-2024-001', 'Architecture', 'Active', 'Acme Corp',
         'Complete website overhaul', '2024-01-01', '2024-06-30', 2000, True
     ]
     
@@ -384,6 +388,7 @@ def _create_projects_instructions_sheet(workbook):
         "PROJECTS SHEET FIELDS:",
         "• name - Project name (REQUIRED)",
         "• projectNumber - Unique project identifier",
+        "• vertical - Vertical name or ID (REQUIRED)",
         "• status - Planning/Active/Active CA/On Hold/Completed/Cancelled",
         "• client - Client name (default: Internal)",
         "• description - Project description",
@@ -626,6 +631,28 @@ def _import_single_project(row_data, update_existing, dry_run):
     """Import single project using ProjectSerializer (R2-REBUILD-STANDARDS compliant)."""
     # Clean row data - convert empty strings to None for optional fields
     cleaned_data = _clean_project_data(row_data)
+
+    # Resolve vertical by name or ID if provided
+    if cleaned_data.get('vertical') is not None:
+        vertical_val = cleaned_data.get('vertical')
+        if isinstance(vertical_val, str):
+            if vertical_val.strip() == '':
+                cleaned_data['vertical'] = None
+            elif vertical_val.strip().isdigit():
+                cleaned_data['vertical'] = int(vertical_val.strip())
+            else:
+                v_obj = (
+                    Vertical.objects.filter(name__iexact=vertical_val.strip()).first()
+                    or Vertical.objects.filter(short_name__iexact=vertical_val.strip()).first()
+                )
+                if not v_obj:
+                    return {'created': False, 'updated': False, 'errors': [f"vertical not found: {vertical_val}"], 'project': None}
+                cleaned_data['vertical'] = v_obj.id
+        elif isinstance(vertical_val, (int, float)):
+            try:
+                cleaned_data['vertical'] = int(vertical_val)
+            except Exception:
+                return {'created': False, 'updated': False, 'errors': [f"vertical invalid: {vertical_val}"], 'project': None}
     
     # Match existing project by projectNumber (preferred) or name
     existing_project = None
@@ -936,7 +963,7 @@ def _clean_project_data(row_data):
     # Optional fields that should be None instead of empty strings
     optional_fields = [
         'projectNumber', 'startDate', 'endDate', 'estimatedHours', 
-        'description', 'client'
+        'description', 'client', 'vertical'
     ]
     
     for field in optional_fields:

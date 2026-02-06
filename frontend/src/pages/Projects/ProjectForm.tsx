@@ -11,6 +11,8 @@ import { updateProject } from '@/lib/mutations/projects';
 import { useCreateProject } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useVerticals } from '@/hooks/useVerticals';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -26,6 +28,8 @@ const ProjectForm: React.FC = () => {
   const createProject = useCreateProject();
   const auth = useAuth();
   const canEditAutoHoursTemplate = isAdminOrManager(auth?.user);
+  const { state: verticalState } = useVerticalFilter();
+  const { verticals, isLoading: verticalsLoading } = useVerticals({ includeInactive: true });
 
   const [formData, setFormData] = useState<Partial<Project>>({
     name: '',
@@ -36,6 +40,7 @@ const ProjectForm: React.FC = () => {
     estimatedHours: undefined,
     projectNumber: '',
     autoHoursTemplateId: null,
+    vertical: verticalState.selectedVerticalId ?? null,
   });
 
   const [loading, setLoading] = useState(false);
@@ -92,11 +97,19 @@ const ProjectForm: React.FC = () => {
     }
   }, [isEditing, id]);
 
+  useEffect(() => {
+    if (isEditing) return;
+    if (formData.vertical == null && verticalState.selectedVerticalId != null) {
+      setFormData(prev => ({ ...prev, vertical: verticalState.selectedVerticalId ?? null }));
+    }
+  }, [isEditing, formData.vertical, verticalState.selectedVerticalId]);
+
   useAuthenticatedEffect(() => {
+    if (isEditing) return;
     // Load available clients when component mounts
     const loadClients = async () => {
       try {
-        const clients = await projectsApi.getClients();
+        const clients = await projectsApi.getClients({ vertical: verticalState.selectedVerticalId ?? undefined });
         setAvailableClients(clients);
         setFilteredClients(clients);
       } catch (err) {
@@ -105,7 +118,7 @@ const ProjectForm: React.FC = () => {
     };
 
     loadClients();
-  }, []);
+  }, [isEditing, verticalState.selectedVerticalId]);
 
   useAuthenticatedEffect(() => {
     if (!canEditAutoHoursTemplate) return;
@@ -148,6 +161,9 @@ const ProjectForm: React.FC = () => {
 
     if (!formData.client?.trim()) {
       errors.client = 'Client is required';
+    }
+    if (!formData.vertical) {
+      errors.vertical = 'Vertical is required';
     }
 
     setValidationErrors(errors);
@@ -381,6 +397,29 @@ const ProjectForm: React.FC = () => {
                     })}
                   </ul>
                 </div>
+              )}
+            </div>
+
+            {/* Vertical */}
+            <div>
+              <label className="block text-sm font-medium text-[#cccccc] mb-2">
+                Vertical
+              </label>
+              <select
+                value={formData.vertical || ''}
+                onChange={(e) => handleChange('vertical', e.target.value ? Number(e.target.value) : null)}
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+                disabled={verticalsLoading}
+              >
+                <option value="">{verticalsLoading ? 'Loading verticals...' : 'Select vertical'}</option>
+                {verticals.map((vertical) => (
+                  <option key={vertical.id} value={vertical.id}>
+                    {vertical.shortName ? `${vertical.name} (${vertical.shortName})` : vertical.name}
+                  </option>
+                ))}
+              </select>
+              {validationErrors.vertical && (
+                <p className="text-red-400 text-xs mt-1">{validationErrors.vertical}</p>
               )}
             </div>
 
