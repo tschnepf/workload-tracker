@@ -72,7 +72,8 @@ function normalizeState(next: DepartmentFilterState): DepartmentFilterState {
   const selectedDepartmentId = filters.length === 1 && filters[0].op !== 'not'
     ? filters[0].departmentId
     : null;
-  const includeChildren = selectedDepartmentId != null ? !!next.includeChildren : false;
+  // Global department filter always includes all descendants when a single department is selected.
+  const includeChildren = selectedDepartmentId != null;
   return { filters, selectedDepartmentId, includeChildren };
 }
 
@@ -209,6 +210,21 @@ export function ensureInitialized() {
     });
     // Do not echo URL back; treat as non-user change
     writeToLocalStorage(state);
+    // Normalize legacy URLs like deptChildren=0 to the canonical include-children behavior.
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const hasDeptParam = sp.get('dept') != null || sp.get('deptChildren') != null;
+      if (state.selectedDepartmentId != null && hasDeptParam) {
+        const url = new URL(window.location.href);
+        applyDeptToUrl(url, state);
+        const nextSearch = url.searchParams.toString();
+        const nextUrl = url.pathname + (nextSearch ? `?${nextSearch}` : '') + url.hash;
+        const current = window.location.pathname + window.location.search + window.location.hash;
+        if (nextUrl !== current) {
+          window.history.replaceState(window.history.state, '', nextUrl);
+        }
+      }
+    }
   }
 }
 

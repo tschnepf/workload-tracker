@@ -30,6 +30,15 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
           <rect x="3" y="14" width="7" height="7"/>
         </svg>
       );
+    case 'my-work':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="7" height="7" rx="2"/>
+          <rect x="3" y="13" width="7" height="7" rx="2"/>
+          <circle cx="17" cy="9" r="3.25"/>
+          <path d="M12.5 20a4.75 4.75 0 0 1 9.5 0"/>
+        </svg>
+      );
     case 'people':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
@@ -41,25 +50,65 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
       );
     case 'assignments':
       return (
-        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14,2 14,8 20,8"/>
-          <line x1="9" y1="15" x2="15" y2="15"/>
-          <line x1="9" y1="18" x2="13" y2="18"/>
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="6" cy="9" r="3"/>
+          <path d="M2 19a4 4 0 0 1 8 0"/>
+          <rect x="11" y="4" width="10" height="14" rx="2"/>
+          <circle cx="13.5" cy="8" r="1.1" fill={iconColor} stroke="none"/>
+          <line x1="15.5" y1="8" x2="18.5" y2="8"/>
+          <circle cx="13.5" cy="11" r="1.1" fill={iconColor} stroke="none"/>
+          <line x1="15.5" y1="11" x2="18.5" y2="11"/>
+          <circle cx="13.5" cy="14" r="1.1" fill={iconColor} stroke="none"/>
+          <line x1="15.5" y1="14" x2="18.5" y2="14"/>
+          <line x1="9" y1="11" x2="11" y2="11"/>
+          <path d="M10 9.5 11.5 11 10 12.5"/>
+        </svg>
+      );
+    case 'project-assignments':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="10" height="14" rx="2"/>
+          <circle cx="6" cy="8" r="1.1" fill={iconColor} stroke="none"/>
+          <line x1="8" y1="8" x2="11" y2="8"/>
+          <circle cx="6" cy="11" r="1.1" fill={iconColor} stroke="none"/>
+          <line x1="8" y1="11" x2="11" y2="11"/>
+          <circle cx="6" cy="14" r="1.1" fill={iconColor} stroke="none"/>
+          <line x1="8" y1="14" x2="11" y2="14"/>
+          <circle cx="18" cy="9" r="3"/>
+          <path d="M14 19a4 4 0 0 1 8 0"/>
+          <path d="M12.5 11h4"/>
+          <path d="M15.5 9.5 17 11l-1.5 1.5"/>
         </svg>
       );
     case 'departments':
       return (
-        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
-          <path d="M3 21h18"/>
-          <path d="M5 21V7l8-4v18"/>
-          <path d="M19 21V11l-6-4"/>
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="9" width="5" height="10" rx="1"/>
+          <rect x="9.5" y="6" width="5" height="13" rx="1"/>
+          <rect x="16" y="9" width="5" height="10" rx="1"/>
+          <line x1="5" y1="12" x2="6" y2="12"/>
+          <line x1="5" y1="14.5" x2="6" y2="14.5"/>
+          <line x1="11" y1="9.5" x2="12" y2="9.5"/>
+          <line x1="13" y1="9.5" x2="14" y2="9.5"/>
+          <line x1="11" y1="12" x2="12" y2="12"/>
+          <line x1="13" y1="12" x2="14" y2="12"/>
+          <line x1="11" y1="14.5" x2="12" y2="14.5"/>
+          <line x1="13" y1="14.5" x2="14" y2="14.5"/>
+          <line x1="18" y1="12" x2="19" y2="12"/>
+          <line x1="18" y1="14.5" x2="19" y2="14.5"/>
         </svg>
       );
     case 'projects':
       return (
-        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="5" y="5" width="14" height="16" rx="2"/>
+          <rect x="8" y="2" width="8" height="4" rx="2"/>
+          <circle cx="10" cy="10" r="1.25" fill={iconColor} stroke="none"/>
+          <line x1="12.5" y1="10" x2="16.5" y2="10"/>
+          <circle cx="10" cy="14" r="1.25" fill={iconColor} stroke="none"/>
+          <line x1="12.5" y1="14" x2="16.5" y2="14"/>
+          <circle cx="10" cy="18" r="1.25" fill={iconColor} stroke="none"/>
+          <line x1="12.5" y1="18" x2="16.5" y2="18"/>
         </svg>
       );
     case 'reports':
@@ -70,9 +119,16 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
       );
     case 'skills':
       return (
-        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
-          <path d="M12 2L2 7v10c0 5.55 3.84 10 9 11 1.16.21 2.76.21 3.92 0C20.16 27 24 22.55 24 17V7l-10-5z"/>
-          <path d="M8 11l2 2 4-4"/>
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8"/>
+          <circle cx="12" cy="12" r="4"/>
+          <circle cx="12" cy="12" r="1.2" fill={iconColor} stroke="none"/>
+          <line x1="18.5" y1="6" x2="13.5" y2="11"/>
+          <polygon points="19.3,5.2 20.8,6.7 18.7,7" fill={iconColor} stroke="none"/>
+          <line x1="20.5" y1="12.5" x2="13.5" y2="12.5"/>
+          <polygon points="21.2,11.8 21.2,13.2 19.5,12.5" fill={iconColor} stroke="none"/>
+          <line x1="18.8" y1="18.5" x2="13.2" y2="13.5"/>
+          <polygon points="19.6,18.9 18.1,20.4 17.7,18.3" fill={iconColor} stroke="none"/>
         </svg>
       );
     case 'hierarchy':
@@ -142,10 +198,10 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
   const isAdmin = isAdminUser(auth.user);
   const [logoError, setLogoError] = React.useState(false);
 
-  const menuItems = [
+  const primaryItems = [
     ...(getFlag('PERSONAL_DASHBOARD', true) ? [{
       path: '/my-work',
-      icon: 'dashboard',
+      icon: 'my-work',
       label: 'My Work',
       description: 'Your assignments & milestones'
     }] : []),
@@ -156,16 +212,19 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       description: 'Overview and metrics'
     },
     { 
-      path: '/people', 
-      icon: 'people', 
-      label: 'People',
-      description: 'Team management'
-    },
+      path: '/deliverables/calendar', 
+      icon: 'calendar', 
+      label: 'Calendar',
+      description: 'Milestone schedule'
+    }
+  ];
+
+  const workloadItems = [
     { 
-      path: '/departments', 
-      icon: 'departments', 
-      label: 'Departments',
-      description: 'Organization structure'
+      path: '/projects', 
+      icon: 'projects', 
+      label: 'Projects',
+      description: 'Project tracking'
     },
     { 
       path: '/assignments', 
@@ -175,43 +234,34 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
     },
     { 
       path: '/project-assignments', 
-      icon: 'assignments', 
+      icon: 'project-assignments', 
       label: 'Project Assignments',
       description: 'Projects grouped with assigned people'
+    }
+  ];
+
+  const orgItems = [
+    { 
+      path: '/departments', 
+      icon: 'departments', 
+      label: 'Departments',
+      description: 'Organization structure'
     },
     { 
-      path: '/projects', 
-      icon: 'projects', 
-      label: 'Projects',
-      description: 'Project tracking'
-    },
-    
-    ...(isAdmin ? [
-      {
-        path: '/reports/forecast',
-        icon: 'reports',
-        label: 'Forecast',
-        description: 'Team forecast & timeline'
-      },
-      {
-        path: '/reports/person-experience',
-        icon: 'reports',
-        label: 'Person Experience',
-        description: 'Per-person projects & hours'
-      },
-    ] : []),
-    { 
-      path: '/deliverables/calendar', 
-      icon: 'calendar', 
-      label: 'Calendar',
-      description: 'Milestone schedule'
+      path: '/people', 
+      icon: 'people', 
+      label: 'People',
+      description: 'Team management'
     },
     { 
       path: '/skills', 
       icon: 'skills', 
       label: 'Skills',
       description: 'Team skills analysis'
-    },
+    }
+  ];
+
+  const settingsItems = [
     { 
       path: '/settings', 
       icon: 'settings', 
@@ -219,6 +269,21 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       description: 'System configuration'
     }
   ];
+
+  const adminItems = isAdmin ? [
+    {
+      path: '/reports/forecast',
+      icon: 'reports',
+      label: 'Forecast',
+      description: 'Team forecast & timeline'
+    },
+    {
+      path: '/reports/person-experience',
+      icon: 'reports',
+      label: 'Person Experience',
+      description: 'Per-person projects & hours'
+    },
+  ] : [];
 
   // Advanced department features
   const departmentItems = [
@@ -244,6 +309,11 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
 
   const systemItems: Array<{ path: string; icon: string; label: string; description?: string }> = [];
 
+  const extraItems = [
+    ...adminItems,
+    ...departmentItems,
+    ...systemItems
+  ];
 
   const pendingPath = (nav as any)?.location?.pathname as string | undefined;
   const isActive = (path: string) => {
@@ -255,6 +325,64 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
 
   const widthClass = showLabels ? 'w-64' : 'w-16';
   const linkLayoutClass = showLabels ? 'justify-start gap-3 w-full' : 'justify-center';
+
+  const renderNavItems = (items: Array<{ path: string; icon: string; label: string; description?: string }>) => (
+    items.map((item) => (
+      <TooltipPortal key={item.path} title={item.label} description={item.description}>
+        <Link
+          to={item.path}
+          onMouseEnter={() => {
+            if (!auth?.accessToken) return; // gate by auth
+            if (!getFlag('ROUTE_PREFETCH', true)) return;
+            prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
+            prefetchDataForRoute(item.path).catch(() => {});
+          }}
+          onFocus={() => {
+            if (!auth?.accessToken) return;
+            if (!getFlag('ROUTE_PREFETCH', true)) return;
+            prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
+            prefetchDataForRoute(item.path).catch(() => {});
+          }}
+          onClick={(e) => {
+            // Wrap navigation in a view transition when enabled
+            const enableVT = getFlag('VIEW_TRANSITIONS', false) && supportsViewTransitions();
+            // Mark local pending immediately for instant sidebar feedback
+            setPendingPath(item.path);
+            if (!enableVT) {
+              // Record prefetch hit/miss telemetry
+              const hit = wasPrefetched(item.path);
+              trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
+              return; // allow default link navigation
+            }
+            e.preventDefault();
+            const hit = wasPrefetched(item.path);
+            trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
+            startViewTransition(() => navigate(item.path)).catch(() => navigate(item.path));
+          }}
+          aria-current={isActive(item.path) ? 'page' : undefined}
+          aria-label={!showLabels ? item.label : undefined}
+          className={`
+            group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
+            ${isActive(item.path) 
+              ? 'bg-[var(--primary)]/10 border-r-2 border-[var(--primary)] text-[var(--primary)]' 
+              : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+            }
+          `}
+        >
+          <div className="flex-shrink-0">
+            <IconComponent 
+              type={item.icon} 
+              className="w-4 h-4" 
+              isActive={isActive(item.path)}
+            />
+          </div>
+          {showLabels && (
+            <span className="text-[var(--text)] text-sm">{item.label}</span>
+          )}
+        </Link>
+      </TooltipPortal>
+    ))
+  );
 
   return (
     <div className={`bg-[var(--surface)] border-r border-[var(--border)] flex-shrink-0 ${widthClass} h-screen flex flex-col z-10`}>
@@ -286,149 +414,27 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-theme">
       <nav className="py-4" role="navigation" aria-label="Primary">
         <div className="space-y-1 px-3">
-          {menuItems.map((item) => (
-            <TooltipPortal key={item.path} title={item.label} description={item.description}>
-              <Link
-                to={item.path}
-                onMouseEnter={() => {
-                  if (!auth?.accessToken) return; // gate by auth
-                  if (!getFlag('ROUTE_PREFETCH', true)) return;
-                  prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
-                  prefetchDataForRoute(item.path).catch(() => {});
-                }}
-                onFocus={() => {
-                  if (!auth?.accessToken) return;
-                  if (!getFlag('ROUTE_PREFETCH', true)) return;
-                  prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
-                  prefetchDataForRoute(item.path).catch(() => {});
-                }}
-                onClick={(e) => {
-                  // Wrap navigation in a view transition when enabled
-                  const enableVT = getFlag('VIEW_TRANSITIONS', false) && supportsViewTransitions();
-                  // Mark local pending immediately for instant sidebar feedback
-                  setPendingPath(item.path);
-                  if (!enableVT) {
-                    // Record prefetch hit/miss telemetry
-                    const hit = wasPrefetched(item.path);
-                    trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
-                    return; // allow default link navigation
-                  }
-                  e.preventDefault();
-                  const hit = wasPrefetched(item.path);
-                  trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
-                  startViewTransition(() => navigate(item.path)).catch(() => navigate(item.path));
-                }}
-                aria-current={isActive(item.path) ? 'page' : undefined}
-                aria-label={!showLabels ? item.label : undefined}
-                className={`
-                  group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
-                  ${isActive(item.path) 
-                    ? 'bg-[var(--primary)]/10 border-r-2 border-[var(--primary)] text-[var(--primary)]' 
-                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
-                  }
-                `}
-              >
-                <div className="flex-shrink-0">
-                  <IconComponent 
-                    type={item.icon} 
-                    className="w-4 h-4" 
-                    isActive={isActive(item.path)}
-                  />
-                </div>
-                {showLabels && (
-                  <span className="text-[var(--text)] text-sm">{item.label}</span>
-                )}
-              </Link>
-            </TooltipPortal>
-          ))}
+          {renderNavItems(primaryItems)}
         </div>
 
-        {/* Department Advanced Features */}
         <div className="my-4 mx-6 border-t border-[var(--border)]" />
         <div className="space-y-1 px-3">
-          {departmentItems.map((item) => (
-            <TooltipPortal key={item.path} title={item.label} description={item.description}>
-              <Link
-                to={item.path}
-                onMouseEnter={() => {
-                  if (!auth?.accessToken) return;
-                  if (!getFlag('ROUTE_PREFETCH', true)) return;
-                  prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
-                  prefetchDataForRoute(item.path).catch(() => {});
-                }}
-                onFocus={() => {
-                  if (!auth?.accessToken) return;
-                  if (!getFlag('ROUTE_PREFETCH', true)) return;
-                  prefetchRoute(item.path, { delayMs: 120 }).catch(() => {});
-                  prefetchDataForRoute(item.path).catch(() => {});
-                }}
-                onClick={(e) => {
-                  const enableVT = getFlag('VIEW_TRANSITIONS', false) && supportsViewTransitions();
-                  setPendingPath(item.path);
-                  if (!enableVT) {
-                    const hit = wasPrefetched(item.path);
-                    trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
-                    return;
-                  }
-                  e.preventDefault();
-                  const hit = wasPrefetched(item.path);
-                  trackPerformanceEvent('prefetch.chunk.click', hit ? 1 : 0, 'count', { path: item.path, status: hit ? 'hit' : 'miss' });
-                  startViewTransition(() => navigate(item.path)).catch(() => navigate(item.path));
-                }}
-                aria-current={isActive(item.path) ? 'page' : undefined}
-                aria-label={!showLabels ? item.label : undefined}
-                className={`
-                  group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
-                  ${isActive(item.path) 
-                    ? 'bg-[var(--primary)]/10 border-r-2 border-[var(--primary)] text-[var(--primary)]' 
-                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
-                  }
-                `}
-              >
-                <div className="flex-shrink-0">
-                  <IconComponent 
-                    type={item.icon} 
-                    className="w-4 h-4" 
-                    isActive={isActive(item.path)}
-                  />
-                </div>
-                {showLabels && (
-                  <span className="text-[var(--text)] text-sm">{item.label}</span>
-                )}
-              </Link>
-            </TooltipPortal>
-          ))}
+          {renderNavItems(workloadItems)}
         </div>
 
-        {/* System Items */}
         <div className="my-4 mx-6 border-t border-[var(--border)]" />
         <div className="space-y-1 px-3">
-          {systemItems.map((item) => (
-            <TooltipPortal key={item.path} title={item.label} description={item.description}>
-              <Link
-                to={item.path}
-                aria-label={!showLabels ? item.label : undefined}
-                className={`
-                  group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
-                  ${isActive(item.path) 
-                    ? 'bg-[var(--primary)]/10 border-r-2 border-[var(--primary)] text-[var(--primary)]' 
-                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
-                  }
-                `}
-              >
-                <div className="flex-shrink-0">
-                  <IconComponent 
-                    type={item.icon} 
-                    className="w-4 h-4" 
-                    isActive={isActive(item.path)}
-                  />
-                </div>
-                {showLabels && (
-                  <span className="text-[var(--text)] text-sm">{item.label}</span>
-                )}
-              </Link>
-            </TooltipPortal>
-          ))}
+          {renderNavItems(orgItems)}
+        </div>
+
+        <div className="my-4 mx-6 border-t border-[var(--border)]" />
+        <div className="space-y-1 px-3">
+          {renderNavItems(settingsItems)}
+        </div>
+
+        <div className="my-4 mx-6 border-t border-[var(--border)]" />
+        <div className="space-y-1 px-3">
+          {renderNavItems(extraItems)}
         </div>
       </nav>
       </div>
@@ -527,4 +533,3 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
 };
 
 export default Sidebar;
-
