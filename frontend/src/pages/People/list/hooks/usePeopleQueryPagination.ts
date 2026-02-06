@@ -1,6 +1,6 @@
 import { usePeople } from '@/hooks/usePeople';
 
-export function usePeopleQueryPagination(includeInactive = false) {
+export function usePeopleQueryPagination(options: { includeInactive?: boolean; vertical?: number } = {}) {
   const {
     people,
     loading,
@@ -10,7 +10,7 @@ export function usePeopleQueryPagination(includeInactive = false) {
     isFetchingNextPage,
     dataUpdatedAt,
     peopleVersion,
-  } = usePeople(includeInactive);
+  } = usePeople(options);
 
   return {
     people,

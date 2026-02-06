@@ -121,7 +121,7 @@ const PeopleList: React.FC = () => {
     useGlobalDepartment && deptState.selectedDepartmentId != null
       ? Number(deptState.selectedDepartmentId)
       : undefined;
-  const payloadIncludeChildren =
+  const payloadIncludeChildren: 0 | 1 | undefined =
     useGlobalDepartment && deptState.selectedDepartmentId != null
       ? (deptState.includeChildren ? 1 : 0)
       : undefined;
