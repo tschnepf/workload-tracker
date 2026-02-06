@@ -40,6 +40,7 @@ class AvailablePersonSerializer(serializers.Serializer):
 class RecentAssignmentSerializer(serializers.Serializer):
     person = serializers.CharField()
     project = serializers.CharField()
+    role = serializers.CharField(allow_null=True, required=False)
     created = serializers.CharField()
 
 
@@ -49,4 +50,3 @@ class DashboardResponseSerializer(serializers.Serializer):
     team_overview = TeamOverviewItemSerializer(many=True)
     available_people = AvailablePersonSerializer(many=True)
     recent_assignments = RecentAssignmentSerializer(many=True)
-

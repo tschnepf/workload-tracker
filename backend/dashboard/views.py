@@ -202,19 +202,28 @@ class DashboardView(APIView):
         recent_assignment_qs = Assignment.objects.filter(
             created_at__gte=today - timedelta(days=7),
             person__is_active=True
-        ).select_related('person')
+        ).select_related('person', 'project', 'role_on_project_ref')
         
         if department_filter:
             recent_assignment_qs = recent_assignment_qs.filter(person__department_id=department_filter)
         if vertical_filter:
             recent_assignment_qs = recent_assignment_qs.filter(project__vertical_id=vertical_filter)
             
-        recent_assignment_qs = recent_assignment_qs.order_by('-created_at')[:5]
+        recent_assignment_qs = recent_assignment_qs.order_by('-created_at')
         
         for assignment in recent_assignment_qs:
+            role_name = None
+            try:
+                if assignment.role_on_project_ref:
+                    role_name = assignment.role_on_project_ref.name
+                elif assignment.role_on_project:
+                    role_name = assignment.role_on_project
+            except Exception:
+                role_name = None
             recent_assignments.append({
                 'person': assignment.person.name,
                 'project': assignment.project_display,
+                'role': role_name,
                 'created': assignment.created_at.isoformat()
             })
         

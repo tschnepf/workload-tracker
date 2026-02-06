@@ -25,9 +25,9 @@ import { useDeliverablesSearchIndex } from '@/hooks/useDeliverablesSearchIndex';
 import StatusStrip from '@/components/dashboard/StatusStrip';
 import KpiCard from '@/components/dashboard/KpiCard';
 import StackedDistributionBar from '@/components/dashboard/StackedDistributionBar';
-import BarListCard, { type BarListRow } from '@/components/dashboard/BarListCard';
 import PersonAlertList, { type PersonAlertItem, type PersonAlertFilter } from '@/components/dashboard/PersonAlertList';
 import RoleCapacitySummary from '@/components/dashboard/RoleCapacitySummary';
+import RecentAssignmentsCard from '@/components/dashboard/RecentAssignmentsCard';
 import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
 import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 
@@ -262,17 +262,6 @@ const Dashboard: React.FC = () => {
     ];
   }, []);
 
-  const utilizationRows = useMemo<BarListRow[]>(() => {
-    if (!data || totalMembers === 0) return [];
-    const dist = data.utilization_distribution;
-    const pct = (value: number) => Math.round((value / totalMembers) * 100);
-    return [
-      { key: 'optimal', label: 'Optimal', percent: pct(dist.optimal), color: '#34d399' },
-      { key: 'high', label: 'High', percent: pct(dist.high), color: '#f59e0b' },
-      { key: 'over', label: 'Over', percent: pct(dist.overallocated), color: '#ef4444' },
-    ];
-  }, [data, totalMembers]);
-  
   const loadDepartments = async () => {
     try {
       const response = await departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
@@ -444,18 +433,24 @@ const Dashboard: React.FC = () => {
         <StatusStrip tone={statusTone}>{statusMessage}</StatusStrip>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          <div className="col-span-12 grid grid-cols-1 gap-4 lg:col-span-4 lg:grid-cols-2 lg:self-start">
-            <KpiCard
-              label="Average Utilization"
-              value={`${avgUtil}%`}
-              accent={avgAccent}
-              subtext={weeksPeriod === 1 ? 'This week' : `${weeksPeriod} week average`}
-            />
-            <KpiCard
-              label="Active Projects"
-              value={activeProjects}
-              accent="green"
-              subtext={projectsTotal ? `Total: ${projectsTotal}` : 'Current period'}
+          <div className="col-span-12 lg:col-span-4 lg:self-stretch flex flex-col gap-4 min-h-0">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <KpiCard
+                label="Average Utilization"
+                value={`${avgUtil}%`}
+                accent={avgAccent}
+                subtext={weeksPeriod === 1 ? 'This week' : `${weeksPeriod} week average`}
+              />
+              <KpiCard
+                label="Active Projects"
+                value={activeProjects}
+                accent="green"
+                subtext={projectsTotal ? `Total: ${projectsTotal}` : 'Current period'}
+              />
+            </div>
+            <RecentAssignmentsCard
+              assignments={data.recent_assignments ?? []}
+              className="flex-1"
             />
           </div>
           <div className="col-span-12 lg:col-span-4 lg:col-start-5">
@@ -471,7 +466,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <Card className="col-span-12 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] lg:col-span-8">
+          <Card className="col-span-12 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] lg:col-span-12">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text)]">Utilization Distribution</h3>
@@ -492,14 +487,6 @@ const Dashboard: React.FC = () => {
               />
             </div>
           </Card>
-          <div className="col-span-12 lg:col-span-4">
-            <BarListCard
-              extraRows={utilizationRows}
-              showSecondaryCategories
-              title="Assigned Hours"
-              subtitle="Active projects and utilization mix"
-            />
-          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
