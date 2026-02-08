@@ -219,10 +219,17 @@ class DashboardView(APIView):
                     role_name = assignment.role_on_project
             except Exception:
                 role_name = None
+            client_name = None
+            try:
+                if assignment.project:
+                    client_name = assignment.project.client
+            except Exception:
+                client_name = None
             person_name = assignment.person.name if assignment.person else 'Unassigned'
             recent_assignments.append({
                 'person': person_name,
                 'project': assignment.project_display,
+                'client': client_name,
                 'role': role_name,
                 'created': assignment.created_at.isoformat()
             })

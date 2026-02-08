@@ -40,6 +40,7 @@ class AvailablePersonSerializer(serializers.Serializer):
 class RecentAssignmentSerializer(serializers.Serializer):
     person = serializers.CharField()
     project = serializers.CharField()
+    client = serializers.CharField(allow_null=True, required=False)
     role = serializers.CharField(allow_null=True, required=False)
     created = serializers.CharField()
 

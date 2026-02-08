@@ -377,6 +377,7 @@ export interface DashboardData {
   recent_assignments: Array<{
     person: string;
     project: string;
+    client?: string | null;
     role?: string | null;
     created: string;
   }>;
