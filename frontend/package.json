@@ -79,7 +79,7 @@
         "eslint-import-resolver-typescript": "3.6.1",
         "eslint-plugin-import-x": "4.2.1",
         "eslint-plugin-react-hooks": "5.1.0",
-        "eslint-plugin-react-refresh": "0.4.13",
+        "eslint-plugin-react-refresh": "0.4.26",
         "husky": "9.1.7",
         "jsdom": "25.0.1",
         "lint-staged": "15.2.10",
