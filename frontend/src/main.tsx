@@ -39,6 +39,7 @@ const SkillsDashboard = React.lazy(() => import('./pages/Skills').then(m => ({ d
 const PerformanceDashboard = React.lazy(() => import('./pages/Performance/PerformanceDashboard'))
 const Settings = React.lazy(() => import('./pages/Settings/Settings'))
 const MilestoneCalendar = React.lazy(() => import('./pages/Deliverables/Calendar'))
+const DeliverablesDashboard = React.lazy(() => import('./pages/Deliverables/DeliverablesDashboard'))
 const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'))
 const PersonExperiencePage = React.lazy(() => import('./pages/Reports/PersonExperience'))
 const Login = React.lazy(() => import('./pages/Auth/Login'))
@@ -87,6 +88,7 @@ const router = createBrowserRouter([
       { path: 'performance', element: <RequireAuth><PerformanceDashboard /></RequireAuth> },
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
       { path: 'deliverables/calendar', element: <RequireAuth><MilestoneCalendar /></RequireAuth> },
+      { path: 'deliverables/dashboard', element: <RequireAuth><DeliverablesDashboard /></RequireAuth> },
       { path: 'reports/forecast', element: <RequireAdmin><TeamForecastPage /></RequireAdmin> },
       { path: 'reports/person-experience', element: <RequireAdmin><PersonExperiencePage /></RequireAdmin> },
       { path: 'help', element: <RequireAuth><ComingSoon /></RequireAuth> },
