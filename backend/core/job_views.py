@@ -7,6 +7,12 @@ from django.http import FileResponse, Http404
 from django.conf import settings
 from django.core.files.storage import default_storage
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, OpenApiResponse
+from core.job_access import can_user_access_job, is_job_authz_enforced
+from core.restore_tokens import (
+    extract_restore_token,
+    is_restore_mode_active,
+    validate_restore_job_token,
+)
 
 # Celery may not be installed or running in some environments; guard import
 try:  # pragma: no cover - defensive import
@@ -15,28 +21,65 @@ except Exception:  # pragma: no cover
     AsyncResult = None  # type: ignore
 
 
-class JobStatusView(APIView):
+class _BaseJobView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def _restore_token_mode_active(self) -> bool:
+        return bool(getattr(settings, 'FEATURES', {}).get('JOB_RESTORE_TOKEN_MODE', True)) and is_restore_mode_active()
+
     def get_permissions(self):  # type: ignore[override]
-        # During restore windows, the DB schema may be unavailable. Avoid
-        # triggering DB-backed auth by allowing anonymous read access to job
-        # status (which is stored in Celery backend, e.g., Redis). Security is
-        # acceptable here because job IDs are unguessable UUIDs, and the window
-        # is transient.
-        try:
-            import os
-            from django.conf import settings
-            lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
-            if os.path.exists(lock_path):
-                return [AllowAny()]
-        except Exception:  # nosec B110
-            pass
+        if self._restore_token_mode_active():
+            return [AllowAny()]
         return [p() for p in self.permission_classes]
 
+    def get_authenticators(self):  # type: ignore[override]
+        # During restore windows, DB-backed authentication may be unavailable.
+        # Use signed restore tokens instead.
+        if self._restore_token_mode_active():
+            return []  # type: list[BaseAuthentication]
+        return super().get_authenticators()
+
+    def _authorize_job_access(self, request, job_id: str):
+        if self._restore_token_mode_active():
+            token = extract_restore_token(request)
+            if validate_restore_job_token(token=token, job_id=job_id):
+                return None
+            return Response({'detail': 'Invalid or expired restore job token'}, status=status.HTTP_403_FORBIDDEN)
+
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return Response({'detail': 'Authentication credentials were not provided.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not is_job_authz_enforced():
+            return None
+
+        try:
+            allowed, missing_record = can_user_access_job(user=user, job_id=job_id)
+        except Exception:
+            return Response({'detail': 'Job authorization metadata unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        if allowed:
+            return None
+
+        if missing_record:
+            return Response(
+                {'detail': 'Job access denied. Legacy/in-flight pre-cutover job IDs are not supported.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response({'detail': 'You do not have permission to access this job.'}, status=status.HTTP_403_FORBIDDEN)
+
+
+class JobStatusView(_BaseJobView):
     @extend_schema(
         parameters=[
             OpenApiParameter(name='job_id', type=str, location=OpenApiParameter.PATH, description='Background job id'),
+            OpenApiParameter(
+                name='rt',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description='Restore-session token (required during restore mode)',
+            ),
         ],
         responses={
             200: {
@@ -72,6 +115,9 @@ class JobStatusView(APIView):
         """
         if AsyncResult is None:
             return Response({'detail': 'Async jobs not available'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        authz = self._authorize_job_access(request, job_id)
+        if authz is not None:
+            return authz
 
         result = AsyncResult(job_id)
         state = result.state or 'PENDING'
@@ -125,38 +171,18 @@ class JobStatusView(APIView):
             'error': error,
         })
 
-    def get_authenticators(self):  # type: ignore[override]
-        """Bypass DRF authentication during restore to avoid DB hits."""
-        try:
-            import os
-            from django.conf import settings
-            lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
-            if os.path.exists(lock_path):
-                return []  # type: list[BaseAuthentication]
-        except Exception:  # nosec B110
-            pass
-        return super().get_authenticators()
 
-
-class JobDownloadView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_permissions(self):  # type: ignore[override]
-        # Same reasoning as JobStatus: allow file fetch without DB lookups
-        # while a restore lock exists.
-        try:
-            import os
-            from django.conf import settings
-            lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
-            if os.path.exists(lock_path):
-                return [AllowAny()]
-        except Exception:  # nosec B110
-            pass
-        return [p() for p in self.permission_classes]
-
+class JobDownloadView(_BaseJobView):
     @extend_schema(
         parameters=[
             OpenApiParameter(name='job_id', type=str, location=OpenApiParameter.PATH, description='Background job id'),
+            OpenApiParameter(
+                name='rt',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description='Restore-session token (required during restore mode)',
+            ),
         ],
         responses={
             200: OpenApiResponse(response=OpenApiTypes.BINARY, description='File content'),
@@ -169,6 +195,9 @@ class JobDownloadView(APIView):
         """Stream the file produced by a completed job (if any)."""
         if AsyncResult is None:
             return Response({'detail': 'Async jobs not available'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        authz = self._authorize_job_access(request, job_id)
+        if authz is not None:
+            return authz
 
         result = AsyncResult(job_id)
         if result.state != 'SUCCESS':
@@ -190,14 +219,3 @@ class JobDownloadView(APIView):
         response = FileResponse(f, content_type=content_type)
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
-
-    def get_authenticators(self):  # type: ignore[override]
-        try:
-            import os
-            from django.conf import settings
-            lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
-            if os.path.exists(lock_path):
-                return []  # type: list[BaseAuthentication]
-        except Exception:  # nosec B110
-            pass
-        return super().get_authenticators()

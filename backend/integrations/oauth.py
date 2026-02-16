@@ -40,15 +40,20 @@ class OAuthStateManager:
     CACHE_PREFIX = 'integrations:oauth:pkce:'
 
     @classmethod
-    def build_state(cls, connection_id: int, actor_id: int) -> str:
+    def build_state(cls, connection_id: int, actor_id: int, callback_origin: str | None = None) -> str:
         payload = {'c': connection_id, 'u': actor_id}
+        if callback_origin:
+            payload['o'] = callback_origin
         return signing.dumps(payload, salt=cls.SALT)
 
     @classmethod
-    def parse_state(cls, state: str) -> Tuple[int, int]:
+    def parse_state(cls, state: str) -> Tuple[int, int, str | None]:
         try:
             payload = signing.loads(state, max_age=cls.STATE_TTL, salt=cls.SALT)
-            return int(payload['c']), int(payload['u'])
+            origin = payload.get('o')
+            if origin is not None:
+                origin = str(origin)
+            return int(payload['c']), int(payload['u']), origin
         except Exception as exc:  # pragma: no cover - defensive
             raise OAuthError('Invalid or expired state parameter') from exc
 
@@ -84,9 +89,16 @@ class BQEOAuthClient:
         challenge = base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
         return verifier, challenge
 
-    def build_authorize_url(self, redirect_uri: str, scopes: list[str], connection_id: int, actor_id: int) -> Tuple[str, str]:
+    def build_authorize_url(
+        self,
+        redirect_uri: str,
+        scopes: list[str],
+        connection_id: int,
+        actor_id: int,
+        callback_origin: str | None = None,
+    ) -> Tuple[str, str]:
         code_verifier, code_challenge = self._build_pkce_pair()
-        state = OAuthStateManager.build_state(connection_id, actor_id)
+        state = OAuthStateManager.build_state(connection_id, actor_id, callback_origin=callback_origin)
         OAuthStateManager.store_code_verifier(state, code_verifier)
         from urllib.parse import urlencode
 
@@ -172,11 +184,21 @@ def _build_client(connection: IntegrationConnection, provider_meta=None) -> Tupl
     return client, credential, oauth_config
 
 
-def build_authorization_url(connection: IntegrationConnection, actor_id: int) -> Tuple[str, str]:
+def build_authorization_url(
+    connection: IntegrationConnection,
+    actor_id: int,
+    callback_origin: str | None = None,
+) -> Tuple[str, str]:
     client, credential, oauth_config = _build_client(connection)
     redirect_uri = credential.redirect_uri
     scopes = oauth_config.get('scopes', [])
-    return client.build_authorize_url(redirect_uri=redirect_uri, scopes=scopes, connection_id=connection.id, actor_id=actor_id)
+    return client.build_authorize_url(
+        redirect_uri=redirect_uri,
+        scopes=scopes,
+        connection_id=connection.id,
+        actor_id=actor_id,
+        callback_origin=callback_origin,
+    )
 
 
 def _load_latest_token_payload(connection: IntegrationConnection) -> dict | None:

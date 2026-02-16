@@ -229,7 +229,7 @@ class CreateUserView(APIView):
 
 
 class SetPasswordView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     throttle_classes = [UserRateThrottle, HotEndpointThrottle]
 
     @extend_schema(request=SetPasswordRequestSerializer, responses={204: None})
@@ -241,6 +241,13 @@ class SetPasswordView(APIView):
             return Response({"detail": "userId and newPassword are required."}, status=status.HTTP_400_BAD_REQUEST)
         User = get_user_model()
         target = get_object_or_404(User, pk=user_id)
+        if target.is_superuser and not request.user.is_superuser:
+            return Response({"detail": "Only a superuser may modify another superuser."}, status=status.HTTP_403_FORBIDDEN)
+        superuser_only_resets = (
+            str(getattr(django_settings, 'ADMIN_PASSWORD_RESET_SUPERUSER_ONLY', 'false')).lower() == 'true'
+        )
+        if superuser_only_resets and (target.is_staff or target.is_superuser) and not request.user.is_superuser:
+            return Response({"detail": "Only a superuser may reset staff/admin passwords."}, status=status.HTTP_403_FORBIDDEN)
         try:
             validate_password(new, user=target)
         except Exception as e:
@@ -305,7 +312,7 @@ class ListUsersView(APIView):
 
 
 class DeleteUserView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     throttle_classes = [UserRateThrottle, HotEndpointThrottle]
 
     @extend_schema(
@@ -337,7 +344,7 @@ class DeleteUserView(APIView):
 
 
 class UpdateUserRoleView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     throttle_classes = [UserRateThrottle, HotEndpointThrottle]
 
     @extend_schema(
@@ -356,6 +363,8 @@ class UpdateUserRoleView(APIView):
         # Disallow changing your own role to prevent accidental lock-out
         if target.id == request.user.id:
             return Response({"detail": "You cannot change your own role."}, status=status.HTTP_400_BAD_REQUEST)
+        if target.is_superuser and not request.user.is_superuser:
+            return Response({"detail": "Only a superuser may modify another superuser."}, status=status.HTTP_403_FORBIDDEN)
 
         ser = SetUserRoleRequestSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -500,8 +509,25 @@ class PasswordResetRequestView(APIView):
         email = (ser.validated_data['email'] or '').strip().lower()
         User = get_user_model()
         try:
-            user = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
+            # Do not use `.get()` here; duplicate emails must not cause a 500.
+            qs = User.objects.filter(email__iexact=email).order_by('id')
+            user = qs.first()
+        except Exception:  # nosec B110
+            user = None
+        if user is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        # If email is not unique (case-insensitive), treat as a no-op to avoid
+        # ambiguous account recovery. Still return 204 to prevent enumeration.
+        try:
+            if qs.count() != 1:
+                try:
+                    import logging
+                    logging.getLogger('security').warning('password_reset_duplicate_email', extra={'email': email})
+                except Exception:  # nosec B110
+                    pass
+                return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception:  # nosec B110
+            # On any DB/count issue, fail closed from an enumeration standpoint.
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
@@ -727,7 +753,7 @@ class InviteUserView(APIView):
 
 
 class LinkUserPersonAdminView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     throttle_classes = [UserRateThrottle]
 
     @extend_schema(
@@ -739,6 +765,8 @@ class LinkUserPersonAdminView(APIView):
         """Link or unlink a target user to a Person (admin only)."""
         User = get_user_model()
         target = get_object_or_404(User, pk=user_id)
+        if target.is_superuser and not request.user.is_superuser:
+            return Response({"detail": "Only a superuser may modify another superuser."}, status=status.HTTP_403_FORBIDDEN)
         ser = AdminLinkUserPersonRequestSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         person_id = ser.validated_data.get('personId')

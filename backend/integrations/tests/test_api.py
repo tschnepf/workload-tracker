@@ -124,6 +124,9 @@ class IntegrationsApiTests(APITestCase):
         mock_post.return_value = Dummy()
         callback = self.client.get(f'/api/integrations/providers/bqe/connect/callback/?code=auth&state={state}')
         self.assertEqual(callback.status_code, 200)
+        body = callback.content.decode('utf-8')
+        self.assertIn('postMessage(data,', body)
+        self.assertNotIn("postMessage(data, '*')", body)
         connection = IntegrationConnection.objects.get(id=connection_id)
         self.assertTrue(connection.secrets.exists())
 

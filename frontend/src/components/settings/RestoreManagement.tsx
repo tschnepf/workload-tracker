@@ -18,6 +18,7 @@ const queryKeys = {
 type ActiveJob = {
   jobId: string;
   target?: string; // filename or label
+  restoreToken?: string;
   state: string;
   message?: string | null;
   progress?: number;
@@ -60,16 +61,26 @@ const RestoreManagement: React.FC = () => {
   const MAX_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024; // 5 GiB (client guard)
   const CLIENT_UPLOAD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
-  const startPolling = async (jobId: string, target?: string) => {
+  const startPolling = async (jobId: string, target?: string, statusUrl?: string) => {
+    let restoreToken: string | undefined;
+    if (statusUrl) {
+      try {
+        const parsed = new URL(statusUrl, window.location.origin);
+        restoreToken = parsed.searchParams.get('rt') || undefined;
+      } catch {
+        restoreToken = undefined;
+      }
+    }
     try {
-      setActiveJob({ jobId, target, state: 'STARTED', message: 'Starting...', progress: 0 });
+      setActiveJob({ jobId, target, restoreToken, state: 'STARTED', message: 'Starting...', progress: 0 });
       const started = Date.now();
       // Poll until terminal
       while (true) {
-        const s = await jobsApi.getStatus(jobId);
+        const s = await jobsApi.getStatus(jobId, { restoreToken });
         setActiveJob(prev => ({
           jobId,
           target,
+          restoreToken,
           state: s.state,
           message: s.message,
           progress: s.progress,
@@ -106,7 +117,7 @@ const RestoreManagement: React.FC = () => {
     try {
       showToast('Starting restore...', 'info');
       const res = await backupApi.restoreBackup(b.id, RESTORE_CONFIRM_PHRASE, { jobs, migrate });
-      await startPolling(res.jobId, b.filename);
+      await startPolling(res.jobId, b.filename, res.statusUrl);
     } catch (e: any) {
       showToast(e?.message || 'Failed to start restore', 'error');
     }
@@ -142,7 +153,7 @@ const RestoreManagement: React.FC = () => {
     try {
       showToast('Uploading backup...', 'info');
       const res = await backupApi.uploadAndRestore(uploadFile, RESTORE_CONFIRM_PHRASE, { jobs, migrate });
-      await startPolling(res.jobId, uploadFile.name);
+      await startPolling(res.jobId, uploadFile.name, res.statusUrl);
       setUploadFile(null);
     } catch (e: any) {
       showToast(e?.message || 'Failed to upload/restore', 'error');

@@ -3,10 +3,12 @@ Django settings for workload-tracker project.
 """
 
 import os
+import sys
 import dj_database_url
 from pathlib import Path
 from datetime import timedelta
 import logging
+from urllib.parse import urlparse
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 from sentry_sdk.integrations.django import DjangoIntegration
@@ -15,11 +17,56 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
+RUNNING_TESTS = 'test' in sys.argv
+
+INSECURE_SECRET_KEY_VALUES = {
+    '',
+    'dev-secret-key-change-in-production',
+    'changeme',
+    'change-me',
+    'change-me-restore-token-secret',
+    'change_me_restore_token_secret',
+    'change_me_production_secret',
+    'secret',
+    'django-insecure',
+}
+
+
+def _is_insecure_secret_key(value: str) -> bool:
+    raw = (value or '').strip()
+    lowered = raw.lower()
+    if lowered in INSECURE_SECRET_KEY_VALUES:
+        return True
+    return lowered.startswith('dev-') or lowered.startswith('test-')
+
+
+def validate_secret_key_for_env(secret_key: str, debug: bool, running_tests: bool = False) -> None:
+    if debug or running_tests:
+        return
+    if _is_insecure_secret_key(secret_key):
+        raise ImproperlyConfigured(
+            'SECRET_KEY must be explicitly set to a non-default value when DEBUG=false'
+        )
+
+
+def _parse_origin_list(raw_value: str) -> list[str]:
+    return [o.strip() for o in (raw_value or '').split(',') if o.strip()]
+
+
+def _validate_origin_list(origins: list[str], *, name: str) -> None:
+    for origin in origins:
+        parsed = urlparse(origin)
+        if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+            raise ImproperlyConfigured(f'{name} contains invalid origin: {origin}')
+        if parsed.path not in ('', '/'):
+            raise ImproperlyConfigured(f'{name} entries must not include paths: {origin}')
+
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv('SECRET_KEY') or 'dev-secret-key-change-in-production'
+validate_secret_key_for_env(SECRET_KEY, DEBUG, RUNNING_TESTS)
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 # Always allow localhost/127.0.0.1 for internal healthchecks and container self-probes
@@ -215,12 +262,30 @@ FEATURES.update({
     'SHORT_TTL_AGGREGATES': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
     'AUTH_ENFORCED': os.getenv('AUTH_ENFORCED', 'true').lower() == 'true',
     'ASYNC_JOBS': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
+    'JOB_AUTHZ_WRITE_REQUIRED': os.getenv('JOB_AUTHZ_WRITE_REQUIRED', 'false').lower() == 'true',
+    'JOB_AUTHZ_ENFORCED': os.getenv('JOB_AUTHZ_ENFORCED', 'false').lower() == 'true',
+    'JOB_RESTORE_TOKEN_MODE': os.getenv('JOB_RESTORE_TOKEN_MODE', 'true').lower() == 'true',
     # Always-on flag for safe server-side weekly-hours operations
     'AUTO_REALLOCATION': True,
     # Week key policy controls (Section 3/4)
     'WEEK_KEYS_CANONICAL': os.getenv('WEEK_KEYS_CANONICAL', 'sunday').lower(),
     'WEEK_KEYS_TRANSITION_READ_BOTH': os.getenv('WEEK_KEYS_TRANSITION_READ_BOTH', 'true').lower() == 'true',
 })
+
+ADMIN_PASSWORD_RESET_SUPERUSER_ONLY = os.getenv('ADMIN_PASSWORD_RESET_SUPERUSER_ONLY', 'false').lower() == 'true'
+RESTORE_JOB_TOKEN_SECRET = os.getenv('RESTORE_JOB_TOKEN_SECRET', SECRET_KEY if DEBUG else '')
+RESTORE_JOB_TOKEN_TTL_SECONDS = int(os.getenv('RESTORE_JOB_TOKEN_TTL_SECONDS', '300'))
+
+REQUIRED_FEATURE_FLAGS = (
+    'AUTH_ENFORCED',
+    'ASYNC_JOBS',
+    'JOB_AUTHZ_WRITE_REQUIRED',
+    'JOB_AUTHZ_ENFORCED',
+    'JOB_RESTORE_TOKEN_MODE',
+)
+for _required_feature in REQUIRED_FEATURE_FLAGS:
+    if _required_feature not in FEATURES:
+        raise ImproperlyConfigured(f'Missing required feature flag: {_required_feature}')
 
 # Integrations
 INTEGRATIONS_ENABLED = os.getenv('INTEGRATIONS_ENABLED', 'false').lower() == 'true'
@@ -367,21 +432,20 @@ else:
 AGGREGATE_CACHE_TTL = int(os.getenv('AGGREGATE_CACHE_TTL', '30'))
 # DASHBOARD_CACHE_TTL is intentionally not set by default; set via env when needed.
 
-# CORS
-# CORS - Build allowed origins dynamically
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+# CORS/CSRF
+DEV_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
 ]
-
-# Add network IP if HOST_IP is set
 if HOST_IP:
-    CORS_ALLOWED_ORIGINS.append(f"http://{HOST_IP}:3000")
+    DEV_ALLOWED_ORIGINS.append(f'http://{HOST_IP}:3000')
 
-# Allow overriding via env (comma-separated)
 _cors_from_env = os.getenv('CORS_ALLOWED_ORIGINS')
-if _cors_from_env:
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_from_env.split(',') if o.strip()]
+if _cors_from_env is not None:
+    CORS_ALLOWED_ORIGINS = _parse_origin_list(_cors_from_env)
+else:
+    CORS_ALLOWED_ORIGINS = list(DEV_ALLOWED_ORIGINS) if DEBUG else []
+_validate_origin_list(CORS_ALLOWED_ORIGINS, name='CORS_ALLOWED_ORIGINS')
 
 # Expose headers for client-side downloads (filename via Content-Disposition)
 try:
@@ -389,30 +453,38 @@ try:
 except Exception:
     CORS_EXPOSE_HEADERS = ['Content-Disposition']
 
-# CSRF trusted origins (optional env override; comma-separated)
 _csrf_from_env = os.getenv('CSRF_TRUSTED_ORIGINS')
-if _csrf_from_env:
-    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_from_env.split(',') if o.strip()]
+if _csrf_from_env is not None:
+    CSRF_TRUSTED_ORIGINS = _parse_origin_list(_csrf_from_env)
+else:
+    CSRF_TRUSTED_ORIGINS = list(DEV_ALLOWED_ORIGINS) if DEBUG else []
+_validate_origin_list(CSRF_TRUSTED_ORIGINS, name='CSRF_TRUSTED_ORIGINS')
 
-# Feature flags for progressive enhancement
-FEATURES = {
-    'USE_PROJECT_OBJECTS': True,   # ✅ Chunk 5 Complete - Project objects implemented
-    'USE_DEPARTMENTS': True,       # ✅ Chunk 6 Active - Department filtering enabled
-    'USE_SKILLS': True,            # ✅ Chunk 6 Active - Skills tagging system enabled
-    'USE_DELIVERABLES': True,      # Deliverables feature enabled
-}
+_oauth_popup_origins_env = os.getenv('OAUTH_POPUP_ALLOWED_ORIGINS')
+if _oauth_popup_origins_env is not None:
+    OAUTH_POPUP_ALLOWED_ORIGINS = _parse_origin_list(_oauth_popup_origins_env)
+else:
+    OAUTH_POPUP_ALLOWED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
+_validate_origin_list(OAUTH_POPUP_ALLOWED_ORIGINS, name='OAUTH_POPUP_ALLOWED_ORIGINS')
 
-# Security/auth flags via env
-FEATURES.update({
-    'COOKIE_REFRESH_AUTH': ((os.getenv('COOKIE_REFRESH_AUTH').lower() == 'true') if os.getenv('COOKIE_REFRESH_AUTH') is not None else (not DEBUG)),
-    'LOGIN_PROTECTION': os.getenv('LOGIN_PROTECTION', 'false').lower() == 'true',
-    'SHORT_TTL_AGGREGATES': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
-    'AUTH_ENFORCED': os.getenv('AUTH_ENFORCED', 'true').lower() == 'true',
-})
-
-# With header-only JWT auth, do not allow credentials by default.
-# Enable credentials when cookie-based refresh flow is active.
-CORS_ALLOW_CREDENTIALS = bool(FEATURES.get('COOKIE_REFRESH_AUTH'))
+if not DEBUG and not RUNNING_TESTS:
+    if CORS_ALLOW_CREDENTIALS and not CORS_ALLOWED_ORIGINS:
+        raise ImproperlyConfigured(
+            'CORS_ALLOWED_ORIGINS must be explicitly configured when cookie auth is enabled in production'
+        )
+    if not CSRF_TRUSTED_ORIGINS:
+        raise ImproperlyConfigured('CSRF_TRUSTED_ORIGINS must be explicitly configured when DEBUG=false')
+    if not OAUTH_POPUP_ALLOWED_ORIGINS:
+        raise ImproperlyConfigured('OAUTH_POPUP_ALLOWED_ORIGINS must be configured when DEBUG=false')
+    if FEATURES.get('JOB_RESTORE_TOKEN_MODE', True):
+        if _is_insecure_secret_key(RESTORE_JOB_TOKEN_SECRET):
+            raise ImproperlyConfigured(
+                'RESTORE_JOB_TOKEN_SECRET must be set to a non-default value when DEBUG=false'
+            )
+        if RESTORE_JOB_TOKEN_TTL_SECONDS <= 0 or RESTORE_JOB_TOKEN_TTL_SECONDS > 900:
+            raise ImproperlyConfigured(
+                'RESTORE_JOB_TOKEN_TTL_SECONDS must be between 1 and 900 when DEBUG=false'
+            )
 
 # (AUTO_REALLOCATION already enabled earlier)
 

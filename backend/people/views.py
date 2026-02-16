@@ -36,6 +36,7 @@ from assignments.models import Assignment
 from django.db.models import Q
 from django.db.models.functions import Coalesce, Lower
 from core.search_tokens import parse_search_tokens, apply_token_filter
+from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from django.conf import settings as django_settings
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
@@ -221,14 +222,22 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 actor_id = None
             try:
                 if deactivate_person_cleanup_task is not None:
-                    task = deactivate_person_cleanup_task.delay(instance.id, 'all', actor_id)
-                    try:
-                        job_id = getattr(task, 'id', None)
-                    except Exception:
-                        job_id = None
+                    task = enqueue_user_facing_task(
+                        deactivate_person_cleanup_task,
+                        user=request.user,
+                        purpose='people_deactivate_cleanup',
+                        args=(instance.id, 'all', actor_id),
+                    )
+                    job_id = getattr(task, 'id', None)
                 else:
                     # Fallback synchronous path
                     deactivate_person_cleanup(instance.id, zero_mode='all', actor_user_id=actor_id)
+            except JobAccessRegistrationError:
+                # Do not enqueue without ownership metadata; run synchronously.
+                try:
+                    deactivate_person_cleanup(instance.id, zero_mode='all', actor_user_id=actor_id)
+                except Exception:  # nosec B110
+                    pass
             except Exception:  # nosec B110
                 # Non-fatal: the person is already inactive; aggregates will eventually reflect
                 pass
@@ -597,7 +606,15 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             department = request.query_params.get('department')
             if department:
                 filters['department'] = department
-            task = export_people_excel_task.delay(filters)
+            try:
+                task = enqueue_user_facing_task(
+                    export_people_excel_task,
+                    user=request.user,
+                    purpose='people_export_excel',
+                    args=(filters,),
+                )
+            except JobAccessRegistrationError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             job_id = task.id
             return Response({
                 'jobId': job_id,
@@ -1407,7 +1424,14 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             if val not in (None, ""):
                 filters[key] = val
         try:
-            job = bulk_skill_matching_async.delay(skills, filters)
+            job = enqueue_user_facing_task(
+                bulk_skill_matching_async,
+                user=request.user,
+                purpose='people_skill_match_async',
+                args=(skills, filters),
+            )
+        except JobAccessRegistrationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception as e:
             return Response({'detail': f'Failed to enqueue job: {e.__class__.__name__}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({'jobId': job.id}, status=status.HTTP_202_ACCEPTED)
@@ -1489,7 +1513,21 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 return Response({'success': False, 'error': f'Failed to store upload: {e.__class__.__name__}'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Enqueue background task with absolute path (worker supports absolute path)
-            task = import_people_excel_task.delay(safe_path, update_existing=update_existing, dry_run=dry_run)
+            try:
+                task = enqueue_user_facing_task(
+                    import_people_excel_task,
+                    user=request.user,
+                    purpose='people_import_excel',
+                    args=(safe_path,),
+                    kwargs={'update_existing': update_existing, 'dry_run': dry_run},
+                )
+            except JobAccessRegistrationError as exc:
+                try:
+                    if os.path.exists(safe_path):
+                        os.remove(safe_path)
+                except Exception:  # nosec B110
+                    pass
+                return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             job_id = task.id
             return Response({
                 'jobId': job_id,

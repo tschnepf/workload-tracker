@@ -81,6 +81,13 @@ const clientPolicyOptions: Array<{ value: IntegrationRuleConfig['clientSyncPolic
   { value: 'write_once', label: 'Write Once' },
 ];
 
+const OAUTH_MESSAGE_ORIGINS = (
+  (import.meta.env.VITE_OAUTH_MESSAGE_ORIGINS as string | undefined)?.split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    ?? []
+);
+
 type ConnectFormState = { environment: 'sandbox' | 'production'; utcOffsetMinutes: number };
 
 function generateFernetKey(): string {
@@ -351,6 +358,15 @@ const IntegrationsSection: React.FC = () => {
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (!event.data || event.data.source !== 'integration-oauth') return;
+      const allowedOrigins = OAUTH_MESSAGE_ORIGINS.length > 0 ? OAUTH_MESSAGE_ORIGINS : [window.location.origin];
+      if (!allowedOrigins.includes(event.origin)) {
+        showToast('Ignored OAuth callback from an untrusted origin.', 'warning');
+        return;
+      }
+      if (!oauthWindow || event.source !== oauthWindow) {
+        showToast('Ignored OAuth callback from an unexpected window.', 'warning');
+        return;
+      }
       if (event.data.ok) {
         showToast('Provider authorized successfully.', 'success');
         queryClient.invalidateQueries({ queryKey: queryConnectionsKey });

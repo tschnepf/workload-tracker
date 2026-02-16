@@ -47,6 +47,7 @@ from typing import List, Dict, Tuple, Set, Optional
 import logging
 from roles.models import Role
 from core.search_tokens import parse_search_tokens, apply_token_filter, build_token_query
+from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
@@ -3175,7 +3176,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 vertical = None
         try:
-            job = generate_grid_snapshot_async.delay(weeks, dept, include_children, vertical)
+            job = enqueue_user_facing_task(
+                generate_grid_snapshot_async,
+                user=request.user,
+                purpose='assignments_grid_snapshot_async',
+                args=(weeks, dept, include_children, vertical),
+            )
+        except JobAccessRegistrationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception as e:
             return Response({'detail': f'Failed to enqueue job: {e.__class__.__name__}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({'jobId': job.id}, status=status.HTTP_202_ACCEPTED)

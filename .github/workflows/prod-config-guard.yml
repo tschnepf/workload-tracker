@@ -57,6 +57,17 @@ jobs:
             echo "ERROR: COOKIE_REFRESH_AUTH must be true in .env.production.template" >&2
             exit 1
           fi
+          for key in CORS_ALLOWED_ORIGINS CSRF_TRUSTED_ORIGINS OAUTH_POPUP_ALLOWED_ORIGINS RESTORE_JOB_TOKEN_SECRET RESTORE_JOB_TOKEN_TTL_SECONDS; do
+            if ! grep -E "^${key}=" .env.production.template; then
+              echo "ERROR: ${key} must be present in .env.production.template" >&2
+              exit 1
+            fi
+          done
+          ttl=$(grep -E '^RESTORE_JOB_TOKEN_TTL_SECONDS=' .env.production.template | head -n1 | cut -d= -f2)
+          if [ -z "${ttl}" ] || [ "${ttl}" -le 0 ] || [ "${ttl}" -gt 900 ]; then
+            echo "ERROR: RESTORE_JOB_TOKEN_TTL_SECONDS must be between 1 and 900" >&2
+            exit 1
+          fi
 
       - name: Ensure ALLOWED_HOSTS present in env example
         run: |

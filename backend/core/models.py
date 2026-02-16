@@ -511,3 +511,30 @@ class RiskAttachmentSettings(models.Model):
             defaults={'base_path': default_path},
         )
         return obj
+
+
+class JobAccessRecord(models.Model):
+    """Ownership/access metadata for user-facing async jobs."""
+
+    job_id = models.CharField(max_length=255, unique=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='owned_job_access_records',
+    )
+    is_admin_only = models.BooleanField(default=False)
+    purpose = models.CharField(max_length=100, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_by']),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('JobAccessRecord is immutable once created')
+        super().save(*args, **kwargs)

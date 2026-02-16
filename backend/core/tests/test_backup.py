@@ -11,6 +11,7 @@ from django.test import TestCase, Client, override_settings
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from core.job_access import JobAccessRegistrationError
 
 
 def _make_admin_and_user():
@@ -180,6 +181,16 @@ class BackupAPITests(TestCase):
             self._admin_login()
             with patch('core.backup_views._celery_has_workers', return_value=False):
                 r = self.client.post('/api/backups/', data=json.dumps({}), content_type='application/json')
+                self.assertEqual(r.status_code, 503)
+
+    def test_backup_create_fails_when_job_ownership_write_fails(self):
+        with override_settings(BACKUPS_DIR=self.tmpdir):
+            self._admin_login()
+            with patch('core.backup_views._celery_has_workers', return_value=True), \
+                 patch('core.backup_views.create_backup_task') as mock_task, \
+                 patch('core.backup_views.enqueue_user_facing_task', side_effect=JobAccessRegistrationError('metadata write failed')):
+                mock_task.apply_async.return_value = SimpleNamespace(id='job123')
+                r = self.client.post('/api/backups/', data=json.dumps({'description': 'test'}), content_type='application/json')
                 self.assertEqual(r.status_code, 503)
 
     def test_download_rejects_traversal(self):

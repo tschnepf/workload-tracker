@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Optional
+from urllib.parse import quote
 
 from django.http import FileResponse
-from django.urls import reverse
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status, serializers
@@ -15,6 +16,8 @@ from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiRespo
 from django.conf import settings
 
 from .backup_service import BackupService
+from .job_access import JobAccessRegistrationError, enqueue_user_facing_task
+from .restore_tokens import issue_restore_job_token
 
 
 class BackupInfoSerializer(serializers.Serializer):
@@ -106,6 +109,29 @@ def _celery_has_workers(timeout: float = 1.0) -> bool:
         return False
 
 
+def _build_status_url(request, job_id: str, *, include_restore_token: bool = False) -> str:
+    status_url = request.build_absolute_uri(f"/api/jobs/{job_id}/")
+    if not include_restore_token:
+        return status_url
+    token = None
+    # The restore lock file may appear shortly after enqueue; wait briefly to
+    # maximize session-bound token issuance.
+    for _ in range(10):
+        try:
+            token = issue_restore_job_token(job_id=job_id)
+            break
+        except Exception:
+            time.sleep(0.2)
+    if token is None:
+        try:
+            token = issue_restore_job_token(job_id=job_id, allow_without_session=True)
+        except Exception:
+            token = None
+    if token:
+        return f"{status_url}?rt={quote(token, safe='')}"
+    return status_url
+
+
 class BackupListCreateView(GenericAPIView):
     permission_classes = [IsAdminUser]
 
@@ -132,7 +158,16 @@ class BackupListCreateView(GenericAPIView):
         description: Optional[str] = request.data.get('description') if isinstance(request.data, dict) else None
         if create_backup_task is None:
             return Response({"detail": "Async jobs unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        task = create_backup_task.delay(description=description)
+        try:
+            task = enqueue_user_facing_task(
+                create_backup_task,
+                user=request.user,
+                is_admin_only=True,
+                purpose='backup_create',
+                kwargs={'description': description},
+            )
+        except JobAccessRegistrationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         # Admin audit log
         try:
             from accounts.models import AdminAuditLog  # type: ignore
@@ -143,7 +178,7 @@ class BackupListCreateView(GenericAPIView):
             )
         except Exception:  # nosec B110
             pass
-        status_url = request.build_absolute_uri(f"/api/jobs/{task.id}/")
+        status_url = _build_status_url(request, str(task.id))
         return Response({"jobId": task.id, "statusUrl": status_url}, status=status.HTTP_202_ACCEPTED)
 
 
@@ -253,7 +288,16 @@ class BackupRestoreView(GenericAPIView):
         except Exception:
             return Response({"detail": "Backup not found or invalid"}, status=status.HTTP_404_NOT_FOUND)
 
-        task = restore_backup_task.delay(path=path, jobs=jobs_i, confirm=confirm, migrate=migrate)
+        try:
+            task = enqueue_user_facing_task(
+                restore_backup_task,
+                user=request.user,
+                is_admin_only=True,
+                purpose='backup_restore',
+                kwargs={'path': path, 'jobs': jobs_i, 'confirm': confirm, 'migrate': migrate},
+            )
+        except JobAccessRegistrationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         # Admin audit log
         try:
             from accounts.models import AdminAuditLog  # type: ignore
@@ -264,7 +308,7 @@ class BackupRestoreView(GenericAPIView):
             )
         except Exception:  # nosec B110
             pass
-        status_url = request.build_absolute_uri(f"/api/jobs/{task.id}/")
+        status_url = _build_status_url(request, str(task.id), include_restore_token=True)
         return Response({"jobId": task.id, "statusUrl": status_url}, status=status.HTTP_202_ACCEPTED)
 
 
@@ -331,7 +375,16 @@ class UploadAndRestoreView(GenericAPIView):
         except Exception:
             jobs_i = 2
 
-        task = restore_backup_task.delay(path=final_path, jobs=jobs_i, confirm=confirm, migrate=migrate)
+        try:
+            task = enqueue_user_facing_task(
+                restore_backup_task,
+                user=request.user,
+                is_admin_only=True,
+                purpose='backup_upload_restore',
+                kwargs={'path': final_path, 'jobs': jobs_i, 'confirm': confirm, 'migrate': migrate},
+            )
+        except JobAccessRegistrationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         # Admin audit log
         try:
             from accounts.models import AdminAuditLog  # type: ignore
@@ -342,5 +395,5 @@ class UploadAndRestoreView(GenericAPIView):
             )
         except Exception:  # nosec B110
             pass
-        status_url = request.build_absolute_uri(f"/api/jobs/{task.id}/")
+        status_url = _build_status_url(request, str(task.id), include_restore_token=True)
         return Response({"jobId": task.id, "statusUrl": status_url}, status=status.HTTP_202_ACCEPTED)

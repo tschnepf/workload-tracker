@@ -38,6 +38,7 @@ from .models import PreDeliverableItem
 from .services import PreDeliverableService
 from .permissions import DeliverableTaskPermission
 from accounts.permissions import is_admin_or_manager, IsAdminOrManager
+from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from assignments.utils.project_membership import current_project_ids
 from rest_framework.permissions import IsAdminUser
 from projects.change_log import record_project_change
@@ -955,13 +956,21 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Async path
         if settings.FEATURES.get('ASYNC_JOBS') and backfill_pre_deliverables_async is not None:
             try:
-                task = backfill_pre_deliverables_async.delay(project_id, str(start) if start else None, str(end) if end else None, regenerate)
+                task = enqueue_user_facing_task(
+                    backfill_pre_deliverables_async,
+                    user=request.user,
+                    is_admin_only=True,
+                    purpose='deliverables_preitems_backfill',
+                    args=(project_id, str(start) if start else None, str(end) if end else None, regenerate),
+                )
                 job_id = task.id
                 return Response({
                     'enqueued': True,
                     'jobId': job_id,
                     'statusUrl': request.build_absolute_uri(f"/api/jobs/{job_id}/"),
                 }, status=status.HTTP_202_ACCEPTED)
+            except JobAccessRegistrationError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             except Exception:  # nosec B110
                 pass
 

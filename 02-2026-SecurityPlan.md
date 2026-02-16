@@ -23,6 +23,8 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 3. For job authz (#3), use a hard cutover policy: no legacy compatibility layer.
 4. Database schema and producer write paths must be deployed before enforcement flags are enabled.
 5. Queue drain/purge actions must be scoped to workload-tracker-owned queues and result keys only.
+6. Version pins in Workstream E are temporary stabilization controls for cutover; ongoing upgrades continue on a scheduled cadence.
+7. Redis purge operations are allowed only when Redis isolation is verified (dedicated DB/index for this app or enforced key prefixing).
 
 ## Prioritization
 
@@ -105,22 +107,33 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 3. Add dedicated signing secret (`RESTORE_JOB_TOKEN_SECRET`) and explicit TTL (`RESTORE_JOB_TOKEN_TTL_SECONDS`).
 5. Add endpoint inventory control to ensure all user-facing job producers persist ownership metadata.
 6. If ownership metadata write fails for a user-facing producer, fail the request and do not enqueue the job.
+7. Add DB safety constraints for ownership records:
+1. `job_id` unique constraint.
+2. Index on `created_by_user_id`.
+3. Ownership fields immutable after creation (no update path in app code/admin).
+8. Define restore-token lifecycle controls:
+1. Token issuer limited to restore-start flow only.
+2. Max token TTL cap: 900 seconds.
+3. Rotate token signing context each restore session.
+4. Invalidate restore tokens when restore lock clears or service exits restore mode.
 
 ### Hard Cutover Policy (No Legacy Support)
 
 1. Pre-cutover maintenance window required.
-2. Disable new async job creation (set `ASYNC_JOBS=false` or equivalent traffic guard).
-3. Pause schedulers/periodic producers (Celery Beat, cron-driven enqueuers, integration planners).
-4. Drain workers until workload-tracker queues are empty:
+2. Disable new async job creation (set `ASYNC_JOBS=false` via deploy config override, or apply equivalent traffic guard).
+3. Verify quiesce condition: no API path can enqueue new jobs.
+4. Pause schedulers/periodic producers (Celery Beat, cron-driven enqueuers, integration planners).
+5. Drain workers until workload-tracker queues are empty:
 1. active = 0
 2. reserved = 0
 3. scheduled = 0
-5. Purge/expire workload-tracker result-backend entries (namespace-scoped only).
-6. Apply schema migration for ownership metadata.
-7. Deploy job-owner enforcement code to API and workers from the same release artifact (no mixed-version cluster).
-8. Enable strict flags (`JOB_AUTHZ_WRITE_REQUIRED=true`, `JOB_AUTHZ_ENFORCED=true`).
-9. Re-enable async jobs and schedulers.
-10. Communicate that pre-cutover job URLs are intentionally invalid.
+6. Verify Redis isolation precondition (dedicated DB/index or required key prefix) before any purge.
+7. Purge/expire workload-tracker result-backend entries (namespace-scoped only).
+8. Apply schema migration for ownership metadata.
+9. Deploy job-owner enforcement code to API and workers from the same release artifact (no mixed-version cluster).
+10. Enable strict flags (`JOB_AUTHZ_WRITE_REQUIRED=true`, `JOB_AUTHZ_ENFORCED=true`).
+11. Re-enable async jobs and schedulers.
+12. Communicate that pre-cutover job URLs are intentionally invalid.
 
 ### Verification
 
@@ -131,6 +144,9 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 5. Tests: metadata-write failure prevents enqueue and returns explicit error.
 6. Operational check: queue drained and result backend purged before flag enablement.
 7. Operational check: only workload-tracker queue names and key prefixes were drained/purged.
+8. CI check: endpoint inventory for all `jobId` producers matches Appendix A and fails on drift.
+9. Tests: ownership immutability and uniqueness constraints enforced.
+10. Tests: restore tokens expire, are session-bound, and are rejected once restore mode ends.
 
 ### Rollout
 
@@ -139,6 +155,7 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 3. Rollback path: disable `JOB_AUTHZ_WRITE_REQUIRED` and `JOB_AUTHZ_ENFORCED`, keep async disabled until confirmed stable.
 4. Restore-mode token gate: `JOB_RESTORE_TOKEN_MODE=true` (default enabled once validated).
 5. Require non-default `RESTORE_JOB_TOKEN_SECRET` in non-debug environments.
+6. Require `RESTORE_JOB_TOKEN_TTL_SECONDS<=900` in non-debug environments.
 
 ## Workstream C: Production Secret Key Fail-Closed (#4)
 
@@ -200,16 +217,23 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 
 ### Changes
 
-1. Upgrade and lock vulnerable chains with exact pinned targets:
+1. Pin strategy intent:
+1. Use exact versions as a short-lived stabilization baseline for the security release.
+2. After production stabilization, resume controlled upgrades to newer versions via scheduled dependency-review cycles.
+2. Upgrade and lock vulnerable chains with exact pinned targets:
 1. `openapi-typescript` -> `7.13.0` (pin in `devDependencies`).
 2. `markdown-it` -> `14.1.1` (pin via `overrides` because it is transitive through `prosemirror-markdown`).
 3. `undici` -> `7.22.0` (pin via `overrides` to close transitive advisory path).
 4. `lodash` -> `4.17.23` (pin via `overrides`).
 5. `lodash-es` -> `4.17.23` (pin via `overrides`).
-2. Regenerate lockfile and run full test/build matrix.
-3. CI policy:
+3. Regenerate lockfile and run full test/build matrix.
+4. CI policy:
 1. Fail on `npm audit --omit=dev` moderate+.
 2. Maintain explicit accepted-risk registry for dev-only findings with expiry dates.
+5. Establish dependency upgrade cadence:
+1. First post-cutover review on March 16, 2026.
+2. Recurring monthly dependency review thereafter.
+3. Upgrade rule: prefer latest patched minor/major only after audit + tests + staging smoke pass.
 
 ### Verification
 
@@ -269,6 +293,8 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 2. Result backend purge procedure succeeds.
 3. Restore workflow can still poll/download with restore-session token flow.
 4. Scoped purge verified against workload-tracker-only key prefix.
+6. Verify Redis isolation precondition documented with evidence (dedicated DB/index or enforced prefix).
+7. CI endpoint-inventory drift check passes for job-producing endpoints.
 
 ## Operational Go/No-Go and Rollback Triggers
 
@@ -284,6 +310,10 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 1. Re-enable previous app version.
 2. Disable enforcement flags (`JOB_AUTHZ_WRITE_REQUIRED`, `JOB_AUTHZ_ENFORCED`, related strict gates).
 3. Keep maintenance mode until service health stabilizes.
+4. If startup fails from #4/#7 fail-closed checks:
+1. Reapply last-known-good env bundle (`SECRET_KEY`, CORS, CSRF, OAuth origins).
+2. Redeploy backend with known-good env.
+3. Re-run config preflight before reopening traffic.
 
 ## Rollout Strategy
 
@@ -319,6 +349,8 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 9. `POST /api/backups/upload-restore/` -> JSON body includes `jobId`, `statusUrl` (`backend/core/backup_views.py:278`).
 10. Header-based job ID surface:
 1. `PUT/PATCH /api/people/{id}/` can return `X-Job-Id` and `X-Job-Status-Url` when deactivation cleanup is enqueued (`backend/people/views.py:202`).
+11. CI ownership:
+1. Appendix A is generated/validated by CI and cannot drift from OpenAPI + endpoint tests.
 
 ## Appendix B: Hard-Cutover Operator Commands (Drain/Purge)
 
@@ -330,16 +362,21 @@ Scope: Remediation plan for security findings from full codebase review, excludi
 2. `celery-taskset-meta-*`
 3. `chord-unlock-*`
 3. If Redis result backend `global_keyprefix` is later enabled, prepend that prefix to all patterns above.
-4. Commands (docker-compose deployment):
+4. Precondition (must pass before purge):
+1. Redis is app-isolated: dedicated Redis DB/index for workload-tracker OR enforced result/backend key prefixing.
+2. If precondition is false, abort cutover purge and implement isolation first.
+5. Commands (docker-compose deployment):
 
 ```bash
 # Choose compose file for target environment
 export COMPOSE_FILE=docker-compose.prod.yml
 dc(){ docker compose -f "$COMPOSE_FILE" "$@"; }
 
-# 1) Stop schedulers/producers before drain
+# 1) Quiesce producers (no new job enqueue during cutover)
+# Option A: deploy override with ASYNC_JOBS=false; Option B: enforce maintenance traffic guard + stop API producers
 dc stop worker_beat
 dc stop backend
+dc ps worker_beat backend
 
 # 2) Verify queue depths (REDIS DB index is /1 from REDIS_URL)
 dc exec redis redis-cli -n 1 LLEN celery
@@ -353,16 +390,19 @@ dc exec worker_db celery -A config inspect active
 dc exec worker_db celery -A config inspect reserved
 dc exec worker_db celery -A config inspect scheduled
 
-# 4) If any queued tasks remain and maintenance window requires hard cut:
+# 4) Verify Redis isolation precondition (document evidence before purge)
+dc exec redis redis-cli -n 1 INFO keyspace
+
+# 5) If any queued tasks remain and maintenance window requires hard cut:
 dc exec worker celery -A config purge -Q celery -f
 dc exec worker_db celery -A config purge -Q db_maintenance -f
 
-# 5) Purge result backend keys for pre-cutover jobs (namespace-scoped)
+# 6) Purge result backend keys for pre-cutover jobs (namespace-scoped)
 dc exec redis sh -lc "redis-cli -n 1 --scan --pattern 'celery-task-meta-*' | xargs -r redis-cli -n 1 DEL"
 dc exec redis sh -lc "redis-cli -n 1 --scan --pattern 'celery-taskset-meta-*' | xargs -r redis-cli -n 1 DEL"
 dc exec redis sh -lc "redis-cli -n 1 --scan --pattern 'chord-unlock-*' | xargs -r redis-cli -n 1 DEL"
 
-# 6) Post-purge verification
+# 7) Post-purge verification
 dc exec redis redis-cli -n 1 --scan --pattern 'celery-task-meta-*' | head
 dc exec redis redis-cli -n 1 --scan --pattern 'celery-taskset-meta-*' | head
 dc exec redis redis-cli -n 1 --scan --pattern 'chord-unlock-*' | head
@@ -379,3 +419,8 @@ dc exec redis redis-cli -n 1 --scan --pattern 'chord-unlock-*' | head
 2. Lockfile regeneration requirement:
 1. Run install to regenerate `frontend/package-lock.json`.
 2. Record exact resolved versions in PR notes using `npm ls` command from verification section.
+3. These pins are temporary release controls, not a long-term freeze.
+4. At each monthly dependency review:
+1. Propose newer versions.
+2. Run `npm audit --omit=dev`, full test/build matrix, and staging smoke validation.
+3. Promote only if checks pass; otherwise keep current pins and document reason.

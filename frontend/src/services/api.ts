@@ -1645,33 +1645,45 @@ export const rolesApi = {
 // Jobs API (async background tasks)
 export const jobsApi = {
   // Get job status
-  getStatus: async (jobId: string) => {
-    const res = await apiClient.GET('/jobs/{job_id}/' as any, { params: { path: { job_id: jobId } }, headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+  getStatus: async (jobId: string, options?: { restoreToken?: string }) => {
+    const suffix = options?.restoreToken ? `?rt=${encodeURIComponent(options.restoreToken)}` : '';
+    const res = await fetchApi<JobStatus>(`/jobs/${encodeURIComponent(jobId)}/${suffix}`);
+    if (!res) {
+      throw new ApiError('Job status request failed', 500);
     }
-    return res.data as unknown as JobStatus;
+    return res;
   },
 
   // Download job result file (if available). Returns a Blob.
-  downloadFile: async (jobId: string): Promise<Blob> => {
-    const url = `${API_BASE_URL}/jobs/${jobId}/download/`;
+  downloadFile: async (jobId: string, options?: { restoreToken?: string }): Promise<Blob> => {
+    const suffix = options?.restoreToken ? `?rt=${encodeURIComponent(options.restoreToken)}` : '';
+    const url = `${API_BASE_URL}/jobs/${jobId}/download/${suffix}`;
     const token = getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (options?.restoreToken) headers['X-Restore-Job-Token'] = options.restoreToken;
     const res = await fetch(url, {
       method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
     });
     if (!res.ok) {
       throw new ApiError(`HTTP ${res.status}`, res.status);
     }
     return await res.blob();
   },
+
   // Simple polling helper for convenience
-  pollStatus: async (jobId: string, { intervalMs = 1500, timeoutMs = 120000 }: { intervalMs?: number; timeoutMs?: number } = {}) => {
+  pollStatus: async (
+    jobId: string,
+    {
+      intervalMs = 1500,
+      timeoutMs = 120000,
+      restoreToken,
+    }: { intervalMs?: number; timeoutMs?: number; restoreToken?: string } = {},
+  ) => {
     const started = Date.now();
     while (true) {
-      const s = await jobsApi.getStatus(jobId);
+      const s = await jobsApi.getStatus(jobId, { restoreToken });
       if ((s as any).state === 'SUCCESS') return s;
       if ((s as any).state === 'FAILURE') throw new ApiError((s as any).error || 'Job failed', 500);
       if (Date.now() - started > timeoutMs) throw new ApiError('Job polling timed out', 504);

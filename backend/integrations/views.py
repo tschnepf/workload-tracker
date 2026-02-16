@@ -4,7 +4,9 @@ import json
 import logging
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlparse
 
+from django.conf import settings
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -54,6 +56,38 @@ from .oauth import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_origin(origin: str | None) -> str | None:
+    if not origin:
+        return None
+    parsed = urlparse(str(origin).strip())
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _allowed_popup_origins() -> list[str]:
+    raw = list(getattr(settings, 'OAUTH_POPUP_ALLOWED_ORIGINS', []) or [])
+    normalized: list[str] = []
+    for candidate in raw:
+        origin = _normalize_origin(candidate)
+        if origin and origin not in normalized:
+            normalized.append(origin)
+    return normalized
+
+
+def _resolve_oauth_popup_origin(request) -> str | None:
+    allowed = _allowed_popup_origins()
+    req_origin = _normalize_origin(request.headers.get('Origin'))
+    if req_origin and req_origin in allowed:
+        return req_origin
+    referer = _normalize_origin(request.headers.get('Referer'))
+    if referer and referer in allowed:
+        return referer
+    if allowed:
+        return allowed[0]
+    return None
 
 
 ProviderCredentialSerializer = inline_serializer(
@@ -411,6 +445,12 @@ class ProviderConnectStartView(APIView):
         connection_id = (request.data or {}).get('connectionId')
         if not connection_id:
             return Response({'detail': 'connectionId is required'}, status=status.HTTP_400_BAD_REQUEST)
+        callback_origin = _resolve_oauth_popup_origin(request)
+        if not callback_origin:
+            return Response(
+                {'detail': 'Unable to resolve a trusted OAuth callback origin'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             connection = IntegrationConnection.objects.select_related('provider', 'provider__credentials').get(
                 id=connection_id,
@@ -419,22 +459,28 @@ class ProviderConnectStartView(APIView):
         except IntegrationConnection.DoesNotExist:
             return Response({'detail': 'Connection not found'}, status=status.HTTP_404_NOT_FOUND)
         try:
-            authorize_url, state = build_authorization_url(connection, request.user.id)
+            authorize_url, state = build_authorization_url(
+                connection,
+                request.user.id,
+                callback_origin=callback_origin,
+            )
         except OAuthError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'authorizeUrl': authorize_url, 'state': state})
 
 
-def _oauth_callback_response(payload: dict[str, Any]) -> HttpResponse:
+def _oauth_callback_response(payload: dict[str, Any], target_origin: str | None) -> HttpResponse:
     payload = dict(payload)
     payload.setdefault('source', 'integration-oauth')
     payload_json = json.dumps(payload)
+    origin_json = json.dumps(target_origin or '')
     body = f"""<!DOCTYPE html><html><body>
     <script>
       (function() {{
         var data = {payload_json};
-        if (window.opener) {{
-          window.opener.postMessage(data, '*');
+        var targetOrigin = {origin_json};
+        if (window.opener && targetOrigin) {{
+          window.opener.postMessage(data, targetOrigin);
         }}
         window.close();
       }})();
@@ -456,26 +502,29 @@ class ProviderConnectCallbackView(APIView):
         error = request.query_params.get('error')
         state = request.query_params.get('state')
         code = request.query_params.get('code')
+        target_origin = _resolve_oauth_popup_origin(request)
         if error:
-            return _oauth_callback_response({'ok': False, 'message': error, 'provider': key})
+            return _oauth_callback_response({'ok': False, 'message': error, 'provider': key}, target_origin)
         if not state or not code:
-            return _oauth_callback_response({'ok': False, 'message': 'Missing state or code', 'provider': key})
+            return _oauth_callback_response({'ok': False, 'message': 'Missing state or code', 'provider': key}, target_origin)
         try:
-            connection_id, _ = OAuthStateManager.parse_state(state)
+            connection_id, _, state_origin = OAuthStateManager.parse_state(state)
+            if state_origin:
+                target_origin = _normalize_origin(state_origin)
         except OAuthError as exc:
-            return _oauth_callback_response({'ok': False, 'message': str(exc), 'provider': key})
+            return _oauth_callback_response({'ok': False, 'message': str(exc), 'provider': key}, target_origin)
         try:
             connection = IntegrationConnection.objects.select_related('provider', 'provider__credentials').get(
                 id=connection_id,
                 provider__key=key,
             )
         except IntegrationConnection.DoesNotExist:
-            return _oauth_callback_response({'ok': False, 'message': 'Connection not found', 'provider': key})
+            return _oauth_callback_response({'ok': False, 'message': 'Connection not found', 'provider': key}, target_origin)
         try:
             exchange_code_for_connection(connection, code, state)
         except OAuthError as exc:
-            return _oauth_callback_response({'ok': False, 'message': str(exc), 'provider': key})
-        return _oauth_callback_response({'ok': True, 'provider': key})
+            return _oauth_callback_response({'ok': False, 'message': str(exc), 'provider': key}, target_origin)
+        return _oauth_callback_response({'ok': True, 'provider': key}, target_origin)
 
 
 class MappingDefaultsView(APIView):

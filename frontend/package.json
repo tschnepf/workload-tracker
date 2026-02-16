@@ -30,7 +30,11 @@
         "express": "4.22.1",
         "tar-fs": "3.1.1",
         "glob": "10.5.0",
-        "js-yaml": "4.1.1"
+        "js-yaml": "4.1.1",
+        "markdown-it": "14.1.1",
+        "undici": "7.22.0",
+        "lodash": "4.17.23",
+        "lodash-es": "4.17.23"
     },
     "dependencies": {
         "@dnd-kit/core": "6.3.1",
@@ -84,7 +88,7 @@
         "jsdom": "25.0.1",
         "lint-staged": "15.2.10",
         "msw": "2.4.9",
-        "openapi-typescript": "6.7.6",
+        "openapi-typescript": "7.13.0",
         "postcss": "8.5.6",
         "prettier": "3.3.3",
         "rollup-plugin-visualizer": "6.0.3",

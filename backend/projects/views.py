@@ -32,6 +32,7 @@ from assignments.models import Assignment
 from people.models import Person
 from departments.models import Department
 from core.search_tokens import parse_search_tokens, apply_token_filter
+from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from django.shortcuts import get_object_or_404
 import hashlib
 import json
@@ -935,7 +936,15 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             client = request.query_params.get('client')
             if client:
                 filters['client'] = client
-            task = export_projects_excel_task.delay(filters)
+            try:
+                task = enqueue_user_facing_task(
+                    export_projects_excel_task,
+                    user=request.user,
+                    purpose='projects_export_excel',
+                    args=(filters,),
+                )
+            except JobAccessRegistrationError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             job_id = task.id
             return Response({
                 'jobId': job_id,
