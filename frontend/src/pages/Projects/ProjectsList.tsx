@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Project, Person, Assignment, Department } from '@/types/models';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -35,6 +35,7 @@ import { useProjectStatusMutation } from '@/pages/Projects/list/hooks/useProject
 import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 import { useProjectDeliverablesBulk } from '@/pages/Projects/list/hooks/useProjectDeliverablesBulk';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import ProjectForm from '@/pages/Projects/ProjectForm';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -60,6 +61,7 @@ const ProjectsList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [detailsPaneOpen, setDetailsPaneOpen] = useState(false);
   const [detailsSplitPct, setDetailsSplitPct] = useState(66);
   const splitDragRef = useRef<{ active: boolean; startX: number; startPct: number }>({ active: false, startX: 0, startPct: 66 });
@@ -342,6 +344,37 @@ const ProjectsList: React.FC = () => {
 
   // Deep-link selection: /projects?projectId=123
   const location = useLocation();
+  const openCreateFromQuery = useMemo(() => {
+    const sp = new URLSearchParams(location.search || '');
+    return sp.get('new') === '1';
+  }, [location.search]);
+  useEffect(() => {
+    setCreateDrawerOpen(openCreateFromQuery);
+  }, [openCreateFromQuery]);
+  const openCreateDrawer = useCallback(() => {
+    setCreateDrawerOpen(true);
+    setMobileDetailOpen(false);
+    const sp = new URLSearchParams(location.search || '');
+    sp.set('new', '1');
+    const nextSearch = sp.toString();
+    const currentSearch = location.search?.replace(/^\?/, '') || '';
+    if (nextSearch !== currentSearch) {
+      navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
+  const closeCreateDrawer = useCallback(() => {
+    setCreateDrawerOpen(false);
+    const sp = new URLSearchParams(location.search || '');
+    if (!sp.has('new')) return;
+    sp.delete('new');
+    const nextSearch = sp.toString();
+    navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+  const handleProjectCreated = useCallback(() => {
+    closeCreateDrawer();
+    void refetchProjectsSafe();
+    void invalidateFilterMeta();
+  }, [closeCreateDrawer, refetchProjectsSafe, invalidateFilterMeta]);
   const [pendingProjectId, setPendingProjectId] = useState<number | null>(null);
   useEffect(() => {
     const sp = new URLSearchParams(location.search || '');
@@ -902,15 +935,15 @@ const ProjectsList: React.FC = () => {
           <div className="flex justify-between items-center mb-2">
             <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
             <div className="flex flex-col items-end gap-2">
-              <Link to="/projects/new">
-                <button
-                  className="px-2 py-1 rounded-md border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors text-xs sm:text-sm font-medium leading-tight flex items-center justify-center gap-1.5"
-                  style={{ minHeight: 32 }}
-                >
-                  <span>+</span>
-                  <span>New</span>
-                </button>
-              </Link>
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors text-xs sm:text-sm font-medium leading-tight flex items-center justify-center gap-1.5"
+                style={{ minHeight: 32 }}
+                onClick={openCreateDrawer}
+              >
+                <span>+</span>
+                <span>New</span>
+              </button>
             </div>
           </div>
           <FiltersBar
@@ -1150,11 +1183,13 @@ const ProjectsList: React.FC = () => {
           >
             Filters
           </button>
-          <Link to="/projects/new">
-            <button className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]">
-              + New
-            </button>
-          </Link>
+          <button
+            type="button"
+            className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
+            onClick={openCreateDrawer}
+          >
+            + New
+          </button>
         </div>
       </div>
       {error && (<ErrorBanner message={error} />)}
@@ -1354,6 +1389,9 @@ const ProjectsList: React.FC = () => {
           <div className="p-4 text-sm text-[var(--muted)]">Select a project to view details</div>
         )}
       </MobileDetailsDrawer>
+      <ProjectCreateDrawer open={createDrawerOpen} onClose={closeCreateDrawer}>
+        <ProjectForm embedded onCancel={closeCreateDrawer} onSuccess={handleProjectCreated} />
+      </ProjectCreateDrawer>
     </Layout>
   );
 };
@@ -1398,6 +1436,38 @@ const MobileDetailsDrawer: React.FC<{ open: boolean; title: string; onClose: () 
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
           <div className="text-base font-semibold truncate">{title}</div>
           <button type="button" className="text-xl text-[var(--muted)]" onClick={onClose} aria-label="Close details">
+            ×
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+const ProjectCreateDrawer: React.FC<{ open: boolean; onClose: () => void; children: React.ReactNode }> = ({ open, onClose, children }) => {
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  if (!open || typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1200] bg-black/60 flex justify-end"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-3xl h-full bg-[var(--surface)] text-[var(--text)] shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <div className="text-base font-semibold truncate">Create New Project</div>
+          <button type="button" className="text-xl text-[var(--muted)]" onClick={onClose} aria-label="Close new project form">
             ×
           </button>
         </div>

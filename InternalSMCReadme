@@ -1,0 +1,405 @@
+# Internal SMC Readme: Unraid Deployment Guide (Start to Finish)
+
+This guide is for an IT professional deploying Workload Tracker for the first time with limited Unraid and Docker experience.
+
+Scope:
+- Install and initialize Unraid.
+- Prepare Unraid for Docker and Compose workflows.
+- Clone and configure this repository.
+- Deploy the stack via Compose Manager using `docker-compose.unraid.yml` as the base configuration.
+- Configure SWAG reverse proxy with TLS.
+- Configure router port forwarding.
+
+Assumed target URL:
+- `https://smc-projects.com`
+- `https://www.smc-projects.com`
+
+---
+
+## 1. Architecture Overview
+
+Workload Tracker runs as multiple containers:
+- `frontend` (web UI) on host port `3000`
+- `backend` (API) on host port `8000`
+- `db` (PostgreSQL)
+- `redis`
+- `worker`, `worker_db`, `worker_beat`
+
+On Unraid, public traffic should go through SWAG:
+- `/` -> `frontend:3000`
+- `/api` -> `backend:8000`
+
+Do not expose `3000` and `8000` directly to the internet.
+
+---
+
+## 2. Install Unraid OS
+
+Official references:
+- Unraid setup docs: https://docs.unraid.net/unraid-os/getting-started/set-up-unraid/
+- Deploy/configure docs: https://docs.unraid.net/unraid-os/getting-started/set-up-unraid/deploy-and-configure-unraid-os/
+
+### 2.1 Create Unraid boot media
+1. Download the Unraid USB Creator from unraid.net.
+2. Use a reliable USB flash drive (recommended 4GB to 32GB).
+3. Write the Unraid image to USB.
+4. Insert USB into the target server.
+
+### 2.2 BIOS and first boot
+1. Set USB as first boot device.
+2. Disable Secure Boot.
+3. Boot the server.
+4. From another machine, open:
+   - `http://tower.local` or
+   - `http://<unraid-lan-ip>`
+
+### 2.3 Initial Unraid setup
+1. Set a strong `root` password.
+2. Register/activate your license.
+3. Assign data/parity disks.
+4. Start the array.
+5. Set array auto-start.
+6. Set a static LAN IP for Unraid.
+---
+
+## 3. Prepare Unraid for Docker Workloads
+
+### 3.1 Enable Docker service
+1. In Unraid UI: `Settings` -> `Docker`.
+2. Set `Enable Docker` = `Yes`.
+3. Keep default Docker network unless your policy requires custom.
+4. Apply changes.
+
+### 3.2 Install Community Applications
+Official reference:
+- https://docs.unraid.net/unraid-os/using-unraid-to/run-docker-containers/community-applications/
+
+1. Go to `Plugins` tab.
+2. Install Community Applications.
+3. Confirm the `Apps` tab appears.
+
+### 3.3 Install Compose Manager plugin (manual install)
+Compose Manager should be installed from the plugin URL:
+
+1. In Unraid UI, open `Plugins` -> `Install Plugin`.
+2. Paste:
+   `https://raw.githubusercontent.com/mstrhakr/compose_plugin/main/compose.manager.plg`
+3. Click `Install`.
+4. Open `Docker` -> `Compose` and verify the page loads.
+5. Open `Settings` -> `Compose` and confirm `Projects Folder` is:
+   `/boot/config/plugins/compose.manager/projects`
+
+### 3.4 Enable SSH for administration
+1. In Unraid UI, open `Settings` -> `Management Access`.
+2. Under SSH, set the service/start mode to enabled (or start it now).
+3. Set authentication according to your policy (recommended: SSH keys for admin access).
+4. Click `Apply`.
+5. Test from an admin workstation: `ssh root@<unraid-lan-ip>`.
+
+---
+
+## 4. Prepare Project Files on Unraid
+
+Before running the commands in this section, SSH into your Unraid server from an admin workstation:
+
+`ssh root@<unraid-lan-ip>`
+
+### 4.1 Clone repository
+If `git` is available, clone into `/mnt/user/appdata`:
+
+```bash
+cd /mnt/user/appdata
+git clone https://github.com/tschnepf/workload-tracker.git
+```
+
+If `git` is not available, download the repository ZIP from GitHub and extract it into:
+- `/mnt/user/appdata/workload-tracker`
+
+### 4.2 Create backup folder
+
+```bash
+mkdir -p /mnt/user/appdata/workload-tracker/backups
+```
+
+### 4.3 Keep env template available for reference
+You will enter env values in Compose Manager's **Env** tab, but keep this file open as the source template:
+
+- `/mnt/user/appdata/workload-tracker/unraid/.env.unraid.example`
+
+Generate secure values now (you will paste them in the Env tab):
+
+```bash
+openssl rand -base64 48   # SECRET_KEY
+openssl rand -hex 24      # POSTGRES_PASSWORD and REDIS_PASSWORD
+openssl rand -hex 32      # RESTORE_JOB_TOKEN_SECRET
+```
+
+---
+
+## 5. Deploy with Compose Manager
+
+### 5.1 Create stack in Compose Manager
+1. Open `Docker` -> `Compose`.
+2. Click `Add Stack`.
+3. Stack name: `workload-tracker`.
+4. Save/create the stack.
+
+### 5.2 Load the project compose file
+Use one of these methods:
+
+Method A (recommended for first setup):
+1. In terminal, copy the repo compose file into the stack project folder:
+```bash
+cp /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml \
+  /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml
+```
+2. In Compose Manager, click `Edit Stack` and confirm the **Compose File** tab contains the expected services.
+
+Method B (editor paste):
+1. Open `/mnt/user/appdata/workload-tracker/docker-compose.unraid.yml`.
+2. Paste contents into the stack **Compose File** tab.
+3. Save.
+
+### 5.3 Create `.env` inside Compose Manager (plugin-managed)
+1. In `Edit Stack`, open the **Env** tab.
+2. Paste the variables from:
+   `/mnt/user/appdata/workload-tracker/unraid/.env.unraid.example`
+3. Replace all placeholder values (`CHANGE_ME_*`, email credentials, domain values).
+4. Save.
+
+Important:
+- Compose Manager writes this to the stack project env file automatically.
+- Default path is:
+  `/boot/config/plugins/compose.manager/projects/workload-tracker/.env`
+- If you set a custom env path in the stack **Settings** tab, use that path consistently.
+
+### 5.4 Required env values to verify
+At minimum confirm these are set correctly:
+- `SECRET_KEY`
+- `POSTGRES_PASSWORD`
+- `REDIS_PASSWORD`
+- `RESTORE_JOB_TOKEN_SECRET`
+- `ALLOWED_HOSTS=smc-projects.com,www.smc-projects.com`
+- `CSRF_TRUSTED_ORIGINS=https://smc-projects.com,https://www.smc-projects.com`
+- `COOKIE_REFRESH_AUTH=true`
+- `SECURE_SSL_REDIRECT=true`
+- `FRONTEND_API_URL=/api`
+- `FRONTEND_COOKIE_REFRESH_AUTH=true`
+
+### 5.5 Start the stack
+In Compose Manager:
+- Click `Compose Up` on the `workload-tracker` stack.
+
+### 5.6 CLI equivalent (optional validation)
+
+```bash
+docker compose \
+  -f /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml \
+  --env-file /boot/config/plugins/compose.manager/projects/workload-tracker/.env \
+  up -d --build
+```
+
+### 5.7 Verify local service health
+
+```bash
+docker compose -f /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml ps
+docker compose -f /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml logs -f backend
+curl -fsS http://<unraid-lan-ip>:8000/api/health/
+```
+
+---
+
+### 5.8 Create the initial admin user
+After services are healthy, create the first admin account:
+
+```bash
+docker compose \
+  -f /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml \
+  --env-file /boot/config/plugins/compose.manager/projects/workload-tracker/.env \
+  exec backend \
+  python manage.py createsuperuser --username admin --email admin@smc-projects.com
+```
+
+You will be prompted to enter a password.
+
+If the account already exists and you need to reset the password:
+
+```bash
+docker compose \
+  -f /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml \
+  --env-file /boot/config/plugins/compose.manager/projects/workload-tracker/.env \
+  exec backend \
+  python manage.py changepassword admin
+```
+
+## 6. Set Up SWAG Reverse Proxy
+
+SWAG reference:
+- https://docs.linuxserver.io/images/docker-swag/
+
+### 6.1 Install SWAG container
+1. In `Apps`, install `SWAG` (LinuxServer.io).
+2. Configure cert provider and domain values for `smc-projects.com`.
+3. Publish ports:
+   - Host `80` -> Container `80`
+   - Host `443` -> Container `443`
+4. Start SWAG and confirm it is healthy.
+
+### 6.2 Add proxy config file
+Create this file:
+- `/mnt/user/appdata/swag/nginx/site-confs/smc-projects.com.conf`
+
+Sample config (replace `10.20.30.2` with your Unraid LAN IP):
+
+```nginx
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name smc-projects.com;
+
+    include /config/nginx/ssl.conf;
+    http2 on;
+
+    client_max_body_size 0;
+
+    location /api/ {
+        include /config/nginx/proxy.conf;
+        proxy_pass http://10.20.30.2:8000;
+    }
+
+    location /admin/ {
+        include /config/nginx/proxy.conf;
+        proxy_pass http://10.20.30.2:8000;
+    }
+
+    location ~ ^/calendar/.*\.ics$ {
+        include /config/nginx/proxy.conf;
+        proxy_pass http://10.20.30.2:8000;
+    }
+
+    location / {
+        include /config/nginx/proxy.conf;
+        proxy_pass http://10.20.30.2:3000;
+    }
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name smc-projects.com www.smc-projects.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name www.smc-projects.com;
+    include /config/nginx/ssl.conf;
+    http2 on;
+    return 301 https://smc-projects.com$request_uri;
+}
+```
+
+Apply changes by restarting SWAG.
+
+### 6.3 SWAG validation
+- Check SWAG logs for certificate and config errors.
+- Open `https://smc-projects.com` and confirm frontend loads.
+- Open `https://smc-projects.com/api/health/` and confirm API health.
+
+---
+
+## 7. Router Port Forwarding
+
+### 7.1 Required inbound forwards
+On your perimeter router/firewall, forward:
+- TCP `80` -> `<unraid-lan-ip>:80` (SWAG)
+- TCP `443` -> `<unraid-lan-ip>:443` (SWAG)
+
+### 7.2 DNS records
+At your DNS provider, create/update:
+- `A` record for `smc-projects.com` -> your public IP
+- `A` record for `www.smc-projects.com` -> your public IP
+
+### 7.3 Security rules
+- Do not forward `3000` or `8000` publicly.
+- Restrict Unraid admin UI exposure from WAN.
+- If possible, manage Unraid UI only from LAN or VPN.
+
+### 7.4 External test checklist
+From a network outside your LAN:
+1. `https://smc-projects.com` returns frontend.
+2. `https://smc-projects.com/api/health/` returns healthy response.
+3. TLS certificate is valid and trusted.
+
+---
+
+## 8. Day-2 Operations
+
+### 8.1 Update application
+
+1. Pull updated repo files:
+```bash
+cd /mnt/user/appdata/workload-tracker
+git pull
+```
+2. Update the stack compose file used by Compose Manager:
+```bash
+cp /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml \
+  /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml
+```
+3. In Compose Manager, open the stack and click `Update Stack` (or `Compose Up`).
+4. If env values changed, update them in the stack **Env** tab and save.
+
+### 8.2 Restart services
+
+```bash
+docker compose -f /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml restart
+```
+
+### 8.3 Check logs
+
+```bash
+docker compose -f /boot/config/plugins/compose.manager/projects/workload-tracker/docker-compose.yml logs -f backend worker
+```
+
+### 8.4 Backup paths
+- App backup path used by stack:
+  - `/mnt/user/appdata/workload-tracker/backups`
+- Include flash backup and appdata backup in your normal operations schedule.
+
+---
+
+## 9. Troubleshooting Quick Reference
+
+- `502` from SWAG:
+  - Check backend/frontend containers are healthy and listening on `8000`/`3000`.
+  - Verify `proxy_pass` IP in SWAG config matches current Unraid LAN IP.
+
+- Login/session errors after HTTPS enablement:
+  - Confirm stack **Env** tab values include `COOKIE_REFRESH_AUTH=true` and `SECURE_SSL_REDIRECT=true`.
+  - Confirm proxy forwards `X-Forwarded-Proto` (SWAG default proxy.conf handles this).
+
+- CSRF or host validation errors:
+  - Recheck `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` values.
+
+- Compose fails to start:
+  - Verify env file path:
+    `/boot/config/plugins/compose.manager/projects/workload-tracker/.env`
+  - Validate YAML formatting and no tab characters.
+
+---
+
+## 10. Suggested First Deployment Sequence
+
+Use this exact order for initial production setup:
+1. Install/configure Unraid.
+2. Enable Docker + install Compose Manager.
+3. Clone repository to `/mnt/user/appdata/workload-tracker`.
+4. Create stack in Compose Manager and populate the **Env** tab (plugin writes `.env` automatically).
+5. Deploy tracker stack and verify local health.
+6. Install/configure SWAG.
+7. Add SWAG site config and verify HTTPS locally and externally.
+8. Configure DNS and router port forwarding.
+9. Validate end-to-end from an external network.
+10. Document credentials, backup schedule, and update process.

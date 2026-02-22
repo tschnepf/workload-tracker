@@ -1,3 +1,430 @@
+## Ubuntu Deployment (Recommended)
+
+This runbook is for an IT administrator deploying Workload Tracker on a single Ubuntu server.  
+It is written for operations use, not software development. You do not need to modify application code.
+
+### Deployment model (what will run)
+- `frontend`: User-facing web interface.
+- `backend`: Main API/application service.
+- `db`: PostgreSQL database.
+- `redis`: Queue/cache service.
+- `worker`, `worker_db`, `worker_beat`: Background jobs and scheduled tasks.
+- Optional `nginx` profile for reverse proxy and TLS termination.
+
+### 1. Prepare the Ubuntu host
+Recommended OS: Ubuntu Server `22.04 LTS` or `24.04 LTS`.
+
+1. Update packages:
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+2. Install Docker Engine and Docker Compose plugin:
+```bash
+sudo apt install -y docker.io docker-compose-v2
+sudo systemctl enable --now docker
+```
+3. (Optional) Allow your admin user to run Docker without `sudo`:
+```bash
+sudo usermod -aG docker $USER
+```
+After this command, sign out/in once so the group change applies.
+
+### 2. Place the application files on the server
+Use your standard IT process (Git, artifact copy, or backup restore). If you are using Git, this is the recommended sequence:
+
+```bash
+sudo mkdir -p /opt/workload-tracker
+sudo chown -R $USER:$USER /opt/workload-tracker
+cd /opt/workload-tracker
+git clone https://github.com/tschnepf/workload-tracker.git
+cd workload-tracker
+```
+
+If your organization provides a release artifact instead of Git access, extract it into `/opt/workload-tracker` and run the remaining steps from that project root directory.
+
+### 3. Create production environment file
+From the project root:
+```bash
+cp .env.production.template .env
+```
+
+Open `.env` in your editor and set production values (domain, credentials, and secrets).  
+Minimum required values for a secure deployment:
+- `DEBUG=false`
+- `ALLOWED_HOSTS=<your domain(s)>`
+- `SECRET_KEY=<strong random value>`
+- `POSTGRES_PASSWORD=<strong random value>`
+- `REDIS_PASSWORD=<strong random value>`
+- `CSRF_TRUSTED_ORIGINS=https://<your-domain>`
+- `CORS_ALLOWED_ORIGINS=https://<your-domain>`
+- `RESTORE_JOB_TOKEN_SECRET=<strong random value>`
+
+### 4. Generate strong secrets
+Run on the Ubuntu host:
+
+```bash
+openssl rand -base64 48   # SECRET_KEY
+openssl rand -hex 32      # RESTORE_JOB_TOKEN_SECRET
+openssl rand -hex 24      # DB/Redis passwords
+```
+
+### 5. Deploy the production stack
+From the project root:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.no-host-db-ports.yml \
+  up -d --build
+```
+
+If you want the built-in Nginx reverse proxy from this repository:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.no-host-db-ports.yml \
+  --profile proxy \
+  up -d --build
+```
+
+### 6. Validate service health
+Check container state:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml ps
+```
+
+Review startup logs (especially migrations and backend):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml logs -f migrator backend
+```
+
+Health checks:
+- Internal: `docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml exec backend curl -fsS http://localhost:8000/api/health/`
+- External: `curl -i https://<your-domain>/api/health/`
+
+### 7. Day-2 operations (routine maintenance)
+- Restart services: `docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml restart`
+- Pull and redeploy updates:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml up -d
+```
+- Check status after updates: `docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml ps`
+
+### 8. Optional: Dockage (Dockge) and File Browser
+These tools are recommended for IT operations teams who want a web UI for container and file management:
+- `Dockge` (often pronounced "Dockage") for Docker Compose stack management.
+- `File Browser` for secure web-based file access (for example, backups and attachments).
+
+Security recommendation: keep both tools on an internal admin network or behind VPN/SSO. Do not expose them directly to the public internet.
+
+1. Create operations directories:
+```bash
+sudo mkdir -p /opt/ops-tools/dockge
+sudo mkdir -p /opt/ops-tools/stacks
+sudo mkdir -p /opt/ops-tools/filebrowser/database
+sudo mkdir -p /opt/ops-tools/filebrowser/config
+sudo chown -R $USER:$USER /opt/ops-tools
+```
+
+2. Deploy Dockge (Docker Compose manager):
+```bash
+cd /opt/ops-tools/dockge
+curl -fsSL https://raw.githubusercontent.com/louislam/dockge/master/compose.yaml -o compose.yaml
+docker compose up -d
+```
+Dockge default URL: `http://<ubuntu-server-ip>:5001`
+
+3. Deploy File Browser:
+```bash
+cd /opt/ops-tools/filebrowser
+cat > compose.yaml <<'YAML'
+services:
+  filebrowser:
+    image: filebrowser/filebrowser:s6
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /opt/workload-tracker:/srv/workload-tracker
+      - /opt/ops-tools/filebrowser/database:/database
+      - /opt/ops-tools/filebrowser/config:/config
+YAML
+docker compose up -d
+```
+File Browser URL: `http://<ubuntu-server-ip>:8080`
+
+4. First login and hardening:
+- Retrieve first-run admin password from logs: `docker compose -f /opt/ops-tools/filebrowser/compose.yaml logs --tail=100 filebrowser`
+- Change admin password immediately after first login.
+- If you use Ubuntu UFW, allow admin access only from trusted IP ranges.
+
+5. Basic operations commands:
+- Update Dockge: `cd /opt/ops-tools/dockge && docker compose pull && docker compose up -d`
+- Update File Browser: `cd /opt/ops-tools/filebrowser && docker compose pull && docker compose up -d`
+
+### 9. Network and security checklist
+- DNS for your domain points to this Ubuntu host.
+- Ports `80`/`443` are allowed through firewall/security group.
+- SSH access is restricted to trusted admin sources.
+- `.env` is backed up securely and not committed to source control.
+- TLS certificates are managed (either by repo `nginx` setup or your external reverse proxy).
+
+## Unraid Deployment
+
+This runbook is for IT administrators deploying Workload Tracker on Unraid.  
+It is focused on operations and configuration, not software development.
+
+### Deployment model on Unraid
+- `frontend`: User web application (`:3000` on host).
+- `backend`: API/application service (`:8000` on host).
+- `db`: PostgreSQL database.
+- `redis`: Queue/cache service.
+- `worker`, `worker_db`, `worker_beat`: Background and scheduled jobs.
+- Reverse proxy/TLS is normally handled by your Unraid proxy app (for example SWAG or NPM).
+
+### 1. Prerequisites on Unraid
+- Unraid array is started.
+- Docker service is enabled.
+- Compose Manager plugin is installed and working.
+- DNS for your domain points to the Unraid host.
+- A reverse proxy (SWAG/NPM/etc.) is available for HTTPS.
+
+### 2. Create application folders
+From the Unraid terminal:
+
+```bash
+mkdir -p /mnt/user/appdata/workload-tracker
+mkdir -p /mnt/user/appdata/workload-tracker/backups
+```
+
+### 3. Place project files on Unraid
+If you use Git:
+
+```bash
+cd /mnt/user/appdata/workload-tracker
+git clone https://github.com/tschnepf/workload-tracker.git .
+```
+
+If your organization provides a release artifact, extract it into `/mnt/user/appdata/workload-tracker`.
+
+### 4. Create the Unraid environment file
+This stack expects the env file at:
+
+`/boot/config/plugins/compose.manager/projects/workload-tracker/.env`
+
+Create it from the provided template:
+
+```bash
+mkdir -p /boot/config/plugins/compose.manager/projects/workload-tracker
+cp /mnt/user/appdata/workload-tracker/unraid/.env.unraid.example \
+  /boot/config/plugins/compose.manager/projects/workload-tracker/.env
+```
+
+### 5. Configure required values in `.env`
+Edit:
+
+`/boot/config/plugins/compose.manager/projects/workload-tracker/.env`
+
+Set at minimum:
+- `SECRET_KEY`
+- `POSTGRES_PASSWORD`
+- `REDIS_PASSWORD`
+- `RESTORE_JOB_TOKEN_SECRET`
+- `ALLOWED_HOSTS=smc-projects.com,www.smc-projects.com`
+- `CSRF_TRUSTED_ORIGINS=https://smc-projects.com,https://www.smc-projects.com`
+- `COOKIE_REFRESH_AUTH=true`
+- `SECURE_SSL_REDIRECT=true`
+
+### 6. Generate strong secrets
+Run these on the Unraid host and paste values into `.env`:
+
+```bash
+openssl rand -base64 48   # SECRET_KEY
+openssl rand -hex 24      # POSTGRES_PASSWORD / REDIS_PASSWORD
+openssl rand -hex 32      # RESTORE_JOB_TOKEN_SECRET
+```
+
+### 7. Deploy with Unraid Compose Manager
+In the Unraid web UI:
+1. Open `Docker` -> `Compose`.
+2. Create project name: `workload-tracker`.
+3. Set compose file path to:
+   `/mnt/user/appdata/workload-tracker/docker-compose.unraid.yml`
+4. Set env file path to:
+   `/boot/config/plugins/compose.manager/projects/workload-tracker/.env`
+5. Start/Deploy the project.
+
+CLI equivalent:
+
+```bash
+docker compose \
+  -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml \
+  --env-file /boot/config/plugins/compose.manager/projects/workload-tracker/.env \
+  up -d --build
+```
+
+### 7.1 Create the initial admin user
+After the stack is up, create your first admin account from the backend container:
+
+```bash
+docker compose \
+  -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml \
+  exec backend \
+  python manage.py createsuperuser --username admin --email admin@smc-projects.com
+```
+
+You will be prompted to enter a password.
+
+If the admin user already exists and you need to reset the password:
+
+```bash
+docker compose \
+  -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml \
+  exec backend \
+  python manage.py changepassword admin
+```
+
+### 8. Configure reverse proxy and TLS
+For public access at `https://smc-projects.com`:
+- Route `/api` to `http://<unraid-ip>:8000`.
+- Route `/` to `http://<unraid-ip>:3000`.
+- Enable TLS certificate for `smc-projects.com` and `www.smc-projects.com`.
+- Preserve headers required for HTTPS-aware apps (`Host`, `X-Forwarded-Proto`).
+
+### 9. Validate deployment
+Check stack status:
+
+```bash
+docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml ps
+```
+
+Review logs:
+
+```bash
+docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml logs -f backend worker
+```
+
+Health checks:
+- Internal: `curl -fsS http://<unraid-ip>:8000/api/health/`
+- External: `curl -i https://smc-projects.com/api/health/`
+
+### 10. Routine operations
+- Restart: `docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml restart`
+- Rebuild/redeploy after updates:
+```bash
+docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml up -d --build
+```
+- Backup data in: `/mnt/user/appdata/workload-tracker/backups`
+
+### 11. Common issues
+- Backend cannot start: verify `.env` path and required secrets.
+- CORS/CSRF errors: verify `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` exactly match your HTTPS domains.
+- Browser login/session issues: verify proxy forwards HTTPS correctly and `COOKIE_REFRESH_AUTH=true`.
+
+
+## Deployment
+
+Use this section to install and deploy the production stack with Docker Compose.
+
+### 1. Prerequisites
+- Docker Engine + Docker Compose plugin installed on the host.
+- DNS for your domain pointed to the host.
+- TLS terminated either by this stack (`nginx` profile) or an external reverse proxy.
+
+### 2. Create production `.env`
+```bash
+cp .env.production.template .env
+```
+
+Edit `.env` and replace all `CHANGE_ME_*` values.
+
+### 3. Generate required secrets
+Generate strong random values on the deployment host:
+
+```bash
+# Django app secret
+openssl rand -base64 48
+
+# Restore job token signing secret (required when JOB_RESTORE_TOKEN_MODE=true)
+openssl rand -hex 32
+
+# Recommended strong DB/Redis passwords
+openssl rand -hex 24
+```
+
+Set the generated values in `.env`:
+- `SECRET_KEY=<random value>`
+- `RESTORE_JOB_TOKEN_SECRET=<random value>`
+- `POSTGRES_PASSWORD=<random value>`
+- `REDIS_PASSWORD=<random value>`
+
+### 4. Required production variables
+These variables must be set correctly when `DEBUG=false`:
+
+- `DEBUG=false`
+- `ALLOWED_HOSTS=smc-projects.com,www.smc-projects.com`
+- `SECRET_KEY=<non-default secret>`
+- `COOKIE_REFRESH_AUTH=true` (if enabled, CORS credentials are enabled)
+- `CORS_ALLOWED_ORIGINS=https://smc-projects.com,https://www.smc-projects.com`
+- `CSRF_TRUSTED_ORIGINS=https://smc-projects.com,https://www.smc-projects.com`
+- `OAUTH_POPUP_ALLOWED_ORIGINS=https://smc-projects.com,https://www.smc-projects.com`
+- `JOB_RESTORE_TOKEN_MODE=true`
+- `RESTORE_JOB_TOKEN_SECRET=<non-default secret>`
+- `RESTORE_JOB_TOKEN_TTL_SECONDS=300` (must be `1` to `900`)
+
+Database configuration (pick one approach):
+- `DATABASE_URL=postgresql://...` (managed DB), or
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`.
+
+### 5. Deploy the stack
+Build and start production services:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.no-host-db-ports.yml \
+  up -d --build
+```
+
+If you want the bundled nginx reverse proxy in this repo, include the profile:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.no-host-db-ports.yml \
+  --profile proxy \
+  up -d --build
+```
+
+### 6. Validate startup
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml logs -f migrator backend
+```
+
+Health checks:
+- Internal: `docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml exec backend curl -fsS http://localhost:8000/api/health/`
+- External: `curl -i https://smc-projects.com/api/health/`
+
+### 7. Common startup failures
+- `CORS_ALLOWED_ORIGINS must be explicitly configured...`
+  - Set `CORS_ALLOWED_ORIGINS` to your exact HTTPS origins (comma-separated, no paths).
+- `RESTORE_JOB_TOKEN_SECRET must be set to a non-default value...`
+  - Generate a new random value and set `RESTORE_JOB_TOKEN_SECRET`.
+- `CSRF_TRUSTED_ORIGINS must be explicitly configured...`
+  - Set exact HTTPS origins in `CSRF_TRUSTED_ORIGINS`.
+
 Workload Tracker — User Guide
 
 Getting Started

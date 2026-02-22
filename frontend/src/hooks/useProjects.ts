@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery, keepPreviousData } from '@tanstack/react-query';
 import { projectsApi } from '@/services/api';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { Project } from '@/types/models';
@@ -150,6 +150,7 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
       }
     },
     staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
 

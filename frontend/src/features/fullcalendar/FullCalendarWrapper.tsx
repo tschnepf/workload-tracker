@@ -70,6 +70,7 @@ const DEFAULT_RESPONSIVE_VIEWS: ResponsiveViewConfig = {
   mobile: 'listWeek',
   desktop: 'timeGridWeek',
 };
+const PRE_REVEALED_DATA_KEY = 'preRevealedForHighlight';
 
 function importFullCalendarReact(): Promise<FullCalendarComponent> {
   if (!fullCalendarReactPromise) {
@@ -271,30 +272,45 @@ const FullCalendarWrapper: React.FC<FullCalendarWrapperProps> = ({
     if (!root) return;
     const eventEls = root.querySelectorAll<HTMLElement>('.fc-event');
     eventEls.forEach((el) => {
-      const hiddenByFilter = el.dataset.hiddenByFilter === 'true';
-      const eventGroupIds = el.dataset.highlightGroupIds ? el.dataset.highlightGroupIds.split(',').filter(Boolean) : [];
-      const inGroup = groupIds ? groupIds.some((id) => eventGroupIds.includes(id)) : false;
-      if (!groupIds || groupIds.length === 0) {
-        el.classList.remove('fc-event-dimmed');
-        if (hiddenByFilter) {
-          el.classList.add('fc-event-pre-hidden');
-        }
-        return;
+      el.classList.remove('fc-event-dimmed');
+      if (el.dataset[PRE_REVEALED_DATA_KEY] === 'true') {
+        delete el.dataset[PRE_REVEALED_DATA_KEY];
+        el.classList.add('fc-event-pre-hidden');
       }
+    });
+    if (!groupIds || groupIds.length === 0) {
+      highlightedGroupRef.current = null;
+      return;
+    }
+    eventEls.forEach((el) => {
+      const eventGroupIds = el.dataset.highlightGroupIds ? el.dataset.highlightGroupIds.split(',').filter(Boolean) : [];
+      const inGroup = groupIds.some((id) => eventGroupIds.includes(id));
       if (inGroup) {
-        el.classList.remove('fc-event-dimmed');
-        if (hiddenByFilter) {
+        if (el.classList.contains('fc-event-pre-hidden')) {
           el.classList.remove('fc-event-pre-hidden');
+          el.dataset[PRE_REVEALED_DATA_KEY] = 'true';
         }
       } else {
         el.classList.add('fc-event-dimmed');
-        if (hiddenByFilter) {
-          el.classList.add('fc-event-pre-hidden');
-        }
       }
     });
-    highlightedGroupRef.current = groupIds ? groupIds.join(',') : null;
+    highlightedGroupRef.current = groupIds.join(',');
   }, []);
+
+  React.useEffect(() => {
+    if (clearHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(clearHighlightTimeoutRef.current);
+      clearHighlightTimeoutRef.current = null;
+    }
+    const root = wrapperRef.current;
+    if (!root) return;
+    const eventEls = root.querySelectorAll<HTMLElement>('.fc-event');
+    eventEls.forEach((el) => {
+      el.classList.remove('fc-event-dimmed');
+      delete el.dataset[PRE_REVEALED_DATA_KEY];
+    });
+    highlightedGroupRef.current = null;
+  }, [events]);
 
   const buildEventLabel = React.useCallback(
     (eventTitle: string, start?: Date | null, end?: Date | null, extendedProps?: Record<string, unknown>): string => {
@@ -345,11 +361,6 @@ const FullCalendarWrapper: React.FC<FullCalendarWrapperProps> = ({
         : legacySingle
           ? [legacySingle]
           : [];
-      const hiddenByFilter = Boolean((event.extendedProps as any)?.hiddenByFilter);
-      element.dataset.hiddenByFilter = hiddenByFilter ? 'true' : 'false';
-      if (hiddenByFilter) {
-        element.classList.add('fc-event-pre-hidden');
-      }
       if (normalizedGroupIds.length) {
         element.dataset.highlightGroupIds = normalizedGroupIds.join(',');
       } else {
@@ -389,7 +400,7 @@ const FullCalendarWrapper: React.FC<FullCalendarWrapperProps> = ({
         element.removeAttribute('tabindex');
         element.removeAttribute('aria-label');
         delete element.dataset.interactive;
-        delete element.dataset.hiddenByFilter;
+        delete element.dataset[PRE_REVEALED_DATA_KEY];
         delete element.dataset.highlightGroupIds;
         if (normalizedGroupIds.length) {
           if (highlightedGroupRef.current && highlightedGroupRef.current.split(',').some((id) => normalizedGroupIds.includes(id))) {

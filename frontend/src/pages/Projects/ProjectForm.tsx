@@ -19,7 +19,13 @@ import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';
 
-const ProjectForm: React.FC = () => {
+interface ProjectFormProps {
+  embedded?: boolean;
+  onCancel?: () => void;
+  onSuccess?: () => void;
+}
+
+const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, onSuccess }) => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   // EDIT FLOW OBSOLETE: /projects/:id/edit redirects to the list.
@@ -143,7 +149,7 @@ const ProjectForm: React.FC = () => {
   const loadProject = async () => {
     try {
       setLoading(true);
-      const project = await projectsApi.get(parseInt(id!));
+      const project = await projectsApi.get(parseInt(id!, 10));
       setFormData(project);
     } catch (err: any) {
       setError('Failed to load project');
@@ -192,12 +198,18 @@ const ProjectForm: React.FC = () => {
       };
 
       if (isEditing && id) {
-        await updateProject(parseInt(id), projectData, projectsApi);
+        await updateProject(parseInt(id, 10), projectData, projectsApi);
       } else {
         await createProject.mutateAsync(projectData as Omit<Project, 'id' | 'createdAt' | 'updatedAt'>);
       }
 
-      navigate('/projects');
+      if (onSuccess) {
+        onSuccess();
+      } else if (embedded && onCancel) {
+        onCancel();
+      } else {
+        navigate('/projects');
+      }
     } catch (err: any) {
       console.error('Project form submission error:', err);
       let errorMessage = err.message || `Failed to ${isEditing ? 'update' : 'create'} project`;
@@ -303,9 +315,12 @@ const ProjectForm: React.FC = () => {
     setClientHighlightIndex(-1);
   };
 
-  return (
-    <Layout>
-      <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto space-y-6 pb-32 px-4 sm:px-0">
+  const form = (
+    <form
+      onSubmit={handleSubmit}
+      className={embedded ? 'h-full flex flex-col' : 'w-full max-w-3xl mx-auto space-y-6 pb-32 px-4 sm:px-0'}
+    >
+      <div className={embedded ? 'flex-1 overflow-y-auto px-4 py-4 space-y-6' : 'space-y-6'}>
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-[#cccccc]">
@@ -542,25 +557,41 @@ const ProjectForm: React.FC = () => {
             </button>
             {preSettingsOpen && (
               <div id={preSettingsPanelId} className="mt-4">
-                <ProjectPreDeliverableSettings projectId={parseInt(id)} />
+                <ProjectPreDeliverableSettings projectId={parseInt(id, 10)} />
               </div>
             )}
           </Card>
         )}
-
-        <div className="sticky bottom-0 left-0 right-0 bg-[#1f1f23] border-t border-[#3e3e42] px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.35)]">
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => navigate('/projects')} disabled={loading}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" disabled={loading}>
-              {loading ? 'Saving...' : isEditing ? 'Update Project' : 'Create Project'}
-            </Button>
-          </div>
         </div>
-      </form>
-    </Layout>
+      <div className={embedded ? 'border-t border-[#3e3e42] bg-[#1f1f23] px-4 py-3' : 'sticky bottom-0 left-0 right-0 bg-[#1f1f23] border-t border-[#3e3e42] px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.35)]'}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              if (onCancel) {
+                onCancel();
+                return;
+              }
+              navigate('/projects');
+            }}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={loading}>
+            {loading ? 'Saving...' : isEditing ? 'Update Project' : 'Create Project'}
+          </Button>
+        </div>
+      </div>
+    </form>
   );
+
+  if (embedded) {
+    return form;
+  }
+
+  return <Layout>{form}</Layout>;
 };
 
 export default ProjectForm;
