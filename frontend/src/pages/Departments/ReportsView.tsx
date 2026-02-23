@@ -18,6 +18,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminUser } from '@/utils/roleAccess';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { getDepartmentManagerSummary } from '@/utils/departmentManagers';
 
 interface DepartmentReport {
   department: Department;
@@ -416,7 +417,7 @@ const ReportsView: React.FC = () => {
                           <div>
                             <div className="font-medium text-[#cccccc]">{report.department.name}</div>
                             <div className="text-xs text-[#969696]">
-                              {report.department.managerName || 'No manager'}
+                              {getDepartmentManagerSummary(report.department)}
                             </div>
                           </div>
                         </td>

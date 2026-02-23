@@ -1053,7 +1053,7 @@ export const departmentsApi = {
     fetchApi<Department>(`/departments/${id}/`),
 
   // Create department
-  create: (data: Omit<Department, 'id' | 'managerName' | 'createdAt' | 'updatedAt'>) => 
+  create: (data: Omit<Department, 'id' | 'managerName' | 'secondaryManagerNames' | 'createdAt' | 'updatedAt'>) => 
     fetchApi<Department>('/departments/', {
       method: 'POST',
       body: JSON.stringify(data),

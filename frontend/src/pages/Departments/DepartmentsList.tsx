@@ -18,6 +18,11 @@ import DepartmentForm from './DepartmentForm';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import {
+  getDepartmentManagerSummary,
+  getPrimaryManagerName,
+  getSecondaryManagersLabel,
+} from '@/utils/departmentManagers';
 
 const DepartmentsList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
@@ -163,12 +168,6 @@ const DepartmentsList: React.FC = () => {
     }
   };
 
-  const getManagerName = (managerId: number | null) => {
-    if (!managerId) return 'None';
-    const manager = people.find(p => p.id === managerId);
-    return manager ? manager.name : 'Unknown';
-  };
-
   const getParentDepartmentName = (parentId: number | null) => {
     if (!parentId) return 'None';
     const parent = departments.find(d => d.id === parentId);
@@ -234,7 +233,7 @@ const DepartmentsList: React.FC = () => {
                         </p>
                       )}
                       <p className="text-sm text-[var(--muted)] mb-2">
-                        Manager: {department.managerName || 'None'}
+                        Manager: {getDepartmentManagerSummary(department)}
                       </p>
                       {department.description && (
                         <p className="text-sm text-[var(--muted)] line-clamp-2">
@@ -352,7 +351,7 @@ const DepartmentsList: React.FC = () => {
                   </div>
                 )}
                 <div className="text-xs text-[var(--muted)] truncate">
-                  Manager: {department.managerName || 'None'}
+                  Manager: {getDepartmentManagerSummary(department)}
                 </div>
                 {department.parentDepartment && (
                   <div className="text-xs text-[var(--muted)] truncate">
@@ -509,8 +508,12 @@ const DepartmentDetails: React.FC<{
             <p className="text-[var(--text)]">{department.shortName || '—'}</p>
           </div>
           <div>
-            <span className="text-sm text-[var(--muted)]">Manager:</span>
-            <p className="text-[var(--text)]">{department.managerName || 'None assigned'}</p>
+            <span className="text-sm text-[var(--muted)]">Primary Manager:</span>
+            <p className="text-[var(--text)]">{getPrimaryManagerName(department) || 'None assigned'}</p>
+          </div>
+          <div>
+            <span className="text-sm text-[var(--muted)]">Secondary Managers:</span>
+            <p className="text-[var(--text)]">{getSecondaryManagersLabel(department)}</p>
           </div>
           <div>
             <span className="text-sm text-[var(--muted)]">Parent Department:</span>

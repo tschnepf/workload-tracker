@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Department, Person } from '@/types/models';
 import Card from '@/components/ui/Card';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { getDepartmentManagerSummary } from '@/utils/departmentManagers';
 
 interface DepartmentNode extends Department {
   children: DepartmentNode[];
@@ -97,7 +98,7 @@ const DepartmentHierarchy: React.FC<DepartmentHierarchyProps> = ({
               
               {/* Manager */}
               <div className="text-xs text-[var(--muted)] mb-2">
-                Manager: {node.managerName || 'None assigned'}
+                Manager: {getDepartmentManagerSummary(node)}
               </div>
               
               {/* Team Size */}

@@ -13,6 +13,11 @@ class Department(models.Model):
     parent_department = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
     vertical = models.ForeignKey('verticals.Vertical', on_delete=models.PROTECT, blank=True, null=True, related_name='departments')
     manager = models.ForeignKey('people.Person', on_delete=models.SET_NULL, blank=True, null=True, related_name='managed_departments')
+    secondary_managers = models.ManyToManyField(
+        'people.Person',
+        blank=True,
+        related_name='secondary_managed_departments',
+    )
     description = models.TextField(blank=True)
     
     # System fields

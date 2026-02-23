@@ -1,14 +1,36 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
+from django.db import connection
+from functools import lru_cache
 from .models import Department
 from .serializers import DepartmentSerializer
+
+
+@lru_cache(maxsize=1)
+def _has_secondary_manager_m2m_table() -> bool:
+    """Best-effort check for the secondary manager m2m table.
+
+    Some running environments may have code deployed before migrations are applied.
+    In that case, prefetching the m2m relation raises a database error and breaks
+    all department reads.
+    """
+    try:
+        table_name = Department.secondary_managers.through._meta.db_table
+        with connection.cursor() as cursor:
+            return table_name in set(connection.introspection.table_names(cursor))
+    except Exception:
+        return False
+
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
     # Use global default permissions (IsAuthenticated)
 
     def get_queryset(self):
-        qs = Department.objects.order_by('name')
+        qs = Department.objects.select_related('manager')
+        if _has_secondary_manager_m2m_table():
+            qs = qs.prefetch_related('secondary_managers')
+        qs = qs.order_by('name')
         include_inactive = False
         try:
             raw = self.request.query_params.get('include_inactive') if self.request else None

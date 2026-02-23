@@ -13,6 +13,10 @@ import { Department, Person } from '@/types/models';
 import { departmentsApi, peopleApi } from '@/services/api';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import {
+  getPrimaryManagerName,
+  getSecondaryManagersLabel,
+} from '@/utils/departmentManagers';
 
 const HierarchyView: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
@@ -106,9 +110,15 @@ const HierarchyView: React.FC = () => {
             </h4>
             <div className="space-y-1 text-sm">
               <div className="text-[#969696]">
-                Manager:{' '}
+                Primary Manager:{' '}
                 <span className="text-[#cccccc]">
-                  {selectedDepartment.managerName || 'None assigned'}
+                  {getPrimaryManagerName(selectedDepartment) || 'None assigned'}
+                </span>
+              </div>
+              <div className="text-[#969696]">
+                Secondary Managers:{' '}
+                <span className="text-[#cccccc]">
+                  {getSecondaryManagersLabel(selectedDepartment)}
                 </span>
               </div>
               <div className="text-[#969696]">

@@ -16,6 +16,7 @@ interface DepartmentFormData {
   parentDepartment: number | null;
   vertical: number | null;
   manager: number | null;
+  secondaryManagers: number[];
   description: string;
   isActive: boolean;
 }
@@ -43,6 +44,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
     parentDepartment: null,
     vertical: null,
     manager: null,
+    secondaryManagers: [],
     description: '',
     isActive: true,
   });
@@ -58,7 +60,10 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
         shortName: department.shortName || '',
         parentDepartment: department.parentDepartment,
         vertical: department.vertical ?? null,
-        manager: department.manager,
+        manager: department.manager ?? null,
+        secondaryManagers: (department.secondaryManagers || []).filter(
+          (id) => id != null && id !== department.manager,
+        ),
         description: department.description || '',
         isActive: department.isActive !== false,
       });
@@ -69,6 +74,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
         parentDepartment: null,
         vertical: null,
         manager: null,
+        secondaryManagers: [],
         description: '',
         isActive: true,
       });
@@ -144,6 +150,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
         parentDepartment: formData.parentDepartment,
         vertical: formData.vertical,
         manager: formData.manager,
+        secondaryManagers: formData.secondaryManagers,
         description: formData.description.trim(),
         isActive: formData.isActive,
       };
@@ -157,10 +164,19 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
   };
 
   const handleInputChange = (field: keyof DepartmentFormData, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        [field]: value,
+      } as DepartmentFormData;
+
+      // Keep manager and secondary manager assignments mutually exclusive.
+      if (field === 'manager' && value != null) {
+        next.secondaryManagers = prev.secondaryManagers.filter((id) => id !== value);
+      }
+
+      return next;
+    });
     
     // Clear validation error for this field
     if (validationErrors[field]) {
@@ -173,6 +189,25 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
 
   // Filter departments to exclude current department from parent options
   const parentDepartmentOptions = departments.filter(dept => dept.id !== department?.id);
+  const secondaryManagerOptions = useMemo(
+    () => people.filter((person) => person.id != null && person.id !== formData.manager),
+    [people, formData.manager],
+  );
+
+  const toggleSecondaryManager = (personId: number, checked: boolean) => {
+    setFormData((prev) => {
+      const set = new Set(prev.secondaryManagers || []);
+      if (checked) {
+        set.add(personId);
+      } else {
+        set.delete(personId);
+      }
+      return {
+        ...prev,
+        secondaryManagers: Array.from(set),
+      };
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-[var(--surfaceOverlay)] flex items-center justify-center z-50">
@@ -281,7 +316,7 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
 
             <div>
               <label className="block text-sm font-medium text-[var(--text)] mb-1">
-                Manager
+                Primary Manager
               </label>
               <select
                 value={formData.manager || ''}
@@ -296,6 +331,39 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[var(--text)] mb-1">
+                Secondary Managers
+              </label>
+              <div className="w-full max-h-40 overflow-y-auto bg-[var(--surface)] border border-[var(--border)] rounded-md p-2 space-y-1">
+                {secondaryManagerOptions.length === 0 ? (
+                  <p className="text-sm text-[var(--muted)] px-2 py-1">No additional people available</p>
+                ) : (
+                  secondaryManagerOptions.map((person) => {
+                    const personId = person.id as number;
+                    return (
+                      <label
+                        key={personId}
+                        className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[var(--surfaceHover)] text-sm text-[var(--text)]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.secondaryManagers.includes(personId)}
+                          onChange={(e) => toggleSecondaryManager(personId, e.target.checked)}
+                          className="w-4 h-4 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
+                          disabled={loading}
+                        />
+                        <span>{person.name}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Secondary managers can view the same department data as the primary manager.
+              </p>
             </div>
 
             <div>

@@ -107,6 +107,8 @@ export interface Department {
   verticalName?: string;
   manager?: number | null; // Person ID
   managerName?: string; // Read-only manager name
+  secondaryManagers?: number[]; // Person IDs
+  secondaryManagerNames?: string[]; // Read-only secondary manager names
   description?: string;
   isActive?: boolean;
   createdAt?: string;
