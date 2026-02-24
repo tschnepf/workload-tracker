@@ -6,7 +6,7 @@ from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
+from rest_framework.throttling import UserRateThrottle
 from django.db.models import Sum, Max, Prefetch, Value, Count
 from django.conf import settings
 from django.core.cache import cache
@@ -54,18 +54,18 @@ except Exception:
     deactivate_person_cleanup_task = None  # type: ignore
 from .services import deactivate_person_cleanup
 
-class FindAvailableThrottle(ScopedRateThrottle):
+class FindAvailableThrottle(UserRateThrottle):
     scope = 'find_available'
 
 class HotEndpointThrottle(UserRateThrottle):
     """Special throttle for hot endpoints like utilization checking"""
     scope = 'hot_endpoint'
 
-class HeatmapThrottle(ScopedRateThrottle):
+class HeatmapThrottle(UserRateThrottle):
     """Higher-rate throttle for aggregate heatmap reads"""
     scope = 'heatmap'
 
-class SkillMatchThrottle(ScopedRateThrottle):
+class SkillMatchThrottle(UserRateThrottle):
     """Throttle for skill match endpoint"""
     scope = 'skill_match'
 

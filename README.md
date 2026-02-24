@@ -187,6 +187,7 @@ It is focused on operations and configuration, not software development.
 - `frontend`: User web application (`:3000` on host).
 - `backend`: API/application service (`:8000` on host).
 - `db`: PostgreSQL database.
+- `pgbouncer`: PostgreSQL connection pooler used by backend and workers.
 - `redis`: Queue/cache service.
 - `worker`, `worker_db`, `worker_beat`: Background and scheduled jobs.
 - Reverse proxy/TLS is normally handled by your Unraid proxy app (for example SWAG or NPM).
@@ -197,6 +198,7 @@ It is focused on operations and configuration, not software development.
 - Compose Manager plugin is installed and working.
 - DNS for your domain points to the Unraid host.
 - A reverse proxy (SWAG/NPM/etc.) is available for HTTPS.
+- If using Vault workflow: `vault` CLI and `jq` installed on the host.
 
 ### 2. Create application folders
 From the Unraid terminal:
@@ -229,7 +231,112 @@ cp /mnt/user/appdata/workload-tracker/unraid/.env.unraid.example \
   /boot/config/plugins/compose.manager/projects/workload-tracker/.env
 ```
 
-### 5. Configure required values in `.env`
+### 4.1 Choose a secrets workflow (new deployments)
+This repository's compose files expect a runtime `.env` file for container `env_file` loading.
+If you want secret isolation, keep separate source files and generate `.env` before deploy.
+
+Option A: Single `.env` (simplest)
+- Keep everything in `/boot/config/plugins/compose.manager/projects/workload-tracker/.env`
+- Restrict permissions:
+
+```bash
+chmod 600 /boot/config/plugins/compose.manager/projects/workload-tracker/.env
+```
+
+Option B: Split `.env.base` + `.env.secrets` (recommended without external services)
+1. Create source files:
+
+```bash
+cp /mnt/user/appdata/workload-tracker/unraid/.env.unraid.example \
+  /boot/config/plugins/compose.manager/projects/workload-tracker/.env.base
+
+cp /mnt/user/appdata/workload-tracker/.env.secrets.example \
+  /boot/config/plugins/compose.manager/projects/workload-tracker/.env.secrets
+```
+
+2. Edit `.env.base` for non-secret values and `.env.secrets` for credentials.
+3. Generate runtime `.env` used by compose:
+
+```bash
+cat /boot/config/plugins/compose.manager/projects/workload-tracker/.env.base \
+    /boot/config/plugins/compose.manager/projects/workload-tracker/.env.secrets \
+  > /boot/config/plugins/compose.manager/projects/workload-tracker/.env
+chmod 600 /boot/config/plugins/compose.manager/projects/workload-tracker/.env*
+```
+
+4. Re-run the `cat ... > .env` command after any base/secret change.
+
+Option C: HashiCorp Vault + generated `.env.secrets` (no external SaaS)
+1. Deploy Vault (single-node is acceptable for small environments; use HA for critical production).
+2. Initialize and unseal Vault, then log in with an admin token:
+
+```bash
+export VAULT_ADDR=http://<vault-host>:8200
+vault operator init
+vault operator unseal <unseal-key-1>
+vault operator unseal <unseal-key-2>
+vault operator unseal <unseal-key-3>
+vault login <initial-root-token>
+```
+
+3. Enable KV v2 and write workload secrets:
+
+```bash
+vault secrets enable -path=workload-tracker kv-v2
+vault kv put workload-tracker/prod \
+  SECRET_KEY='<value>' \
+  POSTGRES_PASSWORD='<value>' \
+  REDIS_PASSWORD='<value>' \
+  RESTORE_JOB_TOKEN_SECRET='<value>' \
+  EMAIL_HOST_USER='<value>' \
+  EMAIL_HOST_PASSWORD='<value>' \
+  SENTRY_DSN='<value>'
+```
+
+4. Create a read-only policy and AppRole for deployments:
+
+```bash
+cat > /tmp/workload-tracker-read.hcl <<'EOF'
+path "workload-tracker/data/prod" {
+  capabilities = ["read"]
+}
+EOF
+
+vault policy write workload-tracker-read /tmp/workload-tracker-read.hcl
+vault auth enable approle
+vault write auth/approle/role/workload-tracker \
+  token_policies="workload-tracker-read" \
+  token_ttl=1h \
+  token_max_ttl=4h
+
+vault read -field=role_id auth/approle/role/workload-tracker/role-id
+vault write -f -field=secret_id auth/approle/role/workload-tracker/secret-id
+```
+
+5. On the Unraid host, use AppRole to fetch secrets into `.env.secrets`, then generate runtime `.env`:
+
+```bash
+export VAULT_ADDR=http://<vault-host>:8200
+export ROLE_ID=<role-id>
+export SECRET_ID=<secret-id>
+
+export VAULT_TOKEN="$(vault write -field=token auth/approle/login role_id=\"$ROLE_ID\" secret_id=\"$SECRET_ID\")"
+
+vault kv get -format=json workload-tracker/prod \
+  | jq -r '.data.data | to_entries[] | "\(.key)=\(.value)"' \
+  > /boot/config/plugins/compose.manager/projects/workload-tracker/.env.secrets
+
+cat /boot/config/plugins/compose.manager/projects/workload-tracker/.env.base \
+    /boot/config/plugins/compose.manager/projects/workload-tracker/.env.secrets \
+  > /boot/config/plugins/compose.manager/projects/workload-tracker/.env
+chmod 600 /boot/config/plugins/compose.manager/projects/workload-tracker/.env*
+```
+
+6. Redeploy after secret updates:
+- Regenerate `.env` from `.env.base` + `.env.secrets`
+- Run `docker compose ... up -d`
+
+### 5. Configure required values in `.env` (or `.env.base` + `.env.secrets`)
 Edit:
 
 `/boot/config/plugins/compose.manager/projects/workload-tracker/.env`
@@ -239,13 +346,14 @@ Set at minimum:
 - `POSTGRES_PASSWORD`
 - `REDIS_PASSWORD`
 - `RESTORE_JOB_TOKEN_SECRET`
+- `PGBOUNCER_AUTH_TYPE=scram-sha-256`
 - `ALLOWED_HOSTS=smc-projects.com,www.smc-projects.com`
 - `CSRF_TRUSTED_ORIGINS=https://smc-projects.com,https://www.smc-projects.com`
 - `COOKIE_REFRESH_AUTH=true`
 - `SECURE_SSL_REDIRECT=true`
 
 ### 6. Generate strong secrets
-Run these on the Unraid host and paste values into `.env`:
+Run these on the Unraid host and paste values into your source env file(s):
 
 ```bash
 openssl rand -base64 48   # SECRET_KEY
@@ -293,6 +401,36 @@ docker compose \
   python manage.py changepassword admin
 ```
 
+### 7.2 PgBouncer setup and verification
+`docker-compose.unraid.yml` includes PgBouncer by default. App services connect to Postgres through PgBouncer for better burst handling.
+
+How this stack is wired:
+- `backend`, `worker`, `worker_db`, `worker_beat` use `DATABASE_URL=...@pgbouncer:6432/...`
+- Maintenance operations still use direct DB via `DB_ADMIN_URL=...@db:5432/...`
+- Reverse proxy still routes to backend (`:8000`) and frontend (`:3000`) only.
+
+Recommended PgBouncer env keys in `/boot/config/plugins/compose.manager/projects/workload-tracker/.env`:
+- `PGBOUNCER_AUTH_TYPE=scram-sha-256`
+- `PGBOUNCER_PORT=6432`
+- `PGBOUNCER_POOL_MODE=transaction`
+- `PGBOUNCER_MAX_CLIENT_CONN=1500`
+- `PGBOUNCER_DEFAULT_POOL_SIZE=60`
+- `PGBOUNCER_RESERVE_POOL_SIZE=20`
+- `PGBOUNCER_MAX_DB_CONNECTIONS=120`
+
+After changing PgBouncer or DB auth settings, recreate services:
+
+```bash
+docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml \
+  up -d --force-recreate pgbouncer backend worker worker_db worker_beat
+```
+
+Verify pooler and backend startup:
+
+```bash
+docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml logs --tail=150 pgbouncer backend
+```
+
 ### 8. Configure reverse proxy and TLS
 For public access at `https://smc-projects.com`:
 - Route `/api` to `http://<unraid-ip>:8000`.
@@ -310,7 +448,7 @@ docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml p
 Review logs:
 
 ```bash
-docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml logs -f backend worker
+docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml logs -f pgbouncer backend worker
 ```
 
 Health checks:
@@ -329,6 +467,11 @@ docker compose -f /mnt/user/appdata/workload-tracker/docker-compose.unraid.yml u
 - Backend cannot start: verify `.env` path and required secrets.
 - CORS/CSRF errors: verify `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` exactly match your HTTPS domains.
 - Browser login/session issues: verify proxy forwards HTTPS correctly and `COOKIE_REFRESH_AUTH=true`.
+- PgBouncer error `wrong password type`:
+  - Set `PGBOUNCER_AUTH_TYPE=scram-sha-256` and recreate `pgbouncer` + app services.
+- PgBouncer startup error with malformed host/port in generated config:
+  - Ensure you are using the current `docker-compose.unraid.yml` from this repo (PgBouncer uses `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME`).
+  - Remove old overrides that set PgBouncer `DATABASE_URL`.
 
 
 ## Deployment
@@ -339,6 +482,7 @@ Use this section to install and deploy the production stack with Docker Compose.
 - Docker Engine + Docker Compose plugin installed on the host.
 - DNS for your domain pointed to the host.
 - TLS terminated either by this stack (`nginx` profile) or an external reverse proxy.
+- If using Vault workflow: `vault` CLI and `jq` installed on the deployment host.
 
 ### 2. Create production `.env`
 ```bash
@@ -346,6 +490,47 @@ cp .env.production.template .env
 ```
 
 Edit `.env` and replace all `CHANGE_ME_*` values.
+
+### 2.1 Optional secret isolation patterns
+For new deployments, you can choose one of these patterns:
+
+Option A: Single `.env`
+- Keep all values in `.env` (simplest).
+- Set file permissions: `chmod 600 .env`
+
+Option B: `.env.base` + `.env.secrets` (no external services)
+1. Create split source files:
+
+```bash
+cp .env.production.template .env.base
+cp .env.secrets.example .env.secrets
+```
+
+2. Put non-secrets in `.env.base` and secrets in `.env.secrets`.
+3. Generate runtime `.env` before each deploy:
+
+```bash
+cat .env.base .env.secrets > .env
+chmod 600 .env .env.base .env.secrets
+```
+
+Option C: HashiCorp Vault + generated `.env.secrets`
+- Store secrets in Vault KV v2 and materialize `.env.secrets` at deploy time.
+- Minimum flow:
+  1. `vault kv put workload-tracker/prod ...`
+  2. Authenticate deploy host using AppRole.
+  3. Render `.env.secrets`:
+
+```bash
+vault kv get -format=json workload-tracker/prod \
+  | jq -r '.data.data | to_entries[] | "\(.key)=\(.value)"' > .env.secrets
+cat .env.base .env.secrets > .env
+chmod 600 .env .env.base .env.secrets
+```
+
+Operational note:
+- Compose interpolation and service `env_file` in this repo rely on the runtime `.env`.
+- If you split files, always regenerate `.env` before `docker compose up`.
 
 ### 3. Generate required secrets
 Generate strong random values on the deployment host:

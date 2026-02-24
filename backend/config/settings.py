@@ -175,6 +175,13 @@ try:
     DATABASES['default']['CONN_HEALTH_CHECKS'] = os.getenv('DB_CONN_HEALTH_CHECKS', 'true').lower() == 'true'
 except Exception:  # nosec B110
     pass
+# PgBouncer compatibility: disable server-side cursors when transaction pooling is used.
+try:
+    _disable_ssc = os.getenv('DISABLE_SERVER_SIDE_CURSORS')
+    if _disable_ssc is not None:
+        DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = _disable_ssc.lower() == 'true'
+except Exception:  # nosec B110
+    pass
 
 # --- End Sentry ---
 
@@ -336,6 +343,7 @@ REST_FRAMEWORK = {
         'anon': _rate('DRF_THROTTLE_ANON', '100/min'),
         'user': _rate('DRF_THROTTLE_USER', '1000/min'),
         'hot_endpoint': _rate('DRF_THROTTLE_HOT', '300/hour'),  # Special limit for hot endpoints
+        'snapshots': _rate('DRF_THROTTLE_SNAPSHOTS', '120/min'),
         'heatmap': _rate('DRF_THROTTLE_HEATMAP', '1200/min'),
         'skill_match': _rate('DRF_THROTTLE_SKILL_MATCH', '600/min'),
         'project_availability': _rate('DRF_THROTTLE_PROJECT_AVAILABILITY', '600/min'),

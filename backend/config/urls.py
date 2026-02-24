@@ -183,7 +183,6 @@ urlpatterns = [
     path('api/personal/', include('personal.urls')),
     path('api/core/', include('core.urls')),
     path('api/reports/', include('reports.urls')),
-    path('api/core/', include('core.urls')),
     path('api/', include('roles.urls')),
     path('api/integrations/', include('integrations.urls')),
     # Public ICS calendar feeds (token-protected via querystring)

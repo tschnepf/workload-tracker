@@ -31,7 +31,15 @@ esac
 
 if [ "${RUN_MIGRATIONS_ON_START:-true}" = "true" ] || [ "${RUN_MIGRATIONS_ON_START:-true}" = "1" ]; then
   echo "Running migrations..."
+  # Prefer direct DB URL for migrations when available (avoid PgBouncer txn-pool edge cases)
+  ORIG_DATABASE_URL="${DATABASE_URL:-}"
+  if [ -n "${DB_ADMIN_URL:-}" ]; then
+    export DATABASE_URL="${DB_ADMIN_URL}"
+  fi
   python manage.py migrate --noinput
+  if [ -n "${ORIG_DATABASE_URL:-}" ]; then
+    export DATABASE_URL="${ORIG_DATABASE_URL}"
+  fi
 else
   echo "Skipping migrations (RUN_MIGRATIONS_ON_START=${RUN_MIGRATIONS_ON_START})"
 fi

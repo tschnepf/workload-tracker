@@ -11,7 +11,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serial
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.settings import api_settings
 from django.db.models import Sum, Max, Min, Prefetch, Value, Count, Q, Exists, OuterRef  # noqa: F401
@@ -59,12 +59,12 @@ class HotEndpointThrottle(UserRateThrottle):
     scope = 'hot_endpoint'
 
 
-class GridSnapshotThrottle(ScopedRateThrottle):
+class GridSnapshotThrottle(UserRateThrottle):
     """Throttle for grid snapshot aggregate reads"""
     scope = 'grid_snapshot'
 
 
-class SnapshotsThrottle(ScopedRateThrottle):
+class SnapshotsThrottle(UserRateThrottle):
     """Throttle for snapshots/experience read endpoints"""
     scope = 'snapshots'
 
@@ -1470,19 +1470,16 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return Response({'weekKeys': [wk.strftime('%Y-%m-%d') for wk in week_keys], 'roles': [], 'series': []})
 
         # Short‑TTL cache (acceptable 60s staleness)
-        try:
-            if request.query_params.get('nocache') != '1':
+        cache_key = None
+        if request.query_params.get('nocache') != '1':
+            try:
                 cache_key = f"rc:{'all' if dept_id is None else dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}:v{vertical_id if vertical_id is not None else 'all'}"
                 cached = cache.get(cache_key)
                 if cached is not None:
                     return Response(cached)
-        except Exception:
-            # Cache must never break the request path
-            cache_key = None
-            cached = None
-        else:
-            # ensure key exists for later set
-            cache_key = cache_key
+            except Exception:
+                # Cache must never break the request path
+                cache_key = None
 
         # Compute role capacity via vendor-aware helper (Postgres JSONB path or optimized Python fallback)
         wk_strs, roles_payload, series = compute_role_capacity(

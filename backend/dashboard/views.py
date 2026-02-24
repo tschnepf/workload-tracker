@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Sum, Q
 from datetime import date, timedelta
+from django.utils import timezone
 from django.core.cache import cache
 from django.conf import settings
 from people.models import Person
@@ -200,7 +201,7 @@ class DashboardView(APIView):
         # Recent assignments (last 7 days), optionally filtered by department
         recent_assignments = []
         recent_assignment_qs = Assignment.objects.filter(
-            created_at__gte=today - timedelta(days=7)
+            created_at__gte=timezone.now() - timedelta(days=7)
         ).select_related('person', 'project', 'role_on_project_ref')
         
         if department_filter:

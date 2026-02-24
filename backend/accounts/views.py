@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from rest_framework.throttling import UserRateThrottle, ScopedRateThrottle
+from rest_framework.throttling import UserRateThrottle
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .models import UserProfile, AdminAuditLog
@@ -36,7 +36,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings as django_settings
 
 
-class HotEndpointThrottle(ScopedRateThrottle):
+class HotEndpointThrottle(UserRateThrottle):
     scope = 'hot_endpoint'
 
 class MeView(APIView):

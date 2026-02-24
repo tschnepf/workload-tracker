@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, status
 import os
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.filters import OrderingFilter
 from rest_framework.views import APIView
 from django.db.models import Max, Min, Count, Exists, OuterRef, Q, Prefetch, F
@@ -43,7 +43,7 @@ try:
 except Exception:
     export_projects_excel_task = None  # type: ignore
 
-class ProjectAvailabilityThrottle(ScopedRateThrottle):
+class ProjectAvailabilityThrottle(UserRateThrottle):
     scope = 'project_availability'
 
 
