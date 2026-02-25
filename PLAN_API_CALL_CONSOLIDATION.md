@@ -103,6 +103,8 @@ These values are mandatory unless explicitly superseded by a later ADR.
    Any threshold breach disables the affected workstream flag automatically.
 
 ## Workstream 0: Identity and Cache Safety Foundation
+Status: `Complete` (verified on 2026-02-24)
+
 ### Objective
 Prevent cross-user cache reuse and make consolidated snapshots safe under login/logout and account switching.
 
@@ -123,6 +125,8 @@ Prevent cross-user cache reuse and make consolidated snapshots safe under login/
 2. Block rollout of later workstreams until this gate is green in CI.
 
 ## Workstream A: Shared Bootstrap and Reference Data De-duplication
+Status: `Complete` (verified on 2026-02-24)
+
 ### Objective
 Eliminate repeated calls for global reference resources and mount-time duplicates without cross-scope cache corruption.
 
@@ -152,6 +156,8 @@ Eliminate repeated calls for global reference resources and mount-time duplicate
 Directly reduces repeated `departments`, `roles`, `verticals`, and `capabilities` calls across most pages.
 
 ## Workstream B: Assignments and Project-Assignments Bulk Consolidation
+Status: `Complete` (verified on 2026-02-24)
+
 ### Objective
 Collapse per-phase and repeated settings requests into one scoped bulk call.
 
@@ -547,6 +553,13 @@ Required flag keys:
    - test results summary,
    - route-budget delta for affected routes,
    - rollback flag names validated.
+4. Section completion checkoff requirement (mandatory before marking any workstream/section complete):
+   - implement the planned changes for that section,
+   - rescan the codebase and verify expected files/contracts/paths were actually updated,
+   - restart any affected Docker containers/services,
+   - run required migrations (if any),
+   - run a live runtime test for that section’s primary route/endpoint behavior,
+   - only then mark that section as `Complete` in this plan.
 
 Prompt template:
 ```text

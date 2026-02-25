@@ -272,6 +272,8 @@ FEATURES.update({
     'JOB_AUTHZ_WRITE_REQUIRED': os.getenv('JOB_AUTHZ_WRITE_REQUIRED', 'false').lower() == 'true',
     'JOB_AUTHZ_ENFORCED': os.getenv('JOB_AUTHZ_ENFORCED', 'false').lower() == 'true',
     'JOB_RESTORE_TOKEN_MODE': os.getenv('JOB_RESTORE_TOKEN_MODE', 'true').lower() == 'true',
+    'FF_UI_BOOTSTRAP': os.getenv('FF_UI_BOOTSTRAP', 'true').lower() == 'true',
+    'FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE': os.getenv('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', 'true').lower() == 'true',
     # Always-on flag for safe server-side weekly-hours operations
     'AUTO_REALLOCATION': True,
     # Week key policy controls (Section 3/4)
@@ -349,6 +351,7 @@ REST_FRAMEWORK = {
         'project_availability': _rate('DRF_THROTTLE_PROJECT_AVAILABILITY', '600/min'),
         'find_available': _rate('DRF_THROTTLE_FIND_AVAILABLE', '600/min'),
         'grid_snapshot': _rate('DRF_THROTTLE_GRID_SNAPSHOT', '600/min'),
+        'ui_bootstrap': _rate('DRF_THROTTLE_UI_BOOTSTRAP', '120/min'),
         'login': _rate('DRF_THROTTLE_LOGIN', '10/min'),
         # Backup/restore endpoints (Phase 0: Step 0.3)
         # Enforce strict create rate so the second POST is throttled in tests

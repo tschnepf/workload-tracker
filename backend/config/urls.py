@@ -31,6 +31,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from deliverables.ics_views import deliverables_ics
 from assignments.views import AssignmentsPageSnapshotView
+from core.views import UiBootstrapView
 
 def health_check(request):
     """Health check endpoint for Docker and monitoring"""
@@ -175,6 +176,7 @@ urlpatterns = [
     path('api/people/', include('people.urls')),
     path('api/projects/', include('projects.urls')),
     path('api/assignments/', include('assignments.urls')),
+    path('api/ui/bootstrap/', UiBootstrapView.as_view(), name='ui_bootstrap'),
     path('api/ui/assignments-page/', AssignmentsPageSnapshotView.as_view(), name='assignments_page_snapshot'),
     path('api/deliverables/', include('deliverables.urls')),
     path('api/departments/', include('departments.urls')),

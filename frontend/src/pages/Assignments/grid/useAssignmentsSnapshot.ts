@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Assignment, Deliverable, Project } from '@/types/models';
 import { useWeekHeaders } from '@/pages/Assignments/grid/useWeekHeaders';
 import { useAssignmentsPageSnapshot } from '@/pages/Assignments/hooks/useAssignmentsPageSnapshot';
+import type { AutoHoursBundle } from '@/services/assignmentsPageSnapshotApi';
 
 export interface UseAssignmentsSnapshotArgs {
   weeksHorizon: number;
@@ -9,6 +10,10 @@ export interface UseAssignmentsSnapshotArgs {
   includeChildren?: boolean;
   departmentFilters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
   vertical?: number;
+  include?: string;
+  requestAutoHoursBundle?: boolean;
+  autoHoursPhases?: string[];
+  autoHoursTemplateIds?: number[];
 
   // External state setters (container-owned)
   setPeople: React.Dispatch<React.SetStateAction<any[]>>;
@@ -44,7 +49,10 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
     includeChildren: args.includeChildren,
     departmentFilters: args.departmentFilters,
     vertical: args.vertical,
-    include: 'assignment',
+    include: args.include || 'assignment',
+    requestAutoHoursBundle: args.requestAutoHoursBundle,
+    autoHoursPhases: args.autoHoursPhases,
+    autoHoursTemplateIds: args.autoHoursTemplateIds,
   });
 
   const loadData = useCallback(async () => {
@@ -146,6 +154,7 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
     loadData,
     asyncJob,
     departments: snapshot.data?.departments || [],
+    autoHoursBundle: (snapshot.data?.autoHoursBundle || null) as AutoHoursBundle | null,
     setPeople: args.setPeople,
     setAssignmentsData: args.setAssignmentsData,
     setProjectsData: args.setProjectsData,

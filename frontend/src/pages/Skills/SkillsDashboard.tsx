@@ -9,8 +9,10 @@ import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { Person, Department, SkillTag, PersonSkill } from '@/types/models';
-import { peopleApi, departmentsApi, skillTagsApi, personSkillsApi } from '@/services/api';
+import { peopleApi, skillTagsApi, personSkillsApi } from '@/services/api';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useUiBootstrap } from '@/hooks/useUiBootstrap';
 
 interface SkillCoverage {
   skillName: string;
@@ -36,8 +38,12 @@ interface DepartmentSkills {
 
 const SkillsDashboard: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
+  useUiBootstrap({
+    include: ['departments'],
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
+  const { departments } = useDepartments({ vertical: verticalState.selectedVerticalId ?? undefined });
   const [people, setPeople] = useState<Person[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [skillTags, setSkillTags] = useState<SkillTag[]>([]);
   // Manage Skill Tags (add/remove)
   const [newSkillName, setNewSkillName] = useState<string>("");
@@ -59,15 +65,13 @@ const SkillsDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const [peopleResponse, departmentsResponse, skillTagsResponse, peopleSkillsResponse] = await Promise.all([
+      const [peopleResponse, skillTagsResponse, peopleSkillsResponse] = await Promise.all([
         peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
-        departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
         skillTagsApi.list(),
         personSkillsApi.list()
       ]);
       
       setPeople(peopleResponse.results || []);
-      setDepartments(departmentsResponse.results || []);
       setSkillTags(skillTagsResponse.results || []);
       setPeopleSkills(peopleSkillsResponse.results || []);
       

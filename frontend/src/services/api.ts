@@ -41,6 +41,14 @@ import { refreshAccessToken as refreshAccessTokenSafe } from '@/store/auth';
 import { showToast } from '@/lib/toastBus';
 import { etagStore } from '@/api/etagStore';
 import { friendlyErrorMessage as _friendlyErrorMessage } from '@/api/errors';
+import {
+  clearApiInflightPromise,
+  clearApiMemoryCaches,
+  readApiCachedData,
+  readApiInflightPromise,
+  writeApiCachedData,
+  writeApiInflightPromise,
+} from '@/lib/fetchApiCache';
 
 const API_BASE_URL = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
 // Feature flags for OpenAPI migration (scoped + global)
@@ -77,22 +85,14 @@ function friendlyErrorMessage(status: number, data: any, fallback: string): stri
   return _friendlyErrorMessage(status, data, fallback);
 }
 
-// Lightweight in-memory cache to coalesce duplicate GETs and short-cache results
-type CacheEntry<T> = { promise: Promise<T>; timestamp: number; data?: T };
-const inflightRequests = new Map<string, CacheEntry<any>>();
-const responseCache = new Map<string, CacheEntry<any>>();
+export function clearFetchApiCachedStores() {
+  clearApiMemoryCaches();
+}
 
 // Expose a narrowly scoped cache invalidator for deliverables GET endpoints
 export function invalidateDeliverablesCache() {
   try {
-    const KEYS = Array.from(responseCache.keys());
-    for (const k of KEYS) {
-      if (k.includes('/deliverables/')) responseCache.delete(k);
-    }
-    const INFLIGHT = Array.from(inflightRequests.keys());
-    for (const k of INFLIGHT) {
-      if (k.includes('/deliverables/')) inflightRequests.delete(k);
-    }
+    clearApiMemoryCaches((key) => key.includes('/deliverables/'));
   } catch {}
 }
 // Store ETags by endpoint for conditional requests (detail routes)
@@ -266,26 +266,24 @@ async function fetchApiCached<T>(endpoint: string, ttlMs = DEFAULT_TTL_MS): Prom
   const key = makeCacheKey(url, 'GET');
   const now = Date.now();
 
-  const cached = responseCache.get(key);
-  if (cached && cached.data !== undefined && (now - cached.timestamp) < ttlMs) {
-    return cached.data as T;
-  }
+  const cached = readApiCachedData<T>(key, ttlMs, now);
+  if (cached !== undefined) return cached;
 
-  const inflight = inflightRequests.get(key);
-  if (inflight) return inflight.promise as Promise<T>;
+  const inflight = readApiInflightPromise<T>(key);
+  if (inflight) return inflight;
 
   const promise = fetchApi<T>(endpoint, { method: 'GET' })
     .then((data) => {
-      responseCache.set(key, { promise, timestamp: Date.now(), data });
-      inflightRequests.delete(key);
+      writeApiCachedData(key, promise, data, Date.now());
+      clearApiInflightPromise(key);
       return data;
     })
     .catch((err) => {
-      inflightRequests.delete(key);
+      clearApiInflightPromise(key);
       throw err;
     });
 
-  inflightRequests.set(key, { promise, timestamp: now });
+  writeApiInflightPromise(key, promise, now);
   return promise;
 }
 
@@ -1606,7 +1604,12 @@ export const rolesApi = {
   },
 
   // Get all roles (bulk) - for autocomplete/dropdowns
-  listAll: () => fetchApi<Role[]>('/roles/bulk/'),
+  listAll: (opts?: { include_inactive?: 0 | 1 }) => {
+    const sp = new URLSearchParams();
+    if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<Role[]>(`/roles/bulk/${qs}`);
+  },
 
   // Get single role
   get: (id: number) => fetchApi<Role>(`/roles/${id}/`),
@@ -1785,6 +1788,31 @@ export const backupApi = {
 export const systemApi = {
   getCapabilities: async (): Promise<SystemCapabilities> => {
     return fetchApi<SystemCapabilities>(`/capabilities/`);
+  },
+};
+
+export type UiBootstrapInclude = 'verticals' | 'capabilities' | 'departments' | 'roles';
+
+export type UiBootstrapResponse = {
+  contractVersion: number;
+  included: string[];
+  verticals?: Vertical[];
+  capabilities?: SystemCapabilities;
+  departmentsAll?: Department[];
+  rolesAll?: Role[];
+};
+
+export const uiApi = {
+  bootstrap: async (opts?: { include?: UiBootstrapInclude[]; vertical?: number; include_inactive?: 0 | 1 }): Promise<UiBootstrapResponse> => {
+    const sp = new URLSearchParams();
+    if (opts?.include && opts.include.length > 0) {
+      const include = Array.from(new Set(opts.include)).sort();
+      sp.set('include', include.join(','));
+    }
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<UiBootstrapResponse>(`/ui/bootstrap/${qs}`);
   },
 };
 

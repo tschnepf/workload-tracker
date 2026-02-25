@@ -8,8 +8,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
-import { Person, Department, Role } from '@/types/models';
-import { peopleApi, rolesApi } from '@/services/api';
+import { Person } from '@/types/models';
+import { peopleApi } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
 import { showToast } from '@/lib/toastBus';
 import Layout from '@/components/layout/Layout';
@@ -24,14 +24,29 @@ import { usePeopleSearch } from '@/hooks/usePeopleSearch';
 import { usePersonSelection } from '@/pages/People/list/hooks/usePersonSelection';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useRolesAll } from '@/hooks/useRolesAll';
+import { useUiBootstrap } from '@/hooks/useUiBootstrap';
 
 const PeopleList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const { state: verticalState } = useVerticalFilter();
   const [showInactive, setShowInactive] = useState(false);
-  const [departments, setDepartments] = useState<Department[]>([]); // Phase 2: Department filter
+  useUiBootstrap({
+    include: ['departments'],
+    vertical: verticalState.selectedVerticalId ?? undefined,
+    includeInactive: showInactive,
+  });
+  useUiBootstrap({
+    include: ['roles'],
+    includeInactive: true,
+  });
+  const { departments } = useDepartments({
+    vertical: verticalState.selectedVerticalId ?? undefined,
+    includeInactive: showInactive,
+  });
+  const { roles } = useRolesAll({ includeInactive: true });
   const [locations, setLocations] = useState<string[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]); // Phase 1: Role management
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]); // Multi-select department filter
   const [locationFilter, setLocationFilter] = useState<string[]>([]); // Multi-select location filter
@@ -54,22 +69,6 @@ const PeopleList: React.FC = () => {
   const [roleInputValue, setRoleInputValue] = useState('');
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(-1);
 
-  // Roles are now loaded from API instead of hardcoded
-
-  useAuthenticatedEffect(() => {
-    loadRoles(); // Phase 1: Load roles for dropdowns
-  }, []);
-
-  // Phase 1: Load roles for dropdown
-  const loadRoles = async () => {
-    try {
-      const page = await rolesApi.list();
-      setRoles(page.results || []);
-    } catch (err) {
-      console.error('Error loading roles:', err);
-    }
-  };
-
   // Right-panel effects moved into PersonDetailsContainer
 
   const loadFiltersMetadata = async () => {
@@ -78,7 +77,6 @@ const PeopleList: React.FC = () => {
         vertical: verticalState.selectedVerticalId ?? undefined,
         include_inactive: showInactive ? 1 : undefined,
       });
-      setDepartments(res.departments || []);
       setLocations(res.locations || []);
     } catch (err) {
       console.error('Error loading people filter metadata:', err);

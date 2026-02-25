@@ -1,10 +1,13 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework.throttling import ScopedRateThrottle
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from rest_framework import serializers, status
 from django.conf import settings
+from django.core.cache import cache
 import hashlib
+import os
 from django.db import transaction
 from decimal import Decimal
 
@@ -30,16 +33,158 @@ from .models import (
     AutoHoursTemplate,
     AutoHoursTemplateRoleSetting,
 )
+from .cache_keys import build_aggregate_cache_key
 from accounts.permissions import IsAdminOrManager
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
 from assignments.models import Assignment  # type: ignore
 from projects.models import ProjectRole as DepartmentProjectRole
 from departments.models import Department
+from departments.serializers import DepartmentSerializer
+from roles.models import Role
+from roles.serializers import RoleSerializer
+from verticals.models import Vertical
+from verticals.serializers import VerticalSerializer
 
 AUTO_HOURS_MAX_WEEKS_BEFORE = 17
 AUTO_HOURS_MAX_WEEKS_COUNT = AUTO_HOURS_MAX_WEEKS_BEFORE + 1
 AUTO_HOURS_DEFAULT_WEEKS_COUNT = 6
+
+
+class UiBootstrapThrottle(ScopedRateThrottle):
+    scope = 'ui_bootstrap'
+
+
+class UiBootstrapView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UiBootstrapThrottle]
+    _INCLUDE_ALLOWED = {'verticals', 'capabilities', 'departments', 'roles'}
+
+    def _parse_include(self, request) -> tuple[list[str] | None, str | None]:
+        raw = (request.query_params.get('include') or '').strip().lower()
+        if not raw:
+            return sorted(self._INCLUDE_ALLOWED), None
+        include_set = set(x.strip() for x in raw.split(',') if x.strip())
+        unknown = sorted(x for x in include_set if x not in self._INCLUDE_ALLOWED)
+        if unknown:
+            return None, f"invalid include token(s): {', '.join(unknown)}"
+        return sorted(include_set), None
+
+    def _parse_vertical(self, request) -> tuple[int | None, str | None]:
+        raw = request.query_params.get('vertical')
+        if raw in (None, ''):
+            return None, None
+        try:
+            return int(raw), None
+        except Exception:
+            return None, 'vertical must be an integer'
+
+    def _parse_include_inactive(self, request) -> bool:
+        raw = request.query_params.get('include_inactive')
+        if raw in (None, ''):
+            return False
+        return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+    def _capabilities_payload(self):
+        caps = {
+            'asyncJobs': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
+            'aggregates': {
+                'capacityHeatmap': True,
+                'projectAvailability': True,
+                'findAvailable': True,
+                'gridSnapshot': True,
+                'skillMatch': True,
+            },
+            'cache': {
+                'shortTtlAggregates': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
+                'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
+            },
+            'personalDashboard': True,
+        }
+        try:
+            caps['projectRolesByDepartment'] = bool(settings.FEATURES.get('PROJECT_ROLES_BY_DEPARTMENT', False))
+        except Exception:
+            caps['projectRolesByDepartment'] = False
+        try:
+            caps['integrations'] = {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}
+        except Exception:
+            caps['integrations'] = {'enabled': False}
+        return caps
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='include', type=str, required=False, description='CSV include: verticals,capabilities,departments,roles'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Department vertical scope'),
+            OpenApiParameter(name='include_inactive', type=int, required=False, description='0|1 include inactive verticals/departments/roles'),
+        ],
+    )
+    def get(self, request):
+        if not settings.FEATURES.get('FF_UI_BOOTSTRAP', True):
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        include_tokens, include_err = self._parse_include(request)
+        if include_err:
+            return Response({'error': include_err}, status=status.HTTP_400_BAD_REQUEST)
+        vertical_filter, vertical_err = self._parse_vertical(request)
+        if vertical_err:
+            return Response({'error': vertical_err}, status=status.HTTP_400_BAD_REQUEST)
+        include_inactive = self._parse_include_inactive(request)
+
+        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        cache_key = None
+        if use_cache:
+            try:
+                cache_key = build_aggregate_cache_key(
+                    'ui.bootstrap',
+                    request,
+                    filters={
+                        'include': include_tokens,
+                        'vertical': vertical_filter if vertical_filter is not None else 'all',
+                        'include_inactive': 1 if include_inactive else 0,
+                    },
+                )
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                cache_key = None
+
+        include_set = set(include_tokens or [])
+        payload: dict = {
+            'contractVersion': 1,
+            'included': include_tokens or [],
+        }
+
+        if 'verticals' in include_set:
+            verticals_qs = Vertical.objects.order_by('name')
+            if not include_inactive:
+                verticals_qs = verticals_qs.filter(is_active=True)
+            payload['verticals'] = VerticalSerializer(verticals_qs, many=True).data
+
+        if 'capabilities' in include_set:
+            payload['capabilities'] = self._capabilities_payload()
+
+        if 'departments' in include_set:
+            departments_qs = Department.objects.select_related('manager').order_by('name')
+            if not include_inactive:
+                departments_qs = departments_qs.filter(is_active=True)
+            if vertical_filter is not None:
+                departments_qs = departments_qs.filter(vertical_id=vertical_filter)
+            payload['departmentsAll'] = DepartmentSerializer(departments_qs, many=True).data
+
+        if 'roles' in include_set:
+            roles_qs = Role.objects.order_by('sort_order', 'name', 'id')
+            if not include_inactive:
+                roles_qs = roles_qs.filter(is_active=True)
+            payload['rolesAll'] = RoleSerializer(roles_qs, many=True).data
+
+        if use_cache and cache_key:
+            try:
+                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+            except Exception:
+                pass
+
+        return Response(payload)
 
 
 class PreDeliverableGlobalSettingsView(APIView):
@@ -181,47 +326,30 @@ class AutoHoursRoleSettingsView(APIView):
             return norm, None
         return None, 'phase must match an existing phase mapping'
 
-    @extend_schema(
-        responses=inline_serializer(
-            name='AutoHoursRoleSettingsResponse',
-            fields={
-                'settings': inline_serializer(
-                    name='AutoHoursRoleSettingItem',
-                    fields={
-                        'roleId': serializers.IntegerField(),
-                        'roleName': serializers.CharField(),
-                        'departmentId': serializers.IntegerField(),
-                        'departmentName': serializers.CharField(),
-                        'percentByWeek': serializers.DictField(child=serializers.FloatField()),
-                        'roleCount': serializers.IntegerField(),
-                        'weeksCount': serializers.IntegerField(),
-                        'isActive': serializers.BooleanField(),
-                        'sortOrder': serializers.IntegerField(),
-                    },
-                    many=True,
-                ),
-                'weekLimits': inline_serializer(
-                    name='AutoHoursWeekLimits',
-                    fields={
-                        'maxWeeksCount': serializers.IntegerField(),
-                        'defaultWeeksCount': serializers.IntegerField(),
-                    },
-                ),
-            },
-        ),
-    )
-    def get(self, request):
-        phase, phase_err = self._parse_phase(request)
-        if phase_err:
-            return Response({'error': phase_err}, status=400)
-        weeks_count = self._get_weeks_count(phase)
-        dept_id = request.query_params.get('department_id')
-        dept_id_int = None
-        if dept_id:
-            try:
-                dept_id_int = int(dept_id)
-            except Exception:
-                return Response({'error': 'department_id must be an integer'}, status=400)
+    def _parse_phases(self, request) -> tuple[list[str] | None, str | None]:
+        raw = request.query_params.get('phases')
+        if not raw:
+            return None, None
+        if request.query_params.get('phase'):
+            return None, 'phase and phases cannot be combined'
+        tokens = []
+        for token in str(raw).split(','):
+            norm = str(token).strip().lower()
+            if not norm:
+                continue
+            if norm not in tokens:
+                tokens.append(norm)
+        if not tokens:
+            return None, 'phases must include at least one phase'
+        valid = list(DeliverablePhaseDefinition.objects.order_by('sort_order', 'id').values_list('key', flat=True))
+        valid_set = set(valid)
+        invalid = [p for p in tokens if p not in valid_set]
+        if invalid:
+            return None, 'phases must match existing phase mappings'
+        ordered = [p for p in valid if p in set(tokens)]
+        return ordered, None
+
+    def _build_settings_items(self, phase: str | None, dept_id_int: int | None, weeks_count: int):
         roles_qs = DepartmentProjectRole.objects.select_related('department')
         if dept_id_int is not None:
             roles_qs = roles_qs.filter(department_id=dept_id_int)
@@ -273,6 +401,73 @@ class AutoHoursRoleSettingsView(APIView):
                 'isActive': role.is_active,
                 'sortOrder': role.sort_order,
             })
+        return items
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='AutoHoursRoleSettingsResponse',
+            fields={
+                'settings': inline_serializer(
+                    name='AutoHoursRoleSettingItem',
+                    fields={
+                        'roleId': serializers.IntegerField(),
+                        'roleName': serializers.CharField(),
+                        'departmentId': serializers.IntegerField(),
+                        'departmentName': serializers.CharField(),
+                        'percentByWeek': serializers.DictField(child=serializers.FloatField()),
+                        'roleCount': serializers.IntegerField(),
+                        'weeksCount': serializers.IntegerField(),
+                        'isActive': serializers.BooleanField(),
+                        'sortOrder': serializers.IntegerField(),
+                    },
+                    many=True,
+                ),
+                'weekLimits': inline_serializer(
+                    name='AutoHoursWeekLimits',
+                    fields={
+                        'maxWeeksCount': serializers.IntegerField(),
+                        'defaultWeeksCount': serializers.IntegerField(),
+                    },
+                ),
+            },
+        ),
+    )
+    def get(self, request):
+        phase, phase_err = self._parse_phase(request)
+        if phase_err:
+            return Response({'error': phase_err}, status=400)
+        phases, phases_err = self._parse_phases(request)
+        if phases_err:
+            return Response({'error': phases_err}, status=400)
+        weeks_count = self._get_weeks_count(phase)
+        dept_id = request.query_params.get('department_id')
+        dept_id_int = None
+        if dept_id:
+            try:
+                dept_id_int = int(dept_id)
+            except Exception:
+                return Response({'error': 'department_id must be an integer'}, status=400)
+        if phases:
+            settings_by_phase = {}
+            week_limits_by_phase = {}
+            for phase_key in phases:
+                phase_weeks_count = self._get_weeks_count(phase_key)
+                settings_by_phase[phase_key] = self._build_settings_items(phase_key, dept_id_int, phase_weeks_count)
+                week_limits_by_phase[phase_key] = {
+                    'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+                    'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
+                    'weeksCount': phase_weeks_count,
+                }
+            return Response({
+                'settingsByPhase': settings_by_phase,
+                'weekLimitsByPhase': week_limits_by_phase,
+                'weekLimits': {
+                    'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+                    'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
+                },
+            })
+
+        items = self._build_settings_items(phase, dept_id_int, weeks_count)
         return Response({
             'settings': items,
             'weekLimits': {

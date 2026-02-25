@@ -31,6 +31,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
 import { showToast as showToastBus } from '@/lib/toastBus';
+import { getFlag } from '@/lib/flags';
 import MobileProjectAccordions from '@/pages/Assignments/project/components/MobileProjectAccordions';
 import MobileProjectAddAssignmentSheet from '@/pages/Assignments/project/components/MobileProjectAddAssignmentSheet';
 import MobileProjectAssignmentSheet from '@/pages/Assignments/project/components/MobileProjectAssignmentSheet';
@@ -138,6 +139,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [autoHoursTemplates, setAutoHoursTemplates] = useState<AutoHoursTemplate[]>([]);
 
   const [weeksHorizon, setWeeksHorizon] = useState(20);
+  const snapshotAutoHoursTemplateIds = useMemo(() => {
+    const ids = new Set<number>();
+    (projectsData || []).forEach((project) => {
+      const value = Number((project as any)?.autoHoursTemplateId);
+      if (!Number.isFinite(value) || value <= 0) return;
+      ids.add(Math.trunc(value));
+    });
+    return Array.from(ids).sort((a, b) => a - b).slice(0, 200);
+  }, [projectsData]);
   const setProjectsDataFromSnapshot = useCallback(() => {
     // Keep project list controlled by paged search results to avoid snapshot overrides.
   }, []);
@@ -147,6 +157,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
     includeChildren: deptState.includeChildren,
     departmentFilters: deptState.selectedDepartmentId == null ? departmentFiltersPayload : undefined,
     vertical: verticalState.selectedVerticalId ?? undefined,
+    include: 'assignment',
+    requestAutoHoursBundle: canUseAutoHours && getFlag('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', true),
+    autoHoursPhases,
+    autoHoursTemplateIds: snapshotAutoHoursTemplateIds,
     setPeople: setPeople as any,
     setAssignmentsData,
     setProjectsData: setProjectsDataFromSnapshot as any,
@@ -161,6 +175,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
   });
 
   const { weeks, departments } = snapshot;
+  const autoHoursBundle = snapshot.autoHoursBundle;
+  const hasAutoHoursBundle = canUseAutoHours && !!autoHoursBundle;
   const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
   const weekVirtualization = useWeekVirtualization(weeks, 70, 2);
   const visibleWeeks = isMobileLayout ? weekVirtualization.visibleWeeks : weeks;
@@ -188,6 +204,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [departments]);
 
   useEffect(() => {
+    if (!canUseAutoHours || hasAutoHoursBundle) return;
     let mounted = true;
     (async () => {
       try {
@@ -199,7 +216,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [canUseAutoHours, hasAutoHoursBundle]);
 
   useEffect(() => {
     try {
@@ -489,6 +506,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
       setAutoHoursSettingsLoading(false);
       return;
     }
+    if (hasAutoHoursBundle) {
+      setAutoHoursSettingsLoading(false);
+      return;
+    }
     try {
       setAutoHoursSettingsLoading(true);
       setAutoHoursSettingsError(null);
@@ -509,13 +530,16 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } finally {
       setAutoHoursSettingsLoading(false);
     }
-  }, [autoHoursPhases, canUseAutoHours]);
+  }, [autoHoursPhases, canUseAutoHours, hasAutoHoursBundle]);
 
   useEffect(() => { void refreshAutoHoursSettings(); }, [refreshAutoHoursSettings]);
 
   useEffect(() => {
     if (!canUseAutoHours) {
       setAutoHoursTemplates([]);
+      return;
+    }
+    if (hasAutoHoursBundle) {
       return;
     }
     let mounted = true;
@@ -528,7 +552,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [canUseAutoHours]);
+  }, [canUseAutoHours, hasAutoHoursBundle]);
 
   const autoHoursTemplatePhaseKeysById = useMemo(() => {
     const map = new Map<number, Set<string>>();
@@ -574,6 +598,32 @@ const ProjectAssignmentsGrid: React.FC = () => {
       });
     }
   }, [autoHoursPhases, autoHoursTemplatePhaseKeysById, autoHoursTemplateSettings]);
+
+  useEffect(() => {
+    if (!canUseAutoHours || !autoHoursBundle) return;
+    setAutoHoursSettingsByPhase(autoHoursBundle.defaultSettingsByPhase || {});
+    setAutoHoursSettingsLoading(false);
+    setAutoHoursSettingsError(null);
+    setAutoHoursTemplates((autoHoursBundle.templates || []) as AutoHoursTemplate[]);
+    setPhaseMapping((autoHoursBundle.phaseMapping as DeliverablePhaseMappingSettings) || null);
+    setPhaseMappingError(null);
+
+    const templateSettingsRaw = autoHoursBundle.templateSettingsByPhase || {};
+    const templateSettings: Record<number, Record<string, AutoHoursRoleSetting[]>> = {};
+    Object.entries(templateSettingsRaw).forEach(([templateIdRaw, phases]) => {
+      const templateId = Number(templateIdRaw);
+      if (!Number.isFinite(templateId)) return;
+      templateSettings[templateId] = phases || {};
+    });
+    if (Object.keys(templateSettings).length > 0) {
+      setAutoHoursTemplateSettings((prev) => ({ ...prev, ...templateSettings }));
+    }
+    if (!autoHoursBundle.bundleComplete && (autoHoursBundle.missingTemplateIds || []).length > 0) {
+      setAutoHoursSettingsError(
+        `Auto hours bundle missing template settings for: ${autoHoursBundle.missingTemplateIds.join(', ')}`
+      );
+    }
+  }, [autoHoursBundle, canUseAutoHours]);
 
   const autoHoursSettingsByPhaseMap = useMemo(() => {
     const out: Record<string, Map<number, AutoHoursRoleSetting>> = {};

@@ -2,8 +2,8 @@
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
-import { peopleApi, projectsApi, assignmentsApi, deliverablesApi, departmentsApi } from '../../services/api';
-import { WorkloadForecastItem, Project, Assignment, Deliverable, Department } from '../../types/models';
+import { peopleApi, projectsApi, assignmentsApi, deliverablesApi } from '../../services/api';
+import { WorkloadForecastItem, Project, Assignment, Deliverable } from '../../types/models';
 import CapacityTimeline, { CapacityTimelineCompact } from '@/components/charts/CapacityTimeline';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -12,6 +12,8 @@ import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useUiBootstrap } from '@/hooks/useUiBootstrap';
 
 function fmt(date: Date): string { return date.toISOString().slice(0,10); }
 
@@ -20,12 +22,18 @@ const TeamForecastPage: React.FC = () => {
   const [scale, setScale] = useState<'week'|'month'|'quarter'|'year'>('month');
   const { state: deptState, setDepartment } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
+  useUiBootstrap({
+    include: ['departments'],
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
+  const { departments: depts, refetch: refetchDepartments } = useDepartments({
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [forecast, setForecast] = useState<WorkloadForecastItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [depts, setDepts] = useState<Department[]>([]);
   const forecastRef = useRef<WorkloadForecastItem[]>([]);
 
   // Project timeline state
@@ -42,7 +50,6 @@ const TeamForecastPage: React.FC = () => {
   const forecastRequestIdRef = useRef(0);
   const projectDetailsRequestIdRef = useRef(0);
   const projectsRequestIdRef = useRef(0);
-  const departmentsRequestIdRef = useRef(0);
 
   useEffect(() => {
     setPendingDeptId(deptState.selectedDepartmentId ?? null);
@@ -92,20 +99,9 @@ const TeamForecastPage: React.FC = () => {
     } catch {}
   }, [verticalState.selectedVerticalId]);
 
-  const loadDepartments = useCallback(async () => {
-    const requestId = ++departmentsRequestIdRef.current;
-    try {
-      const p = await departmentsApi.list({ page: 1, page_size: 500, vertical: verticalState.selectedVerticalId ?? undefined });
-      if (requestId === departmentsRequestIdRef.current) setDepts(p.results || []);
-    } catch {}
-  }, [verticalState.selectedVerticalId]);
-
   useAuthenticatedEffect(() => {
     loadProjects();
   }, [loadProjects]);
-  useAuthenticatedEffect(() => {
-    loadDepartments();
-  }, [loadDepartments]);
 
   const loadProjectDetails = useCallback(async () => {
     const requestId = ++projectDetailsRequestIdRef.current;
@@ -169,7 +165,7 @@ const TeamForecastPage: React.FC = () => {
       if (selectedProject) scheduleProjectDetailsRefresh();
     });
     const unsubscribeDepartments = subscribeDepartmentsRefresh(() => {
-      loadDepartments();
+      refetchDepartments();
       scheduleForecastRefresh();
       if (selectedProject) scheduleProjectDetailsRefresh();
     });
@@ -188,7 +184,7 @@ const TeamForecastPage: React.FC = () => {
         projectDetailsRefreshTimerRef.current = null;
       }
     };
-  }, [loadForecast, loadProjectDetails, loadProjects, loadDepartments, selectedProject]);
+  }, [loadForecast, loadProjectDetails, loadProjects, refetchDepartments, selectedProject]);
 
   const weekStarts = useMemo(() => (forecast || []).map(f => f.weekStart), [forecast]);
 

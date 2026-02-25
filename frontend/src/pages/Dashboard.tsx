@@ -7,12 +7,14 @@ import React, { useState, useMemo, useLayoutEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../components/layout/Layout';
 import Card from '../components/ui/Card';
-import { dashboardApi, departmentsApi, projectsApi, peopleApi } from '../services/api';
+import { dashboardApi, projectsApi, peopleApi } from '../services/api';
 import { useAuth } from '@/hooks/useAuth';
-import { DashboardData, Department } from '../types/models';
+import { DashboardData } from '../types/models';
 import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useUiBootstrap } from '@/hooks/useUiBootstrap';
 import { useDashboardHeatmapView, type DashboardHeatmapRow } from '@/mobile/dashboardAdapters';
 import { FullCalendarWrapper, mapCapacityHeatmapToEvents, mapDeliverableCalendarToEvents, formatDeliverableInlineLabel } from '@/features/fullcalendar';
 import { useDeliverablesCalendar, subtractOneDay, toIsoDate } from '@/hooks/useDeliverablesCalendar';
@@ -39,9 +41,17 @@ const Dashboard: React.FC = () => {
   const [weeksPeriod, setWeeksPeriod] = useState<number>(1);
   
   // Department filtering state (global)
-  const [departments, setDepartments] = useState<Department[]>([]);
   const { state: deptState, setDepartment } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
+  useUiBootstrap({
+    enabled: !!auth.accessToken,
+    include: ['departments', 'capabilities'],
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
+  const { departments } = useDepartments({
+    enabled: !!auth.accessToken,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
   
   // Heatmap + project summary state
   const heatWeeks = 12;
@@ -57,13 +67,6 @@ const Dashboard: React.FC = () => {
     if (!auth.accessToken) return;
     loadDashboard();
   }, [auth.accessToken, weeksPeriod, deptState.selectedDepartmentId, verticalState.selectedVerticalId]);
-
-  // Load static data once
-  useAuthenticatedEffect(() => {
-    if (!auth.accessToken) return;
-    loadDepartments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.accessToken, verticalState.selectedVerticalId]);
 
   // Load project summary once authenticated
   useAuthenticatedEffect(() => {
@@ -261,15 +264,6 @@ const Dashboard: React.FC = () => {
       },
     ];
   }, []);
-
-  const loadDepartments = async () => {
-    try {
-      const response = await departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
-      setDepartments(response.results || []);
-    } catch (err) {
-      console.error('Error loading departments:', err);
-    }
-  };
 
   const loadProjects = async () => {
     try {

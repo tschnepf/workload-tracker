@@ -3,12 +3,13 @@ import Card from '@/components/ui/Card';
 import MultiRoleCapacityChart, { type ChartMode, roleColorForId } from '@/components/charts/MultiRoleCapacityChart';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
-import { rolesApi, departmentsApi } from '@/services/api';
 import { getRoleCapacityTimeline } from '@/services/analyticsApi';
-import type { Department } from '@/types/models';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useRolesAll } from '@/hooks/useRolesAll';
+import { useUiBootstrap } from '@/hooks/useUiBootstrap';
 
 type HideControls = {
   timeframe?: boolean;
@@ -45,47 +46,23 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   const isMobile = useMediaQuery('(max-width: 767px)');
   const { state: globalDept } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
+  useUiBootstrap({
+    include: ['departments', 'roles'],
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
+  const { departments } = useDepartments({ vertical: verticalState.selectedVerticalId ?? undefined });
+  const { roles } = useRolesAll();
   const effectiveDeptId = (departmentId ?? globalDept.selectedDepartmentId) ?? null;
 
   const [weeks, setWeeks] = React.useState<number>(defaultWeeks);
   const [mode, setMode] = React.useState<ChartMode>(defaultMode);
-  const [roles, setRoles] = React.useState<Array<{ id: number; name: string }>>([]);
   const [selectedRoleIds, setSelectedRoleIds] = React.useState<Set<number>>(new Set(initialSelectedRoleIds || []));
   const initializedSelection = React.useRef(false);
-  const [departments, setDepartments] = React.useState<Department[]>([]);
   const [weekKeys, setWeekKeys] = React.useState<string[]>([]);
   const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[] }>>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const refreshTimerRef = React.useRef<number | null>(null);
-
-  // Load roles once
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const list = await rolesApi.listAll();
-        if (mounted) setRoles(list || []);
-      } catch {
-        if (mounted) setRoles([]);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  // Load departments once (for name display)
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const page = await departmentsApi.list({ page: 1, page_size: 500, vertical: verticalState.selectedVerticalId ?? undefined });
-        if (mounted) setDepartments((page.results || []) as Department[]);
-      } catch {
-        if (mounted) setDepartments([]);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [verticalState.selectedVerticalId]);
 
   // Initialize selection to all roles (or provided initial ids) once roles load
   React.useEffect(() => {

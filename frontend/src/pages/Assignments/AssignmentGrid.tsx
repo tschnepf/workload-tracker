@@ -455,6 +455,15 @@ const AssignmentGrid: React.FC = () => {
       showToast,
     });
   };
+  const snapshotAutoHoursTemplateIds = useMemo(() => {
+    const ids = new Set<number>();
+    (projectsData || []).forEach((project) => {
+      const value = Number((project as any)?.autoHoursTemplateId);
+      if (!Number.isFinite(value) || value <= 0) return;
+      ids.add(Math.trunc(value));
+    });
+    return Array.from(ids).sort((a, b) => a - b).slice(0, 200);
+  }, [projectsData]);
   // Weeks header: from grid snapshot when available (server weekKeys only)
   const snapshot = useAssignmentsSnapshot({
     weeksHorizon,
@@ -462,6 +471,10 @@ const AssignmentGrid: React.FC = () => {
     includeChildren: deptState.includeChildren,
     departmentFilters: deptState.selectedDepartmentId == null ? departmentFiltersPayload : undefined,
     vertical: verticalState.selectedVerticalId ?? undefined,
+    include: 'assignment',
+    requestAutoHoursBundle: canUseAutoHours && getFlag('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', true),
+    autoHoursPhases,
+    autoHoursTemplateIds: snapshotAutoHoursTemplateIds,
     setPeople,
     setAssignmentsData,
     setProjectsData: setProjectsData as any,
@@ -489,10 +502,16 @@ const AssignmentGrid: React.FC = () => {
   const [personSortMode, setPersonSortMode] = useState<'client_project' | 'deliverable'>('client_project');
 
   const autoHoursDepartmentId = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+  const autoHoursBundle = snapshot.autoHoursBundle;
+  const hasAutoHoursBundle = canUseAutoHours && !!autoHoursBundle;
   const refreshAutoHoursSettings = useCallback(async () => {
     if (!canUseAutoHours) {
       setAutoHoursSettingsByPhase({});
       setAutoHoursSettingsError(null);
+      setAutoHoursSettingsLoading(false);
+      return;
+    }
+    if (hasAutoHoursBundle) {
       setAutoHoursSettingsLoading(false);
       return;
     }
@@ -518,7 +537,7 @@ const AssignmentGrid: React.FC = () => {
     } finally {
       setAutoHoursSettingsLoading(false);
     }
-  }, [autoHoursDepartmentId, autoHoursPhases, canUseAutoHours]);
+  }, [autoHoursDepartmentId, autoHoursPhases, canUseAutoHours, hasAutoHoursBundle]);
 
   useEffect(() => {
     void refreshAutoHoursSettings();
@@ -527,6 +546,9 @@ const AssignmentGrid: React.FC = () => {
   useEffect(() => {
     if (!canUseAutoHours) {
       setAutoHoursTemplates([]);
+      return;
+    }
+    if (hasAutoHoursBundle) {
       return;
     }
     let mounted = true;
@@ -541,7 +563,7 @@ const AssignmentGrid: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [canUseAutoHours]);
+  }, [canUseAutoHours, hasAutoHoursBundle]);
 
   const autoHoursTemplatePhaseKeysById = useMemo(() => {
     const map = new Map<number, Set<string>>();
@@ -590,6 +612,7 @@ const AssignmentGrid: React.FC = () => {
 
   useEffect(() => {
     if (!canUseAutoHours) return;
+    if (hasAutoHoursBundle) return;
     let mounted = true;
     (async () => {
       try {
@@ -604,7 +627,33 @@ const AssignmentGrid: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [canUseAutoHours]);
+  }, [canUseAutoHours, hasAutoHoursBundle]);
+
+  useEffect(() => {
+    if (!canUseAutoHours || !autoHoursBundle) return;
+    setAutoHoursSettingsByPhase(autoHoursBundle.defaultSettingsByPhase || {});
+    setAutoHoursSettingsLoading(false);
+    setAutoHoursSettingsError(null);
+    setAutoHoursTemplates((autoHoursBundle.templates || []) as AutoHoursTemplate[]);
+    setPhaseMapping((autoHoursBundle.phaseMapping as DeliverablePhaseMappingSettings) || null);
+    setPhaseMappingError(null);
+
+    const templateSettingsRaw = autoHoursBundle.templateSettingsByPhase || {};
+    const templateSettings: Record<number, Record<string, AutoHoursRoleSetting[]>> = {};
+    Object.entries(templateSettingsRaw).forEach(([templateIdRaw, phases]) => {
+      const templateId = Number(templateIdRaw);
+      if (!Number.isFinite(templateId)) return;
+      templateSettings[templateId] = phases || {};
+    });
+    if (Object.keys(templateSettings).length > 0) {
+      setAutoHoursTemplateSettings((prev) => ({ ...prev, ...templateSettings }));
+    }
+    if (!autoHoursBundle.bundleComplete && (autoHoursBundle.missingTemplateIds || []).length > 0) {
+      setAutoHoursSettingsError(
+        `Auto hours bundle missing template settings for: ${autoHoursBundle.missingTemplateIds.join(', ')}`
+      );
+    }
+  }, [autoHoursBundle, canUseAutoHours]);
 
   // Precompute next upcoming deliverable date per project for sorting
   const nextDeliverableByProject = useMemo(() => {

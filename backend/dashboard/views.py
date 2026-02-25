@@ -11,6 +11,7 @@ from assignments.models import Assignment
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 import logging
 from core.models import UtilizationScheme
+from core.cache_keys import build_aggregate_cache_key
 from .serializers import DashboardResponseSerializer
 
 
@@ -52,11 +53,14 @@ class DashboardView(APIView):
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
         cache_key = None
         if use_cache:
-            # Keyed by weeks + department (None -> 'all')
-            cache_key = (
-                f"dashboard_v1:{weeks}:"
-                f"{department_filter if department_filter is not None else 'all'}:"
-                f"{vertical_filter if vertical_filter is not None else 'all'}"
+            cache_key = build_aggregate_cache_key(
+                'dashboard.summary',
+                request,
+                filters={
+                    'weeks': weeks,
+                    'department': department_filter if department_filter is not None else 'all',
+                    'vertical': vertical_filter if vertical_filter is not None else 'all',
+                },
             )
             try:
                 cached = cache.get(cache_key)

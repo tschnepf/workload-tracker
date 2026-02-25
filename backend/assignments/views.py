@@ -29,10 +29,19 @@ from projects.models import Project  # noqa: F401
 from projects.models import ProjectRole
 from projects.change_log import record_project_change
 from projects.roles_serializers import ProjectRoleItemSerializer
-from core.models import UtilizationScheme
+from core.models import (
+    UtilizationScheme,
+    AutoHoursRoleSetting,
+    AutoHoursGlobalSettings,
+    AutoHoursTemplate,
+    AutoHoursTemplateRoleSetting,
+    DeliverablePhaseDefinition,
+    DeliverablePhaseMappingSettings,
+)
 from core.serializers import UtilizationSchemeSerializer
 from deliverables.models import Deliverable
 from .services import WorkloadRebalancingService
+from accounts.permissions import is_admin_or_manager
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponseNotModified
@@ -48,6 +57,7 @@ import logging
 from roles.models import Role
 from core.search_tokens import parse_search_tokens, apply_token_filter, build_token_query
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
+from core.cache_keys import build_aggregate_cache_key
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
@@ -826,18 +836,20 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         try:
             cache_key = None
             try:
-                # Compose a stable key of params that affect payload
-                cache_key = (
-                    f"assignments:project_grid_snapshot:"
-                    f"w={request.query_params.get('weeks','12')}:"
-                    f"d={request.query_params.get('department','')}:"
-                    f"c={request.query_params.get('include_children','')}:"
-                    f"df={request.query_params.get('department_filters') or request.query_params.get('departmentFilters') or ''}:"
-                    f"v={request.query_params.get('vertical','')}:"
-                    f"p={request.query_params.get('include_placeholders','')}:"
-                    f"s={request.query_params.get('status_in','')}:"
-                    f"hfd={request.query_params.get('has_future_deliverables','')}:"
-                    f"ids={request.query_params.get('project_ids','')}"
+                cache_key = build_aggregate_cache_key(
+                    'assignments.project_grid_snapshot',
+                    request,
+                    filters={
+                        'weeks': request.query_params.get('weeks', '12'),
+                        'department': request.query_params.get('department', ''),
+                        'include_children': request.query_params.get('include_children', ''),
+                        'department_filters': request.query_params.get('department_filters') or request.query_params.get('departmentFilters') or '',
+                        'vertical': request.query_params.get('vertical', ''),
+                        'include_placeholders': request.query_params.get('include_placeholders', ''),
+                        'status_in': request.query_params.get('status_in', ''),
+                        'has_future_deliverables': request.query_params.get('has_future_deliverables', ''),
+                        'project_ids': request.query_params.get('project_ids', ''),
+                    },
                 )
             except Exception:
                 cache_key = None
@@ -3011,7 +3023,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             version = cache.get('analytics_cache_version', 1)
         except Exception:
             version = 1
-        cache_key = f"assignments:grid_snapshot:v{version}:{weeks}:{cache_scope}"
+        cache_key = build_aggregate_cache_key(
+            'assignments.grid_snapshot',
+            request,
+            filters={
+                'version': int(version),
+                'weeks': weeks,
+                'scope': cache_scope,
+            },
+        )
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
 
         # Compute conservative validators across People + Assignments
@@ -3544,19 +3564,349 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters (project grid)'),
         OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1 (project grid)'),
         OpenApiParameter(name='project_ids', type=str, required=False, description='CSV of project IDs to scope totals (project grid)'),
-        OpenApiParameter(name='include', type=str, required=False, description='CSV: assignment,project (default both)'),
+        OpenApiParameter(name='include', type=str, required=False, description='CSV: assignment,project,auto_hours (default assignment,project)'),
+        OpenApiParameter(name='auto_hours_phases', type=str, required=False, description='CSV of phase keys for auto-hours bundle'),
+        OpenApiParameter(name='template_ids', type=str, required=False, description='CSV of template IDs for templateSettingsByPhase (max 200)'),
     ],
 )
 class AssignmentsPageSnapshotView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [GridSnapshotThrottle]
+    _AUTO_HOURS_MAX_TEMPLATE_IDS = 200
+    _AUTO_HOURS_MAX_WEEKS_BEFORE = 17
+    _INCLUDE_ALLOWED = {'assignment', 'project', 'auto_hours'}
+    _DEFAULT_INCLUDE = ['assignment', 'project']
+    _MAX_INCLUDE_TOKENS = 10
 
-    def get(self, request):
-        include_param = (request.query_params.get('include') or '').strip().lower()
-        if include_param:
-            include_set = set(x.strip() for x in include_param.split(',') if x.strip())
+    def _parse_include(self, request, body: dict | None = None):
+        raw = None
+        if body and 'include' in body:
+            raw = body.get('include')
+        if raw is None:
+            raw = request.query_params.get('include')
+        if raw in (None, ''):
+            return list(self._DEFAULT_INCLUDE), None
+
+        if isinstance(raw, list):
+            source = raw
         else:
-            include_set = {'assignment', 'project'}
+            source = str(raw).split(',')
+        tokens: list[str] = []
+        for item in source:
+            token = str(item).strip().lower()
+            if not token:
+                continue
+            if token not in tokens:
+                tokens.append(token)
+        if not tokens:
+            return list(self._DEFAULT_INCLUDE), None
+        if len(tokens) > self._MAX_INCLUDE_TOKENS:
+            return None, f'include supports up to {self._MAX_INCLUDE_TOKENS} tokens'
+        unknown = sorted([t for t in tokens if t not in self._INCLUDE_ALLOWED])
+        if unknown:
+            return None, f"invalid include token(s): {', '.join(unknown)}"
+        return sorted(tokens), None
+
+    def _forbidden_auto_hours_payload(self):
+        return {
+            'detail': 'forbidden',
+            'code': 'forbidden',
+            'contractVersion': 1,
+        }
+
+    def _empty_hours_by_week(self) -> dict:
+        return {str(i): 0 for i in range(self._AUTO_HOURS_MAX_WEEKS_BEFORE + 1)}
+
+    def _phase_mapping_payload(self):
+        mapping = DeliverablePhaseMappingSettings.get_active()
+        phases = DeliverablePhaseDefinition.objects.all().order_by('sort_order', 'id')
+        payload = {
+            'useDescriptionMatch': bool(mapping.use_description_match),
+            'phases': [
+                {
+                    'key': p.key,
+                    'label': p.label,
+                    'descriptionTokens': p.description_tokens or [],
+                    'rangeMin': p.range_min,
+                    'rangeMax': p.range_max,
+                    'sortOrder': p.sort_order,
+                }
+                for p in phases
+            ],
+            'updatedAt': mapping.updated_at,
+        }
+        keys = [p['key'] for p in payload['phases']]
+        return payload, keys
+
+    def _parse_auto_hours_phases(self, request, body: dict | None = None):
+        _, valid_keys = self._phase_mapping_payload()
+        valid_set = set(valid_keys)
+        raw = None
+        if body and 'auto_hours_phases' in body:
+            raw = body.get('auto_hours_phases')
+        if raw is None:
+            raw = request.query_params.get('auto_hours_phases')
+        if raw is None or raw == '':
+            return valid_keys, None
+        if isinstance(raw, list):
+            tokens_raw = raw
+        else:
+            tokens_raw = str(raw).split(',')
+        tokens: list[str] = []
+        for token in tokens_raw:
+            norm = str(token).strip().lower()
+            if not norm:
+                continue
+            if norm not in tokens:
+                tokens.append(norm)
+        if not tokens:
+            return valid_keys, None
+        invalid = [p for p in tokens if p not in valid_set]
+        if invalid:
+            return None, 'auto_hours_phases must match existing phase mappings'
+        ordered = [p for p in valid_keys if p in set(tokens)]
+        return ordered, None
+
+    def _parse_template_ids(self, request, body: dict | None = None):
+        raw = None
+        if body and 'template_ids' in body:
+            raw = body.get('template_ids')
+        if raw is None:
+            raw = request.query_params.get('template_ids')
+        if raw in (None, ''):
+            return [], None
+        ids: list[int] = []
+        if isinstance(raw, list):
+            source = raw
+        else:
+            source = str(raw).split(',')
+        for item in source:
+            token = str(item).strip()
+            if not token:
+                continue
+            try:
+                value = int(token)
+            except Exception:
+                return None, 'template_ids must be integers'
+            if value not in ids:
+                ids.append(value)
+        if len(ids) > self._AUTO_HOURS_MAX_TEMPLATE_IDS:
+            return None, f'template_ids supports up to {self._AUTO_HOURS_MAX_TEMPLATE_IDS} IDs'
+        return ids, None
+
+    def _build_role_setting_item(self, role, setting, phase: str, weeks_count: int, *, template_mode: bool):
+        hours_by_week = self._empty_hours_by_week()
+        role_count = 1
+        if setting:
+            raw = None
+            if template_mode:
+                raw = (setting.ramp_percent_by_phase or {}).get(phase) or {}
+            else:
+                raw_phase = (setting.ramp_percent_by_phase or {}).get(phase)
+                if isinstance(raw_phase, dict) or isinstance(raw_phase, list):
+                    raw = raw_phase
+                if raw is None:
+                    raw = setting.ramp_percent_by_week or {}
+            if isinstance(raw, dict):
+                for key, value in raw.items():
+                    if str(key) in hours_by_week:
+                        try:
+                            hours_by_week[str(int(key))] = float(value)
+                        except Exception:
+                            pass
+            if (not template_mode) and (not raw):
+                try:
+                    hours_by_week['0'] = float(setting.standard_percent_of_capacity)
+                except Exception:
+                    pass
+            try:
+                count_raw = (setting.role_count_by_phase or {}).get(phase)
+                if count_raw is not None:
+                    role_count = max(0, int(count_raw))
+            except Exception:
+                role_count = 1
+        return {
+            'roleId': role.id,
+            'roleName': role.name,
+            'departmentId': role.department_id,
+            'departmentName': getattr(role.department, 'name', ''),
+            'percentByWeek': hours_by_week,
+            'roleCount': role_count,
+            'weeksCount': weeks_count,
+            'isActive': role.is_active,
+            'sortOrder': role.sort_order,
+        }
+
+    def _build_auto_hours_bundle(self, request, phases: list[str], template_ids: list[int]):
+        phase_mapping_payload, _ = self._phase_mapping_payload()
+        dept_id_raw = request.query_params.get('department')
+        dept_id_int = None
+        if dept_id_raw not in (None, ''):
+            try:
+                dept_id_int = int(dept_id_raw)
+            except Exception:
+                dept_id_int = None
+
+        roles_qs = ProjectRole.objects.select_related('department').order_by('department_id', 'sort_order', 'name')
+        if dept_id_int is not None:
+            roles_qs = roles_qs.filter(department_id=dept_id_int)
+        roles = list(roles_qs)
+        role_ids = [r.id for r in roles]
+
+        global_settings = {
+            s.role_id: s for s in AutoHoursRoleSetting.objects.filter(role_id__in=role_ids)
+        }
+        global_config = AutoHoursGlobalSettings.get_active()
+        global_weeks_by_phase = global_config.weeks_by_phase or {}
+
+        default_settings_by_phase: Dict[str, List[dict]] = {}
+        week_limits_by_phase: Dict[str, dict] = {}
+        for phase in phases:
+            try:
+                weeks_count = int(global_weeks_by_phase.get(phase, 6))
+            except Exception:
+                weeks_count = 6
+            default_settings_by_phase[phase] = [
+                self._build_role_setting_item(role, global_settings.get(role.id), phase, weeks_count, template_mode=False)
+                for role in roles
+            ]
+            week_limits_by_phase[phase] = {
+                'maxWeeksCount': self._AUTO_HOURS_MAX_WEEKS_BEFORE + 1,
+                'defaultWeeksCount': 6,
+                'weeksCount': weeks_count,
+            }
+
+        templates = list(AutoHoursTemplate.objects.all().prefetch_related('excluded_roles', 'excluded_departments').order_by('name'))
+        template_by_id = {t.id: t for t in templates}
+        templates_payload = []
+        for t in templates:
+            excluded_role_ids = list(t.excluded_roles.values_list('id', flat=True))
+            excluded_department_ids = list(t.excluded_departments.values_list('id', flat=True))
+            weeks_by_phase_raw = t.weeks_by_phase or {}
+            weeks_by_phase = {}
+            for phase in phases:
+                try:
+                    weeks_by_phase[phase] = int(weeks_by_phase_raw.get(phase, 6))
+                except Exception:
+                    weeks_by_phase[phase] = 6
+            templates_payload.append({
+                'id': t.id,
+                'name': t.name,
+                'description': t.description or '',
+                'isActive': bool(t.is_active),
+                'phaseKeys': t.phase_keys or [],
+                'weeksByPhase': weeks_by_phase,
+                'maxWeeksCount': self._AUTO_HOURS_MAX_WEEKS_BEFORE + 1,
+                'defaultWeeksCount': 6,
+                'excludedRoleIds': excluded_role_ids,
+                'excludedDepartmentIds': excluded_department_ids,
+            })
+
+        missing_template_ids: list[int] = []
+        template_settings_by_phase: Dict[str, Dict[str, List[dict]]] = {}
+        if template_ids:
+            template_rows = AutoHoursTemplateRoleSetting.objects.filter(
+                template_id__in=template_ids,
+                role_id__in=role_ids,
+            )
+            template_setting_map: Dict[tuple[int, int], AutoHoursTemplateRoleSetting] = {
+                (row.template_id, row.role_id): row for row in template_rows
+            }
+            for template_id in template_ids:
+                template = template_by_id.get(template_id)
+                if not template:
+                    missing_template_ids.append(template_id)
+                    continue
+                excluded_departments = set(template.excluded_departments.values_list('id', flat=True))
+                excluded_roles = set(template.excluded_roles.values_list('id', flat=True))
+                filtered_roles = [
+                    role for role in roles
+                    if role.id not in excluded_roles and role.department_id not in excluded_departments
+                ]
+                allowed_phases = set(template.phase_keys or [])
+                per_phase: Dict[str, List[dict]] = {}
+                for phase in phases:
+                    if phase not in allowed_phases:
+                        per_phase[phase] = []
+                        continue
+                    try:
+                        template_weeks_count = int((template.weeks_by_phase or {}).get(phase, 6))
+                    except Exception:
+                        template_weeks_count = 6
+                    per_phase[phase] = [
+                        self._build_role_setting_item(
+                            role,
+                            template_setting_map.get((template_id, role.id)),
+                            phase,
+                            template_weeks_count,
+                            template_mode=True,
+                        )
+                        for role in filtered_roles
+                    ]
+                template_settings_by_phase[str(template_id)] = per_phase
+
+        bundle = {
+            'phaseMapping': phase_mapping_payload,
+            'templates': templates_payload,
+            'defaultSettingsByPhase': default_settings_by_phase,
+            'weekLimitsByPhase': week_limits_by_phase,
+            'bundleComplete': len(missing_template_ids) == 0,
+            'missingTemplateIds': missing_template_ids,
+        }
+        if template_ids:
+            bundle['templateSettingsByPhase'] = template_settings_by_phase
+        bundle_hash = hashlib.sha256(json.dumps(bundle, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+        bundle['contractVersion'] = 1
+        bundle['bundleVersion'] = 'v1'
+        bundle['etag'] = bundle_hash
+        return bundle
+
+    def _build_snapshot_payload(self, request, body: dict | None = None, *, allow_cache: bool = True):
+        include_tokens, include_err = self._parse_include(request, body)
+        if include_err:
+            return None, Response({'error': include_err}, status=status.HTTP_400_BAD_REQUEST)
+        include_set = set(include_tokens or [])
+        include_auto_hours = 'auto_hours' in include_set
+        if include_auto_hours and (not is_admin_or_manager(request.user)):
+            return None, Response(self._forbidden_auto_hours_payload(), status=status.HTTP_403_FORBIDDEN)
+
+        auto_hours_phases: list[str] = []
+        template_ids: list[int] = []
+        if include_auto_hours:
+            auto_hours_phases, phases_err = self._parse_auto_hours_phases(request, body)
+            if phases_err:
+                return None, Response({'error': phases_err}, status=status.HTTP_400_BAD_REQUEST)
+            template_ids, template_ids_err = self._parse_template_ids(request, body)
+            if template_ids_err:
+                return None, Response({'error': template_ids_err}, status=status.HTTP_400_BAD_REQUEST)
+
+        bundle_enabled = include_auto_hours and bool(settings.FEATURES.get('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', True))
+
+        use_cache = allow_cache and bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        cache_key = None
+        if use_cache:
+            try:
+                cache_filters = {
+                    'weeks': request.query_params.get('weeks', '12'),
+                    'department': request.query_params.get('department', ''),
+                    'include_children': request.query_params.get('include_children', ''),
+                    'department_filters': request.query_params.get('department_filters') or request.query_params.get('departmentFilters') or '',
+                    'vertical': request.query_params.get('vertical', ''),
+                    'include_placeholders': request.query_params.get('include_placeholders', ''),
+                    'status_in': request.query_params.get('status_in', ''),
+                    'has_future_deliverables': request.query_params.get('has_future_deliverables', ''),
+                    'project_ids': request.query_params.get('project_ids', ''),
+                    'include': include_tokens or [],
+                    'auto_hours_enabled': 1 if bundle_enabled else 0,
+                    'auto_hours_phases': auto_hours_phases if bundle_enabled else [],
+                    'template_ids': template_ids if bundle_enabled else [],
+                }
+                cache_key = build_aggregate_cache_key('ui.assignments_page', request, filters=cache_filters)
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return cached, None
+            except Exception:
+                cache_key = None
 
         # Avoid conditional-GET short-circuit inside nested snapshot calls
         request.META.pop('HTTP_IF_NONE_MATCH', None)
@@ -3658,7 +4008,7 @@ class AssignmentsPageSnapshotView(APIView):
         projects_payload: List[dict] = []
         try:
             projects_qs = Project.objects.filter(is_active=True).only(
-                'id', 'name', 'client', 'project_number', 'status', 'is_active'
+                'id', 'name', 'client', 'project_number', 'status', 'is_active', 'auto_hours_template_id'
             ).order_by('name')
             projects_payload = [
                 {
@@ -3668,6 +4018,7 @@ class AssignmentsPageSnapshotView(APIView):
                     'projectNumber': p.project_number,
                     'status': p.status,
                     'isActive': p.is_active,
+                    'autoHoursTemplateId': p.auto_hours_template_id,
                 }
                 for p in projects_qs
             ]
@@ -3700,6 +4051,9 @@ class AssignmentsPageSnapshotView(APIView):
             deliverables_payload = []
 
         payload = {
+            'contractVersion': 1,
+            'bundleVersion': 'v1',
+            'included': include_tokens or [],
             'assignmentGridSnapshot': assignment_snapshot,
             'projectGridSnapshot': project_snapshot,
             'projects': projects_payload,
@@ -3709,4 +4063,39 @@ class AssignmentsPageSnapshotView(APIView):
             'capabilities': caps,
             'utilizationScheme': util_data,
         }
+        if bundle_enabled:
+            payload['autoHoursBundle'] = self._build_auto_hours_bundle(
+                request,
+                auto_hours_phases or [],
+                template_ids or [],
+            )
+
+        if use_cache and cache_key:
+            try:
+                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+            except Exception:  # nosec B110
+                pass
+        return payload, None
+
+    def get(self, request):
+        payload, error_response = self._build_snapshot_payload(request, allow_cache=True)
+        if error_response is not None:
+            return error_response
+        return Response(payload)
+
+    @extend_schema(
+        request=inline_serializer(
+            name='AssignmentsPageSnapshotPostRequest',
+            fields={
+                'include': serializers.CharField(required=False),
+                'auto_hours_phases': serializers.ListField(child=serializers.CharField(), required=False),
+                'template_ids': serializers.ListField(child=serializers.IntegerField(), required=False),
+            },
+        ),
+    )
+    def post(self, request):
+        body = request.data if isinstance(request.data, dict) else {}
+        payload, error_response = self._build_snapshot_payload(request, body=body, allow_cache=False)
+        if error_response is not None:
+            return error_response
         return Response(payload)

@@ -6,7 +6,7 @@
   - Exposes helpers to login, logout, refresh access token, and update settings
 */
 
-import { etagStore } from '@/api/etagStore';
+import { resetIdentityTransitionCaches } from '@/lib/identityCacheReset';
 import { resolveApiBase } from '@/utils/apiBase';
 
 type UserSummary = {
@@ -143,11 +143,13 @@ if (typeof window !== 'undefined') {
     // If token cleared in another tab, logout in this one
     if (!newToken) {
       setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
+      resetIdentityTransitionCaches('storage-refresh-cleared');
       return;
     }
     // If token changed in another tab, update and clear access token (will refresh on demand)
     if (newToken !== state.refreshToken) {
       setState({ refreshToken: newToken, accessToken: null });
+      resetIdentityTransitionCaches('storage-refresh-changed');
     }
   });
 }
@@ -188,6 +190,7 @@ export async function login(usernameOrEmail: string, password: string): Promise<
       setState({ refreshToken: null, accessToken: tok.access });
     }
   }
+  resetIdentityTransitionCaches('login');
   await hydrateProfile();
 }
 
@@ -197,8 +200,7 @@ export async function logout(): Promise<void> {
   }
   writeRefreshToStorage(null);
   setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
-  // Clear any stored ETags on identity change
-  etagStore.clear();
+  resetIdentityTransitionCaches('logout');
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
@@ -219,7 +221,7 @@ export async function refreshAccessToken(): Promise<string | null> {
         return state.accessToken;
       }
       setState({ accessToken: null, user: null, person: null, settings: {} });
-      etagStore.clear();
+      resetIdentityTransitionCaches('refresh-failed-cookie-mode');
       return null;
     }
   } else {
@@ -258,7 +260,7 @@ export async function refreshAccessToken(): Promise<string | null> {
       // If refresh fails (expired/invalid), clear auth state
       writeRefreshToStorage(null);
       setState({ accessToken: null, refreshToken: null, user: null, person: null, settings: {} });
-      etagStore.clear();
+      resetIdentityTransitionCaches('refresh-failed-storage-mode');
       return null;
     }
   }
@@ -371,4 +373,3 @@ if (typeof window !== 'undefined') {
 export async function reloadProfile(): Promise<void> {
   await hydrateProfile();
 }
-
