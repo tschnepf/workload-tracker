@@ -385,6 +385,45 @@ export interface DashboardData {
   }>;
 }
 
+export interface DepartmentsOverviewResponse {
+  contractVersion: number;
+  partialFailures: string[];
+  errorsByScope: Record<string, { code: string; message: string }>;
+  departments: Department[];
+  overviewByDepartment: Record<string, {
+    peopleCount: number;
+    skills: {
+      totalSkills: number;
+      topSkills: Array<{ name: string; count: number }>;
+      uniqueSkills: number;
+      skillGaps: string[];
+    };
+    dashboardSummary: {
+      avgUtilization: number;
+      peakUtilization: number;
+      totalAssignments: number;
+      overallocatedCount: number;
+      availableHours: number;
+    };
+    analytics?: {
+      utilizationTimeline?: Array<{
+        weekKey: string;
+        allocatedHours: number;
+        utilization: number;
+      }>;
+    };
+  }>;
+  analyticsSeries: {
+    utilizationByDepartment: Array<{ departmentId: number; avgUtilization: number }>;
+    assignmentsByDepartment: Array<{ departmentId: number; totalAssignments: number }>;
+    peopleByDepartment: Array<{ departmentId: number; peopleCount: number }>;
+    utilizationTimelineByDepartment: Array<{
+      departmentId: number;
+      series: Array<{ weekKey: string; allocatedHours: number; utilization: number }>;
+    }>;
+  };
+}
+
 // DeliverableAssignment (link person to deliverable with weekly hours)
 export interface DeliverableAssignment {
   id?: number;

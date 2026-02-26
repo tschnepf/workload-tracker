@@ -15,6 +15,7 @@ from django.utils.dateparse import parse_date
 from django.utils.http import http_date
 from datetime import datetime
 from collections import defaultdict
+import re
 import logging
 from .models import Deliverable, DeliverableAssignment, ReallocationAudit, DeliverableTaskTemplate, DeliverableTask, DeliverableQATask
 from .serializers import (
@@ -470,6 +471,8 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='mine_only', type=bool, required=False),
             OpenApiParameter(name='type_id', type=int, required=False),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='include_notes', type=str, required=False, description='none|preview|full (default none)'),
+            OpenApiParameter(name='include_project_leads', type=bool, required=False, description='Include department lead names grouped by project'),
         ],
     )
     @action(detail=False, methods=['get'])
@@ -488,8 +491,31 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         mine_only = request.query_params.get('mine_only') in ('1', 'true', 'True')
         type_id = request.query_params.get('type_id')
         vertical_param = request.query_params.get('vertical')
+        include_notes_raw = (request.query_params.get('include_notes') or '').strip().lower()
+        include_project_leads = request.query_params.get('include_project_leads') in ('1', 'true', 'True')
         start_date = parse_date(start_str) if start_str else None
         end_date = parse_date(end_str) if end_str else None
+
+        if include_notes_raw in ('', '0', 'none', 'false'):
+            include_notes = 'none'
+        elif include_notes_raw in ('preview', 'full'):
+            include_notes = include_notes_raw
+        else:
+            return Response({'detail': 'include_notes must be one of: none, preview, full'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if include_notes == 'full' and not is_admin_or_manager(getattr(request, 'user', None)):
+            return Response({'detail': 'include_notes=full requires admin or manager access'}, status=status.HTTP_403_FORBIDDEN)
+
+        def _sanitize_notes_preview(raw_notes: str | None, limit: int = 280) -> str | None:
+            if not raw_notes:
+                return None
+            text = re.sub(r'<[^>]*>', ' ', raw_notes)
+            text = re.sub(r'\s+', ' ', text).strip()
+            if not text:
+                return None
+            if len(text) <= limit:
+                return text
+            return f"{text[: max(0, limit - 1)].rstrip()}..."
 
         # Compute allowed deliverable IDs (subquery) for mine_only scoping
         allowed_ids_subq = None
@@ -527,38 +553,6 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:  # nosec B110
                 pass
 
-        # Apply person scoping to deliverables when mine_only is requested
-        allowed_deliverable_ids = None
-        if mine_only:
-            from accounts.models import UserProfile
-            try:
-                prof = UserProfile.objects.select_related('person').get(user=request.user)
-                pid = getattr(prof.person, 'id', None)
-            except UserProfile.DoesNotExist:
-                pid = None
-            if pid:
-                from deliverables.models import Deliverable as _Del
-                from deliverables.models import DeliverableAssignment as _DelAssign
-                from assignments.models import Assignment as _ProjAssign
-
-                # Explicit ID lists for determinism and portability
-                direct_ids = list(
-                    _DelAssign.objects.filter(is_active=True, person_id=pid)
-                    .values_list('deliverable_id', flat=True)
-                )
-                project_ids = list(
-                    _ProjAssign.objects.filter(is_active=True, person_id=pid)
-                    .values_list('project_id', flat=True)
-                )
-                via_project_ids = list(
-                    _Del.objects.filter(project_id__in=project_ids)
-                    .values_list('id', flat=True)
-                )
-
-                allowed_deliverable_ids = set(direct_ids) | set(via_project_ids)
-            else:
-                allowed_deliverable_ids = set()
-
         # Start from base_qs or restrict by explicit ID allow‑list
         if mine_only:
             if allowed_ids_list:
@@ -587,10 +581,17 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             .distinct()
         )
 
-        items = [{
-            'itemType': 'deliverable',
-            **DeliverableCalendarItemSerializer(d).data
-        } for d in qs]
+        items = []
+        for d in qs:
+            item = {
+                'itemType': 'deliverable',
+                **DeliverableCalendarItemSerializer(d).data,
+            }
+            if include_notes == 'preview':
+                item['notesPreview'] = _sanitize_notes_preview(getattr(d, 'notes', None))
+            elif include_notes == 'full':
+                item['notes'] = getattr(d, 'notes', None)
+            items.append(item)
 
         pre_qs = PreDeliverableItem.objects.select_related('deliverable', 'deliverable__project', 'pre_deliverable_type')
         if start_date:
@@ -629,13 +630,73 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'isOverdue': pi.is_overdue,
         } for pi in pre_qs]
 
-        try:
-            _ids = [it.get('id') for it in items]
-            _pre = [it.get('id') for it in pre_items]
-        except Exception:  # nosec B110
-            pass
+        department_leads_by_project: dict[int, dict[int, list[str]]] = {}
+        if include_project_leads:
+            project_ids = sorted(
+                {
+                    int(item.get('project'))
+                    for item in items
+                    if isinstance(item.get('project'), int)
+                }
+            )
+            if project_ids:
+                grouped: dict[int, dict[int, set[str]]] = defaultdict(lambda: defaultdict(set))
+                assignments_qs = (
+                    Assignment.objects.filter(is_active=True, project_id__in=project_ids, person__isnull=False)
+                    .select_related('person', 'person__department', 'department', 'role_on_project_ref')
+                )
+                for assignment in assignments_qs:
+                    role_name = None
+                    try:
+                        if assignment.role_on_project_ref and assignment.role_on_project_ref.name:
+                            role_name = assignment.role_on_project_ref.name
+                        elif assignment.role_on_project:
+                            role_name = assignment.role_on_project
+                    except Exception:  # nosec B110
+                        role_name = assignment.role_on_project
+                    if not role_name or 'lead' not in role_name.lower():
+                        continue
+                    person_name = None
+                    try:
+                        person_name = assignment.person.name if assignment.person else None
+                    except Exception:  # nosec B110
+                        person_name = None
+                    if not person_name:
+                        continue
+                    dept_id = (
+                        getattr(assignment.person, 'department_id', None)
+                        or getattr(assignment, 'department_id', None)
+                        or getattr(getattr(assignment, 'role_on_project_ref', None), 'department_id', None)
+                        or -1
+                    )
+                    if assignment.project_id:
+                        grouped[int(assignment.project_id)][int(dept_id)].add(person_name)
 
-        return Response(items + pre_items)
+                for pid, dept_map in grouped.items():
+                    department_leads_by_project[int(pid)] = {
+                        int(dept_id): sorted(leads)
+                        for dept_id, leads in dept_map.items()
+                    }
+
+            for item in items:
+                project_id = item.get('project')
+                if isinstance(project_id, int):
+                    item['departmentLeads'] = department_leads_by_project.get(project_id, {})
+                else:
+                    item['departmentLeads'] = {}
+
+        combined = items + pre_items
+        if include_notes != 'none' or include_project_leads:
+            payload = {
+                'contractVersion': 1,
+                'items': combined,
+            }
+            if include_notes != 'none':
+                payload['notesMode'] = include_notes
+            if include_project_leads:
+                payload['departmentLeadsByProject'] = department_leads_by_project
+            return Response(payload)
+        return Response(combined)
 
     @extend_schema(
         parameters=[OpenApiParameter(name='days_ahead', type=int, required=False)],

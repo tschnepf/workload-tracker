@@ -195,6 +195,8 @@ Collapse per-phase and repeated settings requests into one scoped bulk call.
 - `/project-assignments`: `25 -> 8`
 
 ## Workstream C: Department Reports Fan-Out Removal
+Status: `Complete` (verified on 2026-02-25)
+
 ### Objective
 Replace per-department dashboard loops with one aggregate report endpoint while preserving graceful degradation.
 
@@ -231,7 +233,20 @@ Replace per-department dashboard loops with one aggregate report endpoint while 
 ### Expected impact
 - `/departments/reports`: `36 -> 8`
 
+### Verification
+1. Backend and frontend code paths rescanned for endpoint, fallback caps, and circuit-break wiring.
+2. Containers restarted (`workload-tracker-backend`, `workload-tracker-frontend`) and health rechecked.
+3. Migration state verified with `python manage.py migrate --check` (no pending migrations).
+4. Live authenticated endpoint checks passed for:
+   - `GET /api/reports/departments/overview/?weeks=4`
+   - `GET /api/deliverables/calendar_with_pre_items/?include_notes=preview&include_project_leads=1`
+5. Automated checks passed:
+   - `python manage.py test reports.tests deliverables.tests.test_calendar`
+   - `npm --prefix frontend run build`
+
 ## Workstream D: Deliverables Dashboard N+1 Elimination
+Status: `Complete` (verified on 2026-02-25)
+
 ### Objective
 Remove per-deliverable detail lookups and consolidate project lead mapping data without inflating calendar payloads.
 

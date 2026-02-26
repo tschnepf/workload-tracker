@@ -3,7 +3,7 @@
  * Provides detailed department performance metrics and insights
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
@@ -12,8 +12,8 @@ import AssignedHoursTimelineCard from '@/components/analytics/AssignedHoursTimel
 import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
 import { resolveUtilizationLevel, defaultUtilizationScheme } from '@/util/utilization';
-import { dashboardApi, departmentsApi, peopleApi, personSkillsApi } from '@/services/api';
-import { DashboardData, Department, Person, PersonSkill } from '@/types/models';
+import { dashboardApi, departmentsApi, peopleApi, personSkillsApi, reportsApi } from '@/services/api';
+import { DashboardData, Department, DepartmentsOverviewResponse, Person, PersonSkill } from '@/types/models';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminUser } from '@/utils/roleAccess';
@@ -118,18 +118,77 @@ const AccordionSection: React.FC<{
   </Card>
 );
 
+const FALLBACK_MAX_CONCURRENCY = 4;
+const FALLBACK_MAX_RETRIES_PER_DEPARTMENT = 1;
+const FALLBACK_MAX_DEPARTMENTS_PER_RENDER = 10;
+const FALLBACK_CIRCUIT_BREAK_MS = 60_000;
+
+const buildSkillsSnapshot = (departmentPeople: Person[], allSkills: PersonSkill[]) => {
+  const deptPeopleIds = departmentPeople.map((person) => person.id);
+  const deptSkills = allSkills.filter((skill) => deptPeopleIds.includes(skill.person));
+  const strengthSkills = deptSkills.filter((skill) => skill.skillType === 'strength');
+
+  const skillCounts = new Map<string, number>();
+  strengthSkills.forEach((skill) => {
+    const skillName = skill.skillTagName || 'Unknown';
+    skillCounts.set(skillName, (skillCounts.get(skillName) || 0) + 1);
+  });
+
+  const topSkills = Array.from(skillCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  const allOtherDeptSkills = allSkills
+    .filter((skill) => !deptPeopleIds.includes(skill.person) && skill.skillType === 'strength')
+    .map((skill) => skill.skillTagName || '')
+    .filter((name) => !skillCounts.has(name));
+  const skillGaps = [...new Set(allOtherDeptSkills)].slice(0, 3);
+
+  return {
+    totalSkills: deptSkills.length,
+    topSkills,
+    uniqueSkills: skillCounts.size,
+    skillGaps,
+  };
+};
+
+const buildReportFromOverview = (
+  department: Department,
+  overview?: DepartmentsOverviewResponse['overviewByDepartment'][string]
+): DepartmentReport => ({
+  department,
+  metrics: {
+    teamSize: overview?.peopleCount || 0,
+    avgUtilization: overview?.dashboardSummary?.avgUtilization || 0,
+    peakUtilization: overview?.dashboardSummary?.peakUtilization || 0,
+    totalAssignments: overview?.dashboardSummary?.totalAssignments || 0,
+    overallocatedCount: overview?.dashboardSummary?.overallocatedCount || 0,
+    availableHours: overview?.dashboardSummary?.availableHours || 0,
+    utilizationTrend: 'stable',
+  },
+  people: [],
+  dashboardData: undefined,
+  skills: {
+    totalSkills: overview?.skills?.totalSkills || 0,
+    topSkills: overview?.skills?.topSkills || [],
+    uniqueSkills: overview?.skills?.uniqueSkills || 0,
+    skillGaps: overview?.skills?.skillGaps || [],
+  },
+});
+
 const ReportsView: React.FC = () => {
   const auth = useAuth();
   const isAdmin = isAdminUser(auth.user);
   const { state: verticalState } = useVerticalFilter();
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [reports, setReports] = useState<DepartmentReport[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState<number>(4); // weeks
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
   const isMobileLayout = useMediaQuery('(max-width: 767px)');
   const [assignedAnalyticsOpen, setAssignedAnalyticsOpen] = useState<boolean>(false);
+  const aggregateFailureStreakRef = useRef<number>(0);
+  const fallbackCircuitUntilRef = useRef<number>(0);
 
   useEffect(() => {
     // Default open on desktop/tablet; collapsed on mobile to defer chart mounts.
@@ -141,69 +200,72 @@ const ReportsView: React.FC = () => {
   }, [selectedTimeframe, verticalState.selectedVerticalId]);
 
   const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Load departments, people, and skills
-      const [deptResponse, peopleResponse, skillsResponse] = await Promise.all([
-        departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
-        peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
-        personSkillsApi.list()
+    const selectedVertical = verticalState.selectedVerticalId ?? undefined;
+    const isFallbackCircuitOpen = () => Date.now() < fallbackCircuitUntilRef.current;
+    const registerAggregateFailure = () => {
+      aggregateFailureStreakRef.current += 1;
+      if (aggregateFailureStreakRef.current >= 3) {
+        fallbackCircuitUntilRef.current = Date.now() + FALLBACK_CIRCUIT_BREAK_MS;
+        aggregateFailureStreakRef.current = 0;
+      }
+    };
+    const registerAggregateSuccess = () => {
+      aggregateFailureStreakRef.current = 0;
+      fallbackCircuitUntilRef.current = 0;
+    };
+
+    const loadFallbackReports = async (
+      departmentsToRender: Department[],
+      options?: { skipCircuitCheck?: boolean }
+    ): Promise<Map<number, DepartmentReport>> => {
+      if (!options?.skipCircuitCheck && isFallbackCircuitOpen()) {
+        return new Map();
+      }
+      const limitedDepartments = departmentsToRender
+        .filter((dept) => dept.id != null)
+        .slice(0, FALLBACK_MAX_DEPARTMENTS_PER_RENDER);
+      if (!limitedDepartments.length) {
+        return new Map();
+      }
+
+      const [peopleResponse, skillsResponse] = await Promise.all([
+        peopleApi.list({ vertical: selectedVertical }),
+        personSkillsApi.list(),
       ]);
-      
-      const allDepartments = deptResponse.results || [];
       const allPeople = peopleResponse.results || [];
       const allSkills = skillsResponse.results || [];
-      
-      setDepartments(allDepartments);
-      setPeopleSkills(allSkills);
 
-      // Generate reports for each department
-      const departmentReports = await Promise.all(
-        allDepartments.map(async (dept) => {
-          const deptPeople = allPeople.filter(p => p.department === dept.id);
-          
-          let dashboardData: DashboardData | undefined;
-          try {
-            dashboardData = await dashboardApi.getDashboard(selectedTimeframe, dept.id?.toString(), verticalState.selectedVerticalId ?? undefined);
-          } catch (err) {
-            console.error(`Error loading dashboard data for department ${dept.name}:`, err);
+      const indexRef = { value: 0 };
+      const results = new Map<number, DepartmentReport>();
+
+      const worker = async () => {
+        while (indexRef.value < limitedDepartments.length) {
+          const currentIndex = indexRef.value;
+          indexRef.value += 1;
+          const dept = limitedDepartments[currentIndex];
+          if (dept.id == null) {
+            continue;
           }
 
-          // Calculate basic metrics
-          const totalCapacity = deptPeople.reduce((sum, p) => sum + (p.weeklyCapacity || 36), 0);
+          const deptPeople = allPeople.filter((person) => person.department === dept.id);
+          let dashboardData: DashboardData | undefined;
+          for (let attempt = 0; attempt <= FALLBACK_MAX_RETRIES_PER_DEPARTMENT; attempt += 1) {
+            try {
+              dashboardData = await dashboardApi.getDashboard(selectedTimeframe, String(dept.id), selectedVertical);
+              break;
+            } catch (err) {
+              if (attempt >= FALLBACK_MAX_RETRIES_PER_DEPARTMENT) {
+                dashboardData = undefined;
+              }
+            }
+          }
+
+          const totalCapacity = deptPeople.reduce((sum, person) => sum + (person.weeklyCapacity || 36), 0);
           const avgUtilization = dashboardData?.summary.avg_utilization || 0;
           const availableHours = totalCapacity - (totalCapacity * avgUtilization / 100);
+          const skills = buildSkillsSnapshot(deptPeople, allSkills);
 
-          // Calculate skills analysis
-          const deptPeopleIds = deptPeople.map(p => p.id);
-          const deptSkills = allSkills.filter(skill => deptPeopleIds.includes(skill.person));
-          
-          // Count skills by type and name
-          const skillCounts = new Map<string, number>();
-          const strengthSkills = deptSkills.filter(skill => skill.skillType === 'strength');
-          
-          strengthSkills.forEach(skill => {
-            const skillName = skill.skillTagName || 'Unknown';
-            skillCounts.set(skillName, (skillCounts.get(skillName) || 0) + 1);
-          });
-          
-          // Get top skills sorted by count
-          const topSkills = Array.from(skillCounts.entries())
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 5);
-          
-          // Find skill gaps (skills present in other departments but not here)
-          const allOtherDeptSkills = allSkills
-            .filter(skill => !deptPeopleIds.includes(skill.person) && skill.skillType === 'strength')
-            .map(skill => skill.skillTagName || '')
-            .filter(name => !skillCounts.has(name));
-          
-          const skillGaps = [...new Set(allOtherDeptSkills)].slice(0, 3);
-
-          const report: DepartmentReport = {
+          results.set(dept.id, {
             department: dept,
             metrics: {
               teamSize: deptPeople.length,
@@ -212,25 +274,95 @@ const ReportsView: React.FC = () => {
               totalAssignments: dashboardData?.summary.total_assignments || 0,
               overallocatedCount: dashboardData?.summary.overallocated_count || 0,
               availableHours: Math.max(0, availableHours),
-              utilizationTrend: 'stable' // TODO: Calculate trend from historical data
+              utilizationTrend: 'stable',
             },
             people: deptPeople,
             dashboardData,
-            skills: {
-              totalSkills: deptSkills.length,
-              topSkills,
-              uniqueSkills: skillCounts.size,
-              skillGaps
-            }
-          };
-          
-          return report;
-        })
-      );
+            skills,
+          });
+        }
+      };
 
-      setReports(departmentReports);
+      const workerCount = Math.max(1, Math.min(FALLBACK_MAX_CONCURRENCY, limitedDepartments.length));
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
+      return results;
+    };
+
+    try {
+      setLoading(true);
+      setError(null);
+      const overview = await reportsApi.getDepartmentsOverview({
+        weeks: selectedTimeframe,
+        vertical: selectedVertical,
+      });
+      registerAggregateSuccess();
+
+      const allDepartments = overview.departments || [];
+      const reportByDeptId = new Map<number, DepartmentReport>();
+      allDepartments.forEach((dept) => {
+        if (dept.id == null) {
+          return;
+        }
+        const overviewEntry = overview.overviewByDepartment?.[String(dept.id)];
+        reportByDeptId.set(dept.id, buildReportFromOverview(dept, overviewEntry));
+      });
+
+      const missingDepartments = allDepartments.filter((dept) => {
+        if (dept.id == null) {
+          return false;
+        }
+        return !overview.overviewByDepartment?.[String(dept.id)];
+      });
+
+      if (missingDepartments.length && !isFallbackCircuitOpen()) {
+        const fallbackReports = await loadFallbackReports(missingDepartments);
+        fallbackReports.forEach((value, key) => {
+          reportByDeptId.set(key, value);
+        });
+      }
+
+      const mergedReports = allDepartments
+        .filter((dept) => dept.id != null)
+        .map((dept) => reportByDeptId.get(dept.id!) || buildReportFromOverview(dept));
+      setReports(mergedReports);
+
+      const failureMessages: string[] = [];
+      if (overview.partialFailures?.length) {
+        failureMessages.push(`Aggregate returned partial data (${overview.partialFailures.length} scope(s)).`);
+      }
+      if (missingDepartments.length > FALLBACK_MAX_DEPARTMENTS_PER_RENDER) {
+        failureMessages.push(
+          `Fallback limited to ${FALLBACK_MAX_DEPARTMENTS_PER_RENDER} departments this render.`
+        );
+      }
+      if (missingDepartments.length > 0 && isFallbackCircuitOpen()) {
+        failureMessages.push('Fallback temporarily paused after repeated aggregate failures.');
+      }
+      if (failureMessages.length) {
+        setError(failureMessages.join(' '));
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to load department reports');
+      registerAggregateFailure();
+
+      if (!isFallbackCircuitOpen()) {
+        try {
+          const deptResponse = await departmentsApi.list({ vertical: selectedVertical });
+          const allDepartments = deptResponse.results || [];
+          const fallbackByDept = await loadFallbackReports(allDepartments, { skipCircuitCheck: true });
+          const mergedReports = allDepartments
+            .filter((dept) => dept.id != null)
+            .map((dept) => fallbackByDept.get(dept.id!) || buildReportFromOverview(dept));
+          setReports(mergedReports);
+          setError(
+            `Overview endpoint unavailable; using bounded fallback (${Math.min(FALLBACK_MAX_DEPARTMENTS_PER_RENDER, allDepartments.length)} departments).`
+          );
+          return;
+        } catch (fallbackErr: any) {
+          setError(fallbackErr?.message || err?.message || 'Failed to load department reports');
+        }
+      } else {
+        setError('Aggregate reports unavailable and fallback circuit is open. Retry in about 60 seconds.');
+      }
     } finally {
       setLoading(false);
     }

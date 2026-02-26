@@ -24,6 +24,7 @@ import {
   ApiResponse,
   PaginatedResponse,
   DashboardData,
+  DepartmentsOverviewResponse,
   SkillTag,
   PersonSkill,
   AssignmentConflictResponse,
@@ -1487,6 +1488,29 @@ export const dashboardApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as unknown as DashboardData;
+  },
+};
+
+export const reportsApi = {
+  getDepartmentsOverview: async (params?: {
+    weeks?: number;
+    vertical?: number;
+    department?: number;
+    include_children?: 0 | 1;
+    include_inactive?: 0 | 1;
+    status_in?: string;
+    search?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.weeks != null) queryParams.set('weeks', String(params.weeks));
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.department != null) queryParams.set('department', String(params.department));
+    if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
+    if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
+    if (params?.status_in) queryParams.set('status_in', params.status_in);
+    if (params?.search) queryParams.set('search', params.search);
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<DepartmentsOverviewResponse>(`/reports/departments/overview/${queryString}`);
   },
 };
 

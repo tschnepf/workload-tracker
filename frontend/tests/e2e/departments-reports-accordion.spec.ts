@@ -25,42 +25,61 @@ const departmentsPayload = {
   ],
 };
 
-const peoplePayload = {
-  count: 2,
-  next: null,
-  previous: null,
-  results: [
-    { id: 101, name: 'Jordan Lee', department: 1, weeklyCapacity: 40 },
-    { id: 102, name: 'Alijah Williams', department: 2, weeklyCapacity: 36 },
-  ],
-};
-
-const skillsPayload = {
-  count: 0,
-  next: null,
-  previous: null,
-  results: [],
-};
-
-const dashboardPayload = (deptId: number) => ({
-  summary: {
-    total_people: deptId === 1 ? 5 : 3,
-    avg_utilization: deptId === 1 ? 78 : 72,
-    peak_utilization: deptId === 1 ? 95 : 88,
-    peak_person: deptId === 1 ? 'Jordan Lee' : 'Alijah Williams',
-    total_assignments: deptId === 1 ? 12 : 7,
-    overallocated_count: deptId === 1 ? 1 : 0,
+const departmentsOverviewPayload = {
+  contractVersion: 1,
+  partialFailures: [],
+  errorsByScope: {},
+  departments: departmentsPayload.results,
+  overviewByDepartment: {
+    '1': {
+      peopleCount: 5,
+      skills: {
+        totalSkills: 0,
+        topSkills: [],
+        uniqueSkills: 0,
+        skillGaps: [],
+      },
+      dashboardSummary: {
+        avgUtilization: 78,
+        peakUtilization: 95,
+        totalAssignments: 12,
+        overallocatedCount: 1,
+        availableHours: 44,
+      },
+    },
+    '2': {
+      peopleCount: 3,
+      skills: {
+        totalSkills: 0,
+        topSkills: [],
+        uniqueSkills: 0,
+        skillGaps: [],
+      },
+      dashboardSummary: {
+        avgUtilization: 72,
+        peakUtilization: 88,
+        totalAssignments: 7,
+        overallocatedCount: 0,
+        availableHours: 30,
+      },
+    },
   },
-  utilization_distribution: {
-    underutilized: 0,
-    optimal: 0,
-    high: 0,
-    overallocated: 0,
+  analyticsSeries: {
+    utilizationByDepartment: [
+      { departmentId: 1, avgUtilization: 78 },
+      { departmentId: 2, avgUtilization: 72 },
+    ],
+    assignmentsByDepartment: [
+      { departmentId: 1, totalAssignments: 12 },
+      { departmentId: 2, totalAssignments: 7 },
+    ],
+    peopleByDepartment: [
+      { departmentId: 1, peopleCount: 5 },
+      { departmentId: 2, peopleCount: 3 },
+    ],
+    utilizationTimelineByDepartment: [],
   },
-  team_overview: [],
-  available_people: [],
-  recent_assignments: [],
-});
+};
 
 test.describe('Department reports accordion behavior', () => {
   test.use({
@@ -75,19 +94,8 @@ test.describe('Department reports accordion behavior', () => {
 
     const dashboardQueries: URLSearchParams[] = [];
 
-    await page.route('**/api/departments/**', (route) => {
-      if (route.request().method() === 'GET') {
-        return route.fulfill(jsonResponse(departmentsPayload));
-      }
-      return route.continue();
-    });
-
-    await page.route('**/api/people/**', (route) =>
-      route.fulfill(jsonResponse(peoplePayload))
-    );
-
-    await page.route('**/api/skills/person-skills/**', (route) =>
-      route.fulfill(jsonResponse(skillsPayload))
+    await page.route('**/api/reports/departments/overview/**', (route) =>
+      route.fulfill(jsonResponse(departmentsOverviewPayload))
     );
 
     await page.route('**/api/dashboard/**', (route) => {
@@ -103,10 +111,10 @@ test.describe('Department reports accordion behavior', () => {
 
     await expect(page.getByText('Department Reports')).toBeVisible();
 
-    // Wait for initial batched load (dashboard calls per department)
+    // Consolidated endpoint should avoid per-department dashboard fan-out.
     await expect
       .poll(() => dashboardQueries.length, { timeout: 8000 })
-      .toBe(2);
+      .toBe(0);
 
     // On mobile, the accordion should start collapsed
     await expect(page.getByRole('button', { name: /Assigned Hours Analytics/i })).toBeVisible();
@@ -118,10 +126,10 @@ test.describe('Department reports accordion behavior', () => {
     // The charts should now be visible
     await expect(page.getByText(/Assigned Hours Timeline/i)).toBeVisible();
 
-    // Expanding does NOT trigger extra dashboardApi calls
+    // Expanding does NOT trigger per-department dashboard calls.
     await expect
       .poll(() => dashboardQueries.length, { timeout: 3000 })
-      .toBe(2);
+      .toBe(0);
 
     // Collapse again
     await page.getByRole('button', { name: /Assigned Hours Analytics/i }).click();
@@ -133,19 +141,8 @@ test.describe('Department reports accordion behavior', () => {
 
     const dashboardQueries: URLSearchParams[] = [];
 
-    await page.route('**/api/departments/**', (route) => {
-      if (route.request().method() === 'GET') {
-        return route.fulfill(jsonResponse(departmentsPayload));
-      }
-      return route.continue();
-    });
-
-    await page.route('**/api/people/**', (route) =>
-      route.fulfill(jsonResponse(peoplePayload))
-    );
-
-    await page.route('**/api/skills/person-skills/**', (route) =>
-      route.fulfill(jsonResponse(skillsPayload))
+    await page.route('**/api/reports/departments/overview/**', (route) =>
+      route.fulfill(jsonResponse(departmentsOverviewPayload))
     );
 
     await page.route('**/api/dashboard/**', (route) => {
@@ -163,10 +160,10 @@ test.describe('Department reports accordion behavior', () => {
 
     await expect(page.getByText('Department Reports')).toBeVisible();
 
-    // Wait for initial dashboard calls (once per department)
+    // Wait for load and assert no per-department dashboard calls.
     await expect
       .poll(() => dashboardQueries.length, { timeout: 8000 })
-      .toBe(2);
+      .toBe(0);
 
     // Accordion should be open by default on desktop; timeline heading should be visible
     await expect(page.getByText(/Assigned Hours Timeline/i)).toBeVisible();
@@ -180,7 +177,6 @@ test.describe('Department reports accordion behavior', () => {
 
     await expect
       .poll(() => dashboardQueries.length, { timeout: 3000 })
-      .toBe(2);
+      .toBe(0);
   });
 });
-

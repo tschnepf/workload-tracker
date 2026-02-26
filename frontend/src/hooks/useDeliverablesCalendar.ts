@@ -42,6 +42,8 @@ type Options = {
   personId?: number | null;
   typeId?: number | null;
   vertical?: number | null;
+  includeNotes?: 'preview' | 'full' | 'none';
+  includeProjectLeads?: boolean;
 };
 
 export function useDeliverablesCalendar(range: CalendarRange | null, options?: Options) {
@@ -50,16 +52,34 @@ export function useDeliverablesCalendar(range: CalendarRange | null, options?: O
   const vertical = options?.vertical ?? null;
 
   return useQuery<DeliverableCalendarUnion[], Error>({
-    queryKey: ['deliverables-calendar', mineOnly ? personId : 'all', range?.start, range?.end, mineOnly ? 1 : 0, options?.typeId ?? 'all', vertical ?? 'all'],
+    queryKey: [
+      'deliverables-calendar',
+      mineOnly ? personId : 'all',
+      range?.start,
+      range?.end,
+      mineOnly ? 1 : 0,
+      options?.typeId ?? 'all',
+      vertical ?? 'all',
+      options?.includeNotes ?? 'none',
+      options?.includeProjectLeads ? 1 : 0,
+    ],
     enabled: Boolean(range?.start && range?.end && (!mineOnly || !!personId)),
-    queryFn: () => fetchDeliverableCalendar(range!, { mineOnly, personId, typeId: options?.typeId, vertical }),
+    queryFn: () =>
+      fetchDeliverableCalendar(range!, {
+        mineOnly,
+        personId,
+        typeId: options?.typeId,
+        vertical,
+        includeNotes: options?.includeNotes,
+        includeProjectLeads: options?.includeProjectLeads,
+      }),
     staleTime: 1000 * 60 * 5,
     retry: 2,
   });
 }
 
 async function fetchDeliverableCalendar(range: CalendarRange, options: Options): Promise<DeliverableCalendarUnion[]> {
-  const { mineOnly, personId, typeId, vertical } = options;
+  const { mineOnly, personId, typeId, vertical, includeNotes, includeProjectLeads } = options;
   const params: Record<string, any> = {
     query: {
       start: range.start,
@@ -70,11 +90,29 @@ async function fetchDeliverableCalendar(range: CalendarRange, options: Options):
   if (mineOnly) params.query.mine_only = 1;
   if (typeId != null) params.query.type_id = typeId;
   if (vertical != null) params.query.vertical = vertical;
+  if (includeNotes && includeNotes !== 'none') params.query.include_notes = includeNotes;
+  if (includeProjectLeads) params.query.include_project_leads = 1;
   try {
     const res = await apiClient.GET('/deliverables/calendar_with_pre_items/' as any, params);
     const payload = (res as any)?.data ?? res;
     if (Array.isArray(payload)) {
       return payload as DeliverableCalendarUnion[];
+    }
+    if (payload && Array.isArray((payload as any).items)) {
+      const items = (payload as any).items as DeliverableCalendarUnion[];
+      const leadsByProject = (payload as any).departmentLeadsByProject || {};
+      const enriched = items.map((raw: any) => {
+        if ((raw?.itemType ?? 'deliverable') !== 'deliverable') return raw;
+        const projectId = typeof raw?.project === 'number' ? raw.project : null;
+        if (projectId == null) return raw;
+        return {
+          ...raw,
+          departmentLeads: (raw?.departmentLeads && typeof raw.departmentLeads === 'object')
+            ? raw.departmentLeads
+            : (leadsByProject[String(projectId)] || leadsByProject[projectId] || {}),
+        };
+      });
+      return enriched as DeliverableCalendarUnion[];
     }
   } catch {
     // swallow and fall back

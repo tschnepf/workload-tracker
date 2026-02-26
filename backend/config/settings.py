@@ -352,6 +352,7 @@ REST_FRAMEWORK = {
         'find_available': _rate('DRF_THROTTLE_FIND_AVAILABLE', '600/min'),
         'grid_snapshot': _rate('DRF_THROTTLE_GRID_SNAPSHOT', '600/min'),
         'ui_bootstrap': _rate('DRF_THROTTLE_UI_BOOTSTRAP', '120/min'),
+        'reports_departments_overview': _rate('DRF_THROTTLE_REPORTS_DEPARTMENTS_OVERVIEW', '120/min'),
         'login': _rate('DRF_THROTTLE_LOGIN', '10/min'),
         # Backup/restore endpoints (Phase 0: Step 0.3)
         # Enforce strict create rate so the second POST is throttled in tests

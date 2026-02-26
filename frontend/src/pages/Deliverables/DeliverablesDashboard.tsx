@@ -6,8 +6,6 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import type { Assignment, Department } from '@/types/models';
 
 const UNKNOWN_DEPT_ID = -1;
-const MAX_ASSIGNMENT_PAGES = 100;
-const ASSIGNMENT_PAGE_SIZE = 200;
 
 type DeliverablesRow = {
   id: string;
@@ -54,18 +52,6 @@ function getDeptColor(seed: string): string {
   return DEPT_PALETTE[idx];
 }
 
-function parseNextPage(next: string | undefined, fallback: number): number {
-  if (!next) return fallback + 1;
-  try {
-    const url = new URL(next);
-    const pageParam = url.searchParams.get('page');
-    if (pageParam) return Number(pageParam);
-  } catch {
-    // ignore
-  }
-  return fallback + 1;
-}
-
 function formatDaysLabel(daysUntil: number): { label: string; urgency: 'urgent' | 'soon' | 'normal' } {
   if (daysUntil < 0) {
     return { label: `${Math.abs(daysUntil)}d overdue`, urgency: 'urgent' };
@@ -82,14 +68,20 @@ function formatDaysLabel(daysUntil: number): { label: string; urgency: 'urgent' 
   return { label: `In ${daysUntil} days`, urgency: 'normal' };
 }
 
+function stripNotes(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const text = value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text || null;
+}
+
 const DeliverablesDashboard: React.FC = () => {
   const [now, setNow] = useState(() => new Date());
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentError, setDepartmentError] = useState<string | null>(null);
-  const [projectDepartmentLeads, setProjectDepartmentLeads] = useState<Record<number, Record<number, string[]>>>({});
-  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
-  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
-  const [deliverableNotesById, setDeliverableNotesById] = useState<Record<number, string | null>>({});
+  const [fallbackProjectDepartmentLeads, setFallbackProjectDepartmentLeads] = useState<Record<number, Record<number, string[]>>>({});
+  const [fallbackAssignmentsLoading, setFallbackAssignmentsLoading] = useState(false);
+  const [fallbackAssignmentsError, setFallbackAssignmentsError] = useState<string | null>(null);
+  const [fallbackDeliverableNotesById, setFallbackDeliverableNotesById] = useState<Record<number, string | null>>({});
   const [rowsPerPage, setRowsPerPage] = useState(6);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageDeadline, setPageDeadline] = useState<number | null>(null);
@@ -130,7 +122,11 @@ const DeliverablesDashboard: React.FC = () => {
     return { start: toIsoDate(start), end: toIsoDate(end) };
   }, [todayKey]);
 
-  const deliverablesQuery = useDeliverablesCalendar(range, { mineOnly: false });
+  const deliverablesQuery = useDeliverablesCalendar(range, {
+    mineOnly: false,
+    includeNotes: 'preview',
+    includeProjectLeads: true,
+  });
 
   const deliverables = useMemo<DeliverablesRow[]>(() => {
     const items = deliverablesQuery.data ?? [];
@@ -154,6 +150,8 @@ const DeliverablesDashboard: React.FC = () => {
         const projectName = raw.projectName || raw.projectClient || (projectId != null ? `Project ${projectId}` : 'Unknown Project');
         const projectClient = raw.projectName ? raw.projectClient ?? null : null;
         const deliverableId = typeof raw.id === 'number' ? raw.id : undefined;
+        const bundledNotes = stripNotes(raw.notesPreview ?? raw.notes);
+        const fallbackNotes = deliverableId != null ? (fallbackDeliverableNotesById[deliverableId] ?? null) : null;
         return {
           id: `deliv-${raw.id}`,
           deliverableId,
@@ -164,7 +162,7 @@ const DeliverablesDashboard: React.FC = () => {
           title: raw.title || 'Deliverable',
           isCompleted: Boolean(raw.isCompleted),
           percentage: typeof raw.percentage === 'number' ? Number(raw.percentage) : null,
-          notes: deliverableId != null ? deliverableNotesById[deliverableId] ?? null : null,
+          notes: bundledNotes ?? fallbackNotes,
         } as DeliverablesRow;
       })
       .sort((a, b) => {
@@ -172,7 +170,7 @@ const DeliverablesDashboard: React.FC = () => {
         const db = new Date(`${b.date}T00:00:00`).getTime();
         return da - db;
       });
-  }, [deliverablesQuery.data, range.end, range.start, deliverableNotesById]);
+  }, [deliverablesQuery.data, range.end, range.start, fallbackDeliverableNotesById]);
 
   const projectIds = useMemo(() => {
     const ids = new Set<number>();
@@ -182,8 +180,6 @@ const DeliverablesDashboard: React.FC = () => {
     return Array.from(ids);
   }, [deliverables]);
 
-  const projectIdsKey = useMemo(() => projectIds.join(','), [projectIds]);
-
   const deliverableIds = useMemo(() => {
     const ids = new Set<number>();
     deliverables.forEach((item) => {
@@ -192,13 +188,25 @@ const DeliverablesDashboard: React.FC = () => {
     return Array.from(ids);
   }, [deliverables]);
 
-  const deliverableIdsKey = useMemo(() => deliverableIds.join(','), [deliverableIds]);
+  const hasBundledNotes = useMemo(() => {
+    const items = deliverablesQuery.data ?? [];
+    return items.some((item) => {
+      const raw = item as any;
+      const itemType = raw.itemType ?? raw.kind;
+      if (itemType && itemType !== 'deliverable') return false;
+      return Object.prototype.hasOwnProperty.call(raw, 'notesPreview') || Object.prototype.hasOwnProperty.call(raw, 'notes');
+    });
+  }, [deliverablesQuery.data]);
 
-  const stripNotes = (value: string | null | undefined) => {
-    if (!value) return null;
-    const text = value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-    return text || null;
-  };
+  const hasBundledDepartmentLeads = useMemo(() => {
+    const items = deliverablesQuery.data ?? [];
+    return items.some((item) => {
+      const raw = item as any;
+      const itemType = raw.itemType ?? raw.kind;
+      if (itemType && itemType !== 'deliverable') return false;
+      return Object.prototype.hasOwnProperty.call(raw, 'departmentLeads');
+    });
+  }, [deliverablesQuery.data]);
 
   const safeRowsPerPage = useMemo(() => {
     if (!Number.isFinite(rowsPerPage) || rowsPerPage <= 0) return Math.max(1, deliverables.length || 1);
@@ -223,6 +231,31 @@ const DeliverablesDashboard: React.FC = () => {
     });
     return map;
   }, [departments]);
+
+  const projectDepartmentLeads = useMemo(() => {
+    const normalized: Record<number, Record<number, string[]>> = { ...fallbackProjectDepartmentLeads };
+    const items = deliverablesQuery.data ?? [];
+    items.forEach((item) => {
+      const raw = item as any;
+      const itemType = raw.itemType ?? raw.kind;
+      if (itemType && itemType !== 'deliverable') return;
+      const projectId = typeof raw.project === 'number' ? raw.project : null;
+      if (projectId == null) return;
+      const leadsMap = raw.departmentLeads;
+      if (!leadsMap || typeof leadsMap !== 'object') return;
+      const projectEntry = { ...(normalized[projectId] || {}) };
+      Object.entries(leadsMap).forEach(([deptIdRaw, leadsValue]) => {
+        const deptId = Number(deptIdRaw);
+        if (!Number.isFinite(deptId)) return;
+        const leads = Array.isArray(leadsValue)
+          ? leadsValue.filter((name) => typeof name === 'string')
+          : [];
+        projectEntry[deptId] = leads;
+      });
+      normalized[projectId] = projectEntry;
+    });
+    return normalized;
+  }, [deliverablesQuery.data, fallbackProjectDepartmentLeads]);
 
   const departmentMetaByProject = useMemo(() => {
     const entries: Record<number, DepartmentMeta[]> = {};
@@ -347,13 +380,12 @@ const DeliverablesDashboard: React.FC = () => {
 
   useAuthenticatedEffect(() => {
     let active = true;
-    if (!deliverableIds.length) {
-      setDeliverableNotesById({});
+    if (hasBundledNotes || !deliverableIds.length) {
       return () => {
         active = false;
       };
     }
-    const missing = deliverableIds.filter((id) => !(id in deliverableNotesById));
+    const missing = deliverableIds.filter((id) => !(id in fallbackDeliverableNotesById));
     if (!missing.length) {
       return () => {
         active = false;
@@ -366,13 +398,13 @@ const DeliverablesDashboard: React.FC = () => {
             const detail = await deliverablesApi.get(id);
             return { id, notes: stripNotes(detail.notes) };
           } catch (err) {
-            console.warn('Failed to load deliverable notes', id, err);
+            console.warn('Fallback note load failed', id, err);
             return { id, notes: null };
           }
         })
       );
       if (!active) return;
-      setDeliverableNotesById((prev) => {
+      setFallbackDeliverableNotesById((prev) => {
         const next = { ...prev };
         results.forEach((item) => {
           next[item.id] = item.notes;
@@ -383,35 +415,37 @@ const DeliverablesDashboard: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [deliverableIdsKey, deliverableNotesById]);
+  }, [hasBundledNotes, deliverableIds.join(','), fallbackDeliverableNotesById]);
 
   useAuthenticatedEffect(() => {
     let active = true;
-    if (!projectIds.length) {
-      setProjectDepartmentLeads({});
-      setAssignmentsLoading(false);
-      setAssignmentsError(null);
-      return undefined;
+    if (hasBundledDepartmentLeads) {
+      setFallbackAssignmentsLoading(false);
+      setFallbackAssignmentsError(null);
+      return () => {
+        active = false;
+      };
     }
-    setAssignmentsLoading(true);
-    setAssignmentsError(null);
+    if (!projectIds.length) {
+      setFallbackProjectDepartmentLeads({});
+      setFallbackAssignmentsLoading(false);
+      setFallbackAssignmentsError(null);
+      return () => {
+        active = false;
+      };
+    }
+    setFallbackAssignmentsLoading(true);
+    setFallbackAssignmentsError(null);
     (async () => {
-      const all: Assignment[] = [];
-      let page = 1;
-      for (let i = 0; i < MAX_ASSIGNMENT_PAGES; i += 1) {
-        const resp = await assignmentsApi.list({
+      const all = await assignmentsApi.listAll(
+        {
           project_ids: projectIds,
-          page,
-          page_size: ASSIGNMENT_PAGE_SIZE,
           include_placeholders: 1,
-        });
-        const items = (resp?.results || []) as Assignment[];
-        all.push(...items);
-        if (!resp?.next) break;
-        page = parseNextPage(resp.next, page);
-      }
+        },
+        { noCache: true }
+      );
       const map: Record<number, Map<number, Set<string>>> = {};
-      all.forEach((assignment) => {
+      (all || []).forEach((assignment: Assignment) => {
         const pid = assignment.project;
         if (typeof pid !== 'number') return;
         if (!map[pid]) map[pid] = new Map<number, Set<string>>();
@@ -433,18 +467,18 @@ const DeliverablesDashboard: React.FC = () => {
         normalized[Number(pid)] = deptEntries;
       });
       if (!active) return;
-      setProjectDepartmentLeads(normalized);
-      setAssignmentsLoading(false);
+      setFallbackProjectDepartmentLeads(normalized);
+      setFallbackAssignmentsLoading(false);
     })().catch((err) => {
       if (!active) return;
-      console.error('Failed to load assignments:', err);
-      setAssignmentsError('Assignments unavailable');
-      setAssignmentsLoading(false);
+      console.error('Fallback lead coverage load failed:', err);
+      setFallbackAssignmentsError('Assignment coverage unavailable');
+      setFallbackAssignmentsLoading(false);
     });
     return () => {
       active = false;
     };
-  }, [projectIdsKey]);
+  }, [hasBundledDepartmentLeads, projectIds.join(',')]);
 
   const headerDate = useMemo(() => {
     return new Intl.DateTimeFormat('en-US', {
@@ -472,6 +506,8 @@ const DeliverablesDashboard: React.FC = () => {
 
   const totalProjects = projectIds.length;
   const totalDeliverables = deliverables.length;
+  const leadCoverageLoading =
+    deliverablesQuery.isLoading || deliverablesQuery.isFetching || fallbackAssignmentsLoading;
 
   return (
     <div className="deliverables-dashboard">
@@ -560,8 +596,8 @@ const DeliverablesDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  {assignmentsLoading ? (
-                    <div className="dd-empty">Loading assignments...</div>
+                  {leadCoverageLoading ? (
+                    <div className="dd-empty">Loading lead coverage...</div>
                   ) : departmentsForProject.length > 0 ? (
                     <div className="dd-dept-list">
                       {departmentsForProject.map((dept) => (
@@ -575,7 +611,7 @@ const DeliverablesDashboard: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="dd-empty">No assignments yet</div>
+                    <div className="dd-empty">No department leads mapped</div>
                   )}
                 </div>
               </div>
@@ -604,9 +640,9 @@ const DeliverablesDashboard: React.FC = () => {
             )}
           </div>
           <div>
-            {assignmentsLoading && 'Loading assignment coverage'}
-            {!assignmentsLoading && assignmentsError && assignmentsError}
-            {!assignmentsLoading && !assignmentsError && departmentError && departmentError}
+            {leadCoverageLoading && 'Refreshing coverage'}
+            {!leadCoverageLoading && fallbackAssignmentsError && fallbackAssignmentsError}
+            {!leadCoverageLoading && !fallbackAssignmentsError && departmentError && departmentError}
           </div>
         </footer>
       </div>
