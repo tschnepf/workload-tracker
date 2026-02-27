@@ -1,6 +1,7 @@
 from django.urls import path
 from projects.views_roles import (
     ProjectRoleListCreateView,
+    ProjectRoleBulkView,
     ProjectRoleDetailView,
     ProjectRoleReorderView,
     ProjectRoleUsageView,
@@ -10,6 +11,7 @@ from projects.views_roles import (
 
 urlpatterns = [
     path('project-roles/', ProjectRoleListCreateView.as_view(), name='project_roles_list_create'),
+    path('project-roles/bulk/', ProjectRoleBulkView.as_view(), name='project_roles_bulk'),
     path('project-roles/search/', ProjectRoleSearchView.as_view(), name='project_roles_search'),
     path('project-roles/<int:id>/', ProjectRoleDetailView.as_view(), name='project_roles_detail'),
     path('project-roles/<int:id>/usage/', ProjectRoleUsageView.as_view(), name='project_roles_usage'),

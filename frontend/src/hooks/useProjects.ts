@@ -5,6 +5,7 @@ import { Project } from '@/types/models';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createProject, deleteProject, updateProject } from '@/lib/mutations/projects';
+import { primeProjectRolesCache } from '@/roles/api';
 
 export type ProjectsSearchToken = { term: string; op: 'or' | 'and' | 'not' };
 export type ProjectsDepartmentFilter = { departmentId: number; op: 'or' | 'and' | 'not' };
@@ -127,9 +128,17 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
   }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, useSearch, vertical]);
   const query = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam = 1 }) => {
+    queryFn: async ({ pageParam = 1 }) => {
       if (useSearch) {
-        return projectsApi.search({ ...searchPayloadBase, page: pageParam });
+        const page = await projectsApi.search({
+          ...searchPayloadBase,
+          page: pageParam,
+          include: 'role_map',
+        });
+        if (page.rolesByDepartment) {
+          primeProjectRolesCache(page.rolesByDepartment);
+        }
+        return page;
       }
       return projectsApi.list({
         page: pageParam,

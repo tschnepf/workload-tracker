@@ -20,6 +20,43 @@ from projects.models import ProjectRole
 from accounts.permissions import IsAdminOrManager
 from assignments.models import Assignment
 
+PROJECT_ROLE_BULK_MAX_IDS = 200
+PROJECT_ROLE_BULK_GET_MAX_IDS = 25
+PROJECT_ROLE_BULK_GET_MAX_QUERY_LENGTH = 512
+
+
+def _parse_department_ids(raw_values):
+    ids = []
+    seen = set()
+    for raw in raw_values:
+        try:
+            dept_id = int(str(raw).strip())
+        except Exception:
+            raise ValueError('invalid department id')
+        if dept_id <= 0:
+            raise ValueError('invalid department id')
+        if dept_id in seen:
+            continue
+        seen.add(dept_id)
+        ids.append(dept_id)
+    return ids
+
+
+def _parse_include_inactive(raw_value):
+    return str(raw_value or '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _bulk_roles_by_department_payload(dept_ids, include_inactive: bool):
+    roles_qs = ProjectRole.objects.filter(department_id__in=dept_ids)
+    if not include_inactive:
+        roles_qs = roles_qs.filter(is_active=True)
+    roles_qs = roles_qs.order_by('department_id', '-is_active', 'sort_order', 'name')
+    serialized = ProjectRoleItemSerializer(list(roles_qs), many=True).data
+    payload = {str(dept_id): [] for dept_id in dept_ids}
+    for item in serialized:
+        payload[str(item['department_id'])].append(item)
+    return payload
+
 
 class ProjectRoleListCreateView(APIView):
     def get_permissions(self):
@@ -80,6 +117,72 @@ class ProjectRoleListCreateView(APIView):
             is_active=True,
         )
         return Response(ProjectRoleItemSerializer(obj).data, status=201)
+
+
+class ProjectRoleBulkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=inline_serializer(
+            name='ProjectRoleBulkRequest',
+            fields={
+                'department_ids': serializers.ListField(child=serializers.IntegerField()),
+                'include_inactive': serializers.BooleanField(required=False, default=False),
+            },
+        ),
+        responses=inline_serializer(
+            name='ProjectRoleBulkResponse',
+            fields={
+                'rolesByDepartment': serializers.JSONField(),
+            },
+        ),
+    )
+    def post(self, request):
+        raw_ids = request.data.get('department_ids')
+        if not isinstance(raw_ids, list):
+            return Response({'detail': 'department_ids[] required'}, status=400)
+        try:
+            dept_ids = _parse_department_ids(raw_ids)
+        except ValueError:
+            return Response({'detail': 'invalid department_ids'}, status=400)
+        if not dept_ids:
+            return Response({'detail': 'department_ids[] required'}, status=400)
+        if len(dept_ids) > PROJECT_ROLE_BULK_MAX_IDS:
+            return Response({'detail': f'department_ids max length is {PROJECT_ROLE_BULK_MAX_IDS}'}, status=400)
+
+        include_inactive = _parse_include_inactive(request.data.get('include_inactive'))
+        payload = _bulk_roles_by_department_payload(dept_ids, include_inactive=include_inactive)
+        return Response({'rolesByDepartment': payload})
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='ProjectRoleBulkGetResponse',
+            fields={
+                'rolesByDepartment': serializers.JSONField(),
+            },
+        ),
+    )
+    def get(self, request):
+        raw_csv = str(request.query_params.get('department_ids') or '').strip()
+        if not raw_csv:
+            return Response({'detail': 'department_ids is required'}, status=400)
+        if len(raw_csv) > PROJECT_ROLE_BULK_GET_MAX_QUERY_LENGTH:
+            return Response({'detail': 'department_ids query is too long; use POST'}, status=400)
+        tokens = [token for token in raw_csv.split(',') if str(token).strip()]
+        try:
+            dept_ids = _parse_department_ids(tokens)
+        except ValueError:
+            return Response({'detail': 'invalid department_ids'}, status=400)
+        if not dept_ids:
+            return Response({'detail': 'department_ids is required'}, status=400)
+        if len(dept_ids) > PROJECT_ROLE_BULK_GET_MAX_IDS:
+            return Response({'detail': f'department_ids max length is {PROJECT_ROLE_BULK_GET_MAX_IDS} for GET; use POST'}, status=400)
+        if len(dept_ids) > PROJECT_ROLE_BULK_MAX_IDS:
+            return Response({'detail': f'department_ids max length is {PROJECT_ROLE_BULK_MAX_IDS}'}, status=400)
+
+        include_inactive = _parse_include_inactive(request.query_params.get('include_inactive'))
+        payload = _bulk_roles_by_department_payload(dept_ids, include_inactive=include_inactive)
+        return Response({'rolesByDepartment': payload})
 
 
 class ProjectRoleSearchView(APIView):

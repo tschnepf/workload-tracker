@@ -1,4 +1,6 @@
-from django.test import TestCase
+import json
+
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -126,3 +128,37 @@ class DeliverablesCalendarApiTests(TestCase):
         kickoff = next((item for item in items if item.get('itemType') == 'deliverable' and item.get('id') == self.d1.id), None)
         self.assertIsNotNone(kickoff)
         self.assertIn('departmentLeads', kickoff)
+
+    @override_settings(DELIVERABLES_CALENDAR_MAX_BYTES=450)
+    def test_calendar_with_pre_items_applies_payload_guardrails(self):
+        resp = self.client.get(
+            '/api/deliverables/calendar_with_pre_items/?start=2025-09-01&end=2025-09-30&include_notes=preview&include_project_leads=1'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        payload = resp.json()
+        self.assertIn('truncated', payload)
+        truncation = payload.get('truncated') or {}
+        self.assertTrue(
+            'items' in truncation
+            or 'departmentLeadsByProject' in truncation
+            or 'notesPreview' in truncation
+            or 'notes' in truncation
+        )
+        compact_size = len(json.dumps(payload, default=str, separators=(',', ':')).encode('utf-8'))
+        self.assertLessEqual(compact_size, 450)
+
+    @override_settings(DELIVERABLES_CALENDAR_MAX_BYTES=450)
+    def test_calendar_with_pre_items_truncation_is_deterministic(self):
+        url = (
+            '/api/deliverables/calendar_with_pre_items/'
+            '?start=2025-09-01&end=2025-09-30&include_notes=preview&include_project_leads=1'
+        )
+        resp1 = self.client.get(url)
+        resp2 = self.client.get(url)
+        self.assertEqual(resp1.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+        payload1 = resp1.json()
+        payload2 = resp2.json()
+        ids1 = [item.get('id') for item in payload1.get('items', [])]
+        ids2 = [item.get('id') for item in payload2.get('items', [])]
+        self.assertEqual(ids1, ids2)

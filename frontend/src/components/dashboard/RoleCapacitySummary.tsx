@@ -4,6 +4,7 @@ import MultiRoleCapacityChart from '@/components/charts/MultiRoleCapacityChart';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { getRoleCapacityTimeline } from '@/services/analyticsApi';
+import { reportsApi } from '@/services/api';
 import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import { Link } from 'react-router';
@@ -39,11 +40,28 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
   const refreshTimerRef = React.useRef<number | null>(null);
   const summaryRef = React.useRef<HTMLDivElement | null>(null);
   const [summaryHeight, setSummaryHeight] = React.useState(0);
+  const hasBootstrappedRef = React.useRef(false);
 
   const refresh = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      if (!hasBootstrappedRef.current) {
+        try {
+          const bootstrap = await reportsApi.getRoleCapacityBootstrap({
+            department: deptState.selectedDepartmentId ?? undefined,
+            weeks,
+            vertical: verticalState.selectedVerticalId ?? undefined,
+          });
+          hasBootstrappedRef.current = true;
+          setWeekKeys(bootstrap.timeline?.weekKeys || []);
+          setSeries(bootstrap.timeline?.series || []);
+          return;
+        } catch {
+          // Fall through to existing timeline endpoint.
+        }
+      }
+
       const res = await getRoleCapacityTimeline({
         department: deptState.selectedDepartmentId ?? null,
         weeks,

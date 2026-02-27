@@ -720,6 +720,16 @@ export const autoHoursTemplatesApi = {
 };
 
 // Projects API
+export type ProjectsSearchResponse = PaginatedResponse<Project> & {
+  rolesByDepartment?: Record<string, Array<{
+    id: number;
+    name: string;
+    is_active: boolean;
+    sort_order: number;
+    department_id: number;
+  }>>;
+};
+
 export const projectsApi = {
   // Get all projects with pagination support
   list: async (params?: { page?: number; page_size?: number; ordering?: string; vertical?: number }) => {
@@ -792,8 +802,10 @@ export const projectsApi = {
     vertical?: number;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
     department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+    include?: string;
+    include_inactive_roles?: boolean;
   }) => {
-    return fetchApi<PaginatedResponse<Project>>('/projects/search/', {
+    return fetchApi<ProjectsSearchResponse>('/projects/search/', {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(payload || {}),
@@ -1491,7 +1503,54 @@ export const dashboardApi = {
   },
 };
 
+export type RoleCapacityBootstrapResponse = {
+  departments: Department[];
+  roles: Array<{ id: number; name: string }>;
+  timeline: {
+    weekKeys: string[];
+    series: Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[]; people?: number[] }>;
+  };
+};
+
+export type ForecastBootstrapResponse = {
+  departments: Department[];
+  projects: Array<{ id: number; name: string }>;
+  workloadForecast: WorkloadForecastItem[];
+};
+
 export const reportsApi = {
+  getRoleCapacityBootstrap: async (params?: {
+    weeks?: number;
+    department?: number;
+    role_ids?: string;
+    vertical?: number;
+    include_inactive?: 0 | 1;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.weeks != null) queryParams.set('weeks', String(params.weeks));
+    if (params?.department != null) queryParams.set('department', String(params.department));
+    if (params?.role_ids) queryParams.set('role_ids', params.role_ids);
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<RoleCapacityBootstrapResponse>(`/reports/role-capacity/bootstrap/${queryString}`);
+  },
+
+  getForecastBootstrap: async (params?: {
+    weeks?: number;
+    department?: number;
+    include_children?: 0 | 1;
+    vertical?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.weeks != null) queryParams.set('weeks', String(params.weeks));
+    if (params?.department != null) queryParams.set('department', String(params.department));
+    if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<ForecastBootstrapResponse>(`/reports/forecast/bootstrap/${queryString}`);
+  },
+
   getDepartmentsOverview: async (params?: {
     weeks?: number;
     vertical?: number;

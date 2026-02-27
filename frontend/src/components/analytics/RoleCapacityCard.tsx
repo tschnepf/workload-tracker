@@ -4,12 +4,10 @@ import MultiRoleCapacityChart, { type ChartMode, roleColorForId } from '@/compon
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { getRoleCapacityTimeline } from '@/services/analyticsApi';
+import { reportsApi } from '@/services/api';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
-import { useDepartments } from '@/hooks/useDepartments';
-import { useRolesAll } from '@/hooks/useRolesAll';
-import { useUiBootstrap } from '@/hooks/useUiBootstrap';
 
 type HideControls = {
   timeframe?: boolean;
@@ -46,23 +44,27 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   const isMobile = useMediaQuery('(max-width: 767px)');
   const { state: globalDept } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
-  useUiBootstrap({
-    include: ['departments', 'roles'],
-    vertical: verticalState.selectedVerticalId ?? undefined,
-  });
-  const { departments } = useDepartments({ vertical: verticalState.selectedVerticalId ?? undefined });
-  const { roles } = useRolesAll();
   const effectiveDeptId = (departmentId ?? globalDept.selectedDepartmentId) ?? null;
 
   const [weeks, setWeeks] = React.useState<number>(defaultWeeks);
   const [mode, setMode] = React.useState<ChartMode>(defaultMode);
+  const [departments, setDepartments] = React.useState<Array<{ id: number; name: string }>>([]);
+  const [roles, setRoles] = React.useState<Array<{ id: number; name: string }>>([]);
   const [selectedRoleIds, setSelectedRoleIds] = React.useState<Set<number>>(new Set(initialSelectedRoleIds || []));
   const initializedSelection = React.useRef(false);
+  const hasBootstrappedRef = React.useRef(false);
   const [weekKeys, setWeekKeys] = React.useState<string[]>([]);
   const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[] }>>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const refreshTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    hasBootstrappedRef.current = false;
+    initializedSelection.current = false;
+    setRoles([]);
+    setDepartments([]);
+  }, [verticalState.selectedVerticalId]);
 
   // Initialize selection to all roles (or provided initial ids) once roles load
   React.useEffect(() => {
@@ -80,6 +82,32 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
     setLoading(true);
     setError(null);
     try {
+      if (!hasBootstrappedRef.current) {
+        try {
+          const bootstrap = await reportsApi.getRoleCapacityBootstrap({
+            department: effectiveDeptId != null ? Number(effectiveDeptId) : undefined,
+            weeks,
+            vertical: verticalState.selectedVerticalId ?? undefined,
+          });
+          hasBootstrappedRef.current = true;
+          setDepartments(
+            (bootstrap.departments || [])
+              .map((dept) => ({ id: Number(dept.id), name: dept.name || `#${dept.id}` }))
+              .filter((dept) => Number.isFinite(dept.id) && dept.id > 0)
+          );
+          setRoles(
+            (bootstrap.roles || [])
+              .map((role) => ({ id: Number(role.id), name: role.name || `Role #${role.id}` }))
+              .filter((role) => Number.isFinite(role.id) && role.id > 0)
+          );
+          setWeekKeys(bootstrap.timeline?.weekKeys || []);
+          setSeries(bootstrap.timeline?.series || []);
+          return;
+        } catch {
+          // Fallback below to existing timeline endpoint path.
+        }
+      }
+
       const roleIdsCsv = (selectedRoleIds && selectedRoleIds.size > 0) ? Array.from(selectedRoleIds).join(',') : undefined;
       const res = await getRoleCapacityTimeline({
         department: effectiveDeptId != null ? Number(effectiveDeptId) : undefined,
@@ -87,6 +115,13 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
         roleIdsCsv,
         vertical: verticalState.selectedVerticalId ?? undefined,
       });
+      if (res.roles?.length) {
+        setRoles(
+          res.roles
+            .map((role) => ({ id: Number(role.id), name: role.name || `Role #${role.id}` }))
+            .filter((role) => Number.isFinite(role.id) && role.id > 0)
+        );
+      }
       setWeekKeys(res.weekKeys || []);
       setSeries(res.series || []);
     } catch (e: any) {

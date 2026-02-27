@@ -2,8 +2,8 @@
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
-import { peopleApi, projectsApi, assignmentsApi, deliverablesApi } from '../../services/api';
-import { WorkloadForecastItem, Project, Assignment, Deliverable } from '../../types/models';
+import { peopleApi, projectsApi, departmentsApi, assignmentsApi, deliverablesApi, reportsApi } from '../../services/api';
+import { WorkloadForecastItem, Project, Assignment, Deliverable, Department } from '../../types/models';
 import CapacityTimeline, { CapacityTimelineCompact } from '@/components/charts/CapacityTimeline';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -12,8 +12,6 @@ import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
-import { useDepartments } from '@/hooks/useDepartments';
-import { useUiBootstrap } from '@/hooks/useUiBootstrap';
 
 function fmt(date: Date): string { return date.toISOString().slice(0,10); }
 
@@ -22,14 +20,8 @@ const TeamForecastPage: React.FC = () => {
   const [scale, setScale] = useState<'week'|'month'|'quarter'|'year'>('month');
   const { state: deptState, setDepartment } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
-  useUiBootstrap({
-    include: ['departments'],
-    vertical: verticalState.selectedVerticalId ?? undefined,
-  });
-  const { departments: depts, refetch: refetchDepartments } = useDepartments({
-    vertical: verticalState.selectedVerticalId ?? undefined,
-  });
   const isMobile = useMediaQuery('(max-width: 767px)');
+  const [depts, setDepts] = useState<Department[]>([]);
   const [forecast, setForecast] = useState<WorkloadForecastItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(false);
@@ -50,6 +42,8 @@ const TeamForecastPage: React.FC = () => {
   const forecastRequestIdRef = useRef(0);
   const projectDetailsRequestIdRef = useRef(0);
   const projectsRequestIdRef = useRef(0);
+  const bootstrapModeRef = useRef<'pending' | 'enabled' | 'disabled'>('pending');
+  const fallbackRefsLoadedRef = useRef(false);
 
   useEffect(() => {
     setPendingDeptId(deptState.selectedDepartmentId ?? null);
@@ -63,6 +57,13 @@ const TeamForecastPage: React.FC = () => {
     forecastRef.current = forecast;
   }, [forecast]);
 
+  useEffect(() => {
+    bootstrapModeRef.current = 'pending';
+    fallbackRefsLoadedRef.current = false;
+    setProjects([]);
+    setDepts([]);
+  }, [verticalState.selectedVerticalId]);
+
   const loadForecast = useCallback(async () => {
     const requestId = ++forecastRequestIdRef.current;
     const hasData = (forecastRef.current || []).length > 0;
@@ -70,6 +71,58 @@ const TeamForecastPage: React.FC = () => {
     setIsFetching(hasData);
     setError(null);
     try {
+      if (bootstrapModeRef.current === 'pending') {
+        try {
+          const bootstrap = await reportsApi.getForecastBootstrap({
+            weeks,
+            department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
+            include_children: deptState.includeChildren ? 1 : 0,
+            vertical: verticalState.selectedVerticalId ?? undefined,
+          });
+          if (requestId === forecastRequestIdRef.current) {
+            setForecast(bootstrap.workloadForecast || []);
+            setProjects((bootstrap.projects || []) as any);
+            setDepts((bootstrap.departments || []) as any);
+          }
+          bootstrapModeRef.current = 'enabled';
+          fallbackRefsLoadedRef.current = true;
+          return;
+        } catch {
+          bootstrapModeRef.current = 'disabled';
+        }
+      }
+
+      if (bootstrapModeRef.current === 'enabled') {
+        const data = await peopleApi.workloadForecast({
+          weeks,
+          department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
+          include_children: deptState.includeChildren ? 1 : 0,
+          vertical: verticalState.selectedVerticalId ?? undefined,
+        });
+        if (requestId === forecastRequestIdRef.current) setForecast(data || []);
+        return;
+      }
+
+      if (!fallbackRefsLoadedRef.current) {
+        const [forecastData, projectsResp, deptList] = await Promise.all([
+          peopleApi.workloadForecast({
+            weeks,
+            department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
+            include_children: deptState.includeChildren ? 1 : 0,
+            vertical: verticalState.selectedVerticalId ?? undefined,
+          }),
+          projectsApi.list({ page: 1, page_size: 200, vertical: verticalState.selectedVerticalId ?? undefined }),
+          departmentsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined }),
+        ]);
+        if (requestId === forecastRequestIdRef.current) {
+          setForecast(forecastData || []);
+          setProjects(projectsResp.results || []);
+          setDepts(deptList || []);
+        }
+        fallbackRefsLoadedRef.current = true;
+        return;
+      }
+
       const data = await peopleApi.workloadForecast({
         weeks,
         department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
@@ -91,6 +144,13 @@ const TeamForecastPage: React.FC = () => {
     loadForecast();
   }, [loadForecast]);
 
+  const loadDepartments = useCallback(async () => {
+    try {
+      const list = await departmentsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined });
+      setDepts(list || []);
+    } catch {}
+  }, [verticalState.selectedVerticalId]);
+
   const loadProjects = useCallback(async () => {
     const requestId = ++projectsRequestIdRef.current;
     try {
@@ -98,10 +158,6 @@ const TeamForecastPage: React.FC = () => {
       if (requestId === projectsRequestIdRef.current) setProjects(p.results || []);
     } catch {}
   }, [verticalState.selectedVerticalId]);
-
-  useAuthenticatedEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
 
   const loadProjectDetails = useCallback(async () => {
     const requestId = ++projectDetailsRequestIdRef.current;
@@ -165,7 +221,7 @@ const TeamForecastPage: React.FC = () => {
       if (selectedProject) scheduleProjectDetailsRefresh();
     });
     const unsubscribeDepartments = subscribeDepartmentsRefresh(() => {
-      refetchDepartments();
+      loadDepartments();
       scheduleForecastRefresh();
       if (selectedProject) scheduleProjectDetailsRefresh();
     });
@@ -184,7 +240,7 @@ const TeamForecastPage: React.FC = () => {
         projectDetailsRefreshTimerRef.current = null;
       }
     };
-  }, [loadForecast, loadProjectDetails, loadProjects, refetchDepartments, selectedProject]);
+  }, [loadDepartments, loadForecast, loadProjectDetails, loadProjects, selectedProject]);
 
   const weekStarts = useMemo(() => (forecast || []).map(f => f.weekStart), [forecast]);
 

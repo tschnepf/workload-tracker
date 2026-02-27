@@ -11,7 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useVerticals } from '@/hooks/useVerticals';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
-import { listProjectRoles, type ProjectRole } from '@/roles/api';
+import { listProjectRoles, listProjectRolesBulk, type ProjectRole } from '@/roles/api';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import AssignmentRow from './AssignmentRow';
 import type { OnRoleSelect } from '@/roles/types';
@@ -288,16 +288,40 @@ const ProjectDetailsPanel: React.FC<Props> = ({
   React.useEffect(() => {
     if (!showAddAssignment) return;
     if (!roleSearchQuery) return;
-    const missing = departments.filter((dept) => dept.id != null && !rolesByDept[dept.id]);
+    const missing = departments
+      .map((dept) => (dept.id != null && !rolesByDept[dept.id] ? Number(dept.id) : null))
+      .filter((deptId): deptId is number => typeof deptId === 'number' && deptId > 0);
     if (missing.length === 0) return;
-    missing.forEach((dept) => {
-      if (dept.id == null) return;
-      listProjectRoles(dept.id)
-        .then((roles) => {
-          setRolesByDept((prev) => (prev[dept.id as number] ? prev : { ...prev, [dept.id as number]: roles }));
-        })
-        .catch(() => {});
-    });
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const bulk = await listProjectRolesBulk(missing);
+        if (cancelled) return;
+        setRolesByDept((prev) => {
+          const next = { ...prev };
+          let changed = false;
+          missing.forEach((deptId) => {
+            if (next[deptId]) return;
+            next[deptId] = bulk[deptId] || [];
+            changed = true;
+          });
+          return changed ? next : prev;
+        });
+      } catch {
+        await Promise.all(missing.map(async (deptId) => {
+          try {
+            const roles = await listProjectRoles(deptId);
+            if (cancelled) return;
+            setRolesByDept((prev) => (prev[deptId] ? prev : { ...prev, [deptId]: roles }));
+          } catch {}
+        }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [departments, roleSearchQuery, rolesByDept, showAddAssignment]);
   // Build week keys from assignment data to avoid TZ drift and mismatches.
   // Prefer the next 4 assignment week keys >= baseline; fallback to local Monday +3.

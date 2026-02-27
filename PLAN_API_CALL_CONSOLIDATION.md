@@ -195,7 +195,7 @@ Collapse per-phase and repeated settings requests into one scoped bulk call.
 - `/project-assignments`: `25 -> 8`
 
 ## Workstream C: Department Reports Fan-Out Removal
-Status: `Complete` (verified on 2026-02-25)
+Status: `Complete` (verified on 2026-02-27)
 
 ### Objective
 Replace per-department dashboard loops with one aggregate report endpoint while preserving graceful degradation.
@@ -243,9 +243,13 @@ Replace per-department dashboard loops with one aggregate report endpoint while 
 5. Automated checks passed:
    - `python manage.py test reports.tests deliverables.tests.test_calendar`
    - `npm --prefix frontend run build`
+6. Backend hardening completed and verified in `backend/reports/views.py`:
+   - endpoint-level deadline budget (`REPORTS_DEPARTMENTS_OVERVIEW_DEADLINE_MS`)
+   - bounded sub-query timeout wiring (`REPORTS_DEPARTMENTS_OVERVIEW_SUBQUERY_TIMEOUT_MS`)
+   - anti-stampede cache controls (`fresh/stale/lock`) with jittered TTL and stale fallback
 
 ## Workstream D: Deliverables Dashboard N+1 Elimination
-Status: `Complete` (verified on 2026-02-25)
+Status: `Complete` (verified on 2026-02-27)
 
 ### Objective
 Remove per-deliverable detail lookups and consolidate project lead mapping data without inflating calendar payloads.
@@ -270,7 +274,19 @@ Remove per-deliverable detail lookups and consolidate project lead mapping data 
 ### Expected impact
 - `/deliverables/dashboard`: `19 -> 6`
 
+### Verification
+1. Payload guardrails completed and verified in `backend/deliverables/views.py`:
+   - response-size cap (`DELIVERABLES_CALENDAR_MAX_BYTES`)
+   - deterministic truncation order and metadata
+   - predictable fallback truncation behavior under hard caps
+2. Automated checks passed:
+   - `python manage.py test deliverables.tests.test_calendar`
+3. Live authenticated endpoint check passed:
+   - `GET /api/deliverables/calendar_with_pre_items/?start=2025-09-01&end=2025-09-30&include_notes=preview&include_project_leads=1`
+
 ## Workstream E: Projects Page Role and Assignment Fan-Out
+Status: `Complete` (verified on 2026-02-27)
+
 ### Objective
 Replace per-department role lookup calls with bulk role fetch without changing role behavior.
 
@@ -293,7 +309,32 @@ Replace per-department role lookup calls with bulk role fetch without changing r
 ### Expected impact
 - `/projects`: `15 -> 9`
 
+### Verification
+1. Backend endpoint + routing verified:
+   - `POST /api/projects/project-roles/bulk/` implemented as primary path.
+   - `GET /api/projects/project-roles/bulk/?department_ids=...` implemented as CSV compatibility path with guardrails.
+2. Deterministic `rolesByDepartment` response with empty-array departments verified in tests.
+3. Frontend role fan-out loops replaced with one bulk call plus fallback in:
+   - `frontend/src/pages/Projects/list/hooks/useProjectAssignments.ts`
+   - `frontend/src/pages/Projects/list/components/ProjectDetailsPanel.tsx`
+4. Automated checks passed:
+   - `python manage.py test projects.tests.test_roles_api projects.tests.test_roles_list_filters`
+   - `npm --prefix frontend run build`
+5. Optional role-map include completed for project search payload:
+   - `POST /api/projects/search/` now accepts `include=role_map`
+   - response includes `rolesByDepartment` for departments found in the current page's staffing scope
+6. Frontend role cache priming and reuse completed:
+   - `frontend/src/hooks/useProjects.ts` primes from `rolesByDepartment`
+   - `frontend/src/roles/api.ts` reuses primed single-department cache for bulk lookups
+7. Live authenticated endpoint check passed:
+   - `POST /api/projects/search/` with `{ "page_size": 25, "include": "role_map" }`
+8. GET compatibility guardrails are now explicitly covered by tests:
+   - max-ids overflow returns `400`
+   - query-length overflow returns `400` with POST guidance
+
 ## Workstream F: Reports Role Capacity and Forecast Bootstrap
+Status: `Complete` (verified on 2026-02-26)
+
 ### Objective
 Reduce duplicate report setup calls by bundling reference + primary dataset while preserving current permissions.
 
@@ -322,6 +363,25 @@ Reduce duplicate report setup calls by bundling reference + primary dataset whil
 ### Expected impact
 - `/reports/role-capacity`: `11 -> 6`
 - `/reports/forecast`: `10 -> 6`
+
+### Verification
+1. Backend endpoints + permissions verified:
+   - `GET /api/reports/role-capacity/bootstrap/` (authenticated)
+   - `GET /api/reports/forecast/bootstrap/` (admin-only with explicit `403` for non-admin users)
+2. Frontend startup bootstrap path integrated with fallback in:
+   - `frontend/src/components/analytics/RoleCapacityCard.tsx`
+   - `frontend/src/components/dashboard/RoleCapacitySummary.tsx`
+   - `frontend/src/pages/Reports/TeamForecast.tsx`
+3. Environment and runtime checks:
+   - Restarted `workload-tracker-backend` and `workload-tracker-frontend` containers.
+   - `python manage.py migrate --noinput` -> no unapplied migrations.
+   - Live authenticated API smoke test:
+     - role-capacity bootstrap (admin token): `200`
+     - forecast bootstrap (admin token): `200`
+     - forecast bootstrap (non-admin token): `403`
+4. Automated checks passed:
+   - `python manage.py test reports.tests projects.tests.test_roles_api projects.tests.test_roles_list_filters`
+   - `npm --prefix frontend run build`
 
 ## Workstream G: People, Skills, Settings Consolidation
 ### Objective

@@ -15,6 +15,7 @@ from django.utils.dateparse import parse_date
 from django.utils.http import http_date
 from datetime import datetime
 from collections import defaultdict
+import json
 import re
 import logging
 from .models import Deliverable, DeliverableAssignment, ReallocationAudit, DeliverableTaskTemplate, DeliverableTask, DeliverableQATask
@@ -517,6 +518,114 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 return text
             return f"{text[: max(0, limit - 1)].rstrip()}..."
 
+        def _payload_size_bytes(value: object) -> int:
+            try:
+                return len(json.dumps(value, default=str, separators=(',', ':')).encode('utf-8'))
+            except Exception:
+                return 0
+
+        def _truncate_text(value: str | None, limit: int) -> str | None:
+            if value is None:
+                return None
+            text = str(value)
+            if len(text) <= limit:
+                return text
+            return f"{text[: max(0, limit - 1)].rstrip()}..."
+
+        def _apply_payload_guardrails(payload: dict) -> dict:
+            try:
+                max_bytes = int(getattr(settings, 'DELIVERABLES_CALENDAR_MAX_BYTES', 512_000))
+            except Exception:
+                max_bytes = 512_000
+            max_bytes = max(128, max_bytes)
+            if _payload_size_bytes(payload) <= max_bytes:
+                return payload
+
+            truncation: dict[str, object] = {}
+            items_raw = payload.get('items')
+            if not isinstance(items_raw, list):
+                payload['truncated'] = {'reason': 'payload_cap_exceeded'}
+                return payload
+
+            items_list: list[dict] = [dict(item) if isinstance(item, dict) else {'value': item} for item in items_raw]
+            notes_mode = payload.get('notesMode')
+            if notes_mode == 'full':
+                for item in items_list:
+                    if item.get('itemType') != 'deliverable':
+                        continue
+                    if 'notes' in item:
+                        item['notes'] = _truncate_text(item.get('notes'), 800)
+                truncation['notes'] = 'trimmed_to_800_chars'
+            elif notes_mode == 'preview':
+                for item in items_list:
+                    if item.get('itemType') != 'deliverable':
+                        continue
+                    if 'notesPreview' in item:
+                        item['notesPreview'] = _truncate_text(item.get('notesPreview'), 140)
+                truncation['notesPreview'] = 'trimmed_to_140_chars'
+
+            payload['items'] = items_list
+            if _payload_size_bytes(payload) <= max_bytes:
+                payload['truncated'] = truncation
+                return payload
+
+            if 'departmentLeadsByProject' in payload:
+                payload.pop('departmentLeadsByProject', None)
+                for item in items_list:
+                    item.pop('departmentLeads', None)
+                truncation['departmentLeadsByProject'] = 'removed'
+                if _payload_size_bytes(payload) <= max_bytes:
+                    payload['truncated'] = truncation
+                    return payload
+
+            def _item_sort_key(item: dict) -> tuple[str, str, int]:
+                raw_id = item.get('id')
+                try:
+                    item_id = int(raw_id)
+                except Exception:
+                    item_id = 0
+                return (
+                    str(item.get('date') or ''),
+                    str(item.get('itemType') or ''),
+                    item_id,
+                )
+
+            ordered_items = sorted(items_list, key=_item_sort_key)
+            base_payload = {k: v for k, v in payload.items() if k != 'items'}
+            kept: list[dict] = []
+            omitted = 0
+            for item in ordered_items:
+                candidate = {**base_payload, 'items': kept + [item]}
+                if _payload_size_bytes(candidate) <= max_bytes:
+                    kept.append(item)
+                else:
+                    omitted += 1
+            payload['items'] = kept
+            truncation['items'] = {
+                'returned': len(kept),
+                'omitted': omitted,
+            }
+            payload['truncated'] = truncation
+            if _payload_size_bytes(payload) > max_bytes:
+                payload.pop('notesMode', None)
+                payload['truncated'] = {
+                    'reason': 'payload_cap_exceeded',
+                    'items': {
+                        'returned': len(payload.get('items', [])),
+                        'omitted': max(0, len(ordered_items) - len(payload.get('items', []))),
+                    },
+                }
+            if _payload_size_bytes(payload) > max_bytes:
+                payload['items'] = []
+                payload['truncated'] = {
+                    'reason': 'payload_cap_exceeded',
+                    'items': {
+                        'returned': 0,
+                        'omitted': len(ordered_items),
+                    },
+                }
+            return payload
+
         # Compute allowed deliverable IDs (subquery) for mine_only scoping
         allowed_ids_subq = None
         allowed_ids_list: list[int] = []
@@ -695,6 +804,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 payload['notesMode'] = include_notes
             if include_project_leads:
                 payload['departmentLeadsByProject'] = department_leads_by_project
+            payload = _apply_payload_guardrails(payload)
             return Response(payload)
         return Response(combined)
 

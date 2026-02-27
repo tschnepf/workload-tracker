@@ -14,7 +14,7 @@ from accounts.permissions import is_admin_or_manager
 from accounts.serializers import AdminAuditLogSerializer
 from django.core.cache import cache
 from django.utils import timezone
-from .models import Project, ProjectChangeLog
+from .models import Project, ProjectChangeLog, ProjectRole
 from core.etag import ETagConditionalMixin
 from .serializers import ProjectSerializer, ProjectFilterMetadataSerializer, ProjectAvailabilityItemSerializer, ProjectChangeLogSerializer
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
@@ -163,6 +163,64 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         return response
 
+    def _parse_include_tokens(self, data: dict, request) -> set[str]:
+        raw = data.get('include')
+        if raw in (None, ''):
+            raw = request.query_params.get('include')
+        if raw in (None, ''):
+            return set()
+        if isinstance(raw, list):
+            source = raw
+        else:
+            source = str(raw).split(',')
+        out: set[str] = set()
+        for item in source:
+            token = str(item).strip().lower()
+            if token:
+                out.add(token)
+        return out
+
+    def _build_roles_by_department_for_projects(
+        self,
+        project_ids: 'list[int]',
+        *,
+        include_inactive: bool = False,
+    ) -> 'dict[str, list[dict]]':
+        if not project_ids:
+            return {}
+        assignments_qs = Assignment.objects.filter(is_active=True, project_id__in=project_ids).values(
+            'person__department_id',
+            'department_id',
+            'role_on_project_ref__department_id',
+        )
+        department_ids: set[int] = set()
+        for row in assignments_qs:
+            dept_id = (
+                row.get('person__department_id')
+                or row.get('department_id')
+                or row.get('role_on_project_ref__department_id')
+            )
+            if dept_id:
+                department_ids.add(int(dept_id))
+        if not department_ids:
+            return {}
+
+        roles_qs = ProjectRole.objects.filter(department_id__in=department_ids)
+        if not include_inactive:
+            roles_qs = roles_qs.filter(is_active=True)
+        roles_qs = roles_qs.order_by('department_id', '-is_active', 'sort_order', 'name')
+
+        payload: dict[str, list[dict]] = {str(dept_id): [] for dept_id in sorted(department_ids)}
+        for role in roles_qs:
+            payload[str(role.department_id)].append({
+                'id': role.id,
+                'name': role.name,
+                'is_active': bool(role.is_active),
+                'sort_order': int(role.sort_order or 0),
+                'department_id': role.department_id,
+            })
+        return payload
+
     @extend_schema(
         description="Search projects with tokenized filters and pagination.",
         request=inline_serializer(
@@ -194,6 +252,8 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     ),
                     required=False
                 ),
+                'include': serializers.CharField(required=False, help_text='CSV includes. Supports role_map.'),
+                'include_inactive_roles': serializers.BooleanField(required=False),
                 'include_deliverable_dates': serializers.BooleanField(required=False),
             }
         ),
@@ -204,12 +264,20 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'next': serializers.CharField(allow_null=True, required=False),
                 'previous': serializers.CharField(allow_null=True, required=False),
                 'results': serializers.ListField(child=serializers.DictField()),
+                'rolesByDepartment': serializers.JSONField(required=False),
             }
         )
     )
     @action(detail=False, methods=['post'], url_path='search')
     def search(self, request):
         data = request.data or {}
+        include_tokens = self._parse_include_tokens(data, request)
+        include_role_map = 'role_map' in include_tokens
+        include_inactive_roles = str(
+            data.get('include_inactive_roles')
+            if 'include_inactive_roles' in data
+            else request.query_params.get('include_inactive_roles') or ''
+        ).strip().lower() in ('1', 'true', 'yes', 'on')
         queryset = self.get_queryset()
         vertical_param = data.get('vertical')
         if vertical_param is None:
@@ -522,12 +590,20 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 item['nextDeliverableDate'] = getattr(obj, 'next_deliverable_date', None)
                 item['prevDeliverableDate'] = getattr(obj, 'prev_deliverable_date', None)
 
-        return Response({
+        response_payload = {
             'count': paginator.count,
             'next': next_url,
             'previous': prev_url,
             'results': results,
-        })
+        }
+        if include_role_map:
+            project_ids = [int(obj.id) for obj in page_obj.object_list if getattr(obj, 'id', None)]
+            response_payload['rolesByDepartment'] = self._build_roles_by_department_for_projects(
+                project_ids,
+                include_inactive=include_inactive_roles,
+            )
+
+        return Response(response_payload)
 
     def _paginate_post_queryset(self, request, queryset, data=None):
         """Paginate using body-provided page/page_size for POST search endpoints."""

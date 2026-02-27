@@ -1,6 +1,8 @@
 ﻿from datetime import date, timedelta
-from django.test import TestCase
-from rest_framework.test import APIClient
+from django.conf import settings
+from django.core.cache import cache
+from django.test import TestCase, override_settings
+from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework import status
 
 from projects.models import Project
@@ -9,7 +11,9 @@ from assignments.models import Assignment
 from departments.models import Department
 from verticals.models import Vertical
 from skills.models import SkillTag, PersonSkill
+from roles.models import Role
 from deliverables.models import Deliverable, PreDeliverableType, PreDeliverableItem, DeliverableAssignment
+from core.cache_keys import build_aggregate_cache_key
 
 
 class PreDeliverableReportsTests(TestCase):
@@ -65,8 +69,8 @@ class DepartmentsOverviewReportsTests(TestCase):
         self.client = APIClient()
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        user = User.objects.create_user(username='report_user', password='pw')
-        self.client.force_authenticate(user=user)
+        self.user = User.objects.create_user(username='report_user', password='pw')
+        self.client.force_authenticate(user=self.user)
 
         self.vertical = Vertical.objects.create(name='Architecture')
         self.parent_dept = Department.objects.create(name='Design', vertical=self.vertical)
@@ -158,3 +162,113 @@ class DepartmentsOverviewReportsTests(TestCase):
         self.assertIn(self.parent_dept.id, dept_ids_with_children)
         self.assertIn(self.child_dept.id, dept_ids_with_children)
 
+    def test_departments_overview_cache_headers_and_stale_fallback(self):
+        features = dict(getattr(settings, 'FEATURES', {}) or {})
+        features['SHORT_TTL_AGGREGATES'] = True
+        with override_settings(FEATURES=features):
+            cache.clear()
+            url = '/api/reports/departments/overview/?weeks=4'
+
+            first = self.client.get(url)
+            self.assertEqual(first.status_code, status.HTTP_200_OK)
+            self.assertEqual(first.headers.get('X-Overview-Cache'), 'generated')
+
+            second = self.client.get(url)
+            self.assertEqual(second.status_code, status.HTTP_200_OK)
+            self.assertEqual(second.headers.get('X-Overview-Cache'), 'fresh')
+
+            factory = APIRequestFactory()
+            request_for_key = factory.get('/api/reports/departments/overview/?weeks=4')
+            request_for_key.user = self.user
+            base_key = build_aggregate_cache_key(
+                'reports.departments.overview',
+                request_for_key,
+                filters={
+                    'weeks': 4,
+                    'vertical': 'all',
+                    'department': 'all',
+                    'include_children': 0,
+                    'include_inactive': 0,
+                    'status_in': [],
+                    'search': '',
+                },
+            )
+            fresh_key = f'{base_key}:fresh'
+            stale_key = f'{base_key}:stale'
+            lock_key = f'{base_key}:lock'
+            self.assertIsNotNone(cache.get(stale_key))
+            cache.delete(fresh_key)
+            cache.set(lock_key, '1', timeout=5)
+            stale_resp = self.client.get(url)
+            self.assertEqual(stale_resp.status_code, status.HTTP_200_OK)
+            self.assertEqual(stale_resp.headers.get('X-Overview-Cache'), 'stale')
+
+    @override_settings(REPORTS_DEPARTMENTS_OVERVIEW_DEADLINE_MS=0)
+    def test_departments_overview_deadline_budget_returns_partial(self):
+        resp = self.client.get('/api/reports/departments/overview/?weeks=4')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        payload = resp.json()
+        self.assertIn('aggregate', payload.get('partialFailures', []))
+        self.assertIn('aggregate', payload.get('errorsByScope', {}))
+        self.assertEqual(payload['errorsByScope']['aggregate']['code'], 'deadline_exceeded')
+
+
+class ReportsBootstrapEndpointsTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.admin = User.objects.create_user(username='reports_admin', password='pw', is_staff=True)
+        self.user = User.objects.create_user(username='reports_user', password='pw', is_staff=False)
+
+        self.vertical = Vertical.objects.create(name='Interiors')
+        self.department = Department.objects.create(name='Studio', vertical=self.vertical, is_active=True)
+        self.project = Project.objects.create(name='Bootstrap Project', vertical=self.vertical, is_active=True)
+
+        self.role, _ = Role.objects.get_or_create(
+            name='Designer Bootstrap',
+            defaults={'is_active': True, 'sort_order': 1},
+        )
+        self.person = Person.objects.create(
+            name='Bootstrap Person',
+            department=self.department,
+            role=self.role,
+            weekly_capacity=40,
+            is_active=True,
+        )
+
+        today = date.today()
+        sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        week_key = sunday.isoformat()
+        Assignment.objects.create(
+            person=self.person,
+            project=self.project,
+            weekly_hours={week_key: 18},
+            is_active=True,
+        )
+
+    def test_role_capacity_bootstrap_returns_expected_shape_for_authenticated_user(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/reports/role-capacity/bootstrap/?weeks=4')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        data = resp.json()
+        self.assertIn('departments', data)
+        self.assertIn('roles', data)
+        self.assertIn('timeline', data)
+        self.assertIn('weekKeys', data['timeline'])
+        self.assertIn('series', data['timeline'])
+        self.assertGreaterEqual(len(data['roles']), 1)
+        self.assertGreaterEqual(len(data['timeline']['weekKeys']), 1)
+
+    def test_forecast_bootstrap_is_admin_only(self):
+        self.client.force_authenticate(self.user)
+        forbidden = self.client.get('/api/reports/forecast/bootstrap/?weeks=8')
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN, forbidden.content)
+
+        self.client.force_authenticate(self.admin)
+        allowed = self.client.get('/api/reports/forecast/bootstrap/?weeks=8')
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK, allowed.content)
+        payload = allowed.json()
+        self.assertIn('departments', payload)
+        self.assertIn('projects', payload)
+        self.assertIn('workloadForecast', payload)

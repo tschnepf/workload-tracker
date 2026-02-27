@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Assignment, Person } from '@/types/models';
 import { assignmentsApi } from '@/services/api';
-import { listProjectRoles, type ProjectRole } from '@/roles/api';
+import { listProjectRoles, listProjectRolesBulk, type ProjectRole } from '@/roles/api';
 import { sortAssignmentsByProjectRole } from '@/roles/utils/sortByProjectRole';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 
@@ -40,15 +40,22 @@ export function useProjectAssignments({ projectId, people }: UseProjectAssignmen
         .filter((v): v is number => typeof v === 'number' && v > 0);
 
       const rolesByDept: Record<number, ProjectRole[]> = {};
-      await Promise.all(
-        deptIds.map(async (deptId) => {
-          try {
-            rolesByDept[deptId] = await listProjectRoles(deptId);
-          } catch {
-            rolesByDept[deptId] = [];
-          }
-        })
-      );
+      try {
+        const bulk = await listProjectRolesBulk(deptIds);
+        deptIds.forEach((deptId) => {
+          rolesByDept[deptId] = bulk[deptId] || [];
+        });
+      } catch {
+        await Promise.all(
+          deptIds.map(async (deptId) => {
+            try {
+              rolesByDept[deptId] = await listProjectRoles(deptId);
+            } catch {
+              rolesByDept[deptId] = [];
+            }
+          })
+        );
+      }
 
       const sorted = sortAssignmentsByProjectRole(all, rolesByDept);
       setAssignments(sorted);
