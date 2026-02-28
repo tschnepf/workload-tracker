@@ -5,15 +5,19 @@ interface Props {
   selected: Set<string>;
   format: (s: string) => string;
   onToggle: (s: string) => void;
+  compact?: boolean;
+  compactLabels?: Record<string, string>;
 }
 
-const StatusFilterChips: React.FC<Props> = ({ options, selected, format, onToggle }) => {
+const StatusFilterChips: React.FC<Props> = ({ options, selected, format, onToggle, compact = false, compactLabels }) => {
   const showAllActive = selected.size === 0 || selected.has('Show All');
   return (
-    <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap min-w-0" aria-label="Status filters">
+    <div className={`${compact ? 'flex items-center gap-1 min-w-0 whitespace-nowrap' : 'flex flex-wrap items-center gap-1 min-w-0'}`} aria-label="Status filters">
       {options.map((status) => {
         const isActive = status === 'Show All' ? showAllActive : selected.has(status);
         const label = format(status);
+        const compactLabel = compactLabels?.[label] ?? compactLabels?.[status];
+        const displayLabel = compact && compactLabel ? compactLabel : label;
         return (
           <button
             key={status}
@@ -27,7 +31,7 @@ const StatusFilterChips: React.FC<Props> = ({ options, selected, format, onToggl
             aria-label={`Filter: ${label}`}
             title={label}
           >
-            {label}
+            {displayLabel}
           </button>
         );
       })}
@@ -36,4 +40,3 @@ const StatusFilterChips: React.FC<Props> = ({ options, selected, format, onToggl
 };
 
 export default StatusFilterChips;
-

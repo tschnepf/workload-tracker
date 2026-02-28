@@ -217,7 +217,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           aria-label="Department filter operation"
           value={selectedOp}
           onChange={(e) => setSelectedOp(e.target.value as DepartmentFilterOp)}
-          className="bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+          className="h-10 bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
         >
           <option value="and">AND</option>
           <option value="or">OR</option>
@@ -239,7 +239,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          className={`w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 py-1 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--focus)] relative z-50 ${expand ? '' : 'min-w-[60px]'}`}
+          className={`h-10 w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--focus)] relative z-50 ${expand ? '' : 'min-w-[60px]'}`}
         />
         {open && dropdownRect &&
           createPortal(

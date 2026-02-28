@@ -238,7 +238,7 @@ const TopBarInner: React.FC<{
   onOpenSidebar: () => void;
   hamburgerRef: React.RefObject<HTMLButtonElement>;
 }> = ({ authPresent, showVerticalFilter, showDepartmentFilter, onLogout, onOpenSidebar, hamburgerRef }) => {
-  const { left, right } = useTopBarSlotValues();
+  const { left } = useTopBarSlotValues();
   return (
     <div
       id="app-topbar"
@@ -271,12 +271,17 @@ const TopBarInner: React.FC<{
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        {showVerticalFilter ? <GlobalVerticalFilter /> : null}
-        {showDepartmentFilter ? <GlobalDepartmentFilter expand={false} /> : null}
-        {/* Explicit portal mount points for page headers */}
-        <div id="topbar-left-mount" className="min-w-0" />
-        <div id="topbar-right-mount" className="min-w-0" />
-        {left ? <div className="min-w-0">{left}</div> : null}
+        <div className="min-w-0 flex-1 flex items-center gap-2 overflow-x-auto scrollbar-theme">
+          <div className="min-w-0 shrink-0">
+            <div id="topbar-left-mount" className="min-w-0" />
+            {left ? <div className="min-w-0">{left}</div> : null}
+          </div>
+          <div className="flex items-center gap-2 min-w-0 shrink-0">
+            {showVerticalFilter ? <GlobalVerticalFilter /> : null}
+            {showDepartmentFilter ? <GlobalDepartmentFilter expand={false} /> : null}
+          </div>
+          <div id="topbar-right-mount" className="min-w-0 flex-1" />
+        </div>
       </div>
       <div className="flex items-center gap-2 min-w-0 ml-auto">
         {authPresent && (

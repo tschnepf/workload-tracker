@@ -53,9 +53,8 @@ import { useDeliverablesIndex } from '@/pages/Assignments/grid/useDeliverablesIn
 import { useProjectStatusFilters } from '@/pages/Assignments/grid/useProjectStatusFilters';
 import { getFlag } from '@/lib/flags';
 import { useAssignmentsInteractionStore } from '@/pages/Assignments/grid/useAssignmentsInteractionStore';
-import WeeksSelector from '@/components/compact/WeeksSelector';
-import StatusFilterChips from '@/components/compact/StatusFilterChips';
 import HeaderActions from '@/components/compact/HeaderActions';
+import AssignmentsFilterMenu from '@/components/compact/AssignmentsFilterMenu';
 import { buildProjectAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
@@ -69,7 +68,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
 import { emitToast, showToast as showToastBus } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
-import ActionBar from '@/components/ux/ActionBar';
 import SaveStateBadge, { type SaveState } from '@/components/ux/SaveStateBadge';
 import { usePageShortcuts } from '@/hooks/usePageShortcuts';
 
@@ -250,6 +248,8 @@ const AssignmentGrid: React.FC = () => {
   const auth = useAuth();
   const canUseAutoHours = isAdminOrManager(auth.user);
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
+  const isNarrowHeaderLayout = useMediaQuery('(max-width: 1700px)');
+  const useAbbrevHeaderLabels = !isMobileLayout && isNarrowHeaderLayout;
   // Async job state for snapshot generation
   // async job state provided by useAssignmentsSnapshot
   // New multi-select project status filters (aggregate selection)
@@ -2871,126 +2871,106 @@ const AssignmentGrid: React.FC = () => {
   const { data: schemeData } = useUtilizationScheme({ enabled: false });
   const scheme = schemeData ?? defaultUtilizationScheme;
   const searchBar = (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex-1 min-w-[240px]">
-        <label className="sr-only" htmlFor="assignments-search">Search assignments</label>
-        <div className="flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
-          <div className="flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
-            <select
-              className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
-              value={activeToken?.op ?? searchOp}
-              onChange={(e) => handleSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
-              aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
-            >
-              <option value="or">OR</option>
-              <option value="and">AND</option>
-              <option value="not">NOT</option>
-            </select>
-          </div>
-          <div className="flex flex-wrap items-center gap-1 px-2 py-1 flex-1 min-w-0">
-            {searchTokens.map((token) => {
-              const isActive = token.id === activeTokenId;
-              return (
-                <div
-                  key={token.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setActiveTokenId(token.id)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTokenId(token.id); } }}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] ${
-                    isActive
-                      ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
-                      : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
-                  }`}
-                  title={`${token.op.toUpperCase()} ${token.term}`}
+    <div className={isMobileLayout ? 'w-full min-w-0' : 'w-[320px] min-w-[220px] max-w-[34vw] shrink-0'}>
+      <label className="sr-only" htmlFor="assignments-search">Search assignments</label>
+      <div className="h-10 flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
+        <div className="h-full flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
+          <select
+            className="h-full bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+            value={activeToken?.op ?? searchOp}
+            onChange={(e) => handleSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
+            aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
+          >
+            <option value="or">OR</option>
+            <option value="and">AND</option>
+            <option value="not">NOT</option>
+          </select>
+        </div>
+        <div className="h-full flex items-center gap-1 px-2 flex-1 min-w-0 overflow-x-auto whitespace-nowrap scrollbar-theme">
+          {searchTokens.map((token) => {
+            const isActive = token.id === activeTokenId;
+            return (
+              <div
+                key={token.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setActiveTokenId(token.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTokenId(token.id); } }}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] shrink-0 ${
+                  isActive
+                    ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+                title={`${token.op.toUpperCase()} ${token.term}`}
+              >
+                <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
+                <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
+                <button
+                  type="button"
+                  className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeSearchToken(token.id);
+                  }}
+                  aria-label={`Remove ${token.term}`}
                 >
-                  <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
-                  <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
-                  <button
-                    type="button"
-                    className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeSearchToken(token.id);
-                    }}
-                    aria-label={`Remove ${token.term}`}
-                  >
-                    x
-                  </button>
-                </div>
-              );
-            })}
-            <input
-              id="assignments-search"
-              type="text"
-              value={searchInput}
-              onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
-              onKeyDown={handleSearchKeyDown}
-              placeholder={searchTokens.length ? 'Add another filter...' : 'Search people, projects, or clients (Enter)'}
-              className="flex-1 min-w-[140px] px-1 py-0.5 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
-            />
-          </div>
+                  x
+                </button>
+              </div>
+            );
+          })}
+          <input
+            id="assignments-search"
+            type="text"
+            value={searchInput}
+            onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={searchTokens.length ? 'Add another filter...' : 'Search people, projects, or clients (Enter)'}
+            className="h-full flex-1 min-w-[140px] px-1 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+          />
         </div>
       </div>
     </div>
   );
 
   const topBarHeader = (
-    <div className="flex flex-col gap-2 min-w-0 w-full">
-      <ActionBar
-        secondary={(
-          <div className="min-w-[120px]">
-            <div className="text-lg font-semibold text-[var(--text)] leading-tight">Assignments</div>
-            {isFetching ? (
-              <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
-            ) : null}
-          </div>
-        )}
-        overflow={(
-          <div className="min-w-0 flex-1">
-            <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
-          </div>
-        )}
-        danger={(
-          <SaveStateBadge
-            state={saveState}
-            message={saveStateMessage}
-            onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
-          />
-        )}
-        primary={(
-          <div className="flex items-center gap-2">
-            <HeaderActions
-              onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
-              onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
-              onRefreshAll={refreshAllAssignments}
-              disabled={loading || (loadingAssignments.size > 0)}
-            />
-            <a
-              href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
-              className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            >
-              Project View
-            </a>
-          </div>
-        )}
+    <div className="flex items-center gap-1 min-w-0 w-full">
+      {searchBar}
+      <HeaderActions
+        onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
+        onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
+        onRefreshAll={refreshAllAssignments}
+        disabled={loading || (loadingAssignments.size > 0)}
+        compact={useAbbrevHeaderLabels}
+        compactLabels={{ expandAll: 'EA', collapseAll: 'CA', refreshAll: 'RE' }}
       />
-      <div className="flex flex-wrap items-center gap-1">
-        <StatusFilterChips
-          options={statusFilterOptions as unknown as readonly string[]}
-          selected={selectedStatusFilters as unknown as Set<string>}
-          format={formatFilterStatus as any}
-          onToggle={(s) => toggleStatusFilter(s as any)}
-        />
-      </div>
-      {isMobileLayout && selectedCells.length > 0 ? (
-        <div className="flex items-center gap-2 p-2 rounded border border-[var(--border)] bg-[var(--surface)]">
-          <span className="text-xs text-[var(--muted)]">
-            {selectedCells.length} selected • {selectedHoursLabel}h
-          </span>
+      <AssignmentsFilterMenu
+        weeksValue={weeksHorizon}
+        onWeeksChange={setWeeksHorizon}
+        statusOptions={statusFilterOptions as unknown as readonly string[]}
+        selectedStatuses={selectedStatusFilters as unknown as Set<string>}
+        formatStatus={(status) => formatFilterStatus(status as any)}
+        onToggleStatus={(status) => toggleStatusFilter(status as any)}
+        buttonLabel="Filter"
+        buttonTitle="Filter assignments"
+      />
+      <a
+        href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
+        className="h-10 inline-flex items-center px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
+        title="Project View"
+      >
+        {useAbbrevHeaderLabels ? 'PV' : 'Project View'}
+      </a>
+      <DeliverableLegendFloating
+        buttonLabel={useAbbrevHeaderLabels ? 'TP' : 'Types'}
+        buttonTitle="Deliverable Types"
+      />
+      {selectedCells.length > 0 ? (
+        <div className="h-10 shrink-0 inline-flex items-center gap-2 px-2 rounded border border-[var(--border)] bg-[var(--surface)]">
+          <span className="text-xs text-[var(--muted)] whitespace-nowrap">{selectedCells.length} selected • {selectedHoursLabel}h</span>
           <button
             type="button"
-            className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            className="h-8 px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
             onClick={() => { void copyForwardSelectedRange(); }}
             disabled={selectedCells.length < 2}
           >
@@ -2998,39 +2978,28 @@ const AssignmentGrid: React.FC = () => {
           </button>
           <button
             type="button"
-            className="px-2 py-0.5 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
+            className="h-8 px-2 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
             onClick={csClear}
           >
-            Clear Selection
+            Clear
           </button>
         </div>
       ) : null}
-      {searchBar}
+      {saveState !== 'idle' ? (
+        <div className="shrink-0">
+          <SaveStateBadge
+            state={saveState}
+            message={saveStateMessage}
+            onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
+          />
+        </div>
+      ) : null}
     </div>
   );
 
-  const selectedActionsTopBarLeft = !isMobileLayout && selectedCells.length > 0 ? (
+  const leftTopBarContent = compact && !isMobileLayout ? (
     <TopBarPortal side="left">
-      <div className="flex items-center gap-2 ml-1 px-2 py-1 rounded border border-[var(--border)] bg-[var(--surface)] whitespace-nowrap">
-        <span className="text-xs text-[var(--muted)]">
-          {selectedCells.length} selected • {selectedHoursLabel}h
-        </span>
-        <button
-          type="button"
-          className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
-          onClick={() => { void copyForwardSelectedRange(); }}
-          disabled={selectedCells.length < 2}
-        >
-          Copy Forward
-        </button>
-        <button
-          type="button"
-          className="px-2 py-0.5 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
-          onClick={csClear}
-        >
-          Clear Selection
-        </button>
-      </div>
+      <div className="text-base font-semibold text-[var(--text)] leading-tight whitespace-nowrap">Assignments</div>
     </TopBarPortal>
   ) : null;
 
@@ -3038,7 +3007,7 @@ const AssignmentGrid: React.FC = () => {
     if (pageStateEnabled) {
       return (
         <Layout>
-          {selectedActionsTopBarLeft}
+          {leftTopBarContent}
           {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
           <PageState isLoading skeleton={<AssignmentsSkeleton />} />
         </Layout>
@@ -3046,7 +3015,7 @@ const AssignmentGrid: React.FC = () => {
     }
     return (
       <Layout>
-        {selectedActionsTopBarLeft}
+        {leftTopBarContent}
         {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
         <AssignmentsSkeleton />
       </Layout>
@@ -3073,9 +3042,7 @@ const AssignmentGrid: React.FC = () => {
   const mobileToolbar = (
     <div className="md:hidden sticky top-0 z-30 bg-[var(--bg)] border border-[var(--border)] rounded-lg shadow-sm px-3 py-2 space-y-2">
       <div className="flex items-center justify-between gap-1">
-        <div className="min-w-0 flex-1">
-          <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
-        </div>
+        <div className="min-w-0 flex-1 text-sm font-semibold text-[var(--text)]">Assignments</div>
         <SaveStateBadge
           state={saveState}
           message={saveStateMessage}
@@ -3089,13 +3056,16 @@ const AssignmentGrid: React.FC = () => {
         >
           Refresh
         </button>
-      </div>
-      <div className="flex flex-wrap items-center gap-1">
-        <StatusFilterChips
-          options={statusFilterOptions as unknown as readonly string[]}
-          selected={selectedStatusFilters as unknown as Set<string>}
-          format={formatFilterStatus as any}
-          onToggle={(s) => toggleStatusFilter(s as any)}
+        <AssignmentsFilterMenu
+          weeksValue={weeksHorizon}
+          onWeeksChange={setWeeksHorizon}
+          statusOptions={statusFilterOptions as unknown as readonly string[]}
+          selectedStatuses={selectedStatusFilters as unknown as Set<string>}
+          formatStatus={(status) => formatFilterStatus(status as any)}
+          onToggleStatus={(status) => toggleStatusFilter(status as any)}
+          buttonLabel="Filter"
+          buttonTitle="Filter assignments"
+          align="left"
         />
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -3167,7 +3137,7 @@ const AssignmentGrid: React.FC = () => {
 
   return (
     <Layout>
-      {selectedActionsTopBarLeft}
+      {leftTopBarContent}
       {compact && !isMobileLayout && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
       {isMobileLayout ? (
         <div className="flex-1 flex flex-col min-w-0 px-4 py-4 space-y-4">
@@ -3232,7 +3202,6 @@ const AssignmentGrid: React.FC = () => {
             virtualPaddingRight={isMobileLayout ? weekPaddingRight : 0}
             showAutoHoursHeader={canUseAutoHours}
           />
-          <DeliverableLegendFloating top={(compact ? 0 : headerHeight) + 8} />
           <div
             className={`flex-1 overflow-x-auto bg-[var(--bg)] scrollbar-theme ${isMobileLayout ? 'snap-x snap-mandatory' : ''}`}
             ref={bodyScrollRef}

@@ -25,8 +25,7 @@ import WeekCell from '@/pages/Assignments/grid/components/WeekCell';
 import AutoHoursActionButtons from '@/pages/Assignments/grid/components/AutoHoursActionButtons';
 import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
 import HeaderActions from '@/components/compact/HeaderActions';
-import WeeksSelector from '@/components/compact/WeeksSelector';
-import StatusFilterChips from '@/components/compact/StatusFilterChips';
+import AssignmentsFilterMenu from '@/components/compact/AssignmentsFilterMenu';
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,7 +33,6 @@ import { isAdminOrManager } from '@/utils/roleAccess';
 import { emitToast, showToast as showToastBus } from '@/lib/toastBus';
 import { getFlag } from '@/lib/flags';
 import { confirmAction } from '@/lib/confirmAction';
-import ActionBar from '@/components/ux/ActionBar';
 import SaveStateBadge, { type SaveState } from '@/components/ux/SaveStateBadge';
 import { usePageShortcuts } from '@/hooks/usePageShortcuts';
 import { useRouteUiState } from '@/hooks/useRouteUiState';
@@ -48,6 +46,8 @@ import { bulkUpdateAssignmentHours, createAssignment, updateAssignment, deleteAs
 import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
+import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
+import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
 
 interface ProjectWithAssignments extends Project {
   assignments: Assignment[];
@@ -95,6 +95,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const canUseAutoHours = isAdminOrManager(auth.user);
   const canEditAssignments = true;
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
+  const isNarrowHeaderLayout = useMediaQuery('(max-width: 1700px)');
+  const useAbbrevHeaderLabels = !isMobileLayout && isNarrowHeaderLayout;
   const query = useGridUrlState();
   const departmentFilters = useMemo(() => (deptState.filters ?? [])
     .map((f) => ({ departmentId: Number(f.departmentId), op: f.op }))
@@ -2003,66 +2005,119 @@ const ProjectAssignmentsGrid: React.FC = () => {
     );
   };
 
-  const topBarHeader = (
-    <div className="flex flex-col gap-2 min-w-0 w-full">
-      <ActionBar
-        secondary={(
-          <div className="min-w-[120px]">
-            <div className="text-lg font-semibold text-[var(--text)] leading-tight">Project Assignments</div>
-            {isFetching || projectsLoading ? (
-              <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
-            ) : null}
-          </div>
-        )}
-        overflow={(
-          <div className="min-w-0 flex-1">
-            <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
-          </div>
-        )}
-        danger={(
-          <SaveStateBadge
-            state={saveState}
-            message={saveStateMessage}
-            onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
+  const searchBar = (
+    <div className={isMobileLayout ? 'w-full min-w-0' : 'w-[320px] min-w-[220px] max-w-[34vw] shrink-0'}>
+      <label className="sr-only" htmlFor="project-assignments-search">Search projects</label>
+      <div className="h-10 flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
+        <div className="h-full flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
+          <select
+            className="h-full bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+            value={activeToken?.op ?? searchOp}
+            onChange={(e) => handleSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
+            aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
+          >
+            <option value="or">OR</option>
+            <option value="and">AND</option>
+            <option value="not">NOT</option>
+          </select>
+        </div>
+        <div className="h-full flex items-center gap-1 px-2 flex-1 min-w-0 overflow-x-auto whitespace-nowrap scrollbar-theme">
+          {searchTokens.map((token) => {
+            const isActive = token.id === activeTokenId;
+            return (
+              <div
+                key={token.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setActiveTokenId(token.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTokenId(token.id); } }}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] shrink-0 ${
+                  isActive
+                    ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+                title={`${token.op.toUpperCase()} ${token.term}`}
+              >
+                <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
+                <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
+                <button
+                  type="button"
+                  className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeSearchToken(token.id);
+                  }}
+                  aria-label={`Remove ${token.term}`}
+                >
+                  x
+                </button>
+              </div>
+            );
+          })}
+          <input
+            id="project-assignments-search"
+            type="text"
+            value={searchInput}
+            onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client or name (Enter)'}
+            className="h-full flex-1 min-w-[140px] px-1 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
           />
-        )}
-        primary={(
-          <HeaderActions
-            onExpandAll={() => {
-              const next = new Set(
-                (projectsData || [])
-                  .map(p => p.id)
-                  .filter((id): id is number => typeof id === 'number')
-              );
-              setExpandedProjectIds(next);
-              void refreshAllAssignments();
-            }}
-            onCollapseAll={() => setExpandedProjectIds(new Set())}
-            onRefreshAll={async () => {
-              await snapshot.loadData();
-              await fetchProjectsPage(1, { append: false });
-              await refreshAllAssignments();
-            }}
-            disabled={loading}
-          />
-        )}
-      />
-      <div className="flex flex-wrap items-center gap-1">
-        <StatusFilterChips
-          options={statusFilterOptions as unknown as readonly string[]}
-          selected={selectedStatusFilters as unknown as Set<string>}
-          format={formatFilterStatus as any}
-          onToggle={(s) => toggleStatusFilter(s as any)}
-        />
+        </div>
       </div>
-      {isMobileLayout && selectedCells.length > 0 ? (
-        <div className="flex items-center gap-2 p-2 rounded border border-[var(--border)] bg-[var(--surface)]">
-          <span className="text-xs text-[var(--muted)]">
-            {selectedCells.length} selected • {selectedHoursLabel}h
-          </span>
+    </div>
+  );
+
+  const topBarHeader = (
+    <div className="flex items-center gap-1 min-w-0 w-full">
+      {searchBar}
+      <HeaderActions
+        onExpandAll={() => {
+          const next = new Set(
+            (projectsData || [])
+              .map(p => p.id)
+              .filter((id): id is number => typeof id === 'number')
+          );
+          setExpandedProjectIds(next);
+          void refreshAllAssignments();
+        }}
+        onCollapseAll={() => setExpandedProjectIds(new Set())}
+        onRefreshAll={async () => {
+          await snapshot.loadData();
+          await fetchProjectsPage(1, { append: false });
+          await refreshAllAssignments();
+        }}
+        disabled={loading}
+        compact={useAbbrevHeaderLabels}
+        compactLabels={{ expandAll: 'EA', collapseAll: 'CA', refreshAll: 'RE' }}
+      />
+      <AssignmentsFilterMenu
+        weeksValue={weeksHorizon}
+        onWeeksChange={setWeeksHorizon}
+        statusOptions={statusFilterOptions as unknown as readonly string[]}
+        selectedStatuses={selectedStatusFilters as unknown as Set<string>}
+        formatStatus={(status) => formatFilterStatus(status as any)}
+        onToggleStatus={(status) => toggleStatusFilter(status as any)}
+        buttonLabel="Filter"
+        buttonTitle="Filter project assignments"
+      />
+      <a
+        href={buildAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
+        className="h-10 inline-flex items-center px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
+        title="Assignments View"
+      >
+        {useAbbrevHeaderLabels ? 'AV' : 'Assignments View'}
+      </a>
+      <DeliverableLegendFloating
+        buttonLabel={useAbbrevHeaderLabels ? 'TP' : 'Types'}
+        buttonTitle="Deliverable Types"
+      />
+      {selectedCells.length > 0 ? (
+        <div className="h-10 shrink-0 inline-flex items-center gap-2 px-2 rounded border border-[var(--border)] bg-[var(--surface)]">
+          <span className="text-xs text-[var(--muted)] whitespace-nowrap">{selectedCells.length} selected • {selectedHoursLabel}h</span>
           <button
             type="button"
-            className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            className="h-8 px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
             onClick={() => { void copyForwardSelectedRange(); }}
             disabled={selectedCells.length < 2}
           >
@@ -2070,106 +2125,34 @@ const ProjectAssignmentsGrid: React.FC = () => {
           </button>
           <button
             type="button"
-            className="px-2 py-0.5 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
+            className="h-8 px-2 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
             onClick={csClear}
           >
-            Clear Selection
+            Clear
           </button>
         </div>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex-1 min-w-[240px]">
-          <label className="sr-only" htmlFor="project-assignments-search">Search projects</label>
-          <div className="flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
-            <div className="flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
-              <select
-                className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
-                value={activeToken?.op ?? searchOp}
-                onChange={(e) => handleSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
-                aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
-              >
-                <option value="or">OR</option>
-                <option value="and">AND</option>
-                <option value="not">NOT</option>
-              </select>
-            </div>
-            <div className="flex flex-wrap items-center gap-1 px-2 py-1 flex-1 min-w-0">
-              {searchTokens.map((token) => {
-                const isActive = token.id === activeTokenId;
-                return (
-                  <div
-                    key={token.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setActiveTokenId(token.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTokenId(token.id); } }}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] ${
-                      isActive
-                        ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
-                        : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
-                    }`}
-                    title={`${token.op.toUpperCase()} ${token.term}`}
-                  >
-                    <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
-                    <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
-                    <button
-                      type="button"
-                      className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeSearchToken(token.id);
-                      }}
-                      aria-label={`Remove ${token.term}`}
-                    >
-                      x
-                    </button>
-                  </div>
-                );
-              })}
-              <input
-                id="project-assignments-search"
-                type="text"
-                value={searchInput}
-                onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
-                onKeyDown={handleSearchKeyDown}
-                placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client or name (Enter)'}
-                className="flex-1 min-w-[140px] px-1 py-0.5 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
-              />
-            </div>
-          </div>
+      {saveState !== 'idle' ? (
+        <div className="shrink-0">
+          <SaveStateBadge
+            state={saveState}
+            message={saveStateMessage}
+            onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
+          />
         </div>
-      </div>
+      ) : null}
     </div>
   );
 
-  const selectedActionsTopBarLeft = !isMobileLayout && selectedCells.length > 0 ? (
+  const leftTopBarContent = !isMobileLayout ? (
     <TopBarPortal side="left">
-      <div className="flex items-center gap-2 ml-1 px-2 py-1 rounded border border-[var(--border)] bg-[var(--surface)] whitespace-nowrap">
-        <span className="text-xs text-[var(--muted)]">
-          {selectedCells.length} selected • {selectedHoursLabel}h
-        </span>
-        <button
-          type="button"
-          className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
-          onClick={() => { void copyForwardSelectedRange(); }}
-          disabled={selectedCells.length < 2}
-        >
-          Copy Forward
-        </button>
-        <button
-          type="button"
-          className="px-2 py-0.5 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
-          onClick={csClear}
-        >
-          Clear Selection
-        </button>
-      </div>
+      <div className="text-base font-semibold text-[var(--text)] leading-tight whitespace-nowrap">Project Assignments</div>
     </TopBarPortal>
   ) : null;
 
   return (
     <Layout>
-      {selectedActionsTopBarLeft}
+      {leftTopBarContent}
       {isMobileLayout ? (
         <div className="flex-1 flex flex-col min-w-0 px-4 py-4 space-y-4">
           {topBarHeader}
@@ -2203,7 +2186,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="p-4">
+        <div className="p-0">
           <TopBarPortal side="right">{topBarHeader}</TopBarPortal>
           <ProjectWeekHeader />
           <div

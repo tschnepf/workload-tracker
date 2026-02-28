@@ -2,25 +2,19 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 
 interface Props {
-  onExpandAll: () => void | Promise<void>;
-  onCollapseAll: () => void;
-  onRefreshAll: () => void | Promise<void>;
-  disabled?: boolean;
-  compact?: boolean;
-  compactLabels?: {
-    expandAll?: string;
-    collapseAll?: string;
-    refreshAll?: string;
-  };
+  onNewProject: () => void;
+  onToggleDetails: () => void;
+  detailsOpen: boolean;
+  onRefresh: () => void | Promise<void>;
 }
 
-const HeaderActions: React.FC<Props> = ({ onExpandAll, onCollapseAll, onRefreshAll, disabled }) => {
+const ProjectsActionsMenu: React.FC<Props> = ({ onNewProject, onToggleDetails, detailsOpen, onRefresh }) => {
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const [menuPos, setMenuPos] = React.useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const MENU_WIDTH = 160;
+  const MENU_WIDTH = 180;
 
   const updateMenuPosition = React.useCallback(() => {
     if (!buttonRef.current) return;
@@ -68,16 +62,15 @@ const HeaderActions: React.FC<Props> = ({ onExpandAll, onCollapseAll, onRefreshA
   };
 
   return (
-    <div ref={rootRef} className="relative flex items-center gap-1 text-xs">
+    <div ref={rootRef} className="relative flex items-center">
       <button
         ref={buttonRef}
-        className={`h-10 px-2 rounded border ${disabled ? 'text-[var(--muted)] cursor-wait' : 'text-[var(--muted)] hover:text-[var(--text)]'} border-[var(--border)]`}
+        type="button"
+        className="h-10 px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
         onClick={() => setOpen((prev) => !prev)}
-        aria-busy={disabled}
-        disabled={disabled}
-        title="Actions"
-        aria-label="Open actions menu"
         aria-expanded={open}
+        aria-label="Open project actions menu"
+        title="Actions"
       >
         Actions
       </button>
@@ -87,31 +80,31 @@ const HeaderActions: React.FC<Props> = ({ onExpandAll, onCollapseAll, onRefreshA
           className="fixed z-[1200] rounded-md border border-[var(--border)] bg-[var(--card)] shadow-lg p-1"
           style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
           role="menu"
-          aria-label="Actions menu"
+          aria-label="Project actions menu"
         >
           <button
             type="button"
             className="w-full text-left px-2 py-1 rounded text-xs text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-            onClick={() => { void runAction(onExpandAll); }}
+            onClick={() => { void runAction(onNewProject); }}
             role="menuitem"
           >
-            Expand All
+            New Project
           </button>
           <button
             type="button"
             className="w-full text-left px-2 py-1 rounded text-xs text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-            onClick={() => { void runAction(onCollapseAll); }}
+            onClick={() => { void runAction(onToggleDetails); }}
             role="menuitem"
           >
-            Collapse All
+            {detailsOpen ? 'Hide Details' : 'Show Details'}
           </button>
           <button
             type="button"
             className="w-full text-left px-2 py-1 rounded text-xs text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-            onClick={() => { void runAction(onRefreshAll); }}
+            onClick={() => { void runAction(onRefresh); }}
             role="menuitem"
           >
-            Refresh All
+            Refresh
           </button>
         </div>,
         document.body
@@ -120,4 +113,4 @@ const HeaderActions: React.FC<Props> = ({ onExpandAll, onCollapseAll, onRefreshA
   );
 };
 
-export default HeaderActions;
+export default ProjectsActionsMenu;

@@ -25,6 +25,8 @@ import ProjectsTable from '@/pages/Projects/list/components/ProjectsTable';
 import ProjectDetailsPanel from '@/pages/Projects/list/components/ProjectDetailsPanel';
 import WarningsBanner from '@/pages/Projects/list/components/WarningsBanner';
 import ErrorBanner from '@/pages/Projects/list/components/ErrorBanner';
+import TopBarPortal from '@/components/layout/TopBarPortal';
+import StatusFilterMenu from '@/components/compact/StatusFilterMenu';
 import { useProjectFilters } from '@/pages/Projects/list/hooks/useProjectFilters';
 import { useProjectSelection } from '@/pages/Projects/list/hooks/useProjectSelection';
 import { useAssignmentInlineEdit } from '@/pages/Projects/list/hooks/useAssignmentInlineEdit';
@@ -38,10 +40,9 @@ import { useProjectDeliverablesBulk } from '@/pages/Projects/list/hooks/useProje
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ProjectForm from '@/pages/Projects/ProjectForm';
 import { confirmAction } from '@/lib/confirmAction';
-import ActionBar from '@/components/ux/ActionBar';
-import FilterSummaryChips, { type FilterSummaryItem } from '@/components/ux/FilterSummaryChips';
 import { useRouteUiState } from '@/hooks/useRouteUiState';
 import { usePageShortcuts } from '@/hooks/usePageShortcuts';
+import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -67,6 +68,8 @@ const ProjectsList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
+  const isNarrowHeaderLayout = useMediaQuery('(max-width: 1700px)');
+  const useAbbrevHeaderLabels = !isMobileLayout && isNarrowHeaderLayout;
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
@@ -202,25 +205,6 @@ const ProjectsList: React.FC = () => {
       .sort()
       .join(',');
   }, [selectedStatusFilters]);
-  const filterSummaryItems = useMemo<FilterSummaryItem[]>(() => {
-    const items: FilterSummaryItem[] = [];
-    const statuses = Array.from(selectedStatusFilters).filter((status) => status && status !== 'Show All');
-    statuses.forEach((status) => {
-      items.push({
-        id: `status:${status}`,
-        label: `Status: ${formatFilterStatus(status)}`,
-        onRemove: () => toggleStatusFilter(status),
-      });
-    });
-    searchTokens.forEach((token) => {
-      items.push({
-        id: `search:${token.id}`,
-        label: `${token.op.toUpperCase()} ${token.term}`,
-        onRemove: () => removeSearchToken(token.id),
-      });
-    });
-    return items;
-  }, [selectedStatusFilters, formatFilterStatus, toggleStatusFilter, searchTokens, removeSearchToken]);
   const departmentFilters = useMemo(() => (deptState.filters ?? [])
     .map((f) => ({
       departmentId: Number(f.departmentId),
@@ -1069,28 +1053,116 @@ const ProjectsList: React.FC = () => {
     );
   }
 
-  const detailsToggleButton = (
-    <button
-      type="button"
-      aria-label={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
-      title={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
-      onClick={() => setDetailsPaneOpen((v) => !v)}
-      className="px-2 py-0.5 rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surfaceHover)] flex items-center justify-center gap-1 text-[11px] font-medium text-center leading-tight"
-      style={{ minHeight: 28 }}
-    >
-      {!detailsPaneOpen ? (
-        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
-      ) : null}
-      <span>{detailsPaneOpen ? 'Hide Details' : 'Show Details'}</span>
-      {detailsPaneOpen ? (
-        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-      ) : null}
-    </button>
+  const searchBar = (
+    <div className={isMobileLayout ? 'w-full min-w-0' : 'w-[340px] min-w-[240px] max-w-[36vw] shrink-0'}>
+      <label className="sr-only" htmlFor="projects-search">Search projects</label>
+      <div className="h-10 flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
+        <div className="h-full flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
+          <select
+            className="h-full bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+            value={activeToken?.op ?? searchOp}
+            onChange={(e) => handleSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
+            aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
+          >
+            <option value="or">OR</option>
+            <option value="and">AND</option>
+            <option value="not">NOT</option>
+          </select>
+        </div>
+        <div className="h-full flex items-center gap-1 px-2 flex-1 min-w-0 overflow-x-auto whitespace-nowrap scrollbar-theme">
+          {searchTokens.map((token) => {
+            const isActive = token.id === activeTokenId;
+            return (
+              <div
+                key={token.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setActiveTokenId(token.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveTokenId(token.id);
+                  }
+                }}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] shrink-0 ${
+                  isActive
+                    ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+                title={`${token.op.toUpperCase()} ${token.term}`}
+              >
+                <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
+                <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
+                <button
+                  type="button"
+                  className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeSearchToken(token.id);
+                  }}
+                  aria-label={`Remove ${token.term}`}
+                >
+                  x
+                </button>
+              </div>
+            );
+          })}
+          <input
+            id="projects-search"
+            type="text"
+            value={searchInput}
+            onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client, name, or number (Enter)'}
+            className="h-full flex-1 min-w-[140px] px-1 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+          />
+        </div>
+      </div>
+    </div>
   );
+
+  const topBarHeader = (
+    <div className="flex items-center gap-1 min-w-0 w-full">
+      {searchBar}
+      <button
+        type="button"
+        className="h-10 inline-flex items-center px-3 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
+        onClick={openCreateDrawer}
+        title="Create new project"
+      >
+        + New
+      </button>
+      <button
+        type="button"
+        className="h-10 inline-flex items-center px-3 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
+        onClick={() => setDetailsPaneOpen((v) => !v)}
+        title={detailsPaneOpen ? 'Hide project details panel' : 'Show project details panel'}
+      >
+        {detailsPaneOpen ? 'Hide Details' : 'Show Details'}
+      </button>
+      <StatusFilterMenu
+        statusOptions={statusOptions}
+        selectedStatuses={selectedStatusFilters}
+        formatStatus={formatFilterStatus}
+        onToggleStatus={toggleStatusFilter}
+        buttonLabel="Filter"
+        buttonTitle="Filter projects"
+      />
+      <a
+        href={buildAssignmentsLink({ weeks: 20, statuses: (Array.from(selectedStatusFilters) || []).filter((s) => s !== 'Show All') })}
+        className="h-10 inline-flex items-center px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
+        title="Assignments View"
+      >
+        {useAbbrevHeaderLabels ? 'AV' : 'Assignments View'}
+      </a>
+    </div>
+  );
+
+  const leftTopBarContent = !isMobileLayout ? (
+    <TopBarPortal side="left">
+      <div className="text-base font-semibold text-[var(--text)] leading-tight whitespace-nowrap">Projects</div>
+    </TopBarPortal>
+  ) : null;
 
   const desktopLayout = (
     <div ref={containerRef} className="h-full min-h-0 flex bg-[var(--bg)] relative">
@@ -1098,58 +1170,6 @@ const ProjectsList: React.FC = () => {
         className={`${detailsPaneOpen ? '' : 'w-full'} border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-theme relative transition-all`}
         style={detailsPaneOpen ? { width: `${detailsSplitPct}%` } : undefined}
       >
-        <div className="px-1.5 py-1 border-b border-[var(--border)] sticky top-0 z-20 bg-[var(--bg)]/95 backdrop-blur-sm">
-          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5">
-            <div className="flex justify-between items-center gap-2 mb-1.5">
-              <div className="min-w-0 flex items-center gap-2">
-                <h1 className="text-base font-semibold text-[var(--text)] leading-tight">Projects</h1>
-                <p className="text-[11px] text-[var(--muted)] leading-tight whitespace-nowrap">{resultsCount} results</p>
-              </div>
-              <ActionBar
-                secondary={detailsToggleButton}
-                primary={(
-                  <button
-                    type="button"
-                    className="px-2 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors text-[11px] font-medium leading-tight flex items-center justify-center gap-1"
-                    style={{ minHeight: 28 }}
-                    onClick={openCreateDrawer}
-                  >
-                    <span>+</span>
-                    <span>New</span>
-                  </button>
-                )}
-              />
-            </div>
-            <FiltersBar
-              compact
-              statusOptions={statusOptions}
-              selectedStatusFilters={selectedStatusFilters}
-              onToggleStatus={toggleStatusFilter}
-              searchTokens={searchTokens}
-              searchInput={searchInput}
-              searchOp={searchOp}
-              activeTokenId={activeTokenId}
-              onSearchInput={setSearchInput}
-              onSearchKeyDown={handleSearchKeyDown}
-              onSearchOpChange={handleSearchOpChange}
-              onSelectToken={setActiveTokenId}
-              onRemoveToken={removeSearchToken}
-              formatFilterStatus={formatFilterStatus}
-              filterMetaLoading={filterMetaLoading}
-              filterMetaError={filterMetaError}
-              onRetryFilterMeta={() => { void refetchFilterMeta(); }}
-            />
-            <FilterSummaryChips
-              className="mt-1"
-              items={filterSummaryItems}
-              onClearAll={() => {
-                forceShowAll();
-                clearSearchTokens();
-              }}
-              emptyLabel="No active filters"
-            />
-          </div>
-        </div>
         {error && (<ErrorBanner message={error} />)}
         {warnings.length > 0 && (<WarningsBanner warnings={warnings} />)}
         <ProjectsTable
@@ -1415,6 +1435,8 @@ const ProjectsList: React.FC = () => {
 
   return (
     <Layout>
+      {leftTopBarContent}
+      {!isMobileLayout ? <TopBarPortal side="right">{topBarHeader}</TopBarPortal> : null}
       {isMobileLayout ? mobileLayout : desktopLayout}
       <MobileFiltersSheet open={isMobileLayout && mobileFiltersOpen} title="Project Filters" onClose={() => setMobileFiltersOpen(false)}>
         <FiltersBar

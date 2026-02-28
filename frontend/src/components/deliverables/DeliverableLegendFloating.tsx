@@ -1,9 +1,11 @@
 import React from 'react';
-import Card from '@/components/ui/Card';
 import { typeColors } from '@/components/deliverables/calendar.utils';
 
 interface Props {
-  top: number;
+  buttonLabel?: string;
+  buttonTitle?: string;
+  className?: string;
+  align?: 'left' | 'right';
 }
 
 const rows: Array<[string, string]> = [
@@ -18,41 +20,55 @@ const rows: Array<[string, string]> = [
   ['Pre-Deliverable', 'pre_deliverable'],
 ];
 
-const DeliverableLegendFloating: React.FC<Props> = ({ top }) => {
-  const [collapsed, setCollapsed] = React.useState<boolean>(() => {
-    try { return localStorage.getItem('assignGrid:legendCollapsed') === '1'; } catch { return false; }
-  });
-
-  const toggle = () => {
-    setCollapsed(v => { const n = !v; try { localStorage.setItem('assignGrid:legendCollapsed', n ? '1' : '0'); } catch {} return n; });
-  };
+const DeliverableLegendFloating: React.FC<Props> = ({ buttonLabel = 'Deliverable Types', buttonTitle = 'Deliverable Types', className, align = 'right' }) => {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current) return;
+      if (rootRef.current.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
 
   return (
-    <div className="hidden xl:block fixed right-4 z-30" style={{ top }}>
-      <Card className="relative p-0 bg-[var(--card)] border-[var(--border)] shadow-lg min-w-[100px]">
-        <div className="px-0 py-0 border-b border-[var(--border)] flex items-center gap-2">
-          <button
-            onClick={toggle}
-            aria-label={collapsed ? 'Expand legend' : 'Collapse legend'}
-            aria-expanded={!collapsed}
-            title={collapsed ? 'Show legend' : 'Hide legend'}
-            className="w-5 h-5 rounded text-[var(--text)] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surfaceHover)] flex items-center justify-center text-xs"
-          >
-            {collapsed ? '+' : '−'}
-          </button>
-          <div className="text-[var(--text)] text-sm font-semibold leading-none">Deliverable Types</div>
-        </div>
-        {!collapsed && (
-          <div className="p-0 text-xs space-y-1">
+    <div ref={rootRef} className={`relative min-w-0 ${className || ''}`.trim()}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-label="Toggle deliverable types legend"
+        aria-expanded={open}
+        title={buttonTitle}
+        className="h-10 px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+      >
+        {buttonLabel}
+      </button>
+      {open ? (
+        <div
+          className={`absolute top-full ${align === 'left' ? 'left-0' : 'right-0'} mt-1 z-40 min-w-[220px] rounded-md border border-[var(--border)] bg-[var(--card)] shadow-lg p-2`}
+          role="dialog"
+          aria-label="Deliverable Types legend"
+        >
+          <div className="text-[var(--text)] text-xs font-semibold pb-1 border-b border-[var(--border)]">Deliverable Types</div>
+          <div className="pt-1 text-xs space-y-1">
             {rows.map(([label, key]) => (
               <div key={key} className="flex items-center gap-2 text-[var(--text)]">
                 <span className="inline-block w-3 h-3 rounded" style={{ background: (typeColors as any)[key] }} />
-                {label}
+                <span>{label}</span>
               </div>
             ))}
           </div>
-        )}
-      </Card>
+        </div>
+      ) : null}
     </div>
   );
 };

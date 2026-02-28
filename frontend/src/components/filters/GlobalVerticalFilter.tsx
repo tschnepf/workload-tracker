@@ -26,7 +26,7 @@ export const GlobalVerticalFilter: React.FC<Props> = ({ expand = false }) => {
           setVertical(Number(next));
         }}
         disabled={isLoading}
-        className={`bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 py-1 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--focus)] ${expand ? 'min-w-[140px]' : 'w-[110px] sm:w-[140px]'}`}
+        className={`h-10 bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--focus)] ${expand ? 'min-w-[140px]' : 'w-[110px] sm:w-[140px]'}`}
       >
         <option value="">{isLoading ? 'Loading…' : 'All Verticals'}</option>
         {verticals.map((v) => (
