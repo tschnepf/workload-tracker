@@ -14,6 +14,10 @@
   --primaryHover: #1e90ff;
   --accent: #8b5cf6;
   --focus: #007acc;
+  --statusInfo: #60a5fa;
+  --statusSuccess: #34d399;
+  --statusWarning: #f59e0b;
+  --statusDanger: #ef4444;
   /* Hover/overlay tokens (pre-baked alpha) */
   /* Slightly tinted by primary for clearer theme feedback */
   --surfaceHover: rgba(0, 122, 204, 0.12);
@@ -63,6 +67,10 @@
   --primaryHover: #2563eb; /* bright blue */
   --accent: #0ea5e9; /* sky */
   --focus: #2563eb;
+  --statusInfo: #2563eb;
+  --statusSuccess: #059669;
+  --statusWarning: #d97706;
+  --statusDanger: #dc2626;
   --surfaceHover: rgba(37, 99, 235, 0.08);
   --cardHover: rgba(37, 99, 235, 0.06);
   --surfaceOverlay: rgba(37, 99, 235, 0.12);

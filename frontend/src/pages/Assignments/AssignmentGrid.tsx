@@ -22,6 +22,7 @@ import AssignmentsSkeleton from '@/components/skeletons/AssignmentsSkeleton';
 import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
 import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import Toast from '@/components/ui/Toast';
+import PageState from '@/components/ui/PageState';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 // header filter included by HeaderBarComp
@@ -67,6 +68,8 @@ import MobileAddAssignmentSheet from '@/pages/Assignments/grid/components/Mobile
 import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
+import { showToast as showToastBus } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
 
 // Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
 
@@ -109,6 +112,8 @@ const isDateInWeek = (dateStr: string, weekStartStr: string) => {
 
 const AssignmentGrid: React.FC = () => {
   const queryClient = useQueryClient();
+  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
+  const queueToastsEnabled = getFlag('FF_TOAST_QUEUE', false);
   const { state: deptState } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
   
@@ -167,8 +172,12 @@ const AssignmentGrid: React.FC = () => {
   // Toast state (used by status controls)
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
   const showToast = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    if (queueToastsEnabled) {
+      showToastBus(message, type);
+      return;
+    }
     setToast({ message, type });
-  }, [setToast]);
+  }, [queueToastsEnabled]);
 
   // Status controls (dropdown + project status updates)
   const { statusDropdown, projectStatus, getProjectStatus, handleStatusChange } = useStatusControls({
@@ -1967,7 +1976,13 @@ const AssignmentGrid: React.FC = () => {
 
   // Remove assignment
   const removeAssignment = async (assignmentId: number, personId: number) => {
-    if (!confirm('Are you sure you want to remove this assignment?')) return;
+    const confirmed = await confirmAction({
+      title: 'Remove Assignment',
+      message: 'Are you sure you want to remove this assignment?',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     let prevFilteredRows: Assignment[] | null = null;
     let removedAssignment: Assignment | null = null;
     let didOptimisticFilteredUpdate = false;
@@ -2570,8 +2585,14 @@ const AssignmentGrid: React.FC = () => {
       showToast(autoHoursSettingsError, 'error');
       return;
     }
-    if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) {
-      return;
+    if (mode === 'replace') {
+      const confirmed = await confirmAction({
+        title: 'Replace Auto Hours',
+        message: 'This will replace hours based on auto hours presets and may overwrite existing hours. Continue?',
+        confirmLabel: 'Replace',
+        tone: 'warning',
+      });
+      if (!confirmed) return;
     }
     const assignments = await ensureAssignmentsLoaded(person.id!, { mode: 'full' });
     if (!assignments || assignments.length === 0) {
@@ -2613,8 +2634,14 @@ const AssignmentGrid: React.FC = () => {
       showToast(autoHoursSettingsError, 'error');
       return;
     }
-    if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) {
-      return;
+    if (mode === 'replace') {
+      const confirmed = await confirmAction({
+        title: 'Replace Auto Hours',
+        message: 'This will replace hours based on auto hours presets and may overwrite existing hours. Continue?',
+        confirmLabel: 'Replace',
+        tone: 'warning',
+      });
+      if (!confirmed) return;
     }
     const person = people.find(p => p.id === personId);
     if (!person) return;
@@ -2736,6 +2763,14 @@ const AssignmentGrid: React.FC = () => {
   );
 
   if (loading) {
+    if (pageStateEnabled) {
+      return (
+        <Layout>
+          {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
+          <PageState isLoading skeleton={<AssignmentsSkeleton />} />
+        </Layout>
+      );
+    }
     return (
       <Layout>
         {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
@@ -2745,6 +2780,13 @@ const AssignmentGrid: React.FC = () => {
   }
 
   if (error) {
+    if (pageStateEnabled) {
+      return (
+        <Layout>
+          <PageState error={error} onRetry={() => { void refreshAllAssignments(); }} />
+        </Layout>
+      );
+    }
     return (
       <Layout>
         <div className="flex items-center justify-center h-64">
@@ -3033,7 +3075,7 @@ const AssignmentGrid: React.FC = () => {
         loadingAssignments={loadingAssignments}
         canEditAssignments={canEditAssignments}
       />
-      {toast && (
+      {!queueToastsEnabled && toast && (
         <Toast
           message={toast.message}
           type={toast.type}

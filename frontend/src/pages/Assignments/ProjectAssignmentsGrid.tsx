@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '@/components/layout/Layout';
 import AssignmentsSkeleton from '@/components/skeletons/AssignmentsSkeleton';
+import PageState from '@/components/ui/PageState';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useAssignmentsSnapshot } from '@/pages/Assignments/grid/useAssignmentsSnapshot';
@@ -32,6 +33,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
 import { showToast as showToastBus } from '@/lib/toastBus';
 import { getFlag } from '@/lib/flags';
+import { confirmAction } from '@/lib/confirmAction';
 import MobileProjectAccordions from '@/pages/Assignments/project/components/MobileProjectAccordions';
 import MobileProjectAddAssignmentSheet from '@/pages/Assignments/project/components/MobileProjectAddAssignmentSheet';
 import MobileProjectAssignmentSheet from '@/pages/Assignments/project/components/MobileProjectAssignmentSheet';
@@ -81,6 +83,7 @@ const isDateInWeek = (dateStr: string, weekStartStr: string) => {
 };
 
 const ProjectAssignmentsGrid: React.FC = () => {
+  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
   const { state: deptState } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
   const auth = useAuth();
@@ -873,7 +876,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
       showToastBus(autoHoursSettingsError, 'error');
       return;
     }
-    if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) return;
+    if (mode === 'replace') {
+      const confirmed = await confirmAction({
+        title: 'Replace Auto Hours',
+        message: 'This will replace hours based on auto hours presets and may overwrite existing hours. Continue?',
+        confirmLabel: 'Replace',
+        tone: 'warning',
+      });
+      if (!confirmed) return;
+    }
     const templateId = project?.autoHoursTemplateId ?? null;
     if (templateId) await ensureTemplateSettings([templateId]);
     const { updates, skipped } = buildAutoHoursUpdatesForAssignments(project.assignments || [], mode);
@@ -898,7 +909,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
       showToastBus(autoHoursSettingsError, 'error');
       return;
     }
-    if (mode === 'replace' && !confirm('This will replace hours based on auto hours presets and may overwrite existing hours. Continue?')) return;
+    if (mode === 'replace') {
+      const confirmed = await confirmAction({
+        title: 'Replace Auto Hours',
+        message: 'This will replace hours based on auto hours presets and may overwrite existing hours. Continue?',
+        confirmLabel: 'Replace',
+        tone: 'warning',
+      });
+      if (!confirmed) return;
+    }
     const project = assignment.project ? projectsById.get(assignment.project) : null;
     const templateId = project?.autoHoursTemplateId ?? null;
     if (templateId) await ensureTemplateSettings([templateId]);
@@ -1292,7 +1311,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
   };
 
   const removeAssignment = async (projectId: number, assignmentId: number) => {
-    if (!confirm('Are you sure you want to remove this assignment?')) return;
+    const confirmed = await confirmAction({
+      title: 'Remove Assignment',
+      message: 'Are you sure you want to remove this assignment?',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     const assignment = assignmentById.get(assignmentId);
     try {
       await deleteAssignment(assignmentId, assignmentsApi, {
@@ -1420,6 +1445,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const initialProjectsLoading = projectsLoading && projectsData.length === 0;
 
   if (loading || initialProjectsLoading) {
+    if (pageStateEnabled) {
+      return (
+        <Layout>
+          <PageState isLoading skeleton={<AssignmentsSkeleton />} />
+        </Layout>
+      );
+    }
     return (
       <Layout>
         <AssignmentsSkeleton />
@@ -1428,6 +1460,13 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }
 
   if (error || projectsError) {
+    if (pageStateEnabled) {
+      return (
+        <Layout>
+          <PageState error={error || projectsError} onRetry={() => { void refreshAllAssignments(); }} />
+        </Layout>
+      );
+    }
     return (
       <Layout>
         <div className="p-6 text-red-400">{error || projectsError}</div>

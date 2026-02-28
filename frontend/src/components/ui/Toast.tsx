@@ -11,6 +11,7 @@ interface ToastProps {
   message: string;
   type?: 'info' | 'success' | 'warning' | 'error';
   duration?: number; // in milliseconds
+  stackIndex?: number;
   onDismiss: () => void;
 }
 
@@ -18,6 +19,7 @@ const Toast: React.FC<ToastProps> = ({
   message, 
   type = 'info', 
   duration = 15000, 
+  stackIndex = 0,
   onDismiss 
 }) => {
   useEffect(() => {
@@ -59,8 +61,13 @@ const Toast: React.FC<ToastProps> = ({
 
   const styles = getTypeStyles();
 
+  const bottomOffset = `${24 + (stackIndex * 88)}px`;
+
   const toastElement = (
-    <div className="fixed bottom-6 right-6 z-[9999] animate-in slide-in-from-right-5 duration-500 ease-out motion-reduce:animate-none motion-reduce:transition-none">
+    <div
+      className="fixed right-6 z-[9999] animate-in slide-in-from-right-5 duration-500 ease-out motion-reduce:animate-none motion-reduce:transition-none"
+      style={{ bottom: bottomOffset }}
+    >
       <div className={`
         relative rounded-xl px-4 py-4 pr-10 min-w-[320px] max-w-[400px]
         bg-[#2d2d30] backdrop-blur-md

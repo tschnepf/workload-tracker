@@ -13,6 +13,7 @@ import GlobalVerticalFilter from '@/components/filters/GlobalVerticalFilter';
 import TopProgress from '@/components/ui/TopProgress';
 import GlobalNavPending from '@/components/ui/GlobalNavPending';
 import { setPendingPath } from '@/lib/navFeedback';
+import { getFlag } from '@/lib/flags';
 import { useNavTiming } from '@/utils/useNavTiming';
 import Button from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,6 +34,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const nav = useNavigation();
   const navigate = useNavigate();
+  const unifiedNavPending = getFlag('FF_NAV_PENDING_UNIFIED', false);
   useNavTiming();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
@@ -155,7 +157,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Global top-edge progress indicator */}
       <TopProgress />
       {/* Blank overlay while navigation is pending (ensures obvious feedback) */}
-      <GlobalNavPending />
+      {!unifiedNavPending ? <GlobalNavPending /> : null}
       {/* Skip link for keyboard users */}
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 bg-[var(--primary)] text-white px-3 py-2 rounded">
         Skip to main content

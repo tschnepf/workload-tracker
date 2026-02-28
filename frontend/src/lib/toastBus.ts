@@ -1,25 +1,129 @@
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
-export type ToastPayload = { message: string; type?: ToastKind };
 
-type Listener = (t: ToastPayload) => void;
+export type ToastEvent = {
+  id: string;
+  message: string;
+  type: ToastKind;
+  dedupeKey?: string;
+  durationMs?: number;
+  priority?: number;
+  createdAt: number;
+};
 
-const listeners = new Set<Listener>();
+// Backward-compatible alias
+export type ToastPayload = ToastEvent;
 
-export function subscribeToast(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+type EventListener = (event: ToastEvent) => void;
+type QueueListener = (queue: ToastEvent[]) => void;
+
+const eventListeners = new Set<EventListener>();
+const queueListeners = new Set<QueueListener>();
+
+const MAX_QUEUE_SIZE = 80;
+let seq = 0;
+let queue: ToastEvent[] = [];
+
+function toSentenceCaseFirst(message: string): string {
+  if (!message) return message;
+  const idx = message.search(/[A-Za-z]/);
+  if (idx === -1) return message;
+  return message.slice(0, idx) + message.charAt(idx).toUpperCase() + message.slice(idx + 1);
 }
 
-function toSentenceCaseFirst(msg: string): string {
-  if (!msg) return msg;
-  const idx = msg.search(/[A-Za-z]/);
-  if (idx === -1) return msg;
-  return msg.slice(0, idx) + msg.charAt(idx).toUpperCase() + msg.slice(idx + 1);
+function eventId() {
+  seq += 1;
+  return `toast-${Date.now()}-${seq}`;
+}
+
+function snapshotQueue() {
+  return queue.slice();
+}
+
+function sortQueue(items: ToastEvent[]) {
+  return items.sort((a, b) => {
+    const pa = Number.isFinite(a.priority as number) ? Number(a.priority) : 0;
+    const pb = Number.isFinite(b.priority as number) ? Number(b.priority) : 0;
+    if (pa !== pb) return pb - pa;
+    return a.createdAt - b.createdAt;
+  });
+}
+
+function notifyQueueListeners() {
+  const snapshot = snapshotQueue();
+  for (const listener of Array.from(queueListeners)) {
+    try {
+      listener(snapshot);
+    } catch {}
+  }
+}
+
+function notifyEventListeners(event: ToastEvent) {
+  for (const listener of Array.from(eventListeners)) {
+    try {
+      listener(event);
+    } catch {}
+  }
+}
+
+export function emitToast(payload: {
+  message: string;
+  type?: ToastKind;
+  dedupeKey?: string;
+  durationMs?: number;
+  priority?: number;
+}): ToastEvent {
+  const next: ToastEvent = {
+    id: eventId(),
+    message: toSentenceCaseFirst(payload.message),
+    type: payload.type || 'info',
+    dedupeKey: payload.dedupeKey,
+    durationMs: payload.durationMs,
+    priority: payload.priority,
+    createdAt: Date.now(),
+  };
+
+  if (next.dedupeKey) {
+    queue = queue.filter((item) => item.dedupeKey !== next.dedupeKey);
+  }
+
+  queue.push(next);
+  queue = sortQueue(queue).slice(0, MAX_QUEUE_SIZE);
+
+  notifyEventListeners(next);
+  notifyQueueListeners();
+  return next;
 }
 
 export function showToast(message: string, type: ToastKind = 'info') {
-  const formatted = toSentenceCaseFirst(message);
-  for (const l of Array.from(listeners)) {
-    try { l({ message: formatted, type }); } catch {}
+  return emitToast({ message, type });
+}
+
+export function dismissToast(id: string) {
+  const before = queue.length;
+  queue = queue.filter((event) => event.id !== id);
+  if (queue.length !== before) {
+    notifyQueueListeners();
   }
+}
+
+export function clearToasts() {
+  if (!queue.length) return;
+  queue = [];
+  notifyQueueListeners();
+}
+
+export function getToastQueue() {
+  return snapshotQueue();
+}
+
+// Backward-compatible listener for single-event subscriptions
+export function subscribeToast(listener: EventListener): () => void {
+  eventListeners.add(listener);
+  return () => eventListeners.delete(listener);
+}
+
+export function subscribeToastQueue(listener: QueueListener): () => void {
+  queueListeners.add(listener);
+  listener(snapshotQueue());
+  return () => queueListeners.delete(listener);
 }

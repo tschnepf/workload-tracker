@@ -32,10 +32,12 @@ import RecentAssignmentsCard from '@/components/dashboard/RecentAssignmentsCard'
 import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
 import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 import { getFlag } from '@/lib/flags';
+import PageState from '@/components/ui/PageState';
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
   const snapshotsEnabled = getFlag('FF_MODERATE_PAGES_SNAPSHOTS', true);
+  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
   const bootstrapModeRef = React.useRef<'pending' | 'enabled' | 'disabled'>('pending');
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -336,6 +338,25 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  if (pageStateEnabled && (loading || Boolean(error) || !data)) {
+    return (
+      <Layout>
+        <PageState
+          isLoading={loading}
+          error={error}
+          isEmpty={!loading && !error && !data}
+          onRetry={loadDashboard}
+          loadingState={(
+            <div className="flex items-center justify-center h-64">
+              <div className="text-[var(--muted)]">Loading dashboard...</div>
+            </div>
+          )}
+          emptyState={<div className="text-[var(--muted)]">No dashboard data available</div>}
+        />
+      </Layout>
+    );
+  }
+
   if (loading) {
     return (
       <Layout>
@@ -353,7 +374,7 @@ const Dashboard: React.FC = () => {
           <div className="text-red-400">Error: {error}</div>
           <button
             onClick={loadDashboard}
-            className="bg-[var(--primary)] hover:bg-[#1e90ff] text-white px-4 py-2 rounded transition-colors"
+            className="bg-[var(--primary)] hover:bg-[var(--primaryHover)] text-white px-4 py-2 rounded transition-colors"
           >
             Retry
           </button>
@@ -384,10 +405,10 @@ const Dashboard: React.FC = () => {
   const avgUtil = data.summary.avg_utilization;
   const avgAccent = avgUtil <= 70 ? 'blue' : avgUtil <= 85 ? 'green' : avgUtil <= 100 ? 'amber' : 'red';
   const distributionSegments = [
-    { key: 'under', label: 'Under', range: '<70%', value: underCount, color: '#60a5fa' },
-    { key: 'optimal', label: 'Optimal', range: '70-85%', value: optimalCount, color: '#34d399' },
-    { key: 'high', label: 'High', range: '85-100%', value: highCount, color: '#f59e0b' },
-    { key: 'over', label: 'Over', range: '>100%', value: overCount, color: '#ef4444' },
+    { key: 'under', label: 'Under', range: '<70%', value: underCount, color: 'var(--statusInfo)' },
+    { key: 'optimal', label: 'Optimal', range: '70-85%', value: optimalCount, color: 'var(--statusSuccess)' },
+    { key: 'high', label: 'High', range: '85-100%', value: highCount, color: 'var(--statusWarning)' },
+    { key: 'over', label: 'Over', range: '>100%', value: overCount, color: 'var(--statusDanger)' },
   ];
 
   return (

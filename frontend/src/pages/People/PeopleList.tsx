@@ -28,12 +28,14 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useRolesAll } from '@/hooks/useRolesAll';
 import { getFlag } from '@/lib/flags';
 import { useUiPeoplePageSnapshot } from '@/hooks/useUiPageSnapshots';
+import PageState from '@/components/ui/PageState';
 
 const PeopleList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const { state: verticalState } = useVerticalFilter();
   const [showInactive, setShowInactive] = useState(false);
   const snapshotsEnabled = getFlag('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', true);
+  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
   const [snapshotFallbackEnabled, setSnapshotFallbackEnabled] = useState(false);
   const [legacyLocations, setLegacyLocations] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -555,6 +557,35 @@ const PeopleList: React.FC = () => {
         </div>
       </div>
   );
+
+  const listErrorMessage = listError ? String(listError) : null;
+  const combinedError = error || listErrorMessage;
+
+  if (pageStateEnabled && effectiveListLoading && visiblePeople.length === 0) {
+    return (
+      <Layout>
+        <PageState
+          isLoading
+          loadingState={(
+            <div className="h-full min-h-0 flex items-center justify-center">
+              <div className="text-[var(--muted)]">Loading people...</div>
+            </div>
+          )}
+        />
+      </Layout>
+    );
+  }
+
+  if (pageStateEnabled && combinedError && visiblePeople.length === 0) {
+    return (
+      <Layout>
+        <PageState
+          error={combinedError}
+          onRetry={() => window.location.reload()}
+        />
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

@@ -8,6 +8,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from '@/lib/queryClient';
 import Loader from '@/components/ui/Loader';
+import RoutePageBoundary from '@/components/RoutePageBoundary';
 
 // Routing & auth wrappers are configured in route objects (main.tsx)
 
@@ -53,6 +54,7 @@ class LazyLoadErrorBoundary extends React.Component<
 import { useDeptServerDefaultsOnce } from '@/hooks/useDeptServerDefaults';
 import { useThemeFromSettings } from '@/hooks/useThemeFromSettings';
 import ToastHost from '@/components/ui/ToastHost';
+import ConfirmDialogHost from '@/components/ui/ConfirmDialogHost';
 
 function App() {
   // Apply server-provided defaults and theme after auth hydration
@@ -63,15 +65,17 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <LazyLoadErrorBoundary>
         <Suspense fallback={<PageLoader />}>
-          <Outlet />
+          <RoutePageBoundary>
+            <Outlet />
+          </RoutePageBoundary>
         </Suspense>
       </LazyLoadErrorBoundary>
       {/* React Query DevTools for development */}
       <ReactQueryDevtools initialIsOpen={false} />
+      <ConfirmDialogHost />
       <ToastHost />
     </QueryClientProvider>
   );
 }
 
 export default App;
-

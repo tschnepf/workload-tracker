@@ -17,6 +17,7 @@ import { trackPerformanceEvent } from '@/utils/monitoring';
 // PersonWithAvailability interface moved into usePersonSearch hook
 import Layout from '@/components/layout/Layout';
 import ProjectsSkeleton from '@/components/skeletons/ProjectsSkeleton';
+import PageState from '@/components/ui/PageState';
 import { statusOptions } from '@/components/projects/StatusBadge';
 import DeliverablesSectionLoaderComp from '@/pages/Projects/list/components/DeliverablesSectionLoader';
 import FiltersBar from '@/pages/Projects/list/components/FiltersBar';
@@ -36,6 +37,7 @@ import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 import { useProjectDeliverablesBulk } from '@/pages/Projects/list/hooks/useProjectDeliverablesBulk';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ProjectForm from '@/pages/Projects/ProjectForm';
+import { getFlag } from '@/lib/flags';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -48,6 +50,7 @@ const DeliverablesSection = React.lazy(() => import('@/components/deliverables/D
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
   const [ordering, setOrdering] = useState<string | null>('client,name');
+  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { state: verticalState } = useVerticalFilter();
@@ -921,9 +924,24 @@ const ProjectsList: React.FC = () => {
   }, []);
 
   if (loading) {
+    if (pageStateEnabled) {
+      return (
+        <Layout>
+          <PageState isLoading skeleton={<ProjectsSkeleton />} />
+        </Layout>
+      );
+    }
     return (
       <Layout>
         <ProjectsSkeleton />
+      </Layout>
+    );
+  }
+
+  if (pageStateEnabled && error && deptFilteredSortedProjects.length === 0) {
+    return (
+      <Layout>
+        <PageState error={error} onRetry={() => { void refetchProjectsSafe(); }} />
       </Layout>
     );
   }
