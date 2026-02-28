@@ -9,30 +9,32 @@ For clarity:
 1. Baseline table values are for hotspot ranking and were collected in a development runtime (React StrictMode enabled).
 2. CI enforcement budgets must run in one canonical mode: production frontend build (`npm run build` + preview/server) against the same backend dataset.
 
-| Page Route | Current Calls | Goal Calls |
-|---|---:|---:|
-| `/my-work` | 4 | 3 |
-| `/dashboard` | 17 | 8 |
-| `/people` | 11 | 6 |
-| `/projects` | 15 | 9 |
-| `/assignments` | 21 | 7 |
-| `/project-assignments` | 25 | 8 |
-| `/departments` | 7 | 5 |
-| `/departments/manager` | 12 | 8 |
-| `/departments/hierarchy` | 8 | 5 |
-| `/departments/reports` | 36 | 8 |
-| `/deliverables/calendar` | 5 | 4 |
-| `/deliverables/dashboard` | 19 | 6 |
-| `/settings` | 7 | 5 |
-| `/skills` | 12 | 6 |
-| `/performance` | 2 | 2 |
-| `/reports/role-capacity` | 11 | 6 |
-| `/reports/forecast` | 10 | 6 |
-| `/reports/person-experience` | 3 | 3 |
+| Page Route | Baseline Calls | Goal Calls | Current Calls (Measured 2026-02-28) | Result |
+|---|---:|---:|---:|---|
+| `/my-work` | 4 | 3 | 3 | `4 -> 3` (`-1`, met goal) |
+| `/dashboard` | 17 | 8 | 8 | `17 -> 8` (`-9`, met goal) |
+| `/people` | 11 | 6 | 6 | `11 -> 6` (`-5`, met goal) |
+| `/projects` | 15 | 9 | 9 | `15 -> 9` (`-6`, met goal) |
+| `/assignments` | 21 | 7 | 5 | `21 -> 5` (`-16`, beat goal by 2) |
+| `/project-assignments` | 25 | 8 | 7 | `25 -> 7` (`-18`, beat goal by 1) |
+| `/departments` | 7 | 5 | 5 | `7 -> 5` (`-2`, met goal) |
+| `/departments/manager` | 12 | 8 | 8 | `12 -> 8` (`-4`, met goal) |
+| `/departments/hierarchy` | 8 | 5 | 4 | `8 -> 4` (`-4`, beat goal by 1) |
+| `/departments/reports` | 36 | 8 | 8 | `36 -> 8` (`-28`, met goal) |
+| `/deliverables/calendar` | 5 | 4 | 4 | `5 -> 4` (`-1`, met goal) |
+| `/deliverables/dashboard` | 19 | 6 | 4 | `19 -> 4` (`-15`, beat goal by 2) |
+| `/settings` | 7 | 5 | 4 | `7 -> 4` (`-3`, beat goal by 1) |
+| `/skills` | 12 | 6 | 5 | `12 -> 5` (`-7`, beat goal by 1) |
+| `/performance` | 2 | 2 | 2 | `2 -> 2` (`0`, met goal) |
+| `/reports/role-capacity` | 11 | 6 | 6 | `11 -> 6` (`-5`, met goal) |
+| `/reports/forecast` | 10 | 6 | 6 | `10 -> 6` (`-4`, met goal) |
+| `/reports/person-experience` | 3 | 3 | 3 | `3 -> 3` (`0`, met goal) |
 
 Total baseline calls across these routes: `225`  
 Total goal calls across these routes: `105`  
 Net reduction target: `-120` calls (`~53%`).
+Latest measured total calls across these routes (production probe, 2026-02-28): `97`  
+Latest measured net reduction vs baseline: `-128` calls (`~56.9%`) and `8` calls better than goal.
 
 ## Primary Hotspots To Fix
 1. `/departments/reports` fan-out to many department-specific dashboard calls.
