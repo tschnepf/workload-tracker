@@ -147,11 +147,15 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
   }, [args.subscribeGridRefresh, loadData]);
 
   const asyncJob = useMemo(() => ({ id: asyncJobId, progress: asyncProgress, message: asyncMessage }), [asyncJobId, asyncProgress, asyncMessage]);
+  const snapshotSettled = Boolean(snapshot.data || snapshot.error);
+  const snapshotLoading = Boolean(snapshot.isLoading || snapshot.isFetching);
 
   return {
     weeks,
     isSnapshotMode,
     loadData,
+    snapshotSettled,
+    snapshotLoading,
     asyncJob,
     departments: snapshot.data?.departments || [],
     autoHoursBundle: (snapshot.data?.autoHoursBundle || null) as AutoHoursBundle | null,

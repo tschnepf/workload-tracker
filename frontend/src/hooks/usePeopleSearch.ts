@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { peopleApi } from '@/services/api';
-import type { Person } from '@/types/models';
+import type { PaginatedResponse, Person } from '@/types/models';
 
 export type PeopleSearchToken = { term: string; op: 'or' | 'and' | 'not' };
 export type PeopleDepartmentFilter = { departmentId: number; op: 'or' | 'and' | 'not' };
@@ -79,7 +79,10 @@ export function buildPeopleSearchQueryKey(options: PeopleSearchOptions) {
   return ['people', 'search', hash] as const;
 }
 
-export function usePeopleSearch(options: PeopleSearchOptions) {
+export function usePeopleSearch(
+  options: PeopleSearchOptions,
+  queryOptions?: { enabled?: boolean; initialPage?: PaginatedResponse<Person> | null }
+) {
   const payloadBase = useMemo(() => buildPeopleSearchPayloadBase(options), [options]);
   const queryKey = useMemo(() => buildPeopleSearchQueryKey(options), [options]);
 
@@ -87,6 +90,12 @@ export function usePeopleSearch(options: PeopleSearchOptions) {
     queryKey,
     queryFn: ({ pageParam = 1 }) => peopleApi.searchList({ ...payloadBase, page: pageParam }),
     initialPageParam: 1,
+    initialData: queryOptions?.initialPage
+      ? {
+          pages: [queryOptions.initialPage],
+          pageParams: [1],
+        }
+      : undefined,
     getNextPageParam: (lastPage) => {
       if (!lastPage?.next) return undefined;
       try {
@@ -99,6 +108,7 @@ export function usePeopleSearch(options: PeopleSearchOptions) {
     },
     staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
+    enabled: queryOptions?.enabled ?? true,
   });
 
   const people = (query.data?.pages || []).flatMap(p => p?.results || []) as Person[];

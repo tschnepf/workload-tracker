@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { jsonResponse, primeAuth } from './utils';
+import { jsonResponse, primeAuth, mockApiFallback } from './utils';
 
 const forecastPayload = [
   {
@@ -64,16 +64,17 @@ const deliverablesPayload = {
 
 test.describe('Team Forecast responsive charts', () => {
   test('renders compact capacity and project charts at 360px', async ({ page }) => {
+    await mockApiFallback(page);
     await primeAuth(page);
 
-    await page.route('**/api/people/workload_forecast/**', (route) =>
-      route.fulfill(jsonResponse(forecastPayload))
-    );
-    await page.route('**/api/departments/**', (route) =>
-      route.fulfill(jsonResponse(departmentsPayload))
-    );
-    await page.route('**/api/projects/**', (route) =>
-      route.fulfill(jsonResponse(projectsPayload))
+    await page.route('**/api/reports/forecast/bootstrap/**', (route) =>
+      route.fulfill(
+        jsonResponse({
+          departments: departmentsPayload.results,
+          projects: projectsPayload.results.map((project) => ({ id: project.id, name: project.name })),
+          workloadForecast: forecastPayload,
+        })
+      )
     );
     await page.route('**/api/assignments/**', (route) =>
       route.fulfill(jsonResponse(assignmentsPayload))
@@ -81,16 +82,15 @@ test.describe('Team Forecast responsive charts', () => {
     await page.route('**/api/deliverables/**', (route) =>
       route.fulfill(jsonResponse(deliverablesPayload))
     );
-    await page.route('**/api/**', (route) => route.fulfill(jsonResponse({})));
 
     await page.setViewportSize({ width: 360, height: 780 });
-    await page.goto('/reports/team-forecast');
+    await page.goto('/reports/forecast');
 
     await expect(page.getByRole('heading', { name: /Team Forecast & Project Timeline/i })).toBeVisible();
     await expect(page.getByText('Weeks:')).toBeVisible();
 
     await expect(page.getByText('Capacity Timeline')).toBeVisible();
-    await expect(page.getByText('Project Timeline')).toBeVisible();
+    await expect(page.getByText(/^Project Timeline$/)).toBeVisible();
 
     await expect(page.getByRole('button', { name: 'Apply Filters' })).toBeVisible();
 
@@ -102,16 +102,17 @@ test.describe('Team Forecast responsive charts', () => {
   });
 
   test('renders full SVG capacity timeline and legends at 768px', async ({ page }) => {
+    await mockApiFallback(page);
     await primeAuth(page);
 
-    await page.route('**/api/people/workload_forecast/**', (route) =>
-      route.fulfill(jsonResponse(forecastPayload))
-    );
-    await page.route('**/api/departments/**', (route) =>
-      route.fulfill(jsonResponse(departmentsPayload))
-    );
-    await page.route('**/api/projects/**', (route) =>
-      route.fulfill(jsonResponse(projectsPayload))
+    await page.route('**/api/reports/forecast/bootstrap/**', (route) =>
+      route.fulfill(
+        jsonResponse({
+          departments: departmentsPayload.results,
+          projects: projectsPayload.results.map((project) => ({ id: project.id, name: project.name })),
+          workloadForecast: forecastPayload,
+        })
+      )
     );
     await page.route('**/api/assignments/**', (route) =>
       route.fulfill(jsonResponse(assignmentsPayload))
@@ -119,10 +120,9 @@ test.describe('Team Forecast responsive charts', () => {
     await page.route('**/api/deliverables/**', (route) =>
       route.fulfill(jsonResponse(deliverablesPayload))
     );
-    await page.route('**/api/**', (route) => route.fulfill(jsonResponse({})));
 
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto('/reports/team-forecast');
+    await page.goto('/reports/forecast');
 
     await expect(page.getByText('Capacity Timeline')).toBeVisible();
 
@@ -143,4 +143,3 @@ test.describe('Team Forecast responsive charts', () => {
     await expect(page).toHaveScreenshot('team-forecast-768.png', { fullPage: true });
   });
 });
-

@@ -3,8233 +3,11471 @@
  * Do not make direct changes to the file.
  */
 
-
 export interface paths {
-  "/api/assignments/": {
-    /**
-     * @description Get all assignments with person details and optional project
-     * filtering.
-     */
-    get: operations["assignments_list"];
-    /** @description Create assignment with validation */
-    post: operations["assignments_create"];
-  };
-  "/api/assignments/{id}/": {
-    /**
-     * @description Assignment CRUD API with utilization tracking
-     * Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
-     */
-    get: operations["assignments_retrieve"];
-    /**
-     * @description Assignment CRUD API with utilization tracking
-     * Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
-     */
-    put: operations["assignments_update"];
-    /**
-     * @description Assignment CRUD API with utilization tracking
-     * Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
-     */
-    delete: operations["assignments_destroy"];
-    /**
-     * @description Assignment CRUD API with utilization tracking
-     * Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
-     */
-    patch: operations["assignments_partial_update"];
-  };
-  "/api/assignments/analytics_by_client/": {
-    /**
-     * @description Assigned hours aggregated by client for N weeks ahead.
-     *
-     * Response: { clients: [{ label: string, hours: number }] }
-     */
-    get: operations["assignments_analytics_by_client_retrieve"];
-  };
-  "/api/assignments/analytics_client_projects/": {
-    /**
-     * @description Assigned hours aggregated by project for a given client over N weeks ahead.
-     *
-     * Response: { projects: [{ id: number, name: string, hours: number }] }
-     */
-    get: operations["assignments_analytics_client_projects_retrieve"];
-  };
-  "/api/assignments/analytics_deliverable_timeline/": {
-    /**
-     * @description Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.
-     *
-     * Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
-     * Classification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.
-     * Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.
-     * Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }
-     */
-    get: operations["assignments_analytics_deliverable_timeline_retrieve"];
-  };
-  "/api/assignments/analytics_role_capacity/": {
-    /**
-     * @description Per-role capacity vs assigned hours timeline for a department over the next N weeks.
-     *
-     * Rules: Only includes active people; applies hireDate gating (capacity contributes only on or after start).
-     * Capacity is the sum of weekly capacity for all active people in the department with the selected role(s) for each week, gated by hire date.
-     * Assigned hours are summed from current Assignments.weekly_hours by person role and week.
-     */
-    get: operations["assignments_analytics_role_capacity_retrieve"];
-  };
-  "/api/assignments/analytics_status_timeline/": {
-    /**
-     * @description Assigned hours weekly timeline aggregated by project status for N weeks ahead.
-     *
-     * Categories reflect Project.status controlled vocabulary: 'active', 'active_ca', and 'other'.
-     * Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }
-     */
-    get: operations["assignments_analytics_status_timeline_retrieve"];
-  };
-  "/api/assignments/bulk_update_hours/": {
-    /** @description Bulk update weekly hours for multiple assignments in a single transaction. */
-    patch: operations["assignments_bulk_update_hours_partial_update"];
-  };
-  "/api/assignments/by_person/": {
-    /** @description Get assignments grouped by person */
-    get: operations["assignments_by_person_retrieve"];
-  };
-  "/api/assignments/check_conflicts/": {
-    /**
-     * @description Check assignment conflicts for a person in a specific week.
-     * Optimized to prevent N+1 queries by fetching all person assignments
-     * in a single query.
-     */
-    post: operations["assignments_check_conflicts_create"];
-  };
-  "/api/assignments/counts_by_person/": {
-    /** @description Counts of assignments per person with optional filters. */
-    get: operations["assignments_counts_by_person_retrieve"];
-  };
-  "/api/assignments/experience_by_client/": {
-    /**
-     * @description Experience by Client: list people with totals and role aggregates in a date window.
-     *
-     * Params: client?, department?, include_children? (0|1), start?, end?, min_weeks?
-     */
-    get: operations["assignments_experience_by_client_retrieve"];
-  };
-  "/api/assignments/grid_snapshot/": {
-    /**
-     * @description Return compact pre-aggregated grid data for N weeks ahead (default 12).
-     *
-     * Response shape: { weekKeys: [YYYY-MM-DD], people: [{id, name, weeklyCapacity, department}], hoursByPerson: { <personId>: { <weekKey>: hours } } }
-     */
-    get: operations["assignments_grid_snapshot_retrieve"];
-  };
-  "/api/assignments/grid_snapshot_async/": {
-    /** @description Start async grid snapshot job and return task ID for polling. */
-    get: operations["assignments_grid_snapshot_async_retrieve"];
-  };
-  "/api/assignments/person_experience_profile/": {
-    /** @description Person Experience Profile: breakdown by client and project with role/phase aggregates, plus eventsCount. */
-    get: operations["assignments_person_experience_profile_retrieve"];
-  };
-  "/api/assignments/person_project_timeline/": {
-    /** @description Person-Project timeline with coverage blocks, events, and derived role changes. */
-    get: operations["assignments_person_project_timeline_retrieve"];
-  };
-  "/api/assignments/project_grid_snapshot/": {
-    /**
-     * @description Project-centric aggregate snapshot for N weeks ahead (default 12).
-     *
-     * Response shape: { weekKeys: [YYYY-MM-DD], projects: [{id,name,client,status}],
-     * hoursByProject: { <projectId>: { <weekKey>: hours } },
-     * deliverablesByProjectWeek: { <projectId>: { <weekKey>: count } },
-     * hasFutureDeliverablesByProject: { <projectId>: boolean },
-     * metrics: { projectsCount, peopleAssignedCount, totalHours } }
-     */
-    get: operations["assignments_project_grid_snapshot_retrieve"];
-  };
-  "/api/assignments/project_staffing_timeline/": {
-    /** @description Project Staffing Timeline: aggregates per role and people lists with events. */
-    get: operations["assignments_project_staffing_timeline_retrieve"];
-  };
-  "/api/assignments/project_totals/": {
-    /** @description Return authoritative totals for specific projects over current horizon. */
-    get: operations["assignments_project_totals_retrieve"];
-  };
-  "/api/assignments/rebalance_suggestions/": {
-    /**
-     * @description Suggest non-destructive rebalancing ideas across the next N weeks
-     * (default 12).
-     *
-     *     Heuristic:
-     *     - Overallocated: utilization > 100% (based on 1-week snapshot)
-     *     - Underutilized: utilization < 70%
-     *     - Pair over with under and propose shifting 4–8 hours
-     *     Returns at most 20 suggestions.
-     */
-    get: operations["assignments_rebalance_suggestions_retrieve"];
-  };
-  "/api/assignments/run_weekly_snapshot/": {
-    /**
-     * @description Run weekly assignment snapshot writer or backfill for a given Sunday week.
-     *
-     * If 'week' is omitted, uses the current week's Sunday. Add 'backfill=1' to use the backfill service (optional 'emit_events' and 'force' flags). Returns summary.
-     */
-    post: operations["assignments_run_weekly_snapshot_create"];
-  };
-  "/api/assignments/search/": {
-    /** @description Search assignments with tokenized filters and return people match metadata. */
-    post: operations["assignments_search_create"];
-  };
-  "/api/auth/admin_audit/": {
-    /** @description Read-only endpoint for recent admin audit logs (admin only). */
-    get: operations["auth_admin_audit_list"];
-  };
-  "/api/auth/change_password/": {
-    /** @description Change password for the authenticated user. */
-    post: operations["auth_change_password_create"];
-  };
-  "/api/auth/create_user/": {
-    /** @description Create a new user (staff only) and optionally link to a Person. */
-    post: operations["auth_create_user_create"];
-  };
-  "/api/auth/invite/": {
-    /**
-     * @description Invite a user by email.
-     *
-     * - If the user exists, sends a password set/reset link.
-     * - If not, creates an account with an unusable password and sends the link.
-     * - Optionally assigns role and links to a Person.
-     */
-    post: operations["auth_invite_create"];
-  };
-  "/api/auth/link_person/": {
-    /** @description Link or unlink the current user's profile to a Person. */
-    post: operations["auth_link_person_create"];
-  };
-  "/api/auth/me/": {
-    /** @description Return the current user's profile with settings and optional person link. */
-    get: operations["auth_me_retrieve"];
-  };
-  "/api/auth/notification-preferences/": {
-    get: operations["auth_notification_preferences_retrieve"];
-    put: operations["auth_notification_preferences_update"];
-  };
-  "/api/auth/password_reset/": {
-    /**
-     * @description Request a password reset by email. Always returns 204.
-     *
-     * If a user with the email exists, sends a reset link with uid/token.
-     */
-    post: operations["auth_password_reset_create"];
-  };
-  "/api/auth/password_reset_confirm/": {
-    /** @description Confirm password reset with uid/token and set a new password. */
-    post: operations["auth_password_reset_confirm_create"];
-  };
-  "/api/auth/set_password/": {
-    /** @description Set password for a target user (staff only). */
-    post: operations["auth_set_password_create"];
-  };
-  "/api/auth/settings/": {
-    /** @description Update settings for the current user's profile (partial). */
-    patch: operations["auth_settings_partial_update"];
-  };
-  "/api/auth/users/": {
-    /** @description List all users with role and linked person (admin only). */
-    get: operations["auth_users_list"];
-  };
-  "/api/auth/users/{user_id}/": {
-    /** @description Delete a user account (admin only). */
-    delete: operations["auth_users_destroy"];
-  };
-  "/api/auth/users/{user_id}/link_person/": {
-    /** @description Link or unlink a target user to a Person (admin only). */
-    post: operations["auth_users_link_person_create"];
-  };
-  "/api/auth/users/{user_id}/role/": {
-    /**
-     * @description Set role for a target user (admin only).
-     *
-     * Accepts one of: {'role': 'admin' | 'manager' | 'user'}
-     */
-    post: operations["auth_users_role_create"];
-  };
-  "/api/backups/": {
-    get: operations["backups_retrieve"];
-    post: operations["backups_create"];
-  };
-  "/api/backups/{id}/": {
-    delete: operations["backups_destroy"];
-  };
-  "/api/backups/{id}/download/": {
-    get: operations["backups_download_retrieve"];
-  };
-  "/api/backups/{id}/restore/": {
-    post: operations["backups_restore_create"];
-  };
-  "/api/backups/status/": {
-    get: operations["backups_status_retrieve"];
-  };
-  "/api/backups/upload-restore/": {
-    post: operations["backups_upload_restore_create"];
-  };
-  "/api/capabilities/": {
-    /**
-     * @description Advertise backend feature capabilities (requires authentication).
-     *
-     * Returns booleans and simple settings for aggregate endpoints, async jobs, and cache TTL hints.
-     */
-    get: operations["capabilities_retrieve"];
-  };
-  "/api/core/calendar_feeds/": {
-    /**
-     * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
-     *
-     * - GET: returns current token values
-     * - PATCH: set a specific token or regenerate with {regenerate: true}
-     */
-    get: operations["core_calendar_feeds_retrieve"];
-    /**
-     * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
-     *
-     * - GET: returns current token values
-     * - PATCH: set a specific token or regenerate with {regenerate: true}
-     */
-    patch: operations["core_calendar_feeds_partial_update"];
-  };
-  "/api/core/deliverable_phase_mapping/": {
-    get: operations["core_deliverable_phase_mapping_retrieve"];
-    put: operations["core_deliverable_phase_mapping_update"];
-    post: operations["core_deliverable_phase_mapping_create"];
-    /**
-     * @description Remove a project role from the catalog and clear assignments using it.
-     *
-     * Behavior:
-     * - Admin only.
-     * - Accepts role name via query param (?name=...) or JSON body { name }.
-     * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
-     * - If a catalog ProjectRole exists for that normalized name, it is deleted.
-     */
-    delete: operations["core_deliverable_phase_mapping_destroy"];
-  };
-  "/api/core/pre-deliverable-global-settings/": {
-    get: operations["core_pre_deliverable_global_settings_list"];
-    put: operations["core_pre_deliverable_global_settings_update"];
-  };
-  "/api/core/project-template-settings/": {
-    get: operations["core_project_template_settings_retrieve"];
-    put: operations["core_project_template_settings_update"];
-  };
-  "/api/core/project-template-settings/{template_id}/": {
-    get: operations["core_project_template_settings_list"];
-    put: operations["core_project_template_settings_update_2"];
-  };
-  "/api/core/project-templates/": {
-    get: operations["core_project_templates_list"];
-    post: operations["core_project_templates_create"];
-  };
-  "/api/core/project-templates/{template_id}/": {
-    get: operations["core_project_templates_retrieve"];
-    put: operations["core_project_templates_update"];
-    post: operations["core_project_templates_create_2"];
-    delete: operations["core_project_templates_destroy"];
-  };
-  "/api/core/project-templates/{template_id}/duplicate/": {
-    post: operations["core_project_templates_duplicate_create"];
-  };
-  "/api/core/project-templates/duplicate-default/": {
-    get: operations["core_project_templates_duplicate_default_list"];
-    post: operations["core_project_templates_duplicate_default_create"];
-  };
-  "/api/core/project_roles/": {
-    /**
-     * @description List/add project roles for suggestions/settings.
-     *
-     * - GET: returns union of catalog roles and distinct existing assignment roles.
-     * - POST: admin-only; adds a role to the catalog.
-     */
-    get: operations["core_project_roles_retrieve"];
-  };
-  "/api/core/qa_task_settings/": {
-    get: operations["core_qa_task_settings_retrieve"];
-    put: operations["core_qa_task_settings_update"];
-  };
-  "/api/core/utilization_scheme/": {
-    /**
-     * @description Singleton endpoint for utilization scheme.
-     *
-     * - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
-     * - PUT: admin-only, requires If-Match ETag; increments version on success.
-     * - When feature flag is disabled: GET returns defaults; PUT returns 403.
-     */
-    get: operations["core_utilization_scheme_retrieve"];
-    /**
-     * @description Singleton endpoint for utilization scheme.
-     *
-     * - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
-     * - PUT: admin-only, requires If-Match ETag; increments version on success.
-     * - When feature flag is disabled: GET returns defaults; PUT returns 403.
-     */
-    put: operations["core_utilization_scheme_update"];
-  };
-  "/api/dashboard/": {
-    /** @description Team dashboard with utilization metrics and overview */
-    get: operations["dashboard_retrieve"];
-  };
-  "/api/deliverables/": {
-    /** @description Get deliverables with bulk loading support (Phase 2 optimization) */
-    get: operations["deliverables_list"];
-    /**
-     * @description CRUD operations for deliverables
-     * Supports filtering by project and manual reordering
-     */
-    post: operations["deliverables_create"];
-  };
-  "/api/deliverables/{id}/": {
-    /**
-     * @description CRUD operations for deliverables
-     * Supports filtering by project and manual reordering
-     */
-    get: operations["deliverables_retrieve"];
-    /**
-     * @description CRUD operations for deliverables
-     * Supports filtering by project and manual reordering
-     */
-    put: operations["deliverables_update"];
-    /**
-     * @description CRUD operations for deliverables
-     * Supports filtering by project and manual reordering
-     */
-    delete: operations["deliverables_destroy"];
-    /**
-     * @description PATCH deliverable. If date changes and feature flag enabled, reallocate hours.
-     *
-     * Response includes optional 'reallocation' summary with keys:
-     * { deltaWeeks, assignmentsChanged, touchedWeekKeys }
-     */
-    patch: operations["deliverables_partial_update"];
-  };
-  "/api/deliverables/{id}/staffing_summary/": {
-    /**
-     * @description Return derived staffing for a deliverable from Assignment.weekly_hours.
-     *
-     * Default window: 6 weeks prior OR between previous and current deliverable (exclusive→inclusive).
-     * Optional override: ?weeks=6 to force a fixed lookback window.
-     *
-     * Returns array items per person with >0 hours in window on the deliverable's project:
-     * { linkId|null, personId, personName, roleOnMilestone|null, totalHours, weekBreakdown }
-     */
-    get: operations["deliverables_staffing_summary_retrieve"];
-  };
-  "/api/deliverables/assignments/": {
-    /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-    get: operations["deliverables_assignments_list"];
-    /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-    post: operations["deliverables_assignments_create"];
-  };
-  "/api/deliverables/assignments/{id}/": {
-    /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-    get: operations["deliverables_assignments_retrieve"];
-    /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-    put: operations["deliverables_assignments_update"];
-    /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-    delete: operations["deliverables_assignments_destroy"];
-    /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-    patch: operations["deliverables_assignments_partial_update"];
-  };
-  "/api/deliverables/assignments/by_deliverable/": {
-    /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-    get: operations["deliverables_assignments_by_deliverable_list"];
-  };
-  "/api/deliverables/assignments/by_person/": {
-    /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-    get: operations["deliverables_assignments_by_person_list"];
-  };
-  "/api/deliverables/bulk/": {
-    /**
-     * @description Bulk fetch deliverables for multiple projects
-     * GET /api/deliverables/bulk/?project_ids=1,2,3,4
-     *
-     * Returns: { "1": [...], "2": [...], "3": [...], "4": [...] }
-     */
-    get: operations["deliverables_bulk_retrieve"];
-  };
-  "/api/deliverables/calendar/": {
-    /**
-     * @description Read-only calendar endpoint returning deliverables within a date range
-     * with assignmentCount. Missing params tolerated (returns all dated items).
-     *
-     * GET /api/deliverables/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD
-     */
-    get: operations["deliverables_calendar_list"];
-  };
-  "/api/deliverables/calendar_with_pre_items/": {
-    /**
-     * @description Calendar view returning deliverables and pre-deliverable items.
-     *
-     * Semantics:
-     * - When mine_only=true, scope results to the union of:
-     *   (a) deliverables directly linked to the current user via DeliverableAssignment,
-     *   (b) deliverables on projects where the current user has an active project-level Assignment.
-     * - Duplicates are eliminated via a distinct ID subquery strategy; counts use distinct=True.
-     * - Optional filters: start, end (dates) and type_id (pre-deliverable type).
-     */
-    get: operations["deliverables_calendar_with_pre_items_retrieve"];
-  };
-  "/api/deliverables/personal_pre_deliverables/": {
-    /** @description Upcoming pre-deliverable items for the authenticated user (default 14 days). */
-    get: operations["deliverables_personal_pre_deliverables_retrieve"];
-  };
-  "/api/deliverables/pre_deliverable_items/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    get: operations["deliverables_pre_deliverable_items_list"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    post: operations["deliverables_pre_deliverable_items_create"];
-  };
-  "/api/deliverables/pre_deliverable_items/{id}/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    get: operations["deliverables_pre_deliverable_items_retrieve"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    put: operations["deliverables_pre_deliverable_items_update"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    delete: operations["deliverables_pre_deliverable_items_destroy"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    patch: operations["deliverables_pre_deliverable_items_partial_update"];
-  };
-  "/api/deliverables/pre_deliverable_items/{id}/complete/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    post: operations["deliverables_pre_deliverable_items_complete_create"];
-  };
-  "/api/deliverables/pre_deliverable_items/{id}/uncomplete/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    post: operations["deliverables_pre_deliverable_items_uncomplete_create"];
-  };
-  "/api/deliverables/pre_deliverable_items/backfill/": {
-    /**
-     * @description Staff-only: backfill or regenerate pre-items for a project/date window.
-     *
-     * If ASYNC_JOBS is enabled and Celery task is available, enqueues background job and
-     * returns 202 with job metadata. Otherwise, runs synchronously and returns a summary.
-     */
-    post: operations["deliverables_pre_deliverable_items_backfill_create"];
-  };
-  "/api/deliverables/pre_deliverable_items/bulk_complete/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    post: operations["deliverables_pre_deliverable_items_bulk_complete_create"];
-  };
-  "/api/deliverables/qa_tasks/": {
-    get: operations["deliverables_qa_tasks_list"];
-    post: operations["deliverables_qa_tasks_create"];
-  };
-  "/api/deliverables/qa_tasks/{id}/": {
-    get: operations["deliverables_qa_tasks_retrieve"];
-    put: operations["deliverables_qa_tasks_update"];
-    delete: operations["deliverables_qa_tasks_destroy"];
-    patch: operations["deliverables_qa_tasks_partial_update"];
-  };
-  "/api/deliverables/reorder/": {
-    /**
-     * @description Manually reorder deliverables for a project
-     * Expected payload: {
-     *     "project": project_id,
-     *     "deliverable_ids": [id1, id2, id3, ...]
-     * }
-     */
-    post: operations["deliverables_reorder_create"];
-  };
-  "/api/deliverables/task_templates/": {
-    get: operations["deliverables_task_templates_list"];
-    post: operations["deliverables_task_templates_create"];
-  };
-  "/api/deliverables/task_templates/{id}/": {
-    get: operations["deliverables_task_templates_retrieve"];
-    put: operations["deliverables_task_templates_update"];
-    delete: operations["deliverables_task_templates_destroy"];
-    patch: operations["deliverables_task_templates_partial_update"];
-  };
-  "/api/deliverables/tasks/": {
-    get: operations["deliverables_tasks_list"];
-    post: operations["deliverables_tasks_create"];
-  };
-  "/api/deliverables/tasks/{id}/": {
-    get: operations["deliverables_tasks_retrieve"];
-    put: operations["deliverables_tasks_update"];
-    delete: operations["deliverables_tasks_destroy"];
-    patch: operations["deliverables_tasks_partial_update"];
-  };
-  "/api/departments/": {
-    /** @description Get all departments with bulk loading support */
-    get: operations["departments_list"];
-    post: operations["departments_create"];
-  };
-  "/api/departments/{id}/": {
-    get: operations["departments_retrieve"];
-    put: operations["departments_update"];
-    delete: operations["departments_destroy"];
-    patch: operations["departments_partial_update"];
-  };
-  "/api/integrations/connections/": {
-    get: operations["integrations_connections_list"];
-    post: operations["integrations_connections_create"];
-  };
-  "/api/integrations/connections/{id}/": {
-    get: operations["integrations_connections_retrieve"];
-    put: operations["integrations_connections_update"];
-    delete: operations["integrations_connections_destroy"];
-    patch: operations["integrations_connections_partial_update"];
-  };
-  "/api/integrations/connections/{id}/test/": {
-    post: operations["integrations_connections_test_create"];
-  };
-  "/api/integrations/connections/{id}/test-activity/": {
-    post: operations["integrations_connections_test_activity_create"];
-  };
-  "/api/integrations/health/": {
-    get: operations["integrations_health_retrieve"];
-  };
-  "/api/integrations/jobs/{id}/retry/": {
-    post: operations["integrations_jobs_retry_create"];
-  };
-  "/api/integrations/providers/": {
-    get: operations["integrations_providers_list"];
-  };
-  "/api/integrations/providers/{key}/": {
-    get: operations["integrations_providers_detail"];
-  };
-  "/api/integrations/providers/{key}/catalog/": {
-    get: operations["integrations_providers_catalog_retrieve"];
-  };
-  "/api/integrations/providers/{key}/connect/callback/": {
-    get: operations["integrations_providers_connect_callback_retrieve"];
-  };
-  "/api/integrations/providers/{key}/connect/start/": {
-    post: operations["integrations_providers_connect_start_create"];
-  };
-  "/api/integrations/providers/{key}/credentials/": {
-    get: operations["integrations_providers_credentials_retrieve"];
-    post: operations["integrations_providers_credentials_create"];
-  };
-  "/api/integrations/providers/{key}/objects/": {
-    get: operations["integrations_providers_objects_retrieve"];
-  };
-  "/api/integrations/providers/{key}/reset/": {
-    post: operations["integrations_providers_reset_create"];
-  };
-  "/api/integrations/providers/{provider_key}/{object_key}/mapping/defaults/": {
-    get: operations["integrations_providers_mapping_defaults_retrieve"];
-    post: operations["integrations_providers_mapping_defaults_create"];
-  };
-  "/api/integrations/providers/{provider_key}/jobs/": {
-    get: operations["integrations_providers_jobs_retrieve"];
-  };
-  "/api/integrations/providers/{provider_key}/projects/matching/confirm/": {
-    post: operations["integrations_providers_projects_matching_confirm_create"];
-  };
-  "/api/integrations/providers/{provider_key}/projects/matching/suggestions/": {
-    get: operations["integrations_providers_projects_matching_suggestions_retrieve"];
-  };
-  "/api/integrations/rules/": {
-    get: operations["integrations_rules_list"];
-    post: operations["integrations_rules_create"];
-  };
-  "/api/integrations/rules/{id}/": {
-    get: operations["integrations_rules_retrieve"];
-    put: operations["integrations_rules_update"];
-    delete: operations["integrations_rules_destroy"];
-    patch: operations["integrations_rules_partial_update"];
-  };
-  "/api/integrations/rules/{id}/resync/": {
-    post: operations["integrations_rules_resync_create"];
-  };
-  "/api/integrations/secret-key/": {
-    get: operations["integrations_secret_key_retrieve"];
-    post: operations["integrations_secret_key_create"];
-  };
-  "/api/jobs/{job_id}/": {
-    /**
-     * @description Return status and metadata for a Celery job.
-     *
-     * Response fields:
-     * - id: task id
-     * - state: PENDING|STARTED|PROGRESS|SUCCESS|FAILURE
-     * - progress: 0-100 if available
-     * - message: optional status message
-     * - downloadReady: bool
-     * - downloadUrl: present when a file is available to download
-     * - result: task result when not file-based (e.g., import summary)
-     * - error: error message if failed
-     */
-    get: operations["jobs_retrieve"];
-  };
-  "/api/jobs/{job_id}/download/": {
-    /** @description Stream the file produced by a completed job (if any). */
-    get: operations["jobs_download_retrieve"];
-  };
-  "/api/people/": {
-    /** @description Get all people with conditional request support (ETag/Last-Modified) and bulk loading */
-    get: operations["people_list"];
-    /**
-     * @description Person CRUD API with utilization calculations
-     * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
-     */
-    post: operations["people_create"];
-  };
-  "/api/people/{id}/": {
-    /**
-     * @description Person CRUD API with utilization calculations
-     * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
-     */
-    get: operations["people_retrieve"];
-    /**
-     * @description Override update to trigger deactivation cleanup when is_active flips to false.
-     *
-     * Enqueues a Celery task when available; otherwise runs synchronously in-process.
-     */
-    put: operations["people_update"];
-    /**
-     * @description Delete a person by primary key.
-     *
-     * Note: bypass get_queryset() filtering so deletes work even if the record
-     * is inactive or excluded from the default list queryset.
-     * Still enforces object-level permissions before deletion.
-     */
-    delete: operations["people_destroy"];
-    /**
-     * @description Person CRUD API with utilization calculations
-     * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
-     */
-    patch: operations["people_partial_update"];
-  };
-  "/api/people/{id}/utilization/": {
-    /** @description Get detailed utilization breakdown for a person - Chunk 3 */
-    get: operations["people_utilization_retrieve"];
-  };
-  "/api/people/autocomplete/": {
-    /**
-     * @description Lightweight autocomplete for active people.
-     *
-     * Query params:
-     * - search or q: optional substring of name
-     * - limit: max results (default 20)
-     */
-    get: operations["people_autocomplete_retrieve"];
-  };
-  "/api/people/capacity_heatmap/": {
-    /** @description Return per-person week summaries for the next N weeks (default 12). */
-    get: operations["people_capacity_heatmap_list"];
-  };
-  "/api/people/export_excel/": {
-    /** @description Export people to Excel with streaming response for large datasets */
-    get: operations["people_export_excel_retrieve"];
-  };
-  "/api/people/find_available/": {
-    /**
-     * @description Person CRUD API with utilization calculations
-     * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
-     */
-    get: operations["people_find_available_list"];
-  };
-  "/api/people/import_excel/": {
-    /** @description Import people from Excel with progress tracking */
-    post: operations["people_import_excel_create"];
-  };
-  "/api/people/search/": {
-    /**
-     * @description Server-side typeahead for People.
-     *
-     * Params:
-     * - q: required search query (min length 2)
-     * - limit: optional, default 20, max 50
-     * Returns minimal projection: id, name, department
-     */
-    get: operations["people_search_retrieve"];
-  };
-  "/api/people/skill_match/": {
-    /**
-     * @description Rank people by skills (and optionally availability for a given week).
-     *
-     * Returns an array of items: { personId, name, score, matchedSkills[], missingSkills[], departmentId, roleName }.
-     * Score is based on percent of required skills matched (case-insensitive contains) and optionally blended with availability when `week` is provided.
-     */
-    get: operations["people_skill_match_list"];
-  };
-  "/api/people/skill_match_async/": {
-    /** @description Start async skill match job and return task ID for polling. */
-    get: operations["people_skill_match_async_retrieve"];
-  };
-  "/api/people/workload_forecast/": {
-    /**
-     * @description Aggregate team capacity vs allocated for N weeks ahead (default 8).
-     *
-     * Response array items:
-     * { weekStart, totalCapacity, totalAllocated, teamUtilization, peopleOverallocated[] }
-     */
-    get: operations["people_workload_forecast_list"];
-  };
-  "/api/personal/work/": {
-    get: operations["personal_work_retrieve"];
-  };
-  "/api/projects/": {
-    /** @description Get all projects with conditional request support (ETag/Last-Modified) and bulk loading */
-    get: operations["projects_list"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    post: operations["projects_create"];
-  };
-  "/api/projects/{id}/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    get: operations["projects_retrieve"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    put: operations["projects_update"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    delete: operations["projects_destroy"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    patch: operations["projects_partial_update"];
-  };
-  "/api/projects/{id}/availability/": {
-    /**
-     * @description Return availability snapshot for people relevant to the project context.
-     *
-     * Response items: { personId, personName, totalHours, capacity, availableHours, utilizationPercent }
-     * Uses Sunday as canonical week key; exact JSON key lookup (no tolerance).
-     */
-    get: operations["projects_availability_list"];
-  };
-  "/api/projects/{id}/deliverable_tasks/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    get: operations["projects_deliverable_tasks_list"];
-  };
-  "/api/projects/{id}/pre-deliverable-settings/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    get: operations["projects_pre_deliverable_settings_retrieve"];
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    put: operations["projects_pre_deliverable_settings_update"];
-  };
-  "/api/projects/{id}/qa_tasks/": {
-    /**
-     * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-     *
-     * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-     * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-     *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-     */
-    get: operations["projects_qa_tasks_list"];
-  };
-  "/api/projects/{project_id}/risks/": {
-    get: operations["projects_risks_list"];
-    post: operations["projects_risks_create"];
-  };
-  "/api/projects/{project_id}/risks/{risk_id}/": {
-    get: operations["projects_risks_retrieve"];
-    put: operations["projects_risks_update"];
-    delete: operations["projects_risks_destroy"];
-    patch: operations["projects_risks_partial_update"];
-  };
-  "/api/projects/{project_id}/risks/{risk_id}/attachment/": {
-    get: operations["projects_risks_attachment_retrieve"];
-  };
-  "/api/projects/audit/": {
-    /** @description Read-only endpoint for recent project create/delete audit logs (admin only). */
-    get: operations["projects_audit_list"];
-  };
-  "/api/projects/export_excel/": {
-    /** @description Export projects to Excel with streaming response for large datasets */
-    get: operations["projects_export_excel_retrieve"];
-  };
-  "/api/projects/export_template/": {
-    /** @description Export Excel import template with examples */
-    get: operations["projects_export_template_retrieve"];
-  };
-  "/api/projects/filter-metadata/": {
-    /**
-     * @description Get optimized filter metadata for all projects.
-     *
-     * Returns camelCase keys for direct frontend consumption:
-     * {
-     *   "projectFilters": {
-     *     "<projectId>": {
-     *       "assignmentCount": number,
-     *       "hasFutureDeliverables": boolean,
-     *       "status": string
-     *     }, ...
-     *   }
-     * }
-     */
-    get: operations["projects_filter_metadata_retrieve"];
-  };
-  "/api/projects/import_excel/": {
-    /** @description Import projects from Excel with progress tracking */
-    post: operations["projects_import_excel_create"];
-  };
-  "/api/projects/project-roles/": {
-    get: operations["projects_project_roles_list"];
-    post: operations["projects_project_roles_create"];
-  };
-  "/api/projects/project-roles/{id}/": {
-    delete: operations["projects_project_roles_destroy"];
-    patch: operations["projects_project_roles_partial_update"];
-  };
-  "/api/projects/project-roles/{id}/clear-assignments/": {
-    post: operations["projects_project_roles_clear_assignments_create"];
-  };
-  "/api/projects/project-roles/{id}/usage/": {
-    get: operations["projects_project_roles_usage_retrieve"];
-  };
-  "/api/projects/project-roles/reorder/": {
-    post: operations["projects_project_roles_reorder_create"];
-  };
-  "/api/projects/project-roles/search/": {
-    get: operations["projects_project_roles_search_list"];
-  };
-  "/api/projects/search/": {
-    /** @description Search projects with tokenized filters and pagination. */
-    post: operations["projects_search_create"];
-  };
-  "/api/reports/pre-deliverable-completion/": {
-    get: operations["reports_pre_deliverable_completion_retrieve"];
-  };
-  "/api/reports/pre-deliverable-team-performance/": {
-    get: operations["reports_pre_deliverable_team_performance_retrieve"];
-  };
-  "/api/roles/": {
-    /**
-     * @description Role ViewSet providing CRUD operations
-     * - List all roles (paginated)
-     * - Create new role
-     * - Retrieve specific role
-     * - Update role
-     * - Delete role
-     * - Bulk list (for autocomplete)
-     */
-    get: operations["roles_list"];
-    /**
-     * @description Role ViewSet providing CRUD operations
-     * - List all roles (paginated)
-     * - Create new role
-     * - Retrieve specific role
-     * - Update role
-     * - Delete role
-     * - Bulk list (for autocomplete)
-     */
-    post: operations["roles_create"];
-  };
-  "/api/roles/{id}/": {
-    /**
-     * @description Role ViewSet providing CRUD operations
-     * - List all roles (paginated)
-     * - Create new role
-     * - Retrieve specific role
-     * - Update role
-     * - Delete role
-     * - Bulk list (for autocomplete)
-     */
-    get: operations["roles_retrieve"];
-    /**
-     * @description Role ViewSet providing CRUD operations
-     * - List all roles (paginated)
-     * - Create new role
-     * - Retrieve specific role
-     * - Update role
-     * - Delete role
-     * - Bulk list (for autocomplete)
-     */
-    put: operations["roles_update"];
-    /** @description Override destroy to check for role usage before deletion */
-    delete: operations["roles_destroy"];
-    /**
-     * @description Role ViewSet providing CRUD operations
-     * - List all roles (paginated)
-     * - Create new role
-     * - Retrieve specific role
-     * - Update role
-     * - Delete role
-     * - Bulk list (for autocomplete)
-     */
-    patch: operations["roles_partial_update"];
-  };
-  "/api/roles/bulk/": {
-    /**
-     * @description Return all roles without pagination for autocomplete/dropdowns
-     * Access via: GET /api/roles/bulk/
-     */
-    get: operations["roles_bulk_list"];
-  };
-  "/api/roles/reorder/": {
-    /**
-     * @description Bulk reorder roles by IDs.
-     *
-     * Body: { "ids": [int, ...] }
-     * Requires staff privileges.
-     */
-    post: operations["roles_reorder_create"];
-  };
-  "/api/skills/person-skills/": {
-    /** @description CRUD operations for person skills */
-    get: operations["skills_person_skills_list"];
-    /** @description CRUD operations for person skills */
-    post: operations["skills_person_skills_create"];
-  };
-  "/api/skills/person-skills/{id}/": {
-    /** @description CRUD operations for person skills */
-    get: operations["skills_person_skills_retrieve"];
-    /** @description CRUD operations for person skills */
-    put: operations["skills_person_skills_update"];
-    /** @description CRUD operations for person skills */
-    delete: operations["skills_person_skills_destroy"];
-    /** @description CRUD operations for person skills */
-    patch: operations["skills_person_skills_partial_update"];
-  };
-  "/api/skills/person-skills/summary/": {
-    /** @description Get skill summary for a person */
-    get: operations["skills_person_skills_summary_retrieve"];
-  };
-  "/api/skills/skill-tags/": {
-    /** @description CRUD operations for skill tags */
-    get: operations["skills_skill_tags_list"];
-    /** @description CRUD operations for skill tags */
-    post: operations["skills_skill_tags_create"];
-  };
-  "/api/skills/skill-tags/{id}/": {
-    /** @description CRUD operations for skill tags */
-    get: operations["skills_skill_tags_retrieve"];
-    /** @description CRUD operations for skill tags */
-    put: operations["skills_skill_tags_update"];
-    /** @description CRUD operations for skill tags */
-    delete: operations["skills_skill_tags_destroy"];
-    /** @description CRUD operations for skill tags */
-    patch: operations["skills_skill_tags_partial_update"];
-  };
-  "/api/token/": {
-    /**
-     * @description Takes a set of user credentials and returns an access and refresh JSON web
-     * token pair to prove the authentication of those credentials.
-     */
-    post: operations["token_create"];
-  };
-  "/api/token/logout/": {
-    /** @description Clears the refresh cookie in cookie mode. Body is ignored. */
-    post: operations["token_logout_create"];
-  };
-  "/api/token/refresh/": {
-    /**
-     * @description Takes a refresh type JSON web token and returns an access type JSON web
-     * token if the refresh token is valid.
-     */
-    post: operations["token_refresh_create"];
-  };
-  "/api/token/verify/": {
-    /**
-     * @description Takes a token and indicates if it is valid.  This view provides no
-     * information about a token's fitness for a particular use.
-     */
-    post: operations["token_verify_create"];
-  };
-  "/api/ui/assignments-page/": {
-    /** @description Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks. */
-    get: operations["ui_assignments_page_retrieve"];
-  };
+    "/api/assignments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Get all assignments with person details and optional project
+         *     filtering.
+         */
+        get: operations["assignments_list"];
+        put?: never;
+        /** @description Create assignment with validation */
+        post: operations["assignments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Assignment CRUD API with utilization tracking
+         *     Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
+         */
+        get: operations["assignments_retrieve"];
+        /**
+         * @description Assignment CRUD API with utilization tracking
+         *     Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
+         */
+        put: operations["assignments_update"];
+        post?: never;
+        /**
+         * @description Assignment CRUD API with utilization tracking
+         *     Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
+         */
+        delete: operations["assignments_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Assignment CRUD API with utilization tracking
+         *     Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
+         */
+        patch: operations["assignments_partial_update"];
+        trace?: never;
+    };
+    "/api/assignments/analytics_by_client/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Assigned hours aggregated by client for N weeks ahead.
+         *
+         *     Response: { clients: [{ label: string, hours: number }] }
+         */
+        get: operations["assignments_analytics_by_client_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/analytics_client_projects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Assigned hours aggregated by project for a given client over N weeks ahead.
+         *
+         *     Response: { projects: [{ id: number, name: string, hours: number }] }
+         */
+        get: operations["assignments_analytics_client_projects_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/analytics_deliverable_timeline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.
+         *
+         *     Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
+         *     Classification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.
+         *     Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.
+         *     Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }
+         */
+        get: operations["assignments_analytics_deliverable_timeline_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/analytics_role_capacity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Per-role capacity vs assigned hours timeline for a department over the next N weeks.
+         *
+         *     Rules: Only includes active people; applies hireDate gating (capacity contributes only on or after start).
+         *     Capacity is the sum of weekly capacity for all active people in the department with the selected role(s) for each week, gated by hire date.
+         *     Assigned hours are summed from current Assignments.weekly_hours by person role and week.
+         */
+        get: operations["assignments_analytics_role_capacity_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/analytics_status_timeline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Assigned hours weekly timeline aggregated by project status for N weeks ahead.
+         *
+         *     Categories reflect Project.status controlled vocabulary: 'active', 'active_ca', and 'other'.
+         *     Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }
+         */
+        get: operations["assignments_analytics_status_timeline_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/bulk_update_hours/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Bulk update weekly hours for multiple assignments in a single transaction. */
+        patch: operations["assignments_bulk_update_hours_partial_update"];
+        trace?: never;
+    };
+    "/api/assignments/by_person/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get assignments grouped by person */
+        get: operations["assignments_by_person_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/check_conflicts/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Check assignment conflicts for a person in a specific week.
+         *     Optimized to prevent N+1 queries by fetching all person assignments
+         *     in a single query.
+         */
+        post: operations["assignments_check_conflicts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/counts_by_person/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Counts of assignments per person with optional filters. */
+        get: operations["assignments_counts_by_person_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/experience_by_client/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Experience by Client: list people with totals and role aggregates in a date window.
+         *
+         *     Params: client?, department?, include_children? (0|1), start?, end?, min_weeks?
+         */
+        get: operations["assignments_experience_by_client_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/grid_snapshot/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Return compact pre-aggregated grid data for N weeks ahead (default 12).
+         *
+         *     Response shape: { weekKeys: [YYYY-MM-DD], people: [{id, name, weeklyCapacity, department}], hoursByPerson: { <personId>: { <weekKey>: hours } } }
+         */
+        get: operations["assignments_grid_snapshot_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/grid_snapshot_async/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Start async grid snapshot job and return task ID for polling. */
+        get: operations["assignments_grid_snapshot_async_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/person_experience_profile/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Person Experience Profile: breakdown by client and project with role/phase aggregates, plus eventsCount. */
+        get: operations["assignments_person_experience_profile_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/person_project_timeline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Person-Project timeline with coverage blocks, events, and derived role changes. */
+        get: operations["assignments_person_project_timeline_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/project_grid_snapshot/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Project-centric aggregate snapshot for N weeks ahead (default 12).
+         *
+         *     Response shape: { weekKeys: [YYYY-MM-DD], projects: [{id,name,client,status}],
+         *     hoursByProject: { <projectId>: { <weekKey>: hours } },
+         *     deliverablesByProjectWeek: { <projectId>: { <weekKey>: count } },
+         *     hasFutureDeliverablesByProject: { <projectId>: boolean },
+         *     metrics: { projectsCount, peopleAssignedCount, totalHours } }
+         */
+        get: operations["assignments_project_grid_snapshot_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/project_staffing_timeline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Project Staffing Timeline: aggregates per role and people lists with events. */
+        get: operations["assignments_project_staffing_timeline_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/project_totals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Return authoritative totals for specific projects over current horizon. */
+        get: operations["assignments_project_totals_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/rebalance_suggestions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Suggest non-destructive rebalancing ideas across the next N weeks
+         *     (default 12).
+         *
+         *         Heuristic:
+         *         - Overallocated: utilization > 100% (based on 1-week snapshot)
+         *         - Underutilized: utilization < 70%
+         *         - Pair over with under and propose shifting 4–8 hours
+         *         Returns at most 20 suggestions.
+         */
+        get: operations["assignments_rebalance_suggestions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/run_weekly_snapshot/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Run weekly assignment snapshot writer or backfill for a given Sunday week.
+         *
+         *     If 'week' is omitted, uses the current week's Sunday. Add 'backfill=1' to use the backfill service (optional 'emit_events' and 'force' flags). Returns summary.
+         */
+        post: operations["assignments_run_weekly_snapshot_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assignments/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Search assignments with tokenized filters and return people match metadata. */
+        post: operations["assignments_search_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/admin_audit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read-only endpoint for recent admin audit logs (admin only). */
+        get: operations["auth_admin_audit_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/change_password/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Change password for the authenticated user. */
+        post: operations["auth_change_password_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/create_user/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Create a new user (staff only) and optionally link to a Person. */
+        post: operations["auth_create_user_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/invite/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Invite a user by email.
+         *
+         *     - If the user exists, sends a password set/reset link.
+         *     - If not, creates an account with an unusable password and sends the link.
+         *     - Optionally assigns role and links to a Person.
+         */
+        post: operations["auth_invite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/link_person/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Link or unlink the current user's profile to a Person. */
+        post: operations["auth_link_person_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Return the current user's profile with settings and optional person link. */
+        get: operations["auth_me_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/notification-preferences/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_notification_preferences_retrieve"];
+        put: operations["auth_notification_preferences_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/password_reset/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Request a password reset by email. Always returns 204.
+         *
+         *     If a user with the email exists, sends a reset link with uid/token.
+         */
+        post: operations["auth_password_reset_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/password_reset_confirm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Confirm password reset with uid/token and set a new password. */
+        post: operations["auth_password_reset_confirm_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/set_password/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Set password for a target user (staff only). */
+        post: operations["auth_set_password_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Update settings for the current user's profile (partial). */
+        patch: operations["auth_settings_partial_update"];
+        trace?: never;
+    };
+    "/api/auth/users/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List all users with role and linked person (admin only). */
+        get: operations["auth_users_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/users/{user_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Delete a user account (admin only). */
+        delete: operations["auth_users_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/users/{user_id}/link_person/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Link or unlink a target user to a Person (admin only). */
+        post: operations["auth_users_link_person_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/users/{user_id}/role/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Set role for a target user (admin only).
+         *
+         *     Accepts one of: {'role': 'admin' | 'manager' | 'user'}
+         */
+        post: operations["auth_users_role_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["backups_retrieve"];
+        put?: never;
+        post: operations["backups_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["backups_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/{id}/download/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["backups_download_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/{id}/restore/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["backups_restore_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["backups_status_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/backups/upload-restore/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["backups_upload_restore_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/capabilities/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Advertise backend feature capabilities (requires authentication).
+         *
+         *     Returns booleans and simple settings for aggregate endpoints, async jobs, and cache TTL hints.
+         */
+        get: operations["capabilities_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/calendar_feeds/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+         *
+         *     - GET: returns current token values
+         *     - PATCH: set a specific token or regenerate with {regenerate: true}
+         */
+        get: operations["core_calendar_feeds_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+         *
+         *     - GET: returns current token values
+         *     - PATCH: set a specific token or regenerate with {regenerate: true}
+         */
+        patch: operations["core_calendar_feeds_partial_update"];
+        trace?: never;
+    };
+    "/api/core/deliverable_phase_mapping/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_deliverable_phase_mapping_retrieve"];
+        put: operations["core_deliverable_phase_mapping_update"];
+        post: operations["core_deliverable_phase_mapping_create"];
+        /**
+         * @description Remove a project role from the catalog and clear assignments using it.
+         *
+         *     Behavior:
+         *     - Admin only.
+         *     - Accepts role name via query param (?name=...) or JSON body { name }.
+         *     - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
+         *     - If a catalog ProjectRole exists for that normalized name, it is deleted.
+         */
+        delete: operations["core_deliverable_phase_mapping_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/pre-deliverable-global-settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_pre_deliverable_global_settings_list"];
+        put: operations["core_pre_deliverable_global_settings_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/project-template-settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_project_template_settings_retrieve"];
+        put: operations["core_project_template_settings_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/project-template-settings/{template_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_project_template_settings_list"];
+        put: operations["core_project_template_settings_update_2"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/project-templates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_project_templates_list"];
+        put?: never;
+        post: operations["core_project_templates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/project-templates/{template_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_project_templates_retrieve"];
+        put: operations["core_project_templates_update"];
+        post: operations["core_project_templates_create_2"];
+        delete: operations["core_project_templates_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/project-templates/{template_id}/duplicate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["core_project_templates_duplicate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/project-templates/duplicate-default/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_project_templates_duplicate_default_list"];
+        put?: never;
+        post: operations["core_project_templates_duplicate_default_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/project_roles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description List/add project roles for suggestions/settings.
+         *
+         *     - GET: returns union of catalog roles and distinct existing assignment roles.
+         *     - POST: admin-only; adds a role to the catalog.
+         */
+        get: operations["core_project_roles_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/qa_task_settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_qa_task_settings_retrieve"];
+        put: operations["core_qa_task_settings_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/utilization_scheme/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Singleton endpoint for utilization scheme.
+         *
+         *     - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
+         *     - PUT: admin-only, requires If-Match ETag; increments version on success.
+         *     - When feature flag is disabled: GET returns defaults; PUT returns 403.
+         */
+        get: operations["core_utilization_scheme_retrieve"];
+        /**
+         * @description Singleton endpoint for utilization scheme.
+         *
+         *     - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
+         *     - PUT: admin-only, requires If-Match ETag; increments version on success.
+         *     - When feature flag is disabled: GET returns defaults; PUT returns 403.
+         */
+        put: operations["core_utilization_scheme_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Team dashboard with utilization metrics and overview */
+        get: operations["dashboard_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get deliverables with bulk loading support (Phase 2 optimization) */
+        get: operations["deliverables_list"];
+        put?: never;
+        /**
+         * @description CRUD operations for deliverables
+         *     Supports filtering by project and manual reordering
+         */
+        post: operations["deliverables_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description CRUD operations for deliverables
+         *     Supports filtering by project and manual reordering
+         */
+        get: operations["deliverables_retrieve"];
+        /**
+         * @description CRUD operations for deliverables
+         *     Supports filtering by project and manual reordering
+         */
+        put: operations["deliverables_update"];
+        post?: never;
+        /**
+         * @description CRUD operations for deliverables
+         *     Supports filtering by project and manual reordering
+         */
+        delete: operations["deliverables_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description PATCH deliverable. If date changes and feature flag enabled, reallocate hours.
+         *
+         *     Response includes optional 'reallocation' summary with keys:
+         *     { deltaWeeks, assignmentsChanged, touchedWeekKeys }
+         */
+        patch: operations["deliverables_partial_update"];
+        trace?: never;
+    };
+    "/api/deliverables/{id}/staffing_summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Return derived staffing for a deliverable from Assignment.weekly_hours.
+         *
+         *     Default window: 6 weeks prior OR between previous and current deliverable (exclusive→inclusive).
+         *     Optional override: ?weeks=6 to force a fixed lookback window.
+         *
+         *     Returns array items per person with >0 hours in window on the deliverable's project:
+         *     { linkId|null, personId, personName, roleOnMilestone|null, totalHours, weekBreakdown }
+         */
+        get: operations["deliverables_staffing_summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/assignments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
+        get: operations["deliverables_assignments_list"];
+        put?: never;
+        /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
+        post: operations["deliverables_assignments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/assignments/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
+        get: operations["deliverables_assignments_retrieve"];
+        /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
+        put: operations["deliverables_assignments_update"];
+        post?: never;
+        /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
+        delete: operations["deliverables_assignments_destroy"];
+        options?: never;
+        head?: never;
+        /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
+        patch: operations["deliverables_assignments_partial_update"];
+        trace?: never;
+    };
+    "/api/deliverables/assignments/by_deliverable/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
+        get: operations["deliverables_assignments_by_deliverable_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/assignments/by_person/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
+        get: operations["deliverables_assignments_by_person_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/bulk/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Bulk fetch deliverables for multiple projects
+         *     GET /api/deliverables/bulk/?project_ids=1,2,3,4
+         *
+         *     Returns: { "1": [...], "2": [...], "3": [...], "4": [...] }
+         */
+        get: operations["deliverables_bulk_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/calendar/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Read-only calendar endpoint returning deliverables within a date range
+         *     with assignmentCount. Missing params tolerated (returns all dated items).
+         *
+         *     GET /api/deliverables/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD
+         */
+        get: operations["deliverables_calendar_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/calendar_with_pre_items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Calendar view returning deliverables and pre-deliverable items.
+         *
+         *     Semantics:
+         *     - When mine_only=true, scope results to the union of:
+         *       (a) deliverables directly linked to the current user via DeliverableAssignment,
+         *       (b) deliverables on projects where the current user has an active project-level Assignment.
+         *     - Duplicates are eliminated via a distinct ID subquery strategy; counts use distinct=True.
+         *     - Optional filters: start, end (dates) and type_id (pre-deliverable type).
+         */
+        get: operations["deliverables_calendar_with_pre_items_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/personal_pre_deliverables/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Upcoming pre-deliverable items for the authenticated user (default 14 days). */
+        get: operations["deliverables_personal_pre_deliverables_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/pre_deliverable_items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        get: operations["deliverables_pre_deliverable_items_list"];
+        put?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        post: operations["deliverables_pre_deliverable_items_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/pre_deliverable_items/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        get: operations["deliverables_pre_deliverable_items_retrieve"];
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        put: operations["deliverables_pre_deliverable_items_update"];
+        post?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        delete: operations["deliverables_pre_deliverable_items_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        patch: operations["deliverables_pre_deliverable_items_partial_update"];
+        trace?: never;
+    };
+    "/api/deliverables/pre_deliverable_items/{id}/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        post: operations["deliverables_pre_deliverable_items_complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/pre_deliverable_items/{id}/uncomplete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        post: operations["deliverables_pre_deliverable_items_uncomplete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/pre_deliverable_items/backfill/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Staff-only: backfill or regenerate pre-items for a project/date window.
+         *
+         *     If ASYNC_JOBS is enabled and Celery task is available, enqueues background job and
+         *     returns 202 with job metadata. Otherwise, runs synchronously and returns a summary.
+         */
+        post: operations["deliverables_pre_deliverable_items_backfill_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/pre_deliverable_items/bulk_complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        post: operations["deliverables_pre_deliverable_items_bulk_complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/qa_tasks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["deliverables_qa_tasks_list"];
+        put?: never;
+        post: operations["deliverables_qa_tasks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/qa_tasks/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["deliverables_qa_tasks_retrieve"];
+        put: operations["deliverables_qa_tasks_update"];
+        post?: never;
+        delete: operations["deliverables_qa_tasks_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["deliverables_qa_tasks_partial_update"];
+        trace?: never;
+    };
+    "/api/deliverables/reorder/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Manually reorder deliverables for a project
+         *     Expected payload: {
+         *         "project": project_id,
+         *         "deliverable_ids": [id1, id2, id3, ...]
+         *     }
+         */
+        post: operations["deliverables_reorder_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/task_templates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["deliverables_task_templates_list"];
+        put?: never;
+        post: operations["deliverables_task_templates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/task_templates/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["deliverables_task_templates_retrieve"];
+        put: operations["deliverables_task_templates_update"];
+        post?: never;
+        delete: operations["deliverables_task_templates_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["deliverables_task_templates_partial_update"];
+        trace?: never;
+    };
+    "/api/deliverables/tasks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["deliverables_tasks_list"];
+        put?: never;
+        post: operations["deliverables_tasks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliverables/tasks/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["deliverables_tasks_retrieve"];
+        put: operations["deliverables_tasks_update"];
+        post?: never;
+        delete: operations["deliverables_tasks_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["deliverables_tasks_partial_update"];
+        trace?: never;
+    };
+    "/api/departments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get all departments with bulk loading support */
+        get: operations["departments_list"];
+        put?: never;
+        post: operations["departments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/departments/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["departments_retrieve"];
+        put: operations["departments_update"];
+        post?: never;
+        delete: operations["departments_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["departments_partial_update"];
+        trace?: never;
+    };
+    "/api/integrations/connections/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_connections_list"];
+        put?: never;
+        post: operations["integrations_connections_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/connections/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_connections_retrieve"];
+        put: operations["integrations_connections_update"];
+        post?: never;
+        delete: operations["integrations_connections_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["integrations_connections_partial_update"];
+        trace?: never;
+    };
+    "/api/integrations/connections/{id}/test/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_connections_test_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/connections/{id}/test-activity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_connections_test_activity_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/health/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_health_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/jobs/{id}/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_jobs_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{key}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{key}/catalog/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_catalog_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{key}/connect/callback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_connect_callback_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{key}/connect/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_connect_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{key}/credentials/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_credentials_retrieve"];
+        put?: never;
+        post: operations["integrations_providers_credentials_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{key}/objects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_objects_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{key}/reset/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_reset_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{provider_key}/{object_key}/mapping/defaults/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_mapping_defaults_retrieve"];
+        put?: never;
+        post: operations["integrations_providers_mapping_defaults_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{provider_key}/jobs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_jobs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{provider_key}/projects/matching/confirm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_projects_matching_confirm_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/{provider_key}/projects/matching/suggestions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_projects_matching_suggestions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/rules/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_rules_list"];
+        put?: never;
+        post: operations["integrations_rules_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/rules/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_rules_retrieve"];
+        put: operations["integrations_rules_update"];
+        post?: never;
+        delete: operations["integrations_rules_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["integrations_rules_partial_update"];
+        trace?: never;
+    };
+    "/api/integrations/rules/{id}/resync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_rules_resync_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/secret-key/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_secret_key_retrieve"];
+        put?: never;
+        post: operations["integrations_secret_key_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Return status and metadata for a Celery job.
+         *
+         *     Response fields:
+         *     - id: task id
+         *     - state: PENDING|STARTED|PROGRESS|SUCCESS|FAILURE
+         *     - progress: 0-100 if available
+         *     - message: optional status message
+         *     - downloadReady: bool
+         *     - downloadUrl: present when a file is available to download
+         *     - result: task result when not file-based (e.g., import summary)
+         *     - error: error message if failed
+         */
+        get: operations["jobs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/download/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Stream the file produced by a completed job (if any). */
+        get: operations["jobs_download_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get all people with conditional request support (ETag/Last-Modified) and bulk loading */
+        get: operations["people_list"];
+        put?: never;
+        /**
+         * @description Person CRUD API with utilization calculations
+         *     Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+         */
+        post: operations["people_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Person CRUD API with utilization calculations
+         *     Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+         */
+        get: operations["people_retrieve"];
+        /**
+         * @description Override update to trigger deactivation cleanup when is_active flips to false.
+         *
+         *     Enqueues a Celery task when available; otherwise runs synchronously in-process.
+         */
+        put: operations["people_update"];
+        post?: never;
+        /**
+         * @description Delete a person by primary key.
+         *
+         *     Note: bypass get_queryset() filtering so deletes work even if the record
+         *     is inactive or excluded from the default list queryset.
+         *     Still enforces object-level permissions before deletion.
+         */
+        delete: operations["people_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Person CRUD API with utilization calculations
+         *     Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+         */
+        patch: operations["people_partial_update"];
+        trace?: never;
+    };
+    "/api/people/{id}/utilization/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get detailed utilization breakdown for a person - Chunk 3 */
+        get: operations["people_utilization_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/autocomplete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Lightweight autocomplete for active people.
+         *
+         *     Query params:
+         *     - search or q: optional substring of name
+         *     - limit: max results (default 20)
+         */
+        get: operations["people_autocomplete_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/capacity_heatmap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Return per-person week summaries for the next N weeks (default 12). */
+        get: operations["people_capacity_heatmap_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/export_excel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Export people to Excel with streaming response for large datasets */
+        get: operations["people_export_excel_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/find_available/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Person CRUD API with utilization calculations
+         *     Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+         */
+        get: operations["people_find_available_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/import_excel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Import people from Excel with progress tracking */
+        post: operations["people_import_excel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Server-side typeahead for People.
+         *
+         *     Params:
+         *     - q: required search query (min length 2)
+         *     - limit: optional, default 20, max 50
+         *     Returns minimal projection: id, name, department
+         */
+        get: operations["people_search_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/skill_match/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Rank people by skills (and optionally availability for a given week).
+         *
+         *     Returns an array of items: { personId, name, score, matchedSkills[], missingSkills[], departmentId, roleName }.
+         *     Score is based on percent of required skills matched (case-insensitive contains) and optionally blended with availability when `week` is provided.
+         */
+        get: operations["people_skill_match_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/skill_match_async/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Start async skill match job and return task ID for polling. */
+        get: operations["people_skill_match_async_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/workload_forecast/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Aggregate team capacity vs allocated for N weeks ahead (default 8).
+         *
+         *     Response array items:
+         *     { weekStart, totalCapacity, totalAllocated, teamUtilization, peopleOverallocated[] }
+         */
+        get: operations["people_workload_forecast_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/personal/work/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["personal_work_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get all projects with conditional request support (ETag/Last-Modified) and bulk loading */
+        get: operations["projects_list"];
+        put?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        post: operations["projects_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        get: operations["projects_retrieve"];
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        put: operations["projects_update"];
+        post?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        delete: operations["projects_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        patch: operations["projects_partial_update"];
+        trace?: never;
+    };
+    "/api/projects/{id}/availability/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Return availability snapshot for people relevant to the project context.
+         *
+         *     Response items: { personId, personName, totalHours, capacity, availableHours, utilizationPercent }
+         *     Uses Sunday as canonical week key; exact JSON key lookup (no tolerance).
+         */
+        get: operations["projects_availability_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/deliverable_tasks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        get: operations["projects_deliverable_tasks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/pre-deliverable-settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        get: operations["projects_pre_deliverable_settings_retrieve"];
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        put: operations["projects_pre_deliverable_settings_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/qa_tasks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        get: operations["projects_qa_tasks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/risks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_risks_list"];
+        put?: never;
+        post: operations["projects_risks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/risks/{risk_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_risks_retrieve"];
+        put: operations["projects_risks_update"];
+        post?: never;
+        delete: operations["projects_risks_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["projects_risks_partial_update"];
+        trace?: never;
+    };
+    "/api/projects/{project_id}/risks/{risk_id}/attachment/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_risks_attachment_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/audit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read-only endpoint for recent project create/delete audit logs (admin only). */
+        get: operations["projects_audit_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/export_excel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Export projects to Excel with streaming response for large datasets */
+        get: operations["projects_export_excel_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/export_template/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Export Excel import template with examples */
+        get: operations["projects_export_template_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/filter-metadata/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Get optimized filter metadata for all projects.
+         *
+         *     Returns camelCase keys for direct frontend consumption:
+         *     {
+         *       "projectFilters": {
+         *         "<projectId>": {
+         *           "assignmentCount": number,
+         *           "hasFutureDeliverables": boolean,
+         *           "status": string
+         *         }, ...
+         *       }
+         *     }
+         */
+        get: operations["projects_filter_metadata_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/import_excel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Import projects from Excel with progress tracking */
+        post: operations["projects_import_excel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/project-roles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_project_roles_list"];
+        put?: never;
+        post: operations["projects_project_roles_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/project-roles/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["projects_project_roles_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["projects_project_roles_partial_update"];
+        trace?: never;
+    };
+    "/api/projects/project-roles/{id}/clear-assignments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["projects_project_roles_clear_assignments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/project-roles/{id}/usage/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_project_roles_usage_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/project-roles/reorder/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["projects_project_roles_reorder_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/project-roles/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_project_roles_search_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Search projects with tokenized filters and pagination. */
+        post: operations["projects_search_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/pre-deliverable-completion/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_pre_deliverable_completion_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/pre-deliverable-team-performance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_pre_deliverable_team_performance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/roles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Role ViewSet providing CRUD operations
+         *     - List all roles (paginated)
+         *     - Create new role
+         *     - Retrieve specific role
+         *     - Update role
+         *     - Delete role
+         *     - Bulk list (for autocomplete)
+         */
+        get: operations["roles_list"];
+        put?: never;
+        /**
+         * @description Role ViewSet providing CRUD operations
+         *     - List all roles (paginated)
+         *     - Create new role
+         *     - Retrieve specific role
+         *     - Update role
+         *     - Delete role
+         *     - Bulk list (for autocomplete)
+         */
+        post: operations["roles_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/roles/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Role ViewSet providing CRUD operations
+         *     - List all roles (paginated)
+         *     - Create new role
+         *     - Retrieve specific role
+         *     - Update role
+         *     - Delete role
+         *     - Bulk list (for autocomplete)
+         */
+        get: operations["roles_retrieve"];
+        /**
+         * @description Role ViewSet providing CRUD operations
+         *     - List all roles (paginated)
+         *     - Create new role
+         *     - Retrieve specific role
+         *     - Update role
+         *     - Delete role
+         *     - Bulk list (for autocomplete)
+         */
+        put: operations["roles_update"];
+        post?: never;
+        /** @description Override destroy to check for role usage before deletion */
+        delete: operations["roles_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Role ViewSet providing CRUD operations
+         *     - List all roles (paginated)
+         *     - Create new role
+         *     - Retrieve specific role
+         *     - Update role
+         *     - Delete role
+         *     - Bulk list (for autocomplete)
+         */
+        patch: operations["roles_partial_update"];
+        trace?: never;
+    };
+    "/api/roles/bulk/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Return all roles without pagination for autocomplete/dropdowns
+         *     Access via: GET /api/roles/bulk/
+         */
+        get: operations["roles_bulk_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/roles/reorder/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Bulk reorder roles by IDs.
+         *
+         *     Body: { "ids": [int, ...] }
+         *     Requires staff privileges.
+         */
+        post: operations["roles_reorder_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/person-skills/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description CRUD operations for person skills */
+        get: operations["skills_person_skills_list"];
+        put?: never;
+        /** @description CRUD operations for person skills */
+        post: operations["skills_person_skills_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/person-skills/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description CRUD operations for person skills */
+        get: operations["skills_person_skills_retrieve"];
+        /** @description CRUD operations for person skills */
+        put: operations["skills_person_skills_update"];
+        post?: never;
+        /** @description CRUD operations for person skills */
+        delete: operations["skills_person_skills_destroy"];
+        options?: never;
+        head?: never;
+        /** @description CRUD operations for person skills */
+        patch: operations["skills_person_skills_partial_update"];
+        trace?: never;
+    };
+    "/api/skills/person-skills/summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get skill summary for a person */
+        get: operations["skills_person_skills_summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/skill-tags/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description CRUD operations for skill tags */
+        get: operations["skills_skill_tags_list"];
+        put?: never;
+        /** @description CRUD operations for skill tags */
+        post: operations["skills_skill_tags_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/skill-tags/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description CRUD operations for skill tags */
+        get: operations["skills_skill_tags_retrieve"];
+        /** @description CRUD operations for skill tags */
+        put: operations["skills_skill_tags_update"];
+        post?: never;
+        /** @description CRUD operations for skill tags */
+        delete: operations["skills_skill_tags_destroy"];
+        options?: never;
+        head?: never;
+        /** @description CRUD operations for skill tags */
+        patch: operations["skills_skill_tags_partial_update"];
+        trace?: never;
+    };
+    "/api/token/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Takes a set of user credentials and returns an access and refresh JSON web
+         *     token pair to prove the authentication of those credentials.
+         */
+        post: operations["token_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/token/logout/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Clears the refresh cookie in cookie mode. Body is ignored. */
+        post: operations["token_logout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/token/refresh/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Takes a refresh type JSON web token and returns an access type JSON web
+         *     token if the refresh token is valid.
+         */
+        post: operations["token_refresh_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/token/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Takes a token and indicates if it is valid.  This view provides no
+         *     information about a token's fitness for a particular use.
+         */
+        post: operations["token_verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ui/assignments-page/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks. */
+        get: operations["ui_assignments_page_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
-
 export type webhooks = Record<string, never>;
-
 export interface components {
-  schemas: {
-    /**
-     * @description * `created` - Created
-     * * `updated` - Updated
-     * @enum {string}
-     */
-    ActionEnum: "created" | "updated";
-    AdminAuditLog: {
-      id: number;
-      action: string;
-      detail: unknown;
-      /** Format: date-time */
-      created_at: string;
-      actor: {
-        [key: string]: unknown;
-      } | null;
-      targetUser: {
-        [key: string]: unknown;
-      } | null;
-    };
-    AdminLinkUserPersonRequestRequest: {
-      personId?: number | null;
-    };
-    AssignedHoursByClientResponse: {
-      clients: components["schemas"]["ClientTotal"][];
-    };
-    AssignedHoursClientProjectsResponse: {
-      projects: components["schemas"]["ProjectTotal"][];
-    };
-    AssignedHoursDeliverableTimelineResponse: {
-      weekKeys: string[];
-      series: components["schemas"]["DeliverableSeries"];
-      /** @description deprecated: kept for backward compatibility; typically empty */
-      extras?: components["schemas"]["ExtraSeries"][] | null;
-      totalByWeek: number[];
-    };
-    AssignedHoursStatusTimelineResponse: {
-      weekKeys: string[];
-      series: components["schemas"]["StatusSeries"];
-      totalByWeek: number[];
-    };
-    /** @description Assignment serializer with weekly hours support */
-    Assignment: {
-      id: number;
-      person?: number | null;
-      personName: string;
-      personWeeklyCapacity: number;
-      personDepartmentId: number | null;
-      personSkills: readonly components["schemas"]["PersonSkillSummary"][];
-      projectName?: string;
-      project?: number | null;
-      projectDisplayName: string;
-      roleOnProjectId?: number | null;
-      roleName: string | null;
-      weeklyHours?: unknown;
-      allocationPercentage: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    AssignmentCountsByPersonResponse: {
-      countsByPerson: {
-        [key: string]: number;
-      };
-    };
-    AssignmentHoursUpdateRequest: {
-      assignmentId: number;
-      weeklyHours: {
-        [key: string]: number;
-      };
-    };
-    /** @description Assignment serializer with weekly hours support */
-    AssignmentRequest: {
-      person?: number | null;
-      projectName?: string;
-      project?: number | null;
-      roleOnProjectId?: number | null;
-      weeklyHours?: unknown;
-    };
-    AssignmentSearchRequestRequest: {
-      page?: number;
-      page_size?: number;
-      department?: number;
-      include_children?: number;
-      status_in?: string;
-      include_placeholders?: number;
-      project?: number;
-      person?: number;
-      meta_only?: boolean;
-      search_tokens?: components["schemas"]["SearchTokenRequest"][];
-    };
-    AssignmentSearchResponse: {
-      count: number;
-      next?: string | null;
-      previous?: string | null;
-      results: components["schemas"]["Assignment"][];
-      people: components["schemas"]["PersonLite"][];
-      assignmentCountsByPerson: {
-        [key: string]: number;
-      };
-      peopleMatchReason: {
-        [key: string]: string;
-      };
-      filteredTotals: {
-        [key: string]: {
-          [key: string]: number;
-        };
-      };
-    };
-    AutoHoursRoleSettingItem: {
-      roleId: number;
-      roleName: string;
-      departmentId: number;
-      departmentName: string;
-      percentByWeek: {
-        [key: string]: number;
-      };
-      roleCount: number;
-      weeksCount: number;
-      isActive: boolean;
-      sortOrder: number;
-    };
-    AutoHoursRoleSettingItemResponse: {
-      settings: components["schemas"]["AutoHoursRoleSettingItemResponseItem"][];
-      weekLimits: components["schemas"]["AutoHoursWeekLimitsResponse"];
-    };
-    AutoHoursRoleSettingItemResponseItem: {
-      roleId: number;
-      roleName: string;
-      departmentId: number;
-      departmentName: string;
-      percentByWeek: {
-        [key: string]: number;
-      };
-      roleCount: number;
-      weeksCount: number;
-      isActive: boolean;
-      sortOrder: number;
-    };
-    AutoHoursRoleSettingUpdateItemRequest: {
-      roleId: number;
-      percentByWeek?: {
-        [key: string]: number;
-      };
-      /** Format: double */
-      percentPerWeek?: number;
-      roleCount?: number;
-    };
-    AutoHoursRoleSettingsResponse: {
-      settings: components["schemas"]["AutoHoursRoleSettingItem"][];
-      weekLimits: components["schemas"]["AutoHoursWeekLimits"];
-    };
-    AutoHoursRoleSettingsUpdateRequest: {
-      weeksCount?: number;
-      settings: components["schemas"]["AutoHoursRoleSettingUpdateItemRequest"][];
-    };
-    AutoHoursTemplateCreateRequest: {
-      name: string;
-      description?: string;
-      excludedRoleIds?: number[];
-      excludedDepartmentIds?: number[];
-      isActive?: boolean;
-      phaseKeys?: string[];
-      weeksByPhase?: {
-        [key: string]: number;
-      };
-    };
-    AutoHoursTemplateCreateResponse: {
-      id: number;
-      name: string;
-      description: string;
-      excludedRoleIds: number[];
-      excludedDepartmentIds: number[];
-      isActive: boolean;
-      phaseKeys: string[];
-      weeksByPhase: {
-        [key: string]: number;
-      };
-      maxWeeksCount: number;
-      defaultWeeksCount: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    AutoHoursTemplateDetail: {
-      id: number;
-      name: string;
-      description: string;
-      excludedRoleIds: number[];
-      excludedDepartmentIds: number[];
-      isActive: boolean;
-      phaseKeys: string[];
-      weeksByPhase: {
-        [key: string]: number;
-      };
-      maxWeeksCount: number;
-      defaultWeeksCount: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    AutoHoursTemplateDuplicateDefaultRequest: {
-      name: string;
-      description?: string;
-      excludedRoleIds?: number[];
-      excludedDepartmentIds?: number[];
-      isActive?: boolean;
-      phaseKeys?: string[];
-    };
-    AutoHoursTemplateDuplicateDefaultResponse: {
-      id: number;
-      name: string;
-      description: string;
-      excludedRoleIds: number[];
-      excludedDepartmentIds: number[];
-      isActive: boolean;
-      phaseKeys: string[];
-      weeksByPhase: {
-        [key: string]: number;
-      };
-      maxWeeksCount: number;
-      defaultWeeksCount: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    AutoHoursTemplateDuplicateRequest: {
-      name: string;
-    };
-    AutoHoursTemplateDuplicateResponse: {
-      id: number;
-      name: string;
-      description: string;
-      excludedRoleIds: number[];
-      excludedDepartmentIds: number[];
-      isActive: boolean;
-      phaseKeys: string[];
-      weeksByPhase: {
-        [key: string]: number;
-      };
-      maxWeeksCount: number;
-      defaultWeeksCount: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    AutoHoursTemplateListItem: {
-      id: number;
-      name: string;
-      description: string;
-      excludedRoleIds: number[];
-      excludedDepartmentIds: number[];
-      isActive: boolean;
-      phaseKeys: string[];
-      weeksByPhase: {
-        [key: string]: number;
-      };
-      maxWeeksCount: number;
-      defaultWeeksCount: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    AutoHoursTemplateRoleSettingItem: {
-      roleId: number;
-      roleName: string;
-      departmentId: number;
-      departmentName: string;
-      percentByWeek: {
-        [key: string]: number;
-      };
-      roleCount: number;
-      weeksCount: number;
-      isActive: boolean;
-      sortOrder: number;
-    };
-    AutoHoursTemplateRoleSettingItemResponse: {
-      roleId: number;
-      roleName: string;
-      departmentId: number;
-      departmentName: string;
-      percentByWeek: {
-        [key: string]: number;
-      };
-      roleCount: number;
-      weeksCount: number;
-      isActive: boolean;
-      sortOrder: number;
-    };
-    AutoHoursTemplateRoleSettingUpdateItemRequest: {
-      roleId: number;
-      percentByWeek?: {
-        [key: string]: number;
-      };
-      roleCount?: number;
-    };
-    AutoHoursTemplateRoleSettingsUpdateRequest: {
-      weeksCount?: number;
-      settings: components["schemas"]["AutoHoursTemplateRoleSettingUpdateItemRequest"][];
-    };
-    AutoHoursTemplateUpdateRequest: {
-      name?: string;
-      description?: string;
-      excludedRoleIds?: number[];
-      excludedDepartmentIds?: number[];
-      isActive?: boolean;
-      phaseKeys?: string[];
-      weeksByPhase?: {
-        [key: string]: number;
-      };
-    };
-    AutoHoursTemplateUpdateResponse: {
-      id: number;
-      name: string;
-      description: string;
-      excludedRoleIds: number[];
-      excludedDepartmentIds: number[];
-      isActive: boolean;
-      phaseKeys: string[];
-      weeksByPhase: {
-        [key: string]: number;
-      };
-      maxWeeksCount: number;
-      defaultWeeksCount: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    AutoHoursWeekLimits: {
-      maxWeeksCount: number;
-      defaultWeeksCount: number;
-    };
-    AutoHoursWeekLimitsResponse: {
-      maxWeeksCount: number;
-      defaultWeeksCount: number;
-    };
-    AvailablePerson: {
-      id: number;
-      name: string;
-      /** Format: double */
-      available_hours: number;
-      /** Format: double */
-      utilization_percent: number;
-    };
-    BackupCreateRequestRequest: {
-      description?: string;
-    };
-    BackupInfo: {
-      id: string;
-      filename: string;
-      size: number;
-      createdAt: string;
-      description?: string | null;
-      sha256?: string | null;
-      format: string;
-    };
-    BackupJobResponse: {
-      jobId: string;
-      statusUrl: string;
-    };
-    BackupListResponse: {
-      items: components["schemas"]["BackupInfo"][];
-    };
-    BackupRestoreRequestRequest: {
-      confirm: string;
-      jobs?: number;
-      migrate?: boolean;
-    };
-    BackupStatusResponse: {
-      lastBackupAt?: string | null;
-      lastBackupSize?: number | null;
-      retentionOk: boolean;
-      offsiteEnabled: boolean;
-      offsiteLastSyncAt?: string | null;
-      policy: string;
-      encryptionEnabled: boolean;
-      encryptionProvider?: string | null;
-    };
-    BackupUploadRestoreRequestRequest: {
-      confirm: string;
-      jobs?: number;
-      migrate?: boolean;
-      /** Format: binary */
-      file: string;
-    };
-    BulkCompleteRequestRequest: {
-      ids: number[];
-    };
-    BulkCompleteResponse: {
-      success: boolean;
-      updatedCount: number;
-      failed: number[];
-    };
-    BulkUpdateHoursResponse: {
-      success: boolean;
-      results: components["schemas"]["BulkUpdateResultItem"][];
-    };
-    BulkUpdateResultItem: {
-      assignmentId: number;
-      status: string;
-      etag: string;
-    };
-    CalendarFeedSettings: {
-      deliverables_token: string;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    CapabilitiesAggregates: {
-      capacityHeatmap: boolean;
-      projectAvailability: boolean;
-      findAvailable: boolean;
-      gridSnapshot: boolean;
-      skillMatch: boolean;
-    };
-    CapabilitiesCache: {
-      shortTtlAggregates: boolean;
-      aggregateTtlSeconds: number;
-    };
-    CapabilitiesIntegrations: {
-      enabled: boolean;
-    };
-    CapabilitiesResponse: {
-      asyncJobs: boolean;
-      aggregates: components["schemas"]["CapabilitiesAggregates"];
-      cache: components["schemas"]["CapabilitiesCache"];
-      personalDashboard: boolean;
-      projectRolesByDepartment: boolean;
-      integrations: components["schemas"]["CapabilitiesIntegrations"];
-    };
-    ChangePasswordRequestRequest: {
-      currentPassword: string;
-      newPassword: string;
-    };
-    ClientTotal: {
-      label: string;
-      /** Format: double */
-      hours: number;
-    };
-    /**
-     * @description * `not_started` - Not Started
-     * * `in_progress` - In Progress
-     * * `complete` - Complete
-     * @enum {string}
-     */
-    CompletionStatusEnum: "not_started" | "in_progress" | "complete";
-    CoverageBlock: {
-      roleId: number;
-      start: string;
-      end: string;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    CreateUserRequestRequest: {
-      username: string;
-      email?: string;
-      password: string;
-      personId?: number | null;
-      role?: components["schemas"]["RoleEnum"];
-    };
-    DashboardResponse: {
-      summary: components["schemas"]["DashboardSummary"];
-      utilization_distribution: components["schemas"]["UtilizationDistribution"];
-      team_overview: components["schemas"]["TeamOverviewItem"][];
-      available_people: components["schemas"]["AvailablePerson"][];
-      recent_assignments: components["schemas"]["RecentAssignment"][];
-    };
-    DashboardSummary: {
-      total_people: number;
-      /** Format: double */
-      avg_utilization: number;
-      /** Format: double */
-      peak_utilization: number;
-      peak_person?: string | null;
-      total_assignments: number;
-      overallocated_count: number;
-    };
-    /**
-     * @description * `not_started` - Not Started
-     * * `in_progress` - In Progress
-     * * `complete` - Complete
-     * @enum {string}
-     */
-    DefaultCompletionStatusEnum: "not_started" | "in_progress" | "complete";
-    /**
-     * @description * `not_reviewed` - Not Reviewed
-     * * `in_review` - In Review
-     * * `approved` - Approved
-     * * `changes_required` - Changes Required
-     * @enum {string}
-     */
-    DefaultQaStatusEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
-    /** @description Deliverable serializer with snake_case -> camelCase field mapping */
-    Deliverable: {
-      id: number;
-      project: number;
-      /** @description Completion percentage (0-100) */
-      percentage?: number | null;
-      /** @description Brief description (e.g., SD, DD, IFP, IFC) */
-      description?: string;
-      /** Format: date */
-      date?: string | null;
-      /** @description Additional details, owner info, requirements, etc. */
-      notes?: string;
-      sortOrder?: number;
-      isCompleted?: boolean;
-      /** Format: date */
-      completedDate?: string | null;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-      preItems: readonly {
-          [key: string]: unknown;
-        }[];
-    };
-    /** @description Serializer for linking people to deliverables with weekly hours. */
-    DeliverableAssignment: {
-      id: number;
-      deliverable: number;
-      person: number;
-      roleOnMilestone?: string | null;
-      is_active?: boolean;
-      personName: string;
-      projectId: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    /** @description Serializer for linking people to deliverables with weekly hours. */
-    DeliverableAssignmentRequest: {
-      deliverable: number;
-      person: number;
-      roleOnMilestone?: string | null;
-      is_active?: boolean;
-    };
-    /**
-     * @description Serializer for calendar items (aggregate), camelCase API fields.
-     *
-     * Accepts Deliverable instances annotated with assignmentCount.
-     */
-    DeliverableCalendarItem: {
-      id: number;
-      project: number;
-      projectName: string | null;
-      projectClient?: string | null;
-      title: string;
-      /** Format: date */
-      date: string | null;
-      isCompleted: boolean;
-      assignmentCount: number;
-    };
-    DeliverableMarkerLite: {
-      type: string;
-      percentage?: number | null;
-      dates?: string[];
-      description?: string | null;
-      note?: string | null;
-    };
-    DeliverablePhaseDefinition: {
-      key: string;
-      label: string;
-      descriptionTokens?: string[];
-      rangeMin?: number | null;
-      rangeMax?: number | null;
-      sortOrder?: number;
-    };
-    DeliverablePhaseDefinitionRequest: {
-      key: string;
-      label: string;
-      descriptionTokens?: string[];
-      rangeMin?: number | null;
-      rangeMax?: number | null;
-      sortOrder?: number;
-    };
-    DeliverablePhaseMappingSettings: {
-      useDescriptionMatch: boolean;
-      phases: components["schemas"]["DeliverablePhaseDefinition"][];
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    DeliverablePhaseMappingSettingsRequest: {
-      useDescriptionMatch: boolean;
-      phases: components["schemas"]["DeliverablePhaseDefinitionRequest"][];
-    };
-    DeliverableQATask: {
-      id: number;
-      deliverable: number;
-      deliverableInfo: {
-        [key: string]: unknown;
-      };
-      departmentId: number;
-      departmentName: string;
-      qaStatus: components["schemas"]["DeliverableQATaskQaStatusEnum"];
-      qaAssignedTo?: number | null;
-      qaAssignedToName: string;
-      /** Format: date-time */
-      reviewedAt: string | null;
-      dueDate: string;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    /**
-     * @description * `not_reviewed` - Not Reviewed
-     * * `reviewed` - Reviewed
-     * @enum {string}
-     */
-    DeliverableQATaskQaStatusEnum: "not_reviewed" | "reviewed";
-    DeliverableQATaskRequest: {
-      deliverable: number;
-      departmentId: number;
-      qaStatus: components["schemas"]["DeliverableQATaskQaStatusEnum"];
-      qaAssignedTo?: number | null;
-    };
-    DeliverableReorderRequestRequest: {
-      project: number;
-      deliverable_ids: number[];
-    };
-    DeliverableReorderResponse: {
-      success: boolean;
-    };
-    /** @description Deliverable serializer with snake_case -> camelCase field mapping */
-    DeliverableRequest: {
-      project: number;
-      /** @description Completion percentage (0-100) */
-      percentage?: number | null;
-      /** @description Brief description (e.g., SD, DD, IFP, IFC) */
-      description?: string;
-      /** Format: date */
-      date?: string | null;
-      /** @description Additional details, owner info, requirements, etc. */
-      notes?: string;
-      sortOrder?: number;
-      isCompleted?: boolean;
-      /** Format: date */
-      completedDate?: string | null;
-    };
-    DeliverableSeries: {
-      sd: number[];
-      dd: number[];
-      ifp: number[];
-      ifc: number[];
-      masterplan: number[];
-      bulletins: number[];
-      ca: number[];
-      other: number[];
-    };
-    DeliverableStaffingSummaryItem: {
-      linkId?: number | null;
-      personId: number;
-      personName: string;
-      roleOnMilestone?: string | null;
-      /** Format: double */
-      totalHours: number;
-      weekBreakdown: {
-        [key: string]: unknown;
-      };
-    };
-    DeliverableTask: {
-      id: number;
-      deliverable: number;
-      deliverableInfo: {
-        [key: string]: unknown;
-      };
-      templateId?: number | null;
-      departmentId: number;
-      departmentName: string;
-      sheetNumber?: string | null;
-      sheetName?: string | null;
-      scopeDescription?: string;
-      completionStatus: components["schemas"]["CompletionStatusEnum"];
-      qaStatus: components["schemas"]["QaStatus7bcEnum"];
-      qaAssignedTo?: number | null;
-      qaAssignedToName: string;
-      assignedTo?: number | null;
-      assignedToName: string;
-      completedBy: number | null;
-      completedByName: string;
-      /** Format: date-time */
-      completedAt: string | null;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    DeliverableTaskRequest: {
-      deliverable: number;
-      templateId?: number | null;
-      departmentId: number;
-      sheetNumber?: string | null;
-      sheetName?: string | null;
-      scopeDescription?: string;
-      completionStatus: components["schemas"]["CompletionStatusEnum"];
-      qaStatus: components["schemas"]["QaStatus7bcEnum"];
-      qaAssignedTo?: number | null;
-      assignedTo?: number | null;
-    };
-    DeliverableTaskTemplate: {
-      id: number;
-      phase: string;
-      departmentId: number;
-      departmentName: string;
-      sheetNumber?: string | null;
-      sheetName?: string | null;
-      scopeDescription?: string;
-      defaultCompletionStatus: components["schemas"]["DefaultCompletionStatusEnum"];
-      defaultQaStatus: components["schemas"]["DefaultQaStatusEnum"];
-      sortOrder?: number;
-      isActive?: boolean;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    DeliverableTaskTemplateRequest: {
-      phase: string;
-      departmentId: number;
-      sheetNumber?: string | null;
-      sheetName?: string | null;
-      scopeDescription?: string;
-      defaultCompletionStatus: components["schemas"]["DefaultCompletionStatusEnum"];
-      defaultQaStatus: components["schemas"]["DefaultQaStatusEnum"];
-      sortOrder?: number;
-      isActive?: boolean;
-    };
-    /** @description Department serializer with explicit camelCase field mapping */
-    Department: {
-      id: number;
-      name: string;
-      shortName?: string;
-      parentDepartment?: number | null;
-      manager?: number | null;
-      managerName: string;
-      description?: string;
-      isActive: boolean;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    DepartmentFilterProjectRequest: {
-      departmentId: number;
-      op: components["schemas"]["OpEnum"];
-    };
-    /** @description Department serializer with explicit camelCase field mapping */
-    DepartmentRequest: {
-      name: string;
-      shortName?: string;
-      parentDepartment?: number | null;
-      manager?: number | null;
-      description?: string;
-      isActive: boolean;
-    };
-    EBCPRoleAgg: {
-      roleId: number;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    EBCPTotals: {
-      weeks: number;
-      /** Format: double */
-      hours: number;
-      projectsCount: number;
-    };
-    /**
-     * @description * `sandbox` - Sandbox
-     * * `production` - Production
-     * @enum {string}
-     */
-    EnvironmentEnum: "sandbox" | "production";
-    /**
-     * @description * `joined` - Joined
-     * * `left` - Left
-     * @enum {string}
-     */
-    EventTypeEnum: "joined" | "left";
-    ExperienceByClientPerson: {
-      personId: number;
-      personName: string;
-      departmentId?: number | null;
-      totals: components["schemas"]["EBCPTotals"];
-      roles: {
-        [key: string]: components["schemas"]["EBCPRoleAgg"];
-      };
-    };
-    ExperienceByClientResponse: {
-      results: components["schemas"]["ExperienceByClientPerson"][];
-      count: number;
-    };
-    ExtraSeries: {
-      label: string;
-      values: number[];
-    };
-    GlobalSettingsUpdateRequest: {
-      settings: components["schemas"]["PreDeliverableGlobalSettingsUpdateRequest"][];
-    };
-    GridSnapshotAsyncResponse: {
-      jobId: string;
-    };
-    GridSnapshotPerson: {
-      id: number;
-      name: string;
-      weeklyCapacity: number;
-      department: number | null;
-    };
-    GridSnapshotResponse: {
-      weekKeys: string[];
-      people: components["schemas"]["GridSnapshotPerson"][];
-      hoursByPerson: {
-        [key: string]: {
-          [key: string]: number;
-        };
-      };
-    };
-    IntegrationConnection: {
-      id: number;
-      provider: string;
-      providerDisplayName: string;
-      environment: components["schemas"]["EnvironmentEnum"];
-      is_active?: boolean;
-      needs_reauth?: boolean;
-      is_disabled?: boolean;
-      utc_offset_minutes?: number;
-      hasToken: boolean;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    IntegrationConnectionRequest: {
-      providerKey: string;
-      environment: components["schemas"]["EnvironmentEnum"];
-      is_active?: boolean;
-      needs_reauth?: boolean;
-      is_disabled?: boolean;
-      extra_headers?: unknown;
-      utc_offset_minutes?: number;
-    };
-    IntegrationHealthResponse: {
-      healthy: boolean;
-      workersAvailable: boolean;
-      cacheAvailable: boolean;
-      message?: string | null;
-      schedulerPaused: boolean;
-      jobs: components["schemas"]["IntegrationJobHealthSummary"];
-    };
-    IntegrationJob: {
-      id: number;
-      connection: number;
-      provider: string;
-      providerDisplayName: string;
-      connectionCompany: string;
-      connectionEnvironment: string;
-      object_key: string;
-      status: components["schemas"]["IntegrationJobStatusEnum"];
-      payload: unknown;
-      logs: unknown;
-      metrics: unknown;
-      celery_id: string;
-      /** Format: date-time */
-      started_at: string | null;
-      /** Format: date-time */
-      finished_at: string | null;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    IntegrationJobHealthRecent: {
-      windowHours: number;
-      total: number;
-      succeeded: number;
-      failed: number;
-      /** Format: double */
-      successRate?: number | null;
-      itemsProcessed: number;
-    };
-    IntegrationJobHealthSummary: {
-      running: number;
-      lastJobAt?: string | null;
-      lastFailureAt?: string | null;
-      recent: components["schemas"]["IntegrationJobHealthRecent"];
-    };
-    IntegrationJobListResponse: {
-      items: components["schemas"]["IntegrationJob"][];
-    };
-    IntegrationJobRetryResponse: {
-      queued: boolean;
-    };
-    /**
-     * @description * `pending` - Pending
-     * * `running` - Running
-     * * `succeeded` - Succeeded
-     * * `failed` - Failed
-     * @enum {string}
-     */
-    IntegrationJobStatusEnum: "pending" | "running" | "succeeded" | "failed";
-    IntegrationRule: {
-      id: number;
-      connection: number;
-      object_key: string;
-      config?: unknown;
-      is_enabled?: boolean;
-      revision: number;
-      /** Format: date-time */
-      next_run_at: string | null;
-      /** Format: date-time */
-      last_run_at: string | null;
-      /** Format: date-time */
-      last_success_at: string | null;
-      last_error: string;
-      resync_required: boolean;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    IntegrationRuleRequest: {
-      connection_id: number;
-      object_key: string;
-      config?: unknown;
-      is_enabled?: boolean;
-    };
-    IntegrationRuleResyncRequestRequest: {
-      scope?: string;
-    };
-    IntegrationRuleResyncResponse: {
-      rule: components["schemas"]["IntegrationRule"];
-      state: {
-        [key: string]: unknown;
-      };
-    };
-    IntegrationSecretKeyRequestRequest: {
-      secretKey: string;
-    };
-    IntegrationSecretKeyResponse: {
-      configured: boolean;
-    };
-    IntegrationTestResponse: {
-      ok: boolean;
-      provider: string;
-      environment: string;
-      checkedAt: string;
-      sampleCount: number;
-      message?: string;
-    };
-    InviteUserRequestRequest: {
-      /** Format: email */
-      email: string;
-      username?: string;
-      personId?: number | null;
-      role?: components["schemas"]["RoleEnum"];
-    };
-    LinkPersonRequestRequest: {
-      person_id?: number | null;
-    };
-    MappingDefaultsRequestRequest: {
-      connectionId: number;
-      version?: string;
-      mappings: {
-          [key: string]: unknown;
-        }[];
-    };
-    MappingDefaultsResponse: {
-      schemaVersion?: string | null;
-      defaults: {
-          [key: string]: unknown;
-        }[];
-      fieldSignatureHash: string;
-      overrides?: {
-        [key: string]: unknown;
-      } | null;
-      stale: boolean;
-    };
-    MembershipEvent: {
-      week_start: string;
-      event_type: components["schemas"]["EventTypeEnum"];
-      deliverable_phase: string;
-      /** Format: double */
-      hours_before: number;
-      /** Format: double */
-      hours_after: number;
-    };
-    /**
-     * @description * `absolute_hours` - Absolute Hours
-     * * `percent` - Percent
-     * @enum {string}
-     */
-    ModeEnum: "absolute_hours" | "percent";
-    NotificationPreferences: {
-      emailPreDeliverableReminders: boolean;
-      reminderDaysBefore: number;
-      dailyDigest: boolean;
-    };
-    NotificationPreferencesRequest: {
-      emailPreDeliverableReminders: boolean;
-      reminderDaysBefore: number;
-      dailyDigest: boolean;
-    };
-    /**
-     * @description * `or` - or
-     * * `and` - and
-     * * `not` - not
-     * @enum {string}
-     */
-    OpEnum: "or" | "and" | "not";
-    PEPClient: {
-      client: string;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-      roles: {
-        [key: string]: components["schemas"]["PEPClientRole"];
-      };
-      phases: {
-        [key: string]: components["schemas"]["PEPClientPhase"];
-      };
-    };
-    PEPClientPhase: {
-      phase: string;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    PEPClientRole: {
-      roleId: number;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    PEPProject: {
-      projectId: number;
-      projectName: string;
-      client: string;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-      roles: {
-        [key: string]: components["schemas"]["PEPProjectRole"];
-      };
-      phases: {
-        [key: string]: components["schemas"]["PEPProjectPhase"];
-      };
-    };
-    PEPProjectPhase: {
-      phase: string;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    PEPProjectRole: {
-      roleId: number;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    PSTEvent: {
-      week_start: string;
-      event_type: components["schemas"]["EventTypeEnum"];
-    };
-    PSTPerson: {
-      personId: number;
-      personName: string;
-      departmentId?: number | null;
-      firstWeek?: string | null;
-      lastWeek?: string | null;
-      totalWeeks?: number | null;
-      roles: components["schemas"]["PSTPersonRole"][];
-      events: components["schemas"]["PSTEvent"][];
-    };
-    PSTPersonRole: {
-      roleId: number | null;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    PSTRoleAgg: {
-      roleId: number | null;
-      peopleCount: number;
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    PaginatedAssignmentList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["Assignment"][];
-    };
-    PaginatedDeliverableAssignmentList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["DeliverableAssignment"][];
-    };
-    PaginatedDeliverableCalendarItemList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["DeliverableCalendarItem"][];
-    };
-    PaginatedDeliverableList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["Deliverable"][];
-    };
-    PaginatedDeliverableQATaskList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["DeliverableQATask"][];
-    };
-    PaginatedDeliverableTaskList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["DeliverableTask"][];
-    };
-    PaginatedDeliverableTaskTemplateList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["DeliverableTaskTemplate"][];
-    };
-    PaginatedDepartmentList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["Department"][];
-    };
-    PaginatedIntegrationConnectionList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["IntegrationConnection"][];
-    };
-    PaginatedIntegrationRuleList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["IntegrationRule"][];
-    };
-    PaginatedPersonCapacityHeatmapItemList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["PersonCapacityHeatmapItem"][];
-    };
-    PaginatedPersonList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["Person"][];
-    };
-    PaginatedPersonSkillList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["PersonSkill"][];
-    };
-    PaginatedPreDeliverableItemList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["PreDeliverableItem"][];
-    };
-    PaginatedProjectAvailabilityItemList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["ProjectAvailabilityItem"][];
-    };
-    PaginatedProjectList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["Project"][];
-    };
-    PaginatedProjectRiskList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["ProjectRisk"][];
-    };
-    PaginatedRoleList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["Role"][];
-    };
-    PaginatedSkillMatchResultItemList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["SkillMatchResultItem"][];
-    };
-    PaginatedSkillTagList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["SkillTag"][];
-    };
-    PaginatedWorkloadForecastItemList: {
-      /** @example 123 */
-      count: number;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=4
-       */
-      next?: string | null;
-      /**
-       * Format: uri
-       * @example http://api.example.org/accounts/?page=2
-       */
-      previous?: string | null;
-      results: components["schemas"]["WorkloadForecastItem"][];
-    };
-    PasswordResetConfirmRequest: {
-      uid: string;
-      token: string;
-      newPassword: string;
-    };
-    PasswordResetRequestRequest: {
-      /** Format: email */
-      email: string;
-    };
-    /** @description Assignment serializer with weekly hours support */
-    PatchedAssignmentRequest: {
-      person?: number | null;
-      projectName?: string;
-      project?: number | null;
-      roleOnProjectId?: number | null;
-      weeklyHours?: unknown;
-    };
-    PatchedBulkUpdateHoursRequestRequest: {
-      updates?: components["schemas"]["AssignmentHoursUpdateRequest"][];
-    };
-    PatchedCalendarFeedsPatchRequest: {
-      deliverables_token?: string;
-      regenerate?: boolean;
-    };
-    /** @description Serializer for linking people to deliverables with weekly hours. */
-    PatchedDeliverableAssignmentRequest: {
-      deliverable?: number;
-      person?: number;
-      roleOnMilestone?: string | null;
-      is_active?: boolean;
-    };
-    PatchedDeliverableQATaskRequest: {
-      deliverable?: number;
-      departmentId?: number;
-      qaStatus?: components["schemas"]["DeliverableQATaskQaStatusEnum"];
-      qaAssignedTo?: number | null;
-    };
-    /** @description Deliverable serializer with snake_case -> camelCase field mapping */
-    PatchedDeliverableRequest: {
-      project?: number;
-      /** @description Completion percentage (0-100) */
-      percentage?: number | null;
-      /** @description Brief description (e.g., SD, DD, IFP, IFC) */
-      description?: string;
-      /** Format: date */
-      date?: string | null;
-      /** @description Additional details, owner info, requirements, etc. */
-      notes?: string;
-      sortOrder?: number;
-      isCompleted?: boolean;
-      /** Format: date */
-      completedDate?: string | null;
-    };
-    PatchedDeliverableTaskRequest: {
-      deliverable?: number;
-      templateId?: number | null;
-      departmentId?: number;
-      sheetNumber?: string | null;
-      sheetName?: string | null;
-      scopeDescription?: string;
-      completionStatus?: components["schemas"]["CompletionStatusEnum"];
-      qaStatus?: components["schemas"]["QaStatus7bcEnum"];
-      qaAssignedTo?: number | null;
-      assignedTo?: number | null;
-    };
-    PatchedDeliverableTaskTemplateRequest: {
-      phase?: string;
-      departmentId?: number;
-      sheetNumber?: string | null;
-      sheetName?: string | null;
-      scopeDescription?: string;
-      defaultCompletionStatus?: components["schemas"]["DefaultCompletionStatusEnum"];
-      defaultQaStatus?: components["schemas"]["DefaultQaStatusEnum"];
-      sortOrder?: number;
-      isActive?: boolean;
-    };
-    /** @description Department serializer with explicit camelCase field mapping */
-    PatchedDepartmentRequest: {
-      name?: string;
-      shortName?: string;
-      parentDepartment?: number | null;
-      manager?: number | null;
-      description?: string;
-      isActive?: boolean;
-    };
-    PatchedIntegrationConnectionRequest: {
-      providerKey?: string;
-      environment?: components["schemas"]["EnvironmentEnum"];
-      is_active?: boolean;
-      needs_reauth?: boolean;
-      is_disabled?: boolean;
-      extra_headers?: unknown;
-      utc_offset_minutes?: number;
-    };
-    PatchedIntegrationRuleRequest: {
-      connection_id?: number;
-      object_key?: string;
-      config?: unknown;
-      is_enabled?: boolean;
-    };
-    /** @description Person serializer with department and role integration */
-    PatchedPersonRequest: {
-      name?: string;
-      /** @default 36 */
-      weeklyCapacity?: number;
-      /** @description Person's role in the organization */
-      role?: number | null;
-      department?: number | null;
-      location?: string | null;
-      /** Format: date */
-      hireDate?: string | null;
-      isActive?: boolean;
-      notes?: string;
-    };
-    /** @description Person skill serializer with camelCase field names and related data */
-    PatchedPersonSkillRequest: {
-      person?: number;
-      skillTagId?: number;
-      skillType?: string;
-      proficiencyLevel?: string;
-      notes?: string;
-      /** Format: date */
-      lastUsed?: string | null;
-    };
-    PatchedPreDeliverableItemRequest: {
-      deliverable?: number;
-      preDeliverableTypeId?: number;
-      /** Format: date */
-      generatedDate?: string;
-      daysBefore?: number;
-      isCompleted?: boolean;
-      /** Format: date */
-      completedDate?: string | null;
-      notes?: string;
-      isActive?: boolean;
-    };
-    PatchedProjectRequest: {
-      name?: string;
-      status?: components["schemas"]["ProjectStatusEnum"];
-      client?: string;
-      description?: string;
-      notes?: string | null;
-      notesJson?: unknown;
-      projectNumber?: string | null;
-      /** Format: date */
-      startDate?: string | null;
-      /** Format: date */
-      endDate?: string | null;
-      estimatedHours?: number | null;
-      /** @default true */
-      isActive?: boolean;
-      autoHoursTemplateId?: number | null;
-    };
-    PatchedProjectRiskRequest: {
-      description?: string;
-      priority?: components["schemas"]["PriorityEnum"];
-      status?: components["schemas"]["ProjectRiskStatusEnum"];
-      departments?: number[];
-      /** Format: binary */
-      attachment?: string | null;
-    };
-    PatchedProjectRoleUpdateRequest: {
-      name?: string;
-      isActive?: boolean;
-      sortOrder?: number;
-    };
-    /** @description Role serializer with camelCase field transformation */
-    PatchedRoleRequest: {
-      /** @description Role name (e.g., Senior Engineer, Product Manager) */
-      name?: string;
-      /** @description Optional description of the role responsibilities */
-      description?: string;
-      /**
-       * Format: double
-       * @description Default overhead hours per week for people in this role
-       */
-      overheadHoursPerWeek?: number;
-      /** @description Whether this role is currently available for assignment */
-      isActive?: boolean;
-      sortOrder?: number;
-    };
-    /** @description Skill tag serializer with camelCase field names */
-    PatchedSkillTagRequest: {
-      name?: string;
-      category?: string;
-      description?: string;
-    };
-    PatchedUserSettingsPatchRequest: {
-      settings?: {
-        [key: string]: unknown;
-      };
-    };
-    PeopleAutocompleteItem: {
-      id: number;
-      name: string;
-      department?: number | null;
-    };
-    PeopleSearchItem: {
-      id: number;
-      name: string;
-      department?: number | null;
-      roleName?: string | null;
-    };
-    /** @description Person serializer with department and role integration */
-    Person: {
-      id: number;
-      name: string;
-      /** @default 36 */
-      weeklyCapacity?: number;
-      /** @description Person's role in the organization */
-      role?: number | null;
-      roleName: string;
-      department?: number | null;
-      departmentName: string;
-      location?: string | null;
-      /** Format: date */
-      hireDate?: string | null;
-      isActive?: boolean;
-      notes?: string;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    /** @description Serializer for capacity heatmap items returned by capacity_heatmap action. */
-    PersonCapacityHeatmapItem: {
-      id: number;
-      name: string;
-      weeklyCapacity: number;
-      department?: string | null;
-      weekKeys: string[];
-      weekTotals: {
-        [key: string]: number;
-      };
-      peak: {
-        [key: string]: number;
-      };
-      /** Format: double */
-      averagePercentage: number;
-      percentByWeek?: {
-        [key: string]: number;
-      };
-      availableByWeek?: {
-        [key: string]: number;
-      };
-    };
-    PersonExperienceProfileResponse: {
-      byClient: components["schemas"]["PEPClient"][];
-      byProject: components["schemas"]["PEPProject"][];
-      eventsCount: number;
-    };
-    PersonLite: {
-      id: number;
-      name: string;
-      weeklyCapacity?: number;
-      department?: number | null;
-    };
-    PersonProjectTimelineResponse: {
-      weeksSummary: components["schemas"]["WeeksSummary"];
-      coverageBlocks: components["schemas"]["CoverageBlock"][];
-      events: components["schemas"]["MembershipEvent"][];
-      roleChanges: components["schemas"]["RoleChange"][];
-      weeklyHours: {
-        [key: string]: number;
-      };
-    };
-    /** @description Person serializer with department and role integration */
-    PersonRequest: {
-      name: string;
-      /** @default 36 */
-      weeklyCapacity?: number;
-      /** @description Person's role in the organization */
-      role?: number | null;
-      department?: number | null;
-      location?: string | null;
-      /** Format: date */
-      hireDate?: string | null;
-      isActive?: boolean;
-      notes?: string;
-    };
-    /** @description Person skill serializer with camelCase field names and related data */
-    PersonSkill: {
-      id: number;
-      person: number;
-      skillTagId: number;
-      skillTagName: string;
-      skillType: string;
-      proficiencyLevel: string;
-      notes?: string;
-      /** Format: date */
-      lastUsed?: string | null;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    /** @description Person skill serializer with camelCase field names and related data */
-    PersonSkillRequest: {
-      person: number;
-      skillTagId: number;
-      skillType: string;
-      proficiencyLevel: string;
-      notes?: string;
-      /** Format: date */
-      lastUsed?: string | null;
-    };
-    /** @description Lightweight serializer for person skill summaries */
-    PersonSkillSummary: {
-      skillTagName: string;
-      skillType: string;
-      proficiencyLevel: string;
-    };
-    PersonSkillSummaryGrouped: {
-      strengths: components["schemas"]["PersonSkillSummary"][];
-      development: components["schemas"]["PersonSkillSummary"][];
-      learning: components["schemas"]["PersonSkillSummary"][];
-    };
-    PersonalAlerts: {
-      overallocatedNextWeek: boolean;
-      underutilizedNext4Weeks: boolean;
-      overduePreItems: number;
-    };
-    PersonalDeliverableItem: {
-      id: number;
-      project: number;
-      projectName: string | null;
-      title: string;
-      /** Format: date */
-      date: string | null;
-      isCompleted: boolean;
-    };
-    PersonalProjectItem: {
-      id: number;
-      name: string | null;
-      client?: string | null;
-      status?: string | null;
-      /** Format: date */
-      nextDeliverableDate?: string | null;
-    };
-    PersonalSchedule: {
-      weekKeys: string[];
-      weekTotals: {
-        [key: string]: number;
-      };
-      weeklyCapacity: number;
-    };
-    PersonalSummary: {
-      personId: number;
-      currentWeekKey: string;
-      /** Format: double */
-      utilizationPercent: number;
-      /** Format: double */
-      allocatedHours: number;
-      /** Format: double */
-      availableHours: number;
-    };
-    PersonalWork: {
-      summary: components["schemas"]["PersonalSummary"];
-      alerts: components["schemas"]["PersonalAlerts"];
-      projects: components["schemas"]["PersonalProjectItem"][];
-      deliverables: components["schemas"]["PersonalDeliverableItem"][];
-      preItems: components["schemas"]["PreDeliverableItem"][];
-      schedule: components["schemas"]["PersonalSchedule"];
-    };
-    PreDeliverableAssignedPerson: {
-      id: number;
-      name: string;
-    };
-    PreDeliverableCompletedBy: {
-      id: number | null;
-      username?: string | null;
-    };
-    PreDeliverableCompletionByProject: {
-      projectId: number | null;
-      projectName?: string | null;
-      total: number;
-      completed: number;
-      overdue: number;
-      /** Format: double */
-      completionRate: number;
-    };
-    PreDeliverableCompletionByType: {
-      typeId: number | null;
-      typeName?: string | null;
-      total: number;
-      completed: number;
-      overdue: number;
-      /** Format: double */
-      completionRate: number;
-    };
-    PreDeliverableCompletionResponse: {
-      total: number;
-      completed: number;
-      overdue: number;
-      /** Format: double */
-      completionRate: number;
-      byProject: components["schemas"]["PreDeliverableCompletionByProject"][];
-      byType: components["schemas"]["PreDeliverableCompletionByType"][];
-    };
-    PreDeliverableGlobalSettingsItem: {
-      typeId: number;
-      typeName: string;
-      defaultDaysBefore: number;
-      isEnabledByDefault: boolean;
-      sortOrder?: number;
-      isActive?: boolean;
-    };
-    PreDeliverableGlobalSettingsUpdateRequest: {
-      typeId: number;
-      defaultDaysBefore: number;
-      isEnabledByDefault: boolean;
-    };
-    PreDeliverableItem: {
-      id: number;
-      deliverable: number;
-      preDeliverableTypeId: number;
-      typeName: string;
-      /** Format: date */
-      generatedDate: string;
-      daysBefore: number;
-      isCompleted: boolean;
-      /** Format: date */
-      completedDate?: string | null;
-      completedBy: components["schemas"]["PreDeliverableCompletedBy"];
-      notes?: string;
-      isActive: boolean;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-      displayName: string;
-      isOverdue: boolean;
-      parentDeliverable: components["schemas"]["PreDeliverableParent"];
-      assignedPeople: readonly components["schemas"]["PreDeliverableAssignedPerson"][];
-      itemType: string;
-    };
-    PreDeliverableItemRequest: {
-      deliverable: number;
-      preDeliverableTypeId: number;
-      /** Format: date */
-      generatedDate: string;
-      daysBefore: number;
-      isCompleted: boolean;
-      /** Format: date */
-      completedDate?: string | null;
-      notes?: string;
-      isActive: boolean;
-    };
-    PreDeliverableParent: {
-      id: number;
-      description?: string | null;
-      /** Format: date */
-      date?: string | null;
-    };
-    PreDeliverableTeamPerformancePerson: {
-      personId: number | null;
-      personName?: string | null;
-      assignedItems: number;
-      completedItems: number;
-      overdueItems: number;
-      /** Format: double */
-      completionRate: number;
-    };
-    PreDeliverableTeamPerformanceResponse: {
-      people: components["schemas"]["PreDeliverableTeamPerformancePerson"][];
-    };
-    PreItemsBackfillRequestRequest: {
-      projectId?: number;
-      /** Format: date */
-      start?: string;
-      /** Format: date */
-      end?: string;
-      regenerate?: boolean;
-    };
-    PreItemsBackfillResponse: {
-      enqueued: boolean;
-      jobId?: string;
-      statusUrl?: string;
-      result?: {
-        [key: string]: unknown;
-      };
-    };
-    /**
-     * @description * `high` - High
-     * * `medium` - Medium
-     * * `low` - Low
-     * @enum {string}
-     */
-    PriorityEnum: "high" | "medium" | "low";
-    Project: {
-      id: number;
-      name: string;
-      status?: components["schemas"]["ProjectStatusEnum"];
-      client?: string;
-      description?: string;
-      notes?: string | null;
-      notesJson?: unknown;
-      projectNumber?: string | null;
-      /** Format: date */
-      startDate?: string | null;
-      /** Format: date */
-      endDate?: string | null;
-      estimatedHours?: number | null;
-      /** @default true */
-      isActive?: boolean;
-      bqeClientName: string;
-      bqeClientId: string;
-      clientSyncPolicyState: string;
-      autoHoursTemplateId?: number | null;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    /** @description Availability snapshot item for a person in project context. */
-    ProjectAvailabilityItem: {
-      personId: number;
-      personName: string;
-      /** Format: double */
-      totalHours: number;
-      /** Format: double */
-      capacity: number;
-      /** Format: double */
-      availableHours: number;
-      /** Format: double */
-      utilizationPercent: number;
-    };
-    ProjectFilterItem: {
-      assignmentCount: number;
-      hasFutureDeliverables: boolean;
-      status: string;
-      missingQa?: boolean;
-    };
-    ProjectFilterMetadataResponse: {
-      projectFilters: {
-        [key: string]: components["schemas"]["ProjectFilterItem"];
-      };
-    };
-    ProjectGridSnapshotResponse: {
-      weekKeys: string[];
-      projects: components["schemas"]["ProjectLite"][];
-      hoursByProject: {
-        [key: string]: {
-          [key: string]: number;
-        };
-      };
-      deliverablesByProjectWeek: {
-        [key: string]: {
-          [key: string]: number;
-        };
-      };
-      deliverableMarkersByProjectWeek?: {
-        [key: string]: {
-          [key: string]: components["schemas"]["DeliverableMarkerLite"][];
-        };
-      };
-      hasFutureDeliverablesByProject: {
-        [key: string]: boolean;
-      };
-      hasPlaceholdersByProject?: {
-        [key: string]: number;
-      };
-      metrics: components["schemas"]["ProjectSnapshotMetrics"];
-    };
-    ProjectLite: {
-      id: number;
-      name: string;
-      client?: string | null;
-      status?: string | null;
-    };
-    ProjectMatchingConfirmRequestRequest: {
-      connectionId: number;
-      matches?: {
-          [key: string]: unknown;
-        }[];
-      enableRule?: boolean;
-    };
-    ProjectPreDeliverableSettingsResponse: {
-      projectId: number;
-      settings: components["schemas"]["ProjectTypeSetting"][];
-    };
-    ProjectRequest: {
-      name: string;
-      status?: components["schemas"]["ProjectStatusEnum"];
-      client?: string;
-      description?: string;
-      notes?: string | null;
-      notesJson?: unknown;
-      projectNumber?: string | null;
-      /** Format: date */
-      startDate?: string | null;
-      /** Format: date */
-      endDate?: string | null;
-      estimatedHours?: number | null;
-      /** @default true */
-      isActive?: boolean;
-      autoHoursTemplateId?: number | null;
-    };
-    ProjectRisk: {
-      id: number;
-      project: number;
-      description: string;
-      priority?: components["schemas"]["PriorityEnum"];
-      status?: components["schemas"]["ProjectRiskStatusEnum"];
-      departments?: number[];
-      departmentNames: readonly string[];
-      createdBy: number;
-      createdByName: string;
-      /** Format: date-time */
-      createdAt: string;
-      updatedBy: number;
-      updatedByName: string;
-      /** Format: date-time */
-      updatedAt: string;
-      /** Format: uri */
-      attachment?: string | null;
-      attachmentUrl: string;
-      edits: readonly components["schemas"]["ProjectRiskEdit"][];
-    };
-    ProjectRiskEdit: {
-      id: number;
-      action: components["schemas"]["ActionEnum"];
-      changes?: unknown;
-      actor: number;
-      actorName: string;
-      /** Format: date-time */
-      createdAt: string;
-    };
-    ProjectRiskRequest: {
-      description: string;
-      priority?: components["schemas"]["PriorityEnum"];
-      status?: components["schemas"]["ProjectRiskStatusEnum"];
-      departments?: number[];
-      /** Format: binary */
-      attachment?: string | null;
-    };
-    /**
-     * @description * `open` - Open
-     * * `closed` - Closed
-     * @enum {string}
-     */
-    ProjectRiskStatusEnum: "open" | "closed";
-    ProjectRole: {
-      id: number;
-      name: string;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    ProjectRoleClearAssignmentsResponse: {
-      cleared: number;
-    };
-    ProjectRoleCreateRequest: {
-      department: number;
-      name: string;
-      sortOrder?: number | null;
-    };
-    ProjectRoleCreateRequestRequest: {
-      name: string;
-    };
-    ProjectRoleItem: {
-      id: number;
-      name: string;
-      is_active?: boolean;
-      sort_order?: number;
-      department_id: number;
-    };
-    ProjectRoleListResponse: {
-      roles: string[];
-    };
-    ProjectRoleLite: {
-      id: number;
-      name: string;
-    };
-    ProjectRoleReorderRequestRequest: {
-      ids: number[];
-    };
-    ProjectRoleReorderResponse: {
-      detail: string;
-    };
-    ProjectRoleUsageAssignment: {
-      id: number;
-      person: components["schemas"]["ProjectRoleUsagePerson"];
-      project: components["schemas"]["ProjectRoleUsageProject"];
-    };
-    ProjectRoleUsagePerson: {
-      id: number | null;
-      name: string;
-    };
-    ProjectRoleUsageProject: {
-      id: number | null;
-      name: string;
-    };
-    ProjectRoleUsageResponse: {
-      count: number;
-      assignments: components["schemas"]["ProjectRoleUsageAssignment"][];
-    };
-    ProjectSearchRequestRequest: {
-      page?: number;
-      page_size?: number;
-      ordering?: string;
-      status_in?: string;
-      include_children?: number;
-      search_tokens?: components["schemas"]["SearchTokenProjectRequest"][];
-      department_filters?: components["schemas"]["DepartmentFilterProjectRequest"][];
-      include_deliverable_dates?: boolean;
-    };
-    ProjectSearchResponse: {
-      count: number;
-      next?: string | null;
-      previous?: string | null;
-      results: {
-          [key: string]: unknown;
-        }[];
-    };
-    ProjectSnapshotMetrics: {
-      projectsCount: number;
-      peopleAssignedCount: number;
-      /** Format: double */
-      totalHours: number;
-    };
-    ProjectStaffingTimelineResponse: {
-      people: components["schemas"]["PSTPerson"][];
-      roleAggregates: components["schemas"]["PSTRoleAgg"][];
-    };
-    /**
-     * @description * `planning` - Planning
-     * * `active` - Active
-     * * `active_ca` - Active CA
-     * * `on_hold` - On Hold
-     * * `completed` - Completed
-     * * `cancelled` - Cancelled
-     * * `inactive` - Inactive
-     * @enum {string}
-     */
-    ProjectStatusEnum: "planning" | "active" | "active_ca" | "on_hold" | "completed" | "cancelled" | "inactive";
-    ProjectTotal: {
-      id: number;
-      name: string;
-      /** Format: double */
-      hours: number;
-    };
-    ProjectTotalsResponse: {
-      hoursByProject: {
-        [key: string]: {
-          [key: string]: number;
-        };
-      };
-    };
-    ProjectTypeSetting: {
-      typeId: number;
-      typeName: string;
-      isEnabled: boolean;
-      daysBefore: number | null;
-      source: components["schemas"]["SourceEnum"];
-    };
-    Provider: {
-      key: string;
-      displayName: string;
-      schemaVersion: string;
-      metadata: unknown;
-    };
-    ProviderCatalog: {
-      key: string;
-      displayName: string;
-      schemaVersion: string;
-      rateLimits?: {
-        [key: string]: unknown;
-      };
-      baseUrlVariants?: {
-        [key: string]: unknown;
-      };
-      objects: {
-          [key: string]: unknown;
-        }[];
-    };
-    ProviderConnectStartRequestRequest: {
-      connectionId: number;
-    };
-    ProviderConnectStartResponse: {
-      authorizeUrl: string;
-      state: string;
-    };
-    ProviderCredential: {
-      clientId: string;
-      redirectUri: string;
-      hasClientSecret: boolean;
-      configured: boolean;
-    };
-    ProviderCredentialRequestRequest: {
-      clientId: string;
-      redirectUri: string;
-      clientSecret?: string;
-    };
-    ProviderResetRequestRequest: {
-      confirm: boolean;
-    };
-    ProviderResetResponse: {
-      reset: boolean;
-    };
-    QATaskSettings: {
-      defaultDaysBefore: number;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    QATaskSettingsRequest: {
-      defaultDaysBefore: number;
-    };
-    /**
-     * @description * `not_reviewed` - Not Reviewed
-     * * `in_review` - In Review
-     * * `approved` - Approved
-     * * `changes_required` - Changes Required
-     * @enum {string}
-     */
-    QaStatus7bcEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
-    RecentAssignment: {
-      person: string;
-      project: string;
-      created: string;
-    };
-    /** @description Role serializer with camelCase field transformation */
-    Role: {
-      id: number;
-      /** @description Role name (e.g., Senior Engineer, Product Manager) */
-      name: string;
-      /** @description Optional description of the role responsibilities */
-      description?: string;
-      /**
-       * Format: double
-       * @description Default overhead hours per week for people in this role
-       */
-      overheadHoursPerWeek?: number;
-      /** @description Whether this role is currently available for assignment */
-      isActive?: boolean;
-      sortOrder?: number;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    RoleCapacityTimelineResponse: {
-      weekKeys: string[];
-      roles: components["schemas"]["ProjectRoleLite"][];
-      series: components["schemas"]["RoleSeries"][];
-    };
-    RoleChange: {
-      week_start: string;
-      roleFromId: number;
-      roleToId: number;
-    };
-    /**
-     * @description * `admin` - admin
-     * * `manager` - manager
-     * * `user` - user
-     * @enum {string}
-     */
-    RoleEnum: "admin" | "manager" | "user";
-    /** @description Role serializer with camelCase field transformation */
-    RoleRequest: {
-      /** @description Role name (e.g., Senior Engineer, Product Manager) */
-      name: string;
-      /** @description Optional description of the role responsibilities */
-      description?: string;
-      /**
-       * Format: double
-       * @description Default overhead hours per week for people in this role
-       */
-      overheadHoursPerWeek?: number;
-      /** @description Whether this role is currently available for assignment */
-      isActive?: boolean;
-      sortOrder?: number;
-    };
-    RoleSeries: {
-      roleId: number;
-      roleName: string;
-      assigned: number[];
-      capacity: number[];
-      people?: number[];
-    };
-    RunWeeklySnapshotResponse: {
-      week_start: string;
-      lock_acquired: boolean;
-      examined?: number;
-      inserted?: number;
-      updated?: number;
-      skipped?: number;
-      events_inserted?: number;
-      skipped_due_to_lock?: boolean;
-    };
-    SearchTokenProjectRequest: {
-      term: string;
-      op: components["schemas"]["OpEnum"];
-    };
-    SearchTokenRequest: {
-      term: string;
-      op: components["schemas"]["OpEnum"];
-    };
-    SetPasswordRequestRequest: {
-      userId: number;
-      newPassword: string;
-    };
-    SetUserRoleRequestRequest: {
-      role: components["schemas"]["RoleEnum"];
-    };
-    SkillMatchAsyncResponse: {
-      jobId: string;
-    };
-    /** @description Result item for people skill match scoring. */
-    SkillMatchResultItem: {
-      personId: number;
-      name: string;
-      /**
-       * Format: double
-       * @description 0-100
-       */
-      score: number;
-      matchedSkills: string[];
-      missingSkills: string[];
-      departmentId: number | null;
-      roleName?: string | null;
-    };
-    /** @description Skill tag serializer with camelCase field names */
-    SkillTag: {
-      id: number;
-      name: string;
-      category?: string;
-      description?: string;
-      isActive: boolean;
-      /** Format: date-time */
-      createdAt: string;
-      /** Format: date-time */
-      updatedAt: string;
-    };
-    /** @description Skill tag serializer with camelCase field names */
-    SkillTagRequest: {
-      name: string;
-      category?: string;
-      description?: string;
-    };
-    /**
-     * @description * `project` - project
-     * * `global` - global
-     * * `default` - default
-     * @enum {string}
-     */
-    SourceEnum: "project" | "global" | "default";
-    StatusSeries: {
-      active: number[];
-      active_ca: number[];
-      other: number[];
-    };
-    TeamOverviewItem: {
-      id: number;
-      name: string;
-      role: string;
-      /** Format: double */
-      utilization_percent: number;
-      /** Format: double */
-      allocated_hours: number;
-      capacity: number;
-      is_overallocated: boolean;
-      /** Format: double */
-      peak_utilization_percent: number;
-      peak_week: string;
-      is_peak_overallocated: boolean;
-    };
-    TokenRefresh: {
-      access: string;
-      refresh: string;
-    };
-    TokenRefreshRequest: {
-      refresh: string;
-    };
-    TokenVerifyRequest: {
-      token: string;
-    };
-    UserListItem: {
-      id: number;
-      username: string;
-      email?: string;
-      is_staff: boolean;
-      is_superuser: boolean;
-      groups: string[];
-      role: string;
-      person?: components["schemas"]["UserListPerson"] | null;
-      accountSetup: boolean;
-    };
-    UserListPerson: {
-      id: number;
-      name: string;
-    };
-    UserProfile: {
-      id: number;
-      user: {
-        [key: string]: unknown;
-      };
-      person: {
-        [key: string]: unknown;
-      } | null;
-      settings?: unknown;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    /**
-     * @description Allow login with either username or email.
-     *
-     * If the incoming 'username' field looks like an email or uniquely matches a
-     * user email (case-insensitive), rewrite it to that user's username before
-     * delegating to the base serializer.
-     */
-    UsernameOrEmailTokenObtainPairRequest: {
-      username: string;
-      password: string;
-    };
-    UtilizationDistribution: {
-      underutilized: number;
-      optimal: number;
-      high: number;
-      overallocated: number;
-    };
-    UtilizationScheme: {
-      mode?: components["schemas"]["ModeEnum"];
-      blue_min?: number;
-      blue_max?: number;
-      green_min?: number;
-      green_max?: number;
-      orange_min?: number;
-      orange_max?: number;
-      red_min?: number;
-      full_capacity_hours?: number;
-      zero_is_blank?: boolean;
-      version: number;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    UtilizationSchemeRequest: {
-      mode?: components["schemas"]["ModeEnum"];
-      blue_min?: number;
-      blue_max?: number;
-      green_min?: number;
-      green_max?: number;
-      orange_min?: number;
-      orange_max?: number;
-      red_min?: number;
-      full_capacity_hours?: number;
-      zero_is_blank?: boolean;
-    };
-    WeeksSummary: {
-      weeks: number;
-      /** Format: double */
-      hours: number;
-    };
-    /** @description Serializer for workload forecast items returned by workload_forecast action. */
-    WorkloadForecastItem: {
-      weekStart: string;
-      /** Format: double */
-      totalCapacity: number;
-      /** Format: double */
-      totalAllocated: number;
-      /** Format: double */
-      teamUtilization: number;
-      peopleOverallocated: components["schemas"]["WorkloadForecastOverallocatedItem"][];
-    };
-    WorkloadForecastOverallocatedItem: {
-      id: number;
-      name: string;
-    };
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
-}
-
-export type $defs = Record<string, never>;
-
-export type external = Record<string, never>;
-
-export interface operations {
-
-  /**
-   * @description Get all assignments with person details and optional project
-   * filtering.
-   */
-  assignments_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-        /** @description Number of results to return per page. */
-        page_size?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedAssignmentList"];
-        };
-      };
-    };
-  };
-  /** @description Create assignment with validation */
-  assignments_create: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["AssignmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
-        "multipart/form-data": components["schemas"]["AssignmentRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["Assignment"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Assignment CRUD API with utilization tracking
-   * Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
-   */
-  assignments_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this assignment. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Assignment"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Assignment CRUD API with utilization tracking
-   * Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
-   */
-  assignments_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this assignment. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["AssignmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
-        "multipart/form-data": components["schemas"]["AssignmentRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Assignment"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Assignment CRUD API with utilization tracking
-   * Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
-   */
-  assignments_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this assignment. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /**
-   * @description Assignment CRUD API with utilization tracking
-   * Uses AutoMapped serializer for automatic snake_case -> camelCase conversion
-   */
-  assignments_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this assignment. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedAssignmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedAssignmentRequest"];
-        "multipart/form-data": components["schemas"]["PatchedAssignmentRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Assignment"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Assigned hours aggregated by client for N weeks ahead.
-   *
-   * Response: { clients: [{ label: string, hours: number }] }
-   */
-  assignments_analytics_by_client_retrieve: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AssignedHoursByClientResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Assigned hours aggregated by project for a given client over N weeks ahead.
-   *
-   * Response: { projects: [{ id: number, name: string, hours: number }] }
-   */
-  assignments_analytics_client_projects_retrieve: {
-    parameters: {
-      query: {
-        client: string;
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AssignedHoursClientProjectsResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.
-   *
-   * Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
-   * Classification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.
-   * Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.
-   * Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }
-   */
-  assignments_analytics_deliverable_timeline_retrieve: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 include active_ca status in addition to active (default 0) */
-        include_active_ca?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AssignedHoursDeliverableTimelineResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Per-role capacity vs assigned hours timeline for a department over the next N weeks.
-   *
-   * Rules: Only includes active people; applies hireDate gating (capacity contributes only on or after start).
-   * Capacity is the sum of weekly capacity for all active people in the department with the selected role(s) for each week, gated by hire date.
-   * Assigned hours are summed from current Assignments.weekly_hours by person role and week.
-   */
-  assignments_analytics_role_capacity_retrieve: {
-    parameters: {
-      query: {
-        /** @description Department ID */
-        department: number;
-        /** @description CSV of department ProjectRole IDs to include */
-        role_ids?: string;
-        /** @description Number of future weeks (4,8,12,16,20). Default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["RoleCapacityTimelineResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Assigned hours weekly timeline aggregated by project status for N weeks ahead.
-   *
-   * Categories reflect Project.status controlled vocabulary: 'active', 'active_ca', and 'other'.
-   * Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }
-   */
-  assignments_analytics_status_timeline_retrieve: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AssignedHoursStatusTimelineResponse"];
-        };
-      };
-    };
-  };
-  /** @description Bulk update weekly hours for multiple assignments in a single transaction. */
-  assignments_bulk_update_hours_partial_update: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedBulkUpdateHoursRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedBulkUpdateHoursRequestRequest"];
-        "multipart/form-data": components["schemas"]["PatchedBulkUpdateHoursRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["BulkUpdateHoursResponse"];
-        };
-      };
-    };
-  };
-  /** @description Get assignments grouped by person */
-  assignments_by_person_retrieve: {
-    parameters: {
-      query?: {
-        /** @description Page number (optional pagination) */
-        page?: number;
-        /** @description Page size (optional pagination) */
-        page_size?: number;
-        /** @description Filter by person id */
-        person_id?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Assignment"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Check assignment conflicts for a person in a specific week.
-   * Optimized to prevent N+1 queries by fetching all person assignments
-   * in a single query.
-   */
-  assignments_check_conflicts_create: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["AssignmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
-        "multipart/form-data": components["schemas"]["AssignmentRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Assignment"];
-        };
-      };
-    };
-  };
-  /** @description Counts of assignments per person with optional filters. */
-  assignments_counts_by_person_retrieve: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description 0|1 */
-        include_placeholders?: number;
-        person?: number;
-        project?: number;
-        /** @description CSV of project statuses */
-        status_in?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AssignmentCountsByPersonResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Experience by Client: list people with totals and role aggregates in a date window.
-   *
-   * Params: client?, department?, include_children? (0|1), start?, end?, min_weeks?
-   */
-  assignments_experience_by_client_retrieve: {
-    parameters: {
-      query?: {
-        client?: string;
-        department?: number;
-        /** @description YYYY-MM-DD */
-        end?: string;
-        /** @description 0|1 */
-        include_children?: number;
-        min_weeks?: number;
-        /** @description YYYY-MM-DD */
-        start?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ExperienceByClientResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Return compact pre-aggregated grid data for N weeks ahead (default 12).
-   *
-   * Response shape: { weekKeys: [YYYY-MM-DD], people: [{id, name, weeklyCapacity, department}], hoursByPerson: { <personId>: { <weekKey>: hours } } }
-   */
-  assignments_grid_snapshot_retrieve: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["GridSnapshotResponse"];
-        };
-      };
-    };
-  };
-  /** @description Start async grid snapshot job and return task ID for polling. */
-  assignments_grid_snapshot_async_retrieve: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["GridSnapshotAsyncResponse"];
-        };
-      };
-    };
-  };
-  /** @description Person Experience Profile: breakdown by client and project with role/phase aggregates, plus eventsCount. */
-  assignments_person_experience_profile_retrieve: {
-    parameters: {
-      query: {
-        end?: string;
-        person: number;
-        start?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PersonExperienceProfileResponse"];
-        };
-      };
-    };
-  };
-  /** @description Person-Project timeline with coverage blocks, events, and derived role changes. */
-  assignments_person_project_timeline_retrieve: {
-    parameters: {
-      query: {
-        end?: string;
-        person: number;
-        project: number;
-        start?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PersonProjectTimelineResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Project-centric aggregate snapshot for N weeks ahead (default 12).
-   *
-   * Response shape: { weekKeys: [YYYY-MM-DD], projects: [{id,name,client,status}],
-   * hoursByProject: { <projectId>: { <weekKey>: hours } },
-   * deliverablesByProjectWeek: { <projectId>: { <weekKey>: count } },
-   * hasFutureDeliverablesByProject: { <projectId>: boolean },
-   * metrics: { projectsCount, peopleAssignedCount, totalHours } }
-   */
-  assignments_project_grid_snapshot_retrieve: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        has_future_deliverables?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description 0|1 */
-        include_placeholders?: number;
-        /** @description CSV of project IDs to scope totals (optional) */
-        project_ids?: string;
-        /** @description CSV of project status filters */
-        status_in?: string;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectGridSnapshotResponse"];
-        };
-      };
-    };
-  };
-  /** @description Project Staffing Timeline: aggregates per role and people lists with events. */
-  assignments_project_staffing_timeline_retrieve: {
-    parameters: {
-      query: {
-        end?: string;
-        project: number;
-        start?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectStaffingTimelineResponse"];
-        };
-      };
-    };
-  };
-  /** @description Return authoritative totals for specific projects over current horizon. */
-  assignments_project_totals_retrieve: {
-    parameters: {
-      query: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description 0|1 */
-        include_placeholders?: number;
-        /** @description CSV of project IDs */
-        project_ids: string;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectTotalsResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Suggest non-destructive rebalancing ideas across the next N weeks
-   * (default 12).
-   *
-   *     Heuristic:
-   *     - Overallocated: utilization > 100% (based on 1-week snapshot)
-   *     - Underutilized: utilization < 70%
-   *     - Pair over with under and propose shifting 4–8 hours
-   *     Returns at most 20 suggestions.
-   */
-  assignments_rebalance_suggestions_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Assignment"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Run weekly assignment snapshot writer or backfill for a given Sunday week.
-   *
-   * If 'week' is omitted, uses the current week's Sunday. Add 'backfill=1' to use the backfill service (optional 'emit_events' and 'force' flags). Returns summary.
-   */
-  assignments_run_weekly_snapshot_create: {
-    parameters: {
-      query?: {
-        /** @description Use backfill mode (0|1/true|false) */
-        backfill?: boolean;
-        /** @description Backfill: emit joined/left events */
-        emit_events?: boolean;
-        /** @description Backfill: overwrite existing rows */
-        force?: boolean;
-        /** @description YYYY-MM-DD (Sunday) */
-        week?: string;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["AssignmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
-        "multipart/form-data": components["schemas"]["AssignmentRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["RunWeeklySnapshotResponse"];
-        };
-      };
-    };
-  };
-  /** @description Search assignments with tokenized filters and return people match metadata. */
-  assignments_search_create: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["AssignmentSearchRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AssignmentSearchRequestRequest"];
-        "multipart/form-data": components["schemas"]["AssignmentSearchRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AssignmentSearchResponse"];
-        };
-      };
-    };
-  };
-  /** @description Read-only endpoint for recent admin audit logs (admin only). */
-  auth_admin_audit_list: {
-    parameters: {
-      query?: {
-        limit?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AdminAuditLog"][];
-        };
-      };
-    };
-  };
-  /** @description Change password for the authenticated user. */
-  auth_change_password_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ChangePasswordRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ChangePasswordRequestRequest"];
-        "multipart/form-data": components["schemas"]["ChangePasswordRequestRequest"];
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description Create a new user (staff only) and optionally link to a Person. */
-  auth_create_user_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateUserRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["CreateUserRequestRequest"];
-        "multipart/form-data": components["schemas"]["CreateUserRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UserProfile"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Invite a user by email.
-   *
-   * - If the user exists, sends a password set/reset link.
-   * - If not, creates an account with an unusable password and sends the link.
-   * - Optionally assigns role and links to a Person.
-   */
-  auth_invite_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["InviteUserRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["InviteUserRequestRequest"];
-        "multipart/form-data": components["schemas"]["InviteUserRequestRequest"];
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description Link or unlink the current user's profile to a Person. */
-  auth_link_person_create: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["LinkPersonRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["LinkPersonRequestRequest"];
-        "multipart/form-data": components["schemas"]["LinkPersonRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UserProfile"];
-        };
-      };
-    };
-  };
-  /** @description Return the current user's profile with settings and optional person link. */
-  auth_me_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UserProfile"];
-        };
-      };
-    };
-  };
-  auth_notification_preferences_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["NotificationPreferences"];
-        };
-      };
-    };
-  };
-  auth_notification_preferences_update: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["NotificationPreferencesRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["NotificationPreferencesRequest"];
-        "multipart/form-data": components["schemas"]["NotificationPreferencesRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["NotificationPreferences"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Request a password reset by email. Always returns 204.
-   *
-   * If a user with the email exists, sends a reset link with uid/token.
-   */
-  auth_password_reset_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PasswordResetRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PasswordResetRequestRequest"];
-        "multipart/form-data": components["schemas"]["PasswordResetRequestRequest"];
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description Confirm password reset with uid/token and set a new password. */
-  auth_password_reset_confirm_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PasswordResetConfirmRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PasswordResetConfirmRequest"];
-        "multipart/form-data": components["schemas"]["PasswordResetConfirmRequest"];
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description Set password for a target user (staff only). */
-  auth_set_password_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["SetPasswordRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["SetPasswordRequestRequest"];
-        "multipart/form-data": components["schemas"]["SetPasswordRequestRequest"];
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description Update settings for the current user's profile (partial). */
-  auth_settings_partial_update: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedUserSettingsPatchRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedUserSettingsPatchRequest"];
-        "multipart/form-data": components["schemas"]["PatchedUserSettingsPatchRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UserProfile"];
-        };
-      };
-    };
-  };
-  /** @description List all users with role and linked person (admin only). */
-  auth_users_list: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UserListItem"][];
-        };
-      };
-    };
-  };
-  /** @description Delete a user account (admin only). */
-  auth_users_destroy: {
-    parameters: {
-      path: {
-        user_id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description Link or unlink a target user to a Person (admin only). */
-  auth_users_link_person_create: {
-    parameters: {
-      path: {
-        user_id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["AdminLinkUserPersonRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AdminLinkUserPersonRequestRequest"];
-        "multipart/form-data": components["schemas"]["AdminLinkUserPersonRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UserListItem"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Set role for a target user (admin only).
-   *
-   * Accepts one of: {'role': 'admin' | 'manager' | 'user'}
-   */
-  auth_users_role_create: {
-    parameters: {
-      path: {
-        user_id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["SetUserRoleRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["SetUserRoleRequestRequest"];
-        "multipart/form-data": components["schemas"]["SetUserRoleRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UserListItem"];
-        };
-      };
-    };
-  };
-  backups_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["BackupListResponse"];
-        };
-      };
-    };
-  };
-  backups_create: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["BackupCreateRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["BackupCreateRequestRequest"];
-        "multipart/form-data": components["schemas"]["BackupCreateRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["BackupJobResponse"];
-        };
-      };
-    };
-  };
-  backups_destroy: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  backups_download_retrieve: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    responses: {
-      /** @description Backup archive download. */
-      200: {
-        content: {
-          "application/json": string;
-        };
-      };
-    };
-  };
-  backups_restore_create: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["BackupRestoreRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["BackupRestoreRequestRequest"];
-        "multipart/form-data": components["schemas"]["BackupRestoreRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["BackupJobResponse"];
-        };
-      };
-    };
-  };
-  backups_status_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["BackupStatusResponse"];
-        };
-      };
-    };
-  };
-  backups_upload_restore_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["BackupUploadRestoreRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["BackupUploadRestoreRequestRequest"];
-        "multipart/form-data": components["schemas"]["BackupUploadRestoreRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["BackupJobResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Advertise backend feature capabilities (requires authentication).
-   *
-   * Returns booleans and simple settings for aggregate endpoints, async jobs, and cache TTL hints.
-   */
-  capabilities_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["CapabilitiesResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
-   *
-   * - GET: returns current token values
-   * - PATCH: set a specific token or regenerate with {regenerate: true}
-   */
-  core_calendar_feeds_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["CalendarFeedSettings"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
-   *
-   * - GET: returns current token values
-   * - PATCH: set a specific token or regenerate with {regenerate: true}
-   */
-  core_calendar_feeds_partial_update: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
-        "multipart/form-data": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["CalendarFeedSettings"];
-        };
-      };
-    };
-  };
-  core_deliverable_phase_mapping_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverablePhaseMappingSettings"];
-        };
-      };
-    };
-  };
-  core_deliverable_phase_mapping_update: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
-        "multipart/form-data": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverablePhaseMappingSettings"];
-        };
-      };
-    };
-  };
-  core_deliverable_phase_mapping_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectRoleCreateRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleCreateRequestRequest"];
-        "multipart/form-data": components["schemas"]["ProjectRoleCreateRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRole"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Remove a project role from the catalog and clear assignments using it.
-   *
-   * Behavior:
-   * - Admin only.
-   * - Accepts role name via query param (?name=...) or JSON body { name }.
-   * - Clears `Assignment.role_on_project` wherever it matches (case-insensitive).
-   * - If a catalog ProjectRole exists for that normalized name, it is deleted.
-   */
-  core_deliverable_phase_mapping_destroy: {
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  core_pre_deliverable_global_settings_list: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableGlobalSettingsItem"][];
-        };
-      };
-    };
-  };
-  core_pre_deliverable_global_settings_update: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["GlobalSettingsUpdateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["GlobalSettingsUpdateRequest"];
-        "multipart/form-data": components["schemas"]["GlobalSettingsUpdateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableGlobalSettingsItem"][];
-        };
-      };
-    };
-  };
-  core_project_template_settings_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursRoleSettingsResponse"];
-        };
-      };
-    };
-  };
-  core_project_template_settings_update: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
-        "multipart/form-data": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursRoleSettingItemResponse"];
-        };
-      };
-    };
-  };
-  core_project_template_settings_list: {
-    parameters: {
-      path: {
-        template_id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateRoleSettingItem"][];
-        };
-      };
-    };
-  };
-  core_project_template_settings_update_2: {
-    parameters: {
-      path: {
-        template_id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
-        "multipart/form-data": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateRoleSettingItemResponse"][];
-        };
-      };
-    };
-  };
-  core_project_templates_list: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateListItem"][];
-        };
-      };
-    };
-  };
-  core_project_templates_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AutoHoursTemplateCreateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateCreateRequest"];
-        "multipart/form-data": components["schemas"]["AutoHoursTemplateCreateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateCreateResponse"];
-        };
-      };
-    };
-  };
-  core_project_templates_retrieve: {
-    parameters: {
-      path: {
-        template_id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateDetail"];
-        };
-      };
-    };
-  };
-  core_project_templates_update: {
-    parameters: {
-      path: {
-        template_id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["AutoHoursTemplateUpdateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateUpdateRequest"];
-        "multipart/form-data": components["schemas"]["AutoHoursTemplateUpdateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateUpdateResponse"];
-        };
-      };
-    };
-  };
-  core_project_templates_create_2: {
-    parameters: {
-      path: {
-        template_id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AutoHoursTemplateCreateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateCreateRequest"];
-        "multipart/form-data": components["schemas"]["AutoHoursTemplateCreateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateCreateResponse"];
-        };
-      };
-    };
-  };
-  core_project_templates_destroy: {
-    parameters: {
-      path: {
-        template_id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  core_project_templates_duplicate_create: {
-    parameters: {
-      path: {
-        template_id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
-        "multipart/form-data": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateDuplicateResponse"];
-        };
-      };
-    };
-  };
-  core_project_templates_duplicate_default_list: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateListItem"][];
-        };
-      };
-    };
-  };
-  core_project_templates_duplicate_default_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
-        "multipart/form-data": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AutoHoursTemplateDuplicateDefaultResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description List/add project roles for suggestions/settings.
-   *
-   * - GET: returns union of catalog roles and distinct existing assignment roles.
-   * - POST: admin-only; adds a role to the catalog.
-   */
-  core_project_roles_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRoleListResponse"];
-        };
-      };
-    };
-  };
-  core_qa_task_settings_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["QATaskSettings"];
-        };
-      };
-    };
-  };
-  core_qa_task_settings_update: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["QATaskSettingsRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["QATaskSettingsRequest"];
-        "multipart/form-data": components["schemas"]["QATaskSettingsRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["QATaskSettings"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Singleton endpoint for utilization scheme.
-   *
-   * - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
-   * - PUT: admin-only, requires If-Match ETag; increments version on success.
-   * - When feature flag is disabled: GET returns defaults; PUT returns 403.
-   */
-  core_utilization_scheme_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UtilizationScheme"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Singleton endpoint for utilization scheme.
-   *
-   * - GET: returns the current scheme with ETag/Last-Modified. Requires auth.
-   * - PUT: admin-only, requires If-Match ETag; increments version on success.
-   * - When feature flag is disabled: GET returns defaults; PUT returns 403.
-   */
-  core_utilization_scheme_update: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["UtilizationSchemeRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["UtilizationSchemeRequest"];
-        "multipart/form-data": components["schemas"]["UtilizationSchemeRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["UtilizationScheme"];
-        };
-      };
-    };
-  };
-  /** @description Team dashboard with utilization metrics and overview */
-  dashboard_retrieve: {
-    parameters: {
-      query?: {
-        /** @description Filter by department id */
-        department?: number;
-        /** @description Number of weeks to aggregate (1-12) */
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DashboardResponse"];
-        };
-      };
-    };
-  };
-  /** @description Get deliverables with bulk loading support (Phase 2 optimization) */
-  deliverables_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description CRUD operations for deliverables
-   * Supports filtering by project and manual reordering
-   */
-  deliverables_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["Deliverable"];
-        };
-      };
-    };
-  };
-  /**
-   * @description CRUD operations for deliverables
-   * Supports filtering by project and manual reordering
-   */
-  deliverables_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this deliverable. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Deliverable"];
-        };
-      };
-    };
-  };
-  /**
-   * @description CRUD operations for deliverables
-   * Supports filtering by project and manual reordering
-   */
-  deliverables_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this deliverable. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Deliverable"];
-        };
-      };
-    };
-  };
-  /**
-   * @description CRUD operations for deliverables
-   * Supports filtering by project and manual reordering
-   */
-  deliverables_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this deliverable. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /**
-   * @description PATCH deliverable. If date changes and feature flag enabled, reallocate hours.
-   *
-   * Response includes optional 'reallocation' summary with keys:
-   * { deltaWeeks, assignmentsChanged, touchedWeekKeys }
-   */
-  deliverables_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this deliverable. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedDeliverableRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableRequest"];
-        "multipart/form-data": components["schemas"]["PatchedDeliverableRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Deliverable"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Return derived staffing for a deliverable from Assignment.weekly_hours.
-   *
-   * Default window: 6 weeks prior OR between previous and current deliverable (exclusive→inclusive).
-   * Optional override: ?weeks=6 to force a fixed lookback window.
-   *
-   * Returns array items per person with >0 hours in window on the deliverable's project:
-   * { linkId|null, personId, personName, roleOnMilestone|null, totalHours, weekBreakdown }
-   */
-  deliverables_staffing_summary_retrieve: {
-    parameters: {
-      query?: {
-        /** @description Lookback window in weeks */
-        weeks?: number;
-      };
-      path: {
-        /** @description A unique integer value identifying this deliverable. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableStaffingSummaryItem"];
-        };
-      };
-    };
-  };
-  /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-  deliverables_assignments_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableAssignmentList"];
-        };
-      };
-    };
-  };
-  /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-  deliverables_assignments_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableAssignmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableAssignmentRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableAssignmentRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["DeliverableAssignment"];
-        };
-      };
-    };
-  };
-  /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-  deliverables_assignments_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this deliverable assignment. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableAssignment"];
-        };
-      };
-    };
-  };
-  /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-  deliverables_assignments_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this deliverable assignment. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableAssignmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableAssignmentRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableAssignmentRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableAssignment"];
-        };
-      };
-    };
-  };
-  /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-  deliverables_assignments_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this deliverable assignment. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-  deliverables_assignments_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this deliverable assignment. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedDeliverableAssignmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableAssignmentRequest"];
-        "multipart/form-data": components["schemas"]["PatchedDeliverableAssignmentRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableAssignment"];
-        };
-      };
-    };
-  };
-  /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-  deliverables_assignments_by_deliverable_list: {
-    parameters: {
-      query: {
-        deliverable: number;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableAssignmentList"];
-        };
-      };
-    };
-  };
-  /** @description CRUD and filter endpoints for deliverable-person weekly hour links. */
-  deliverables_assignments_by_person_list: {
-    parameters: {
-      query: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-        person: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableAssignmentList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Bulk fetch deliverables for multiple projects
-   * GET /api/deliverables/bulk/?project_ids=1,2,3,4
-   *
-   * Returns: { "1": [...], "2": [...], "3": [...], "4": [...] }
-   */
-  deliverables_bulk_retrieve: {
-    parameters: {
-      query: {
-        /** @description Comma-separated project IDs */
-        project_ids: string;
-      };
-    };
-    responses: {
-      /** @description Map of project_id to list of deliverables. */
-      200: {
-        content: {
-          "application/json": {
-            [key: string]: unknown;
-          };
-        };
-      };
-    };
-  };
-  /**
-   * @description Read-only calendar endpoint returning deliverables within a date range
-   * with assignmentCount. Missing params tolerated (returns all dated items).
-   *
-   * GET /api/deliverables/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD
-   */
-  deliverables_calendar_list: {
-    parameters: {
-      query?: {
-        /** @description YYYY-MM-DD */
-        end?: string;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-        /** @description YYYY-MM-DD */
-        start?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableCalendarItemList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Calendar view returning deliverables and pre-deliverable items.
-   *
-   * Semantics:
-   * - When mine_only=true, scope results to the union of:
-   *   (a) deliverables directly linked to the current user via DeliverableAssignment,
-   *   (b) deliverables on projects where the current user has an active project-level Assignment.
-   * - Duplicates are eliminated via a distinct ID subquery strategy; counts use distinct=True.
-   * - Optional filters: start, end (dates) and type_id (pre-deliverable type).
-   */
-  deliverables_calendar_with_pre_items_retrieve: {
-    parameters: {
-      query?: {
-        /** @description YYYY-MM-DD */
-        end?: string;
-        mine_only?: boolean;
-        /** @description YYYY-MM-DD */
-        start?: string;
-        type_id?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Deliverable"];
-        };
-      };
-    };
-  };
-  /** @description Upcoming pre-deliverable items for the authenticated user (default 14 days). */
-  deliverables_personal_pre_deliverables_retrieve: {
-    parameters: {
-      query?: {
-        days_ahead?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Deliverable"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedPreDeliverableItemList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PreDeliverableItemRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PreDeliverableItemRequest"];
-        "multipart/form-data": components["schemas"]["PreDeliverableItemRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableItem"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Pre-Deliverable Item. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableItem"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Pre-Deliverable Item. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PreDeliverableItemRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PreDeliverableItemRequest"];
-        "multipart/form-data": components["schemas"]["PreDeliverableItemRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableItem"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Pre-Deliverable Item. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Pre-Deliverable Item. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedPreDeliverableItemRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedPreDeliverableItemRequest"];
-        "multipart/form-data": components["schemas"]["PatchedPreDeliverableItemRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableItem"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_complete_create: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Pre-Deliverable Item. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableItem"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_uncomplete_create: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Pre-Deliverable Item. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableItem"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Staff-only: backfill or regenerate pre-items for a project/date window.
-   *
-   * If ASYNC_JOBS is enabled and Celery task is available, enqueues background job and
-   * returns 202 with job metadata. Otherwise, runs synchronously and returns a summary.
-   */
-  deliverables_pre_deliverable_items_backfill_create: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PreItemsBackfillRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PreItemsBackfillRequestRequest"];
-        "multipart/form-data": components["schemas"]["PreItemsBackfillRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreItemsBackfillResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  deliverables_pre_deliverable_items_bulk_complete_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["BulkCompleteRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["BulkCompleteRequestRequest"];
-        "multipart/form-data": components["schemas"]["BulkCompleteRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["BulkCompleteResponse"];
-        };
-      };
-    };
-  };
-  deliverables_qa_tasks_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
-        };
-      };
-    };
-  };
-  deliverables_qa_tasks_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableQATaskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableQATaskRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableQATaskRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["DeliverableQATask"];
-        };
-      };
-    };
-  };
-  deliverables_qa_tasks_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable QA Task. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableQATask"];
-        };
-      };
-    };
-  };
-  deliverables_qa_tasks_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable QA Task. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableQATaskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableQATaskRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableQATaskRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableQATask"];
-        };
-      };
-    };
-  };
-  deliverables_qa_tasks_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable QA Task. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  deliverables_qa_tasks_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable QA Task. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedDeliverableQATaskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableQATaskRequest"];
-        "multipart/form-data": components["schemas"]["PatchedDeliverableQATaskRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableQATask"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Manually reorder deliverables for a project
-   * Expected payload: {
-   *     "project": project_id,
-   *     "deliverable_ids": [id1, id2, id3, ...]
-   * }
-   */
-  deliverables_reorder_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableReorderRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableReorderRequestRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableReorderRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableReorderResponse"];
-        };
-      };
-    };
-  };
-  deliverables_task_templates_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableTaskTemplateList"];
-        };
-      };
-    };
-  };
-  deliverables_task_templates_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableTaskTemplateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskTemplateRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableTaskTemplateRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["DeliverableTaskTemplate"];
-        };
-      };
-    };
-  };
-  deliverables_task_templates_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable Task Template. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableTaskTemplate"];
-        };
-      };
-    };
-  };
-  deliverables_task_templates_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable Task Template. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableTaskTemplateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskTemplateRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableTaskTemplateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableTaskTemplate"];
-        };
-      };
-    };
-  };
-  deliverables_task_templates_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable Task Template. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  deliverables_task_templates_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable Task Template. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
-        "multipart/form-data": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableTaskTemplate"];
-        };
-      };
-    };
-  };
-  deliverables_tasks_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableTaskList"];
-        };
-      };
-    };
-  };
-  deliverables_tasks_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableTaskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableTaskRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["DeliverableTask"];
-        };
-      };
-    };
-  };
-  deliverables_tasks_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable Task. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableTask"];
-        };
-      };
-    };
-  };
-  deliverables_tasks_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable Task. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeliverableTaskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskRequest"];
-        "multipart/form-data": components["schemas"]["DeliverableTaskRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableTask"];
-        };
-      };
-    };
-  };
-  deliverables_tasks_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable Task. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  deliverables_tasks_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Deliverable Task. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedDeliverableTaskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableTaskRequest"];
-        "multipart/form-data": components["schemas"]["PatchedDeliverableTaskRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["DeliverableTask"];
-        };
-      };
-    };
-  };
-  /** @description Get all departments with bulk loading support */
-  departments_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDepartmentList"];
-        };
-      };
-    };
-  };
-  departments_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DepartmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DepartmentRequest"];
-        "multipart/form-data": components["schemas"]["DepartmentRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["Department"];
-        };
-      };
-    };
-  };
-  departments_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this department. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Department"];
-        };
-      };
-    };
-  };
-  departments_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this department. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DepartmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["DepartmentRequest"];
-        "multipart/form-data": components["schemas"]["DepartmentRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Department"];
-        };
-      };
-    };
-  };
-  departments_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this department. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  departments_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this department. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedDepartmentRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedDepartmentRequest"];
-        "multipart/form-data": components["schemas"]["PatchedDepartmentRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Department"];
-        };
-      };
-    };
-  };
-  integrations_connections_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedIntegrationConnectionList"];
-        };
-      };
-    };
-  };
-  integrations_connections_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["IntegrationConnectionRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["IntegrationConnectionRequest"];
-        "multipart/form-data": components["schemas"]["IntegrationConnectionRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["IntegrationConnection"];
-        };
-      };
-    };
-  };
-  integrations_connections_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this integration connection. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationConnection"];
-        };
-      };
-    };
-  };
-  integrations_connections_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this integration connection. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["IntegrationConnectionRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["IntegrationConnectionRequest"];
-        "multipart/form-data": components["schemas"]["IntegrationConnectionRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationConnection"];
-        };
-      };
-    };
-  };
-  integrations_connections_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this integration connection. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  integrations_connections_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this integration connection. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedIntegrationConnectionRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedIntegrationConnectionRequest"];
-        "multipart/form-data": components["schemas"]["PatchedIntegrationConnectionRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationConnection"];
-        };
-      };
-    };
-  };
-  integrations_connections_test_create: {
-    parameters: {
-      path: {
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationTestResponse"];
-        };
-      };
-    };
-  };
-  integrations_connections_test_activity_create: {
-    parameters: {
-      path: {
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationTestResponse"];
-        };
-      };
-    };
-  };
-  integrations_health_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationHealthResponse"];
-        };
-      };
-    };
-  };
-  integrations_jobs_retry_create: {
-    parameters: {
-      path: {
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationJobRetryResponse"];
-        };
-      };
-    };
-  };
-  integrations_providers_list: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Provider"][];
-        };
-      };
-    };
-  };
-  integrations_providers_detail: {
-    parameters: {
-      path: {
-        key: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Provider"];
-        };
-      };
-    };
-  };
-  integrations_providers_catalog_retrieve: {
-    parameters: {
-      path: {
-        key: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProviderCatalog"];
-        };
-      };
-    };
-  };
-  integrations_providers_connect_callback_retrieve: {
-    parameters: {
-      path: {
-        key: string;
-      };
-    };
-    responses: {
-      /** @description OAuth callback HTML response. */
-      200: {
-        content: {
-          "application/json": string;
-        };
-      };
-    };
-  };
-  integrations_providers_connect_start_create: {
-    parameters: {
-      path: {
-        key: string;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProviderConnectStartRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProviderConnectStartRequestRequest"];
-        "multipart/form-data": components["schemas"]["ProviderConnectStartRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProviderConnectStartResponse"];
-        };
-      };
-    };
-  };
-  integrations_providers_credentials_retrieve: {
-    parameters: {
-      path: {
-        key: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProviderCredential"];
-        };
-      };
-    };
-  };
-  integrations_providers_credentials_create: {
-    parameters: {
-      path: {
-        key: string;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProviderCredentialRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProviderCredentialRequestRequest"];
-        "multipart/form-data": components["schemas"]["ProviderCredentialRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProviderCredential"];
-        };
-      };
-    };
-  };
-  integrations_providers_objects_retrieve: {
-    parameters: {
-      path: {
-        key: string;
-      };
-    };
-    responses: {
-      /** @description List of provider object definitions. */
-      200: {
-        content: {
-          "application/json": {
-            [key: string]: unknown;
-          };
-        };
-      };
-    };
-  };
-  integrations_providers_reset_create: {
-    parameters: {
-      path: {
-        key: string;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProviderResetRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProviderResetRequestRequest"];
-        "multipart/form-data": components["schemas"]["ProviderResetRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProviderResetResponse"];
-        };
-      };
-    };
-  };
-  integrations_providers_mapping_defaults_retrieve: {
-    parameters: {
-      query?: {
-        /** @description Optional connection id */
-        connectionId?: number;
-      };
-      path: {
-        object_key: string;
-        provider_key: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["MappingDefaultsResponse"];
-        };
-      };
-    };
-  };
-  integrations_providers_mapping_defaults_create: {
-    parameters: {
-      path: {
-        object_key: string;
-        provider_key: string;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["MappingDefaultsRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["MappingDefaultsRequestRequest"];
-        "multipart/form-data": components["schemas"]["MappingDefaultsRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["MappingDefaultsResponse"];
-        };
-      };
-    };
-  };
-  integrations_providers_jobs_retrieve: {
-    parameters: {
-      query?: {
-        connection?: number;
-        limit?: number;
-        object?: string;
-        /** @description Comma-separated status values */
-        status?: string;
-      };
-      path: {
-        provider_key: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationJobListResponse"];
-        };
-      };
-    };
-  };
-  integrations_providers_projects_matching_confirm_create: {
-    parameters: {
-      path: {
-        provider_key: string;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
-        "multipart/form-data": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": {
-            [key: string]: unknown;
-          };
-        };
-      };
-    };
-  };
-  integrations_providers_projects_matching_suggestions_retrieve: {
-    parameters: {
-      query: {
-        connectionId: number;
-      };
-      path: {
-        provider_key: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": {
-            [key: string]: unknown;
-          };
-        };
-      };
-    };
-  };
-  integrations_rules_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedIntegrationRuleList"];
-        };
-      };
-    };
-  };
-  integrations_rules_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["IntegrationRuleRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleRequest"];
-        "multipart/form-data": components["schemas"]["IntegrationRuleRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["IntegrationRule"];
-        };
-      };
-    };
-  };
-  integrations_rules_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this integration rule. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationRule"];
-        };
-      };
-    };
-  };
-  integrations_rules_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this integration rule. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["IntegrationRuleRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleRequest"];
-        "multipart/form-data": components["schemas"]["IntegrationRuleRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationRule"];
-        };
-      };
-    };
-  };
-  integrations_rules_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this integration rule. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  integrations_rules_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this integration rule. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedIntegrationRuleRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedIntegrationRuleRequest"];
-        "multipart/form-data": components["schemas"]["PatchedIntegrationRuleRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationRule"];
-        };
-      };
-    };
-  };
-  integrations_rules_resync_create: {
-    parameters: {
-      path: {
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["IntegrationRuleResyncRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleResyncRequestRequest"];
-        "multipart/form-data": components["schemas"]["IntegrationRuleResyncRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationRuleResyncResponse"];
-        };
-      };
-    };
-  };
-  integrations_secret_key_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationSecretKeyResponse"];
-        };
-      };
-    };
-  };
-  integrations_secret_key_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["IntegrationSecretKeyRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["IntegrationSecretKeyRequestRequest"];
-        "multipart/form-data": components["schemas"]["IntegrationSecretKeyRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["IntegrationSecretKeyResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Return status and metadata for a Celery job.
-   *
-   * Response fields:
-   * - id: task id
-   * - state: PENDING|STARTED|PROGRESS|SUCCESS|FAILURE
-   * - progress: 0-100 if available
-   * - message: optional status message
-   * - downloadReady: bool
-   * - downloadUrl: present when a file is available to download
-   * - result: task result when not file-based (e.g., import summary)
-   * - error: error message if failed
-   */
-  jobs_retrieve: {
-    parameters: {
-      path: {
-        /** @description Background job id */
-        job_id: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": {
+    schemas: {
+        /**
+         * @description * `created` - Created
+         *     * `updated` - Updated
+         * @enum {string}
+         */
+        ActionEnum: "created" | "updated";
+        AdminAuditLog: {
+            readonly id: number;
+            readonly action: string;
+            readonly detail: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly actor: {
+                [key: string]: unknown;
+            } | null;
+            readonly targetUser: {
+                [key: string]: unknown;
+            } | null;
+        };
+        AdminLinkUserPersonRequestRequest: {
+            personId?: number | null;
+        };
+        AssignedHoursByClientResponse: {
+            clients: components["schemas"]["ClientTotal"][];
+        };
+        AssignedHoursClientProjectsResponse: {
+            projects: components["schemas"]["ProjectTotal"][];
+        };
+        AssignedHoursDeliverableTimelineResponse: {
+            weekKeys: string[];
+            series: components["schemas"]["DeliverableSeries"];
+            /** @description deprecated: kept for backward compatibility; typically empty */
+            extras?: components["schemas"]["ExtraSeries"][] | null;
+            totalByWeek: number[];
+        };
+        AssignedHoursStatusTimelineResponse: {
+            weekKeys: string[];
+            series: components["schemas"]["StatusSeries"];
+            totalByWeek: number[];
+        };
+        /** @description Assignment serializer with weekly hours support */
+        Assignment: {
+            readonly id: number;
+            person?: number | null;
+            readonly personName: string;
+            readonly personWeeklyCapacity: number;
+            readonly personDepartmentId: number | null;
+            readonly personSkills: components["schemas"]["PersonSkillSummary"][];
+            projectName?: string;
+            project?: number | null;
+            readonly projectDisplayName: string;
+            roleOnProjectId?: number | null;
+            readonly roleName: string | null;
+            weeklyHours?: unknown;
+            readonly allocationPercentage: number;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        AssignmentCountsByPersonResponse: {
+            countsByPerson: {
+                [key: string]: number;
+            };
+        };
+        AssignmentHoursUpdateRequest: {
+            assignmentId: number;
+            weeklyHours: {
+                [key: string]: number;
+            };
+        };
+        /** @description Assignment serializer with weekly hours support */
+        AssignmentRequest: {
+            person?: number | null;
+            projectName?: string;
+            project?: number | null;
+            roleOnProjectId?: number | null;
+            weeklyHours?: unknown;
+        };
+        AssignmentSearchRequestRequest: {
+            page?: number;
+            page_size?: number;
+            department?: number;
+            include_children?: number;
+            status_in?: string;
+            include_placeholders?: number;
+            project?: number;
+            person?: number;
+            meta_only?: boolean;
+            search_tokens?: components["schemas"]["SearchTokenRequest"][];
+        };
+        AssignmentSearchResponse: {
+            count: number;
+            next?: string | null;
+            previous?: string | null;
+            results: components["schemas"]["Assignment"][];
+            people: components["schemas"]["PersonLite"][];
+            assignmentCountsByPerson: {
+                [key: string]: number;
+            };
+            peopleMatchReason: {
+                [key: string]: string;
+            };
+            filteredTotals: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+        };
+        AutoHoursRoleSettingItem: {
+            roleId: number;
+            roleName: string;
+            departmentId: number;
+            departmentName: string;
+            percentByWeek: {
+                [key: string]: number;
+            };
+            roleCount: number;
+            weeksCount: number;
+            isActive: boolean;
+            sortOrder: number;
+        };
+        AutoHoursRoleSettingItemResponse: {
+            settings: components["schemas"]["AutoHoursRoleSettingItemResponseItem"][];
+            weekLimits: components["schemas"]["AutoHoursWeekLimitsResponse"];
+        };
+        AutoHoursRoleSettingItemResponseItem: {
+            roleId: number;
+            roleName: string;
+            departmentId: number;
+            departmentName: string;
+            percentByWeek: {
+                [key: string]: number;
+            };
+            roleCount: number;
+            weeksCount: number;
+            isActive: boolean;
+            sortOrder: number;
+        };
+        AutoHoursRoleSettingUpdateItemRequest: {
+            roleId: number;
+            percentByWeek?: {
+                [key: string]: number;
+            };
+            /** Format: double */
+            percentPerWeek?: number;
+            roleCount?: number;
+        };
+        AutoHoursRoleSettingsResponse: {
+            settings: components["schemas"]["AutoHoursRoleSettingItem"][];
+            weekLimits: components["schemas"]["AutoHoursWeekLimits"];
+        };
+        AutoHoursRoleSettingsUpdateRequest: {
+            weeksCount?: number;
+            settings: components["schemas"]["AutoHoursRoleSettingUpdateItemRequest"][];
+        };
+        AutoHoursTemplateCreateRequest: {
+            name: string;
+            description?: string;
+            excludedRoleIds?: number[];
+            excludedDepartmentIds?: number[];
+            isActive?: boolean;
+            phaseKeys?: string[];
+            weeksByPhase?: {
+                [key: string]: number;
+            };
+        };
+        AutoHoursTemplateCreateResponse: {
+            id: number;
+            name: string;
+            description: string;
+            excludedRoleIds: number[];
+            excludedDepartmentIds: number[];
+            isActive: boolean;
+            phaseKeys: string[];
+            weeksByPhase: {
+                [key: string]: number;
+            };
+            maxWeeksCount: number;
+            defaultWeeksCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AutoHoursTemplateDetail: {
+            id: number;
+            name: string;
+            description: string;
+            excludedRoleIds: number[];
+            excludedDepartmentIds: number[];
+            isActive: boolean;
+            phaseKeys: string[];
+            weeksByPhase: {
+                [key: string]: number;
+            };
+            maxWeeksCount: number;
+            defaultWeeksCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AutoHoursTemplateDuplicateDefaultRequest: {
+            name: string;
+            description?: string;
+            excludedRoleIds?: number[];
+            excludedDepartmentIds?: number[];
+            isActive?: boolean;
+            phaseKeys?: string[];
+        };
+        AutoHoursTemplateDuplicateDefaultResponse: {
+            id: number;
+            name: string;
+            description: string;
+            excludedRoleIds: number[];
+            excludedDepartmentIds: number[];
+            isActive: boolean;
+            phaseKeys: string[];
+            weeksByPhase: {
+                [key: string]: number;
+            };
+            maxWeeksCount: number;
+            defaultWeeksCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AutoHoursTemplateDuplicateRequest: {
+            name: string;
+        };
+        AutoHoursTemplateDuplicateResponse: {
+            id: number;
+            name: string;
+            description: string;
+            excludedRoleIds: number[];
+            excludedDepartmentIds: number[];
+            isActive: boolean;
+            phaseKeys: string[];
+            weeksByPhase: {
+                [key: string]: number;
+            };
+            maxWeeksCount: number;
+            defaultWeeksCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AutoHoursTemplateListItem: {
+            id: number;
+            name: string;
+            description: string;
+            excludedRoleIds: number[];
+            excludedDepartmentIds: number[];
+            isActive: boolean;
+            phaseKeys: string[];
+            weeksByPhase: {
+                [key: string]: number;
+            };
+            maxWeeksCount: number;
+            defaultWeeksCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AutoHoursTemplateRoleSettingItem: {
+            roleId: number;
+            roleName: string;
+            departmentId: number;
+            departmentName: string;
+            percentByWeek: {
+                [key: string]: number;
+            };
+            roleCount: number;
+            weeksCount: number;
+            isActive: boolean;
+            sortOrder: number;
+        };
+        AutoHoursTemplateRoleSettingItemResponse: {
+            roleId: number;
+            roleName: string;
+            departmentId: number;
+            departmentName: string;
+            percentByWeek: {
+                [key: string]: number;
+            };
+            roleCount: number;
+            weeksCount: number;
+            isActive: boolean;
+            sortOrder: number;
+        };
+        AutoHoursTemplateRoleSettingUpdateItemRequest: {
+            roleId: number;
+            percentByWeek?: {
+                [key: string]: number;
+            };
+            roleCount?: number;
+        };
+        AutoHoursTemplateRoleSettingsUpdateRequest: {
+            weeksCount?: number;
+            settings: components["schemas"]["AutoHoursTemplateRoleSettingUpdateItemRequest"][];
+        };
+        AutoHoursTemplateUpdateRequest: {
+            name?: string;
+            description?: string;
+            excludedRoleIds?: number[];
+            excludedDepartmentIds?: number[];
+            isActive?: boolean;
+            phaseKeys?: string[];
+            weeksByPhase?: {
+                [key: string]: number;
+            };
+        };
+        AutoHoursTemplateUpdateResponse: {
+            id: number;
+            name: string;
+            description: string;
+            excludedRoleIds: number[];
+            excludedDepartmentIds: number[];
+            isActive: boolean;
+            phaseKeys: string[];
+            weeksByPhase: {
+                [key: string]: number;
+            };
+            maxWeeksCount: number;
+            defaultWeeksCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AutoHoursWeekLimits: {
+            maxWeeksCount: number;
+            defaultWeeksCount: number;
+        };
+        AutoHoursWeekLimitsResponse: {
+            maxWeeksCount: number;
+            defaultWeeksCount: number;
+        };
+        AvailablePerson: {
+            id: number;
+            name: string;
+            /** Format: double */
+            available_hours: number;
+            /** Format: double */
+            utilization_percent: number;
+        };
+        BackupCreateRequestRequest: {
+            description?: string;
+        };
+        BackupInfo: {
             id: string;
-            /** @enum {string} */
-            state: "PENDING" | "STARTED" | "PROGRESS" | "SUCCESS" | "FAILURE";
-            progress: number;
+            filename: string;
+            size: number;
+            createdAt: string;
+            description?: string | null;
+            sha256?: string | null;
+            format: string;
+        };
+        BackupJobResponse: {
+            jobId: string;
+            statusUrl: string;
+        };
+        BackupListResponse: {
+            items: components["schemas"]["BackupInfo"][];
+        };
+        BackupRestoreRequestRequest: {
+            confirm: string;
+            jobs?: number;
+            migrate?: boolean;
+        };
+        BackupStatusResponse: {
+            lastBackupAt?: string | null;
+            lastBackupSize?: number | null;
+            retentionOk: boolean;
+            offsiteEnabled: boolean;
+            offsiteLastSyncAt?: string | null;
+            policy: string;
+            encryptionEnabled: boolean;
+            encryptionProvider?: string | null;
+        };
+        BackupUploadRestoreRequestRequest: {
+            confirm: string;
+            jobs?: number;
+            migrate?: boolean;
+            /** Format: binary */
+            file: string;
+        };
+        BulkCompleteRequestRequest: {
+            ids: number[];
+        };
+        BulkCompleteResponse: {
+            success: boolean;
+            updatedCount: number;
+            failed: number[];
+        };
+        BulkUpdateHoursResponse: {
+            success: boolean;
+            results: components["schemas"]["BulkUpdateResultItem"][];
+        };
+        BulkUpdateResultItem: {
+            assignmentId: number;
+            status: string;
+            etag: string;
+        };
+        CalendarFeedSettings: {
+            deliverables_token: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        CapabilitiesAggregates: {
+            capacityHeatmap: boolean;
+            projectAvailability: boolean;
+            findAvailable: boolean;
+            gridSnapshot: boolean;
+            skillMatch: boolean;
+        };
+        CapabilitiesCache: {
+            shortTtlAggregates: boolean;
+            aggregateTtlSeconds: number;
+        };
+        CapabilitiesIntegrations: {
+            enabled: boolean;
+        };
+        CapabilitiesResponse: {
+            asyncJobs: boolean;
+            aggregates: components["schemas"]["CapabilitiesAggregates"];
+            cache: components["schemas"]["CapabilitiesCache"];
+            personalDashboard: boolean;
+            projectRolesByDepartment: boolean;
+            integrations: components["schemas"]["CapabilitiesIntegrations"];
+        };
+        ChangePasswordRequestRequest: {
+            currentPassword: string;
+            newPassword: string;
+        };
+        ClientTotal: {
+            label: string;
+            /** Format: double */
+            hours: number;
+        };
+        /**
+         * @description * `not_started` - Not Started
+         *     * `in_progress` - In Progress
+         *     * `complete` - Complete
+         * @enum {string}
+         */
+        CompletionStatusEnum: "not_started" | "in_progress" | "complete";
+        CoverageBlock: {
+            roleId: number;
+            start: string;
+            end: string;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        CreateUserRequestRequest: {
+            username: string;
+            email?: string;
+            password: string;
+            personId?: number | null;
+            role?: components["schemas"]["RoleEnum"];
+        };
+        DashboardResponse: {
+            summary: components["schemas"]["DashboardSummary"];
+            utilization_distribution: components["schemas"]["UtilizationDistribution"];
+            team_overview: components["schemas"]["TeamOverviewItem"][];
+            available_people: components["schemas"]["AvailablePerson"][];
+            recent_assignments: components["schemas"]["RecentAssignment"][];
+        };
+        DashboardSummary: {
+            total_people: number;
+            /** Format: double */
+            avg_utilization: number;
+            /** Format: double */
+            peak_utilization: number;
+            peak_person?: string | null;
+            total_assignments: number;
+            overallocated_count: number;
+        };
+        /**
+         * @description * `not_started` - Not Started
+         *     * `in_progress` - In Progress
+         *     * `complete` - Complete
+         * @enum {string}
+         */
+        DefaultCompletionStatusEnum: "not_started" | "in_progress" | "complete";
+        /**
+         * @description * `not_reviewed` - Not Reviewed
+         *     * `in_review` - In Review
+         *     * `approved` - Approved
+         *     * `changes_required` - Changes Required
+         * @enum {string}
+         */
+        DefaultQaStatusEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
+        /** @description Deliverable serializer with snake_case -> camelCase field mapping */
+        Deliverable: {
+            readonly id: number;
+            project: number;
+            /** @description Completion percentage (0-100) */
+            percentage?: number | null;
+            /** @description Brief description (e.g., SD, DD, IFP, IFC) */
+            description?: string;
+            /** Format: date */
+            date?: string | null;
+            /** @description Additional details, owner info, requirements, etc. */
+            notes?: string;
+            sortOrder?: number;
+            isCompleted?: boolean;
+            /** Format: date */
+            completedDate?: string | null;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+            readonly preItems: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** @description Serializer for linking people to deliverables with weekly hours. */
+        DeliverableAssignment: {
+            readonly id: number;
+            deliverable: number;
+            person: number;
+            roleOnMilestone?: string | null;
+            is_active?: boolean;
+            readonly personName: string;
+            readonly projectId: number;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        /** @description Serializer for linking people to deliverables with weekly hours. */
+        DeliverableAssignmentRequest: {
+            deliverable: number;
+            person: number;
+            roleOnMilestone?: string | null;
+            is_active?: boolean;
+        };
+        /**
+         * @description Serializer for calendar items (aggregate), camelCase API fields.
+         *
+         *     Accepts Deliverable instances annotated with assignmentCount.
+         */
+        DeliverableCalendarItem: {
+            id: number;
+            project: number;
+            projectName: string | null;
+            projectClient?: string | null;
+            readonly title: string;
+            /** Format: date */
+            date: string | null;
+            isCompleted: boolean;
+            assignmentCount: number;
+        };
+        DeliverableMarkerLite: {
+            type: string;
+            percentage?: number | null;
+            dates?: string[];
+            description?: string | null;
+            note?: string | null;
+        };
+        DeliverablePhaseDefinition: {
+            key: string;
+            label: string;
+            descriptionTokens?: string[];
+            rangeMin?: number | null;
+            rangeMax?: number | null;
+            sortOrder?: number;
+        };
+        DeliverablePhaseDefinitionRequest: {
+            key: string;
+            label: string;
+            descriptionTokens?: string[];
+            rangeMin?: number | null;
+            rangeMax?: number | null;
+            sortOrder?: number;
+        };
+        DeliverablePhaseMappingSettings: {
+            useDescriptionMatch: boolean;
+            phases: components["schemas"]["DeliverablePhaseDefinition"][];
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        DeliverablePhaseMappingSettingsRequest: {
+            useDescriptionMatch: boolean;
+            phases: components["schemas"]["DeliverablePhaseDefinitionRequest"][];
+        };
+        DeliverableQATask: {
+            readonly id: number;
+            deliverable: number;
+            readonly deliverableInfo: {
+                [key: string]: unknown;
+            };
+            departmentId: number;
+            readonly departmentName: string;
+            qaStatus: components["schemas"]["DeliverableQATaskQaStatusEnum"];
+            qaAssignedTo?: number | null;
+            readonly qaAssignedToName: string;
+            /** Format: date-time */
+            readonly reviewedAt: string | null;
+            readonly dueDate: string;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        /**
+         * @description * `not_reviewed` - Not Reviewed
+         *     * `reviewed` - Reviewed
+         * @enum {string}
+         */
+        DeliverableQATaskQaStatusEnum: "not_reviewed" | "reviewed";
+        DeliverableQATaskRequest: {
+            deliverable: number;
+            departmentId: number;
+            qaStatus: components["schemas"]["DeliverableQATaskQaStatusEnum"];
+            qaAssignedTo?: number | null;
+        };
+        DeliverableReorderRequestRequest: {
+            project: number;
+            deliverable_ids: number[];
+        };
+        DeliverableReorderResponse: {
+            success: boolean;
+        };
+        /** @description Deliverable serializer with snake_case -> camelCase field mapping */
+        DeliverableRequest: {
+            project: number;
+            /** @description Completion percentage (0-100) */
+            percentage?: number | null;
+            /** @description Brief description (e.g., SD, DD, IFP, IFC) */
+            description?: string;
+            /** Format: date */
+            date?: string | null;
+            /** @description Additional details, owner info, requirements, etc. */
+            notes?: string;
+            sortOrder?: number;
+            isCompleted?: boolean;
+            /** Format: date */
+            completedDate?: string | null;
+        };
+        DeliverableSeries: {
+            sd: number[];
+            dd: number[];
+            ifp: number[];
+            ifc: number[];
+            masterplan: number[];
+            bulletins: number[];
+            ca: number[];
+            other: number[];
+        };
+        DeliverableStaffingSummaryItem: {
+            linkId?: number | null;
+            personId: number;
+            personName: string;
+            roleOnMilestone?: string | null;
+            /** Format: double */
+            totalHours: number;
+            weekBreakdown: {
+                [key: string]: unknown;
+            };
+        };
+        DeliverableTask: {
+            readonly id: number;
+            deliverable: number;
+            readonly deliverableInfo: {
+                [key: string]: unknown;
+            };
+            templateId?: number | null;
+            departmentId: number;
+            readonly departmentName: string;
+            sheetNumber?: string | null;
+            sheetName?: string | null;
+            scopeDescription?: string;
+            completionStatus: components["schemas"]["CompletionStatusEnum"];
+            qaStatus: components["schemas"]["QaStatus7bcEnum"];
+            qaAssignedTo?: number | null;
+            readonly qaAssignedToName: string;
+            assignedTo?: number | null;
+            readonly assignedToName: string;
+            readonly completedBy: number | null;
+            readonly completedByName: string;
+            /** Format: date-time */
+            readonly completedAt: string | null;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        DeliverableTaskRequest: {
+            deliverable: number;
+            templateId?: number | null;
+            departmentId: number;
+            sheetNumber?: string | null;
+            sheetName?: string | null;
+            scopeDescription?: string;
+            completionStatus: components["schemas"]["CompletionStatusEnum"];
+            qaStatus: components["schemas"]["QaStatus7bcEnum"];
+            qaAssignedTo?: number | null;
+            assignedTo?: number | null;
+        };
+        DeliverableTaskTemplate: {
+            readonly id: number;
+            phase: string;
+            departmentId: number;
+            readonly departmentName: string;
+            sheetNumber?: string | null;
+            sheetName?: string | null;
+            scopeDescription?: string;
+            defaultCompletionStatus: components["schemas"]["DefaultCompletionStatusEnum"];
+            defaultQaStatus: components["schemas"]["DefaultQaStatusEnum"];
+            sortOrder?: number;
+            isActive?: boolean;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        DeliverableTaskTemplateRequest: {
+            phase: string;
+            departmentId: number;
+            sheetNumber?: string | null;
+            sheetName?: string | null;
+            scopeDescription?: string;
+            defaultCompletionStatus: components["schemas"]["DefaultCompletionStatusEnum"];
+            defaultQaStatus: components["schemas"]["DefaultQaStatusEnum"];
+            sortOrder?: number;
+            isActive?: boolean;
+        };
+        /** @description Department serializer with explicit camelCase field mapping */
+        Department: {
+            readonly id: number;
+            name: string;
+            shortName?: string;
+            parentDepartment?: number | null;
+            manager?: number | null;
+            readonly managerName: string;
+            description?: string;
+            isActive: boolean;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        DepartmentFilterProjectRequest: {
+            departmentId: number;
+            op: components["schemas"]["OpEnum"];
+        };
+        /** @description Department serializer with explicit camelCase field mapping */
+        DepartmentRequest: {
+            name: string;
+            shortName?: string;
+            parentDepartment?: number | null;
+            manager?: number | null;
+            description?: string;
+            isActive: boolean;
+        };
+        EBCPRoleAgg: {
+            roleId: number;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        EBCPTotals: {
+            weeks: number;
+            /** Format: double */
+            hours: number;
+            projectsCount: number;
+        };
+        /**
+         * @description * `sandbox` - Sandbox
+         *     * `production` - Production
+         * @enum {string}
+         */
+        EnvironmentEnum: "sandbox" | "production";
+        /**
+         * @description * `joined` - Joined
+         *     * `left` - Left
+         * @enum {string}
+         */
+        EventTypeEnum: "joined" | "left";
+        ExperienceByClientPerson: {
+            personId: number;
+            personName: string;
+            departmentId?: number | null;
+            totals: components["schemas"]["EBCPTotals"];
+            roles: {
+                [key: string]: components["schemas"]["EBCPRoleAgg"];
+            };
+        };
+        ExperienceByClientResponse: {
+            results: components["schemas"]["ExperienceByClientPerson"][];
+            count: number;
+        };
+        ExtraSeries: {
+            label: string;
+            values: number[];
+        };
+        GlobalSettingsUpdateRequest: {
+            settings: components["schemas"]["PreDeliverableGlobalSettingsUpdateRequest"][];
+        };
+        GridSnapshotAsyncResponse: {
+            jobId: string;
+        };
+        GridSnapshotPerson: {
+            id: number;
+            name: string;
+            weeklyCapacity: number;
+            department: number | null;
+        };
+        GridSnapshotResponse: {
+            weekKeys: string[];
+            people: components["schemas"]["GridSnapshotPerson"][];
+            hoursByPerson: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+        };
+        IntegrationConnection: {
+            readonly id: number;
+            readonly provider: string;
+            readonly providerDisplayName: string;
+            environment: components["schemas"]["EnvironmentEnum"];
+            is_active?: boolean;
+            needs_reauth?: boolean;
+            is_disabled?: boolean;
+            utc_offset_minutes?: number;
+            readonly hasToken: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        IntegrationConnectionRequest: {
+            providerKey: string;
+            environment: components["schemas"]["EnvironmentEnum"];
+            is_active?: boolean;
+            needs_reauth?: boolean;
+            is_disabled?: boolean;
+            extra_headers?: unknown;
+            utc_offset_minutes?: number;
+        };
+        IntegrationHealthResponse: {
+            healthy: boolean;
+            workersAvailable: boolean;
+            cacheAvailable: boolean;
             message?: string | null;
-            downloadReady: boolean;
-            downloadUrl?: string | null;
-            result?: unknown;
-            error?: string | null;
-          };
-        };
-      };
-      409: {
-        content: {
-          "application/json": unknown;
-        };
-      };
-      503: {
-        content: {
-          "application/json": unknown;
-        };
-      };
-    };
-  };
-  /** @description Stream the file produced by a completed job (if any). */
-  jobs_download_retrieve: {
-    parameters: {
-      path: {
-        /** @description Background job id */
-        job_id: string;
-      };
-    };
-    responses: {
-      /** @description File content */
-      200: {
-        content: {
-          "application/json": string;
-        };
-      };
-      404: {
-        content: {
-          "application/json": unknown;
-        };
-      };
-      409: {
-        content: {
-          "application/json": unknown;
-        };
-      };
-      503: {
-        content: {
-          "application/json": unknown;
-        };
-      };
-    };
-  };
-  /** @description Get all people with conditional request support (ETag/Last-Modified) and bulk loading */
-  people_list: {
-    parameters: {
-      query?: {
-        /** @description Return all items without pagination when true */
-        all?: string;
-        /** @description Filter by department id */
-        department?: number;
-        /** @description Include child departments (0|1) */
-        include_children?: number;
-        /** @description Include inactive people (0|1; default 0) */
-        include_inactive?: number;
-        /** @description Page number */
-        page?: number;
-        /** @description Page size */
-        page_size?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedPersonList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Person CRUD API with utilization calculations
-   * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
-   */
-  people_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PersonRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PersonRequest"];
-        "multipart/form-data": components["schemas"]["PersonRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["Person"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Person CRUD API with utilization calculations
-   * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
-   */
-  people_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this person. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Person"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Override update to trigger deactivation cleanup when is_active flips to false.
-   *
-   * Enqueues a Celery task when available; otherwise runs synchronously in-process.
-   */
-  people_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this person. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PersonRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PersonRequest"];
-        "multipart/form-data": components["schemas"]["PersonRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Person"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Delete a person by primary key.
-   *
-   * Note: bypass get_queryset() filtering so deletes work even if the record
-   * is inactive or excluded from the default list queryset.
-   * Still enforces object-level permissions before deletion.
-   */
-  people_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this person. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /**
-   * @description Person CRUD API with utilization calculations
-   * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
-   */
-  people_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this person. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedPersonRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedPersonRequest"];
-        "multipart/form-data": components["schemas"]["PatchedPersonRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Person"];
-        };
-      };
-    };
-  };
-  /** @description Get detailed utilization breakdown for a person - Chunk 3 */
-  people_utilization_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this person. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Person"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Lightweight autocomplete for active people.
-   *
-   * Query params:
-   * - search or q: optional substring of name
-   * - limit: max results (default 20)
-   */
-  people_autocomplete_retrieve: {
-    parameters: {
-      query?: {
-        /** @description Max results (1-50) */
-        limit?: number;
-        /** @description Alias for search */
-        q?: string;
-        /** @description Substring of name */
-        search?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PeopleAutocompleteItem"];
-        };
-      };
-    };
-  };
-  /** @description Return per-person week summaries for the next N weeks (default 12). */
-  people_capacity_heatmap_list: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedPersonCapacityHeatmapItemList"];
-        };
-      };
-    };
-  };
-  /** @description Export people to Excel with streaming response for large datasets */
-  people_export_excel_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Person"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Person CRUD API with utilization calculations
-   * Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
-   */
-  people_find_available_list: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Max results (1-200), default 100 */
-        limit?: number;
-        /** @description Filter to people with at least this many hours free */
-        minAvailableHours?: number;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-        /** @description Comma-separated skill names */
-        skills?: string;
-        /** @description YYYY-MM-DD (Monday) week key */
-        week?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedSkillMatchResultItemList"];
-        };
-      };
-    };
-  };
-  /** @description Import people from Excel with progress tracking */
-  people_import_excel_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PersonRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PersonRequest"];
-        "multipart/form-data": components["schemas"]["PersonRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Person"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Server-side typeahead for People.
-   *
-   * Params:
-   * - q: required search query (min length 2)
-   * - limit: optional, default 20, max 50
-   * Returns minimal projection: id, name, department
-   */
-  people_search_retrieve: {
-    parameters: {
-      query: {
-        /** @description Filter by department id */
-        department?: number;
-        /** @description Max results (1-50) */
-        limit?: number;
-        /** @description Search query (min length 2) */
-        q: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PeopleSearchItem"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Rank people by skills (and optionally availability for a given week).
-   *
-   * Returns an array of items: { personId, name, score, matchedSkills[], missingSkills[], departmentId, roleName }.
-   * Score is based on percent of required skills matched (case-insensitive contains) and optionally blended with availability when `week` is provided.
-   */
-  people_skill_match_list: {
-    parameters: {
-      query: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Max results (1-200), default 50 */
-        limit?: number;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-        /** @description Comma-separated skill names */
-        skills: string;
-        /** @description YYYY-MM-DD (Monday) for availability-aware scoring */
-        week?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedSkillMatchResultItemList"];
-        };
-      };
-    };
-  };
-  /** @description Start async skill match job and return task ID for polling. */
-  people_skill_match_async_retrieve: {
-    parameters: {
-      query: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description Max results (1-200), default 50 */
-        limit?: number;
-        /** @description Comma-separated skill names */
-        skills: string;
-        /** @description YYYY-MM-DD (Monday) for availability-aware scoring */
-        week?: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["SkillMatchAsyncResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Aggregate team capacity vs allocated for N weeks ahead (default 8).
-   *
-   * Response array items:
-   * { weekStart, totalCapacity, totalAllocated, teamUtilization, peopleOverallocated[] }
-   */
-  people_workload_forecast_list: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-        weeks?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedWorkloadForecastItemList"];
-        };
-      };
-    };
-  };
-  personal_work_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PersonalWork"];
-        };
-      };
-    };
-  };
-  /** @description Get all projects with conditional request support (ETag/Last-Modified) and bulk loading */
-  projects_list: {
-    parameters: {
-      query?: {
-        /** @description Which field to use when ordering the results. */
-        ordering?: string;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedProjectList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
-        "multipart/form-data": components["schemas"]["ProjectRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["Project"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_retrieve: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Project"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_update: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
-        "multipart/form-data": components["schemas"]["ProjectRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Project"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_destroy: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_partial_update: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedProjectRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRequest"];
-        "multipart/form-data": components["schemas"]["PatchedProjectRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Project"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Return availability snapshot for people relevant to the project context.
-   *
-   * Response items: { personId, personName, totalHours, capacity, availableHours, utilizationPercent }
-   * Uses Sunday as canonical week key; exact JSON key lookup (no tolerance).
-   */
-  projects_availability_list: {
-    parameters: {
-      query?: {
-        /** @description Limit to departments already staffing this project (0|1) */
-        candidates_only?: number;
-        /** @description Filter people by department id */
-        department?: number;
-        /** @description Include child departments (0|1) */
-        include_children?: number;
-        /** @description Which field to use when ordering the results. */
-        ordering?: string;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-        /** @description YYYY-MM-DD (Sunday key) */
-        week?: string;
-      };
-      path: {
-        id: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedProjectAvailabilityItemList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_deliverable_tasks_list: {
-    parameters: {
-      query?: {
-        /** @description Which field to use when ordering the results. */
-        ordering?: string;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-      path: {
-        id: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableTaskList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_pre_deliverable_settings_retrieve: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectPreDeliverableSettingsResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_pre_deliverable_settings_update: {
-    parameters: {
-      path: {
-        id: string;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
-        "multipart/form-data": components["schemas"]["ProjectRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectPreDeliverableSettingsResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-   *
-   * - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-   * - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-   *   When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-   */
-  projects_qa_tasks_list: {
-    parameters: {
-      query?: {
-        /** @description Which field to use when ordering the results. */
-        ordering?: string;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-      path: {
-        id: string;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
-        };
-      };
-    };
-  };
-  projects_risks_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-      path: {
-        project_id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedProjectRiskList"];
-        };
-      };
-    };
-  };
-  projects_risks_create: {
-    parameters: {
-      path: {
-        project_id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "multipart/form-data": components["schemas"]["ProjectRiskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRiskRequest"];
-        "application/json": components["schemas"]["ProjectRiskRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["ProjectRisk"];
-        };
-      };
-    };
-  };
-  projects_risks_retrieve: {
-    parameters: {
-      path: {
-        project_id: number;
-        risk_id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRisk"];
-        };
-      };
-    };
-  };
-  projects_risks_update: {
-    parameters: {
-      path: {
-        project_id: number;
-        risk_id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "multipart/form-data": components["schemas"]["ProjectRiskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRiskRequest"];
-        "application/json": components["schemas"]["ProjectRiskRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRisk"];
-        };
-      };
-    };
-  };
-  projects_risks_destroy: {
-    parameters: {
-      path: {
-        project_id: number;
-        risk_id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  projects_risks_partial_update: {
-    parameters: {
-      path: {
-        project_id: number;
-        risk_id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "multipart/form-data": components["schemas"]["PatchedProjectRiskRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRiskRequest"];
-        "application/json": components["schemas"]["PatchedProjectRiskRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRisk"];
-        };
-      };
-    };
-  };
-  projects_risks_attachment_retrieve: {
-    parameters: {
-      path: {
-        project_id: number;
-        risk_id: number;
-      };
-    };
-    responses: {
-      /** @description Risk attachment file */
-      200: {
-        content: {
-          "application/json": string;
-        };
-      };
-      /** @description No attachment found */
-      404: {
-        content: never;
-      };
-    };
-  };
-  /** @description Read-only endpoint for recent project create/delete audit logs (admin only). */
-  projects_audit_list: {
-    parameters: {
-      query?: {
-        limit?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["AdminAuditLog"][];
-        };
-      };
-    };
-  };
-  /** @description Export projects to Excel with streaming response for large datasets */
-  projects_export_excel_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Project"];
-        };
-      };
-    };
-  };
-  /** @description Export Excel import template with examples */
-  projects_export_template_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Project"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Get optimized filter metadata for all projects.
-   *
-   * Returns camelCase keys for direct frontend consumption:
-   * {
-   *   "projectFilters": {
-   *     "<projectId>": {
-   *       "assignmentCount": number,
-   *       "hasFutureDeliverables": boolean,
-   *       "status": string
-   *     }, ...
-   *   }
-   * }
-   */
-  projects_filter_metadata_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectFilterMetadataResponse"];
-        };
-      };
-    };
-  };
-  /** @description Import projects from Excel with progress tracking */
-  projects_import_excel_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
-        "multipart/form-data": components["schemas"]["ProjectRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Project"];
-        };
-      };
-    };
-  };
-  projects_project_roles_list: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRoleItem"][];
-        };
-      };
-    };
-  };
-  projects_project_roles_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectRoleCreateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleCreateRequest"];
-        "multipart/form-data": components["schemas"]["ProjectRoleCreateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRoleItem"];
-        };
-      };
-    };
-  };
-  projects_project_roles_destroy: {
-    parameters: {
-      path: {
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  projects_project_roles_partial_update: {
-    parameters: {
-      path: {
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedProjectRoleUpdateRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRoleUpdateRequest"];
-        "multipart/form-data": components["schemas"]["PatchedProjectRoleUpdateRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRoleItem"];
-        };
-      };
-    };
-  };
-  projects_project_roles_clear_assignments_create: {
-    parameters: {
-      path: {
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRoleClearAssignmentsResponse"];
-        };
-      };
-    };
-  };
-  projects_project_roles_usage_retrieve: {
-    parameters: {
-      path: {
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRoleUsageResponse"];
-        };
-      };
-    };
-  };
-  projects_project_roles_reorder_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ProjectRoleReorderRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleReorderRequestRequest"];
-        "multipart/form-data": components["schemas"]["ProjectRoleReorderRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRoleReorderResponse"];
-        };
-      };
-    };
-  };
-  projects_project_roles_search_list: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectRoleItem"][];
-        };
-      };
-    };
-  };
-  /** @description Search projects with tokenized filters and pagination. */
-  projects_search_create: {
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["ProjectSearchRequestRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["ProjectSearchRequestRequest"];
-        "multipart/form-data": components["schemas"]["ProjectSearchRequestRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["ProjectSearchResponse"];
-        };
-      };
-    };
-  };
-  reports_pre_deliverable_completion_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableCompletionResponse"];
-        };
-      };
-    };
-  };
-  reports_pre_deliverable_team_performance_retrieve: {
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PreDeliverableTeamPerformanceResponse"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Role ViewSet providing CRUD operations
-   * - List all roles (paginated)
-   * - Create new role
-   * - Retrieve specific role
-   * - Update role
-   * - Delete role
-   * - Bulk list (for autocomplete)
-   */
-  roles_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedRoleList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Role ViewSet providing CRUD operations
-   * - List all roles (paginated)
-   * - Create new role
-   * - Retrieve specific role
-   * - Update role
-   * - Delete role
-   * - Bulk list (for autocomplete)
-   */
-  roles_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["RoleRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["RoleRequest"];
-        "multipart/form-data": components["schemas"]["RoleRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["Role"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Role ViewSet providing CRUD operations
-   * - List all roles (paginated)
-   * - Create new role
-   * - Retrieve specific role
-   * - Update role
-   * - Delete role
-   * - Bulk list (for autocomplete)
-   */
-  roles_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Role. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Role"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Role ViewSet providing CRUD operations
-   * - List all roles (paginated)
-   * - Create new role
-   * - Retrieve specific role
-   * - Update role
-   * - Delete role
-   * - Bulk list (for autocomplete)
-   */
-  roles_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Role. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["RoleRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["RoleRequest"];
-        "multipart/form-data": components["schemas"]["RoleRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Role"];
-        };
-      };
-    };
-  };
-  /** @description Override destroy to check for role usage before deletion */
-  roles_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Role. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /**
-   * @description Role ViewSet providing CRUD operations
-   * - List all roles (paginated)
-   * - Create new role
-   * - Retrieve specific role
-   * - Update role
-   * - Delete role
-   * - Bulk list (for autocomplete)
-   */
-  roles_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Role. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedRoleRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedRoleRequest"];
-        "multipart/form-data": components["schemas"]["PatchedRoleRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Role"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Return all roles without pagination for autocomplete/dropdowns
-   * Access via: GET /api/roles/bulk/
-   */
-  roles_bulk_list: {
-    parameters: {
-      query?: {
-        /** @description Include inactive roles when present */
-        include_inactive?: boolean;
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedRoleList"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Bulk reorder roles by IDs.
-   *
-   * Body: { "ids": [int, ...] }
-   * Requires staff privileges.
-   */
-  roles_reorder_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["RoleRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["RoleRequest"];
-        "multipart/form-data": components["schemas"]["RoleRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["Role"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for person skills */
-  skills_person_skills_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedPersonSkillList"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for person skills */
-  skills_person_skills_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PersonSkillRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PersonSkillRequest"];
-        "multipart/form-data": components["schemas"]["PersonSkillRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["PersonSkill"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for person skills */
-  skills_person_skills_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Person Skill. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PersonSkill"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for person skills */
-  skills_person_skills_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Person Skill. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PersonSkillRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PersonSkillRequest"];
-        "multipart/form-data": components["schemas"]["PersonSkillRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PersonSkill"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for person skills */
-  skills_person_skills_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Person Skill. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description CRUD operations for person skills */
-  skills_person_skills_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Person Skill. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedPersonSkillRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedPersonSkillRequest"];
-        "multipart/form-data": components["schemas"]["PatchedPersonSkillRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PersonSkill"];
-        };
-      };
-    };
-  };
-  /** @description Get skill summary for a person */
-  skills_person_skills_summary_retrieve: {
-    parameters: {
-      query: {
-        /** @description Person id */
-        person: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PersonSkillSummaryGrouped"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for skill tags */
-  skills_skill_tags_list: {
-    parameters: {
-      query?: {
-        /** @description A page number within the paginated result set. */
-        page?: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["PaginatedSkillTagList"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for skill tags */
-  skills_skill_tags_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["SkillTagRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["SkillTagRequest"];
-        "multipart/form-data": components["schemas"]["SkillTagRequest"];
-      };
-    };
-    responses: {
-      201: {
-        content: {
-          "application/json": components["schemas"]["SkillTag"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for skill tags */
-  skills_skill_tags_retrieve: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Skill Tag. */
-        id: number;
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["SkillTag"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for skill tags */
-  skills_skill_tags_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Skill Tag. */
-        id: number;
-      };
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["SkillTagRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["SkillTagRequest"];
-        "multipart/form-data": components["schemas"]["SkillTagRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["SkillTag"];
-        };
-      };
-    };
-  };
-  /** @description CRUD operations for skill tags */
-  skills_skill_tags_destroy: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Skill Tag. */
-        id: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      204: {
-        content: never;
-      };
-    };
-  };
-  /** @description CRUD operations for skill tags */
-  skills_skill_tags_partial_update: {
-    parameters: {
-      path: {
-        /** @description A unique integer value identifying this Skill Tag. */
-        id: number;
-      };
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["PatchedSkillTagRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["PatchedSkillTagRequest"];
-        "multipart/form-data": components["schemas"]["PatchedSkillTagRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["SkillTag"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Takes a set of user credentials and returns an access and refresh JSON web
-   * token pair to prove the authentication of those credentials.
-   */
-  token_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
-        "multipart/form-data": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
-      };
-    };
-    responses: {
-      /** @description No response body */
-      200: {
-        content: never;
-      };
-    };
-  };
-  /** @description Clears the refresh cookie in cookie mode. Body is ignored. */
-  token_logout_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["TokenRefreshRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["TokenRefreshRequest"];
-        "multipart/form-data": components["schemas"]["TokenRefreshRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["TokenRefresh"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Takes a refresh type JSON web token and returns an access type JSON web
-   * token if the refresh token is valid.
-   */
-  token_refresh_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["TokenRefreshRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["TokenRefreshRequest"];
-        "multipart/form-data": components["schemas"]["TokenRefreshRequest"];
-      };
-    };
-    responses: {
-      200: {
-        content: {
-          "application/json": components["schemas"]["TokenRefresh"];
-        };
-      };
-    };
-  };
-  /**
-   * @description Takes a token and indicates if it is valid.  This view provides no
-   * information about a token's fitness for a particular use.
-   */
-  token_verify_create: {
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["TokenVerifyRequest"];
-        "application/x-www-form-urlencoded": components["schemas"]["TokenVerifyRequest"];
-        "multipart/form-data": components["schemas"]["TokenVerifyRequest"];
-      };
-    };
-    responses: {
-      /** @description No response body */
-      200: {
-        content: never;
-      };
-    };
-  };
-  /** @description Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks. */
-  ui_assignments_page_retrieve: {
-    parameters: {
-      query?: {
-        department?: number;
-        /** @description 0|1 (project grid) */
-        has_future_deliverables?: number;
-        /** @description CSV: assignment,project (default both) */
-        include?: string;
-        /** @description 0|1 */
-        include_children?: number;
-        /** @description 0|1 */
-        include_placeholders?: number;
-        /** @description CSV of project IDs to scope totals (project grid) */
-        project_ids?: string;
-        /** @description CSV of project status filters (project grid) */
-        status_in?: string;
-        /** @description Number of weeks (1-52), default 12 */
-        weeks?: number;
-      };
-    };
-    responses: {
-      /** @description No response body */
-      200: {
-        content: never;
-      };
-    };
-  };
+            schedulerPaused: boolean;
+            jobs: components["schemas"]["IntegrationJobHealthSummary"];
+        };
+        IntegrationJob: {
+            readonly id: number;
+            readonly connection: number;
+            readonly provider: string;
+            readonly providerDisplayName: string;
+            readonly connectionCompany: string;
+            readonly connectionEnvironment: string;
+            readonly object_key: string;
+            readonly status: components["schemas"]["IntegrationJobStatusEnum"];
+            readonly payload: unknown;
+            readonly logs: unknown;
+            readonly metrics: unknown;
+            readonly celery_id: string;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly finished_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        IntegrationJobHealthRecent: {
+            windowHours: number;
+            total: number;
+            succeeded: number;
+            failed: number;
+            /** Format: double */
+            successRate?: number | null;
+            itemsProcessed: number;
+        };
+        IntegrationJobHealthSummary: {
+            running: number;
+            lastJobAt?: string | null;
+            lastFailureAt?: string | null;
+            recent: components["schemas"]["IntegrationJobHealthRecent"];
+        };
+        IntegrationJobListResponse: {
+            items: components["schemas"]["IntegrationJob"][];
+        };
+        IntegrationJobRetryResponse: {
+            queued: boolean;
+        };
+        /**
+         * @description * `pending` - Pending
+         *     * `running` - Running
+         *     * `succeeded` - Succeeded
+         *     * `failed` - Failed
+         * @enum {string}
+         */
+        IntegrationJobStatusEnum: "pending" | "running" | "succeeded" | "failed";
+        IntegrationRule: {
+            readonly id: number;
+            readonly connection: number;
+            object_key: string;
+            config?: unknown;
+            is_enabled?: boolean;
+            readonly revision: number;
+            /** Format: date-time */
+            readonly next_run_at: string | null;
+            /** Format: date-time */
+            readonly last_run_at: string | null;
+            /** Format: date-time */
+            readonly last_success_at: string | null;
+            readonly last_error: string;
+            readonly resync_required: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        IntegrationRuleRequest: {
+            connection_id: number;
+            object_key: string;
+            config?: unknown;
+            is_enabled?: boolean;
+        };
+        IntegrationRuleResyncRequestRequest: {
+            scope?: string;
+        };
+        IntegrationRuleResyncResponse: {
+            rule: components["schemas"]["IntegrationRule"];
+            state: {
+                [key: string]: unknown;
+            };
+        };
+        IntegrationSecretKeyRequestRequest: {
+            secretKey: string;
+        };
+        IntegrationSecretKeyResponse: {
+            configured: boolean;
+        };
+        IntegrationTestResponse: {
+            ok: boolean;
+            provider: string;
+            environment: string;
+            checkedAt: string;
+            sampleCount: number;
+            message?: string;
+        };
+        InviteUserRequestRequest: {
+            /** Format: email */
+            email: string;
+            username?: string;
+            personId?: number | null;
+            role?: components["schemas"]["RoleEnum"];
+        };
+        LinkPersonRequestRequest: {
+            person_id?: number | null;
+        };
+        MappingDefaultsRequestRequest: {
+            connectionId: number;
+            version?: string;
+            mappings: {
+                [key: string]: unknown;
+            }[];
+        };
+        MappingDefaultsResponse: {
+            schemaVersion?: string | null;
+            defaults: {
+                [key: string]: unknown;
+            }[];
+            fieldSignatureHash: string;
+            overrides?: {
+                [key: string]: unknown;
+            } | null;
+            stale: boolean;
+        };
+        MembershipEvent: {
+            week_start: string;
+            event_type: components["schemas"]["EventTypeEnum"];
+            deliverable_phase: string;
+            /** Format: double */
+            hours_before: number;
+            /** Format: double */
+            hours_after: number;
+        };
+        /**
+         * @description * `absolute_hours` - Absolute Hours
+         *     * `percent` - Percent
+         * @enum {string}
+         */
+        ModeEnum: "absolute_hours" | "percent";
+        NotificationPreferences: {
+            emailPreDeliverableReminders: boolean;
+            reminderDaysBefore: number;
+            dailyDigest: boolean;
+        };
+        NotificationPreferencesRequest: {
+            emailPreDeliverableReminders: boolean;
+            reminderDaysBefore: number;
+            dailyDigest: boolean;
+        };
+        /**
+         * @description * `or` - or
+         *     * `and` - and
+         *     * `not` - not
+         * @enum {string}
+         */
+        OpEnum: "or" | "and" | "not";
+        PEPClient: {
+            client: string;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+            roles: {
+                [key: string]: components["schemas"]["PEPClientRole"];
+            };
+            phases: {
+                [key: string]: components["schemas"]["PEPClientPhase"];
+            };
+        };
+        PEPClientPhase: {
+            phase: string;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        PEPClientRole: {
+            roleId: number;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        PEPProject: {
+            projectId: number;
+            projectName: string;
+            client: string;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+            roles: {
+                [key: string]: components["schemas"]["PEPProjectRole"];
+            };
+            phases: {
+                [key: string]: components["schemas"]["PEPProjectPhase"];
+            };
+        };
+        PEPProjectPhase: {
+            phase: string;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        PEPProjectRole: {
+            roleId: number;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        PSTEvent: {
+            week_start: string;
+            event_type: components["schemas"]["EventTypeEnum"];
+        };
+        PSTPerson: {
+            personId: number;
+            personName: string;
+            departmentId?: number | null;
+            firstWeek?: string | null;
+            lastWeek?: string | null;
+            totalWeeks?: number | null;
+            roles: components["schemas"]["PSTPersonRole"][];
+            events: components["schemas"]["PSTEvent"][];
+        };
+        PSTPersonRole: {
+            roleId: number | null;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        PSTRoleAgg: {
+            roleId: number | null;
+            peopleCount: number;
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        PaginatedAssignmentList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Assignment"][];
+        };
+        PaginatedDeliverableAssignmentList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["DeliverableAssignment"][];
+        };
+        PaginatedDeliverableCalendarItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["DeliverableCalendarItem"][];
+        };
+        PaginatedDeliverableList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Deliverable"][];
+        };
+        PaginatedDeliverableQATaskList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["DeliverableQATask"][];
+        };
+        PaginatedDeliverableTaskList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["DeliverableTask"][];
+        };
+        PaginatedDeliverableTaskTemplateList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["DeliverableTaskTemplate"][];
+        };
+        PaginatedDepartmentList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Department"][];
+        };
+        PaginatedIntegrationConnectionList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["IntegrationConnection"][];
+        };
+        PaginatedIntegrationRuleList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["IntegrationRule"][];
+        };
+        PaginatedPersonCapacityHeatmapItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PersonCapacityHeatmapItem"][];
+        };
+        PaginatedPersonList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Person"][];
+        };
+        PaginatedPersonSkillList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PersonSkill"][];
+        };
+        PaginatedPreDeliverableItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PreDeliverableItem"][];
+        };
+        PaginatedProjectAvailabilityItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["ProjectAvailabilityItem"][];
+        };
+        PaginatedProjectList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Project"][];
+        };
+        PaginatedProjectRiskList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["ProjectRisk"][];
+        };
+        PaginatedRoleList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Role"][];
+        };
+        PaginatedSkillMatchResultItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["SkillMatchResultItem"][];
+        };
+        PaginatedSkillTagList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["SkillTag"][];
+        };
+        PaginatedWorkloadForecastItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["WorkloadForecastItem"][];
+        };
+        PasswordResetConfirmRequest: {
+            uid: string;
+            token: string;
+            newPassword: string;
+        };
+        PasswordResetRequestRequest: {
+            /** Format: email */
+            email: string;
+        };
+        /** @description Assignment serializer with weekly hours support */
+        PatchedAssignmentRequest: {
+            person?: number | null;
+            projectName?: string;
+            project?: number | null;
+            roleOnProjectId?: number | null;
+            weeklyHours?: unknown;
+        };
+        PatchedBulkUpdateHoursRequestRequest: {
+            updates?: components["schemas"]["AssignmentHoursUpdateRequest"][];
+        };
+        PatchedCalendarFeedsPatchRequest: {
+            deliverables_token?: string;
+            regenerate?: boolean;
+        };
+        /** @description Serializer for linking people to deliverables with weekly hours. */
+        PatchedDeliverableAssignmentRequest: {
+            deliverable?: number;
+            person?: number;
+            roleOnMilestone?: string | null;
+            is_active?: boolean;
+        };
+        PatchedDeliverableQATaskRequest: {
+            deliverable?: number;
+            departmentId?: number;
+            qaStatus?: components["schemas"]["DeliverableQATaskQaStatusEnum"];
+            qaAssignedTo?: number | null;
+        };
+        /** @description Deliverable serializer with snake_case -> camelCase field mapping */
+        PatchedDeliverableRequest: {
+            project?: number;
+            /** @description Completion percentage (0-100) */
+            percentage?: number | null;
+            /** @description Brief description (e.g., SD, DD, IFP, IFC) */
+            description?: string;
+            /** Format: date */
+            date?: string | null;
+            /** @description Additional details, owner info, requirements, etc. */
+            notes?: string;
+            sortOrder?: number;
+            isCompleted?: boolean;
+            /** Format: date */
+            completedDate?: string | null;
+        };
+        PatchedDeliverableTaskRequest: {
+            deliverable?: number;
+            templateId?: number | null;
+            departmentId?: number;
+            sheetNumber?: string | null;
+            sheetName?: string | null;
+            scopeDescription?: string;
+            completionStatus?: components["schemas"]["CompletionStatusEnum"];
+            qaStatus?: components["schemas"]["QaStatus7bcEnum"];
+            qaAssignedTo?: number | null;
+            assignedTo?: number | null;
+        };
+        PatchedDeliverableTaskTemplateRequest: {
+            phase?: string;
+            departmentId?: number;
+            sheetNumber?: string | null;
+            sheetName?: string | null;
+            scopeDescription?: string;
+            defaultCompletionStatus?: components["schemas"]["DefaultCompletionStatusEnum"];
+            defaultQaStatus?: components["schemas"]["DefaultQaStatusEnum"];
+            sortOrder?: number;
+            isActive?: boolean;
+        };
+        /** @description Department serializer with explicit camelCase field mapping */
+        PatchedDepartmentRequest: {
+            name?: string;
+            shortName?: string;
+            parentDepartment?: number | null;
+            manager?: number | null;
+            description?: string;
+            isActive?: boolean;
+        };
+        PatchedIntegrationConnectionRequest: {
+            providerKey?: string;
+            environment?: components["schemas"]["EnvironmentEnum"];
+            is_active?: boolean;
+            needs_reauth?: boolean;
+            is_disabled?: boolean;
+            extra_headers?: unknown;
+            utc_offset_minutes?: number;
+        };
+        PatchedIntegrationRuleRequest: {
+            connection_id?: number;
+            object_key?: string;
+            config?: unknown;
+            is_enabled?: boolean;
+        };
+        /** @description Person serializer with department and role integration */
+        PatchedPersonRequest: {
+            name?: string;
+            /** @default 36 */
+            weeklyCapacity: number;
+            /** @description Person's role in the organization */
+            role?: number | null;
+            department?: number | null;
+            location?: string | null;
+            /** Format: date */
+            hireDate?: string | null;
+            isActive?: boolean;
+            notes?: string;
+        };
+        /** @description Person skill serializer with camelCase field names and related data */
+        PatchedPersonSkillRequest: {
+            person?: number;
+            skillTagId?: number;
+            skillType?: string;
+            proficiencyLevel?: string;
+            notes?: string;
+            /** Format: date */
+            lastUsed?: string | null;
+        };
+        PatchedPreDeliverableItemRequest: {
+            deliverable?: number;
+            preDeliverableTypeId?: number;
+            /** Format: date */
+            generatedDate?: string;
+            daysBefore?: number;
+            isCompleted?: boolean;
+            /** Format: date */
+            completedDate?: string | null;
+            notes?: string;
+            isActive?: boolean;
+        };
+        PatchedProjectRequest: {
+            name?: string;
+            status?: components["schemas"]["ProjectStatusEnum"];
+            client?: string;
+            description?: string;
+            notes?: string | null;
+            notesJson?: unknown;
+            projectNumber?: string | null;
+            /** Format: date */
+            startDate?: string | null;
+            /** Format: date */
+            endDate?: string | null;
+            estimatedHours?: number | null;
+            /** @default true */
+            isActive: boolean;
+            autoHoursTemplateId?: number | null;
+        };
+        PatchedProjectRiskRequest: {
+            description?: string;
+            priority?: components["schemas"]["PriorityEnum"];
+            status?: components["schemas"]["ProjectRiskStatusEnum"];
+            departments?: number[];
+            /** Format: binary */
+            attachment?: string | null;
+        };
+        PatchedProjectRoleUpdateRequest: {
+            name?: string;
+            isActive?: boolean;
+            sortOrder?: number;
+        };
+        /** @description Role serializer with camelCase field transformation */
+        PatchedRoleRequest: {
+            /** @description Role name (e.g., Senior Engineer, Product Manager) */
+            name?: string;
+            /** @description Optional description of the role responsibilities */
+            description?: string;
+            /**
+             * Format: double
+             * @description Default overhead hours per week for people in this role
+             */
+            overheadHoursPerWeek?: number;
+            /** @description Whether this role is currently available for assignment */
+            isActive?: boolean;
+            sortOrder?: number;
+        };
+        /** @description Skill tag serializer with camelCase field names */
+        PatchedSkillTagRequest: {
+            name?: string;
+            category?: string;
+            description?: string;
+        };
+        PatchedUserSettingsPatchRequest: {
+            settings?: {
+                [key: string]: unknown;
+            };
+        };
+        PeopleAutocompleteItem: {
+            id: number;
+            name: string;
+            department?: number | null;
+        };
+        PeopleSearchItem: {
+            id: number;
+            name: string;
+            department?: number | null;
+            roleName?: string | null;
+        };
+        /** @description Person serializer with department and role integration */
+        Person: {
+            readonly id: number;
+            name: string;
+            /** @default 36 */
+            weeklyCapacity: number;
+            /** @description Person's role in the organization */
+            role?: number | null;
+            readonly roleName: string;
+            department?: number | null;
+            readonly departmentName: string;
+            location?: string | null;
+            /** Format: date */
+            hireDate?: string | null;
+            isActive?: boolean;
+            notes?: string;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        /** @description Serializer for capacity heatmap items returned by capacity_heatmap action. */
+        PersonCapacityHeatmapItem: {
+            id: number;
+            name: string;
+            weeklyCapacity: number;
+            department?: string | null;
+            weekKeys: string[];
+            weekTotals: {
+                [key: string]: number;
+            };
+            peak: {
+                [key: string]: number;
+            };
+            /** Format: double */
+            averagePercentage: number;
+            percentByWeek?: {
+                [key: string]: number;
+            };
+            availableByWeek?: {
+                [key: string]: number;
+            };
+        };
+        PersonExperienceProfileResponse: {
+            byClient: components["schemas"]["PEPClient"][];
+            byProject: components["schemas"]["PEPProject"][];
+            eventsCount: number;
+        };
+        PersonLite: {
+            id: number;
+            name: string;
+            weeklyCapacity?: number;
+            department?: number | null;
+        };
+        PersonProjectTimelineResponse: {
+            weeksSummary: components["schemas"]["WeeksSummary"];
+            coverageBlocks: components["schemas"]["CoverageBlock"][];
+            events: components["schemas"]["MembershipEvent"][];
+            roleChanges: components["schemas"]["RoleChange"][];
+            weeklyHours: {
+                [key: string]: number;
+            };
+        };
+        /** @description Person serializer with department and role integration */
+        PersonRequest: {
+            name: string;
+            /** @default 36 */
+            weeklyCapacity: number;
+            /** @description Person's role in the organization */
+            role?: number | null;
+            department?: number | null;
+            location?: string | null;
+            /** Format: date */
+            hireDate?: string | null;
+            isActive?: boolean;
+            notes?: string;
+        };
+        /** @description Person skill serializer with camelCase field names and related data */
+        PersonSkill: {
+            readonly id: number;
+            person: number;
+            skillTagId: number;
+            readonly skillTagName: string;
+            skillType: string;
+            proficiencyLevel: string;
+            notes?: string;
+            /** Format: date */
+            lastUsed?: string | null;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        /** @description Person skill serializer with camelCase field names and related data */
+        PersonSkillRequest: {
+            person: number;
+            skillTagId: number;
+            skillType: string;
+            proficiencyLevel: string;
+            notes?: string;
+            /** Format: date */
+            lastUsed?: string | null;
+        };
+        /** @description Lightweight serializer for person skill summaries */
+        PersonSkillSummary: {
+            readonly skillTagName: string;
+            readonly skillType: string;
+            readonly proficiencyLevel: string;
+        };
+        PersonSkillSummaryGrouped: {
+            strengths: components["schemas"]["PersonSkillSummary"][];
+            development: components["schemas"]["PersonSkillSummary"][];
+            learning: components["schemas"]["PersonSkillSummary"][];
+        };
+        PersonalAlerts: {
+            overallocatedNextWeek: boolean;
+            underutilizedNext4Weeks: boolean;
+            overduePreItems: number;
+        };
+        PersonalDeliverableItem: {
+            id: number;
+            project: number;
+            projectName: string | null;
+            title: string;
+            /** Format: date */
+            date: string | null;
+            isCompleted: boolean;
+        };
+        PersonalProjectItem: {
+            id: number;
+            name: string | null;
+            client?: string | null;
+            status?: string | null;
+            /** Format: date */
+            nextDeliverableDate?: string | null;
+        };
+        PersonalSchedule: {
+            weekKeys: string[];
+            weekTotals: {
+                [key: string]: number;
+            };
+            weeklyCapacity: number;
+        };
+        PersonalSummary: {
+            personId: number;
+            currentWeekKey: string;
+            /** Format: double */
+            utilizationPercent: number;
+            /** Format: double */
+            allocatedHours: number;
+            /** Format: double */
+            availableHours: number;
+        };
+        PersonalWork: {
+            summary: components["schemas"]["PersonalSummary"];
+            alerts: components["schemas"]["PersonalAlerts"];
+            projects: components["schemas"]["PersonalProjectItem"][];
+            deliverables: components["schemas"]["PersonalDeliverableItem"][];
+            preItems: components["schemas"]["PreDeliverableItem"][];
+            schedule: components["schemas"]["PersonalSchedule"];
+        };
+        PreDeliverableAssignedPerson: {
+            id: number;
+            name: string;
+        };
+        PreDeliverableCompletedBy: {
+            id: number | null;
+            username?: string | null;
+        };
+        PreDeliverableCompletionByProject: {
+            projectId: number | null;
+            projectName?: string | null;
+            total: number;
+            completed: number;
+            overdue: number;
+            /** Format: double */
+            completionRate: number;
+        };
+        PreDeliverableCompletionByType: {
+            typeId: number | null;
+            typeName?: string | null;
+            total: number;
+            completed: number;
+            overdue: number;
+            /** Format: double */
+            completionRate: number;
+        };
+        PreDeliverableCompletionResponse: {
+            total: number;
+            completed: number;
+            overdue: number;
+            /** Format: double */
+            completionRate: number;
+            byProject: components["schemas"]["PreDeliverableCompletionByProject"][];
+            byType: components["schemas"]["PreDeliverableCompletionByType"][];
+        };
+        PreDeliverableGlobalSettingsItem: {
+            typeId: number;
+            typeName: string;
+            defaultDaysBefore: number;
+            isEnabledByDefault: boolean;
+            sortOrder?: number;
+            isActive?: boolean;
+        };
+        PreDeliverableGlobalSettingsUpdateRequest: {
+            typeId: number;
+            defaultDaysBefore: number;
+            isEnabledByDefault: boolean;
+        };
+        PreDeliverableItem: {
+            readonly id: number;
+            deliverable: number;
+            preDeliverableTypeId: number;
+            readonly typeName: string;
+            /** Format: date */
+            generatedDate: string;
+            daysBefore: number;
+            isCompleted: boolean;
+            /** Format: date */
+            completedDate?: string | null;
+            readonly completedBy: components["schemas"]["PreDeliverableCompletedBy"];
+            notes?: string;
+            isActive: boolean;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+            readonly displayName: string;
+            readonly isOverdue: boolean;
+            readonly parentDeliverable: components["schemas"]["PreDeliverableParent"];
+            readonly assignedPeople: components["schemas"]["PreDeliverableAssignedPerson"][];
+            readonly itemType: string;
+        };
+        PreDeliverableItemRequest: {
+            deliverable: number;
+            preDeliverableTypeId: number;
+            /** Format: date */
+            generatedDate: string;
+            daysBefore: number;
+            isCompleted: boolean;
+            /** Format: date */
+            completedDate?: string | null;
+            notes?: string;
+            isActive: boolean;
+        };
+        PreDeliverableParent: {
+            id: number;
+            description?: string | null;
+            /** Format: date */
+            date?: string | null;
+        };
+        PreDeliverableTeamPerformancePerson: {
+            personId: number | null;
+            personName?: string | null;
+            assignedItems: number;
+            completedItems: number;
+            overdueItems: number;
+            /** Format: double */
+            completionRate: number;
+        };
+        PreDeliverableTeamPerformanceResponse: {
+            people: components["schemas"]["PreDeliverableTeamPerformancePerson"][];
+        };
+        PreItemsBackfillRequestRequest: {
+            projectId?: number;
+            /** Format: date */
+            start?: string;
+            /** Format: date */
+            end?: string;
+            regenerate?: boolean;
+        };
+        PreItemsBackfillResponse: {
+            enqueued: boolean;
+            jobId?: string;
+            statusUrl?: string;
+            result?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * @description * `high` - High
+         *     * `medium` - Medium
+         *     * `low` - Low
+         * @enum {string}
+         */
+        PriorityEnum: "high" | "medium" | "low";
+        Project: {
+            readonly id: number;
+            name: string;
+            status?: components["schemas"]["ProjectStatusEnum"];
+            client?: string;
+            description?: string;
+            notes?: string | null;
+            notesJson?: unknown;
+            projectNumber?: string | null;
+            /** Format: date */
+            startDate?: string | null;
+            /** Format: date */
+            endDate?: string | null;
+            estimatedHours?: number | null;
+            /** @default true */
+            isActive: boolean;
+            readonly bqeClientName: string;
+            readonly bqeClientId: string;
+            readonly clientSyncPolicyState: string;
+            autoHoursTemplateId?: number | null;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        /** @description Availability snapshot item for a person in project context. */
+        ProjectAvailabilityItem: {
+            personId: number;
+            personName: string;
+            /** Format: double */
+            totalHours: number;
+            /** Format: double */
+            capacity: number;
+            /** Format: double */
+            availableHours: number;
+            /** Format: double */
+            utilizationPercent: number;
+        };
+        ProjectFilterItem: {
+            assignmentCount: number;
+            hasFutureDeliverables: boolean;
+            status: string;
+            missingQa?: boolean;
+        };
+        ProjectFilterMetadataResponse: {
+            projectFilters: {
+                [key: string]: components["schemas"]["ProjectFilterItem"];
+            };
+        };
+        ProjectGridSnapshotResponse: {
+            weekKeys: string[];
+            projects: components["schemas"]["ProjectLite"][];
+            hoursByProject: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            deliverablesByProjectWeek: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            deliverableMarkersByProjectWeek?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["DeliverableMarkerLite"][];
+                };
+            };
+            hasFutureDeliverablesByProject: {
+                [key: string]: boolean;
+            };
+            hasPlaceholdersByProject?: {
+                [key: string]: number;
+            };
+            metrics: components["schemas"]["ProjectSnapshotMetrics"];
+        };
+        ProjectLite: {
+            id: number;
+            name: string;
+            client?: string | null;
+            status?: string | null;
+        };
+        ProjectMatchingConfirmRequestRequest: {
+            connectionId: number;
+            matches?: {
+                [key: string]: unknown;
+            }[];
+            enableRule?: boolean;
+        };
+        ProjectPreDeliverableSettingsResponse: {
+            projectId: number;
+            settings: components["schemas"]["ProjectTypeSetting"][];
+        };
+        ProjectRequest: {
+            name: string;
+            status?: components["schemas"]["ProjectStatusEnum"];
+            client?: string;
+            description?: string;
+            notes?: string | null;
+            notesJson?: unknown;
+            projectNumber?: string | null;
+            /** Format: date */
+            startDate?: string | null;
+            /** Format: date */
+            endDate?: string | null;
+            estimatedHours?: number | null;
+            /** @default true */
+            isActive: boolean;
+            autoHoursTemplateId?: number | null;
+        };
+        ProjectRisk: {
+            readonly id: number;
+            readonly project: number;
+            description: string;
+            priority?: components["schemas"]["PriorityEnum"];
+            status?: components["schemas"]["ProjectRiskStatusEnum"];
+            departments?: number[];
+            readonly departmentNames: string[];
+            readonly createdBy: number;
+            readonly createdByName: string;
+            /** Format: date-time */
+            readonly createdAt: string;
+            readonly updatedBy: number;
+            readonly updatedByName: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+            /** Format: uri */
+            attachment?: string | null;
+            readonly attachmentUrl: string;
+            readonly edits: components["schemas"]["ProjectRiskEdit"][];
+        };
+        ProjectRiskEdit: {
+            readonly id: number;
+            action: components["schemas"]["ActionEnum"];
+            changes?: unknown;
+            readonly actor: number;
+            readonly actorName: string;
+            /** Format: date-time */
+            readonly createdAt: string;
+        };
+        ProjectRiskRequest: {
+            description: string;
+            priority?: components["schemas"]["PriorityEnum"];
+            status?: components["schemas"]["ProjectRiskStatusEnum"];
+            departments?: number[];
+            /** Format: binary */
+            attachment?: string | null;
+        };
+        /**
+         * @description * `open` - Open
+         *     * `closed` - Closed
+         * @enum {string}
+         */
+        ProjectRiskStatusEnum: "open" | "closed";
+        ProjectRole: {
+            readonly id: number;
+            name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        ProjectRoleClearAssignmentsResponse: {
+            cleared: number;
+        };
+        ProjectRoleCreateRequest: {
+            department: number;
+            name: string;
+            sortOrder?: number | null;
+        };
+        ProjectRoleCreateRequestRequest: {
+            name: string;
+        };
+        ProjectRoleItem: {
+            readonly id: number;
+            name: string;
+            is_active?: boolean;
+            sort_order?: number;
+            readonly department_id: number;
+        };
+        ProjectRoleListResponse: {
+            roles: string[];
+        };
+        ProjectRoleLite: {
+            id: number;
+            name: string;
+        };
+        ProjectRoleReorderRequestRequest: {
+            ids: number[];
+        };
+        ProjectRoleReorderResponse: {
+            detail: string;
+        };
+        ProjectRoleUsageAssignment: {
+            id: number;
+            person: components["schemas"]["ProjectRoleUsagePerson"];
+            project: components["schemas"]["ProjectRoleUsageProject"];
+        };
+        ProjectRoleUsagePerson: {
+            id: number | null;
+            name: string;
+        };
+        ProjectRoleUsageProject: {
+            id: number | null;
+            name: string;
+        };
+        ProjectRoleUsageResponse: {
+            count: number;
+            assignments: components["schemas"]["ProjectRoleUsageAssignment"][];
+        };
+        ProjectSearchRequestRequest: {
+            page?: number;
+            page_size?: number;
+            ordering?: string;
+            status_in?: string;
+            include_children?: number;
+            search_tokens?: components["schemas"]["SearchTokenProjectRequest"][];
+            department_filters?: components["schemas"]["DepartmentFilterProjectRequest"][];
+            include_deliverable_dates?: boolean;
+        };
+        ProjectSearchResponse: {
+            count: number;
+            next?: string | null;
+            previous?: string | null;
+            results: {
+                [key: string]: unknown;
+            }[];
+        };
+        ProjectSnapshotMetrics: {
+            projectsCount: number;
+            peopleAssignedCount: number;
+            /** Format: double */
+            totalHours: number;
+        };
+        ProjectStaffingTimelineResponse: {
+            people: components["schemas"]["PSTPerson"][];
+            roleAggregates: components["schemas"]["PSTRoleAgg"][];
+        };
+        /**
+         * @description * `planning` - Planning
+         *     * `active` - Active
+         *     * `active_ca` - Active CA
+         *     * `on_hold` - On Hold
+         *     * `completed` - Completed
+         *     * `cancelled` - Cancelled
+         *     * `inactive` - Inactive
+         * @enum {string}
+         */
+        ProjectStatusEnum: "planning" | "active" | "active_ca" | "on_hold" | "completed" | "cancelled" | "inactive";
+        ProjectTotal: {
+            id: number;
+            name: string;
+            /** Format: double */
+            hours: number;
+        };
+        ProjectTotalsResponse: {
+            hoursByProject: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+        };
+        ProjectTypeSetting: {
+            typeId: number;
+            typeName: string;
+            isEnabled: boolean;
+            daysBefore: number | null;
+            source: components["schemas"]["SourceEnum"];
+        };
+        Provider: {
+            key: string;
+            displayName: string;
+            schemaVersion: string;
+            metadata: unknown;
+        };
+        ProviderCatalog: {
+            key: string;
+            displayName: string;
+            schemaVersion: string;
+            rateLimits?: {
+                [key: string]: unknown;
+            };
+            baseUrlVariants?: {
+                [key: string]: unknown;
+            };
+            objects: {
+                [key: string]: unknown;
+            }[];
+        };
+        ProviderConnectStartRequestRequest: {
+            connectionId: number;
+        };
+        ProviderConnectStartResponse: {
+            authorizeUrl: string;
+            state: string;
+        };
+        ProviderCredential: {
+            clientId: string;
+            redirectUri: string;
+            hasClientSecret: boolean;
+            configured: boolean;
+        };
+        ProviderCredentialRequestRequest: {
+            clientId: string;
+            redirectUri: string;
+            clientSecret?: string;
+        };
+        ProviderResetRequestRequest: {
+            confirm: boolean;
+        };
+        ProviderResetResponse: {
+            reset: boolean;
+        };
+        QATaskSettings: {
+            defaultDaysBefore: number;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        QATaskSettingsRequest: {
+            defaultDaysBefore: number;
+        };
+        /**
+         * @description * `not_reviewed` - Not Reviewed
+         *     * `in_review` - In Review
+         *     * `approved` - Approved
+         *     * `changes_required` - Changes Required
+         * @enum {string}
+         */
+        QaStatus7bcEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
+        RecentAssignment: {
+            person: string;
+            project: string;
+            created: string;
+        };
+        /** @description Role serializer with camelCase field transformation */
+        Role: {
+            readonly id: number;
+            /** @description Role name (e.g., Senior Engineer, Product Manager) */
+            name: string;
+            /** @description Optional description of the role responsibilities */
+            description?: string;
+            /**
+             * Format: double
+             * @description Default overhead hours per week for people in this role
+             */
+            overheadHoursPerWeek?: number;
+            /** @description Whether this role is currently available for assignment */
+            isActive?: boolean;
+            sortOrder?: number;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        RoleCapacityTimelineResponse: {
+            weekKeys: string[];
+            roles: components["schemas"]["ProjectRoleLite"][];
+            series: components["schemas"]["RoleSeries"][];
+        };
+        RoleChange: {
+            week_start: string;
+            roleFromId: number;
+            roleToId: number;
+        };
+        /**
+         * @description * `admin` - admin
+         *     * `manager` - manager
+         *     * `user` - user
+         * @enum {string}
+         */
+        RoleEnum: "admin" | "manager" | "user";
+        /** @description Role serializer with camelCase field transformation */
+        RoleRequest: {
+            /** @description Role name (e.g., Senior Engineer, Product Manager) */
+            name: string;
+            /** @description Optional description of the role responsibilities */
+            description?: string;
+            /**
+             * Format: double
+             * @description Default overhead hours per week for people in this role
+             */
+            overheadHoursPerWeek?: number;
+            /** @description Whether this role is currently available for assignment */
+            isActive?: boolean;
+            sortOrder?: number;
+        };
+        RoleSeries: {
+            roleId: number;
+            roleName: string;
+            assigned: number[];
+            capacity: number[];
+            people?: number[];
+        };
+        RunWeeklySnapshotResponse: {
+            week_start: string;
+            lock_acquired: boolean;
+            examined?: number;
+            inserted?: number;
+            updated?: number;
+            skipped?: number;
+            events_inserted?: number;
+            skipped_due_to_lock?: boolean;
+        };
+        SearchTokenProjectRequest: {
+            term: string;
+            op: components["schemas"]["OpEnum"];
+        };
+        SearchTokenRequest: {
+            term: string;
+            op: components["schemas"]["OpEnum"];
+        };
+        SetPasswordRequestRequest: {
+            userId: number;
+            newPassword: string;
+        };
+        SetUserRoleRequestRequest: {
+            role: components["schemas"]["RoleEnum"];
+        };
+        SkillMatchAsyncResponse: {
+            jobId: string;
+        };
+        /** @description Result item for people skill match scoring. */
+        SkillMatchResultItem: {
+            personId: number;
+            name: string;
+            /**
+             * Format: double
+             * @description 0-100
+             */
+            score: number;
+            matchedSkills: string[];
+            missingSkills: string[];
+            departmentId: number | null;
+            roleName?: string | null;
+        };
+        /** @description Skill tag serializer with camelCase field names */
+        SkillTag: {
+            readonly id: number;
+            name: string;
+            category?: string;
+            description?: string;
+            readonly isActive: boolean;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        /** @description Skill tag serializer with camelCase field names */
+        SkillTagRequest: {
+            name: string;
+            category?: string;
+            description?: string;
+        };
+        /**
+         * @description * `project` - project
+         *     * `global` - global
+         *     * `default` - default
+         * @enum {string}
+         */
+        SourceEnum: "project" | "global" | "default";
+        StatusSeries: {
+            active: number[];
+            active_ca: number[];
+            other: number[];
+        };
+        TeamOverviewItem: {
+            id: number;
+            name: string;
+            role: string;
+            /** Format: double */
+            utilization_percent: number;
+            /** Format: double */
+            allocated_hours: number;
+            capacity: number;
+            is_overallocated: boolean;
+            /** Format: double */
+            peak_utilization_percent: number;
+            peak_week: string;
+            is_peak_overallocated: boolean;
+        };
+        TokenRefresh: {
+            readonly access: string;
+            refresh: string;
+        };
+        TokenRefreshRequest: {
+            refresh: string;
+        };
+        TokenVerifyRequest: {
+            token: string;
+        };
+        UserListItem: {
+            id: number;
+            username: string;
+            email?: string;
+            is_staff: boolean;
+            is_superuser: boolean;
+            groups: string[];
+            role: string;
+            person?: components["schemas"]["UserListPerson"] | null;
+            accountSetup: boolean;
+        };
+        UserListPerson: {
+            id: number;
+            name: string;
+        };
+        UserProfile: {
+            readonly id: number;
+            readonly user: {
+                [key: string]: unknown;
+            };
+            readonly person: {
+                [key: string]: unknown;
+            } | null;
+            settings?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description Allow login with either username or email.
+         *
+         *     If the incoming 'username' field looks like an email or uniquely matches a
+         *     user email (case-insensitive), rewrite it to that user's username before
+         *     delegating to the base serializer.
+         */
+        UsernameOrEmailTokenObtainPairRequest: {
+            username: string;
+            password: string;
+        };
+        UtilizationDistribution: {
+            underutilized: number;
+            optimal: number;
+            high: number;
+            overallocated: number;
+        };
+        UtilizationScheme: {
+            mode?: components["schemas"]["ModeEnum"];
+            blue_min?: number;
+            blue_max?: number;
+            green_min?: number;
+            green_max?: number;
+            orange_min?: number;
+            orange_max?: number;
+            red_min?: number;
+            full_capacity_hours?: number;
+            zero_is_blank?: boolean;
+            readonly version: number;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        UtilizationSchemeRequest: {
+            mode?: components["schemas"]["ModeEnum"];
+            blue_min?: number;
+            blue_max?: number;
+            green_min?: number;
+            green_max?: number;
+            orange_min?: number;
+            orange_max?: number;
+            red_min?: number;
+            full_capacity_hours?: number;
+            zero_is_blank?: boolean;
+        };
+        WeeksSummary: {
+            weeks: number;
+            /** Format: double */
+            hours: number;
+        };
+        /** @description Serializer for workload forecast items returned by workload_forecast action. */
+        WorkloadForecastItem: {
+            weekStart: string;
+            /** Format: double */
+            totalCapacity: number;
+            /** Format: double */
+            totalAllocated: number;
+            /** Format: double */
+            teamUtilization: number;
+            peopleOverallocated: components["schemas"]["WorkloadForecastOverallocatedItem"][];
+        };
+        WorkloadForecastOverallocatedItem: {
+            id: number;
+            name: string;
+        };
+    };
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
+}
+export type $defs = Record<string, never>;
+export interface operations {
+    assignments_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAssignmentList"];
+                };
+            };
+        };
+    };
+    assignments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssignmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
+                "multipart/form-data": components["schemas"]["AssignmentRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+        };
+    };
+    assignments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assignment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+        };
+    };
+    assignments_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assignment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssignmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
+                "multipart/form-data": components["schemas"]["AssignmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+        };
+    };
+    assignments_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assignment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    assignments_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assignment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedAssignmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedAssignmentRequest"];
+                "multipart/form-data": components["schemas"]["PatchedAssignmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+        };
+    };
+    assignments_analytics_by_client_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedHoursByClientResponse"];
+                };
+            };
+        };
+    };
+    assignments_analytics_client_projects_retrieve: {
+        parameters: {
+            query: {
+                client: string;
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedHoursClientProjectsResponse"];
+                };
+            };
+        };
+    };
+    assignments_analytics_deliverable_timeline_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 include active_ca status in addition to active (default 0) */
+                include_active_ca?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedHoursDeliverableTimelineResponse"];
+                };
+            };
+        };
+    };
+    assignments_analytics_role_capacity_retrieve: {
+        parameters: {
+            query: {
+                /** @description Department ID */
+                department: number;
+                /** @description CSV of department ProjectRole IDs to include */
+                role_ids?: string;
+                /** @description Number of future weeks (4,8,12,16,20). Default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleCapacityTimelineResponse"];
+                };
+            };
+        };
+    };
+    assignments_analytics_status_timeline_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedHoursStatusTimelineResponse"];
+                };
+            };
+        };
+    };
+    assignments_bulk_update_hours_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedBulkUpdateHoursRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedBulkUpdateHoursRequestRequest"];
+                "multipart/form-data": components["schemas"]["PatchedBulkUpdateHoursRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkUpdateHoursResponse"];
+                };
+            };
+        };
+    };
+    assignments_by_person_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Page number (optional pagination) */
+                page?: number;
+                /** @description Page size (optional pagination) */
+                page_size?: number;
+                /** @description Filter by person id */
+                person_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+        };
+    };
+    assignments_check_conflicts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssignmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
+                "multipart/form-data": components["schemas"]["AssignmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+        };
+    };
+    assignments_counts_by_person_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description 0|1 */
+                include_placeholders?: number;
+                person?: number;
+                project?: number;
+                /** @description CSV of project statuses */
+                status_in?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentCountsByPersonResponse"];
+                };
+            };
+        };
+    };
+    assignments_experience_by_client_retrieve: {
+        parameters: {
+            query?: {
+                client?: string;
+                department?: number;
+                /** @description YYYY-MM-DD */
+                end?: string;
+                /** @description 0|1 */
+                include_children?: number;
+                min_weeks?: number;
+                /** @description YYYY-MM-DD */
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperienceByClientResponse"];
+                };
+            };
+        };
+    };
+    assignments_grid_snapshot_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GridSnapshotResponse"];
+                };
+            };
+        };
+    };
+    assignments_grid_snapshot_async_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GridSnapshotAsyncResponse"];
+                };
+            };
+        };
+    };
+    assignments_person_experience_profile_retrieve: {
+        parameters: {
+            query: {
+                end?: string;
+                person: number;
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonExperienceProfileResponse"];
+                };
+            };
+        };
+    };
+    assignments_person_project_timeline_retrieve: {
+        parameters: {
+            query: {
+                end?: string;
+                person: number;
+                project: number;
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonProjectTimelineResponse"];
+                };
+            };
+        };
+    };
+    assignments_project_grid_snapshot_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                has_future_deliverables?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description 0|1 */
+                include_placeholders?: number;
+                /** @description CSV of project IDs to scope totals (optional) */
+                project_ids?: string;
+                /** @description CSV of project status filters */
+                status_in?: string;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectGridSnapshotResponse"];
+                };
+            };
+        };
+    };
+    assignments_project_staffing_timeline_retrieve: {
+        parameters: {
+            query: {
+                end?: string;
+                project: number;
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectStaffingTimelineResponse"];
+                };
+            };
+        };
+    };
+    assignments_project_totals_retrieve: {
+        parameters: {
+            query: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description 0|1 */
+                include_placeholders?: number;
+                /** @description CSV of project IDs */
+                project_ids: string;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTotalsResponse"];
+                };
+            };
+        };
+    };
+    assignments_rebalance_suggestions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+        };
+    };
+    assignments_run_weekly_snapshot_create: {
+        parameters: {
+            query?: {
+                /** @description Use backfill mode (0|1/true|false) */
+                backfill?: boolean;
+                /** @description Backfill: emit joined/left events */
+                emit_events?: boolean;
+                /** @description Backfill: overwrite existing rows */
+                force?: boolean;
+                /** @description YYYY-MM-DD (Sunday) */
+                week?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssignmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssignmentRequest"];
+                "multipart/form-data": components["schemas"]["AssignmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunWeeklySnapshotResponse"];
+                };
+            };
+        };
+    };
+    assignments_search_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssignmentSearchRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssignmentSearchRequestRequest"];
+                "multipart/form-data": components["schemas"]["AssignmentSearchRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentSearchResponse"];
+                };
+            };
+        };
+    };
+    auth_admin_audit_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuditLog"][];
+                };
+            };
+        };
+    };
+    auth_change_password_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChangePasswordRequestRequest"];
+                "multipart/form-data": components["schemas"]["ChangePasswordRequestRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_create_user_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreateUserRequestRequest"];
+                "multipart/form-data": components["schemas"]["CreateUserRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProfile"];
+                };
+            };
+        };
+    };
+    auth_invite_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteUserRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["InviteUserRequestRequest"];
+                "multipart/form-data": components["schemas"]["InviteUserRequestRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_link_person_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LinkPersonRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LinkPersonRequestRequest"];
+                "multipart/form-data": components["schemas"]["LinkPersonRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProfile"];
+                };
+            };
+        };
+    };
+    auth_me_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProfile"];
+                };
+            };
+        };
+    };
+    auth_notification_preferences_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+        };
+    };
+    auth_notification_preferences_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferencesRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["NotificationPreferencesRequest"];
+                "multipart/form-data": components["schemas"]["NotificationPreferencesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+        };
+    };
+    auth_password_reset_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetRequestRequest"];
+                "multipart/form-data": components["schemas"]["PasswordResetRequestRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_password_reset_confirm_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirmRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetConfirmRequest"];
+                "multipart/form-data": components["schemas"]["PasswordResetConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_set_password_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPasswordRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SetPasswordRequestRequest"];
+                "multipart/form-data": components["schemas"]["SetPasswordRequestRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedUserSettingsPatchRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedUserSettingsPatchRequest"];
+                "multipart/form-data": components["schemas"]["PatchedUserSettingsPatchRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProfile"];
+                };
+            };
+        };
+    };
+    auth_users_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListItem"][];
+                };
+            };
+        };
+    };
+    auth_users_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_users_link_person_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AdminLinkUserPersonRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AdminLinkUserPersonRequestRequest"];
+                "multipart/form-data": components["schemas"]["AdminLinkUserPersonRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListItem"];
+                };
+            };
+        };
+    };
+    auth_users_role_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetUserRoleRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SetUserRoleRequestRequest"];
+                "multipart/form-data": components["schemas"]["SetUserRoleRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListItem"];
+                };
+            };
+        };
+    };
+    backups_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupListResponse"];
+                };
+            };
+        };
+    };
+    backups_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["BackupCreateRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BackupCreateRequestRequest"];
+                "multipart/form-data": components["schemas"]["BackupCreateRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupJobResponse"];
+                };
+            };
+        };
+    };
+    backups_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    backups_download_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup archive download. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+        };
+    };
+    backups_restore_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupRestoreRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BackupRestoreRequestRequest"];
+                "multipart/form-data": components["schemas"]["BackupRestoreRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupJobResponse"];
+                };
+            };
+        };
+    };
+    backups_status_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupStatusResponse"];
+                };
+            };
+        };
+    };
+    backups_upload_restore_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupUploadRestoreRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BackupUploadRestoreRequestRequest"];
+                "multipart/form-data": components["schemas"]["BackupUploadRestoreRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupJobResponse"];
+                };
+            };
+        };
+    };
+    capabilities_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilitiesResponse"];
+                };
+            };
+        };
+    };
+    core_calendar_feeds_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedSettings"];
+                };
+            };
+        };
+    };
+    core_calendar_feeds_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
+                "multipart/form-data": components["schemas"]["PatchedCalendarFeedsPatchRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedSettings"];
+                };
+            };
+        };
+    };
+    core_deliverable_phase_mapping_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverablePhaseMappingSettings"];
+                };
+            };
+        };
+    };
+    core_deliverable_phase_mapping_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
+                "multipart/form-data": components["schemas"]["DeliverablePhaseMappingSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverablePhaseMappingSettings"];
+                };
+            };
+        };
+    };
+    core_deliverable_phase_mapping_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRoleCreateRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleCreateRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRoleCreateRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRole"];
+                };
+            };
+        };
+    };
+    core_deliverable_phase_mapping_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    core_pre_deliverable_global_settings_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableGlobalSettingsItem"][];
+                };
+            };
+        };
+    };
+    core_pre_deliverable_global_settings_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalSettingsUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["GlobalSettingsUpdateRequest"];
+                "multipart/form-data": components["schemas"]["GlobalSettingsUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableGlobalSettingsItem"][];
+                };
+            };
+        };
+    };
+    core_project_template_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursRoleSettingsResponse"];
+                };
+            };
+        };
+    };
+    core_project_template_settings_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
+                "multipart/form-data": components["schemas"]["AutoHoursRoleSettingsUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursRoleSettingItemResponse"];
+                };
+            };
+        };
+    };
+    core_project_template_settings_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateRoleSettingItem"][];
+                };
+            };
+        };
+    };
+    core_project_template_settings_update_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
+                "multipart/form-data": components["schemas"]["AutoHoursTemplateRoleSettingsUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateRoleSettingItemResponse"][];
+                };
+            };
+        };
+    };
+    core_project_templates_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateListItem"][];
+                };
+            };
+        };
+    };
+    core_project_templates_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoHoursTemplateCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateCreateRequest"];
+                "multipart/form-data": components["schemas"]["AutoHoursTemplateCreateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateCreateResponse"];
+                };
+            };
+        };
+    };
+    core_project_templates_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateDetail"];
+                };
+            };
+        };
+    };
+    core_project_templates_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AutoHoursTemplateUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateUpdateRequest"];
+                "multipart/form-data": components["schemas"]["AutoHoursTemplateUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateUpdateResponse"];
+                };
+            };
+        };
+    };
+    core_project_templates_create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoHoursTemplateCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateCreateRequest"];
+                "multipart/form-data": components["schemas"]["AutoHoursTemplateCreateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateCreateResponse"];
+                };
+            };
+        };
+    };
+    core_project_templates_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    core_project_templates_duplicate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
+                "multipart/form-data": components["schemas"]["AutoHoursTemplateDuplicateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateDuplicateResponse"];
+                };
+            };
+        };
+    };
+    core_project_templates_duplicate_default_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateListItem"][];
+                };
+            };
+        };
+    };
+    core_project_templates_duplicate_default_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
+                "multipart/form-data": components["schemas"]["AutoHoursTemplateDuplicateDefaultRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateDuplicateDefaultResponse"];
+                };
+            };
+        };
+    };
+    core_project_roles_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleListResponse"];
+                };
+            };
+        };
+    };
+    core_qa_task_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QATaskSettings"];
+                };
+            };
+        };
+    };
+    core_qa_task_settings_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QATaskSettingsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["QATaskSettingsRequest"];
+                "multipart/form-data": components["schemas"]["QATaskSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QATaskSettings"];
+                };
+            };
+        };
+    };
+    core_utilization_scheme_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UtilizationScheme"];
+                };
+            };
+        };
+    };
+    core_utilization_scheme_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UtilizationSchemeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["UtilizationSchemeRequest"];
+                "multipart/form-data": components["schemas"]["UtilizationSchemeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UtilizationScheme"];
+                };
+            };
+        };
+    };
+    dashboard_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Filter by department id */
+                department?: number;
+                /** @description Number of weeks to aggregate (1-12) */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardResponse"];
+                };
+            };
+        };
+    };
+    deliverables_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableList"];
+                };
+            };
+        };
+    };
+    deliverables_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deliverable"];
+                };
+            };
+        };
+    };
+    deliverables_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deliverable"];
+                };
+            };
+        };
+    };
+    deliverables_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deliverable"];
+                };
+            };
+        };
+    };
+    deliverables_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverables_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDeliverableRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableRequest"];
+                "multipart/form-data": components["schemas"]["PatchedDeliverableRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deliverable"];
+                };
+            };
+        };
+    };
+    deliverables_staffing_summary_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Lookback window in weeks */
+                weeks?: number;
+            };
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableStaffingSummaryItem"];
+                };
+            };
+        };
+    };
+    deliverables_assignments_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableAssignmentList"];
+                };
+            };
+        };
+    };
+    deliverables_assignments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableAssignmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableAssignmentRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableAssignmentRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableAssignment"];
+                };
+            };
+        };
+    };
+    deliverables_assignments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable assignment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableAssignment"];
+                };
+            };
+        };
+    };
+    deliverables_assignments_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable assignment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableAssignmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableAssignmentRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableAssignmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableAssignment"];
+                };
+            };
+        };
+    };
+    deliverables_assignments_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable assignment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverables_assignments_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this deliverable assignment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDeliverableAssignmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableAssignmentRequest"];
+                "multipart/form-data": components["schemas"]["PatchedDeliverableAssignmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableAssignment"];
+                };
+            };
+        };
+    };
+    deliverables_assignments_by_deliverable_list: {
+        parameters: {
+            query: {
+                deliverable: number;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableAssignmentList"];
+                };
+            };
+        };
+    };
+    deliverables_assignments_by_person_list: {
+        parameters: {
+            query: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                person: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableAssignmentList"];
+                };
+            };
+        };
+    };
+    deliverables_bulk_retrieve: {
+        parameters: {
+            query: {
+                /** @description Comma-separated project IDs */
+                project_ids: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Map of project_id to list of deliverables. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    deliverables_calendar_list: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD */
+                end?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description YYYY-MM-DD */
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableCalendarItemList"];
+                };
+            };
+        };
+    };
+    deliverables_calendar_with_pre_items_retrieve: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD */
+                end?: string;
+                mine_only?: boolean;
+                /** @description YYYY-MM-DD */
+                start?: string;
+                type_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deliverable"];
+                };
+            };
+        };
+    };
+    deliverables_personal_pre_deliverables_retrieve: {
+        parameters: {
+            query?: {
+                days_ahead?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deliverable"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPreDeliverableItemList"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreDeliverableItemRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PreDeliverableItemRequest"];
+                "multipart/form-data": components["schemas"]["PreDeliverableItemRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableItem"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Pre-Deliverable Item. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableItem"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Pre-Deliverable Item. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreDeliverableItemRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PreDeliverableItemRequest"];
+                "multipart/form-data": components["schemas"]["PreDeliverableItemRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableItem"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Pre-Deliverable Item. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Pre-Deliverable Item. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPreDeliverableItemRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPreDeliverableItemRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPreDeliverableItemRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableItem"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_complete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Pre-Deliverable Item. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableItem"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_uncomplete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Pre-Deliverable Item. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableItem"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_backfill_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PreItemsBackfillRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PreItemsBackfillRequestRequest"];
+                "multipart/form-data": components["schemas"]["PreItemsBackfillRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreItemsBackfillResponse"];
+                };
+            };
+        };
+    };
+    deliverables_pre_deliverable_items_bulk_complete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkCompleteRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BulkCompleteRequestRequest"];
+                "multipart/form-data": components["schemas"]["BulkCompleteRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkCompleteResponse"];
+                };
+            };
+        };
+    };
+    deliverables_qa_tasks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
+                };
+            };
+        };
+    };
+    deliverables_qa_tasks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableQATaskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableQATaskRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableQATaskRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableQATask"];
+                };
+            };
+        };
+    };
+    deliverables_qa_tasks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable QA Task. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableQATask"];
+                };
+            };
+        };
+    };
+    deliverables_qa_tasks_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable QA Task. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableQATaskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableQATaskRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableQATaskRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableQATask"];
+                };
+            };
+        };
+    };
+    deliverables_qa_tasks_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable QA Task. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverables_qa_tasks_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable QA Task. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDeliverableQATaskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableQATaskRequest"];
+                "multipart/form-data": components["schemas"]["PatchedDeliverableQATaskRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableQATask"];
+                };
+            };
+        };
+    };
+    deliverables_reorder_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableReorderRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableReorderRequestRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableReorderRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableReorderResponse"];
+                };
+            };
+        };
+    };
+    deliverables_task_templates_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableTaskTemplateList"];
+                };
+            };
+        };
+    };
+    deliverables_task_templates_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableTaskTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskTemplateRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableTaskTemplateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableTaskTemplate"];
+                };
+            };
+        };
+    };
+    deliverables_task_templates_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable Task Template. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableTaskTemplate"];
+                };
+            };
+        };
+    };
+    deliverables_task_templates_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable Task Template. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableTaskTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskTemplateRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableTaskTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableTaskTemplate"];
+                };
+            };
+        };
+    };
+    deliverables_task_templates_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable Task Template. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverables_task_templates_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable Task Template. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableTaskTemplate"];
+                };
+            };
+        };
+    };
+    deliverables_tasks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableTaskList"];
+                };
+            };
+        };
+    };
+    deliverables_tasks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableTaskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableTaskRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableTask"];
+                };
+            };
+        };
+    };
+    deliverables_tasks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable Task. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableTask"];
+                };
+            };
+        };
+    };
+    deliverables_tasks_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable Task. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverableTaskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskRequest"];
+                "multipart/form-data": components["schemas"]["DeliverableTaskRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableTask"];
+                };
+            };
+        };
+    };
+    deliverables_tasks_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable Task. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverables_tasks_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Deliverable Task. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDeliverableTaskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableTaskRequest"];
+                "multipart/form-data": components["schemas"]["PatchedDeliverableTaskRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliverableTask"];
+                };
+            };
+        };
+    };
+    departments_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDepartmentList"];
+                };
+            };
+        };
+    };
+    departments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DepartmentRequest"];
+                "multipart/form-data": components["schemas"]["DepartmentRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Department"];
+                };
+            };
+        };
+    };
+    departments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this department. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Department"];
+                };
+            };
+        };
+    };
+    departments_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this department. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DepartmentRequest"];
+                "multipart/form-data": components["schemas"]["DepartmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Department"];
+                };
+            };
+        };
+    };
+    departments_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this department. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    departments_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this department. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDepartmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDepartmentRequest"];
+                "multipart/form-data": components["schemas"]["PatchedDepartmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Department"];
+                };
+            };
+        };
+    };
+    integrations_connections_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedIntegrationConnectionList"];
+                };
+            };
+        };
+    };
+    integrations_connections_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationConnectionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["IntegrationConnectionRequest"];
+                "multipart/form-data": components["schemas"]["IntegrationConnectionRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationConnection"];
+                };
+            };
+        };
+    };
+    integrations_connections_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this integration connection. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationConnection"];
+                };
+            };
+        };
+    };
+    integrations_connections_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this integration connection. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationConnectionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["IntegrationConnectionRequest"];
+                "multipart/form-data": components["schemas"]["IntegrationConnectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationConnection"];
+                };
+            };
+        };
+    };
+    integrations_connections_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this integration connection. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    integrations_connections_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this integration connection. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedIntegrationConnectionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedIntegrationConnectionRequest"];
+                "multipart/form-data": components["schemas"]["PatchedIntegrationConnectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationConnection"];
+                };
+            };
+        };
+    };
+    integrations_connections_test_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationTestResponse"];
+                };
+            };
+        };
+    };
+    integrations_connections_test_activity_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationTestResponse"];
+                };
+            };
+        };
+    };
+    integrations_health_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationHealthResponse"];
+                };
+            };
+        };
+    };
+    integrations_jobs_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationJobRetryResponse"];
+                };
+            };
+        };
+    };
+    integrations_providers_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Provider"][];
+                };
+            };
+        };
+    };
+    integrations_providers_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Provider"];
+                };
+            };
+        };
+    };
+    integrations_providers_catalog_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderCatalog"];
+                };
+            };
+        };
+    };
+    integrations_providers_connect_callback_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OAuth callback HTML response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+        };
+    };
+    integrations_providers_connect_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderConnectStartRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProviderConnectStartRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProviderConnectStartRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderConnectStartResponse"];
+                };
+            };
+        };
+    };
+    integrations_providers_credentials_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderCredential"];
+                };
+            };
+        };
+    };
+    integrations_providers_credentials_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderCredentialRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProviderCredentialRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProviderCredentialRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderCredential"];
+                };
+            };
+        };
+    };
+    integrations_providers_objects_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of provider object definitions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_reset_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderResetRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProviderResetRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProviderResetRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderResetResponse"];
+                };
+            };
+        };
+    };
+    integrations_providers_mapping_defaults_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Optional connection id */
+                connectionId?: number;
+            };
+            header?: never;
+            path: {
+                object_key: string;
+                provider_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingDefaultsResponse"];
+                };
+            };
+        };
+    };
+    integrations_providers_mapping_defaults_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                object_key: string;
+                provider_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MappingDefaultsRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MappingDefaultsRequestRequest"];
+                "multipart/form-data": components["schemas"]["MappingDefaultsRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingDefaultsResponse"];
+                };
+            };
+        };
+    };
+    integrations_providers_jobs_retrieve: {
+        parameters: {
+            query?: {
+                connection?: number;
+                limit?: number;
+                object?: string;
+                /** @description Comma-separated status values */
+                status?: string;
+            };
+            header?: never;
+            path: {
+                provider_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationJobListResponse"];
+                };
+            };
+        };
+    };
+    integrations_providers_projects_matching_confirm_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProjectMatchingConfirmRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_projects_matching_suggestions_retrieve: {
+        parameters: {
+            query: {
+                connectionId: number;
+            };
+            header?: never;
+            path: {
+                provider_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_rules_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedIntegrationRuleList"];
+                };
+            };
+        };
+    };
+    integrations_rules_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationRuleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleRequest"];
+                "multipart/form-data": components["schemas"]["IntegrationRuleRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationRule"];
+                };
+            };
+        };
+    };
+    integrations_rules_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this integration rule. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationRule"];
+                };
+            };
+        };
+    };
+    integrations_rules_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this integration rule. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationRuleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleRequest"];
+                "multipart/form-data": components["schemas"]["IntegrationRuleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationRule"];
+                };
+            };
+        };
+    };
+    integrations_rules_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this integration rule. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    integrations_rules_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this integration rule. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedIntegrationRuleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedIntegrationRuleRequest"];
+                "multipart/form-data": components["schemas"]["PatchedIntegrationRuleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationRule"];
+                };
+            };
+        };
+    };
+    integrations_rules_resync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["IntegrationRuleResyncRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["IntegrationRuleResyncRequestRequest"];
+                "multipart/form-data": components["schemas"]["IntegrationRuleResyncRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationRuleResyncResponse"];
+                };
+            };
+        };
+    };
+    integrations_secret_key_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationSecretKeyResponse"];
+                };
+            };
+        };
+    };
+    integrations_secret_key_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationSecretKeyRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["IntegrationSecretKeyRequestRequest"];
+                "multipart/form-data": components["schemas"]["IntegrationSecretKeyRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationSecretKeyResponse"];
+                };
+            };
+        };
+    };
+    jobs_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Background job id */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        /** @enum {string} */
+                        state: "PENDING" | "STARTED" | "PROGRESS" | "SUCCESS" | "FAILURE";
+                        progress: number;
+                        message?: string | null;
+                        downloadReady: boolean;
+                        downloadUrl?: string | null;
+                        result?: unknown;
+                        error?: string | null;
+                    };
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    jobs_download_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Background job id */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    people_list: {
+        parameters: {
+            query?: {
+                /** @description Return all items without pagination when true */
+                all?: string;
+                /** @description Filter by department id */
+                department?: number;
+                /** @description Include child departments (0|1) */
+                include_children?: number;
+                /** @description Include inactive people (0|1; default 0) */
+                include_inactive?: number;
+                /** @description Page number */
+                page?: number;
+                /** @description Page size */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPersonList"];
+                };
+            };
+        };
+    };
+    people_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PersonRequest"];
+                "multipart/form-data": components["schemas"]["PersonRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+        };
+    };
+    people_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this person. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+        };
+    };
+    people_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this person. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PersonRequest"];
+                "multipart/form-data": components["schemas"]["PersonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+        };
+    };
+    people_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this person. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    people_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this person. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPersonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPersonRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPersonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+        };
+    };
+    people_utilization_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this person. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+        };
+    };
+    people_autocomplete_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Max results (1-50) */
+                limit?: number;
+                /** @description Alias for search */
+                q?: string;
+                /** @description Substring of name */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleAutocompleteItem"];
+                };
+            };
+        };
+    };
+    people_capacity_heatmap_list: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPersonCapacityHeatmapItemList"];
+                };
+            };
+        };
+    };
+    people_export_excel_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+        };
+    };
+    people_find_available_list: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Max results (1-200), default 100 */
+                limit?: number;
+                /** @description Filter to people with at least this many hours free */
+                minAvailableHours?: number;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Comma-separated skill names */
+                skills?: string;
+                /** @description YYYY-MM-DD (Monday) week key */
+                week?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSkillMatchResultItemList"];
+                };
+            };
+        };
+    };
+    people_import_excel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PersonRequest"];
+                "multipart/form-data": components["schemas"]["PersonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+        };
+    };
+    people_search_retrieve: {
+        parameters: {
+            query: {
+                /** @description Filter by department id */
+                department?: number;
+                /** @description Max results (1-50) */
+                limit?: number;
+                /** @description Search query (min length 2) */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleSearchItem"];
+                };
+            };
+        };
+    };
+    people_skill_match_list: {
+        parameters: {
+            query: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Max results (1-200), default 50 */
+                limit?: number;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Comma-separated skill names */
+                skills: string;
+                /** @description YYYY-MM-DD (Monday) for availability-aware scoring */
+                week?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSkillMatchResultItemList"];
+                };
+            };
+        };
+    };
+    people_skill_match_async_retrieve: {
+        parameters: {
+            query: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description Max results (1-200), default 50 */
+                limit?: number;
+                /** @description Comma-separated skill names */
+                skills: string;
+                /** @description YYYY-MM-DD (Monday) for availability-aware scoring */
+                week?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillMatchAsyncResponse"];
+                };
+            };
+        };
+    };
+    people_workload_forecast_list: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedWorkloadForecastItemList"];
+                };
+            };
+        };
+    };
+    personal_work_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalWork"];
+                };
+            };
+        };
+    };
+    projects_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProjectList"];
+                };
+            };
+        };
+    };
+    projects_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_availability_list: {
+        parameters: {
+            query?: {
+                /** @description Limit to departments already staffing this project (0|1) */
+                candidates_only?: number;
+                /** @description Filter people by department id */
+                department?: number;
+                /** @description Include child departments (0|1) */
+                include_children?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description YYYY-MM-DD (Sunday key) */
+                week?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProjectAvailabilityItemList"];
+                };
+            };
+        };
+    };
+    projects_deliverable_tasks_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableTaskList"];
+                };
+            };
+        };
+    };
+    projects_pre_deliverable_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectPreDeliverableSettingsResponse"];
+                };
+            };
+        };
+    };
+    projects_pre_deliverable_settings_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectPreDeliverableSettingsResponse"];
+                };
+            };
+        };
+    };
+    projects_qa_tasks_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
+                };
+            };
+        };
+    };
+    projects_risks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProjectRiskList"];
+                };
+            };
+        };
+    };
+    projects_risks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ProjectRiskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRiskRequest"];
+                "application/json": components["schemas"]["ProjectRiskRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRisk"];
+                };
+            };
+        };
+    };
+    projects_risks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+                risk_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRisk"];
+                };
+            };
+        };
+    };
+    projects_risks_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+                risk_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ProjectRiskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRiskRequest"];
+                "application/json": components["schemas"]["ProjectRiskRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRisk"];
+                };
+            };
+        };
+    };
+    projects_risks_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+                risk_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_risks_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+                risk_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["PatchedProjectRiskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRiskRequest"];
+                "application/json": components["schemas"]["PatchedProjectRiskRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRisk"];
+                };
+            };
+        };
+    };
+    projects_risks_attachment_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+                risk_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Risk attachment file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description No attachment found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_audit_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuditLog"][];
+                };
+            };
+        };
+    };
+    projects_export_excel_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_export_template_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_filter_metadata_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectFilterMetadataResponse"];
+                };
+            };
+        };
+    };
+    projects_import_excel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_project_roles_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleItem"][];
+                };
+            };
+        };
+    };
+    projects_project_roles_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRoleCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleCreateRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRoleCreateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleItem"];
+                };
+            };
+        };
+    };
+    projects_project_roles_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_project_roles_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectRoleUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRoleUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectRoleUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleItem"];
+                };
+            };
+        };
+    };
+    projects_project_roles_clear_assignments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleClearAssignmentsResponse"];
+                };
+            };
+        };
+    };
+    projects_project_roles_usage_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleUsageResponse"];
+                };
+            };
+        };
+    };
+    projects_project_roles_reorder_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRoleReorderRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleReorderRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRoleReorderRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleReorderResponse"];
+                };
+            };
+        };
+    };
+    projects_project_roles_search_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleItem"][];
+                };
+            };
+        };
+    };
+    projects_search_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProjectSearchRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectSearchRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProjectSearchRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSearchResponse"];
+                };
+            };
+        };
+    };
+    reports_pre_deliverable_completion_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableCompletionResponse"];
+                };
+            };
+        };
+    };
+    reports_pre_deliverable_team_performance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreDeliverableTeamPerformanceResponse"];
+                };
+            };
+        };
+    };
+    roles_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRoleList"];
+                };
+            };
+        };
+    };
+    roles_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RoleRequest"];
+                "multipart/form-data": components["schemas"]["RoleRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+        };
+    };
+    roles_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Role. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+        };
+    };
+    roles_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Role. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RoleRequest"];
+                "multipart/form-data": components["schemas"]["RoleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+        };
+    };
+    roles_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Role. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    roles_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Role. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedRoleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedRoleRequest"];
+                "multipart/form-data": components["schemas"]["PatchedRoleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+        };
+    };
+    roles_bulk_list: {
+        parameters: {
+            query?: {
+                /** @description Include inactive roles when present */
+                include_inactive?: boolean;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRoleList"];
+                };
+            };
+        };
+    };
+    roles_reorder_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RoleRequest"];
+                "multipart/form-data": components["schemas"]["RoleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+        };
+    };
+    skills_person_skills_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPersonSkillList"];
+                };
+            };
+        };
+    };
+    skills_person_skills_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonSkillRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PersonSkillRequest"];
+                "multipart/form-data": components["schemas"]["PersonSkillRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonSkill"];
+                };
+            };
+        };
+    };
+    skills_person_skills_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Person Skill. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonSkill"];
+                };
+            };
+        };
+    };
+    skills_person_skills_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Person Skill. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonSkillRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PersonSkillRequest"];
+                "multipart/form-data": components["schemas"]["PersonSkillRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonSkill"];
+                };
+            };
+        };
+    };
+    skills_person_skills_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Person Skill. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    skills_person_skills_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Person Skill. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPersonSkillRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPersonSkillRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPersonSkillRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonSkill"];
+                };
+            };
+        };
+    };
+    skills_person_skills_summary_retrieve: {
+        parameters: {
+            query: {
+                /** @description Person id */
+                person: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonSkillSummaryGrouped"];
+                };
+            };
+        };
+    };
+    skills_skill_tags_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSkillTagList"];
+                };
+            };
+        };
+    };
+    skills_skill_tags_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillTagRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SkillTagRequest"];
+                "multipart/form-data": components["schemas"]["SkillTagRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillTag"];
+                };
+            };
+        };
+    };
+    skills_skill_tags_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Skill Tag. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillTag"];
+                };
+            };
+        };
+    };
+    skills_skill_tags_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Skill Tag. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillTagRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SkillTagRequest"];
+                "multipart/form-data": components["schemas"]["SkillTagRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillTag"];
+                };
+            };
+        };
+    };
+    skills_skill_tags_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Skill Tag. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    skills_skill_tags_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this Skill Tag. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSkillTagRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSkillTagRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSkillTagRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillTag"];
+                };
+            };
+        };
+    };
+    token_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
+                "multipart/form-data": components["schemas"]["UsernameOrEmailTokenObtainPairRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    token_logout_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenRefreshRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TokenRefreshRequest"];
+                "multipart/form-data": components["schemas"]["TokenRefreshRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenRefresh"];
+                };
+            };
+        };
+    };
+    token_refresh_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenRefreshRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TokenRefreshRequest"];
+                "multipart/form-data": components["schemas"]["TokenRefreshRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenRefresh"];
+                };
+            };
+        };
+    };
+    token_verify_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TokenVerifyRequest"];
+                "multipart/form-data": components["schemas"]["TokenVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ui_assignments_page_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 (project grid) */
+                has_future_deliverables?: number;
+                /** @description CSV: assignment,project (default both) */
+                include?: string;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description 0|1 */
+                include_placeholders?: number;
+                /** @description CSV of project IDs to scope totals (project grid) */
+                project_ids?: string;
+                /** @description CSV of project status filters (project grid) */
+                status_in?: string;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
 }

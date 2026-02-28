@@ -31,7 +31,7 @@ function getInitialSection(
   if (fromStorage && sections.some(sec => sec.id === fromStorage)) {
     return fromStorage;
   }
-  return sections[0]?.id ?? '';
+  return '';
 }
 
 const SettingsSplitPane: React.FC<SettingsSplitPaneProps> = ({ sections }) => {
@@ -50,7 +50,7 @@ const SettingsSplitPane: React.FC<SettingsSplitPaneProps> = ({ sections }) => {
 
   const activeSectionId = useMemo(() => {
     if (filteredSections.some(sec => sec.id === selectedId)) return selectedId;
-    return filteredSections[0]?.id ?? '';
+    return '';
   }, [filteredSections, selectedId]);
 
   useEffect(() => {
@@ -117,6 +117,8 @@ const SettingsSplitPane: React.FC<SettingsSplitPaneProps> = ({ sections }) => {
       <div role="tabpanel" aria-labelledby={activeSectionId}>
         {filteredSections.length === 0 ? (
           <p className="text-[var(--muted)]">No sections match “{filter}”.</p>
+        ) : !activeSectionId ? (
+          <p className="text-[var(--muted)]">Select a settings section to load details.</p>
         ) : ActiveSection ? (
           <ActiveSection />
         ) : null}

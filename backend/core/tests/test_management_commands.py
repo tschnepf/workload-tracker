@@ -20,10 +20,10 @@ class UtilizationSchemeCommandTests(TestCase):
 
             # Modify and load
             data['green_max'] = data['green_min']  # shrink green range
+            data['orange_min'] = data['green_max'] + 1  # keep range invariants valid
             json.dump(data, open(tmp.name, 'w'))
             call_command('load_utilization_scheme', file=tmp.name)
 
         s2 = UtilizationScheme.get_active()
         self.assertGreater(s2.version, orig_version)
         self.assertEqual(s2.green_max, s2.green_min)
-

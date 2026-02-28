@@ -8,21 +8,24 @@ import { useMobileUiFlag } from '@/mobile/mobileFlags';
 import { isAdminUser, isManagerUser } from '@/utils/roleAccess';
 
 const SettingsContent: React.FC = () => {
-  const { auth, capsQuery } = useSettingsData();
+  const { auth, capsQuery, caps, settingsShellQuery, visibleSectionIds } = useSettingsData();
   const splitPaneEnabled = (import.meta.env.VITE_SETTINGS_SPLITPANE ?? 'true') !== 'false';
   const mobileSettingsEnabled = useMobileUiFlag('settings');
 
   const visibleSections = useMemo(() => {
     const isAdmin = isAdminUser(auth.user);
     const isManager = isManagerUser(auth.user);
-    return settingsSections.filter(section => {
+    const localVisible = settingsSections.filter(section => {
       if (section.requiresAdmin && !isAdmin && !(section.allowManager && isManager)) return false;
-      if (section.featureFlag && !section.featureFlag(capsQuery.data)) return false;
+      if (section.featureFlag && !section.featureFlag(caps)) return false;
       return true;
     });
-  }, [auth.user, capsQuery.data]);
+    if (visibleSectionIds === undefined) return localVisible;
+    const allowedByServer = new Set(visibleSectionIds);
+    return localVisible.filter((section) => allowedByServer.has(section.id));
+  }, [auth.user, caps, visibleSectionIds]);
 
-  if (capsQuery.isLoading) {
+  if ((settingsShellQuery.isLoading && !settingsShellQuery.data && !settingsShellQuery.isError) || capsQuery.isLoading) {
     return (
       <Layout>
         <div

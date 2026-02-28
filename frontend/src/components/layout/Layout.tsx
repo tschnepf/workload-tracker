@@ -38,14 +38,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const auth = useAuth();
+  const hideGlobalVerticalFilter = location.pathname.startsWith('/departments/manager');
+  const showGlobalVerticalFilter = !hideGlobalVerticalFilter;
+  const hideGlobalDepartmentFilter =
+    location.pathname === '/my-work' ||
+    location.pathname === '/dashboard' ||
+    location.pathname.startsWith('/departments/manager') ||
+    location.pathname.startsWith('/departments/reports') ||
+    location.pathname.startsWith('/departments/hierarchy') ||
+    location.pathname.startsWith('/deliverables/calendar') ||
+    location.pathname.startsWith('/settings');
+  const showGlobalDepartmentFilter = !hideGlobalDepartmentFilter;
   const { state: verticalState } = useVerticalFilter();
   const { state: deptState, setDepartmentFilters, clearDepartment } = useDepartmentFilter();
   const { departments: verticalDepartments, isLoading: departmentsLoading } = useDepartments({
     vertical: verticalState.selectedVerticalId ?? undefined,
+    enabled: showGlobalDepartmentFilter && verticalState.selectedVerticalId != null && (deptState.filters?.length ?? 0) > 0,
   });
 
   // Ensure global department filters stay within the selected vertical
   useEffect(() => {
+    if (!showGlobalDepartmentFilter) return;
     if (verticalState.selectedVerticalId == null) return;
     if (departmentsLoading) return;
     const filters = deptState.filters || [];
@@ -58,7 +71,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     } else {
       setDepartmentFilters(next);
     }
-  }, [verticalState.selectedVerticalId, departmentsLoading, verticalDepartments, deptState.filters, clearDepartment, setDepartmentFilters]);
+  }, [showGlobalDepartmentFilter, verticalState.selectedVerticalId, departmentsLoading, verticalDepartments, deptState.filters, clearDepartment, setDepartmentFilters]);
   useEffect(() => {
     function onKeydown(e: KeyboardEvent) {
       // Don't hijack when typing in inputs/textareas/contenteditable
@@ -156,6 +169,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <TopBarSlotsProvider>
           <TopBarInner
             authPresent={!!auth?.accessToken}
+            showVerticalFilter={showGlobalVerticalFilter}
+            showDepartmentFilter={showGlobalDepartmentFilter}
             onLogout={async () => { try { await performLogout(); } finally { navigate('/login', { replace: true }); } }}
             onOpenSidebar={() => setMobileSidebarOpen(true)}
             hamburgerRef={hamburgerRef}
@@ -216,10 +231,12 @@ export default Layout;
 // Separate top bar to read slot content and keep Layout readable
 const TopBarInner: React.FC<{
   authPresent: boolean;
+  showVerticalFilter: boolean;
+  showDepartmentFilter: boolean;
   onLogout: () => Promise<void> | void;
   onOpenSidebar: () => void;
   hamburgerRef: React.RefObject<HTMLButtonElement>;
-}> = ({ authPresent, onLogout, onOpenSidebar, hamburgerRef }) => {
+}> = ({ authPresent, showVerticalFilter, showDepartmentFilter, onLogout, onOpenSidebar, hamburgerRef }) => {
   const { left, right } = useTopBarSlotValues();
   return (
     <div
@@ -253,8 +270,8 @@ const TopBarInner: React.FC<{
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <GlobalVerticalFilter />
-        <GlobalDepartmentFilter expand={false} />
+        {showVerticalFilter ? <GlobalVerticalFilter /> : null}
+        {showDepartmentFilter ? <GlobalDepartmentFilter expand={false} /> : null}
         {/* Explicit portal mount points for page headers */}
         <div id="topbar-left-mount" className="min-w-0" />
         <div id="topbar-right-mount" className="min-w-0" />

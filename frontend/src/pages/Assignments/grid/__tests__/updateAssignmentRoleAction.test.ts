@@ -34,7 +34,7 @@ describe('updateAssignmentRoleAction', () => {
       showToast,
     });
 
-    expect(assignmentsApi.update).toHaveBeenCalledWith(100, { roleOnProjectId: 5 });
+    expect(assignmentsApi.update).toHaveBeenCalledWith(100, { roleOnProjectId: 5 }, undefined);
     expect(peopleHolder.value[0].assignments[0].roleOnProjectId).toBe(5);
     expect(peopleHolder.value[0].assignments[0].roleName).toBe('Engineer');
     expect(asnHolder.value[0].roleOnProjectId).toBe(5);
@@ -72,4 +72,3 @@ describe('updateAssignmentRoleAction', () => {
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Failed to update role'), 'error');
   });
 });
-

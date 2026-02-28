@@ -3,8 +3,18 @@ import { apiClient, authHeaders } from '@/api/client';
 import { deliverablesApi, deliverableAssignmentsApi } from '@/services/api';
 import type { DeliverableCalendarItem } from '@/types/models';
 import type { DeliverableCalendarUnion } from '@/features/fullcalendar/eventAdapters';
+import { resolveApiBase } from '@/utils/apiBase';
 
 export type CalendarRange = { start: string; end: string };
+export type DeliverablesCalendarMeta = {
+  source: 'bundle' | 'legacy' | 'fallback';
+  notesRequested: boolean;
+  projectLeadsRequested: boolean;
+};
+export type DeliverablesCalendarWithMeta = DeliverableCalendarUnion[] & {
+  __meta?: DeliverablesCalendarMeta;
+};
+const API_BASE_URL = resolveApiBase((import.meta as any)?.env?.VITE_API_URL as string | undefined);
 
 const MAX_WEEKS = 12;
 
@@ -51,7 +61,7 @@ export function useDeliverablesCalendar(range: CalendarRange | null, options?: O
   const personId = options?.personId ?? null;
   const vertical = options?.vertical ?? null;
 
-  return useQuery<DeliverableCalendarUnion[], Error>({
+  return useQuery<DeliverablesCalendarWithMeta, Error>({
     queryKey: [
       'deliverables-calendar',
       mineOnly ? personId : 'all',
@@ -78,25 +88,45 @@ export function useDeliverablesCalendar(range: CalendarRange | null, options?: O
   });
 }
 
-async function fetchDeliverableCalendar(range: CalendarRange, options: Options): Promise<DeliverableCalendarUnion[]> {
-  const { mineOnly, personId, typeId, vertical, includeNotes, includeProjectLeads } = options;
-  const params: Record<string, any> = {
-    query: {
-      start: range.start,
-      end: range.end,
-    },
-    headers: authHeaders(),
-  };
-  if (mineOnly) params.query.mine_only = 1;
-  if (typeId != null) params.query.type_id = typeId;
-  if (vertical != null) params.query.vertical = vertical;
-  if (includeNotes && includeNotes !== 'none') params.query.include_notes = includeNotes;
-  if (includeProjectLeads) params.query.include_project_leads = 1;
+function withMeta(
+  items: DeliverableCalendarUnion[],
+  meta: DeliverablesCalendarMeta
+): DeliverablesCalendarWithMeta {
   try {
-    const res = await apiClient.GET('/deliverables/calendar_with_pre_items/' as any, params);
-    const payload = (res as any)?.data ?? res;
+    Object.defineProperty(items, '__meta', {
+      value: meta,
+      enumerable: false,
+      configurable: true,
+      writable: false,
+    });
+  } catch {}
+  return items as DeliverablesCalendarWithMeta;
+}
+
+async function fetchDeliverableCalendar(range: CalendarRange, options: Options): Promise<DeliverablesCalendarWithMeta> {
+  const { mineOnly, personId, typeId, vertical, includeNotes, includeProjectLeads } = options;
+  const notesRequested = Boolean(includeNotes && includeNotes !== 'none');
+  const projectLeadsRequested = Boolean(includeProjectLeads);
+  const query = new URLSearchParams();
+  query.set('start', range.start);
+  query.set('end', range.end);
+  if (mineOnly) query.set('mine_only', '1');
+  if (typeId != null) query.set('type_id', String(typeId));
+  if (vertical != null) query.set('vertical', String(vertical));
+  if (includeNotes && includeNotes !== 'none') query.set('include_notes', includeNotes);
+  if (includeProjectLeads) query.set('include_project_leads', '1');
+  try {
+    const base = API_BASE_URL.replace(/\/$/, '');
+    const url = `${base}/deliverables/calendar_with_pre_items/?${query.toString()}`;
+    const res = await fetch(url, { headers: authHeaders() as Record<string, string> });
+    if (!res.ok) throw new Error(`calendar_with_pre_items failed: ${res.status}`);
+    const payload = await res.json();
     if (Array.isArray(payload)) {
-      return payload as DeliverableCalendarUnion[];
+      return withMeta(payload as DeliverableCalendarUnion[], {
+        source: 'legacy',
+        notesRequested,
+        projectLeadsRequested,
+      });
     }
     if (payload && Array.isArray((payload as any).items)) {
       const items = (payload as any).items as DeliverableCalendarUnion[];
@@ -112,12 +142,21 @@ async function fetchDeliverableCalendar(range: CalendarRange, options: Options):
             : (leadsByProject[String(projectId)] || leadsByProject[projectId] || {}),
         };
       });
-      return enriched as DeliverableCalendarUnion[];
+      return withMeta(enriched as DeliverableCalendarUnion[], {
+        source: 'bundle',
+        notesRequested,
+        projectLeadsRequested,
+      });
     }
   } catch {
     // swallow and fall back
   }
-  return fallbackDeliverableCalendar(range, { mineOnly, personId, vertical });
+  const fallback = await fallbackDeliverableCalendar(range, { mineOnly, personId, vertical });
+  return withMeta(fallback, {
+    source: 'fallback',
+    notesRequested,
+    projectLeadsRequested,
+  });
 }
 
 async function fallbackDeliverableCalendar(range: CalendarRange, options: Options): Promise<DeliverableCalendarUnion[]> {

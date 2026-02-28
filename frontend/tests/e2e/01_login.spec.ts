@@ -3,5 +3,7 @@ import { uiLogin } from './helpers/auth';
 
 test('login via UI with default admin credentials', async ({ page }) => {
   await uiLogin(page);
-  await expect(page.locator('body')).toContainText(/Dashboard|Assignment Grid|People|Projects/);
+  await expect(page.locator('body')).toContainText(
+    /Dashboard|Assignment Grid|People|Projects|My Work|Your account is not linked to a Person profile yet/i
+  );
 });

@@ -26,27 +26,16 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useRolesAll } from '@/hooks/useRolesAll';
-import { useUiBootstrap } from '@/hooks/useUiBootstrap';
+import { getFlag } from '@/lib/flags';
+import { useUiPeoplePageSnapshot } from '@/hooks/useUiPageSnapshots';
 
 const PeopleList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const { state: verticalState } = useVerticalFilter();
   const [showInactive, setShowInactive] = useState(false);
-  useUiBootstrap({
-    include: ['departments'],
-    vertical: verticalState.selectedVerticalId ?? undefined,
-    includeInactive: showInactive,
-  });
-  useUiBootstrap({
-    include: ['roles'],
-    includeInactive: true,
-  });
-  const { departments } = useDepartments({
-    vertical: verticalState.selectedVerticalId ?? undefined,
-    includeInactive: showInactive,
-  });
-  const { roles } = useRolesAll({ includeInactive: true });
-  const [locations, setLocations] = useState<string[]>([]);
+  const snapshotsEnabled = getFlag('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', true);
+  const [snapshotFallbackEnabled, setSnapshotFallbackEnabled] = useState(false);
+  const [legacyLocations, setLegacyLocations] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([]); // Multi-select department filter
   const [locationFilter, setLocationFilter] = useState<string[]>([]); // Multi-select location filter
@@ -59,39 +48,15 @@ const PeopleList: React.FC = () => {
   const updatePersonMutation = useUpdatePerson();
   // Global department filter (top bar)
   const { state: deptState } = useDepartmentFilter();
-  
+
   // Bulk actions state
   const { bulkMode, setBulkMode, selectedPeopleIds, setSelectedPeopleIds, bulkDepartment, setBulkDepartment } = useBulkActions();
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  
+
   // Role autocomplete state (reserved for future enhancement)
   const [showRoleAutocomplete, setShowRoleAutocomplete] = useState(false);
   const [roleInputValue, setRoleInputValue] = useState('');
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(-1);
-
-  // Right-panel effects moved into PersonDetailsContainer
-
-  const loadFiltersMetadata = async () => {
-    try {
-      const res = await peopleApi.filtersMetadata({
-        vertical: verticalState.selectedVerticalId ?? undefined,
-        include_inactive: showInactive ? 1 : undefined,
-      });
-      setLocations(res.locations || []);
-    } catch (err) {
-      console.error('Error loading people filter metadata:', err);
-    }
-  };
-
-  useAuthenticatedEffect(() => {
-    loadFiltersMetadata();
-  }, [showInactive, verticalState.selectedVerticalId]);
-
-  useEffect(() => {
-    if (deptState.filters.length > 0) {
-      setDepartmentFilter([]);
-    }
-  }, [deptState.filters]);
 
   const orderingParam = useMemo(() => {
     const key = sortBy;
@@ -128,6 +93,69 @@ const PeopleList: React.FC = () => {
       ? globalDepartmentFilters
       : (!useGlobalDepartment ? localDepartmentFilters : []);
 
+  const peopleSnapshot = useUiPeoplePageSnapshot({
+    enabled: snapshotsEnabled && !snapshotFallbackEnabled,
+    include: ['filters', 'people'],
+    page: 1,
+    page_size: 100,
+    search: searchTerm || undefined,
+    department: payloadDepartment,
+    include_children: payloadIncludeChildren,
+    department_filters: payloadDepartmentFilters,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+    include_inactive: showInactive ? 1 : undefined,
+    location: locationFilter.length ? locationFilter : undefined,
+    ordering: orderingParam,
+  });
+  const useLegacyMetadata = !snapshotsEnabled || snapshotFallbackEnabled;
+  const { departments: legacyDepartments } = useDepartments({
+    enabled: useLegacyMetadata,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+    includeInactive: showInactive,
+  });
+  const { roles: legacyRoles } = useRolesAll({
+    enabled: useLegacyMetadata,
+    includeInactive: true,
+  });
+  const snapshotFilters = peopleSnapshot.data?.filters;
+  const departments = snapshotFilters?.departments?.length
+    ? snapshotFilters.departments
+    : legacyDepartments;
+  const roles = snapshotFilters?.roles?.length
+    ? snapshotFilters.roles
+    : legacyRoles;
+  const locations = snapshotFilters?.locations?.length
+    ? snapshotFilters.locations
+    : legacyLocations;
+
+  useEffect(() => {
+    if (!snapshotsEnabled) return;
+    if (!peopleSnapshot.isError) return;
+    setSnapshotFallbackEnabled(true);
+  }, [peopleSnapshot.isError, snapshotsEnabled]);
+
+  // Right-panel effects moved into PersonDetailsContainer
+  useAuthenticatedEffect(() => {
+    if (!useLegacyMetadata) return;
+    (async () => {
+      try {
+        const res = await peopleApi.filtersMetadata({
+          vertical: verticalState.selectedVerticalId ?? undefined,
+          include_inactive: showInactive ? 1 : undefined,
+        });
+        setLegacyLocations(res.locations || []);
+      } catch (err) {
+        console.error('Error loading people filter metadata:', err);
+      }
+    })();
+  }, [useLegacyMetadata, showInactive, verticalState.selectedVerticalId]);
+
+  useEffect(() => {
+    if (deptState.filters.length > 0) {
+      setDepartmentFilter([]);
+    }
+  }, [deptState.filters]);
+
   const peopleSearchOptions = useMemo(() => ({
     includeInactive: showInactive,
     searchTerm,
@@ -154,9 +182,22 @@ const PeopleList: React.FC = () => {
     error: listError,
     fetchNextPage,
     hasNextPage,
-  } = usePeopleSearch(peopleSearchOptions);
+  } = usePeopleSearch(
+    peopleSearchOptions,
+    {
+      enabled: !snapshotsEnabled || snapshotFallbackEnabled || Boolean(peopleSnapshot.data?.people),
+      initialPage: snapshotsEnabled && !snapshotFallbackEnabled
+        ? (peopleSnapshot.data?.people ?? null)
+        : null,
+    },
+  );
 
-  const { selectedPerson, selectedIndex, onRowClick, setSelectedPerson, setSelectedIndex, selectByIndex } = usePersonSelection(people);
+  const snapshotLoading = snapshotsEnabled && !snapshotFallbackEnabled && !peopleSnapshot.data?.people && peopleSnapshot.isLoading;
+  const effectiveListLoading = snapshotLoading || listLoading;
+
+  const { selectedPerson, selectedIndex, onRowClick, selectByIndex } = usePersonSelection(people, {
+    autoSelectFirst: false,
+  });
 
   const handleColumnSort = (column: 'name' | 'location' | 'department' | 'weeklyCapacity' | 'role') => {
     if (sortBy === column) {
@@ -189,7 +230,13 @@ const PeopleList: React.FC = () => {
       });
 
       await Promise.all(updatePromises);
-      await loadFiltersMetadata();
+      if (useLegacyMetadata) {
+        const res = await peopleApi.filtersMetadata({
+          vertical: verticalState.selectedVerticalId ?? undefined,
+          include_inactive: showInactive ? 1 : undefined,
+        });
+        setLegacyLocations(res.locations || []);
+      }
 
       const count = selectedPeopleIds.size;
       setSelectedPeopleIds(new Set());
@@ -234,14 +281,6 @@ const PeopleList: React.FC = () => {
 
   // Server-side filtering + ordering
   const visiblePeople = people;
-
-  // Auto-select first person from filtered list
-  useEffect(() => {
-    if (visiblePeople.length > 0 && !selectedPerson) {
-      setSelectedPerson(visiblePeople[0]);
-      setSelectedIndex(0);
-    }
-  }, [visiblePeople, selectedPerson]);
 
   const loadingContent = (
     <div className="h-full min-h-0 flex items-center justify-center">
@@ -358,7 +397,7 @@ const PeopleList: React.FC = () => {
 
         {/* Right Panel - Person Details */}
         <div className="w-1/2 flex flex-col bg-[var(--card)] min-w-0 min-h-0 overflow-y-auto">
-          {listLoading ? (
+          {effectiveListLoading ? (
             <div className="p-4 space-y-3">
               <div className="w-full h-5 bg-[var(--surface)] animate-pulse rounded" />
               <div className="w-full h-5 bg-[var(--surface)] animate-pulse rounded" />
@@ -384,7 +423,7 @@ const PeopleList: React.FC = () => {
   const mobileView = (
       <div className="h-full min-h-0 flex flex-col bg-[var(--bg)]">
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-          {listLoading ? (
+          {effectiveListLoading ? (
             loadingContent
           ) : (
             <>
@@ -519,7 +558,7 @@ const PeopleList: React.FC = () => {
 
   return (
     <Layout>
-      {listLoading && !isMobileLayout ? loadingContent : isMobileLayout ? mobileView : desktopView}
+      {effectiveListLoading && !isMobileLayout ? loadingContent : isMobileLayout ? mobileView : desktopView}
       {/* Mobile slide-over for person details */}
       <MobilePersonDetailsDrawer
         open={isMobileLayout && mobileDetailOpen && !!selectedPerson}

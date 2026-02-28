@@ -3,7 +3,7 @@
  * Provides comprehensive overview of team skills coverage and gaps
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
@@ -12,7 +12,8 @@ import { Person, Department, SkillTag, PersonSkill } from '@/types/models';
 import { peopleApi, skillTagsApi, personSkillsApi } from '@/services/api';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useDepartments } from '@/hooks/useDepartments';
-import { useUiBootstrap } from '@/hooks/useUiBootstrap';
+import { getFlag } from '@/lib/flags';
+import { useUiSkillsPageSnapshot } from '@/hooks/useUiPageSnapshots';
 
 interface SkillCoverage {
   skillName: string;
@@ -38,12 +39,20 @@ interface DepartmentSkills {
 
 const SkillsDashboard: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
-  useUiBootstrap({
-    include: ['departments'],
+  const snapshotsEnabled = getFlag('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', true);
+  const [snapshotFallbackEnabled, setSnapshotFallbackEnabled] = useState(false);
+  const skillsSnapshot = useUiSkillsPageSnapshot({
+    enabled: snapshotsEnabled && !snapshotFallbackEnabled,
+    include: ['departments', 'people', 'skill_tags', 'person_skills'],
     vertical: verticalState.selectedVerticalId ?? undefined,
   });
-  const { departments } = useDepartments({ vertical: verticalState.selectedVerticalId ?? undefined });
+  const useLegacyData = !snapshotsEnabled || snapshotFallbackEnabled;
+  const { departments: legacyDepartments } = useDepartments({
+    enabled: useLegacyData,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+  });
   const [people, setPeople] = useState<Person[]>([]);
+  const [snapshotDepartments, setSnapshotDepartments] = useState<Department[]>([]);
   const [skillTags, setSkillTags] = useState<SkillTag[]>([]);
   // Manage Skill Tags (add/remove)
   const [newSkillName, setNewSkillName] = useState<string>("");
@@ -52,13 +61,32 @@ const SkillsDashboard: React.FC = () => {
   const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+  const departments = snapshotDepartments.length ? snapshotDepartments : legacyDepartments;
+
   const [selectedDepartment, setSelectedDepartment] = useState<string>(''); // Empty = all departments
   const [viewMode, setViewMode] = useState<'coverage' | 'gaps' | 'departments'>('coverage');
 
   useAuthenticatedEffect(() => {
+    if (!useLegacyData) return;
     loadAllData();
-  }, [verticalState.selectedVerticalId]);
+  }, [verticalState.selectedVerticalId, useLegacyData]);
+
+  useEffect(() => {
+    if (!snapshotsEnabled) return;
+    if (!skillsSnapshot.isError) return;
+    setSnapshotFallbackEnabled(true);
+  }, [skillsSnapshot.isError, snapshotsEnabled]);
+
+  useEffect(() => {
+    if (!snapshotsEnabled || snapshotFallbackEnabled) return;
+    if (!skillsSnapshot.data) return;
+    setPeople(skillsSnapshot.data.people?.results || []);
+    setSkillTags(skillsSnapshot.data.skillTags?.results || []);
+    setPeopleSkills(skillsSnapshot.data.personSkills?.results || []);
+    setSnapshotDepartments(skillsSnapshot.data.departments || []);
+    setError(null);
+    setLoading(false);
+  }, [skillsSnapshot.data, snapshotsEnabled, snapshotFallbackEnabled]);
 
   const loadAllData = async () => {
     try {
@@ -81,6 +109,13 @@ const SkillsDashboard: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const effectiveLoading = useLegacyData
+    ? loading
+    : (skillsSnapshot.isLoading && !skillsSnapshot.data);
+  const effectiveError = useLegacyData
+    ? error
+    : (skillsSnapshot.error ? (skillsSnapshot.error as any).message || 'Failed to load skills data' : null);
 
   // Calculate skills coverage across the team
   const calculateSkillsCoverage = (): SkillCoverage[] => {
@@ -222,7 +257,7 @@ const SkillsDashboard: React.FC = () => {
     return { total, excellent, good, limited, gaps };
   };
 
-  if (loading) {
+  if (effectiveLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-64">
@@ -232,13 +267,22 @@ const SkillsDashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (effectiveError) {
     return (
       <Layout>
         <Card className="bg-red-500/20 border-red-500/30 p-6">
           <div className="text-red-400 font-medium mb-2">Error Loading Skills Data</div>
-          <div className="text-red-300 text-sm">{error}</div>
-          <Button onClick={loadAllData} className="mt-4 bg-red-500 hover:bg-red-400">
+          <div className="text-red-300 text-sm">{effectiveError}</div>
+          <Button
+            onClick={() => {
+              if (useLegacyData) {
+                loadAllData();
+              } else {
+                skillsSnapshot.refetch();
+              }
+            }}
+            className="mt-4 bg-red-500 hover:bg-red-400"
+          >
             Retry
           </Button>
         </Card>

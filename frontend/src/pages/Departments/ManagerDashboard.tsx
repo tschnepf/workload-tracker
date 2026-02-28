@@ -26,6 +26,7 @@ import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { getDepartmentManagerSummary } from '@/utils/departmentManagers';
 import { useCapacityHeatmap } from '@/hooks/useCapacityHeatmap';
 import { useDeliverablesCalendar } from '@/hooks/useDeliverablesCalendar';
+import { getFlag } from '@/lib/flags';
 
 type LayoutOption = 'risk' | 'people' | 'predictive';
 type RiskSortKey = 'name' | 'utilization' | 'overlapDeliverables' | 'deliverablesWithin3Days' | 'riskScore';
@@ -296,6 +297,11 @@ const TrendProjectionChart: React.FC<{ points: ForecastPoint[] }> = ({ points })
 
 const ManagerDashboard: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
+  const snapshotsEnabled = getFlag('FF_MODERATE_PAGES_SNAPSHOTS', true);
+  const departmentsSnapshotFallbackRef = React.useRef(!snapshotsEnabled);
+  const dashboardBootstrapModeRef = React.useRef<'pending' | 'enabled' | 'disabled'>(
+    snapshotsEnabled ? 'pending' : 'disabled',
+  );
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
@@ -312,6 +318,7 @@ const ManagerDashboard: React.FC = () => {
 
   const [weeksPeriod, setWeeksPeriod] = useState<number>(2);
   const [layoutOption, setLayoutOption] = useState<LayoutOption>('risk');
+  const [showClientMixCard, setShowClientMixCard] = useState(false);
 
   const [riskSort, setRiskSort] = useState<{ key: RiskSortKey; direction: SortDirection }>({
     key: 'riskScore',
@@ -359,15 +366,30 @@ const ManagerDashboard: React.FC = () => {
         setError(null);
 
         let fetched: Department[] = [];
-        try {
-          const bulk = await departmentsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined });
-          fetched = normalizeCollection<Department>(bulk);
-        } catch {
-          const paged = await departmentsApi.list({
-            page_size: 500,
-            vertical: verticalState.selectedVerticalId ?? undefined,
-          });
-          fetched = normalizeCollection<Department>(paged);
+        if (!departmentsSnapshotFallbackRef.current) {
+          try {
+            const snapshot = await departmentsApi.snapshot({
+              include: ['departments'],
+              vertical: verticalState.selectedVerticalId ?? undefined,
+              page_size: 500,
+            });
+            fetched = normalizeCollection<Department>(snapshot.departments);
+          } catch (snapshotError) {
+            console.warn('Manager departments snapshot unavailable; falling back:', snapshotError);
+            departmentsSnapshotFallbackRef.current = true;
+          }
+        }
+        if (!fetched.length) {
+          try {
+            const bulk = await departmentsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined });
+            fetched = normalizeCollection<Department>(bulk);
+          } catch {
+            const paged = await departmentsApi.list({
+              page_size: 500,
+              vertical: verticalState.selectedVerticalId ?? undefined,
+            });
+            fetched = normalizeCollection<Department>(paged);
+          }
         }
 
         const sorted = [...fetched].sort((a, b) => a.name.localeCompare(b.name));
@@ -397,6 +419,26 @@ const ManagerDashboard: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
+
+        if (snapshotsEnabled && dashboardBootstrapModeRef.current !== 'disabled') {
+          try {
+            const bootstrap = await dashboardApi.getBootstrap({
+              weeks: weeksPeriod,
+              department: String(scopeDepartmentId),
+              include_children: 0,
+              vertical: verticalState.selectedVerticalId ?? undefined,
+            });
+            if (!bootstrap?.dashboard) {
+              throw new Error('invalid manager dashboard bootstrap payload');
+            }
+            setDashboardData(bootstrap.dashboard);
+            dashboardBootstrapModeRef.current = 'enabled';
+            return;
+          } catch (bootstrapError) {
+            console.warn('Manager dashboard bootstrap unavailable; falling back:', bootstrapError);
+            dashboardBootstrapModeRef.current = 'disabled';
+          }
+        }
 
         const response = await dashboardApi.getDashboard(
           weeksPeriod,
@@ -947,17 +989,6 @@ const ManagerDashboard: React.FC = () => {
 
     return suggestions;
   }, [rankedRiskRows, slackPool, projectLoadsByPerson]);
-
-  React.useEffect(() => {
-    if (!rankedRiskRows.length) {
-      setSelectedPersonId(null);
-      return;
-    }
-    const exists = selectedPersonId != null && rankedRiskRows.some((row) => row.personId === selectedPersonId);
-    if (!exists) {
-      setSelectedPersonId(rankedRiskRows[0].personId);
-    }
-  }, [rankedRiskRows, selectedPersonId]);
 
   const selectedRiskPerson = useMemo(
     () => rankedRiskRows.find((row) => row.personId === selectedPersonId) || null,
@@ -1702,14 +1733,30 @@ const ManagerDashboard: React.FC = () => {
                 </Card>
 
                 <div className="xl:col-span-3">
-                  <AssignedHoursByClientCard
-                    className={`h-full ${sectionCardClass}`}
-                    initialWeeks={clientWeeks}
-                    useGlobalDepartmentFilter={false}
-                    departmentIdOverride={scopeDepartmentId}
-                    includeChildrenOverride={false}
-                    responsive
-                  />
+                  {showClientMixCard ? (
+                    <AssignedHoursByClientCard
+                      className={`h-full ${sectionCardClass}`}
+                      initialWeeks={clientWeeks}
+                      useGlobalDepartmentFilter={false}
+                      departmentIdOverride={scopeDepartmentId}
+                      includeChildrenOverride={false}
+                      responsive
+                    />
+                  ) : (
+                    <Card className={`${sectionCardClass} h-full p-4`}>
+                      <div className="mb-2 text-sm font-semibold text-slate-100">Client Mix</div>
+                      <p className="mb-3 text-xs text-slate-400">
+                        Load assigned-hours by client breakdown on demand.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowClientMixCard(true)}
+                        className="rounded border border-blue-500/40 bg-blue-500/15 px-3 py-1.5 text-xs font-medium text-blue-100 hover:bg-blue-500/25"
+                      >
+                        Load Client Mix
+                      </button>
+                    </Card>
+                  )}
                 </div>
               </div>
             </div>

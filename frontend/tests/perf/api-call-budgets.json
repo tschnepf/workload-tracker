@@ -1,0 +1,82 @@
+{
+  "metadata": {
+    "measurementMode": "production-build",
+    "baselineCapturedAt": "2026-02-24",
+    "updatedAt": "2026-02-27",
+    "source": "PLAN_API_CALL_CONSOLIDATION.md"
+  },
+  "routes": {
+    "/my-work": {
+      "baseline": 4,
+      "budget": 3
+    },
+    "/dashboard": {
+      "baseline": 17,
+      "budget": 8
+    },
+    "/people": {
+      "baseline": 11,
+      "budget": 6
+    },
+    "/projects": {
+      "baseline": 15,
+      "budget": 9
+    },
+    "/assignments": {
+      "baseline": 21,
+      "budget": 7
+    },
+    "/project-assignments": {
+      "baseline": 25,
+      "budget": 8
+    },
+    "/departments": {
+      "baseline": 7,
+      "budget": 5
+    },
+    "/departments/manager": {
+      "baseline": 12,
+      "budget": 8
+    },
+    "/departments/hierarchy": {
+      "baseline": 8,
+      "budget": 5
+    },
+    "/departments/reports": {
+      "baseline": 36,
+      "budget": 8
+    },
+    "/deliverables/calendar": {
+      "baseline": 5,
+      "budget": 4
+    },
+    "/deliverables/dashboard": {
+      "baseline": 19,
+      "budget": 6
+    },
+    "/settings": {
+      "baseline": 7,
+      "budget": 5
+    },
+    "/skills": {
+      "baseline": 12,
+      "budget": 6
+    },
+    "/performance": {
+      "baseline": 2,
+      "budget": 2
+    },
+    "/reports/role-capacity": {
+      "baseline": 11,
+      "budget": 6
+    },
+    "/reports/forecast": {
+      "baseline": 10,
+      "budget": 6
+    },
+    "/reports/person-experience": {
+      "baseline": 3,
+      "budget": 3
+    }
+  }
+}

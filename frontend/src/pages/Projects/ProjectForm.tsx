@@ -16,6 +16,7 @@ import { useVerticals } from '@/hooks/useVerticals';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import DatePickerInput from '@/components/ui/DatePickerInput';
 import Card from '@/components/ui/Card';
 import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';
 
@@ -472,12 +473,12 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
 
             {/* Start Date */}
             <div>
-              <Input
+              <DatePickerInput
                 label="Start Date (Optional)"
                 name="startDate"
-                type="date"
                 value={formData.startDate || ''}
-                onChange={(e) => handleChange('startDate', e.target.value)}
+                onChange={(nextValue) => handleChange('startDate', nextValue)}
+                placeholder="Select start date"
                 className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
               />
               <p className="text-[#969696] text-sm mt-1">

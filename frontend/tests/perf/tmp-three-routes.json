@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "measurementMode": "production-build",
+    "baselineCapturedAt": "2026-02-24",
+    "updatedAt": "2026-02-27",
+    "source": "PLAN_API_CALL_CONSOLIDATION.md"
+  },
+  "routes": {
+    "/assignments": {
+      "baseline": 21,
+      "budget": 7
+    },
+    "/project-assignments": {
+      "baseline": 25,
+      "budget": 8
+    },
+    "/deliverables/dashboard": {
+      "baseline": 19,
+      "budget": 6
+    }
+  }
+}

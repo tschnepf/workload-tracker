@@ -1,0 +1,251 @@
+{
+  "metadata": {
+    "generatedAt": "2026-02-28T01:00:43.654Z",
+    "measurementMode": "production-build",
+    "baseUrl": "http://localhost:3000",
+    "routeCount": 3,
+    "maxRouteSeconds": 40,
+    "idleMs": 900,
+    "minObserveMs": 2500,
+    "interRouteDelayMs": 1500
+  },
+  "routes": {
+    "/assignments": {
+      "route": "/assignments",
+      "totalApiCalls": 5,
+      "uniqueApiEndpoints": 5,
+      "failedApiCalls": 0,
+      "durationMs": 2597,
+      "timedOutWaitingForIdle": false,
+      "endedOnLogin": false,
+      "gotoError": null,
+      "endpointCounts": [
+        {
+          "endpoint": "POST /api/token/refresh/",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/auth/me/",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/verticals/?all=true",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/departments/?all=true",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/ui/assignments-page/?weeks=20&include_children=0&include_placeholders=0&include=assignment%2Cauto_hours&auto_hours_phases=sd%2Cdd%2Cifp%2Cifc",
+          "count": 1
+        }
+      ],
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/api/token/refresh/",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 53
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/me/",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 29
+        },
+        {
+          "method": "GET",
+          "path": "/api/verticals/?all=true",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 62
+        },
+        {
+          "method": "GET",
+          "path": "/api/departments/?all=true",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 127
+        },
+        {
+          "method": "GET",
+          "path": "/api/ui/assignments-page/?weeks=20&include_children=0&include_placeholders=0&include=assignment%2Cauto_hours&auto_hours_phases=sd%2Cdd%2Cifp%2Cifc",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 222
+        }
+      ]
+    },
+    "/project-assignments": {
+      "route": "/project-assignments",
+      "totalApiCalls": 7,
+      "uniqueApiEndpoints": 6,
+      "failedApiCalls": 0,
+      "durationMs": 2588,
+      "timedOutWaitingForIdle": false,
+      "endedOnLogin": false,
+      "gotoError": null,
+      "endpointCounts": [
+        {
+          "endpoint": "POST /api/projects/search/",
+          "count": 2
+        },
+        {
+          "endpoint": "POST /api/token/refresh/",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/auth/me/",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/verticals/?all=true",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/departments/?all=true",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/ui/assignments-page/?weeks=20&include_children=0&include_placeholders=0&include=assignment%2Cauto_hours&auto_hours_phases=sd%2Cdd%2Cifp%2Cifc",
+          "count": 1
+        }
+      ],
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/api/token/refresh/",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 33
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/me/",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 21
+        },
+        {
+          "method": "GET",
+          "path": "/api/verticals/?all=true",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 69
+        },
+        {
+          "method": "GET",
+          "path": "/api/departments/?all=true",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 243
+        },
+        {
+          "method": "GET",
+          "path": "/api/ui/assignments-page/?weeks=20&include_children=0&include_placeholders=0&include=assignment%2Cauto_hours&auto_hours_phases=sd%2Cdd%2Cifp%2Cifc",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 412
+        },
+        {
+          "method": "POST",
+          "path": "/api/projects/search/",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 942
+        },
+        {
+          "method": "POST",
+          "path": "/api/projects/search/",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 1062
+        }
+      ]
+    },
+    "/deliverables/dashboard": {
+      "route": "/deliverables/dashboard",
+      "totalApiCalls": 4,
+      "uniqueApiEndpoints": 4,
+      "failedApiCalls": 0,
+      "durationMs": 2554,
+      "timedOutWaitingForIdle": false,
+      "endedOnLogin": false,
+      "gotoError": null,
+      "endpointCounts": [
+        {
+          "endpoint": "POST /api/token/refresh/",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/auth/me/",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/deliverables/calendar_with_pre_items/?start=2026-02-28&end=2026-03-13&include_notes=preview&include_project_leads=1",
+          "count": 1
+        },
+        {
+          "endpoint": "GET /api/departments/?all=true&include_inactive=1",
+          "count": 1
+        }
+      ],
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/api/token/refresh/",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 104
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/me/",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 77
+        },
+        {
+          "method": "GET",
+          "path": "/api/deliverables/calendar_with_pre_items/?start=2026-02-28&end=2026-03-13&include_notes=preview&include_project_leads=1",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 99
+        },
+        {
+          "method": "GET",
+          "path": "/api/departments/?all=true&include_inactive=1",
+          "type": "fetch",
+          "status": 200,
+          "ok": true,
+          "durationMs": 195
+        }
+      ]
+    }
+  },
+  "totals": {
+    "routesProbed": 3,
+    "apiCalls": 16,
+    "failedApiCalls": 0,
+    "routesTimedOutWaitingForIdle": 0,
+    "routesEndedOnLogin": 0
+  }
+}

@@ -8,20 +8,19 @@ from core.notifications import notify_slack
 
 class SlackWebhookValidationTests(TestCase):
     @patch.dict(os.environ, {"SLACK_WEBHOOK_URL": "http://example.com/webhook"}, clear=False)
-    @patch("urllib.request.urlopen")
-    def test_rejects_non_https(self, mock_open):
+    @patch("requests.post")
+    def test_rejects_non_https(self, mock_post):
         notify_slack("hello")
-        mock_open.assert_not_called()
+        mock_post.assert_not_called()
 
     @patch.dict(os.environ, {"SLACK_WEBHOOK_URL": "https://example.com/webhook"}, clear=False)
-    @patch("urllib.request.urlopen")
-    def test_rejects_non_slack_host(self, mock_open):
+    @patch("requests.post")
+    def test_rejects_non_slack_host(self, mock_post):
         notify_slack("hello")
-        mock_open.assert_not_called()
+        mock_post.assert_not_called()
 
     @patch.dict(os.environ, {"SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T000/B000/XXXX"}, clear=False)
-    @patch("urllib.request.urlopen")
-    def test_allows_hooks_slack_com(self, mock_open):
+    @patch("requests.post")
+    def test_allows_hooks_slack_com(self, mock_post):
         notify_slack("hello")
-        mock_open.assert_called_once()
-
+        mock_post.assert_called_once()

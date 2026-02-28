@@ -49,8 +49,8 @@ describe('PersonalDashboard integration', () => {
 
     renderWithProviders(<div />, { routes: [{ path: '/', element: <PersonalDashboard /> }], route: '/' });
     expect(await screen.findByText('My Summary')).toBeTruthy();
-    expect(await screen.findByText('My Projects')).toBeTruthy();
-    expect(await screen.findByText('My Deliverables')).toBeTruthy();
-    expect(await screen.findByText('My Schedule')).toBeTruthy();
+    expect((await screen.findAllByText('My Projects')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('My Deliverables')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('My Schedule')).length).toBeGreaterThan(0);
   });
 });

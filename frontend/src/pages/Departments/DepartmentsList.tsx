@@ -23,10 +23,12 @@ import {
   getPrimaryManagerName,
   getSecondaryManagersLabel,
 } from '@/utils/departmentManagers';
+import { getFlag } from '@/lib/flags';
 
 const DepartmentsList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const { state: verticalState } = useVerticalFilter();
+  const snapshotsEnabled = getFlag('FF_MODERATE_PAGES_SNAPSHOTS', true);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
@@ -42,16 +44,40 @@ const DepartmentsList: React.FC = () => {
   const loadingRef = useRef(false);
   const suppressNextRefreshRef = useRef(false);
   const departmentsRef = useRef<Department[]>([]);
+  const snapshotFallbackRef = useRef(!snapshotsEnabled);
 
-  const loadDepartments = useCallback(async () => {
+  const loadPageData = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
       const hasData = departmentsRef.current.length > 0;
       setIsLoading(!hasData);
       setIsFetching(hasData);
-      const response = await departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
-      setDepartments(response.results || []);
+      setError(null);
+
+      if (!snapshotFallbackRef.current) {
+        try {
+          const snapshot = await departmentsApi.snapshot({
+            include: ['departments', 'people'],
+            vertical: verticalState.selectedVerticalId ?? undefined,
+            page_size: 500,
+            people_page_size: 500,
+          });
+          setDepartments(snapshot.departments?.results || []);
+          setPeople(snapshot.people?.results || []);
+          return;
+        } catch (snapshotError) {
+          console.warn('Departments snapshot unavailable; falling back to legacy calls:', snapshotError);
+          snapshotFallbackRef.current = true;
+        }
+      }
+
+      const [deptResponse, peopleResponse] = await Promise.all([
+        departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
+        peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
+      ]);
+      setDepartments(deptResponse.results || []);
+      setPeople(peopleResponse.results || []);
     } catch (err: any) {
       setError('Failed to load departments');
       console.error('Error loading departments:', err);
@@ -62,19 +88,9 @@ const DepartmentsList: React.FC = () => {
     }
   }, [verticalState.selectedVerticalId]);
 
-  const loadPeople = useCallback(async () => {
-    try {
-      const response = await peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined });
-      setPeople(response.results || []);
-    } catch (err) {
-      console.error('Error loading people:', err);
-    }
-  }, [verticalState.selectedVerticalId]);
-
   useAuthenticatedEffect(() => {
-    loadDepartments();
-    loadPeople();
-  }, [loadDepartments, loadPeople]);
+    loadPageData();
+  }, [loadPageData]);
 
   // Filter and sort departments
   const filteredAndSortedDepartments = useMemo(() => {
@@ -107,10 +123,10 @@ const DepartmentsList: React.FC = () => {
         return;
       }
       if (loadingRef.current) return;
-      loadDepartments();
+      loadPageData();
     });
     return unsubscribe;
-  }, [loadDepartments]);
+  }, [loadPageData]);
 
   const handleCreateDepartment = () => {
     setEditingDepartment(null);
@@ -134,7 +150,7 @@ const DepartmentsList: React.FC = () => {
 
       suppressNextRefreshRef.current = true;
       // Refresh departments list
-      await loadDepartments();
+      await loadPageData();
       
       // Select the saved/updated department
       setSelectedDepartment(savedDepartment);
@@ -155,7 +171,7 @@ const DepartmentsList: React.FC = () => {
     try {
       await deleteDepartment(department.id, departmentsApi);
       suppressNextRefreshRef.current = true;
-      await loadDepartments();
+      await loadPageData();
       
       // Clear selection if deleted department was selected
       if (selectedDepartment?.id === department.id) {

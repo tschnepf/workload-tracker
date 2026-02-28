@@ -127,6 +127,9 @@ const DeliverablesDashboard: React.FC = () => {
     includeNotes: 'preview',
     includeProjectLeads: true,
   });
+  const calendarMeta = (deliverablesQuery.data as any)?.__meta as
+    | { source?: 'bundle' | 'legacy' | 'fallback'; notesRequested?: boolean; projectLeadsRequested?: boolean }
+    | undefined;
 
   const deliverables = useMemo<DeliverablesRow[]>(() => {
     const items = deliverablesQuery.data ?? [];
@@ -197,6 +200,7 @@ const DeliverablesDashboard: React.FC = () => {
       return Object.prototype.hasOwnProperty.call(raw, 'notesPreview') || Object.prototype.hasOwnProperty.call(raw, 'notes');
     });
   }, [deliverablesQuery.data]);
+  const notesHandledByBundle = Boolean(calendarMeta?.source === 'bundle' && calendarMeta?.notesRequested);
 
   const hasBundledDepartmentLeads = useMemo(() => {
     const items = deliverablesQuery.data ?? [];
@@ -207,6 +211,9 @@ const DeliverablesDashboard: React.FC = () => {
       return Object.prototype.hasOwnProperty.call(raw, 'departmentLeads');
     });
   }, [deliverablesQuery.data]);
+  const projectLeadsHandledByBundle = Boolean(
+    calendarMeta?.source === 'bundle' && calendarMeta?.projectLeadsRequested
+  );
 
   const safeRowsPerPage = useMemo(() => {
     if (!Number.isFinite(rowsPerPage) || rowsPerPage <= 0) return Math.max(1, deliverables.length || 1);
@@ -380,7 +387,7 @@ const DeliverablesDashboard: React.FC = () => {
 
   useAuthenticatedEffect(() => {
     let active = true;
-    if (hasBundledNotes || !deliverableIds.length) {
+    if (notesHandledByBundle || hasBundledNotes || !deliverableIds.length) {
       return () => {
         active = false;
       };
@@ -415,11 +422,11 @@ const DeliverablesDashboard: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [hasBundledNotes, deliverableIds.join(','), fallbackDeliverableNotesById]);
+  }, [notesHandledByBundle, hasBundledNotes, deliverableIds.join(','), fallbackDeliverableNotesById]);
 
   useAuthenticatedEffect(() => {
     let active = true;
-    if (hasBundledDepartmentLeads) {
+    if (projectLeadsHandledByBundle || hasBundledDepartmentLeads) {
       setFallbackAssignmentsLoading(false);
       setFallbackAssignmentsError(null);
       return () => {
@@ -478,7 +485,7 @@ const DeliverablesDashboard: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [hasBundledDepartmentLeads, projectIds.join(',')]);
+  }, [projectLeadsHandledByBundle, hasBundledDepartmentLeads, projectIds.join(',')]);
 
   const headerDate = useMemo(() => {
     return new Intl.DateTimeFormat('en-US', {

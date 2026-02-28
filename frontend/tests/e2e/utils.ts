@@ -26,4 +26,20 @@ export async function primeAuth(page: Page, flags: Record<string, string> = {}) 
       })
     )
   );
+  await page.route('**/api/verticals/**', (route) =>
+    route.fulfill(jsonResponse([]))
+  );
+  await page.route('**/api/departments/**', (route) =>
+    route.fulfill(jsonResponse([]))
+  );
+}
+
+export async function mockApiFallback(page: Page, fallbackBody: unknown = {}) {
+  await page.route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    if (!url.pathname.startsWith('/api/')) {
+      return route.continue();
+    }
+    return route.fulfill(jsonResponse(fallbackBody));
+  });
 }

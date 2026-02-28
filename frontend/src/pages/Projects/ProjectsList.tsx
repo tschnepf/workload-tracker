@@ -256,7 +256,7 @@ const ProjectsList: React.FC = () => {
       vertical: verticalState.selectedVerticalId ?? undefined,
       department_filters: deptState.selectedDepartmentId == null ? departmentFilters : undefined,
     }),
-    enabled: projects.length > 0,
+    enabled: projects.length > 0 && (detailsPaneOpen || mobileDetailOpen),
     staleTime: 30_000,
   });
   const leadAssignments = leadAssignmentsQuery.data ?? [];
@@ -299,7 +299,10 @@ const ProjectsList: React.FC = () => {
 
   // Selection (single source of truth)
   // Use the dept-filtered list for selection and table
-  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(deptFilteredSortedProjects);
+  const { selectedProject, setSelectedProject, selectedIndex, setSelectedIndex, handleProjectClick } = useProjectSelection(
+    deptFilteredSortedProjects,
+    { autoSelectFirst: false, enabled: !createDrawerOpen },
+  );
   const [autoScrollProjectId, setAutoScrollProjectId] = useState<number | null>(null);
   const handleResponsiveProjectClick = useCallback((project: Project, index: number) => {
     handleProjectClick(project, index);
@@ -1460,6 +1463,11 @@ const ProjectCreateDrawer: React.FC<{ open: boolean; onClose: () => void; childr
   return createPortal(
     <div
       className="fixed inset-0 z-[1200] bg-black/60 flex justify-end"
+      onKeyDown={(e) => {
+        if (e.key.startsWith('Arrow')) {
+          e.stopPropagation();
+        }
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

@@ -1367,7 +1367,8 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if last_modified and if_modified_since:
             try:
                 if_modified_timestamp = parse_http_date(if_modified_since)
-                last_modified_timestamp = last_modified.timestamp()
+                # HTTP-date is second-granularity; compare at the same precision.
+                last_modified_timestamp = int(last_modified.timestamp())
                 if last_modified_timestamp <= if_modified_timestamp:
                     response = HttpResponseNotModified()
                     response['ETag'] = f'"{etag}"'
@@ -1381,58 +1382,64 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if settings.FEATURES.get('SHORT_TTL_AGGREGATES'):
             payload = cache.get(cache_key)
         if payload is None:
-            project_ids = list(queryset.values_list('id', flat=True))
-
             # Compute missing QA per project with dept scoping parity
             missing_qa_by_project: dict[int, bool] = {}
+            missing_qa_requested = False
             try:
-                if project_ids:
-                    assignments_qs = (
-                        Assignment.objects
-                        .filter(project_id__in=project_ids, project__is_active=True, is_active=True)
-                        .select_related('person', 'role_on_project_ref')
-                        .values(
-                            'project_id',
-                            'person__department_id',
-                            'department_id',
-                            'role_on_project_ref__department_id',
-                            'role_on_project_ref__name',
-                            'role_on_project',
-                        )
-                    )
-                    if missing_qa_dept_ids:
-                        ids_list = list(missing_qa_dept_ids)
-                        assignments_qs = assignments_qs.filter(
-                            Q(person__department_id__in=ids_list) |
-                            Q(department_id__in=ids_list) |
-                            Q(role_on_project_ref__department_id__in=ids_list)
-                        )
-
-                    assignments_by_project: dict[int, set[int]] = {}
-                    qa_by_project: dict[int, set[int]] = {}
-                    for row in assignments_qs:
-                        pid = row.get('project_id')
-                        if not pid:
-                            continue
-                        dept_id = row.get('person__department_id') or row.get('department_id') or row.get('role_on_project_ref__department_id')
-                        if not dept_id:
-                            continue
-                        assignments_by_project.setdefault(pid, set()).add(dept_id)
-                        role_name = (row.get('role_on_project_ref__name') or row.get('role_on_project') or '').lower()
-                        if 'qa' in role_name or 'quality' in role_name:
-                            qa_by_project.setdefault(pid, set()).add(dept_id)
-
-                    for pid, dept_set in assignments_by_project.items():
-                        qa_depts = qa_by_project.get(pid, set())
-                        if missing_qa_dept_ids:
-                            relevant = dept_set.intersection(missing_qa_dept_ids)
-                            if not relevant:
-                                continue
-                            missing_qa_by_project[pid] = any(d not in qa_depts for d in relevant)
-                        else:
-                            missing_qa_by_project[pid] = any(d not in qa_depts for d in dept_set)
+                raw_statuses = [s.strip().lower() for s in str(status_in_raw).split(',') if s.strip()]
+                missing_qa_requested = 'missing_qa' in raw_statuses
             except Exception:
-                missing_qa_by_project = {}
+                missing_qa_requested = False
+            if missing_qa_requested:
+                project_ids = list(queryset.values_list('id', flat=True))
+                try:
+                    if project_ids:
+                        assignments_qs = (
+                            Assignment.objects
+                            .filter(project_id__in=project_ids, project__is_active=True, is_active=True)
+                            .select_related('person', 'role_on_project_ref')
+                            .values(
+                                'project_id',
+                                'person__department_id',
+                                'department_id',
+                                'role_on_project_ref__department_id',
+                                'role_on_project_ref__name',
+                                'role_on_project',
+                            )
+                        )
+                        if missing_qa_dept_ids:
+                            ids_list = list(missing_qa_dept_ids)
+                            assignments_qs = assignments_qs.filter(
+                                Q(person__department_id__in=ids_list) |
+                                Q(department_id__in=ids_list) |
+                                Q(role_on_project_ref__department_id__in=ids_list)
+                            )
+
+                        assignments_by_project: dict[int, set[int]] = {}
+                        qa_by_project: dict[int, set[int]] = {}
+                        for row in assignments_qs:
+                            pid = row.get('project_id')
+                            if not pid:
+                                continue
+                            dept_id = row.get('person__department_id') or row.get('department_id') or row.get('role_on_project_ref__department_id')
+                            if not dept_id:
+                                continue
+                            assignments_by_project.setdefault(pid, set()).add(dept_id)
+                            role_name = (row.get('role_on_project_ref__name') or row.get('role_on_project') or '').lower()
+                            if 'qa' in role_name or 'quality' in role_name:
+                                qa_by_project.setdefault(pid, set()).add(dept_id)
+
+                        for pid, dept_set in assignments_by_project.items():
+                            qa_depts = qa_by_project.get(pid, set())
+                            if missing_qa_dept_ids:
+                                relevant = dept_set.intersection(missing_qa_dept_ids)
+                                if not relevant:
+                                    continue
+                                missing_qa_by_project[pid] = any(d not in qa_depts for d in relevant)
+                            else:
+                                missing_qa_by_project[pid] = any(d not in qa_depts for d in dept_set)
+                except Exception:
+                    missing_qa_by_project = {}
 
             # Apply status filters (parity with search endpoint)
             if status_in_raw:

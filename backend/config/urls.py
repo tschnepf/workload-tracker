@@ -12,8 +12,9 @@ try:
 except Exception:  # pragma: no cover
     redis = None  # type: ignore
 from django.conf import settings
+from django.utils.module_loading import import_string
 import json
-from dashboard.views import DashboardView
+from dashboard.views import DashboardView, DashboardBootstrapView
 from core.job_views import JobStatusView, JobDownloadView
 from core import backup_views as backups
 import os
@@ -27,11 +28,11 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from deliverables.ics_views import deliverables_ics
 from assignments.views import AssignmentsPageSnapshotView
-from core.views import UiBootstrapView
+from core.views import UiBootstrapView, PeoplePageSnapshotView, SkillsPageSnapshotView, SettingsPageSnapshotView
 
 def health_check(request):
     """Health check endpoint for Docker and monitoring"""
@@ -144,6 +145,33 @@ def capabilities_view(request):
         caps['integrations'] = {'enabled': False}
     return Response(caps)
 
+
+def _spectacular_permission_classes():
+    configured = (getattr(settings, 'SPECTACULAR_SETTINGS', {}) or {}).get('SERVE_PERMISSIONS')
+    if not configured:
+        return [AllowAny]
+    resolved = []
+    for entry in configured:
+        if isinstance(entry, str):
+            try:
+                resolved.append(import_string(entry))
+            except Exception:
+                # Fail closed if a permission path is invalid.
+                return [IsAuthenticated]
+        else:
+            resolved.append(entry)
+    return resolved or [AllowAny]
+
+
+class DynamicSpectacularAPIView(SpectacularAPIView):
+    def get_permissions(self):
+        return [perm() for perm in _spectacular_permission_classes()]
+
+
+class DynamicSpectacularSwaggerView(SpectacularSwaggerView):
+    def get_permissions(self):
+        return [perm() for perm in _spectacular_permission_classes()]
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     # Unauthenticated liveness checks
@@ -158,10 +186,11 @@ urlpatterns = [
     path('api/token/refresh/', ThrottledTokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', ThrottledTokenVerifyView.as_view(), name='token_verify'),
     path('api/token/logout/', ThrottledTokenLogoutView.as_view(), name='token_logout'),
+    path('api/dashboard/bootstrap/', DashboardBootstrapView.as_view(), name='dashboard_bootstrap'),
     path('api/dashboard/', DashboardView.as_view(), name='dashboard'),
     # OpenAPI schema + Swagger UI
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/schema/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/', DynamicSpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/swagger/', DynamicSpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/capabilities/', capabilities_view, name='capabilities'),
     # Async job status and file download
     path('api/jobs/<str:job_id>/', JobStatusView.as_view(), name='job_status'),
@@ -178,6 +207,9 @@ urlpatterns = [
     path('api/assignments/', include('assignments.urls')),
     path('api/ui/bootstrap/', UiBootstrapView.as_view(), name='ui_bootstrap'),
     path('api/ui/assignments-page/', AssignmentsPageSnapshotView.as_view(), name='assignments_page_snapshot'),
+    path('api/ui/people-page/', PeoplePageSnapshotView.as_view(), name='people_page_snapshot'),
+    path('api/ui/skills-page/', SkillsPageSnapshotView.as_view(), name='skills_page_snapshot'),
+    path('api/ui/settings-page/', SettingsPageSnapshotView.as_view(), name='settings_page_snapshot'),
     path('api/deliverables/', include('deliverables.urls')),
     path('api/departments/', include('departments.urls')),
     path('api/verticals/', include('verticals.urls')),

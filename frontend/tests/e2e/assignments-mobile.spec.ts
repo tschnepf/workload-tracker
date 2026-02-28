@@ -1,5 +1,5 @@
 import { test, expect, devices } from '@playwright/test';
-import { jsonResponse, primeAuth } from './utils';
+import { jsonResponse, primeAuth, mockApiFallback } from './utils';
 
 const weekKeys = ['2025-11-24', '2025-12-01', '2025-12-08'];
 
@@ -37,6 +37,24 @@ const projectsPayload = [
   { id: 303, name: 'Atlas Retrofit', status: 'planning', client: 'Atlas' },
 ];
 
+const assignmentsPagePayload = {
+  contractVersion: 1,
+  included: ['assignment'],
+  assignmentGridSnapshot: snapshotPayload,
+  projects: projectsPayload,
+  deliverables: [],
+  departments: [{ id: 1, name: 'Electrical' }],
+  autoHoursBundle: {
+    contractVersion: 1,
+    phaseMapping: { useDescriptionMatch: true, phases: [] },
+    templates: [],
+    defaultSettingsByPhase: {},
+    weekLimitsByPhase: {},
+    bundleComplete: true,
+    missingTemplateIds: [],
+  },
+};
+
 async function mockAssignmentsApis(page: any) {
   await page.route('**/api/capabilities/**', (route: any) =>
     route.fulfill(
@@ -49,8 +67,8 @@ async function mockAssignmentsApis(page: any) {
     )
   );
 
-  await page.route('**/api/assignments/grid_snapshot/**', (route: any) =>
-    route.fulfill(jsonResponse(snapshotPayload))
+  await page.route('**/api/ui/assignments-page/**', (route: any) =>
+    route.fulfill(jsonResponse(assignmentsPagePayload))
   );
 
   await page.route('**/api/people/**', (route: any) =>
@@ -74,6 +92,13 @@ async function mockAssignmentsApis(page: any) {
     route.fulfill(jsonResponse(assignmentsByPerson[personId] || []));
   });
 
+  await page.route('**/api/assignments/search/**', (route: any) => {
+    const payload = JSON.parse(route.request().postData() || '{}');
+    const personId = Number(payload.person);
+    const results = assignmentsByPerson[personId] || [];
+    return route.fulfill(jsonResponse({ results, count: results.length, next: null, previous: null }));
+  });
+
   await page.route('**/api/assignments/201/**', (route: any) => {
     if (route.request().method() === 'PATCH') {
       const body = JSON.parse(route.request().postData() || '{}');
@@ -83,7 +108,7 @@ async function mockAssignmentsApis(page: any) {
     return route.fulfill(jsonResponse(assignmentsByPerson[101][0]));
   });
 
-  await page.route('**/api/assignments/**', (route: any) => {
+  await page.route('**/api/assignments/', (route: any) => {
     if (route.request().method() === 'POST') {
       const payload = JSON.parse(route.request().postData() || '{}');
       const newAssignment = {
@@ -97,8 +122,6 @@ async function mockAssignmentsApis(page: any) {
     }
     return route.continue();
   });
-
-  await page.route('**/api/**', (route: any) => route.fulfill(jsonResponse({})));
 }
 
 test.use({
@@ -111,6 +134,7 @@ test.use({
 test.describe('Assignments grid mobile workflows', () => {
 
   test('supports touch edit and add flows', async ({ page }) => {
+    await mockApiFallback(page);
     await primeAuth(page);
     await mockAssignmentsApis(page);
     const navStart = Date.now();

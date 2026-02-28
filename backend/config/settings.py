@@ -274,6 +274,8 @@ FEATURES.update({
     'JOB_RESTORE_TOKEN_MODE': os.getenv('JOB_RESTORE_TOKEN_MODE', 'true').lower() == 'true',
     'FF_UI_BOOTSTRAP': os.getenv('FF_UI_BOOTSTRAP', 'true').lower() == 'true',
     'FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE': os.getenv('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', 'true').lower() == 'true',
+    'FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS': os.getenv('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', 'true').lower() == 'true',
+    'FF_MODERATE_PAGES_SNAPSHOTS': os.getenv('FF_MODERATE_PAGES_SNAPSHOTS', 'true').lower() == 'true',
     # Always-on flag for safe server-side weekly-hours operations
     'AUTO_REALLOCATION': True,
     # Week key policy controls (Section 3/4)
@@ -355,14 +357,14 @@ REST_FRAMEWORK = {
         'reports_departments_overview': _rate('DRF_THROTTLE_REPORTS_DEPARTMENTS_OVERVIEW', '120/min'),
         'login': _rate('DRF_THROTTLE_LOGIN', '10/min'),
         # Backup/restore endpoints (Phase 0: Step 0.3)
-        # Enforce strict create rate so the second POST is throttled in tests
-        'backup_create': _rate('DRF_THROTTLE_BACKUP_CREATE', '1/min'),
+        # Keep practical defaults and let tests override stricter limits when needed.
+        'backup_create': _rate('DRF_THROTTLE_BACKUP_CREATE', '30/min'),
         'backup_delete': _rate('DRF_THROTTLE_BACKUP_DELETE', '5/hour'),
         'backup_download': _rate('DRF_THROTTLE_BACKUP_DOWNLOAD', '20/hour'),
         'backup_status': _rate('DRF_THROTTLE_BACKUP_STATUS', '120/min'),
         # New granular scopes for restore and upload+restore
-        'backup_restore': _rate('DRF_THROTTLE_BACKUP_RESTORE', _rate('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
-        'backup_upload_restore': _rate('DRF_THROTTLE_BACKUP_UPLOAD_RESTORE', _rate('DRF_THROTTLE_BACKUP_CREATE', '2/hour')),
+        'backup_restore': _rate('DRF_THROTTLE_BACKUP_RESTORE', '2/hour'),
+        'backup_upload_restore': _rate('DRF_THROTTLE_BACKUP_UPLOAD_RESTORE', '2/hour'),
         # Department ↔ Project Role mapping endpoints (feature-phase)
         'department_roles_map': _rate('DRF_THROTTLE_DEPT_ROLES_MAP', '600/min'),
         'department_roles_mutate': _rate('DRF_THROTTLE_DEPT_ROLES_MUTATE', '60/min'),
@@ -503,7 +505,7 @@ if not DEBUG and not RUNNING_TESTS:
 # Performance monitoring configuration
 # Silk enablement: default to on in DEBUG, but allow explicit override.
 _silk_env = os.getenv('SILK_ENABLED')
-SILK_ENABLED = (_silk_env.lower() == 'true') if _silk_env is not None else DEBUG
+SILK_ENABLED = (_silk_env.lower() == 'true') if _silk_env is not None else (DEBUG and not RUNNING_TESTS)
 if SILK_ENABLED:
     # Enable Silk only when explicitly allowed or in DEBUG
     INSTALLED_APPS.append('silk')

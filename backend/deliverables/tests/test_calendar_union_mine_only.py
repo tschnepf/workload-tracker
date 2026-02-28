@@ -19,7 +19,9 @@ class CalendarUnionMineOnlyTests(TestCase):
         self.u2 = User.objects.create_user(username='u2', password='pw')
         # Link u1->p1
         from accounts.models import UserProfile
-        UserProfile.objects.get_or_create(user=self.u1, defaults={'person': self.p1})
+        profile, _ = UserProfile.objects.get_or_create(user=self.u1)
+        profile.person = self.p1
+        profile.save(update_fields=['person'])
         # Project and deliverables
         self.proj = Project.objects.create(name='Proj X')
         today = date.today()

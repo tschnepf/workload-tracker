@@ -1,16 +1,25 @@
 import React from 'react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import Sidebar from '@/components/layout/Sidebar';
+import { getFlag } from '@/lib/flags';
+
+vi.mock('@/lib/flags', () => ({
+  getFlag: vi.fn(),
+}));
+
+const mockedGetFlag = vi.mocked(getFlag);
 
 describe('Sidebar PERSONAL_DASHBOARD flag gating', () => {
   beforeEach(() => {
-    try { localStorage.removeItem('flags.PERSONAL_DASHBOARD'); } catch {}
+    mockedGetFlag.mockImplementation((_name: any, fallback?: boolean) => Boolean(fallback));
   });
 
   it('hides My Work when flag is false', () => {
-    try { localStorage.setItem('flags.PERSONAL_DASHBOARD', 'false'); } catch {}
+    mockedGetFlag.mockImplementation((name: any, fallback?: boolean) =>
+      name === 'PERSONAL_DASHBOARD' ? false : Boolean(fallback)
+    );
     const router = createMemoryRouter([
       { path: '/', element: <Sidebar /> },
     ], { initialEntries: ['/'] });
@@ -19,7 +28,9 @@ describe('Sidebar PERSONAL_DASHBOARD flag gating', () => {
   });
 
   it('shows My Work when flag is true', () => {
-    try { localStorage.setItem('flags.PERSONAL_DASHBOARD', 'true'); } catch {}
+    mockedGetFlag.mockImplementation((name: any, fallback?: boolean) =>
+      name === 'PERSONAL_DASHBOARD' ? true : Boolean(fallback)
+    );
     const router = createMemoryRouter([
       { path: '/', element: <Sidebar /> },
     ], { initialEntries: ['/'] });

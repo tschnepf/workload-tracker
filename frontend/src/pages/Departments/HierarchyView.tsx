@@ -3,7 +3,7 @@
  * Shows complete department structure with navigation and details
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
@@ -17,9 +17,11 @@ import {
   getPrimaryManagerName,
   getSecondaryManagersLabel,
 } from '@/utils/departmentManagers';
+import { getFlag } from '@/lib/flags';
 
 const HierarchyView: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
+  const snapshotsEnabled = getFlag('FF_MODERATE_PAGES_SNAPSHOTS', true);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
@@ -27,6 +29,7 @@ const HierarchyView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const isMobileLayout = useMediaQuery('(max-width: 767px)');
+  const snapshotFallbackRef = useRef(!snapshotsEnabled);
 
   useAuthenticatedEffect(() => {
     loadData();
@@ -36,12 +39,29 @@ const HierarchyView: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
+      if (!snapshotFallbackRef.current) {
+        try {
+          const snapshot = await departmentsApi.snapshot({
+            include: ['departments', 'people'],
+            vertical: verticalState.selectedVerticalId ?? undefined,
+            page_size: 500,
+            people_page_size: 500,
+          });
+          setDepartments(snapshot.departments?.results || []);
+          setPeople(snapshot.people?.results || []);
+          return;
+        } catch (snapshotError) {
+          console.warn('Department hierarchy snapshot unavailable; falling back to legacy calls:', snapshotError);
+          snapshotFallbackRef.current = true;
+        }
+      }
+
       const [deptResponse, peopleResponse] = await Promise.all([
         departmentsApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
         peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined })
       ]);
-      
+
       setDepartments(deptResponse.results || []);
       setPeople(peopleResponse.results || []);
     } catch (err: any) {

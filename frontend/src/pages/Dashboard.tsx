@@ -14,7 +14,6 @@ import { useCapacityHeatmap } from '../hooks/useCapacityHeatmap';
 import { useDepartmentFilter } from '../hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useDepartments } from '@/hooks/useDepartments';
-import { useUiBootstrap } from '@/hooks/useUiBootstrap';
 import { useDashboardHeatmapView, type DashboardHeatmapRow } from '@/mobile/dashboardAdapters';
 import { FullCalendarWrapper, mapCapacityHeatmapToEvents, mapDeliverableCalendarToEvents, formatDeliverableInlineLabel } from '@/features/fullcalendar';
 import { useDeliverablesCalendar, subtractOneDay, toIsoDate } from '@/hooks/useDeliverablesCalendar';
@@ -32,9 +31,12 @@ import RoleCapacitySummary from '@/components/dashboard/RoleCapacitySummary';
 import RecentAssignmentsCard from '@/components/dashboard/RecentAssignmentsCard';
 import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByClientCard';
 import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
+import { getFlag } from '@/lib/flags';
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
+  const snapshotsEnabled = getFlag('FF_MODERATE_PAGES_SNAPSHOTS', true);
+  const bootstrapModeRef = React.useRef<'pending' | 'enabled' | 'disabled'>('pending');
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +45,6 @@ const Dashboard: React.FC = () => {
   // Department filtering state (global)
   const { state: deptState, setDepartment } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
-  useUiBootstrap({
-    enabled: !!auth.accessToken,
-    include: ['departments', 'capabilities'],
-    vertical: verticalState.selectedVerticalId ?? undefined,
-  });
   const { departments } = useDepartments({
     enabled: !!auth.accessToken,
     vertical: verticalState.selectedVerticalId ?? undefined,
@@ -57,6 +54,7 @@ const Dashboard: React.FC = () => {
   const heatWeeks = 12;
   const [projectCounts, setProjectCounts] = useState<Record<string, number>>({});
   const [projectsTotal, setProjectsTotal] = useState<number>(0);
+  const [showClientMixCard, setShowClientMixCard] = useState(false);
   const deliverablesListRef = React.useRef<HTMLDivElement | null>(null);
   const [showDeliverablesScrollHint, setShowDeliverablesScrollHint] = useState(false);
   // People metadata (hire date, active) for availability filtering
@@ -66,37 +64,7 @@ const Dashboard: React.FC = () => {
   useAuthenticatedEffect(() => {
     if (!auth.accessToken) return;
     loadDashboard();
-  }, [auth.accessToken, weeksPeriod, deptState.selectedDepartmentId, verticalState.selectedVerticalId]);
-
-  // Load project summary once authenticated
-  useAuthenticatedEffect(() => {
-    if (!auth.accessToken) return;
-    loadProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.accessToken, verticalState.selectedVerticalId]);
-
-  // Load people metadata for availability filters (respect department scope)
-  useAuthenticatedEffect(() => {
-    if (!auth.accessToken) return;
-    (async () => {
-      try {
-        const list = await peopleApi.listAll({
-          department: deptState.selectedDepartmentId ?? undefined,
-          include_children: deptState.includeChildren ? 1 : 0,
-          vertical: verticalState.selectedVerticalId ?? undefined,
-        });
-        const m = new Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>();
-        for (const p of list) {
-          if (p.id != null) m.set(p.id, { isActive: p.isActive, hireDate: p.hireDate || undefined, roleId: (p as any).role ?? null, roleName: (p as any).roleName ?? null });
-        }
-        setPeopleMeta(m);
-      } catch (err) {
-        // Non-fatal; fall back to backend heatmap filtering
-        console.warn('Failed to load people metadata for availability filtering:', err);
-        setPeopleMeta(new Map());
-      }
-    })();
-  }, [auth.accessToken, deptState.selectedDepartmentId, deptState.includeChildren, verticalState.selectedVerticalId]);
+  }, [auth.accessToken, weeksPeriod, deptState.selectedDepartmentId, deptState.includeChildren, verticalState.selectedVerticalId]);
 
 
   const heatQuery = useCapacityHeatmap(
@@ -265,7 +233,7 @@ const Dashboard: React.FC = () => {
     ];
   }, []);
 
-  const loadProjects = async () => {
+  const loadProjectsLegacy = async () => {
     try {
       const list = await projectsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined });
       setProjectsTotal(list.length);
@@ -280,16 +248,81 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const loadPeopleMetaLegacy = async () => {
+    try {
+      const list = await peopleApi.listAll({
+        department: deptState.selectedDepartmentId ?? undefined,
+        include_children: deptState.includeChildren ? 1 : 0,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      });
+      const m = new Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>();
+      for (const p of list) {
+        if (p.id != null) {
+          m.set(p.id, {
+            isActive: p.isActive,
+            hireDate: p.hireDate || undefined,
+            roleId: (p as any).role ?? null,
+            roleName: (p as any).roleName ?? null,
+          });
+        }
+      }
+      setPeopleMeta(m);
+    } catch (err) {
+      // Non-fatal; fall back to backend heatmap filtering
+      console.warn('Failed to load people metadata for availability filtering:', err);
+      setPeopleMeta(new Map());
+    }
+  };
+
+  const loadDashboardLegacy = async () => {
+    const response = await dashboardApi.getDashboard(
+      weeksPeriod,
+      deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : undefined,
+      verticalState.selectedVerticalId ?? undefined
+    );
+    setData(response);
+    await Promise.all([loadProjectsLegacy(), loadPeopleMetaLegacy()]);
+  };
+
   const loadDashboard = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await dashboardApi.getDashboard(
-        weeksPeriod,
-        deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : undefined,
-        verticalState.selectedVerticalId ?? undefined
-      );
-      setData(response);
+
+      if (snapshotsEnabled && bootstrapModeRef.current !== 'disabled') {
+        try {
+          const bootstrap = await dashboardApi.getBootstrap({
+            weeks: weeksPeriod,
+            department: deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : undefined,
+            include_children: deptState.includeChildren ? 1 : 0,
+            vertical: verticalState.selectedVerticalId ?? undefined,
+          });
+          if (!bootstrap?.dashboard) {
+            throw new Error('invalid dashboard bootstrap payload');
+          }
+          setData(bootstrap.dashboard);
+          setProjectCounts(bootstrap.projectCountsByStatus || {});
+          setProjectsTotal(Number(bootstrap.projectsTotal || 0));
+          const peopleMetaMap = new Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>();
+          (bootstrap.peopleMeta || []).forEach((row) => {
+            if (!row || row.id == null) return;
+            peopleMetaMap.set(row.id, {
+              isActive: row.isActive,
+              hireDate: row.hireDate || undefined,
+              roleId: row.roleId ?? null,
+              roleName: row.roleName ?? null,
+            });
+          });
+          setPeopleMeta(peopleMetaMap);
+          bootstrapModeRef.current = 'enabled';
+          return;
+        } catch (bootstrapError) {
+          console.warn('Dashboard bootstrap unavailable; falling back to legacy calls:', bootstrapError);
+          bootstrapModeRef.current = 'disabled';
+        }
+      }
+
+      await loadDashboardLegacy();
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard data');
     } finally {
@@ -448,7 +481,23 @@ const Dashboard: React.FC = () => {
             />
           </div>
           <div className="col-span-12 lg:col-span-4 lg:col-start-5">
-            <AssignedHoursByClientCard className="w-full h-full" responsive />
+            {showClientMixCard ? (
+              <AssignedHoursByClientCard className="w-full h-full" responsive />
+            ) : (
+              <Card className="w-full h-full rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
+                <div className="text-lg font-semibold text-[var(--text)]">Assigned Hours by Client</div>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Load the client mix chart on demand for this view.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowClientMixCard(true)}
+                  className="mt-4 rounded-lg border border-[var(--primary)] bg-[var(--primary)]/15 px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--primary)]/25"
+                >
+                  Load Client Mix
+                </button>
+              </Card>
+            )}
           </div>
           <UpcomingDeliverablesCard
             deliverables={upcomingDeliverables}

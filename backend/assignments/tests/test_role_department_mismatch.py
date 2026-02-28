@@ -10,7 +10,8 @@ from assignments.models import Assignment
 class AssignmentRoleDepartmentMismatchTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username='user', password='user')
+        # Use an admin user so this test exercises role validation, not RBAC.
+        self.user = User.objects.create_user(username='user', password='user', is_staff=True, is_superuser=True)
         self.client.force_authenticate(self.user)
 
     def test_cross_department_role_update_rejected(self):
@@ -27,4 +28,3 @@ class AssignmentRoleDepartmentMismatchTests(TestCase):
         res = self.client.patch(f'/api/assignments/{a.id}/', {'roleOnProjectId': role_other.id}, format='json')
         self.assertIn(res.status_code, (400, 422))
         self.assertIn('roleOnProjectId', (res.json() or {}))
-

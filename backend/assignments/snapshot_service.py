@@ -77,7 +77,8 @@ def _is_member_for_week(a: Assignment, week_start: date) -> bool:
         return False
     if ed and ed < start_of_week:
         return False
-    return True
+    # Membership events track effective participation for the week.
+    return float(get_week_value(a.weekly_hours or {}, week_start)) > 0
 
 
 def write_weekly_assignment_snapshots(week_start: date | str, *, source: str = SnapshotSource.ASSIGNED) -> dict:
@@ -162,38 +163,94 @@ def write_weekly_assignment_snapshots(week_start: date | str, *, source: str = S
 
         inserted = 0
         updated = 0
-        # Perform batched transactional upserts
+        # Perform batched transactional upserts.
+        #
+        # Postgres unique constraints treat NULLs as distinct, so rows keyed by
+        # (person, project, NULL, week_start, source) need explicit handling.
         if to_upsert:
+            update_fields = [
+                'hours', 'project_status', 'deliverable_phase', 'department_id',
+                'person_name', 'project_name', 'client',
+                'person_is_active', 'person_role_id', 'person_role_name',
+                'updated_at',
+            ]
+            with_role = [row for row in to_upsert if row.role_on_project_id is not None]
+            without_role = [row for row in to_upsert if row.role_on_project_id is None]
+
             with transaction.atomic():
-                res = WeeklyAssignmentSnapshot.objects.bulk_create(
-                    to_upsert,
-                    update_conflicts=True,
-                    update_fields=[
-                        'hours', 'project_status', 'deliverable_phase', 'department_id',
-                        'person_name', 'project_name', 'client',
-                        'person_is_active', 'person_role_id', 'person_role_name',
-                        'updated_at'
-                    ],
-                    unique_fields=['person', 'project', 'role_on_project_id', 'week_start', 'source']
-                )
-                # Django cannot distinguish inserted vs updated from bulk_create result portably.
-                # As a pragmatic approach, perform a lightweight count query for distinct keys
-                # to estimate inserts. This avoids per-row updates.
-                keys = [
-                    (r.person_id, r.project_id, r.role_on_project_id, r.week_start, r.source)
-                    for r in to_upsert
-                ]
-                # Count how many of these keys existed before the upsert
-                existing = set(
-                    WeeklyAssignmentSnapshot.objects.filter(
-                        person_id__in=[k[0] for k in keys],
-                        project_id__in=[k[1] for k in keys],
-                        week_start=sunday,
-                        source=source,
-                    ).values_list('person_id', 'project_id', 'role_on_project_id', 'week_start', 'source')
-                )
-                updated = len(existing)
-                inserted = max(0, len(to_upsert) - updated)
+                if with_role:
+                    with_role_keys = {
+                        (r.person_id, r.project_id, r.role_on_project_id, r.week_start, r.source)
+                        for r in with_role
+                    }
+                    existing_with_role = set(
+                        WeeklyAssignmentSnapshot.objects.filter(
+                            person_id__in=[k[0] for k in with_role_keys],
+                            project_id__in=[k[1] for k in with_role_keys],
+                            role_on_project_id__in=[k[2] for k in with_role_keys],
+                            week_start=sunday,
+                            source=source,
+                        ).values_list('person_id', 'project_id', 'role_on_project_id', 'week_start', 'source')
+                    )
+                    WeeklyAssignmentSnapshot.objects.bulk_create(
+                        with_role,
+                        update_conflicts=True,
+                        update_fields=update_fields,
+                        unique_fields=['person', 'project', 'role_on_project_id', 'week_start', 'source'],
+                    )
+                    updated_with_role = len(with_role_keys & existing_with_role)
+                    updated += updated_with_role
+                    inserted += max(0, len(with_role) - updated_with_role)
+
+                if without_role:
+                    existing_null_rows = list(
+                        WeeklyAssignmentSnapshot.objects.filter(
+                            person_id__in=[row.person_id for row in without_role],
+                            project_id__in=[row.project_id for row in without_role],
+                            week_start=sunday,
+                            source=source,
+                            role_on_project_id__isnull=True,
+                        ).order_by('id')
+                    )
+
+                    existing_by_key: Dict[Tuple[int, int, date, str], WeeklyAssignmentSnapshot] = {}
+                    duplicate_ids: List[int] = []
+                    for row in existing_null_rows:
+                        key = (int(row.person_id), int(row.project_id), row.week_start, row.source)
+                        if key in existing_by_key:
+                            duplicate_ids.append(int(row.id))
+                        else:
+                            existing_by_key[key] = row
+                    if duplicate_ids:
+                        WeeklyAssignmentSnapshot.objects.filter(id__in=duplicate_ids).delete()
+
+                    to_create: List[WeeklyAssignmentSnapshot] = []
+                    to_update: List[WeeklyAssignmentSnapshot] = []
+                    for candidate in without_role:
+                        key = (int(candidate.person_id), int(candidate.project_id), candidate.week_start, candidate.source)
+                        existing = existing_by_key.get(key)
+                        if existing is None:
+                            to_create.append(candidate)
+                            continue
+                        existing.hours = candidate.hours
+                        existing.project_status = candidate.project_status
+                        existing.deliverable_phase = candidate.deliverable_phase
+                        existing.department_id = candidate.department_id
+                        existing.person_name = candidate.person_name
+                        existing.project_name = candidate.project_name
+                        existing.client = candidate.client
+                        existing.person_is_active = candidate.person_is_active
+                        existing.person_role_id = candidate.person_role_id
+                        existing.person_role_name = candidate.person_role_name
+                        existing.updated_at = candidate.updated_at
+                        to_update.append(existing)
+
+                    if to_create:
+                        WeeklyAssignmentSnapshot.objects.bulk_create(to_create)
+                        inserted += len(to_create)
+                    if to_update:
+                        WeeklyAssignmentSnapshot.objects.bulk_update(to_update, update_fields)
+                        updated += len(to_update)
 
         # Emit membership events
         events_inserted = _emit_membership_events(sunday, deliverables_by_pid)
@@ -225,8 +282,8 @@ def write_weekly_assignment_snapshots(week_start: date | str, *, source: str = S
 def _emit_membership_events(week_start: date, deliverables_by_pid: Dict[int, List[dict]]) -> int:
     """Emit joined/left events comparing current vs prior week memberships.
 
-    Membership is defined by the existence of an active assignment overlapping
-    the week window, independent of hours.
+    Membership is defined by active assignment overlap with the week window and
+    positive weekly hours.
     """
     prior_week = week_start - timedelta(days=7)
     # Build membership sets
@@ -312,9 +369,37 @@ def _emit_membership_events(week_start: date, deliverables_by_pid: Dict[int, Lis
     if not rows:
         return 0
 
-    # Insert events; on conflict, do nothing
-    res = AssignmentMembershipEvent.objects.bulk_create(rows, ignore_conflicts=True)
-    return len(res)
+    with_role = [row for row in rows if row.role_on_project_id is not None]
+    without_role = [row for row in rows if row.role_on_project_id is None]
+    inserted = 0
+
+    with transaction.atomic():
+        if with_role:
+            # For non-null role keys, DB-level unique constraints are sufficient.
+            inserted += len(AssignmentMembershipEvent.objects.bulk_create(with_role, ignore_conflicts=True))
+
+        if without_role:
+            # NULL role keys are not de-duplicated by DB unique constraints.
+            existing_null_keys = set(
+                AssignmentMembershipEvent.objects.filter(
+                    week_start=week_start,
+                    role_on_project_id__isnull=True,
+                    person_id__in=[row.person_id for row in without_role],
+                    project_id__in=[row.project_id for row in without_role],
+                    event_type__in=[row.event_type for row in without_role],
+                ).values_list('person_id', 'project_id', 'event_type', 'week_start')
+            )
+            to_create: List[AssignmentMembershipEvent] = []
+            for row in without_role:
+                key = (row.person_id, row.project_id, row.event_type, row.week_start)
+                if key in existing_null_keys:
+                    continue
+                existing_null_keys.add(key)
+                to_create.append(row)
+            if to_create:
+                inserted += len(AssignmentMembershipEvent.objects.bulk_create(to_create))
+
+    return inserted
 
 
 def backfill_weekly_assignment_snapshots(week_start: date | str, *, emit_events: bool = False, force: bool = False) -> dict:

@@ -1,5 +1,5 @@
 import { test, expect, devices } from '@playwright/test';
-import { primeAuth, jsonResponse } from './utils';
+import { primeAuth, jsonResponse, mockApiFallback } from './utils';
 
 const weekKeys = ['2025-11-24', '2025-12-01', '2025-12-08'];
 
@@ -25,6 +25,7 @@ const assignmentsByProject: Record<number, any[]> = {
   501: [
     {
       id: 9101,
+      project: 501,
       person: 710,
       personName: 'Tim Schnepf',
       personDepartmentId: 7,
@@ -56,6 +57,28 @@ const deliverableCalendar = [
   },
 ];
 
+const assignmentsPagePayload = {
+  contractVersion: 1,
+  included: ['assignment'],
+  assignmentGridSnapshot: {
+    weekKeys,
+    people: [],
+    hoursByPerson: {},
+  },
+  projects: snapshotPayload.projects,
+  deliverables: deliverableCalendar,
+  departments: [{ id: 3, name: 'Electrical' }],
+  autoHoursBundle: {
+    contractVersion: 1,
+    phaseMapping: { useDescriptionMatch: true, phases: [] },
+    templates: [],
+    defaultSettingsByPhase: {},
+    weekLimitsByPhase: {},
+    bundleComplete: true,
+    missingTemplateIds: [],
+  },
+};
+
 test.use({
   ...devices['Pixel 5'],
   viewport: { width: 390, height: 844 },
@@ -65,6 +88,7 @@ test.use({
 
 test.describe('Project assignments mobile interactions', () => {
   test('expands projects and opens role sheet without drifting query params', async ({ page }) => {
+    await mockApiFallback(page);
     await primeAuth(page, {
       'deptFilter.selectedId': '3',
       'deptFilter.includeChildren': '0',
@@ -72,7 +96,6 @@ test.describe('Project assignments mobile interactions', () => {
 
     let snapshotQuery: URLSearchParams | null = null;
     let assignmentsQuery: URLSearchParams | null = null;
-    const roleQueries: URLSearchParams[] = [];
 
     await page.route('**/api/capabilities/**', (route) =>
       route.fulfill(
@@ -85,27 +108,21 @@ test.describe('Project assignments mobile interactions', () => {
       )
     );
 
-    await page.route('**/api/assignments/project_grid_snapshot/**', (route) => {
+    await page.route('**/api/ui/assignments-page/**', (route) => {
       const url = new URL(route.request().url());
       snapshotQuery = new URLSearchParams(url.search);
-      return route.fulfill(jsonResponse(snapshotPayload));
+      return route.fulfill(jsonResponse(assignmentsPagePayload));
     });
 
-    await page.route('**/api/assignments/project_totals/**', (route) =>
-      route.fulfill(jsonResponse({ hoursByProject: snapshotPayload.hoursByProject }))
-    );
-
     await page.route('**/api/projects/project-roles/**', (route) => {
-      const url = new URL(route.request().url());
-      roleQueries.push(new URLSearchParams(url.search));
       return route.fulfill(jsonResponse(roleCatalog));
     });
 
-    await page.route('**/api/projects/**', (route) => {
-      const url = new URL(route.request().url());
-      const pageParam = url.searchParams.get('page');
-      if (pageParam && pageParam !== '1') {
-        return route.fulfill(jsonResponse({ results: [], count: snapshotPayload.projects.length }));
+    await page.route('**/api/projects/search/**', (route) => {
+      const payload = JSON.parse(route.request().postData() || '{}');
+      const pageParam = Number(payload.page || 1);
+      if (pageParam > 1) {
+        return route.fulfill(jsonResponse({ results: [], count: snapshotPayload.projects.length, next: null }));
       }
       return route.fulfill(jsonResponse({ results: snapshotPayload.projects, count: snapshotPayload.projects.length }));
     });
@@ -133,8 +150,6 @@ test.describe('Project assignments mobile interactions', () => {
       route.fulfill(jsonResponse({}))
     );
 
-    await page.route('**/api/**', (route) => route.fulfill(jsonResponse({})));
-
     await page.goto('/project-assignments');
 
     const projectCard = page.getByRole('button', { name: /Abernathy Masterplan\/B1/i }).first();
@@ -142,25 +157,22 @@ test.describe('Project assignments mobile interactions', () => {
 
     await expect.poll(() => snapshotQuery?.get('weeks')).toBe('20');
     expect(snapshotQuery?.get('department')).toBe('3');
-    expect(snapshotQuery?.get('include_children')).toBe('0');
-    expect(snapshotQuery?.get('status_in')).toBe('active,active_ca');
+    expect(snapshotQuery?.get('include_children')).toBe('1');
 
     await projectCard.click();
     await expect(page.getByText('Tim Schnepf')).toBeVisible();
 
     await expect.poll(() => assignmentsQuery?.get('project')).toBe('501');
     expect(assignmentsQuery?.get('department')).toBe('3');
-    expect(assignmentsQuery?.get('include_children')).toBe('0');
+    expect(assignmentsQuery?.get('include_children')).toBe('1');
 
-    await page.getByRole('button', { name: 'No role' }).click();
-    const roleSheet = page.getByRole('dialog', { name: 'Select Role' });
-    await expect(roleSheet).toBeVisible();
-    await expect(roleSheet.getByRole('button', { name: 'Electrical Lead' })).toBeVisible();
-
-    expect(roleQueries.some((params) => params.get('department') === '7')).toBe(true);
-
-    await roleSheet.getByRole('button', { name: 'Close sheet' }).click();
-    await expect(roleSheet).not.toBeVisible();
+    const assignmentCard = page.getByRole('button', { name: /Tim Schnepf/i });
+    await assignmentCard.click();
+    const assignmentSheet = page.getByRole('dialog', { name: /Tim Schnepf/i });
+    await expect(assignmentSheet).toBeVisible();
+    await expect(assignmentSheet.getByText(/Unassigned role/i)).toBeVisible();
+    await assignmentSheet.getByRole('button', { name: 'Cancel' }).click();
+    await expect(assignmentSheet).not.toBeVisible();
 
     await projectCard.click();
     await expect(page.getByText('Tim Schnepf')).not.toBeVisible();

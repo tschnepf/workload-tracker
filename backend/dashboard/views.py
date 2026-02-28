@@ -1,7 +1,8 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Count, Sum, Q
+from rest_framework import status
+from django.db.models import Count
 from datetime import date, timedelta
 from django.utils import timezone
 from django.core.cache import cache
@@ -12,6 +13,8 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 import logging
 from core.models import UtilizationScheme
 from core.cache_keys import build_aggregate_cache_key
+from projects.models import Project
+from departments.models import Department
 from .serializers import DashboardResponseSerializer
 
 
@@ -257,6 +260,140 @@ class DashboardView(APIView):
         # Store in cache with short TTL if enabled
         if use_cache and cache_key is not None:
             # TTL preference: DASHBOARD_CACHE_TTL > AGGREGATE_CACHE_TTL > default(30)
+            ttl = getattr(settings, 'DASHBOARD_CACHE_TTL', None)
+            if ttl is None:
+                ttl = getattr(settings, 'AGGREGATE_CACHE_TTL', 30)
+            try:
+                cache.set(cache_key, payload, timeout=int(ttl))
+            except Exception:  # nosec B110
+                pass
+
+        return Response(payload)
+
+
+def _parse_int(raw, default=None):
+    if raw in (None, ''):
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_bool(raw, default=False):
+    if raw in (None, ''):
+        return default
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _department_descendant_ids(root_department_id: int) -> list[int]:
+    rows = Department.objects.values_list('id', 'parent_department_id')
+    children_map = {}
+    for dept_id, parent_id in rows:
+        children_map.setdefault(parent_id, []).append(dept_id)
+    visited = set()
+    stack = [root_department_id]
+    while stack:
+        current = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        for child_id in children_map.get(current, []):
+            if child_id not in visited:
+                stack.append(child_id)
+    return sorted(visited)
+
+
+class DashboardBootstrapView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks to aggregate (1-12)'),
+            OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
+            OpenApiParameter(name='include_children', type=int, required=False, description='Include child departments for people metadata (0|1)'),
+            OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+        ],
+    )
+    def get(self, request):
+        if not settings.FEATURES.get('FF_MODERATE_PAGES_SNAPSHOTS', True):
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        weeks = _parse_int(request.GET.get('weeks'), 1)
+        weeks = max(1, min(12, weeks or 1))
+        department_filter = _parse_int(request.GET.get('department'))
+        include_children = _parse_bool(request.GET.get('include_children'))
+        vertical_filter = _parse_int(request.GET.get('vertical'))
+
+        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        cache_key = None
+        if use_cache:
+            try:
+                cache_key = build_aggregate_cache_key(
+                    'dashboard.bootstrap',
+                    request,
+                    filters={
+                        'weeks': weeks,
+                        'department': department_filter if department_filter is not None else 'all',
+                        'include_children': 1 if include_children else 0,
+                        'vertical': vertical_filter if vertical_filter is not None else 'all',
+                    },
+                )
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                cache_key = None
+
+        # Reuse canonical dashboard payload logic for summary/distribution parity.
+        dashboard_response = DashboardView().get(request)
+        dashboard_payload = getattr(dashboard_response, 'data', None)
+        if not isinstance(dashboard_payload, dict):
+            return Response({'error': 'invalid dashboard payload'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        projects_qs = Project.objects.filter(is_active=True)
+        if vertical_filter is not None:
+            projects_qs = projects_qs.filter(vertical_id=vertical_filter)
+        project_counts_rows = projects_qs.values('status').annotate(count=Count('id'))
+        project_counts_by_status = {}
+        for row in project_counts_rows:
+            key = row.get('status') or 'Unknown'
+            project_counts_by_status[key] = int(row.get('count') or 0)
+
+        people_qs = (
+            Person.objects
+            .select_related('role')
+            .filter(is_active=True)
+            .only('id', 'is_active', 'hire_date', 'role_id', 'role__name', 'department_id')
+        )
+        if vertical_filter is not None:
+            people_qs = people_qs.filter(department__vertical_id=vertical_filter)
+        if department_filter is not None:
+            if include_children:
+                dept_ids = _department_descendant_ids(department_filter)
+                people_qs = people_qs.filter(department_id__in=dept_ids)
+            else:
+                people_qs = people_qs.filter(department_id=department_filter)
+
+        people_meta = []
+        for person in people_qs:
+            people_meta.append({
+                'id': person.id,
+                'isActive': bool(person.is_active),
+                'hireDate': person.hire_date.isoformat() if person.hire_date else None,
+                'roleId': person.role_id,
+                'roleName': person.role.name if getattr(person, 'role', None) else None,
+            })
+
+        payload = {
+            'contractVersion': 1,
+            'dashboard': dashboard_payload,
+            'projectCountsByStatus': project_counts_by_status,
+            'projectsTotal': int(sum(project_counts_by_status.values())),
+            'peopleMeta': people_meta,
+        }
+
+        if use_cache and cache_key is not None:
             ttl = getattr(settings, 'DASHBOARD_CACHE_TTL', None)
             if ttl is None:
                 ttl = getattr(settings, 'AGGREGATE_CACHE_TTL', 30)

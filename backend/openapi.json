@@ -308,6 +308,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
                         "name": "weeks",
                         "schema": {
                             "type": "integer"
@@ -367,6 +375,14 @@
                             "type": "integer"
                         },
                         "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     },
                     {
                         "in": "query",
@@ -432,6 +448,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
                         "name": "weeks",
                         "schema": {
                             "type": "integer"
@@ -488,6 +512,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
                         "name": "weeks",
                         "schema": {
                             "type": "integer"
@@ -539,6 +571,14 @@
                             "type": "integer"
                         },
                         "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     },
                     {
                         "in": "query",
@@ -650,6 +690,14 @@
                             "type": "integer"
                         },
                         "description": "Filter by person id"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     }
                 ],
                 "tags": [
@@ -891,11 +939,27 @@
                     },
                     {
                         "in": "query",
+                        "name": "department_filters",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "JSON array of department filter clauses"
+                    },
+                    {
+                        "in": "query",
                         "name": "include_children",
                         "schema": {
                             "type": "integer"
                         },
                         "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     },
                     {
                         "in": "query",
@@ -1113,6 +1177,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "department_filters",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "JSON array of department filter clauses"
+                    },
+                    {
+                        "in": "query",
                         "name": "has_future_deliverables",
                         "schema": {
                             "type": "integer"
@@ -1150,6 +1222,14 @@
                             "type": "string"
                         },
                         "description": "CSV of project status filters"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     },
                     {
                         "in": "query",
@@ -3506,6 +3586,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
                         "name": "weeks",
                         "schema": {
                             "type": "integer"
@@ -3534,6 +3622,61 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/dashboard/bootstrap/": {
+            "get": {
+                "operationId": "dashboard_bootstrap_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by department id"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Include child departments for people metadata (0|1)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of weeks to aggregate (1-12)"
+                    }
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -4298,6 +4441,14 @@
                             "type": "string"
                         },
                         "description": "YYYY-MM-DD"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     }
                 ],
                 "tags": [
@@ -4340,6 +4491,22 @@
                     },
                     {
                         "in": "query",
+                        "name": "include_notes",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "none|preview|full (default none)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_project_leads",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include department lead names grouped by project"
+                    },
+                    {
+                        "in": "query",
                         "name": "mine_only",
                         "schema": {
                             "type": "boolean"
@@ -4359,6 +4526,14 @@
                         "schema": {
                             "type": "integer"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     }
                 ],
                 "tags": [
@@ -5992,6 +6167,27 @@
                 }
             }
         },
+        "/api/departments/snapshot/": {
+            "get": {
+                "operationId": "departments_snapshot_retrieve",
+                "tags": [
+                    "departments"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/integrations/connections/": {
             "get": {
                 "operationId": "integrations_connections_list",
@@ -7498,6 +7694,14 @@
                         },
                         "description": "Background job id",
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "rt",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Restore-session token (required during restore mode)"
                     }
                 ],
                 "tags": [
@@ -7598,6 +7802,14 @@
                         },
                         "description": "Background job id",
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "rt",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Restore-session token (required during restore mode)"
                     }
                 ],
                 "tags": [
@@ -7679,6 +7891,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "department_filters",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "JSON array of department filter clauses"
+                    },
+                    {
+                        "in": "query",
                         "name": "include_children",
                         "schema": {
                             "type": "integer"
@@ -7708,6 +7928,14 @@
                             "type": "integer"
                         },
                         "description": "Page size"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     }
                 ],
                 "tags": [
@@ -8036,6 +8264,14 @@
                             "type": "string"
                         },
                         "description": "Substring of name"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     }
                 ],
                 "tags": [
@@ -8091,6 +8327,14 @@
                         "schema": {
                             "type": "integer"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     },
                     {
                         "in": "query",
@@ -8154,6 +8398,53 @@
                 }
             }
         },
+        "/api/people/filters_metadata/": {
+            "get": {
+                "operationId": "people_filters_metadata_retrieve",
+                "description": "Person CRUD API with utilization calculations\nUses AutoMapped serializer for automatic snake_case â†” camelCase conversion",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "include_inactive",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Include inactive people (0|1; default 0)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PeopleFiltersMetadata"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/people/find_available/": {
             "get": {
                 "operationId": "people_find_available_list",
@@ -8207,6 +8498,14 @@
                             "type": "string"
                         },
                         "description": "Comma-separated skill names"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     },
                     {
                         "in": "query",
@@ -8292,39 +8591,31 @@
             }
         },
         "/api/people/search/": {
-            "get": {
-                "operationId": "people_search_retrieve",
-                "description": "Server-side typeahead for People.\n\nParams:\n- q: required search query (min length 2)\n- limit: optional, default 20, max 50\nReturns minimal projection: id, name, department",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "department",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "Filter by department id"
-                    },
-                    {
-                        "in": "query",
-                        "name": "limit",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "Max results (1-50)"
-                    },
-                    {
-                        "in": "query",
-                        "name": "q",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Search query (min length 2)",
-                        "required": true
-                    }
-                ],
+            "post": {
+                "operationId": "people_search_create",
+                "description": "Search people with tokenized filters and pagination.",
                 "tags": [
                     "people"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PeopleSearchRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PeopleSearchRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PeopleSearchRequestRequest"
+                            }
+                        }
+                    }
+                },
                 "security": [
                     {
                         "jwtAuth": []
@@ -8338,7 +8629,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/PeopleSearchItem"
+                                    "$ref": "#/components/schemas/PeopleSearchResponse"
                                 }
                             }
                         },
@@ -8392,6 +8683,14 @@
                         },
                         "description": "Comma-separated skill names",
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     },
                     {
                         "in": "query",
@@ -8466,6 +8765,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
                         "name": "week",
                         "schema": {
                             "type": "string"
@@ -8490,6 +8797,70 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/SkillMatchAsyncResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/people/typeahead/": {
+            "get": {
+                "operationId": "people_typeahead_retrieve",
+                "description": "Server-side typeahead for People.\n\nParams:\n- q: required search query (min length 2)\n- limit: optional, default 20, max 50\nReturns minimal projection: id, name, department",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by department id"
+                    },
+                    {
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Max results (1-50)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Search query (min length 2)",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    }
+                ],
+                "tags": [
+                    "people"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PeopleSearchItem"
                                 }
                             }
                         },
@@ -8526,6 +8897,14 @@
                         "schema": {
                             "type": "integer"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
                     },
                     {
                         "in": "query",
@@ -8928,6 +9307,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
                         "name": "week",
                         "schema": {
                             "type": "string"
@@ -9166,6 +9553,55 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PaginatedDeliverableQATaskList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/{project_id}/change_log/": {
+            "get": {
+                "operationId": "projects_change_log_list",
+                "description": "Read-only endpoint for recent project change log entries.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ProjectChangeLog"
+                                    }
                                 }
                             }
                         },
@@ -9953,6 +10389,80 @@
                 }
             }
         },
+        "/api/projects/project-roles/bulk/": {
+            "get": {
+                "operationId": "projects_project_roles_bulk_retrieve",
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectRoleBulkGetResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "projects_project_roles_bulk_create",
+                "tags": [
+                    "projects"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleBulkRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleBulkRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectRoleBulkRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProjectRoleBulkResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/projects/project-roles/reorder/": {
             "post": {
                 "operationId": "projects_project_roles_reorder_create",
@@ -10080,6 +10590,140 @@
                 }
             }
         },
+        "/api/reports/departments/overview/": {
+            "get": {
+                "operationId": "reports_departments_overview_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Optional department id filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "When department is set, include descendant departments."
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_inactive",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include inactive departments/people."
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Tokenized department search."
+                    },
+                    {
+                        "in": "query",
+                        "name": "status_in",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV person status filter: active,inactive."
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Optional vertical id filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of weeks to aggregate (1-12)."
+                    }
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/reports/forecast/bootstrap/": {
+            "get": {
+                "operationId": "reports_forecast_bootstrap_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Optional department id filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include descendant departments when department is set."
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Optional vertical id filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of future weeks. Default 8."
+                    }
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/reports/pre-deliverable-completion/": {
             "get": {
                 "operationId": "reports_pre_deliverable_completion_retrieve",
@@ -10132,6 +10776,69 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/reports/role-capacity/bootstrap/": {
+            "get": {
+                "operationId": "reports_role_capacity_bootstrap_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Optional department id filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_inactive",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include inactive departments in department metadata list."
+                    },
+                    {
+                        "in": "query",
+                        "name": "role_ids",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional CSV of role ids to include."
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Optional vertical id filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of future weeks (4,8,12,16,20). Default 12."
+                    }
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -11261,10 +11968,26 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "auto_hours_phases",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of phase keys for auto-hours bundle"
+                    },
+                    {
+                        "in": "query",
                         "name": "department",
                         "schema": {
                             "type": "integer"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "department_filters",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "JSON array of department filter clauses"
                     },
                     {
                         "in": "query",
@@ -11280,7 +12003,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "CSV: assignment,project (default both)"
+                        "description": "CSV: assignment,project,auto_hours (default assignment,project)"
                     },
                     {
                         "in": "query",
@@ -11316,6 +12039,22 @@
                     },
                     {
                         "in": "query",
+                        "name": "template_ids",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of template IDs for templateSettingsByPhase (max 200)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
                         "name": "weeks",
                         "schema": {
                             "type": "integer"
@@ -11336,6 +12075,680 @@
                 ],
                 "responses": {
                     "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "ui_assignments_page_create",
+                "description": "Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "auto_hours_phases",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of phase keys for auto-hours bundle"
+                    },
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "department_filters",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "JSON array of department filter clauses"
+                    },
+                    {
+                        "in": "query",
+                        "name": "has_future_deliverables",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1 (project grid)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV: assignment,project,auto_hours (default assignment,project)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_placeholders",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "project_ids",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of project IDs to scope totals (project grid)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "status_in",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of project status filters (project grid)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "template_ids",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV of template IDs for templateSettingsByPhase (max 200)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by vertical id"
+                    },
+                    {
+                        "in": "query",
+                        "name": "weeks",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of weeks (1-52), default 12"
+                    }
+                ],
+                "tags": [
+                    "ui"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssignmentsPageSnapshotPostRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssignmentsPageSnapshotPostRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssignmentsPageSnapshotPostRequestRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/ui/bootstrap/": {
+            "get": {
+                "operationId": "ui_bootstrap_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "include",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV include: verticals,capabilities,departments,roles"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_inactive",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1 include inactive verticals/departments/roles"
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Department vertical scope"
+                    }
+                ],
+                "tags": [
+                    "ui"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/ui/people-page/": {
+            "get": {
+                "operationId": "ui_people_page_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "department",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "department_filters",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "JSON department clauses"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV include: filters,people,selected_person_skills"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_children",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_inactive",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "selected_person_id",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "ui"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/ui/settings-page/": {
+            "get": {
+                "operationId": "ui_settings_page_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "section",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional visible section id to include scoped sectionData"
+                    }
+                ],
+                "tags": [
+                    "ui"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/ui/skills-page/": {
+            "get": {
+                "operationId": "ui_skills_page_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "include",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "CSV include: departments,people,skill_tags,person_skills"
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_inactive",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "0|1"
+                    },
+                    {
+                        "in": "query",
+                        "name": "people_page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "people_page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "person_skills_page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "person_skills_page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "skill_tags_page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "skill_tags_page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "vertical",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "ui"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/verticals/": {
+            "get": {
+                "operationId": "verticals_list",
+                "description": "Get all verticals with bulk loading support",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "verticals"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedVerticalList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "verticals_create",
+                "tags": [
+                    "verticals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerticalRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerticalRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerticalRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Vertical"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/verticals/{id}/": {
+            "get": {
+                "operationId": "verticals_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this vertical.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "verticals"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Vertical"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "verticals_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this vertical.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "verticals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerticalRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerticalRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerticalRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Vertical"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "verticals_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this vertical.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "verticals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedVerticalRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedVerticalRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedVerticalRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Vertical"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "verticals_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this vertical.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "verticals"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
                         "description": "No response body"
                     }
                 }
@@ -11586,6 +12999,21 @@
                     "countsByPerson"
                 ]
             },
+            "AssignmentDepartmentFilterRequest": {
+                "type": "object",
+                "properties": {
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/OpEnum"
+                    }
+                },
+                "required": [
+                    "departmentId",
+                    "op"
+                ]
+            },
             "AssignmentHoursUpdateRequest": {
                 "type": "object",
                 "properties": {
@@ -11642,6 +13070,15 @@
                         "type": "integer"
                     },
                     "include_children": {
+                        "type": "integer"
+                    },
+                    "department_filters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AssignmentDepartmentFilterRequest"
+                        }
+                    },
+                    "vertical": {
                         "type": "integer"
                     },
                     "status_in": {
@@ -11725,6 +13162,28 @@
                     "peopleMatchReason",
                     "results"
                 ]
+            },
+            "AssignmentsPageSnapshotPostRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "include": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "auto_hours_phases": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "template_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                }
             },
             "AutoHoursRoleSettingItem": {
                 "type": "object",
@@ -14017,11 +15476,29 @@
                         "type": "integer",
                         "nullable": true
                     },
+                    "vertical": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "verticalName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "manager": {
                         "type": "integer",
                         "nullable": true
                     },
                     "managerName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "secondaryManagers": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "secondaryManagerNames": {
                         "type": "string",
                         "readOnly": true
                     },
@@ -14048,7 +15525,24 @@
                     "isActive",
                     "managerName",
                     "name",
-                    "updatedAt"
+                    "secondaryManagerNames",
+                    "updatedAt",
+                    "verticalName"
+                ]
+            },
+            "DepartmentFilterPeopleRequest": {
+                "type": "object",
+                "properties": {
+                    "departmentId": {
+                        "type": "integer"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/OpEnum"
+                    }
+                },
+                "required": [
+                    "departmentId",
+                    "op"
                 ]
             },
             "DepartmentFilterProjectRequest": {
@@ -14082,9 +15576,19 @@
                         "type": "integer",
                         "nullable": true
                     },
+                    "vertical": {
+                        "type": "integer",
+                        "nullable": true
+                    },
                     "manager": {
                         "type": "integer",
                         "nullable": true
+                    },
+                    "secondaryManagers": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
                     },
                     "description": {
                         "type": "string"
@@ -15836,6 +17340,37 @@
                     }
                 }
             },
+            "PaginatedVerticalList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Vertical"
+                        }
+                    }
+                }
+            },
             "PaginatedWorkloadForecastItemList": {
                 "type": "object",
                 "required": [
@@ -16118,9 +17653,19 @@
                         "type": "integer",
                         "nullable": true
                     },
+                    "vertical": {
+                        "type": "integer",
+                        "nullable": true
+                    },
                     "manager": {
                         "type": "integer",
                         "nullable": true
+                    },
+                    "secondaryManagers": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
                     },
                     "description": {
                         "type": "string"
@@ -16328,6 +17873,10 @@
                     "autoHoursTemplateId": {
                         "type": "integer",
                         "nullable": true
+                    },
+                    "vertical": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 }
             },
@@ -16431,6 +17980,26 @@
                     }
                 }
             },
+            "PatchedVerticalRequest": {
+                "type": "object",
+                "description": "Vertical serializer with camelCase field mapping",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "shortName": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "PeopleAutocompleteItem": {
                 "type": "object",
                 "properties": {
@@ -16448,6 +18017,42 @@
                 "required": [
                     "id",
                     "name"
+                ]
+            },
+            "PeopleFiltersDepartment": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
+                ]
+            },
+            "PeopleFiltersMetadata": {
+                "type": "object",
+                "properties": {
+                    "locations": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "departments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PeopleFiltersDepartment"
+                        }
+                    }
+                },
+                "required": [
+                    "departments",
+                    "locations"
                 ]
             },
             "PeopleSearchItem": {
@@ -16471,6 +18076,78 @@
                 "required": [
                     "id",
                     "name"
+                ]
+            },
+            "PeopleSearchRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "page": {
+                        "type": "integer"
+                    },
+                    "page_size": {
+                        "type": "integer"
+                    },
+                    "department": {
+                        "type": "integer"
+                    },
+                    "include_children": {
+                        "type": "integer"
+                    },
+                    "department_filters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DepartmentFilterPeopleRequest"
+                        }
+                    },
+                    "vertical": {
+                        "type": "integer"
+                    },
+                    "include_inactive": {
+                        "type": "integer"
+                    },
+                    "location": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "ordering": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "search_tokens": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SearchTokenPeopleRequest"
+                        }
+                    }
+                }
+            },
+            "PeopleSearchResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Person"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "results"
                 ]
             },
             "Person": {
@@ -16506,6 +18183,16 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "vertical": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "verticalName": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "location": {
                         "type": "string",
                         "nullable": true,
@@ -16539,7 +18226,9 @@
                     "id",
                     "name",
                     "roleName",
-                    "updatedAt"
+                    "updatedAt",
+                    "vertical",
+                    "verticalName"
                 ]
             },
             "PersonCapacityHeatmapItem": {
@@ -17564,6 +19253,14 @@
                         "type": "integer",
                         "nullable": true
                     },
+                    "vertical": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "verticalName": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "createdAt": {
                         "type": "string",
                         "format": "date-time",
@@ -17582,7 +19279,8 @@
                     "createdAt",
                     "id",
                     "name",
-                    "updatedAt"
+                    "updatedAt",
+                    "verticalName"
                 ]
             },
             "ProjectAvailabilityItem": {
@@ -17619,6 +19317,50 @@
                     "personName",
                     "totalHours",
                     "utilizationPercent"
+                ]
+            },
+            "ProjectChangeLog": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "project": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "action": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "detail": {
+                        "readOnly": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "actor": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "actorName": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "action",
+                    "actor",
+                    "actorName",
+                    "createdAt",
+                    "detail",
+                    "id",
+                    "project"
                 ]
             },
             "ProjectFilterItem": {
@@ -17840,6 +19582,10 @@
                     "autoHoursTemplateId": {
                         "type": "integer",
                         "nullable": true
+                    },
+                    "vertical": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -18034,6 +19780,42 @@
                     "id",
                     "name",
                     "updated_at"
+                ]
+            },
+            "ProjectRoleBulkGetResponse": {
+                "type": "object",
+                "properties": {
+                    "rolesByDepartment": {}
+                },
+                "required": [
+                    "rolesByDepartment"
+                ]
+            },
+            "ProjectRoleBulkRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "department_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "include_inactive": {
+                        "type": "boolean",
+                        "default": false
+                    }
+                },
+                "required": [
+                    "department_ids"
+                ]
+            },
+            "ProjectRoleBulkResponse": {
+                "type": "object",
+                "properties": {
+                    "rolesByDepartment": {}
+                },
+                "required": [
+                    "rolesByDepartment"
                 ]
             },
             "ProjectRoleClearAssignmentsResponse": {
@@ -18246,6 +20028,9 @@
                         "type": "string",
                         "minLength": 1
                     },
+                    "vertical": {
+                        "type": "integer"
+                    },
                     "status_in": {
                         "type": "string",
                         "minLength": 1
@@ -18264,6 +20049,14 @@
                         "items": {
                             "$ref": "#/components/schemas/DepartmentFilterProjectRequest"
                         }
+                    },
+                    "include": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "CSV includes. Supports role_map."
+                    },
+                    "include_inactive_roles": {
+                        "type": "boolean"
                     },
                     "include_deliverable_dates": {
                         "type": "boolean"
@@ -18290,7 +20083,8 @@
                             "type": "object",
                             "additionalProperties": {}
                         }
-                    }
+                    },
+                    "rolesByDepartment": {}
                 },
                 "required": [
                     "count",
@@ -18615,6 +20409,14 @@
                     "project": {
                         "type": "string"
                     },
+                    "client": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "role": {
+                        "type": "string",
+                        "nullable": true
+                    },
                     "created": {
                         "type": "string"
                     }
@@ -18833,6 +20635,22 @@
                 "required": [
                     "lock_acquired",
                     "week_start"
+                ]
+            },
+            "SearchTokenPeopleRequest": {
+                "type": "object",
+                "properties": {
+                    "term": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/OpEnum"
+                    }
+                },
+                "required": [
+                    "op",
+                    "term"
                 ]
             },
             "SearchTokenProjectRequest": {
@@ -19403,6 +21221,68 @@
                         "type": "boolean"
                     }
                 }
+            },
+            "Vertical": {
+                "type": "object",
+                "description": "Vertical serializer with camelCase field mapping",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "shortName": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "createdAt",
+                    "id",
+                    "name",
+                    "updatedAt"
+                ]
+            },
+            "VerticalRequest": {
+                "type": "object",
+                "description": "Vertical serializer with camelCase field mapping",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "shortName": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "isActive": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "name"
+                ]
             },
             "WeeksSummary": {
                 "type": "object",

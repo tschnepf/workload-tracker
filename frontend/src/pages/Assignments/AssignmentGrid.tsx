@@ -488,7 +488,7 @@ const AssignmentGrid: React.FC = () => {
     setError,
     setLoading,
   });
-  const { weeks, isSnapshotMode, loadData, asyncJob, departments } = snapshot;
+  const { weeks, isSnapshotMode, loadData, asyncJob, departments, snapshotSettled } = snapshot;
   const canEditAssignments = caps.data?.aggregates?.gridSnapshot !== false;
   const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
   const weekVirtualization = useWeekVirtualization(weeks, 70, 2);
@@ -504,6 +504,7 @@ const AssignmentGrid: React.FC = () => {
   const autoHoursDepartmentId = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
   const autoHoursBundle = snapshot.autoHoursBundle;
   const hasAutoHoursBundle = canUseAutoHours && !!autoHoursBundle;
+  const shouldUseLegacyAutoHoursFallback = canUseAutoHours && snapshotSettled && !hasAutoHoursBundle;
   const refreshAutoHoursSettings = useCallback(async () => {
     if (!canUseAutoHours) {
       setAutoHoursSettingsByPhase({});
@@ -511,7 +512,7 @@ const AssignmentGrid: React.FC = () => {
       setAutoHoursSettingsLoading(false);
       return;
     }
-    if (hasAutoHoursBundle) {
+    if (!shouldUseLegacyAutoHoursFallback) {
       setAutoHoursSettingsLoading(false);
       return;
     }
@@ -537,7 +538,7 @@ const AssignmentGrid: React.FC = () => {
     } finally {
       setAutoHoursSettingsLoading(false);
     }
-  }, [autoHoursDepartmentId, autoHoursPhases, canUseAutoHours, hasAutoHoursBundle]);
+  }, [autoHoursDepartmentId, autoHoursPhases, canUseAutoHours, shouldUseLegacyAutoHoursFallback]);
 
   useEffect(() => {
     void refreshAutoHoursSettings();
@@ -548,7 +549,7 @@ const AssignmentGrid: React.FC = () => {
       setAutoHoursTemplates([]);
       return;
     }
-    if (hasAutoHoursBundle) {
+    if (!shouldUseLegacyAutoHoursFallback) {
       return;
     }
     let mounted = true;
@@ -563,7 +564,7 @@ const AssignmentGrid: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [canUseAutoHours, hasAutoHoursBundle]);
+  }, [canUseAutoHours, shouldUseLegacyAutoHoursFallback]);
 
   const autoHoursTemplatePhaseKeysById = useMemo(() => {
     const map = new Map<number, Set<string>>();
@@ -611,8 +612,7 @@ const AssignmentGrid: React.FC = () => {
   }, [autoHoursTemplatePhaseKeysById, autoHoursTemplateSettings, showToast]);
 
   useEffect(() => {
-    if (!canUseAutoHours) return;
-    if (hasAutoHoursBundle) return;
+    if (!shouldUseLegacyAutoHoursFallback) return;
     let mounted = true;
     (async () => {
       try {
@@ -627,7 +627,7 @@ const AssignmentGrid: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [canUseAutoHours, hasAutoHoursBundle]);
+  }, [shouldUseLegacyAutoHoursFallback]);
 
   useEffect(() => {
     if (!canUseAutoHours || !autoHoursBundle) return;

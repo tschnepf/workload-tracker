@@ -174,9 +174,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
     setLoading,
   });
 
-  const { weeks, departments } = snapshot;
+  const { weeks, departments, snapshotSettled } = snapshot;
   const autoHoursBundle = snapshot.autoHoursBundle;
   const hasAutoHoursBundle = canUseAutoHours && !!autoHoursBundle;
+  const shouldUseLegacyAutoHoursFallback = canUseAutoHours && snapshotSettled && !hasAutoHoursBundle;
   const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
   const weekVirtualization = useWeekVirtualization(weeks, 70, 2);
   const visibleWeeks = isMobileLayout ? weekVirtualization.visibleWeeks : weeks;
@@ -204,7 +205,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [departments]);
 
   useEffect(() => {
-    if (!canUseAutoHours || hasAutoHoursBundle) return;
+    if (!shouldUseLegacyAutoHoursFallback) return;
     let mounted = true;
     (async () => {
       try {
@@ -216,7 +217,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [canUseAutoHours, hasAutoHoursBundle]);
+  }, [shouldUseLegacyAutoHoursFallback]);
 
   useEffect(() => {
     try {
@@ -506,7 +507,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       setAutoHoursSettingsLoading(false);
       return;
     }
-    if (hasAutoHoursBundle) {
+    if (!shouldUseLegacyAutoHoursFallback) {
       setAutoHoursSettingsLoading(false);
       return;
     }
@@ -530,7 +531,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } finally {
       setAutoHoursSettingsLoading(false);
     }
-  }, [autoHoursPhases, canUseAutoHours, hasAutoHoursBundle]);
+  }, [autoHoursPhases, canUseAutoHours, shouldUseLegacyAutoHoursFallback]);
 
   useEffect(() => { void refreshAutoHoursSettings(); }, [refreshAutoHoursSettings]);
 
@@ -539,7 +540,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       setAutoHoursTemplates([]);
       return;
     }
-    if (hasAutoHoursBundle) {
+    if (!shouldUseLegacyAutoHoursFallback) {
       return;
     }
     let mounted = true;
@@ -552,7 +553,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [canUseAutoHours, hasAutoHoursBundle]);
+  }, [canUseAutoHours, shouldUseLegacyAutoHoursFallback]);
 
   const autoHoursTemplatePhaseKeysById = useMemo(() => {
     const map = new Map<number, Set<string>>();
@@ -1253,25 +1254,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
       setLoadingAssignments(new Set());
     }
   }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, projectsData]);
-
-  const autoRefreshKeyRef = useRef<string>('');
-  useEffect(() => {
-    if (projectsData.length === 0) return;
-    const deptFiltersKey = departmentFiltersPayload.length ? JSON.stringify(departmentFiltersPayload) : 'none';
-    const key = [
-      deptState.selectedDepartmentId ?? 'all',
-      deptState.includeChildren ? 'children' : 'direct',
-      weeksHorizon,
-      verticalState.selectedVerticalId ?? 'all',
-      deptFiltersKey,
-    ].join(':');
-    if (autoRefreshKeyRef.current === key) return;
-    autoRefreshKeyRef.current = key;
-    (async () => {
-      await snapshot.loadData();
-      await refreshAllAssignments();
-    })();
-  }, [projectsData.length, deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, weeksHorizon, snapshot.loadData, refreshAllAssignments]);
 
   const toggleProjectExpanded = (projectId: number) => {
     const getMainScrollContainer = () => bodyScrollRef.current?.closest('main') as HTMLElement | null;

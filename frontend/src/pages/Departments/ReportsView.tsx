@@ -3,7 +3,7 @@
  * Provides detailed department performance metrics and insights
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
@@ -191,7 +191,6 @@ const ReportsView: React.FC = () => {
   const fallbackCircuitUntilRef = useRef<number>(0);
 
   useEffect(() => {
-    // Default open on desktop/tablet; collapsed on mobile to defer chart mounts.
     setAssignedAnalyticsOpen(!isMobileLayout);
   }, [isMobileLayout]);
 

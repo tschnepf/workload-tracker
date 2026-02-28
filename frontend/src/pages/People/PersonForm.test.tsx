@@ -100,7 +100,10 @@ describe('PersonForm mobile flows', () => {
     await userEvent.type(capacityInput, '40');
     await userEvent.selectOptions(screen.getByText(/Role\/Title/i).nextElementSibling as HTMLSelectElement, '10');
 
-    await userEvent.click(screen.getByRole('button', { name: /Advanced details/i }));
+    // Advanced section defaults open; expand only if collapsed.
+    if (!screen.queryByLabelText(/Department/i)) {
+      await userEvent.click(screen.getByRole('button', { name: /Advanced details/i }));
+    }
 
     await userEvent.selectOptions(screen.getByLabelText(/Department/i), '1');
     await userEvent.type(screen.getByPlaceholderText(/New York, NY or Remote/i), 'New York, NY');

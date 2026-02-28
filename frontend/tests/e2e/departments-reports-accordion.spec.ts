@@ -1,4 +1,4 @@
-import { test, expect, devices } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { primeAuth, jsonResponse } from './utils';
 
 const departmentsPayload = {
@@ -83,7 +83,6 @@ const departmentsOverviewPayload = {
 
 test.describe('Department reports accordion behavior', () => {
   test.use({
-    ...devices['iPhone 12'],
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     isMobile: true,

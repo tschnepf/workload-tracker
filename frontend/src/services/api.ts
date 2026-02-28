@@ -1032,6 +1032,14 @@ export const verticalsApi = {
 };
 
 // Departments API
+export type DepartmentsPageSnapshotResponse = {
+  contractVersion: number;
+  included: string[];
+  departments?: PaginatedResponse<Department>;
+  people?: PaginatedResponse<Person>;
+  truncated?: Record<string, unknown>;
+};
+
 export const departmentsApi = {
   // Get all departments with pagination support
   list: async (params?: { page?: number; page_size?: number; vertical?: number; include_inactive?: 0 | 1 }) => {
@@ -1057,6 +1065,27 @@ export const departmentsApi = {
     if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
     if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
     return fetchApiCached<Department[]>(`/departments/?${sp.toString()}`);
+  },
+
+  snapshot: async (params?: {
+    include?: Array<'departments' | 'people'>;
+    vertical?: number;
+    include_inactive?: 0 | 1;
+    page?: number;
+    page_size?: number;
+    people_page?: number;
+    people_page_size?: number;
+  }): Promise<DepartmentsPageSnapshotResponse> => {
+    const sp = new URLSearchParams();
+    if (params?.include?.length) sp.set('include', Array.from(new Set(params.include)).sort().join(','));
+    if (params?.vertical != null) sp.set('vertical', String(params.vertical));
+    if (params?.include_inactive != null) sp.set('include_inactive', String(params.include_inactive));
+    if (params?.page != null) sp.set('page', String(params.page));
+    if (params?.page_size != null) sp.set('page_size', String(params.page_size));
+    if (params?.people_page != null) sp.set('people_page', String(params.people_page));
+    if (params?.people_page_size != null) sp.set('people_page_size', String(params.people_page_size));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApiCached<DepartmentsPageSnapshotResponse>(`/departments/snapshot/${qs}`);
   },
 
   // Get single department
@@ -1486,6 +1515,20 @@ export const deliverableQaTasksApi = {
 };
 
 // Dashboard API
+export type DashboardBootstrapResponse = {
+  contractVersion: number;
+  dashboard: DashboardData;
+  projectCountsByStatus: Record<string, number>;
+  projectsTotal: number;
+  peopleMeta: Array<{
+    id: number;
+    isActive?: boolean;
+    hireDate?: string | null;
+    roleId?: number | null;
+    roleName?: string | null;
+  }>;
+};
+
 export const dashboardApi = {
   // Get dashboard data with optional weeks and department parameters
   getDashboard: async (weeks?: number, department?: string, vertical?: number) => {
@@ -1500,6 +1543,21 @@ export const dashboardApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as unknown as DashboardData;
+  },
+
+  getBootstrap: async (params?: {
+    weeks?: number;
+    department?: string;
+    include_children?: 0 | 1;
+    vertical?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.weeks && params.weeks !== 1) queryParams.set('weeks', String(params.weeks));
+    if (params?.department) queryParams.set('department', params.department);
+    if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApiCached<DashboardBootstrapResponse>(`/dashboard/bootstrap/${queryString}`);
   },
 };
 
@@ -1533,7 +1591,7 @@ export const reportsApi = {
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
     if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return fetchApi<RoleCapacityBootstrapResponse>(`/reports/role-capacity/bootstrap/${queryString}`);
+    return fetchApiCached<RoleCapacityBootstrapResponse>(`/reports/role-capacity/bootstrap/${queryString}`);
   },
 
   getForecastBootstrap: async (params?: {
@@ -1569,7 +1627,7 @@ export const reportsApi = {
     if (params?.status_in) queryParams.set('status_in', params.status_in);
     if (params?.search) queryParams.set('search', params.search);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return fetchApi<DepartmentsOverviewResponse>(`/reports/departments/overview/${queryString}`);
+    return fetchApiCached<DepartmentsOverviewResponse>(`/reports/departments/overview/${queryString}`);
   },
 };
 
@@ -1621,6 +1679,11 @@ export const skillTagsApi = {
 };
 
 export const personSkillsApi = {
+  // Keep person-skills reads consistent with optimistic edits.
+  invalidateCache: () => {
+    clearApiMemoryCaches((key) => key.includes('/skills/person-skills/'));
+  },
+
   // List person skills
   list: (params?: { person?: number; skill_type?: string; search?: string; page_size?: number }) => {
     const queryParams = params ? new URLSearchParams(
@@ -1628,7 +1691,7 @@ export const personSkillsApi = {
         .map(([key, value]) => [key, String(value)])
     ).toString() : '';
     const url = queryParams ? `/skills/person-skills/?${queryParams}` : '/skills/person-skills/';
-    return fetchApi<PaginatedResponse<PersonSkill>>(url);
+    return fetchApiCached<PaginatedResponse<PersonSkill>>(url);
   },
 
   // Get person skill
@@ -1642,6 +1705,7 @@ export const personSkillsApi = {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
+    personSkillsApi.invalidateCache();
     return res.data as unknown as PersonSkill;
   },
 
@@ -1652,6 +1716,7 @@ export const personSkillsApi = {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
+    personSkillsApi.invalidateCache();
     return res.data as unknown as PersonSkill;
   },
 
@@ -1662,12 +1727,13 @@ export const personSkillsApi = {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
+    personSkillsApi.invalidateCache();
     return;
   },
 
   // Get skill summary for a person
   summary: (personId: number) =>
-    fetchApi<{
+    fetchApiCached<{
       strengths: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
       development: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
       learning: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
@@ -1675,23 +1741,20 @@ export const personSkillsApi = {
 };
 
 // Roles API - for role management and dropdowns
+function invalidateRolesCache() {
+  clearApiMemoryCaches((key) => key.includes('/roles/'));
+}
+
 export const rolesApi = {
   // Get all roles (paginated)
-  list: async () => {
-    const res = await apiClient.GET('/roles/' as any, { headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-    return res.data as unknown as PaginatedResponse<Role>;
-  },
+  list: () => fetchApiCached<PaginatedResponse<Role>>('/roles/'),
 
   // Get all roles (bulk) - for autocomplete/dropdowns
   listAll: (opts?: { include_inactive?: 0 | 1 }) => {
     const sp = new URLSearchParams();
     if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<Role[]>(`/roles/bulk/${qs}`);
+    return fetchApiCached<Role[]>(`/roles/bulk/${qs}`);
   },
 
   // Get single role
@@ -1702,6 +1765,9 @@ export const rolesApi = {
     fetchApi<Role>('/roles/', {
       method: 'POST',
       body: JSON.stringify(data),
+    }).then((res) => {
+      invalidateRolesCache();
+      return res;
     }),
 
   // Update role
@@ -1709,12 +1775,18 @@ export const rolesApi = {
     fetchApi<Role>(`/roles/${id}/`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    }).then((res) => {
+      invalidateRolesCache();
+      return res;
     }),
 
   // Delete role
   delete: (id: number) =>
     fetchApi<void>(`/roles/${id}/`, {
       method: 'DELETE',
+    }).then((res) => {
+      invalidateRolesCache();
+      return res;
     }),
 
   // Bulk reorder roles by ids (staff only)
@@ -1724,6 +1796,7 @@ export const rolesApi = {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, res.error, `HTTP ${status}`), status);
     }
+    invalidateRolesCache();
     return true as const;
   },
 };
@@ -1885,6 +1958,43 @@ export type UiBootstrapResponse = {
   rolesAll?: Role[];
 };
 
+export type UiPeoplePageInclude = 'filters' | 'people' | 'selected_person_skills';
+export type UiPeoplePageSnapshotResponse = {
+  contractVersion: number;
+  included: string[];
+  filters?: {
+    locations: string[];
+    departments: Department[];
+    roles: Role[];
+  };
+  people?: PaginatedResponse<Person>;
+  selectedPersonSkills?: {
+    strengths: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+    development: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+    learning: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+  };
+  truncated?: Record<string, unknown>;
+};
+
+export type UiSkillsPageInclude = 'departments' | 'people' | 'skill_tags' | 'person_skills';
+export type UiSkillsPageSnapshotResponse = {
+  contractVersion: number;
+  included: string[];
+  departments?: Department[];
+  people?: PaginatedResponse<Person>;
+  skillTags?: PaginatedResponse<SkillTag>;
+  personSkills?: PaginatedResponse<PersonSkill>;
+  truncated?: Record<string, unknown>;
+};
+
+export type UiSettingsPageSnapshotResponse = {
+  contractVersion: number;
+  capabilities: SystemCapabilities;
+  visibleSections: string[];
+  visibleSectionMeta: Array<{ id: string; title: string }>;
+  sectionData?: Record<string, unknown>;
+};
+
 export const uiApi = {
   bootstrap: async (opts?: { include?: UiBootstrapInclude[]; vertical?: number; include_inactive?: 0 | 1 }): Promise<UiBootstrapResponse> => {
     const sp = new URLSearchParams();
@@ -1896,6 +2006,69 @@ export const uiApi = {
     if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<UiBootstrapResponse>(`/ui/bootstrap/${qs}`);
+  },
+
+  peoplePage: async (opts?: {
+    include?: UiPeoplePageInclude[];
+    page?: number;
+    page_size?: number;
+    search?: string;
+    department?: number;
+    include_children?: 0 | 1;
+    department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
+    vertical?: number;
+    include_inactive?: 0 | 1;
+    location?: string[];
+    ordering?: string;
+    selected_person_id?: number;
+  }): Promise<UiPeoplePageSnapshotResponse> => {
+    const sp = new URLSearchParams();
+    if (opts?.include?.length) sp.set('include', Array.from(new Set(opts.include)).sort().join(','));
+    if (opts?.page != null) sp.set('page', String(opts.page));
+    if (opts?.page_size != null) sp.set('page_size', String(opts.page_size));
+    if (opts?.search) sp.set('search', opts.search);
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.department_filters?.length) sp.set('department_filters', JSON.stringify(opts.department_filters));
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
+    if (opts?.location?.length) opts.location.forEach((item) => sp.append('location', item));
+    if (opts?.ordering) sp.set('ordering', opts.ordering);
+    if (opts?.selected_person_id != null) sp.set('selected_person_id', String(opts.selected_person_id));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<UiPeoplePageSnapshotResponse>(`/ui/people-page/${qs}`);
+  },
+
+  skillsPage: async (opts?: {
+    include?: UiSkillsPageInclude[];
+    vertical?: number;
+    include_inactive?: 0 | 1;
+    people_page?: number;
+    people_page_size?: number;
+    skill_tags_page?: number;
+    skill_tags_page_size?: number;
+    person_skills_page?: number;
+    person_skills_page_size?: number;
+  }): Promise<UiSkillsPageSnapshotResponse> => {
+    const sp = new URLSearchParams();
+    if (opts?.include?.length) sp.set('include', Array.from(new Set(opts.include)).sort().join(','));
+    if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
+    if (opts?.people_page != null) sp.set('people_page', String(opts.people_page));
+    if (opts?.people_page_size != null) sp.set('people_page_size', String(opts.people_page_size));
+    if (opts?.skill_tags_page != null) sp.set('skill_tags_page', String(opts.skill_tags_page));
+    if (opts?.skill_tags_page_size != null) sp.set('skill_tags_page_size', String(opts.skill_tags_page_size));
+    if (opts?.person_skills_page != null) sp.set('person_skills_page', String(opts.person_skills_page));
+    if (opts?.person_skills_page_size != null) sp.set('person_skills_page_size', String(opts.person_skills_page_size));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<UiSkillsPageSnapshotResponse>(`/ui/skills-page/${qs}`);
+  },
+
+  settingsPage: async (opts?: { section?: string }): Promise<UiSettingsPageSnapshotResponse> => {
+    const sp = new URLSearchParams();
+    if (opts?.section) sp.set('section', opts.section);
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<UiSettingsPageSnapshotResponse>(`/ui/settings-page/${qs}`);
   },
 };
 

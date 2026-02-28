@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Project } from '@/types/models';
 
-export function useProjectSelection(sortedProjects: Project[]) {
+type Options = {
+  autoSelectFirst?: boolean;
+  enabled?: boolean;
+};
+
+export function useProjectSelection(sortedProjects: Project[], options?: Options) {
+  const autoSelectFirst = options?.autoSelectFirst ?? true;
+  const enabled = options?.enabled ?? true;
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
@@ -14,14 +21,16 @@ export function useProjectSelection(sortedProjects: Project[]) {
 
   // Initialize selection when projects first arrive
   useEffect(() => {
+    if (!autoSelectFirst) return;
     if (sortedProjects.length > 0 && selectedProjectId == null) {
       setSelectedProjectId(sortedProjects[0].id ?? null)
       setSelectedIndex(0)
     }
-  }, [sortedProjects, selectedProjectId])
+  }, [autoSelectFirst, sortedProjects, selectedProjectId])
 
   // Keyboard navigation by index, but update id from list for stability
   useEffect(() => {
+    if (!enabled) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -37,7 +46,7 @@ export function useProjectSelection(sortedProjects: Project[]) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIndex, sortedProjects]);
+  }, [enabled, selectedIndex, sortedProjects]);
 
   const handleProjectClick = (project: Project, index: number) => {
     setSelectedProjectId(project.id ?? null);

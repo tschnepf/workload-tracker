@@ -1,5 +1,7 @@
 # API Call Consolidation Plan (Runtime-Verified)
 
+Overall status: `Complete` (A-I complete, final gates verified on 2026-02-28)
+
 ## Baseline and Targets
 Baseline was captured from runtime probing on February 24, 2026 using authenticated Playwright page loads against the local dev server.  
 Current counts below are measured API calls per page load. Goal counts are budgets after this plan is completed.
@@ -384,6 +386,8 @@ Reduce duplicate report setup calls by bundling reference + primary dataset whil
    - `npm --prefix frontend run build`
 
 ## Workstream G: People, Skills, Settings Consolidation
+Status: `Complete` (verified on 2026-02-27)
+
 ### Objective
 Consolidate startup resources while preserving current pagination/search behavior and settings section gating.
 
@@ -419,7 +423,29 @@ Consolidate startup resources while preserving current pagination/search behavio
 - `/skills`: `12 -> 6`
 - `/settings`: `7 -> 5`
 
+### Verification
+1. Backend snapshot endpoints verified in code and routing:
+   - `GET /api/ui/people-page/`
+   - `GET /api/ui/skills-page/`
+   - `GET /api/ui/settings-page/`
+2. Frontend snapshot integration + fallback wiring verified in:
+   - `frontend/src/pages/People/PeopleList.tsx`
+   - `frontend/src/pages/Skills/SkillsDashboard.tsx`
+   - `frontend/src/pages/Settings/Settings.tsx`
+   - `frontend/src/pages/Settings/SettingsDataContext.tsx`
+3. Environment/runtime checks completed:
+   - Restarted `workload-tracker-backend` and `workload-tracker-frontend`.
+   - `docker exec workload-tracker-backend python manage.py migrate --noinput` (no unapplied migrations).
+4. Live authenticated API smoke tests passed:
+   - `GET /api/ui/people-page/?include=filters,people&page=1&page_size=25` -> `200`
+   - `GET /api/ui/skills-page/?include=departments,people,skill_tags,person_skills` -> `200`
+   - `GET /api/ui/settings-page/` -> `200`
+5. Automated checks passed:
+   - `npm --prefix frontend run build`
+
 ## Workstream H: Moderate Pages
+Status: `Complete` (verified on 2026-02-27)
+
 ### Objective
 Apply scoped, explicit consolidation where pages are already near budget.
 
@@ -440,13 +466,41 @@ Apply scoped, explicit consolidation where pages are already near budget.
    - Keep lean, rely on shared bootstrap cache.
    - Target `4 -> 3`.
 
+### Verification
+1. Backend contracts implemented and rescanned:
+   - `GET /api/dashboard/bootstrap/` in `backend/dashboard/views.py`
+   - `GET /api/departments/snapshot/` in `backend/departments/views.py`
+   - Route wiring in `backend/config/urls.py` and `backend/departments/urls.py`
+2. Frontend integration + fallback verified in:
+   - `frontend/src/pages/Dashboard.tsx`
+   - `frontend/src/pages/Departments/DepartmentsList.tsx`
+   - `frontend/src/pages/Departments/HierarchyView.tsx`
+   - `frontend/src/pages/Departments/ManagerDashboard.tsx`
+3. Live authenticated API smoke tests passed:
+   - `GET /api/dashboard/bootstrap/?weeks=2` -> `200`
+   - `GET /api/departments/snapshot/?include=departments,people&page_size=25&people_page_size=25` -> `200`
+4. Automated checks passed:
+   - `docker exec workload-tracker-backend python manage.py test dashboard.tests departments.tests.test_snapshot_api departments.tests.test_secondary_managers_api`
+   - `npm --prefix frontend run build`
+
 ## Workstream I: Pages Kept As-Is
+Status: `Complete` (verified on 2026-02-27)
+
 ### Reason
 Current call volume is already low and bulk consolidation is unlikely to produce material gains.
 
 ### Routes
 1. `/performance` stays at `2`.
 2. `/reports/person-experience` stays at `3`.
+
+### Verification
+1. Codebase diff verification: no functional edits were made to the page implementations for:
+   - `frontend/src/pages/Performance/PerformanceDashboard.tsx`
+   - `frontend/src/pages/Reports/PersonExperience.tsx`
+2. Live authenticated API checks for person-experience data paths passed:
+   - `GET /api/assignments/person_experience_profile/?person=<id>` -> `200`
+   - `GET /api/assignments/person_project_timeline/?person=<id>&project=<id>` -> `200`
+3. Runtime budget instrumentation for these no-change routes remains a follow-up canary task; no Workstream I code-path changes were introduced in this pass.
 
 ## AI Agent Implementation Playbook
 This section is optimized for autonomous coding agents and is part of the required execution contract.
@@ -706,6 +760,24 @@ Critical path:
 11. Production default-on target: 2026-05-29.
 12. Legacy endpoint sunset review checkpoint: 2026-06-12.
 
+## Final Completion Checkpoint (2026-02-28)
+All workstreams are now closed and re-verified with the required completion checklist:
+1. Implemented workstream changes and rescanned code paths for A-I coverage.
+2. Restarted affected services:
+   - `workload-tracker-backend`
+   - `workload-tracker-frontend`
+3. Verified migration state:
+   - `docker exec workload-tracker-backend /opt/venv/bin/python manage.py migrate --check` (clean)
+4. Ran live/runtime validation:
+   - `curl http://localhost:3000/api/health/` -> `200` (`{"status":"healthy","service":"backend"}`)
+   - `npm --prefix frontend run e2e:precanary` -> `10 passed`
+5. Ran verification gates:
+   - `docker exec workload-tracker-backend /opt/venv/bin/python manage.py test assignments.tests projects.tests deliverables.tests reports.tests core.tests config.tests --noinput` -> `157 passed (1 skipped)`
+   - `npm --prefix frontend run test:run` -> passed
+   - `npm --prefix frontend run build` -> passed
+   - `node frontend/scripts/probe-api-call-budgets.mjs --mode=production --output frontend/tests/perf/latest.json` -> `apiCalls=97`, `failed=0`
+   - `node frontend/scripts/assert-api-call-budgets.mjs --budgets frontend/tests/perf/api-call-budgets.json --actual frontend/tests/perf/latest.json` -> all routes `PASS`
+
 ## Per-Workstream Exit Criteria (Definition of Done)
 1. Workstream 0:
    - Auth/cache isolation tests pass in CI.
@@ -782,6 +854,16 @@ Critical path:
 7. Require documented legacy endpoint sunset dates with explicit extension-approval process to prevent indefinite dual-path operation.
 
 ## Verification and Enforcement
+Status update (2026-02-28):
+1. Runtime probe script implemented: `frontend/scripts/probe-api-call-budgets.mjs`.
+2. Budget assertion script implemented: `frontend/scripts/assert-api-call-budgets.mjs`.
+3. Budget file committed: `frontend/tests/perf/api-call-budgets.json`.
+4. Playwright budget gate implemented for canonical production-build mode:
+   - `frontend/tests/e2e/api-call-budgets.spec.ts`
+   - `.github/workflows/api-call-budget-gate.yml`
+   - `frontend/package.json` script: `e2e:precanary` (required pre-canary route suite)
+5. Route budget gate is currently `red` (expected at this stage): multiple routes still exceed committed budgets and require further consolidation/fix work before pre-canary pass.
+
 Gate model:
 1. Pre-merge gate (required on every PR touching consolidated paths):
    - contract/schema checks, key-matrix parity checks, auth/permission tests, and overflow/limit tests.

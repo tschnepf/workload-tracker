@@ -6,8 +6,12 @@ from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParam
 from rest_framework import serializers, status
 from django.conf import settings
 from django.core.cache import cache
+from django.core.paginator import Paginator
+from django.db.models import Q, Value
+from django.db.models.functions import Coalesce, Lower
 import hashlib
 import os
+import json
 from django.db import transaction
 from decimal import Decimal
 
@@ -34,17 +38,22 @@ from .models import (
     AutoHoursTemplateRoleSetting,
 )
 from .cache_keys import build_aggregate_cache_key
-from accounts.permissions import IsAdminOrManager
+from accounts.permissions import IsAdminOrManager, is_admin_user, is_manager_user
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
 from assignments.models import Assignment  # type: ignore
 from projects.models import ProjectRole as DepartmentProjectRole
+from people.models import Person
+from people.serializers import PersonSerializer
 from departments.models import Department
 from departments.serializers import DepartmentSerializer
 from roles.models import Role
 from roles.serializers import RoleSerializer
 from verticals.models import Vertical
 from verticals.serializers import VerticalSerializer
+from skills.models import SkillTag, PersonSkill
+from skills.serializers import SkillTagSerializer, PersonSkillSerializer, PersonSkillSummarySerializer
+from core.search_tokens import parse_search_tokens, apply_token_filter
 
 AUTO_HOURS_MAX_WEEKS_BEFORE = 17
 AUTO_HOURS_MAX_WEEKS_COUNT = AUTO_HOURS_MAX_WEEKS_BEFORE + 1
@@ -53,6 +62,115 @@ AUTO_HOURS_DEFAULT_WEEKS_COUNT = 6
 
 class UiBootstrapThrottle(ScopedRateThrottle):
     scope = 'ui_bootstrap'
+
+
+class UiPageSnapshotThrottle(ScopedRateThrottle):
+    scope = 'snapshots'
+
+
+def _build_capabilities_payload():
+    caps = {
+        'asyncJobs': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
+        'aggregates': {
+            'capacityHeatmap': True,
+            'projectAvailability': True,
+            'findAvailable': True,
+            'gridSnapshot': True,
+            'skillMatch': True,
+        },
+        'cache': {
+            'shortTtlAggregates': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
+            'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
+        },
+        'personalDashboard': True,
+    }
+    try:
+        caps['projectRolesByDepartment'] = bool(settings.FEATURES.get('PROJECT_ROLES_BY_DEPARTMENT', False))
+    except Exception:
+        caps['projectRolesByDepartment'] = False
+    try:
+        caps['integrations'] = {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}
+    except Exception:
+        caps['integrations'] = {'enabled': False}
+    return caps
+
+
+def _parse_csv_include(raw, default_tokens: list[str], allowed_tokens: set[str], max_tokens: int = 10):
+    if raw in (None, ''):
+        return sorted(default_tokens), None
+    if isinstance(raw, list):
+        source = raw
+    else:
+        source = str(raw).split(',')
+    tokens: list[str] = []
+    for item in source:
+        token = str(item).strip().lower()
+        if not token:
+            continue
+        if token not in tokens:
+            tokens.append(token)
+    if not tokens:
+        return sorted(default_tokens), None
+    if len(tokens) > max_tokens:
+        return None, f'include supports up to {max_tokens} tokens'
+    unknown = sorted([token for token in tokens if token not in allowed_tokens])
+    if unknown:
+        return None, f"invalid include token(s): {', '.join(unknown)}"
+    return sorted(tokens), None
+
+
+def _parse_bool(raw, default: bool = False) -> bool:
+    if raw in (None, ''):
+        return default
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _bounded_int(raw, default: int, *, min_value: int, max_value: int) -> int:
+    try:
+        value = int(raw)
+    except Exception:
+        value = default
+    return max(min_value, min(max_value, value))
+
+
+def _payload_size_bytes(value: object) -> int:
+    try:
+        return len(json.dumps(value, default=str, separators=(',', ':')).encode('utf-8'))
+    except Exception:
+        return 0
+
+
+def _page_urls(request, *, page_number: int, page_size: int, has_next: bool, has_previous: bool):
+    def _make(num: int | None):
+        if not num:
+            return None
+        params = request.query_params.copy()
+        params['page'] = str(num)
+        params['page_size'] = str(page_size)
+        base = request.build_absolute_uri(request.path)
+        return f"{base}?{params.urlencode()}" if params else base
+
+    next_url = _make(page_number + 1 if has_next else None)
+    prev_url = _make(page_number - 1 if has_previous else None)
+    return next_url, prev_url
+
+
+def _department_descendant_ids(root_department_id: int) -> list[int]:
+    rows = Department.objects.values_list('id', 'parent_department_id')
+    children_map = {}
+    for dept_id, parent_id in rows:
+        children_map.setdefault(parent_id, []).append(dept_id)
+    visited = set()
+    stack = [root_department_id]
+    while stack:
+        current = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        for child_id in children_map.get(current, []):
+            if child_id not in visited:
+                stack.append(child_id)
+    return sorted(visited)
 
 
 class UiBootstrapView(APIView):
@@ -86,30 +204,7 @@ class UiBootstrapView(APIView):
         return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
 
     def _capabilities_payload(self):
-        caps = {
-            'asyncJobs': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
-            'aggregates': {
-                'capacityHeatmap': True,
-                'projectAvailability': True,
-                'findAvailable': True,
-                'gridSnapshot': True,
-                'skillMatch': True,
-            },
-            'cache': {
-                'shortTtlAggregates': os.getenv('SHORT_TTL_AGGREGATES', 'false').lower() == 'true',
-                'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
-            },
-            'personalDashboard': True,
-        }
-        try:
-            caps['projectRolesByDepartment'] = bool(settings.FEATURES.get('PROJECT_ROLES_BY_DEPARTMENT', False))
-        except Exception:
-            caps['projectRolesByDepartment'] = False
-        try:
-            caps['integrations'] = {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}
-        except Exception:
-            caps['integrations'] = {'enabled': False}
-        return caps
+        return _build_capabilities_payload()
 
     @extend_schema(
         parameters=[
@@ -184,6 +279,698 @@ class UiBootstrapView(APIView):
             except Exception:
                 pass
 
+        return Response(payload)
+
+
+class PeoplePageSnapshotView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UiPageSnapshotThrottle]
+    _INCLUDE_ALLOWED = {'filters', 'people', 'selected_person_skills'}
+    _DEFAULT_INCLUDE = ['filters', 'people']
+    _MAX_PAGE_SIZE = 200
+
+    def _parse_include(self, request):
+        return _parse_csv_include(
+            request.query_params.get('include'),
+            self._DEFAULT_INCLUDE,
+            self._INCLUDE_ALLOWED,
+        )
+
+    def _parse_department_filters(self, raw_filters):
+        if raw_filters is None:
+            return []
+        data = raw_filters
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                return []
+        if not isinstance(data, list):
+            return []
+        cleaned = []
+        for raw in data:
+            if not isinstance(raw, dict):
+                continue
+            raw_id = raw.get('departmentId') or raw.get('department_id') or raw.get('id')
+            dept_id = 0
+            if isinstance(raw_id, str) and raw_id.strip().lower() in ('unassigned', 'none', 'null'):
+                dept_id = 0
+            else:
+                try:
+                    dept_id = int(raw_id or 0)
+                except Exception:
+                    dept_id = 0
+            if dept_id < 0:
+                continue
+            if dept_id == 0 and raw_id not in (0, '0', 'unassigned', 'none', 'null'):
+                continue
+            op = (raw.get('op') or 'and').lower()
+            if op not in ('and', 'or', 'not'):
+                op = 'and'
+            cleaned.append({'departmentId': dept_id, 'op': op})
+        return cleaned
+
+    def _apply_department_filters(self, queryset, filters):
+        if not filters:
+            return queryset
+        include_all = set()
+        include_any = set()
+        exclude_only = set()
+        for item in filters:
+            op = item.get('op')
+            dept_id = item.get('departmentId')
+            if dept_id is None:
+                continue
+            if op == 'not':
+                exclude_only.add(dept_id)
+            elif op == 'or':
+                include_any.add(dept_id)
+            else:
+                include_all.add(dept_id)
+
+        def _dept_q(ids: set[int]):
+            if not ids:
+                return Q(pk__in=[])
+            include_null = 0 in ids
+            normalized_ids = sorted([dept_id for dept_id in ids if dept_id != 0])
+            q = Q()
+            if normalized_ids:
+                q |= Q(department_id__in=normalized_ids)
+            if include_null:
+                q |= Q(department_id__isnull=True)
+            return q
+
+        if len(include_all) > 1:
+            return queryset.none()
+        if include_all:
+            queryset = queryset.filter(_dept_q(include_all))
+        if include_any:
+            queryset = queryset.filter(_dept_q(include_any))
+        if exclude_only:
+            q_ex = Q()
+            if 0 in exclude_only:
+                q_ex |= Q(department_id__isnull=True)
+            ids = sorted([dept_id for dept_id in exclude_only if dept_id != 0])
+            if ids:
+                q_ex |= Q(department_id__in=ids)
+            if q_ex:
+                queryset = queryset.exclude(q_ex)
+        return queryset
+
+    def _build_people_queryset(self, request, *, include_inactive: bool):
+        queryset = (
+            Person.objects
+            .select_related('department', 'department__vertical', 'role')
+            .only(
+                'id', 'name', 'weekly_capacity', 'role', 'department', 'location', 'notes',
+                'created_at', 'updated_at', 'department__name', 'department__vertical_id',
+                'department__vertical__name', 'role__name', 'is_active', 'hire_date',
+            )
+        )
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
+
+        dept_param = request.query_params.get('department')
+        include_children = _parse_bool(request.query_params.get('include_children'))
+        if dept_param not in (None, ''):
+            try:
+                dept_id = int(dept_param)
+                if include_children:
+                    queryset = queryset.filter(department_id__in=_department_descendant_ids(dept_id))
+                else:
+                    queryset = queryset.filter(department_id=dept_id)
+            except Exception:
+                pass
+
+        dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
+        dept_filters = self._parse_department_filters(dept_filters_raw)
+        if dept_filters:
+            queryset = self._apply_department_filters(queryset, dept_filters)
+
+        vertical_param = request.query_params.get('vertical')
+        if vertical_param not in (None, ''):
+            try:
+                queryset = queryset.filter(department__vertical_id=int(vertical_param))
+            except Exception:
+                pass
+
+        locations = request.query_params.getlist('location')
+        if not locations:
+            csv_locations = request.query_params.get('location')
+            if csv_locations:
+                locations = [part.strip() for part in str(csv_locations).split(',') if part.strip()]
+        if locations:
+            location_q = Q()
+            for loc in locations:
+                if loc == 'Remote':
+                    location_q |= Q(location__icontains='remote')
+                elif loc == 'unspecified':
+                    location_q |= Q(location__isnull=True) | Q(location__exact='')
+                else:
+                    location_q |= Q(location__iexact=loc)
+            queryset = queryset.filter(location_q)
+
+        search = (request.query_params.get('search') or '').strip()
+        token_data = {'search_tokens': [{'term': search, 'op': 'and'}]} if search else {}
+        tokens = parse_search_tokens(request=request, data=token_data)
+        people_fields = ['name', 'role__name', 'department__name', 'location', 'notes']
+        queryset = apply_token_filter(queryset, tokens, people_fields)
+
+        ordering = request.query_params.get('ordering') or 'name'
+        queryset = queryset.annotate(
+            location_sort=Coalesce(Lower('location'), Value('zzz_unspecified')),
+            department_sort=Coalesce(Lower('department__name'), Value('zzz_unassigned')),
+            role_sort=Coalesce(Lower('role__name'), Value('zzz_no_role')),
+        )
+        ordering_fields = []
+        for raw in str(ordering).split(','):
+            token = raw.strip()
+            if not token:
+                continue
+            desc = token.startswith('-')
+            key = token[1:] if desc else token
+            if key == 'location':
+                field = 'location_sort'
+            elif key == 'department':
+                field = 'department_sort'
+            elif key == 'weeklyCapacity':
+                field = 'weekly_capacity'
+            elif key == 'role':
+                field = 'role_sort'
+            else:
+                field = 'name'
+            ordering_fields.append(f"-{field}" if desc else field)
+        if ordering_fields:
+            ordering_fields.append('id')
+            return queryset.order_by(*ordering_fields)
+        return queryset.order_by('name', 'id')
+
+    def _build_filters_payload(self, request, *, include_inactive: bool):
+        vertical_param = request.query_params.get('vertical')
+        people_qs = Person.objects.all()
+        if not include_inactive:
+            people_qs = people_qs.filter(is_active=True)
+        if vertical_param not in (None, ''):
+            try:
+                people_qs = people_qs.filter(department__vertical_id=int(vertical_param))
+            except Exception:
+                pass
+        locations = list(
+            people_qs
+            .exclude(location__isnull=True)
+            .exclude(location__exact='')
+            .values_list('location', flat=True)
+            .distinct()
+        )
+
+        departments_qs = Department.objects.select_related('manager').order_by('name')
+        if not include_inactive:
+            departments_qs = departments_qs.filter(is_active=True)
+        if vertical_param not in (None, ''):
+            try:
+                departments_qs = departments_qs.filter(vertical_id=int(vertical_param))
+            except Exception:
+                pass
+
+        roles_qs = Role.objects.order_by('sort_order', 'name', 'id')
+        if not include_inactive:
+            roles_qs = roles_qs.filter(is_active=True)
+
+        return {
+            'locations': sorted(set(locations), key=lambda value: (str(value).lower(), str(value))),
+            'departments': DepartmentSerializer(departments_qs, many=True).data,
+            'roles': RoleSerializer(roles_qs, many=True).data,
+        }
+
+    def _build_selected_person_skills_payload(self, request):
+        person_raw = request.query_params.get('selected_person_id')
+        if person_raw in (None, ''):
+            return None
+        try:
+            person_id = int(person_raw)
+        except Exception:
+            return None
+        rows = PersonSkill.objects.filter(person_id=person_id).select_related('skill_tag')
+        serialized = PersonSkillSummarySerializer(rows, many=True).data
+        grouped = {'strengths': [], 'development': [], 'learning': []}
+        for row in serialized:
+            skill_type = row.get('skillType')
+            if skill_type in grouped:
+                grouped[skill_type].append(row)
+        return grouped
+
+    def _apply_payload_guardrails(self, payload: dict):
+        try:
+            max_bytes = int(getattr(settings, 'UI_PEOPLE_PAGE_MAX_BYTES', 512_000))
+        except Exception:
+            max_bytes = 512_000
+        max_bytes = max(2_048, max_bytes)
+        if _payload_size_bytes(payload) <= max_bytes:
+            return payload
+
+        truncated = {}
+        if 'selectedPersonSkills' in payload:
+            payload.pop('selectedPersonSkills', None)
+            truncated['selectedPersonSkills'] = 'removed'
+            if _payload_size_bytes(payload) <= max_bytes:
+                payload['truncated'] = truncated
+                return payload
+
+        people_block = payload.get('people')
+        results = people_block.get('results') if isinstance(people_block, dict) else None
+        if isinstance(results, list):
+            omitted = 0
+            while results and _payload_size_bytes(payload) > max_bytes:
+                results.pop()
+                omitted += 1
+            if omitted:
+                people_block['next'] = None
+                truncated['people'] = {'returned': len(results), 'omitted': omitted}
+            if _payload_size_bytes(payload) <= max_bytes:
+                payload['truncated'] = truncated or {'reason': 'payload_cap_exceeded'}
+                return payload
+
+        payload['people'] = {'count': 0, 'next': None, 'previous': None, 'results': []}
+        payload['truncated'] = {'reason': 'payload_cap_exceeded'}
+        return payload
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='include', type=str, required=False, description='CSV include: filters,people,selected_person_skills'),
+            OpenApiParameter(name='page', type=int, required=False),
+            OpenApiParameter(name='page_size', type=int, required=False),
+            OpenApiParameter(name='search', type=str, required=False),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='department_filters', type=str, required=False, description='JSON department clauses'),
+            OpenApiParameter(name='vertical', type=int, required=False),
+            OpenApiParameter(name='include_inactive', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='ordering', type=str, required=False),
+            OpenApiParameter(name='selected_person_id', type=int, required=False),
+        ],
+    )
+    def get(self, request):
+        if not settings.FEATURES.get('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', True):
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        include_tokens, include_err = self._parse_include(request)
+        if include_err:
+            return Response({'error': include_err}, status=status.HTTP_400_BAD_REQUEST)
+
+        page = _bounded_int(request.query_params.get('page'), 1, min_value=1, max_value=99999)
+        page_size = _bounded_int(request.query_params.get('page_size'), 100, min_value=1, max_value=self._MAX_PAGE_SIZE)
+        include_inactive = _parse_bool(request.query_params.get('include_inactive'))
+
+        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        cache_key = None
+        if use_cache:
+            try:
+                cache_key = build_aggregate_cache_key(
+                    'ui.people_page',
+                    request,
+                    filters={
+                        'include': include_tokens or [],
+                        'page': page,
+                        'page_size': page_size,
+                        'search': request.query_params.get('search') or '',
+                        'department': request.query_params.get('department') or '',
+                        'include_children': request.query_params.get('include_children') or '0',
+                        'department_filters': request.query_params.get('department_filters') or request.query_params.get('departmentFilters') or '',
+                        'vertical': request.query_params.get('vertical') or '',
+                        'include_inactive': 1 if include_inactive else 0,
+                        'ordering': request.query_params.get('ordering') or '',
+                        'selected_person_id': request.query_params.get('selected_person_id') or '',
+                    },
+                )
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                cache_key = None
+
+        include_set = set(include_tokens or [])
+        payload = {
+            'contractVersion': 1,
+            'included': include_tokens or [],
+        }
+
+        if 'filters' in include_set:
+            payload['filters'] = self._build_filters_payload(request, include_inactive=include_inactive)
+
+        if 'people' in include_set:
+            queryset = self._build_people_queryset(request, include_inactive=include_inactive)
+            paginator = Paginator(queryset, page_size)
+            page_obj = paginator.get_page(page)
+            next_url, prev_url = _page_urls(
+                request,
+                page_number=page_obj.number,
+                page_size=page_size,
+                has_next=page_obj.has_next(),
+                has_previous=page_obj.has_previous(),
+            )
+            payload['people'] = {
+                'count': paginator.count,
+                'next': next_url,
+                'previous': prev_url,
+                'results': PersonSerializer(page_obj.object_list, many=True).data,
+            }
+
+        if 'selected_person_skills' in include_set:
+            selected_payload = self._build_selected_person_skills_payload(request)
+            if selected_payload is not None:
+                payload['selectedPersonSkills'] = selected_payload
+
+        payload = self._apply_payload_guardrails(payload)
+        if use_cache and cache_key:
+            try:
+                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+            except Exception:
+                pass
+        return Response(payload)
+
+
+class SkillsPageSnapshotView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UiPageSnapshotThrottle]
+    _INCLUDE_ALLOWED = {'departments', 'people', 'skill_tags', 'person_skills'}
+    _DEFAULT_INCLUDE = ['departments', 'people', 'skill_tags', 'person_skills']
+    _MAX_PAGE_SIZE = 200
+
+    def _parse_include(self, request):
+        return _parse_csv_include(
+            request.query_params.get('include'),
+            self._DEFAULT_INCLUDE,
+            self._INCLUDE_ALLOWED,
+        )
+
+    def _paginate(self, queryset, *, request, page_key: str, page_size_key: str, default_page_size: int = 100):
+        page = _bounded_int(request.query_params.get(page_key), 1, min_value=1, max_value=99999)
+        page_size = _bounded_int(
+            request.query_params.get(page_size_key),
+            default_page_size,
+            min_value=1,
+            max_value=self._MAX_PAGE_SIZE,
+        )
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page)
+        next_url, prev_url = _page_urls(
+            request,
+            page_number=page_obj.number,
+            page_size=page_size,
+            has_next=page_obj.has_next(),
+            has_previous=page_obj.has_previous(),
+        )
+        return {
+            'count': paginator.count,
+            'next': next_url,
+            'previous': prev_url,
+            'results': page_obj.object_list,
+        }
+
+    def _apply_payload_guardrails(self, payload: dict):
+        try:
+            max_bytes = int(getattr(settings, 'UI_SKILLS_PAGE_MAX_BYTES', 768_000))
+        except Exception:
+            max_bytes = 768_000
+        max_bytes = max(2_048, max_bytes)
+        if _payload_size_bytes(payload) <= max_bytes:
+            return payload
+
+        truncated = {}
+        person_skills = payload.get('personSkills')
+        if isinstance(person_skills, dict) and isinstance(person_skills.get('results'), list):
+            omitted = len(person_skills['results'])
+            person_skills['results'] = []
+            person_skills['next'] = None
+            truncated['personSkills'] = {'returned': 0, 'omitted': omitted}
+            if _payload_size_bytes(payload) <= max_bytes:
+                payload['truncated'] = truncated
+                return payload
+
+        people = payload.get('people')
+        if isinstance(people, dict) and isinstance(people.get('results'), list):
+            omitted = 0
+            while people['results'] and _payload_size_bytes(payload) > max_bytes:
+                people['results'].pop()
+                omitted += 1
+            if omitted:
+                people['next'] = None
+                truncated['people'] = {'returned': len(people['results']), 'omitted': omitted}
+            if _payload_size_bytes(payload) <= max_bytes:
+                payload['truncated'] = truncated or {'reason': 'payload_cap_exceeded'}
+                return payload
+
+        payload['people'] = {'count': 0, 'next': None, 'previous': None, 'results': []}
+        payload['personSkills'] = {'count': 0, 'next': None, 'previous': None, 'results': []}
+        payload['truncated'] = {'reason': 'payload_cap_exceeded'}
+        return payload
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='include', type=str, required=False, description='CSV include: departments,people,skill_tags,person_skills'),
+            OpenApiParameter(name='vertical', type=int, required=False),
+            OpenApiParameter(name='include_inactive', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='people_page', type=int, required=False),
+            OpenApiParameter(name='people_page_size', type=int, required=False),
+            OpenApiParameter(name='skill_tags_page', type=int, required=False),
+            OpenApiParameter(name='skill_tags_page_size', type=int, required=False),
+            OpenApiParameter(name='person_skills_page', type=int, required=False),
+            OpenApiParameter(name='person_skills_page_size', type=int, required=False),
+        ],
+    )
+    def get(self, request):
+        if not settings.FEATURES.get('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', True):
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        include_tokens, include_err = self._parse_include(request)
+        if include_err:
+            return Response({'error': include_err}, status=status.HTTP_400_BAD_REQUEST)
+
+        include_inactive = _parse_bool(request.query_params.get('include_inactive'))
+        vertical_param = request.query_params.get('vertical')
+        vertical_filter = None
+        if vertical_param not in (None, ''):
+            try:
+                vertical_filter = int(vertical_param)
+            except Exception:
+                vertical_filter = None
+
+        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        cache_key = None
+        if use_cache:
+            try:
+                cache_key = build_aggregate_cache_key(
+                    'ui.skills_page',
+                    request,
+                    filters={
+                        'include': include_tokens or [],
+                        'vertical': vertical_filter if vertical_filter is not None else 'all',
+                        'include_inactive': 1 if include_inactive else 0,
+                        'people_page': request.query_params.get('people_page') or '1',
+                        'people_page_size': request.query_params.get('people_page_size') or '100',
+                        'skill_tags_page': request.query_params.get('skill_tags_page') or '1',
+                        'skill_tags_page_size': request.query_params.get('skill_tags_page_size') or '100',
+                        'person_skills_page': request.query_params.get('person_skills_page') or '1',
+                        'person_skills_page_size': request.query_params.get('person_skills_page_size') or '100',
+                    },
+                )
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                cache_key = None
+
+        include_set = set(include_tokens or [])
+        payload = {
+            'contractVersion': 1,
+            'included': include_tokens or [],
+        }
+
+        if 'departments' in include_set:
+            departments_qs = Department.objects.select_related('manager').order_by('name')
+            if not include_inactive:
+                departments_qs = departments_qs.filter(is_active=True)
+            if vertical_filter is not None:
+                departments_qs = departments_qs.filter(vertical_id=vertical_filter)
+            payload['departments'] = DepartmentSerializer(departments_qs, many=True).data
+
+        if 'people' in include_set:
+            people_qs = (
+                Person.objects
+                .select_related('department', 'department__vertical', 'role')
+                .only(
+                    'id', 'name', 'weekly_capacity', 'role', 'department', 'location', 'notes',
+                    'created_at', 'updated_at', 'department__name', 'department__vertical_id',
+                    'department__vertical__name', 'role__name', 'is_active', 'hire_date',
+                )
+                .order_by('name', 'id')
+            )
+            if not include_inactive:
+                people_qs = people_qs.filter(is_active=True)
+            if vertical_filter is not None:
+                people_qs = people_qs.filter(department__vertical_id=vertical_filter)
+            people_page = self._paginate(
+                people_qs,
+                request=request,
+                page_key='people_page',
+                page_size_key='people_page_size',
+            )
+            payload['people'] = {
+                'count': people_page['count'],
+                'next': people_page['next'],
+                'previous': people_page['previous'],
+                'results': PersonSerializer(people_page['results'], many=True).data,
+            }
+
+        if 'skill_tags' in include_set:
+            skill_tags_qs = SkillTag.objects.filter(is_active=True).order_by('name')
+            skill_tags_page = self._paginate(
+                skill_tags_qs,
+                request=request,
+                page_key='skill_tags_page',
+                page_size_key='skill_tags_page_size',
+            )
+            payload['skillTags'] = {
+                'count': skill_tags_page['count'],
+                'next': skill_tags_page['next'],
+                'previous': skill_tags_page['previous'],
+                'results': SkillTagSerializer(skill_tags_page['results'], many=True).data,
+            }
+
+        if 'person_skills' in include_set:
+            person_skills_qs = PersonSkill.objects.select_related('person', 'skill_tag').order_by('skill_type', 'skill_tag__name', 'id')
+            if vertical_filter is not None:
+                person_skills_qs = person_skills_qs.filter(person__department__vertical_id=vertical_filter)
+            person_skills_page = self._paginate(
+                person_skills_qs,
+                request=request,
+                page_key='person_skills_page',
+                page_size_key='person_skills_page_size',
+            )
+            payload['personSkills'] = {
+                'count': person_skills_page['count'],
+                'next': person_skills_page['next'],
+                'previous': person_skills_page['previous'],
+                'results': PersonSkillSerializer(person_skills_page['results'], many=True).data,
+            }
+
+        payload = self._apply_payload_guardrails(payload)
+        if use_cache and cache_key:
+            try:
+                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+            except Exception:
+                pass
+        return Response(payload)
+
+
+class SettingsPageSnapshotView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UiPageSnapshotThrottle]
+    _SECTIONS = [
+        {'id': 'role-management', 'title': 'Role Management', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'verticals', 'title': 'Verticals', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'department-project-roles', 'title': 'Department Project Roles', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'utilization-scheme', 'title': 'Utilization Scheme', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'pre-deliverables', 'title': 'Pre-Deliverables', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'project-templates', 'title': 'Project Template', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'deliverable-phase-mapping', 'title': 'Deliverable Phase Mapping', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'deliverable-task-templates', 'title': 'Deliverable Task Templates', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'calendar-feeds', 'title': 'Calendar Feeds', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'admin-users', 'title': 'Create User & Admin Users', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'backup-restore', 'title': 'Backup & Restore', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'integrations', 'title': 'Integrations Hub', 'requires_admin': True, 'allow_manager': False, 'integrations_only': True},
+        {'id': 'admin-audit-log', 'title': 'Admin Audit Log', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'project-audit-log', 'title': 'Project Audit Log', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+    ]
+
+    def _visible_sections(self, request):
+        user = getattr(request, 'user', None)
+        is_admin = is_admin_user(user)
+        is_manager = is_manager_user(user)
+        integrations_enabled = bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))
+        visible = []
+        for section in self._SECTIONS:
+            if section['requires_admin'] and not is_admin and not (section['allow_manager'] and is_manager):
+                continue
+            if section['integrations_only'] and not integrations_enabled:
+                continue
+            visible.append(section)
+        return visible
+
+    def _build_section_data(self, section_id: str):
+        if section_id == 'department-project-roles':
+            departments = DepartmentSerializer(
+                Department.objects.filter(is_active=True).select_related('manager').order_by('name'),
+                many=True,
+            ).data
+            return {'departments': departments}
+        if section_id == 'role-management':
+            return {'roles': RoleSerializer(Role.objects.filter(is_active=True).order_by('sort_order', 'name', 'id'), many=True).data}
+        if section_id == 'verticals':
+            return {'verticals': VerticalSerializer(Vertical.objects.order_by('name'), many=True).data}
+        if section_id == 'utilization-scheme':
+            try:
+                return {'utilizationScheme': UtilizationSchemeSerializer(UtilizationScheme.get_active()).data}
+            except Exception:
+                return {'utilizationScheme': None}
+        if section_id == 'integrations':
+            return {'integrations': {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}}
+        return {}
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='section', type=str, required=False, description='Optional visible section id to include scoped sectionData'),
+        ],
+    )
+    def get(self, request):
+        if not settings.FEATURES.get('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', True):
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        section_id = (request.query_params.get('section') or '').strip()
+        all_sections = {item['id'] for item in self._SECTIONS}
+        if section_id and section_id not in all_sections:
+            return Response({'error': 'invalid section'}, status=status.HTTP_400_BAD_REQUEST)
+
+        visible_sections = self._visible_sections(request)
+        visible_ids = [item['id'] for item in visible_sections]
+        if section_id and section_id not in visible_ids:
+            return Response(
+                {'detail': 'forbidden', 'code': 'forbidden', 'contractVersion': 1},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        cache_key = None
+        if use_cache:
+            try:
+                cache_key = build_aggregate_cache_key(
+                    'ui.settings_page',
+                    request,
+                    filters={
+                        'section': section_id or 'none',
+                        'visible': visible_ids,
+                    },
+                )
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                cache_key = None
+
+        payload = {
+            'contractVersion': 1,
+            'capabilities': _build_capabilities_payload(),
+            'visibleSections': visible_ids,
+            'visibleSectionMeta': [{'id': item['id'], 'title': item['title']} for item in visible_sections],
+        }
+        if section_id:
+            payload['sectionData'] = {section_id: self._build_section_data(section_id)}
+
+        if use_cache and cache_key:
+            try:
+                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+            except Exception:
+                pass
         return Response(payload)
 
 

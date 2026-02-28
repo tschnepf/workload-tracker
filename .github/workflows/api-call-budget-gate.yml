@@ -1,0 +1,123 @@
+name: API Call Budget Gate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  api-call-budgets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Prepare env file for compose
+        run: |
+          cp .env.example .env
+          echo "DEBUG=true" >> .env
+          echo "HOST_IP=localhost" >> .env
+          echo "BACKEND_PORT=8000" >> .env
+          echo "FRONTEND_PORT=3000" >> .env
+          echo "COOKIE_REFRESH_AUTH=false" >> .env
+          echo "VITE_COOKIE_REFRESH_AUTH=false" >> .env
+          echo "CORS_ALLOWED_ORIGINS=http://localhost:3000" >> .env
+          echo "CSRF_TRUSTED_ORIGINS=http://localhost:3000" >> .env
+          echo "OAUTH_POPUP_ALLOWED_ORIGINS=http://localhost:3000" >> .env
+
+      - name: Build and start backend stack
+        run: |
+          docker compose -f docker-compose.yml up -d --build db redis backend
+
+      - name: Wait for backend readiness
+        run: |
+          for i in {1..90}; do
+            if curl -fsS http://localhost:8000/api/readiness/ > /dev/null; then
+              echo "Backend ready"; exit 0; fi; sleep 2; done; \
+          echo "Backend did not become ready in time"; \
+          docker compose -f docker-compose.yml ps; \
+          docker compose -f docker-compose.yml logs backend; \
+          exit 1
+
+      - name: Run migrations
+        run: |
+          docker exec workload-tracker-backend python manage.py migrate --noinput
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend (production runtime)
+        working-directory: frontend
+        env:
+          VITE_API_URL: http://localhost:8000/api
+          VITE_COOKIE_REFRESH_AUTH: "false"
+        run: npm run build
+
+      - name: Serve built frontend on port 3000
+        working-directory: frontend
+        run: |
+          nohup npx serve -s dist -l 3000 > /tmp/frontend-preview.log 2>&1 &
+          echo $! > /tmp/frontend-preview.pid
+
+      - name: Wait for frontend
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:3000/ > /dev/null; then
+              echo "Frontend ready"; exit 0; fi; sleep 2; done; \
+          echo "Frontend did not become ready in time"; \
+          cat /tmp/frontend-preview.log || true; \
+          exit 1
+
+      - name: Install Playwright (Chromium + deps)
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run API call budget Playwright gate
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          API_CALL_BUDGET_GATE: "true"
+          API_CALL_BUDGET_MODE: production-build
+          CI: "true"
+        run: npm run e2e:api-call-budgets
+
+      - name: Run pre-canary E2E suite
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          CI: "true"
+        run: npm run e2e:precanary
+
+      - name: Upload budget artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-call-budget-artifacts
+          if-no-files-found: ignore
+          path: |
+            frontend/test-results/**
+            frontend/playwright-report/**
+            frontend/tests/perf/playwright.fresh.json
+            frontend/tests/perf/playwright.transition.json
+            /tmp/frontend-preview.log
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml ps
+          docker compose -f docker-compose.yml logs backend db redis
+          cat /tmp/frontend-preview.log || true
+
+      - name: Teardown
+        if: always()
+        run: |
+          if [ -f /tmp/frontend-preview.pid ]; then
+            kill "$(cat /tmp/frontend-preview.pid)" || true
+          fi
+          docker compose -f docker-compose.yml down -v
