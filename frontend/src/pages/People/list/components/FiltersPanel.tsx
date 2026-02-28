@@ -2,6 +2,7 @@ import React from 'react';
 import type { Department } from '@/types/models';
 
 export interface FiltersPanelProps {
+  searchInputId?: string;
   searchTerm: string;
   setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
   departments: Department[];
@@ -20,6 +21,7 @@ export interface FiltersPanelProps {
 
 export default function FiltersPanel(props: FiltersPanelProps) {
   const {
+    searchInputId = 'people-search',
     searchTerm,
     setSearchTerm,
     departments,
@@ -60,6 +62,7 @@ export default function FiltersPanel(props: FiltersPanelProps) {
   return (
     <div className="space-y-2">
       <input
+        id={searchInputId}
         type="text"
         placeholder="Search people (name, role, department, location, notes)"
         value={searchTerm}

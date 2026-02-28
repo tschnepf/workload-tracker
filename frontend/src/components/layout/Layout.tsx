@@ -13,7 +13,6 @@ import GlobalVerticalFilter from '@/components/filters/GlobalVerticalFilter';
 import TopProgress from '@/components/ui/TopProgress';
 import GlobalNavPending from '@/components/ui/GlobalNavPending';
 import { setPendingPath } from '@/lib/navFeedback';
-import { getFlag } from '@/lib/flags';
 import { useNavTiming } from '@/utils/useNavTiming';
 import Button from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,7 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const nav = useNavigation();
   const navigate = useNavigate();
-  const unifiedNavPending = getFlag('FF_NAV_PENDING_UNIFIED', false);
+  const unifiedNavPending = true;
   useNavTiming();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);

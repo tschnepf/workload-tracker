@@ -1,6 +1,5 @@
 import React from 'react';
 import { useLocation } from 'react-router';
-import { getFlag } from '@/lib/flags';
 import PageErrorBoundary from '@/components/PageErrorBoundary';
 
 type Props = {
@@ -23,9 +22,6 @@ function pageNameFromPath(pathname: string): string {
 
 const RoutePageBoundary: React.FC<Props> = ({ children }) => {
   const location = useLocation();
-  const enabled = getFlag('FF_PAGE_ERROR_BOUNDARY_ROUTES', false);
-  if (!enabled) return <>{children}</>;
-
   return (
     <PageErrorBoundary key={location.pathname} pageName={pageNameFromPath(location.pathname)}>
       {children}
@@ -34,4 +30,3 @@ const RoutePageBoundary: React.FC<Props> = ({ children }) => {
 };
 
 export default RoutePageBoundary;
-

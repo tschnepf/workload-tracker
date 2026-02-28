@@ -6,12 +6,14 @@
 
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import type { ToastAction } from '@/lib/toastBus';
 
 interface ToastProps {
   message: string;
   type?: 'info' | 'success' | 'warning' | 'error';
   duration?: number; // in milliseconds
   stackIndex?: number;
+  action?: ToastAction;
   onDismiss: () => void;
 }
 
@@ -20,6 +22,7 @@ const Toast: React.FC<ToastProps> = ({
   type = 'info', 
   duration = 15000, 
   stackIndex = 0,
+  action,
   onDismiss 
 }) => {
   useEffect(() => {
@@ -77,8 +80,25 @@ const Toast: React.FC<ToastProps> = ({
         transition-all duration-200 motion-reduce:transition-none hover:shadow-3xl
       `}>
         {/* Content */}
-        <div className={`text-sm font-medium leading-5 ${styles.text}`}>
-          {message}
+        <div className="space-y-2">
+          <div className={`text-sm font-medium leading-5 ${styles.text}`}>
+            {message}
+          </div>
+          {action ? (
+            <button
+              type="button"
+              className={`inline-flex items-center px-2 py-1 rounded border border-current/40 text-xs ${styles.text} hover:bg-white/10`}
+              onClick={async () => {
+                try {
+                  await action.onClick();
+                } finally {
+                  onDismiss();
+                }
+              }}
+            >
+              {action.label}
+            </button>
+          ) : null}
         </div>
         
         {/* Close Button */}

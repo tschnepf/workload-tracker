@@ -32,8 +32,8 @@ const SettingsContent: React.FC = () => {
           className="p-4 sm:p-6"
           data-mobile-ui={mobileSettingsEnabled ? 'true' : 'false'}
         >
-          <div className="max-w-[1800px] mx-auto">
-            <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
+          <div className="max-w-[1800px] mx-auto ux-page-shell">
+            <div className="ux-panel p-6">
               <div className="py-10">
                 <div className="max-w-md mx-auto">
                   <Loader inline message="Loading settings..." />
@@ -79,8 +79,11 @@ const SettingsContent: React.FC = () => {
         className="p-4 sm:p-6"
         data-mobile-ui={mobileSettingsEnabled ? 'true' : 'false'}
       >
-        <div className="max-w-[1800px] mx-auto">
-          <h1 className="text-2xl font-bold text-[var(--text)] mb-6">Settings</h1>
+        <div className="max-w-[1800px] mx-auto ux-page-shell">
+          <div className="ux-page-hero mb-6">
+            <h1 className="text-2xl font-bold text-[var(--text)]">Settings</h1>
+            <p className="mt-1 text-sm text-[var(--muted)]">Manage platform defaults, integrations, and admin controls.</p>
+          </div>
           {body}
         </div>
       </div>

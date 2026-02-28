@@ -1,5 +1,10 @@
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
+export type ToastAction = {
+  label: string;
+  onClick: () => void | Promise<void>;
+};
+
 export type ToastEvent = {
   id: string;
   message: string;
@@ -7,6 +12,7 @@ export type ToastEvent = {
   dedupeKey?: string;
   durationMs?: number;
   priority?: number;
+  action?: ToastAction;
   createdAt: number;
 };
 
@@ -71,6 +77,7 @@ export function emitToast(payload: {
   dedupeKey?: string;
   durationMs?: number;
   priority?: number;
+  action?: ToastAction;
 }): ToastEvent {
   const next: ToastEvent = {
     id: eventId(),
@@ -79,6 +86,7 @@ export function emitToast(payload: {
     dedupeKey: payload.dedupeKey,
     durationMs: payload.durationMs,
     priority: payload.priority,
+    action: payload.action,
     createdAt: Date.now(),
   };
 

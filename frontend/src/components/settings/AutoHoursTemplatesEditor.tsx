@@ -2,6 +2,7 @@ import React from 'react';
 import Button from '@/components/ui/Button';
 import { autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, resolveUtilizationLevel, utilizationLevelToClasses } from '@/util/utilization';
 import type { AutoHoursTemplate, DeliverablePhaseMappingPhase } from '@/types/models';
@@ -810,7 +811,13 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
     const template = templates.find(t => t.id === selectedTemplateId);
     const name = template?.name || 'this template';
-    if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+    const confirmed = await confirmAction({
+      title: 'Delete Template',
+      message: `Delete ${name}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await autoHoursTemplatesApi.delete(selectedTemplateId);
       const next = templates.filter(t => t.id !== selectedTemplateId);

@@ -14,6 +14,7 @@ import DepartmentsSkeleton from '@/components/skeletons/DepartmentsSkeleton';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
+import PageState from '@/components/ui/PageState';
 import DepartmentForm from './DepartmentForm';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeDepartmentsRefresh } from '@/lib/departmentsRefreshBus';
@@ -24,6 +25,7 @@ import {
   getSecondaryManagersLabel,
 } from '@/utils/departmentManagers';
 import { getFlag } from '@/lib/flags';
+import { confirmAction } from '@/lib/confirmAction';
 
 const DepartmentsList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
@@ -164,8 +166,13 @@ const DepartmentsList: React.FC = () => {
 
   const handleDeleteDepartment = async (department: Department) => {
     if (!department.id) return;
-    
-    const confirmed = window.confirm(`Are you sure you want to delete "${department.name}"?`);
+
+    const confirmed = await confirmAction({
+      title: 'Delete Department',
+      message: `Are you sure you want to delete "${department.name}"?`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
     if (!confirmed) return;
 
     try {
@@ -191,12 +198,12 @@ const DepartmentsList: React.FC = () => {
   };
 
   const desktopView = (
-    <div className="h-full min-h-0 flex bg-[var(--bg)]">
+    <div className="ux-page-shell h-full min-h-0 flex bg-[var(--bg)]">
       <div className="flex-1 overflow-hidden">
         <div className="flex h-full min-h-0">
           {/* Left Panel - Department List */}
           <div className="w-1/3 p-6 border-r border-[var(--border)] bg-[var(--surface)] min-h-0 overflow-y-auto">
-            <div className="mb-6">
+            <div className="ux-page-hero mb-6">
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold text-[var(--text)]">Departments</h1>
@@ -230,7 +237,7 @@ const DepartmentsList: React.FC = () => {
               {filteredAndSortedDepartments.map((department, index) => (
                 <Card
                   key={department.id}
-                  className={`p-4 cursor-pointer transition-colors bg-[var(--card)] border-[var(--border)] hover:bg-[var(--surfaceHover)] ${
+                  className={`ux-panel p-4 cursor-pointer transition-colors hover:bg-[var(--surfaceHover)] ${
                     selectedDepartment?.id === department.id ? 'ring-2 ring-[var(--focus)]' : ''
                   }`}
                   onClick={() => {
@@ -309,35 +316,37 @@ const DepartmentsList: React.FC = () => {
   );
 
   const mobileListView = (
-    <div className="h-full min-h-0 flex flex-col bg-[var(--bg)]">
+    <div className="ux-page-shell h-full min-h-0 flex flex-col bg-[var(--bg)]">
       {/* Sticky header with search + actions */}
       <div className="sticky top-0 z-[10] bg-[var(--bg)] border-b border-[var(--border)] px-4 py-3">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-[var(--text)]">Departments</h1>
-            {isFetching && (
-              <span className="text-[10px] text-[var(--muted)]">Refreshing…</span>
-            )}
+        <div className="ux-page-hero">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-[var(--text)]">Departments</h1>
+              {isFetching && (
+                <span className="text-[10px] text-[var(--muted)]">Refreshing…</span>
+              )}
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleCreateDepartment}
+            >
+              Add
+            </Button>
           </div>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleCreateDepartment}
-          >
-            Add
-          </Button>
+          <Input
+            placeholder="Search departments..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full"
+          />
+          {error && (
+            <div className="mt-2 p-2 bg-red-900/30 border border-red-600 rounded text-xs text-red-400">
+              {error}
+            </div>
+          )}
         </div>
-        <Input
-          placeholder="Search departments..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full"
-        />
-        {error && (
-          <div className="mt-2 p-2 bg-red-900/30 border border-red-600 rounded text-xs text-red-400">
-            {error}
-          </div>
-        )}
       </div>
 
       {/* Card list */}
@@ -348,7 +357,7 @@ const DepartmentsList: React.FC = () => {
             <button
               key={department.id}
               type="button"
-              className={`w-full text-left bg-[var(--card)] border border-[var(--border)] rounded-lg px-4 py-3 flex items-center justify-between gap-3 ${
+              className={`ux-panel w-full text-left px-4 py-3 flex items-center justify-between gap-3 ${
                 isSelected ? 'ring-1 ring-[var(--focus)]' : ''
               }`}
               onClick={() => {
@@ -426,7 +435,20 @@ const DepartmentsList: React.FC = () => {
   if (isLoading) {
     return (
       <Layout>
-        <DepartmentsSkeleton />
+        <PageState isLoading skeleton={<DepartmentsSkeleton />} />
+      </Layout>
+    );
+  }
+
+  if (error && filteredAndSortedDepartments.length === 0) {
+    return (
+      <Layout>
+        <PageState
+          error={error}
+          onRetry={() => {
+            void loadPageData();
+          }}
+        />
       </Layout>
     );
   }
@@ -512,7 +534,7 @@ const DepartmentDetails: React.FC<{
     </div>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-      <Card className="p-6 bg-[var(--card)] border-[var(--border)]">
+      <Card className="ux-panel p-6">
         <h3 className="font-semibold text-[var(--text)] mb-4">Department Info</h3>
         <div className="space-y-3">
           <div>
@@ -546,7 +568,7 @@ const DepartmentDetails: React.FC<{
         </div>
       </Card>
 
-      <Card className="p-6 bg-[var(--card)] border-[var(--border)]">
+      <Card className="ux-panel p-6">
         <h3 className="font-semibold text-[var(--text)] mb-4">System Info</h3>
         <div className="space-y-3">
           <div>

@@ -8,12 +8,14 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import PageState from '@/components/ui/PageState';
 import { Person, Department, SkillTag, PersonSkill } from '@/types/models';
 import { peopleApi, skillTagsApi, personSkillsApi } from '@/services/api';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useDepartments } from '@/hooks/useDepartments';
 import { getFlag } from '@/lib/flags';
 import { useUiSkillsPageSnapshot } from '@/hooks/useUiPageSnapshots';
+import { confirmAction } from '@/lib/confirmAction';
 
 interface SkillCoverage {
   skillName: string;
@@ -260,9 +262,14 @@ const SkillsDashboard: React.FC = () => {
   if (effectiveLoading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-[#969696]">Loading skills analysis...</div>
-        </div>
+        <PageState
+          isLoading
+          loadingState={(
+            <div className="flex items-center justify-center h-64">
+              <div className="text-[var(--muted)]">Loading skills analysis...</div>
+            </div>
+          )}
+        />
       </Layout>
     );
   }
@@ -270,22 +277,16 @@ const SkillsDashboard: React.FC = () => {
   if (effectiveError) {
     return (
       <Layout>
-        <Card className="bg-red-500/20 border-red-500/30 p-6">
-          <div className="text-red-400 font-medium mb-2">Error Loading Skills Data</div>
-          <div className="text-red-300 text-sm">{effectiveError}</div>
-          <Button
-            onClick={() => {
-              if (useLegacyData) {
-                loadAllData();
-              } else {
-                skillsSnapshot.refetch();
-              }
-            }}
-            className="mt-4 bg-red-500 hover:bg-red-400"
-          >
-            Retry
-          </Button>
-        </Card>
+        <PageState
+          error={effectiveError}
+          onRetry={() => {
+            if (useLegacyData) {
+              void loadAllData();
+            } else {
+              void skillsSnapshot.refetch();
+            }
+          }}
+        />
       </Layout>
     );
   }
@@ -315,7 +316,13 @@ const SkillsDashboard: React.FC = () => {
 
   async function handleDeleteSkillTag(id: number) {
     try {
-      if (!confirm('Delete this skill? This cannot be undone.')) return;
+      const confirmed = await confirmAction({
+        title: 'Delete Skill',
+        message: 'Delete this skill? This cannot be undone.',
+        confirmLabel: 'Delete',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
       await skillTagsApi.delete(id);
       setSkillTags(prev => prev.filter(s => s.id !== id));
     } catch (e: any) {
@@ -326,13 +333,13 @@ const SkillsDashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="ux-page-shell space-y-6">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div className="ux-page-hero flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#cccccc]">Skills Dashboard</h1>
-            <p className="text-[#969696] mt-2">
+            <h1 className="text-2xl font-bold text-[var(--text)]">Skills Dashboard</h1>
+            <p className="text-[var(--muted)] mt-2">
               Team skills analysis, coverage, and gap identification
               {selectedDepartment && (
                 <span className="block mt-1">
@@ -360,11 +367,11 @@ const SkillsDashboard: React.FC = () => {
         </div>
 
         {/* Manage Skill Tags */}
-        <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
+        <Card className="ux-panel p-4">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row sm:items-end gap-2">
               <div className="flex-1">
-                <label className="block text-xs text-[#969696] mb-1">New Skill Name</label>
+                <label className="block text-xs text-[var(--muted)] mb-1">New Skill Name</label>
                 <input
                   type="text"
                   value={newSkillName}
@@ -374,7 +381,7 @@ const SkillsDashboard: React.FC = () => {
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-[#969696] mb-1">Category (optional)</label>
+                <label className="block text-xs text-[var(--muted)] mb-1">Category (optional)</label>
                 <input
                   type="text"
                   value={newSkillCategory}
@@ -391,13 +398,13 @@ const SkillsDashboard: React.FC = () => {
             </div>
 
             {/* Existing skills list (compact) */}
-            <div className="max-h-40 overflow-auto border border-[#3e3e42] rounded">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-[#3e3e42]">
+            <div className="max-h-40 overflow-auto border border-[var(--border)] rounded">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-[var(--border)]">
                 {skillTags.map(tag => (
-                  <div key={tag.id} className="flex items-center justify-between bg-[#2d2d30] px-3 py-1.5">
+                  <div key={tag.id} className="flex items-center justify-between bg-[var(--card)] px-3 py-1.5">
                     <div className="text-sm text-[var(--text)] truncate">
                       <span className="font-medium">{tag.name}</span>
-                      {tag.category ? <span className="text-[#969696] ml-2">({tag.category})</span> : null}
+                      {tag.category ? <span className="text-[var(--muted)] ml-2">({tag.category})</span> : null}
                     </div>
                     <button
                       className="text-xs px-2 py-0.5 border border-[var(--border)] rounded text-[var(--muted)] hover:text-red-400 hover:border-red-500/50"
@@ -409,7 +416,7 @@ const SkillsDashboard: React.FC = () => {
                   </div>
                 ))}
                 {skillTags.length === 0 && (
-                  <div className="col-span-full text-center text-[#969696] py-2 bg-[#2d2d30]">No skills defined yet</div>
+                  <div className="col-span-full text-center text-[var(--muted)] py-2 bg-[var(--card)]">No skills defined yet</div>
                 )}
               </div>
             </div>
@@ -436,42 +443,42 @@ const SkillsDashboard: React.FC = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
-            <div className="text-[#969696] text-sm">Total Skills</div>
-            <div className="text-2xl font-bold text-[#cccccc]">{stats.total}</div>
+          <Card className="ux-panel p-4">
+            <div className="text-[var(--muted)] text-sm">Total Skills</div>
+            <div className="text-2xl font-bold text-[var(--text)]">{stats.total}</div>
           </Card>
           
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
-            <div className="text-[#969696] text-sm">Excellent Coverage</div>
+          <Card className="ux-panel p-4">
+            <div className="text-[var(--muted)] text-sm">Excellent Coverage</div>
             <div className="text-2xl font-bold text-emerald-400">{stats.excellent}</div>
           </Card>
           
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
-            <div className="text-[#969696] text-sm">Good Coverage</div>
+          <Card className="ux-panel p-4">
+            <div className="text-[var(--muted)] text-sm">Good Coverage</div>
             <div className="text-2xl font-bold text-blue-400">{stats.good}</div>
           </Card>
           
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
-            <div className="text-[#969696] text-sm">Limited Coverage</div>
+          <Card className="ux-panel p-4">
+            <div className="text-[var(--muted)] text-sm">Limited Coverage</div>
             <div className="text-2xl font-bold text-amber-400">{stats.limited}</div>
           </Card>
           
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
-            <div className="text-[#969696] text-sm">Skills Gaps</div>
+          <Card className="ux-panel p-4">
+            <div className="text-[var(--muted)] text-sm">Skills Gaps</div>
             <div className="text-2xl font-bold text-red-400">{stats.gaps}</div>
           </Card>
         </div>
 
         {/* Content based on view mode */}
         {viewMode === 'coverage' && (
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
-            <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Skills Coverage Analysis</h3>
+          <Card className="ux-panel p-6">
+            <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Skills Coverage Analysis</h3>
             <div className="space-y-4">
               {skillsCoverage.map((skill) => (
-                <div key={skill.skillName} className="border-b border-[#3e3e42] pb-4 last:border-b-0">
+                <div key={skill.skillName} className="border-b border-[var(--border)] pb-4 last:border-b-0">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
-                      <span className="font-medium text-[#cccccc]">{skill.skillName}</span>
+                      <span className="font-medium text-[var(--text)]">{skill.skillName}</span>
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         skill.coverage === 'excellent' ? 'bg-emerald-500/20 text-emerald-400' :
                         skill.coverage === 'good' ? 'bg-blue-500/20 text-blue-400' :
@@ -481,34 +488,34 @@ const SkillsDashboard: React.FC = () => {
                         {skill.coverage}
                       </span>
                     </div>
-                    <div className="text-sm text-[#969696]">
+                    <div className="text-sm text-[var(--muted)]">
                       {skill.totalPeople} people
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
-                      <div className="text-[#969696]">Strengths</div>
+                      <div className="text-[var(--muted)]">Strengths</div>
                       <div className="text-emerald-400 font-medium">{skill.strengths}</div>
                     </div>
                     <div>
-                      <div className="text-[#969696]">Learning</div>
+                      <div className="text-[var(--muted)]">Learning</div>
                       <div className="text-blue-400 font-medium">{skill.learning}</div>
                     </div>
                     <div>
-                      <div className="text-[#969696]">Expert/Advanced</div>
+                      <div className="text-[var(--muted)]">Expert/Advanced</div>
                       <div className="text-purple-400 font-medium">{skill.expertCount + skill.advancedCount}</div>
                     </div>
                     <div>
-                      <div className="text-[#969696]">Intermediate/Beginner</div>
-                      <div className="text-[#cccccc] font-medium">{skill.intermediateCount + skill.beginnerCount}</div>
+                      <div className="text-[var(--muted)]">Intermediate/Beginner</div>
+                      <div className="text-[var(--text)] font-medium">{skill.intermediateCount + skill.beginnerCount}</div>
                     </div>
                   </div>
                 </div>
               ))}
               
               {skillsCoverage.length === 0 && (
-                <div className="text-center py-8 text-[#969696]">
+                <div className="text-center py-8 text-[var(--muted)]">
                   No skills data available for the selected filters
                 </div>
               )}
@@ -517,8 +524,8 @@ const SkillsDashboard: React.FC = () => {
         )}
 
         {viewMode === 'gaps' && (
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
-            <h3 className="text-lg font-semibold text-[#cccccc] mb-4">Skills Gaps & Recommendations</h3>
+          <Card className="ux-panel p-6">
+            <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Skills Gaps & Recommendations</h3>
             <div className="space-y-4">
               {skillsCoverage
                 .filter(skill => skill.coverage === 'gap' || skill.coverage === 'limited')
@@ -561,16 +568,16 @@ const SkillsDashboard: React.FC = () => {
         {viewMode === 'departments' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {departmentSkills.map((dept) => (
-              <Card key={dept.departmentId} className="bg-[#2d2d30] border-[#3e3e42] p-6">
+              <Card key={dept.departmentId} className="ux-panel p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-[#cccccc]">{dept.departmentName}</h3>
-                  <span className="text-sm text-[#969696]">{dept.peopleCount} people</span>
+                  <h3 className="text-lg font-semibold text-[var(--text)]">{dept.departmentName}</h3>
+                  <span className="text-sm text-[var(--muted)]">{dept.peopleCount} people</span>
                 </div>
                 
                 <div className="space-y-4">
                   {/* Top Skills */}
                   <div>
-                    <div className="text-sm font-medium text-[#cccccc] mb-2">🌟 Top Skills</div>
+                    <div className="text-sm font-medium text-[var(--text)] mb-2">🌟 Top Skills</div>
                     <div className="flex flex-wrap gap-1">
                       {dept.topSkills.slice(0, 5).map(skill => (
                         <span key={skill} className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
@@ -578,7 +585,7 @@ const SkillsDashboard: React.FC = () => {
                         </span>
                       ))}
                       {dept.topSkills.length === 0 && (
-                        <span className="text-xs text-[#969696]">No skills data available</span>
+                        <span className="text-xs text-[var(--muted)]">No skills data available</span>
                       )}
                     </div>
                   </div>
@@ -586,7 +593,7 @@ const SkillsDashboard: React.FC = () => {
                   {/* Skills Gaps */}
                   {dept.skillGaps.length > 0 && (
                     <div>
-                      <div className="text-sm font-medium text-[#cccccc] mb-2">⚠️ Potential Gaps</div>
+                      <div className="text-sm font-medium text-[var(--text)] mb-2">⚠️ Potential Gaps</div>
                       <div className="flex flex-wrap gap-1">
                         {dept.skillGaps.map(skill => (
                           <span key={skill} className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">
@@ -594,7 +601,7 @@ const SkillsDashboard: React.FC = () => {
                           </span>
                         ))}
                       </div>
-                      <div className="text-xs text-[#969696] mt-1">
+                      <div className="text-xs text-[var(--muted)] mt-1">
                         Skills present in other departments but not here
                       </div>
                     </div>

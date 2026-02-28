@@ -111,6 +111,33 @@
 
 /* Rich text editor defaults (bullets/numbering visible despite global resets) */
 @layer components {
+  .ux-page-shell {
+    border: 1px solid var(--borderSubtle);
+    border-radius: 16px;
+    padding: 16px;
+    background:
+      linear-gradient(180deg, var(--surfaceOverlay), transparent 220px),
+      var(--bg);
+  }
+
+  .ux-page-hero {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    background:
+      radial-gradient(circle at top right, var(--surfaceOverlay), transparent 62%),
+      linear-gradient(180deg, var(--card), var(--surface));
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+  }
+
+  .ux-panel {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background:
+      linear-gradient(180deg, var(--card), var(--surface));
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+  }
+
   .rt-editor ul {
     list-style: disc;
     padding-left: 1.25rem; /* ~20px */

@@ -5,6 +5,7 @@ import { peopleApi, authApi } from '@/services/api';
 import { useSettingsData } from '../SettingsDataContext';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { showToast } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
 import { isAdminOrManager, isAdminUser } from '@/utils/roleAccess';
 
@@ -415,7 +416,13 @@ const AdminUsersSection: React.FC = () => {
                   <button
                     className="text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded px-2 py-1"
                     onClick={async () => {
-                      if (!confirm(`Delete user ${u.username}? This cannot be undone.`)) return;
+                      const confirmed = await confirmAction({
+                        title: 'Delete User',
+                        message: `Delete user ${u.username}? This cannot be undone.`,
+                        confirmLabel: 'Delete',
+                        tone: 'danger',
+                      });
+                      if (!confirmed) return;
                       try {
                         await authApi.deleteUser(u.id);
                         setUsers(prev => prev.filter(x => x.id !== u.id));

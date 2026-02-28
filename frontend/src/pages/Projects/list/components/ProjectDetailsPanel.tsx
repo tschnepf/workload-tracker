@@ -22,6 +22,7 @@ import { toWeekHeader } from '@/pages/Assignments/grid/utils';
 import { applyHoursToCellsOptimistic } from '@/assignments/updateHoursOptimistic';
 import { autoHoursTemplatesApi, projectsApi } from '@/services/api';
 import { isAdminOrManager } from '@/utils/roleAccess';
+import { confirmAction } from '@/lib/confirmAction';
 
 interface Props {
   project: Project;
@@ -494,7 +495,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   <button
                     disabled={isDeleting}
                     onClick={async () => {
-                      const ok = window.confirm('This will permanently delete the project and its data. Are you sure?');
+                      const ok = await confirmAction({
+                        title: 'Delete Project',
+                        message: 'This will permanently delete the project and its data. Are you sure?',
+                        confirmLabel: 'Delete',
+                        tone: 'danger',
+                      });
                       if (!ok) return;
                       try {
                         setIsDeleting(true);

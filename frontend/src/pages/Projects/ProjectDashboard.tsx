@@ -23,6 +23,7 @@ import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwa
 import TooltipPortal from '@/components/ui/TooltipPortal';
 import type { Assignment, Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { confirmAction } from '@/lib/confirmAction';
 
 type AssignmentListItem = Assignment & { isHistorical?: boolean };
 type ProjectChangeLogEntry = {
@@ -570,7 +571,12 @@ const ProjectDashboard: React.FC = () => {
 
   const handleDeleteAssignment = async (assignmentId: number) => {
     if (deletingAssignmentId) return;
-    const ok = window.confirm('Remove this assignment?');
+    const ok = await confirmAction({
+      title: 'Remove Assignment',
+      message: 'Remove this assignment?',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
     if (!ok) return;
     try {
       setDeletingAssignmentId(assignmentId);
@@ -715,7 +721,12 @@ const ProjectDashboard: React.FC = () => {
 
   const handleDeleteRisk = async (riskId: number) => {
     if (!projectId || deletingRiskId) return;
-    const ok = window.confirm('Delete this risk?');
+    const ok = await confirmAction({
+      title: 'Delete Risk',
+      message: 'Delete this risk?',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
     if (!ok) return;
     try {
       setDeletingRiskId(riskId);

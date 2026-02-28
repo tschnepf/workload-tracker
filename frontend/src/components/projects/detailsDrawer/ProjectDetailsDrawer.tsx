@@ -20,6 +20,7 @@ import { assignmentsApi, departmentsApi } from '@/services/api';
 import { updateAssignment, deleteAssignment } from '@/lib/mutations/assignments';
 import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 import { showToast } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
 
 type Props = {
   open: boolean;
@@ -245,7 +246,13 @@ const ProjectDetailsDrawerContent: React.FC<Props> = ({ open, projectId, onClose
   }, [deleteProjectMutation, onClose]);
 
   const handleDeleteAssignment = useCallback(async (assignmentId: number) => {
-    if (!confirm('Are you sure you want to remove this assignment?')) return;
+    const confirmed = await confirmAction({
+      title: 'Remove Assignment',
+      message: 'Are you sure you want to remove this assignment?',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     try {
       const assignment = assignments.find(a => a.id === assignmentId);
       await deleteAssignment(assignmentId, assignmentsApi, {

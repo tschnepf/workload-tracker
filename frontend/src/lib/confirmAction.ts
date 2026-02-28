@@ -1,4 +1,3 @@
-import { getFlag } from '@/lib/flags';
 import { enqueueConfirm, type ConfirmActionOptions } from '@/lib/dialogBus';
 
 function normalizeOptions(options: ConfirmActionOptions | string): ConfirmActionOptions {
@@ -10,12 +9,6 @@ function normalizeOptions(options: ConfirmActionOptions | string): ConfirmAction
 
 export async function confirmAction(options: ConfirmActionOptions | string): Promise<boolean> {
   const normalized = normalizeOptions(options);
-
-  if (!getFlag('FF_DIALOG_SYSTEM', false)) {
-    if (typeof window === 'undefined') return false;
-    return window.confirm(normalized.message);
-  }
-
+  if (typeof window === 'undefined') return false;
   return enqueueConfirm(normalized);
 }
-

@@ -1,6 +1,7 @@
 import React from 'react';
 import { authHeaders } from '@/api/client';
 import { showToast } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
 
 async function fetchCalendarFeeds() {
   const res = await fetch('/api/core/calendar_feeds/', { headers: authHeaders() });
@@ -57,7 +58,12 @@ export default function CalendarFeeds() {
   };
 
   const handleRegenerate = async () => {
-    const ok = window.confirm('Regenerate token? Existing subscriptions will stop updating.');
+    const ok = await confirmAction({
+      title: 'Regenerate Token',
+      message: 'Regenerate token? Existing subscriptions will stop updating.',
+      confirmLabel: 'Regenerate',
+      tone: 'warning',
+    });
     if (!ok) return;
     try {
       setSaving(true);
@@ -125,4 +131,3 @@ export default function CalendarFeeds() {
     </div>
   );
 }
-

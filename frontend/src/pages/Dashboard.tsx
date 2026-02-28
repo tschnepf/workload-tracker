@@ -37,7 +37,6 @@ import PageState from '@/components/ui/PageState';
 const Dashboard: React.FC = () => {
   const auth = useAuth();
   const snapshotsEnabled = getFlag('FF_MODERATE_PAGES_SNAPSHOTS', true);
-  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
   const bootstrapModeRef = React.useRef<'pending' | 'enabled' | 'disabled'>('pending');
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -338,7 +337,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  if (pageStateEnabled && (loading || Boolean(error) || !data)) {
+  if (loading || Boolean(error) || !data) {
     return (
       <Layout>
         <PageState
@@ -353,40 +352,6 @@ const Dashboard: React.FC = () => {
           )}
           emptyState={<div className="text-[var(--muted)]">No dashboard data available</div>}
         />
-      </Layout>
-    );
-  }
-
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-[var(--muted)]">Loading dashboard...</div>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (error) {
-    return (
-      <Layout>
-        <div className="space-y-4">
-          <div className="text-red-400">Error: {error}</div>
-          <button
-            onClick={loadDashboard}
-            className="bg-[var(--primary)] hover:bg-[var(--primaryHover)] text-white px-4 py-2 rounded transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!data) {
-    return (
-      <Layout>
-        <div className="text-[var(--muted)]">No dashboard data available</div>
       </Layout>
     );
   }
@@ -413,8 +378,8 @@ const Dashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between" role="region" aria-label="Dashboard overview and filters">
+      <div className="ux-page-shell space-y-6">
+        <div className="ux-page-hero flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between" role="region" aria-label="Dashboard overview and filters">
           <div className="min-w-0">
             <h1 className="text-3xl font-semibold text-[var(--text)]">Team Dashboard</h1>
             <p className="mt-2 text-sm text-[var(--muted)]">
@@ -505,7 +470,7 @@ const Dashboard: React.FC = () => {
             {showClientMixCard ? (
               <AssignedHoursByClientCard className="w-full h-full" responsive />
             ) : (
-              <Card className="w-full h-full rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
+              <Card className="ux-panel w-full h-full p-5">
                 <div className="text-lg font-semibold text-[var(--text)]">Assigned Hours by Client</div>
                 <p className="mt-2 text-xs text-[var(--muted)]">
                   Load the client mix chart on demand for this view.
@@ -530,7 +495,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <Card className="col-span-12 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] lg:col-span-12">
+          <Card className="ux-panel col-span-12 p-5 lg:col-span-12">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text)]">Utilization Distribution</h3>
@@ -595,7 +560,7 @@ const UpcomingDeliverablesCard: React.FC<UpcomingDeliverablesCardProps> = ({
   const { open: openProjectDetails } = useProjectDetailsDrawer();
   return (
     <Card
-      className="col-span-12 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[0_10px_28px_rgba(0,0,0,0.25)] lg:col-span-4 lg:col-start-9"
+      className="ux-panel col-span-12 flex min-h-0 flex-col overflow-hidden p-4 lg:col-span-4 lg:col-start-9"
     >
       <div className="flex items-center justify-between">
         <div>
@@ -791,7 +756,7 @@ export const TeamCapacityCalendarCard: React.FC<{
   );
 
   return (
-    <Card className="bg-[var(--card)] border-[var(--border)]">
+    <Card className="ux-panel">
       <div className="flex flex-col gap-3 mb-3">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-[var(--text)]">Capacity & Deliverables Timeline</h3>

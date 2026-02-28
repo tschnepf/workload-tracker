@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { authHeaders, apiClient } from '@/api/client';
+import { showToast } from '@/lib/toastBus';
 
 type Item = {
   id: number;
@@ -64,7 +65,7 @@ const UpcomingPreDeliverablesWidget: React.FC<{ className?: string }> = ({ class
       if ((res as any).error) throw (res as any).error;
       await load();
     } catch (e: any) {
-      alert(e?.message || 'Failed to complete');
+      showToast(e?.message || 'Failed to complete', 'error');
     }
   };
 

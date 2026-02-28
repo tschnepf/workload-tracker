@@ -43,10 +43,13 @@ interface Props {
   autoScrollProjectId?: number | null;
   onAutoScrollComplete?: () => void;
   showDashboardButton?: boolean;
+  onCopyProjectLink?: (project: Project) => void;
+  onOpenDetails?: (project: Project, index: number) => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
   loadMoreOffset?: number;
+  onScrollPositionChange?: (scrollTop: number) => void;
 }
 
 const ProjectsTable: React.FC<Props> = ({
@@ -75,15 +78,18 @@ const ProjectsTable: React.FC<Props> = ({
   autoScrollProjectId,
   onAutoScrollComplete,
   showDashboardButton = false,
+  onCopyProjectLink,
+  onOpenDetails,
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
   loadMoreOffset = 160,
+  onScrollPositionChange,
 }) => {
   const { state: verticalState } = useVerticalFilter();
   const baseGridCols = 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))]';
   const gridColsClass = showDashboardButton
-    ? 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))_minmax(0,0.35fr)]'
+    ? 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))_minmax(92px,92px)]'
     : baseGridCols;
   const enableVirtual = !isMobileList && getFlag('VIRTUALIZED_GRID', false) && projects.length > 200;
   const statusDropdown = useDropdownManager<string>();
@@ -181,9 +187,81 @@ const ProjectsTable: React.FC<Props> = ({
     if (!isLoadingMore) loadRequestedRef.current = false;
   }, [isLoadingMore]);
 
+  useEffect(() => {
+    if (!onScrollPositionChange) return;
+    const container = parentRef.current;
+    if (!container) return;
+    let raf = 0;
+    const emit = () => onScrollPositionChange(container.scrollTop);
+    const handleScroll = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        emit();
+      });
+    };
+    emit();
+    container.addEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [onScrollPositionChange, enableVirtual, isMobileList, projects.length]);
+
   const handleRowClick = (project: Project, index: number) => {
     setHoverEnabled(false);
     onSelect(project, index);
+  };
+  const renderRowActions = (project: Project, index: number) => {
+    if (!showDashboardButton || !project.id) return null;
+    return (
+      <div className="col-span-1 flex justify-end">
+        <div className="inline-flex items-center gap-1">
+          <button
+            type="button"
+            className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
+            aria-label="Open project details"
+            title="Open details"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDetails?.(project, index);
+            }}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M4 6h16M4 12h16M4 18h10" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
+            aria-label="Copy project link"
+            title="Copy link"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopyProjectLink?.(project);
+            }}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" />
+              <path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" />
+            </svg>
+          </button>
+          <Link
+            to={`/projects/${project.id}/dashboard`}
+            onClick={(e) => e.stopPropagation()}
+            className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
+            aria-label="Open project dashboard"
+            title="Open project dashboard"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+              <rect x="3" y="4" width="7" height="7" rx="1.2" />
+              <rect x="14" y="4" width="7" height="7" rx="1.2" />
+              <rect x="3" y="15" width="18" height="5" rx="1.2" />
+            </svg>
+          </Link>
+        </div>
+      </div>
+    );
   };
 
   const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
@@ -1226,23 +1304,7 @@ const ProjectsTable: React.FC<Props> = ({
             <div className="col-span-2 text-[var(--muted)] text-xs whitespace-pre-line break-words">
               {renderQaCell(project.id)}
             </div>
-            {showDashboardButton && project.id ? (
-              <div className="col-span-1 flex justify-end">
-                <Link
-                  to={`/projects/${project.id}/dashboard`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
-                  aria-label="Open project dashboard"
-                  title="Open project dashboard"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-                    <rect x="3" y="4" width="7" height="7" rx="1.2" />
-                    <rect x="14" y="4" width="7" height="7" rx="1.2" />
-                    <rect x="3" y="15" width="18" height="5" rx="1.2" />
-                  </svg>
-                </Link>
-              </div>
-            ) : null}
+            {renderRowActions(project, index)}
             {showRowBottomDivider && (
               <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
                 <div className={`grid ${gridColsClass} gap-2`}>
@@ -1596,23 +1658,7 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="col-span-2 text-[var(--muted)] text-xs whitespace-pre-line break-words">
                 {renderQaCell(project.id)}
               </div>
-              {showDashboardButton && project.id ? (
-                <div className="col-span-1 flex justify-end">
-                  <Link
-                    to={`/projects/${project.id}/dashboard`}
-                    onClick={(e) => e.stopPropagation()}
-                  className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
-                  aria-label="Open project dashboard"
-                  title="Open project dashboard"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-                    <rect x="3" y="4" width="7" height="7" rx="1.2" />
-                    <rect x="14" y="4" width="7" height="7" rx="1.2" />
-                    <rect x="3" y="15" width="18" height="5" rx="1.2" />
-                  </svg>
-                  </Link>
-                </div>
-              ) : null}
+              {renderRowActions(project, v.index)}
               {showRowBottomDivider && (
                 <div className="absolute inset-x-0 bottom-0 px-2 pointer-events-none">
                   <div className={`grid ${gridColsClass} gap-2`}>

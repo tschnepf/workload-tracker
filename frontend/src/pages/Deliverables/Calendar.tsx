@@ -1,6 +1,7 @@
 import React from 'react';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
+import PageState from '@/components/ui/PageState';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { FullCalendarWrapper, mapDeliverableCalendarToEvents, formatDeliverableInlineLabel } from '@/features/fullcalendar';
 import {
@@ -160,12 +161,36 @@ export const DeliverablesCalendarContent: React.FC = () => {
     [open]
   );
 
+  if (isLoading && !data) {
+    return (
+      <PageState
+        isLoading
+        loadingState={(
+          <div className="flex items-center justify-center h-64">
+            <div className="text-[var(--muted)]">Loading deliverables calendar...</div>
+          </div>
+        )}
+      />
+    );
+  }
+
+  if (error && (!data || data.length === 0)) {
+    return (
+      <PageState
+        error={error as Error}
+        onRetry={() => {
+          void refetch();
+        }}
+      />
+    );
+  }
+
   return (
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="ux-page-shell space-y-6">
+        <div className="ux-page-hero flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-[#cccccc]">{`Deliverables Calendar (${weeks} Weeks)`}</h1>
-            <p className="text-[#969696] mt-1">Milestones and pre-deliverables with list view on mobile.</p>
+            <h1 className="text-3xl font-bold text-[var(--text)]">{`Deliverables Calendar (${weeks} Weeks)`}</h1>
+            <p className="text-[var(--muted)] mt-1">Milestones and pre-deliverables with list view on mobile.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="w-full sm:w-auto min-w-[280px]">
@@ -211,14 +236,14 @@ export const DeliverablesCalendarContent: React.FC = () => {
           </div>
         </div>
 
-        <Card className="bg-[var(--card)] border-[var(--border)] p-4">
+        <Card className="ux-panel p-4">
           <FullCalendarWrapper
             className="min-h-[640px]"
             events={events}
             loading={isLoading}
             emptyState={
               error ? (
-                <div className="text-sm text-[#fca5a5]">{(error as Error)?.message || 'Failed to load calendar'}</div>
+                <div className="text-sm text-red-400">{(error as Error)?.message || 'Failed to load calendar'}</div>
               ) : (
                 <div className="text-sm text-[var(--muted)]">No milestones scheduled for this window.</div>
               )

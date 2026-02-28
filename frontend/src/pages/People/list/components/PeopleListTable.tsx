@@ -8,7 +8,7 @@ type Props = {
   selectedPersonId: number | null;
   selectedPeopleIds: Set<number>;
   onRowClick: (person: Person, index: number) => void;
-  onToggleSelect: (personId: number, checked: boolean) => void;
+  onToggleSelect: (personId: number, checked: boolean, shiftKey?: boolean, index?: number) => void;
 };
 
 const PeopleListTable: React.FC<Props> = ({
@@ -65,7 +65,7 @@ const PeopleListTable: React.FC<Props> = ({
                     <input
                       type="checkbox"
                       checked={person.id ? selectedPeopleIds.has(person.id) : false}
-                      onChange={(e) => person.id && onToggleSelect(person.id, e.target.checked)}
+                      onChange={(e) => person.id && onToggleSelect(person.id, e.target.checked, Boolean((e.nativeEvent as any).shiftKey), index)}
                       className="w-3 h-3 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
                     />
                   </div>
@@ -105,7 +105,7 @@ const PeopleListTable: React.FC<Props> = ({
                 <input
                   type="checkbox"
                   checked={selectedPeopleIds.has(person.id!)}
-                  onChange={(e) => onToggleSelect(person.id!, e.target.checked)}
+                  onChange={(e) => onToggleSelect(person.id!, e.target.checked, Boolean((e.nativeEvent as any).shiftKey), index)}
                   className="w-3 h-3 text-[var(--primary)] bg-[var(--surface)] border-[var(--border)] rounded focus:ring-[var(--focus)] focus:ring-2"
                 />
               </div>

@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import Toast from '@/components/ui/Toast';
 import { dismissToast, subscribeToast, subscribeToastQueue, ToastEvent, ToastPayload } from '@/lib/toastBus';
-import { getFlag } from '@/lib/flags';
 
 const ToastHost: React.FC = () => {
-  const queueMode = getFlag('FF_TOAST_QUEUE', false);
+  const queueMode = true;
   const maxVisible = 3;
   const [toast, setToast] = useState<ToastPayload | null>(null);
   const [toasts, setToasts] = useState<ToastEvent[]>([]);
@@ -33,6 +32,7 @@ const ToastHost: React.FC = () => {
             type={event.type}
             duration={event.durationMs ?? 8000}
             stackIndex={index}
+            action={event.action}
             onDismiss={() => dismissToast(event.id)}
           />
         ))}
@@ -45,6 +45,7 @@ const ToastHost: React.FC = () => {
     <Toast
       message={toast.message}
       type={toast.type}
+      action={toast.action}
       onDismiss={() => setToast(null)}
       // Use a shorter default for global 412 prompts
       duration={8000}

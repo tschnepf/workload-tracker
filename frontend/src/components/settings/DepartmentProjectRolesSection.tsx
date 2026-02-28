@@ -1,6 +1,7 @@
 ﻿import React from 'react';
 import { departmentsApi } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
 import { useProjectRoles, useProjectRoleMutations } from '@/roles/hooks/useProjectRoles';
 import { reorderProjectRoles, getProjectRoleUsage, clearProjectRoleAssignments, clearProjectRolesCache, ProjectRole, ProjectRoleUsage } from '@/roles/api';
 import SortableList from '@/components/common/SortableList';
@@ -143,7 +144,12 @@ const DepartmentProjectRolesSection: React.FC<{ enabled: boolean; isAdmin: boole
                   className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
                   onClick={async () => {
                     if (!selectedDeptId) return;
-                    const ok = window.confirm(`Delete \"${r.name}\" permanently? This will fail if the role is referenced by any assignments.`);
+                    const ok = await confirmAction({
+                      title: 'Delete Role',
+                      message: `Delete "${r.name}" permanently? This will fail if the role is referenced by any assignments.`,
+                      confirmLabel: 'Delete',
+                      tone: 'danger',
+                    });
                     if (!ok) return;
                     try {
                       await remove.mutateAsync({ id: r.id });

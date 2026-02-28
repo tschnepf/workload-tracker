@@ -2,6 +2,7 @@
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
+import PageState from '@/components/ui/PageState';
 import { peopleApi, projectsApi, departmentsApi, assignmentsApi, deliverablesApi, reportsApi } from '../../services/api';
 import { WorkloadForecastItem, Project, Assignment, Deliverable, Department } from '../../types/models';
 import CapacityTimeline, { CapacityTimelineCompact } from '@/components/charts/CapacityTimeline';
@@ -270,10 +271,38 @@ const TeamForecastPage: React.FC = () => {
     setSelectedProject(pendingProjectId || '');
   };
 
+  if (isLoading && forecast.length === 0) {
+    return (
+      <Layout>
+        <PageState
+          isLoading
+          loadingState={(
+            <div className="flex items-center justify-center h-64">
+              <div className="text-[var(--muted)]">Loading forecast...</div>
+            </div>
+          )}
+        />
+      </Layout>
+    );
+  }
+
+  if (error && forecast.length === 0) {
+    return (
+      <Layout>
+        <PageState
+          error={error}
+          onRetry={() => {
+            void loadForecast();
+          }}
+        />
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="ux-page-shell space-y-6">
+        <div className="ux-page-hero flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-[var(--text)]">Team Forecast & Project Timeline</h1>
             <p className="text-[var(--muted)] mt-1">Team utilization outlook and per-project weekly timeline</p>
@@ -338,7 +367,7 @@ const TeamForecastPage: React.FC = () => {
           </div>
         )}
 
-        <Card className="bg-[var(--card)] border-[var(--border)]">
+        <Card className="ux-panel">
           <div className="p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
               <div className="text-[var(--text)] font-semibold">Capacity Timeline</div>
@@ -380,7 +409,7 @@ const TeamForecastPage: React.FC = () => {
           </div>
         </Card>
 
-        <Card className="bg-[var(--card)] border-[var(--border)]">
+        <Card className="ux-panel">
           <div className="p-4 space-y-4">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
               <div className="text-[var(--text)] font-semibold">Project Timeline</div>

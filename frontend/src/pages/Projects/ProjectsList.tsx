@@ -37,7 +37,11 @@ import { useUpdateProjectStatus } from '@/hooks/useUpdateProjectStatus';
 import { useProjectDeliverablesBulk } from '@/pages/Projects/list/hooks/useProjectDeliverablesBulk';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ProjectForm from '@/pages/Projects/ProjectForm';
-import { getFlag } from '@/lib/flags';
+import { confirmAction } from '@/lib/confirmAction';
+import ActionBar from '@/components/ux/ActionBar';
+import FilterSummaryChips, { type FilterSummaryItem } from '@/components/ux/FilterSummaryChips';
+import { useRouteUiState } from '@/hooks/useRouteUiState';
+import { usePageShortcuts } from '@/hooks/usePageShortcuts';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -50,9 +54,10 @@ const DeliverablesSection = React.lazy(() => import('@/components/deliverables/D
 const ProjectsList: React.FC = () => {
   // React Query hooks for data management
   const [ordering, setOrdering] = useState<string | null>('client,name');
-  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
+  const pageStateEnabled = true;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { state: routeUiState, update: updateRouteUiState } = useRouteUiState('projects');
   const { state: verticalState } = useVerticalFilter();
   const { people } = usePeople({ vertical: verticalState.selectedVerticalId ?? undefined });
   const deleteProjectMutation = useDeleteProject();
@@ -65,8 +70,8 @@ const ProjectsList: React.FC = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
-  const [detailsPaneOpen, setDetailsPaneOpen] = useState(false);
-  const [detailsSplitPct, setDetailsSplitPct] = useState(66);
+  const [detailsPaneOpen, setDetailsPaneOpen] = useState(routeUiState.paneOpen ?? false);
+  const [detailsSplitPct, setDetailsSplitPct] = useState(routeUiState.splitPct ?? 66);
   const splitDragRef = useRef<{ active: boolean; startX: number; startPct: number }>({ active: false, startX: 0, startPct: 66 });
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -157,6 +162,12 @@ const ProjectsList: React.FC = () => {
     setSearchTokens([]);
     setActiveTokenId(null);
   }, []);
+  const focusProjectsSearch = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const input = document.getElementById('projects-search') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
+  }, []);
 
   const serverOrdering = useMemo(() => {
     const direction = sortDirection === 'desc' ? '-' : '';
@@ -191,6 +202,25 @@ const ProjectsList: React.FC = () => {
       .sort()
       .join(',');
   }, [selectedStatusFilters]);
+  const filterSummaryItems = useMemo<FilterSummaryItem[]>(() => {
+    const items: FilterSummaryItem[] = [];
+    const statuses = Array.from(selectedStatusFilters).filter((status) => status && status !== 'Show All');
+    statuses.forEach((status) => {
+      items.push({
+        id: `status:${status}`,
+        label: `Status: ${formatFilterStatus(status)}`,
+        onRemove: () => toggleStatusFilter(status),
+      });
+    });
+    searchTokens.forEach((token) => {
+      items.push({
+        id: `search:${token.id}`,
+        label: `${token.op.toUpperCase()} ${token.term}`,
+        onRemove: () => removeSearchToken(token.id),
+      });
+    });
+    return items;
+  }, [selectedStatusFilters, formatFilterStatus, toggleStatusFilter, searchTokens, removeSearchToken]);
   const departmentFilters = useMemo(() => (deptState.filters ?? [])
     .map((f) => ({
       departmentId: Number(f.departmentId),
@@ -313,6 +343,84 @@ const ProjectsList: React.FC = () => {
       setMobileDetailOpen(true);
     }
   }, [handleProjectClick, isMobileLayout]);
+  const selectRelativeProject = useCallback((delta: number) => {
+    if (!deptFilteredSortedProjects.length) return;
+    const fallbackIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    const nextIndex = Math.max(0, Math.min(deptFilteredSortedProjects.length - 1, fallbackIndex + delta));
+    const nextProject = deptFilteredSortedProjects[nextIndex];
+    if (!nextProject) return;
+    handleProjectClick(nextProject, nextIndex);
+    if (isMobileLayout) setMobileDetailOpen(true);
+  }, [deptFilteredSortedProjects, selectedIndex, handleProjectClick, isMobileLayout]);
+
+  useEffect(() => {
+    const savedId = routeUiState.selectedId;
+    if (savedId == null || selectedProject?.id != null) return;
+    const idx = deptFilteredSortedProjects.findIndex((project) => project.id === savedId);
+    if (idx < 0) return;
+    const project = deptFilteredSortedProjects[idx];
+    if (!project) return;
+    setSelectedProject(project);
+    setSelectedIndex(idx);
+  }, [routeUiState.selectedId, selectedProject?.id, deptFilteredSortedProjects, setSelectedProject, setSelectedIndex]);
+
+  useEffect(() => {
+    updateRouteUiState({
+      paneOpen: detailsPaneOpen,
+      splitPct: Math.round(detailsSplitPct),
+      selectedId: selectedProject?.id ?? null,
+    });
+  }, [detailsPaneOpen, detailsSplitPct, selectedProject?.id, updateRouteUiState]);
+
+  usePageShortcuts({
+    bindings: [
+      {
+        id: 'projects-focus-search',
+        keys: ['/'],
+        description: 'Focus project search',
+        action: focusProjectsSearch,
+      },
+      {
+        id: 'projects-next',
+        keys: ['j'],
+        description: 'Select next project',
+        when: () => !isMobileLayout,
+        action: () => selectRelativeProject(1),
+      },
+      {
+        id: 'projects-prev',
+        keys: ['k'],
+        description: 'Select previous project',
+        when: () => !isMobileLayout,
+        action: () => selectRelativeProject(-1),
+      },
+      {
+        id: 'projects-open-selected',
+        keys: ['enter'],
+        description: 'Open selected project details',
+        when: () => Boolean(selectedProject),
+        action: () => {
+          if (!selectedProject) return;
+          if (isMobileLayout) {
+            setMobileDetailOpen(true);
+            return;
+          }
+          setDetailsPaneOpen(true);
+        },
+      },
+      {
+        id: 'projects-escape',
+        keys: ['escape'],
+        description: 'Close open panels',
+        action: () => {
+          setStatusDropdownOpen(false);
+          setMobileFiltersOpen(false);
+          setMobileDetailOpen(false);
+          setCreateDrawerOpen(false);
+        },
+      },
+    ],
+  });
 
   // Assignments + available roles
   const { assignments, availableRoles, reload: reloadAssignments } = useProjectAssignments({ projectId: selectedProject?.id, people });
@@ -785,7 +893,13 @@ const ProjectsList: React.FC = () => {
   const currentWeekKey = useMemo(() => getCurrentWeekKey(), [getCurrentWeekKey]);
 
   const handleDeleteAssignment = useCallback(async (assignmentId: number) => {
-    if (!confirm('Are you sure you want to remove this assignment?')) return;
+    const confirmed = await confirmAction({
+      title: 'Remove Assignment',
+      message: 'Are you sure you want to remove this assignment?',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     try {
       const assignment = assignments.find(a => a.id === assignmentId);
       await deleteAssignment(assignmentId, assignmentsApi, {
@@ -867,6 +981,16 @@ const ProjectsList: React.FC = () => {
       setError('Failed to delete project');
     }
   }, [deleteProjectMutation, setSelectedProject, setSelectedIndex]);
+  const handleCopyProjectLink = useCallback(async (project: Project) => {
+    if (project.id == null || typeof window === 'undefined') return;
+    const url = `${window.location.origin}/projects?projectId=${project.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Project link copied', 'success');
+    } catch {
+      showToast('Unable to copy link', 'warning');
+    }
+  }, []);
 
   // Page ready timing
   const [pageStart] = useState(() => performance.now());
@@ -901,7 +1025,6 @@ const ProjectsList: React.FC = () => {
       setMobileDetailOpen(true);
     }
   }, [isMobileLayout, selectedProject?.id]);
-
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -946,67 +1069,86 @@ const ProjectsList: React.FC = () => {
     );
   }
 
+  const detailsToggleButton = (
+    <button
+      type="button"
+      aria-label={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
+      title={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
+      onClick={() => setDetailsPaneOpen((v) => !v)}
+      className="px-2 py-0.5 rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surfaceHover)] flex items-center justify-center gap-1 text-[11px] font-medium text-center leading-tight"
+      style={{ minHeight: 28 }}
+    >
+      {!detailsPaneOpen ? (
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      ) : null}
+      <span>{detailsPaneOpen ? 'Hide Details' : 'Show Details'}</span>
+      {detailsPaneOpen ? (
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      ) : null}
+    </button>
+  );
+
   const desktopLayout = (
     <div ref={containerRef} className="h-full min-h-0 flex bg-[var(--bg)] relative">
       <div
         className={`${detailsPaneOpen ? '' : 'w-full'} border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto scrollbar-theme relative transition-all`}
         style={detailsPaneOpen ? { width: `${detailsSplitPct}%` } : undefined}
       >
-        <div className="p-3 pr-[10px] border-b border-[var(--border)]">
-          <div className="flex justify-between items-center mb-2">
-            <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
-            <div className="flex flex-col items-end gap-2">
-              <button
-                type="button"
-                className="px-2 py-1 rounded-md border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors text-xs sm:text-sm font-medium leading-tight flex items-center justify-center gap-1.5"
-                style={{ minHeight: 32 }}
-                onClick={openCreateDrawer}
-              >
-                <span>+</span>
-                <span>New</span>
-              </button>
+        <div className="px-1.5 py-1 border-b border-[var(--border)] sticky top-0 z-20 bg-[var(--bg)]/95 backdrop-blur-sm">
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5">
+            <div className="flex justify-between items-center gap-2 mb-1.5">
+              <div className="min-w-0 flex items-center gap-2">
+                <h1 className="text-base font-semibold text-[var(--text)] leading-tight">Projects</h1>
+                <p className="text-[11px] text-[var(--muted)] leading-tight whitespace-nowrap">{resultsCount} results</p>
+              </div>
+              <ActionBar
+                secondary={detailsToggleButton}
+                primary={(
+                  <button
+                    type="button"
+                    className="px-2 py-0.5 rounded border bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)] transition-colors text-[11px] font-medium leading-tight flex items-center justify-center gap-1"
+                    style={{ minHeight: 28 }}
+                    onClick={openCreateDrawer}
+                  >
+                    <span>+</span>
+                    <span>New</span>
+                  </button>
+                )}
+              />
             </div>
+            <FiltersBar
+              compact
+              statusOptions={statusOptions}
+              selectedStatusFilters={selectedStatusFilters}
+              onToggleStatus={toggleStatusFilter}
+              searchTokens={searchTokens}
+              searchInput={searchInput}
+              searchOp={searchOp}
+              activeTokenId={activeTokenId}
+              onSearchInput={setSearchInput}
+              onSearchKeyDown={handleSearchKeyDown}
+              onSearchOpChange={handleSearchOpChange}
+              onSelectToken={setActiveTokenId}
+              onRemoveToken={removeSearchToken}
+              formatFilterStatus={formatFilterStatus}
+              filterMetaLoading={filterMetaLoading}
+              filterMetaError={filterMetaError}
+              onRetryFilterMeta={() => { void refetchFilterMeta(); }}
+            />
+            <FilterSummaryChips
+              className="mt-1"
+              items={filterSummaryItems}
+              onClearAll={() => {
+                forceShowAll();
+                clearSearchTokens();
+              }}
+              emptyLabel="No active filters"
+            />
           </div>
-          <FiltersBar
-            statusOptions={statusOptions}
-            selectedStatusFilters={selectedStatusFilters}
-            onToggleStatus={toggleStatusFilter}
-            searchTokens={searchTokens}
-            searchInput={searchInput}
-            searchOp={searchOp}
-            activeTokenId={activeTokenId}
-            onSearchInput={setSearchInput}
-            onSearchKeyDown={handleSearchKeyDown}
-            onSearchOpChange={handleSearchOpChange}
-            onSelectToken={setActiveTokenId}
-            onRemoveToken={removeSearchToken}
-            formatFilterStatus={formatFilterStatus}
-            filterMetaLoading={filterMetaLoading}
-            filterMetaError={filterMetaError}
-            onRetryFilterMeta={() => { void refetchFilterMeta(); }}
-            rightSlot={(
-              <button
-                type="button"
-                aria-label={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
-                title={detailsPaneOpen ? 'Hide project details' : 'Show project details'}
-                onClick={() => setDetailsPaneOpen((v) => !v)}
-                className="px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surfaceHover)] flex items-center justify-center gap-1 text-xs sm:text-sm font-medium text-center leading-tight"
-                style={{ minHeight: 32 }}
-              >
-                {!detailsPaneOpen ? (
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
-                ) : null}
-                <span>{detailsPaneOpen ? 'Hide Project Details' : 'Show Project Details'}</span>
-                {detailsPaneOpen ? (
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                ) : null}
-              </button>
-            )}
-          />
         </div>
         {error && (<ErrorBanner message={error} />)}
         {warnings.length > 0 && (<WarningsBanner warnings={warnings} />)}
@@ -1032,7 +1174,12 @@ const ProjectsList: React.FC = () => {
           onChangeStatus={handleTableStatusChange}
           onRefreshDeliverables={refreshDeliverablesFor}
           onDeliverableEdited={bumpDeliverablesRefresh}
-          showDashboardButton={!detailsPaneOpen}
+          showDashboardButton
+          onCopyProjectLink={handleCopyProjectLink}
+          onOpenDetails={(project, index) => {
+            handleResponsiveProjectClick(project, index);
+            if (!isMobileLayout) setDetailsPaneOpen(true);
+          }}
           autoScrollProjectId={autoScrollProjectId}
           onAutoScrollComplete={() => setAutoScrollProjectId(null)}
           hasMore={!!hasNextPage}
@@ -1191,26 +1338,28 @@ const ProjectsList: React.FC = () => {
 
   const mobileLayout = (
     <div className="min-h-0 flex flex-col bg-[var(--bg)]">
-      <div className="p-3 border-b border-[var(--border)] bg-[var(--surface)] flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
-          <p className="text-xs text-[var(--muted)]">{resultsCount} results</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
-            onClick={() => setMobileFiltersOpen(true)}
-          >
-            Filters
-          </button>
-          <button
-            type="button"
-            className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
-            onClick={openCreateDrawer}
-          >
-            + New
-          </button>
+      <div className="p-3 border-b border-[var(--border)] bg-[var(--surface)]">
+        <div className="ux-page-hero flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-semibold text-[var(--text)]">Projects</h1>
+            <p className="text-xs text-[var(--muted)]">{resultsCount} results</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
+              onClick={() => setMobileFiltersOpen(true)}
+            >
+              Filters
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
+              onClick={openCreateDrawer}
+            >
+              + New
+            </button>
+          </div>
         </div>
       </div>
       {error && (<ErrorBanner message={error} />)}
@@ -1237,6 +1386,11 @@ const ProjectsList: React.FC = () => {
         onChangeStatus={handleTableStatusChange}
         onRefreshDeliverables={refreshDeliverablesFor}
         onDeliverableEdited={bumpDeliverablesRefresh}
+        onCopyProjectLink={handleCopyProjectLink}
+        onOpenDetails={(project, index) => {
+          handleResponsiveProjectClick(project, index);
+          setMobileDetailOpen(true);
+        }}
         isMobileList
         autoScrollProjectId={autoScrollProjectId}
         onAutoScrollComplete={() => setAutoScrollProjectId(null)}

@@ -52,7 +52,6 @@ import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeybo
 import { useDeliverablesIndex } from '@/pages/Assignments/grid/useDeliverablesIndex';
 import { useProjectStatusFilters } from '@/pages/Assignments/grid/useProjectStatusFilters';
 import { getFlag } from '@/lib/flags';
-import { useTopBarSlots } from '@/components/layout/TopBarSlots';
 import { useAssignmentsInteractionStore } from '@/pages/Assignments/grid/useAssignmentsInteractionStore';
 import WeeksSelector from '@/components/compact/WeeksSelector';
 import StatusFilterChips from '@/components/compact/StatusFilterChips';
@@ -68,8 +67,11 @@ import MobileAddAssignmentSheet from '@/pages/Assignments/grid/components/Mobile
 import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
-import { showToast as showToastBus } from '@/lib/toastBus';
+import { emitToast, showToast as showToastBus } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
+import ActionBar from '@/components/ux/ActionBar';
+import SaveStateBadge, { type SaveState } from '@/components/ux/SaveStateBadge';
+import { usePageShortcuts } from '@/hooks/usePageShortcuts';
 
 // Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
 
@@ -112,8 +114,8 @@ const isDateInWeek = (dateStr: string, weekStartStr: string) => {
 
 const AssignmentGrid: React.FC = () => {
   const queryClient = useQueryClient();
-  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
-  const queueToastsEnabled = getFlag('FF_TOAST_QUEUE', false);
+  const pageStateEnabled = true;
+  const queueToastsEnabled = true;
   const { state: deptState } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
   
@@ -178,6 +180,32 @@ const AssignmentGrid: React.FC = () => {
     }
     setToast({ message, type });
   }, [queueToastsEnabled]);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveStateMessage, setSaveStateMessage] = useState<string | undefined>(undefined);
+  const saveStateTimerRef = useRef<number | null>(null);
+  const markSaveState = useCallback((nextState: SaveState, message?: string, autoResetMs = 0) => {
+    setSaveState(nextState);
+    setSaveStateMessage(message);
+    if (saveStateTimerRef.current) {
+      window.clearTimeout(saveStateTimerRef.current);
+      saveStateTimerRef.current = null;
+    }
+    if (autoResetMs > 0) {
+      saveStateTimerRef.current = window.setTimeout(() => {
+        setSaveState('idle');
+        setSaveStateMessage(undefined);
+        saveStateTimerRef.current = null;
+      }, autoResetMs);
+    }
+  }, []);
+  const lastRetryRef = useRef<null | (() => Promise<void>)>(null);
+  useEffect(() => {
+    return () => {
+      if (saveStateTimerRef.current) {
+        window.clearTimeout(saveStateTimerRef.current);
+      }
+    };
+  }, []);
 
   // Status controls (dropdown + project status updates)
   const { statusDropdown, projectStatus, getProjectStatus, handleStatusChange } = useStatusControls({
@@ -505,7 +533,6 @@ const AssignmentGrid: React.FC = () => {
   const weekPaddingLeft = isMobileLayout ? weekVirtualization.paddingLeft : 0;
   const weekPaddingRight = isMobileLayout ? weekVirtualization.paddingRight : 0;
   const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
-  const { setLeft, setRight, clearLeft, clearRight } = useTopBarSlots();
   const rowKeyFor = (personId: number, assignmentId: number) => `${personId}:${assignmentId}`;
   // Per-person assignment sort mode (default client->project; alt by next deliverable date)
   const [personSortMode, setPersonSortMode] = useState<'client_project' | 'deliverable'>('client_project');
@@ -1020,6 +1047,27 @@ const AssignmentGrid: React.FC = () => {
     });
   }, [getSelectedCells]);
   const selectionStart = useMemo(() => selStart ? (() => { const [p,a] = selStart.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: selStart.weekKey }; })() : null, [selStart]);
+  const focusAssignmentsSearch = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const input = document.getElementById('assignments-search') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
+  }, []);
+  const getHoursForCell = useCallback((personId: number, assignmentId: number, week: string) => {
+    const person = peopleById.get(personId) || visiblePeople.find((p) => p.id === personId);
+    if (!person) return 0;
+    const assignment = resolvePersonAssignments(person as PersonWithAssignments).find((row) => row.id === assignmentId);
+    return Number(assignment?.weeklyHours?.[week] || 0);
+  }, [peopleById, visiblePeople, resolvePersonAssignments]);
+  const selectedHoursTotal = useMemo(
+    () => selectedCells.reduce((sum, cell) => sum + getHoursForCell(cell.personId, cell.assignmentId, cell.week), 0),
+    [getHoursForCell, selectedCells]
+  );
+  const selectedHoursLabel = useMemo(() => {
+    const rounded = Math.round(selectedHoursTotal * 100) / 100;
+    if (Number.isInteger(rounded)) return `${rounded}`;
+    return rounded.toFixed(2).replace(/\.?0+$/, '');
+  }, [selectedHoursTotal]);
   const url = useGridUrlState();
 
   // Column width state (extracted hook, assignGrid keys)
@@ -1304,6 +1352,7 @@ const AssignmentGrid: React.FC = () => {
   const saveEdit = async () => {
     if (!editingCell || saveEditInFlightRef.current) return;
     saveEditInFlightRef.current = true;
+    markSaveState('saving', 'Saving...');
 
     const numValue = sanitizeHours(editingValue);
 
@@ -1350,9 +1399,11 @@ const AssignmentGrid: React.FC = () => {
         const next = { personId: editingCell.personId, assignmentId: editingCell.assignmentId, week: weeks[currentIdx + 1].date };
         csSelect(`${next.personId}:${next.assignmentId}`, next.week, false);
       }
+      markSaveState('saved', 'Saved', 1400);
     } catch (err: any) {
       console.error('Failed to save edit:', err);
       showToast('Failed to save hours: ' + (err?.message || 'Unknown error'), 'error');
+      markSaveState('error', 'Save failed');
     } finally {
       saveEditInFlightRef.current = false;
       setEditingCell(null);
@@ -2020,8 +2071,10 @@ const AssignmentGrid: React.FC = () => {
 
   // Update assignment hours
   const updateAssignmentHours = async (personId: number, assignmentId: number, week: string, hours: number) => {
+    markSaveState('saving', 'Saving...');
     if (!serverFilterActive) {
       await updateAssignmentHoursAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, personId, assignmentId, week, hours, showToast });
+      markSaveState('saved', 'Saved', 1200);
       return;
     }
     const person = peopleById.get(personId) || (visiblePeople || []).find(p => p.id === personId);
@@ -2080,6 +2133,7 @@ const AssignmentGrid: React.FC = () => {
       }
       queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
       queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+      markSaveState('saved', 'Saved', 1200);
     } catch (err: any) {
       const revertedRows = visibleRows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
       if (isFilteredLoaded) {
@@ -2115,6 +2169,21 @@ const AssignmentGrid: React.FC = () => {
       } catch {}
       console.error('Failed to update assignment hours:', err);
       showToast('Failed to update hours: ' + (err?.message || 'Unknown error'), 'error');
+      markSaveState('error', 'Save failed');
+      lastRetryRef.current = async () => {
+        await updateAssignmentHours(personId, assignmentId, week, hours);
+      };
+      emitToast({
+        type: 'error',
+        message: 'Failed to update hours',
+        action: {
+          label: 'Retry',
+          onClick: async () => {
+            if (!lastRetryRef.current) return;
+            await lastRetryRef.current();
+          },
+        },
+      });
     }
   };
 
@@ -2129,8 +2198,10 @@ const AssignmentGrid: React.FC = () => {
 
   // Update multiple cells at once (for bulk editing)
   const updateMultipleCells = async (cells: { personId: number, assignmentId: number, week: string }[], hours: number) => {
+    markSaveState('saving', 'Saving...');
     if (!serverFilterActive) {
       await updateMultipleCellsAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, cells, hours, showToast });
+      markSaveState('saved', 'Saved', 1200);
       return;
     }
 
@@ -2219,6 +2290,7 @@ const AssignmentGrid: React.FC = () => {
     if (succeeded) {
       queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
       queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+      markSaveState('saved', 'Saved', 1200);
     }
     if (failed.length > 0) {
       setFilteredAssignmentsByPerson((prev) => {
@@ -2249,8 +2321,146 @@ const AssignmentGrid: React.FC = () => {
         }
       });
       showToast(`Failed to update ${failed.length} assignment${failed.length === 1 ? '' : 's'}.`, 'error');
+      markSaveState('error', 'Some cells failed');
+      lastRetryRef.current = async () => {
+        await updateMultipleCells(cells, hours);
+      };
+      emitToast({
+        type: 'error',
+        message: `Failed to update ${failed.length} cells`,
+        action: {
+          label: 'Retry',
+          onClick: async () => {
+            if (!lastRetryRef.current) return;
+            await lastRetryRef.current();
+          },
+        },
+      });
     }
   };
+
+  const copyForwardSelectedRange = useCallback(async () => {
+    if (!selectedCell || selectedCells.length <= 1) return;
+    const sourceHours = getHoursForCell(selectedCell.personId, selectedCell.assignmentId, selectedCell.week);
+    const targets = selectedCells.filter((cell) =>
+      !(cell.personId === selectedCell.personId && cell.assignmentId === selectedCell.assignmentId && cell.week === selectedCell.week),
+    );
+    if (!targets.length) return;
+    markSaveState('saving', 'Copying hours...');
+    try {
+      await updateMultipleCells(targets, sourceHours);
+      markSaveState('saved', `Copied ${sourceHours}h forward`, 1600);
+      showToast(`Copied ${sourceHours}h to ${targets.length} cells`, 'success');
+    } catch (error: any) {
+      markSaveState('error', 'Copy forward failed');
+      showToast(error?.message || 'Failed to copy-forward', 'error');
+    }
+  }, [selectedCell, selectedCells, getHoursForCell, updateMultipleCells, markSaveState, showToast]);
+
+  const handlePasteIntoGrid = useCallback(async (rawText: string) => {
+    if (!selectedCell) return false;
+    const raw = (rawText || '').trim();
+    if (!raw) return false;
+    const lines = raw.split(/\r?\n/).filter((line) => line.length > 0);
+    if (!lines.length) return false;
+    const matrix = lines.map((line) => line.split('\t').map((cell) => Number(cell.trim())));
+    if (!matrix.some((row) => row.some((value) => Number.isFinite(value)))) return false;
+
+    // Single-value paste applies to full selection when present.
+    if (matrix.length === 1 && matrix[0].length === 1 && selectedCells.length > 1) {
+      markSaveState('saving', 'Pasting...');
+      try {
+        await updateMultipleCells(selectedCells, matrix[0][0]);
+        markSaveState('saved', 'Paste applied', 1400);
+        return true;
+      } catch {
+        markSaveState('error', 'Paste failed');
+        return false;
+      }
+    }
+
+    const startRowIndex = rowOrder.indexOf(rowKeyFor(selectedCell.personId, selectedCell.assignmentId));
+    const startWeekIndex = weeks.findIndex((week) => week.date === selectedCell.week);
+    if (startRowIndex < 0 || startWeekIndex < 0) return false;
+
+    const targets: Array<{ personId: number; assignmentId: number; week: string; value: number }> = [];
+    matrix.forEach((row, rIdx) => {
+      row.forEach((value, cIdx) => {
+        if (!Number.isFinite(value)) return;
+        const rowKey = rowOrder[startRowIndex + rIdx];
+        const week = weeks[startWeekIndex + cIdx]?.date;
+        if (!rowKey || !week) return;
+        const [personIdRaw, assignmentIdRaw] = rowKey.split(':');
+        const personId = Number(personIdRaw);
+        const assignmentId = Number(assignmentIdRaw);
+        if (!Number.isFinite(personId) || !Number.isFinite(assignmentId)) return;
+        targets.push({ personId, assignmentId, week, value });
+      });
+    });
+    if (!targets.length) return false;
+
+    markSaveState('saving', 'Pasting...');
+    const byValue = new Map<number, Array<{ personId: number; assignmentId: number; week: string }>>();
+    targets.forEach((target) => {
+      const list = byValue.get(target.value) || [];
+      list.push({ personId: target.personId, assignmentId: target.assignmentId, week: target.week });
+      byValue.set(target.value, list);
+    });
+    try {
+      // Group by value to reuse batched update path.
+      for (const [value, cells] of byValue.entries()) {
+        await updateMultipleCells(cells, value);
+      }
+      markSaveState('saved', 'Paste applied', 1400);
+      return true;
+    } catch {
+      markSaveState('error', 'Paste failed');
+      return false;
+    }
+  }, [selectedCell, selectedCells, markSaveState, rowOrder, weeks, updateMultipleCells]);
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      const rawText = event.clipboardData?.getData('text/plain') || '';
+      if (!rawText) return;
+      event.preventDefault();
+      void handlePasteIntoGrid(rawText);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [handlePasteIntoGrid]);
+
+  usePageShortcuts({
+    bindings: [
+      {
+        id: 'assignments-focus-search',
+        keys: ['/'],
+        description: 'Focus assignments search',
+        action: focusAssignmentsSearch,
+      },
+      {
+        id: 'assignments-escape',
+        keys: ['escape'],
+        description: 'Close assignment overlays',
+        action: () => {
+          setMobileEditTarget(null);
+          addUI.cancel();
+          csClear();
+        },
+      },
+      {
+        id: 'assignments-copy-forward',
+        keys: ['meta+shift+f', 'ctrl+shift+f'],
+        description: 'Copy selected value forward',
+        when: () => selectedCells.length > 1,
+        action: () => { void copyForwardSelectedRange(); },
+      },
+    ],
+  });
 
   type AutoHoursUpdate = {
     personId: number;
@@ -2727,29 +2937,44 @@ const AssignmentGrid: React.FC = () => {
 
   const topBarHeader = (
     <div className="flex flex-col gap-2 min-w-0 w-full">
-      <div className="flex flex-wrap items-center gap-3 min-w-0">
-        <div className="min-w-[120px]">
-          <div className="text-lg font-semibold text-[var(--text)] leading-tight">Assignments</div>
-          {isFetching ? (
-            <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
-          ) : null}
-        </div>
-        <div className="min-w-0 flex-1">
-          <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
-        </div>
-        <HeaderActions
-          onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
-          onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
-          onRefreshAll={refreshAllAssignments}
-          disabled={loading || (loadingAssignments.size > 0)}
-        />
-        <a
-          href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
-          className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
-        >
-          Project View
-        </a>
-      </div>
+      <ActionBar
+        secondary={(
+          <div className="min-w-[120px]">
+            <div className="text-lg font-semibold text-[var(--text)] leading-tight">Assignments</div>
+            {isFetching ? (
+              <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
+            ) : null}
+          </div>
+        )}
+        overflow={(
+          <div className="min-w-0 flex-1">
+            <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+          </div>
+        )}
+        danger={(
+          <SaveStateBadge
+            state={saveState}
+            message={saveStateMessage}
+            onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
+          />
+        )}
+        primary={(
+          <div className="flex items-center gap-2">
+            <HeaderActions
+              onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
+              onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
+              onRefreshAll={refreshAllAssignments}
+              disabled={loading || (loadingAssignments.size > 0)}
+            />
+            <a
+              href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
+              className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            >
+              Project View
+            </a>
+          </div>
+        )}
+      />
       <div className="flex flex-wrap items-center gap-1">
         <StatusFilterChips
           options={statusFilterOptions as unknown as readonly string[]}
@@ -2758,14 +2983,62 @@ const AssignmentGrid: React.FC = () => {
           onToggle={(s) => toggleStatusFilter(s as any)}
         />
       </div>
+      {isMobileLayout && selectedCells.length > 0 ? (
+        <div className="flex items-center gap-2 p-2 rounded border border-[var(--border)] bg-[var(--surface)]">
+          <span className="text-xs text-[var(--muted)]">
+            {selectedCells.length} selected • {selectedHoursLabel}h
+          </span>
+          <button
+            type="button"
+            className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            onClick={() => { void copyForwardSelectedRange(); }}
+            disabled={selectedCells.length < 2}
+          >
+            Copy Forward
+          </button>
+          <button
+            type="button"
+            className="px-2 py-0.5 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
+            onClick={csClear}
+          >
+            Clear Selection
+          </button>
+        </div>
+      ) : null}
       {searchBar}
     </div>
   );
+
+  const selectedActionsTopBarLeft = !isMobileLayout && selectedCells.length > 0 ? (
+    <TopBarPortal side="left">
+      <div className="flex items-center gap-2 ml-1 px-2 py-1 rounded border border-[var(--border)] bg-[var(--surface)] whitespace-nowrap">
+        <span className="text-xs text-[var(--muted)]">
+          {selectedCells.length} selected • {selectedHoursLabel}h
+        </span>
+        <button
+          type="button"
+          className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+          onClick={() => { void copyForwardSelectedRange(); }}
+          disabled={selectedCells.length < 2}
+        >
+          Copy Forward
+        </button>
+        <button
+          type="button"
+          className="px-2 py-0.5 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
+          onClick={csClear}
+        >
+          Clear Selection
+        </button>
+      </div>
+    </TopBarPortal>
+  ) : null;
 
   if (loading) {
     if (pageStateEnabled) {
       return (
         <Layout>
+          {selectedActionsTopBarLeft}
           {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
           <PageState isLoading skeleton={<AssignmentsSkeleton />} />
         </Layout>
@@ -2773,6 +3046,7 @@ const AssignmentGrid: React.FC = () => {
     }
     return (
       <Layout>
+        {selectedActionsTopBarLeft}
         {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
         <AssignmentsSkeleton />
       </Layout>
@@ -2802,6 +3076,11 @@ const AssignmentGrid: React.FC = () => {
         <div className="min-w-0 flex-1">
           <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
         </div>
+        <SaveStateBadge
+          state={saveState}
+          message={saveStateMessage}
+          onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
+        />
         <button
           type="button"
           className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
@@ -2888,6 +3167,7 @@ const AssignmentGrid: React.FC = () => {
 
   return (
     <Layout>
+      {selectedActionsTopBarLeft}
       {compact && !isMobileLayout && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
       {isMobileLayout ? (
         <div className="flex-1 flex flex-col min-w-0 px-4 py-4 space-y-4">

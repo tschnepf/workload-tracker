@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
+import { uiLogin } from './helpers/auth';
 
 type BudgetEntry = {
   baseline?: number;
@@ -59,15 +60,10 @@ function normalizePathname(input: string): string {
 }
 
 async function loginForBudgetProbe(page: Page): Promise<void> {
-  const username = process.env.PW_USERNAME || 'admin';
-  const password = process.env.PW_PASSWORD || 'admin123';
-  await page.goto('/login', { waitUntil: 'domcontentloaded', timeout: MAX_ROUTE_WAIT_MS });
-  await page.locator('input[type="text"], input[type="email"]').first().fill(username);
-  await page.locator('input[type="password"]').first().fill(password);
-  await Promise.all([
-    page.getByRole('button', { name: /sign in|login/i }).first().click(),
-    page.waitForLoadState('domcontentloaded').catch(() => {}),
-  ]);
+  await uiLogin(page, {
+    username: process.env.PW_USERNAME || 'admin',
+    password: process.env.PW_PASSWORD || 'admin123',
+  });
   await page.waitForURL((u) => normalizePathname(u.pathname) !== '/login', { timeout: 20_000 });
 }
 
@@ -376,10 +372,15 @@ test.describe('API Call Budgets', () => {
 
   test('in-app route transition API calls stay within budgets', async ({ page }) => {
     await loginForBudgetProbe(page);
-    const initialRoute = routes[0] || '/dashboard';
-    await page.goto(initialRoute, { waitUntil: 'domcontentloaded' });
+    // Avoid measuring the first route as a same-URL hard reload from the seeded page.
+    // In local auth-throttled environments this can abort refresh and cascade to /login.
+    const initialRoute = '/dashboard';
     const tracker = new ApiCallTracker(IDLE_MS, MIN_OBSERVE_MS);
     tracker.attach(page);
+    tracker.reset();
+    await page.goto(initialRoute, { waitUntil: 'domcontentloaded' });
+    await tracker.waitForIdle(MAX_ROUTE_WAIT_MS);
+    if (INTER_ROUTE_DELAY_MS > 0) await page.waitForTimeout(INTER_ROUTE_DELAY_MS);
 
     const routeResults: Record<string, RouteProbeResult> = {};
     for (const route of routes) {

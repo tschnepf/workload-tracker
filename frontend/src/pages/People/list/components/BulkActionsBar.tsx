@@ -16,7 +16,7 @@ export default function BulkActionsBar(props: BulkActionsBarProps) {
   if (!visible) return null;
 
   return (
-    <div className="p-3 border-t border-[var(--border)] bg-[var(--card)]">
+    <div className="sticky bottom-0 z-10 p-3 border-t border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-sm">
       <div className="flex items-center gap-3">
         <span className="text-sm text-[var(--text)] font-medium">Assign {selectedCount} people to:</span>
         <select

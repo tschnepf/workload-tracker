@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import PageState from '@/components/ui/PageState';
 import { 
   getEnhancedPerformanceSummary, 
   getEnhancedPerformanceMetrics, 
@@ -106,31 +107,36 @@ const PerformanceDashboard: React.FC = () => {
 
   if (!summary) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-[#969696]">Loading performance data...</div>
-      </div>
+      <PageState
+        isLoading
+        loadingState={(
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-[var(--muted)]">Loading performance data...</div>
+          </div>
+        )}
+      />
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ux-page-shell space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="ux-page-hero flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-[#cccccc]">Performance Dashboard</h1>
-          <p className="text-[#969696] mt-1">
+          <h1 className="text-2xl font-bold text-[var(--text)]">Performance Dashboard</h1>
+          <p className="text-[var(--muted)] mt-1">
             Real-time Web Vitals monitoring and budget compliance
           </p>
         </div>
         
         <div className="flex items-center gap-3">
-          <div className="text-sm text-[#969696]">
+          <div className="text-sm text-[var(--muted)]">
             Last updated: {lastUpdated.toLocaleTimeString()}
           </div>
           <Button
             onClick={refreshData}
             disabled={isLoading}
-            className="bg-[#007acc] hover:bg-[#005a99]"
+            className="bg-[var(--primary)] hover:bg-[var(--primaryHover)]"
           >
             {isLoading ? 'Refreshing...' : 'Refresh'}
           </Button>
@@ -139,40 +145,40 @@ const PerformanceDashboard: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
-          <div className="text-[#969696] text-sm">Total Metrics</div>
-          <div className="text-2xl font-bold text-[#cccccc]">{summary.totalMetrics}</div>
-          <div className="text-xs text-[#969696] mt-1">Session: {summary.sessionId.slice(-8)}</div>
+        <Card className="ux-panel">
+          <div className="text-[var(--muted)] text-sm">Total Metrics</div>
+          <div className="text-2xl font-bold text-[var(--text)]">{summary.totalMetrics}</div>
+          <div className="text-xs text-[var(--muted)] mt-1">Session: {summary.sessionId.slice(-8)}</div>
         </Card>
 
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
-          <div className="text-[#969696] text-sm">Budget Compliance</div>
+        <Card className="ux-panel">
+          <div className="text-[var(--muted)] text-sm">Budget Compliance</div>
           <div className={`text-2xl font-bold ${summary.budgetCompliance >= 90 ? 'text-emerald-400' : summary.budgetCompliance >= 70 ? 'text-amber-400' : 'text-red-400'}`}>
             {summary.budgetCompliance.toFixed(1)}%
           </div>
-          <div className="text-xs text-[#969696] mt-1">
+          <div className="text-xs text-[var(--muted)] mt-1">
             {summary.budgetViolations} violations
           </div>
         </Card>
 
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
-          <div className="text-[#969696] text-sm">Good Performance</div>
+        <Card className="ux-panel">
+          <div className="text-[var(--muted)] text-sm">Good Performance</div>
           <div className="text-2xl font-bold text-emerald-400">{summary.byScore.good}</div>
-          <div className="text-xs text-[#969696] mt-1">Within thresholds</div>
+          <div className="text-xs text-[var(--muted)] mt-1">Within thresholds</div>
         </Card>
 
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
-          <div className="text-[#969696] text-sm">Needs Attention</div>
+        <Card className="ux-panel">
+          <div className="text-[var(--muted)] text-sm">Needs Attention</div>
           <div className="text-2xl font-bold text-red-400">
             {summary.byScore.warning + summary.byScore.poor}
           </div>
-          <div className="text-xs text-[#969696] mt-1">Performance issues</div>
+          <div className="text-xs text-[var(--muted)] mt-1">Performance issues</div>
         </Card>
       </div>
 
       {/* Core Web Vitals */}
-      <Card className="bg-[#2d2d30] border-[#3e3e42]">
-        <h2 className="text-lg font-semibold text-[#cccccc] mb-4">Core Web Vitals</h2>
+      <Card className="ux-panel">
+        <h2 className="text-lg font-semibold text-[var(--text)] mb-4">Core Web Vitals</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {Object.entries(PERFORMANCE_BUDGETS).map(([metricName, budget]) => {
             const latestMetric = summary.byMetric[metricName];
@@ -209,8 +215,8 @@ const PerformanceDashboard: React.FC = () => {
 
       {/* Budget Violations */}
       {violations.length > 0 && (
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
-          <h2 className="text-lg font-semibold text-[#cccccc] mb-4">
+        <Card className="ux-panel">
+          <h2 className="text-lg font-semibold text-[var(--text)] mb-4">
             🚨 Budget Violations ({violations.length})
           </h2>
           <div className="space-y-3">
@@ -246,8 +252,8 @@ const PerformanceDashboard: React.FC = () => {
       )}
 
       {/* Recent Metrics */}
-      <Card className="bg-[#2d2d30] border-[#3e3e42]">
-        <h2 className="text-lg font-semibold text-[#cccccc] mb-4">Recent Metrics</h2>
+      <Card className="ux-panel">
+        <h2 className="text-lg font-semibold text-[var(--text)] mb-4">Recent Metrics</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

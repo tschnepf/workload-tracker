@@ -10,7 +10,7 @@ export interface PeopleListPaneProps {
   selectedPersonId: number | null;
   selectedPeopleIds: Set<number>;
   onRowClick: (person: Person, index: number) => void;
-  onToggleSelect: (id: number, checked: boolean) => void;
+  onToggleSelect: (id: number, checked: boolean, shiftKey?: boolean, index?: number) => void;
   onArrowKey?: (dir: 'up' | 'down') => void;
   sortBy: Column;
   sortDirection: 'asc' | 'desc';

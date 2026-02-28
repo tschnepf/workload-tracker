@@ -13,6 +13,7 @@ import { deliverablesApi } from '@/services/api';
 import { emitGridRefresh } from '@/lib/gridRefreshBus';
 import { createDeliverable, updateDeliverable, deleteDeliverable } from '@/lib/mutations/deliverables';
 import { showToast } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
 import { useQueryClient } from '@tanstack/react-query';
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 
@@ -224,7 +225,13 @@ const DeliverablesSection = React.forwardRef<DeliverablesSectionHandle, Delivera
   };
 
   const handleDeleteDeliverable = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this deliverable?')) {
+    const confirmed = await confirmAction({
+      title: 'Delete Deliverable',
+      message: 'Are you sure you want to delete this deliverable?',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
 

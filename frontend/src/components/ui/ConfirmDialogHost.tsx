@@ -1,15 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { resolveActiveConfirm, useConfirmDialogState } from '@/lib/dialogBus';
-import { getFlag } from '@/lib/flags';
 
 const ConfirmDialogHost: React.FC = () => {
   const { active } = useConfirmDialogState();
-  const enabled = getFlag('FF_DIALOG_SYSTEM', false);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!enabled || !active) return;
+    if (!active) return;
+    triggerRef.current = document.activeElement as HTMLElement | null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -21,10 +21,11 @@ const ConfirmDialogHost: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.clearTimeout(timer);
+      triggerRef.current?.focus?.();
     };
-  }, [enabled, active]);
+  }, [active]);
 
-  if (!enabled || !active || typeof document === 'undefined') return null;
+  if (!active || typeof document === 'undefined') return null;
 
   const toneClass =
     active.tone === 'danger'
@@ -73,4 +74,3 @@ const ConfirmDialogHost: React.FC = () => {
 };
 
 export default ConfirmDialogHost;
-

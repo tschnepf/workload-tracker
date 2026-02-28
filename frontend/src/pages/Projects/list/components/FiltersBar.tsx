@@ -18,6 +18,7 @@ interface Props {
   filterMetaError?: string | null;
   onRetryFilterMeta?: () => void;
   rightSlot?: React.ReactNode;
+  compact?: boolean;
 }
 
 const FiltersBar: React.FC<Props> = ({
@@ -38,21 +39,22 @@ const FiltersBar: React.FC<Props> = ({
   filterMetaError,
   onRetryFilterMeta,
   rightSlot,
+  compact = false,
 }) => {
   const activeToken = activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null;
 
   return (
-    <div className="space-y-2">
+    <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
       <div>
-        <label className="text-xs text-[var(--muted)] mb-1 block">Filter by Status:</label>
-        <div className="flex flex-wrap gap-1">
+        <label className={`${compact ? 'sr-only' : 'text-xs text-[var(--muted)] mb-1 block'}`}>Filter by Status:</label>
+        <div className={`flex flex-wrap ${compact ? 'gap-0.5' : 'gap-1'}`}>
           {statusOptions.map((status) => {
             const isActive = selectedStatusFilters.has(status);
             return (
               <button
                 key={status}
                 onClick={() => onToggleStatus(status)}
-                className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                className={`${compact ? 'px-1.5 py-0 text-[11px] leading-5' : 'px-2 py-0.5 text-xs'} rounded border transition-colors ${
                   isActive
                     ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
                     : 'bg-[var(--card)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--cardHover)]'
@@ -67,13 +69,13 @@ const FiltersBar: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
         <div className="flex-1 min-w-0">
           <label className="sr-only" htmlFor="projects-search">Search projects</label>
-          <div className="flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
-            <div className="flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
+          <div className={`flex items-stretch bg-[var(--card)] border border-[var(--border)] ${compact ? 'rounded' : 'rounded-md'} overflow-hidden`}>
+            <div className={`flex items-center border-r border-[var(--border)] bg-[var(--surface)] ${compact ? 'px-1.5' : 'px-2'}`}>
               <select
-                className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+                className={`bg-transparent uppercase tracking-wide text-[var(--muted)] focus:outline-none ${compact ? 'text-[10px]' : 'text-[11px]'}`}
                 value={activeToken?.op ?? searchOp}
                 onChange={(e) => onSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
                 aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
@@ -83,7 +85,7 @@ const FiltersBar: React.FC<Props> = ({
                 <option value="not">NOT</option>
               </select>
             </div>
-            <div className="flex flex-wrap items-center gap-1 px-2 py-1 flex-1 min-w-0">
+            <div className={`flex flex-wrap items-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} flex-1 min-w-0`}>
               {searchTokens.map((token) => {
                 const isActive = token.id === activeTokenId;
                 return (
@@ -98,7 +100,7 @@ const FiltersBar: React.FC<Props> = ({
                         onSelectToken(token.id);
                       }
                     }}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] ${
+                    className={`inline-flex items-center gap-1 ${compact ? 'px-1.5 py-0' : 'px-2 py-0.5'} rounded-full border text-[11px] ${
                       isActive
                         ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
                         : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
@@ -131,7 +133,7 @@ const FiltersBar: React.FC<Props> = ({
                 }}
                 onKeyDown={onSearchKeyDown}
                 placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client, name, or number (Enter)'}
-                className="flex-1 min-w-[160px] px-1 py-0.5 text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+                className={`flex-1 ${compact ? 'min-w-[120px]' : 'min-w-[160px]'} px-1 py-0.5 ${compact ? 'text-xs' : 'text-sm'} bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none`}
               />
             </div>
           </div>
@@ -140,8 +142,8 @@ const FiltersBar: React.FC<Props> = ({
       </div>
 
       {(filterMetaLoading || filterMetaError) && (
-        <div className={`p-3 border-b ${filterMetaError ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[var(--card)] border-[var(--border)]'}`}>
-          <div className={`text-sm ${filterMetaError ? 'text-amber-400' : 'text-[var(--muted)]'}`}>
+        <div className={`${compact ? 'p-2' : 'p-3'} border-b ${filterMetaError ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[var(--card)] border-[var(--border)]'}`}>
+          <div className={`${compact ? 'text-xs' : 'text-sm'} ${filterMetaError ? 'text-amber-400' : 'text-[var(--muted)]'}`}>
             {filterMetaError ? (
               <div className="flex items-center gap-2">
                 <span>Filter data unavailable; special filters temporarily disabled.</span>

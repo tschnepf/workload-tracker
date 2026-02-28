@@ -4,7 +4,7 @@
  * Right panel: Person details with skills management
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { Link } from 'react-router';
@@ -29,13 +29,16 @@ import { useRolesAll } from '@/hooks/useRolesAll';
 import { getFlag } from '@/lib/flags';
 import { useUiPeoplePageSnapshot } from '@/hooks/useUiPageSnapshots';
 import PageState from '@/components/ui/PageState';
+import FilterSummaryChips, { type FilterSummaryItem } from '@/components/ux/FilterSummaryChips';
+import ActionBar from '@/components/ux/ActionBar';
+import { usePageShortcuts } from '@/hooks/usePageShortcuts';
 
 const PeopleList: React.FC = () => {
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const { state: verticalState } = useVerticalFilter();
   const [showInactive, setShowInactive] = useState(false);
   const snapshotsEnabled = getFlag('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', true);
-  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
+  const pageStateEnabled = true;
   const [snapshotFallbackEnabled, setSnapshotFallbackEnabled] = useState(false);
   const [legacyLocations, setLegacyLocations] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -197,8 +200,95 @@ const PeopleList: React.FC = () => {
   const snapshotLoading = snapshotsEnabled && !snapshotFallbackEnabled && !peopleSnapshot.data?.people && peopleSnapshot.isLoading;
   const effectiveListLoading = snapshotLoading || listLoading;
 
-  const { selectedPerson, selectedIndex, onRowClick, selectByIndex } = usePersonSelection(people, {
+  const { selectedPerson, selectedIndex, onRowClick } = usePersonSelection(people, {
     autoSelectFirst: false,
+  });
+  const lastBulkToggleIndexRef = useRef<number | null>(null);
+  const focusPeopleSearch = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const input = document.getElementById('people-search') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
+  }, []);
+  const visiblePeople = people;
+  const activeFilterItems = useMemo<FilterSummaryItem[]>(() => {
+    const items: FilterSummaryItem[] = [];
+    departmentFilter.forEach((deptId) => {
+      const departmentName = deptId === 'unassigned'
+        ? 'Department: Not Assigned'
+        : `Department: ${departments.find((d) => d.id?.toString() === deptId)?.name || deptId}`;
+      items.push({
+        id: `dept:${deptId}`,
+        label: departmentName,
+        onRemove: () => setDepartmentFilter((prev) => prev.filter((id) => id !== deptId)),
+      });
+    });
+    locationFilter.forEach((location) => {
+      items.push({
+        id: `loc:${location}`,
+        label: `Location: ${location}`,
+        onRemove: () => setLocationFilter((prev) => prev.filter((id) => id !== location)),
+      });
+    });
+    if (showInactive) {
+      items.push({
+        id: 'inactive',
+        label: 'Including inactive',
+        onRemove: () => setShowInactive(false),
+      });
+    }
+    if (searchTerm.trim()) {
+      items.push({
+        id: 'search',
+        label: `Search: ${searchTerm.trim()}`,
+        onRemove: () => setSearchTerm(''),
+      });
+    }
+    return items;
+  }, [departmentFilter, departments, locationFilter, searchTerm, showInactive]);
+  const handleToggleSelect = useCallback((id: number, checked: boolean, shiftKey = false, index?: number) => {
+    if (!bulkMode) return;
+    setSelectedPeopleIds((prev) => {
+      const next = new Set(prev);
+      if (shiftKey && typeof index === 'number' && lastBulkToggleIndexRef.current != null) {
+        const lo = Math.min(lastBulkToggleIndexRef.current, index);
+        const hi = Math.max(lastBulkToggleIndexRef.current, index);
+        for (let i = lo; i <= hi; i += 1) {
+          const person = visiblePeople[i];
+          if (!person?.id) continue;
+          if (checked) next.add(person.id);
+          else next.delete(person.id);
+        }
+      } else {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+    if (typeof index === 'number') {
+      lastBulkToggleIndexRef.current = index;
+    }
+  }, [bulkMode, visiblePeople, setSelectedPeopleIds]);
+
+  usePageShortcuts({
+    bindings: [
+      {
+        id: 'people-focus-search',
+        keys: ['/'],
+        description: 'Focus people search',
+        action: focusPeopleSearch,
+      },
+      {
+        id: 'people-escape',
+        keys: ['escape'],
+        description: 'Close people overlays',
+        action: () => {
+          setShowDepartmentDropdown(false);
+          setShowLocationDropdown(false);
+          setMobileDetailOpen(false);
+        },
+      },
+    ],
   });
 
   const handleColumnSort = (column: 'name' | 'location' | 'department' | 'weeklyCapacity' | 'role') => {
@@ -256,34 +346,6 @@ const PeopleList: React.FC = () => {
     }
   };
 
-  // Sortable column header component
-  const SortableHeader = ({ column, children, className = "" }: { 
-    column: 'name' | 'location' | 'department' | 'weeklyCapacity' | 'role';
-    children: React.ReactNode; 
-    className?: string;
-  }) => (
-    <button
-      onClick={() => handleColumnSort(column)}
-      className={`flex items-center gap-1 text-left hover:text-[var(--text)] transition-colors ${className}`}
-    >
-      {children}
-      {sortBy === column && (
-        <svg 
-          className={`w-3 h-3 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="2"
-        >
-          <path d="M6 9l6 6 6-6"/>
-        </svg>
-      )}
-    </button>
-  );
-
-  // Server-side filtering + ordering
-  const visiblePeople = people;
-
   const loadingContent = (
     <div className="h-full min-h-0 flex items-center justify-center">
       <div className="text-[var(--muted)]">Loading people...</div>
@@ -291,56 +353,75 @@ const PeopleList: React.FC = () => {
   );
 
   const desktopView = (
-      <div className="h-full min-h-0 flex bg-[var(--bg)]">
+      <div className="ux-page-shell h-full min-h-0 flex bg-[var(--bg)]">
         
         {/* Left Panel - People List */}
         <div className="w-1/2 border-r border-[var(--border)] flex flex-col min-w-0 min-h-0 overflow-y-auto">
           
           {/* Header */}
           <div className="p-3 border-b border-[var(--border)]">
-            <div className="flex justify-between items-center mb-2">
-              <h1 className="text-lg font-semibold text-[var(--text)]">People</h1>
-              <Link to="/people/new">
-                <button className="px-2 py-0.5 text-xs rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)] hover:text-[var(--text)] transition-colors">
-                  + New
-                </button>
-              </Link>
-            </div>
+            <div className="ux-page-hero">
+              <ActionBar
+                className="mb-2"
+                secondary={(
+                  <button
+                    onClick={() => {
+                      setBulkMode(!bulkMode);
+                      setSelectedPeopleIds(new Set());
+                    }}
+                    className={`px-2 py-1 text-xs rounded border transition-colors ${
+                      bulkMode
+                        ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                        : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+                    }`}
+                  >
+                    {bulkMode ? 'Exit Bulk Mode' : 'Bulk Actions'}
+                  </button>
+                )}
+                primary={(
+                  <Link to="/people/new">
+                    <button className="px-2 py-0.5 text-xs rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)] hover:text-[var(--text)] transition-colors">
+                      + New
+                    </button>
+                  </Link>
+                )}
+              />
+              <div className="flex items-center justify-between">
+                <h1 className="text-lg font-semibold text-[var(--text)]">People</h1>
+                {bulkMode && selectedPeopleIds.size > 0 && (
+                  <span className="text-xs text-[var(--muted)]">{selectedPeopleIds.size} selected</span>
+                )}
+              </div>
 
-            {/* Search and Filters */}
-            <FiltersPanel
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              departments={departments}
-              locations={locations}
-              departmentFilter={departmentFilter}
-              setDepartmentFilter={setDepartmentFilter}
-              locationFilter={locationFilter}
-              setLocationFilter={setLocationFilter}
-              showDepartmentDropdown={showDepartmentDropdown}
-              setShowDepartmentDropdown={setShowDepartmentDropdown}
-              showLocationDropdown={showLocationDropdown}
-              setShowLocationDropdown={setShowLocationDropdown}
-              showInactive={showInactive}
-              setShowInactive={setShowInactive}
-            />
-            <div className="flex items-center justify-between mt-2">
-              <button
-                onClick={() => {
-                  setBulkMode(!bulkMode);
-                  setSelectedPeopleIds(new Set());
+              {/* Search and Filters */}
+              <FiltersPanel
+                searchInputId="people-search"
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                departments={departments}
+                locations={locations}
+                departmentFilter={departmentFilter}
+                setDepartmentFilter={setDepartmentFilter}
+                locationFilter={locationFilter}
+                setLocationFilter={setLocationFilter}
+                showDepartmentDropdown={showDepartmentDropdown}
+                setShowDepartmentDropdown={setShowDepartmentDropdown}
+                showLocationDropdown={showLocationDropdown}
+                setShowLocationDropdown={setShowLocationDropdown}
+                showInactive={showInactive}
+                setShowInactive={setShowInactive}
+              />
+              <FilterSummaryChips
+                className="mt-2"
+                items={activeFilterItems}
+                onClearAll={() => {
+                  setSearchTerm('');
+                  setDepartmentFilter([]);
+                  setLocationFilter([]);
+                  setShowInactive(false);
                 }}
-                className={`px-2 py-1 text-xs rounded border transition-colors ${
-                  bulkMode
-                    ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                    : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]'
-                }`}
-              >
-                {bulkMode ? 'Exit Bulk Mode' : 'Bulk Actions'}
-              </button>
-              {bulkMode && selectedPeopleIds.size > 0 && (
-                <span className="text-xs text-[var(--muted)]">{selectedPeopleIds.size} selected</span>
-              )}
+                emptyLabel="No active filters"
+              />
             </div>
             </div>
 
@@ -374,11 +455,7 @@ const PeopleList: React.FC = () => {
                 onRowClick(nextPerson, nextIndex);
               }
             }}
-            onToggleSelect={(id, checked) => {
-              const next = new Set(selectedPeopleIds);
-              if (checked) next.add(id); else next.delete(id);
-              setSelectedPeopleIds(next);
-            }}
+            onToggleSelect={handleToggleSelect}
             sortBy={sortBy}
             sortDirection={sortDirection}
             onColumnSort={handleColumnSort}
@@ -423,7 +500,7 @@ const PeopleList: React.FC = () => {
   );
 
   const mobileView = (
-      <div className="h-full min-h-0 flex flex-col bg-[var(--bg)]">
+      <div className="ux-page-shell h-full min-h-0 flex flex-col bg-[var(--bg)]">
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
           {effectiveListLoading ? (
             loadingContent
@@ -431,53 +508,67 @@ const PeopleList: React.FC = () => {
             <>
               {/* Mobile header */}
               <div className="p-3 border-b border-[var(--border)] bg-[var(--bg)]">
-                <div className="flex items-center justify-between mb-2">
-                  <h1 className="text-lg font-semibold text-[var(--text)]">People</h1>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="px-2 py-1 text-xs rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-                      onClick={() => {
-                        setBulkMode(!bulkMode);
-                        if (!bulkMode) {
-                          setSelectedPeopleIds(new Set());
-                        }
-                      }}
-                    >
-                      {bulkMode ? 'Done' : 'Bulk'}
-                    </button>
-                    <button
-                      type="button"
-                      className="px-2 py-1 text-xs rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-                      onClick={() => setShowDepartmentDropdown(true)}
-                    >
-                      Filters
-                    </button>
-                    <Link to="/people/new">
-                      <button className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white">
-                        + New
+                <div className="ux-page-hero">
+                  <div className="flex items-center justify-between mb-2">
+                    <h1 className="text-lg font-semibold text-[var(--text)]">People</h1>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-xs rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                        onClick={() => {
+                          setBulkMode(!bulkMode);
+                          if (!bulkMode) {
+                            setSelectedPeopleIds(new Set());
+                          }
+                        }}
+                      >
+                        {bulkMode ? 'Done' : 'Bulk'}
                       </button>
-                    </Link>
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-xs rounded border bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                        onClick={() => setShowDepartmentDropdown(true)}
+                      >
+                        Filters
+                      </button>
+                      <Link to="/people/new">
+                        <button className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white">
+                          + New
+                        </button>
+                      </Link>
+                    </div>
                   </div>
-                </div>
 
-                {/* Keep search + filter controls wired to same state; dropdowns already render as overlays */}
-                <FiltersPanel
-                  searchTerm={searchTerm}
-                  setSearchTerm={setSearchTerm}
-                  departments={departments}
-                  locations={locations}
-                  departmentFilter={departmentFilter}
-                  setDepartmentFilter={setDepartmentFilter}
-                  locationFilter={locationFilter}
-                  setLocationFilter={setLocationFilter}
-                  showDepartmentDropdown={showDepartmentDropdown}
-                  setShowDepartmentDropdown={setShowDepartmentDropdown}
-                  showLocationDropdown={showLocationDropdown}
-                  setShowLocationDropdown={setShowLocationDropdown}
-                  showInactive={showInactive}
-                  setShowInactive={setShowInactive}
-                />
+                  {/* Keep search + filter controls wired to same state; dropdowns already render as overlays */}
+                  <FiltersPanel
+                    searchInputId="people-search"
+                    searchTerm={searchTerm}
+                    setSearchTerm={setSearchTerm}
+                    departments={departments}
+                    locations={locations}
+                    departmentFilter={departmentFilter}
+                    setDepartmentFilter={setDepartmentFilter}
+                    locationFilter={locationFilter}
+                    setLocationFilter={setLocationFilter}
+                    showDepartmentDropdown={showDepartmentDropdown}
+                    setShowDepartmentDropdown={setShowDepartmentDropdown}
+                    showLocationDropdown={showLocationDropdown}
+                    setShowLocationDropdown={setShowLocationDropdown}
+                    showInactive={showInactive}
+                    setShowInactive={setShowInactive}
+                  />
+                  <FilterSummaryChips
+                    className="mt-2"
+                    items={activeFilterItems}
+                    onClearAll={() => {
+                      setSearchTerm('');
+                      setDepartmentFilter([]);
+                      setLocationFilter([]);
+                      setShowInactive(false);
+                    }}
+                    emptyLabel="No active filters"
+                  />
+                </div>
               </div>
 
               {/* List as mobile-friendly cards */}
@@ -512,13 +603,7 @@ const PeopleList: React.FC = () => {
                           checked={isChecked}
                           onChange={(e) => {
                             e.stopPropagation();
-                            const next = new Set(selectedPeopleIds);
-                            if (e.target.checked) {
-                              next.add(person.id);
-                            } else {
-                              next.delete(person.id);
-                            }
-                            setSelectedPeopleIds(next);
+                            handleToggleSelect(person.id, e.target.checked, Boolean((e.nativeEvent as any).shiftKey), index);
                           }}
                           className="w-4 h-4"
                           aria-label={`Select ${person.name}`}

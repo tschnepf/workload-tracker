@@ -3,6 +3,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { deliverableTaskTemplatesApi, departmentsApi, deliverablePhaseMappingApi } from '@/services/api';
 import type { DeliverableTaskTemplate, Department, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
+import { confirmAction } from '@/lib/confirmAction';
 
 type EditableTemplate = DeliverableTaskTemplate & {
   _key: string;
@@ -77,7 +78,12 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
 
   const removeRow = async (row: EditableTemplate) => {
     if (row.id) {
-      const ok = window.confirm('Delete this template?');
+      const ok = await confirmAction({
+        title: 'Delete Template',
+        message: 'Delete this template?',
+        confirmLabel: 'Delete',
+        tone: 'danger',
+      });
       if (!ok) return;
       try {
         await deliverableTaskTemplatesApi.delete(row.id);

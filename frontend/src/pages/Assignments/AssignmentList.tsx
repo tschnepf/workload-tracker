@@ -12,9 +12,11 @@ import { deleteAssignment } from '@/lib/mutations/assignments';
 import Layout from '@/components/layout/Layout';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import PageState from '@/components/ui/PageState';
 import UtilizationBadge from '@/components/ui/UtilizationBadge';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { confirmAction } from '@/lib/confirmAction';
 
 const AssignmentList: React.FC = () => {
   const navigate = useNavigate();
@@ -76,7 +78,13 @@ const AssignmentList: React.FC = () => {
   const handleDelete = async (assignment: Assignment) => {
     const label = assignment.personName
       || (assignment.person != null ? `Person #${assignment.person}` : (assignment.roleName ? `<${assignment.roleName}>` : 'Unassigned'));
-    if (!window.confirm(`Remove ${label} from ${assignment.projectDisplayName}?`)) {
+    const confirmed = await confirmAction({
+      title: 'Remove Assignment',
+      message: `Remove ${label} from ${assignment.projectDisplayName}?`,
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -95,14 +103,32 @@ const AssignmentList: React.FC = () => {
   if (loading) {
     return (
       <Layout>
-        <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
-          <div className="space-y-2">
-            <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
-            <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
-            <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
-            <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
-          </div>
-        </Card>
+        <PageState
+          isLoading
+          loadingState={(
+            <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
+              <div className="space-y-2">
+                <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+                <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+                <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+                <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+              </div>
+            </Card>
+          )}
+        />
+      </Layout>
+    );
+  }
+
+  if (error && assignments.length === 0) {
+    return (
+      <Layout>
+        <PageState
+          error={error}
+          onRetry={() => {
+            void loadAssignments();
+          }}
+        />
       </Layout>
     );
   }

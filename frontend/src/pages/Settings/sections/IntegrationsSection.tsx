@@ -46,6 +46,7 @@ import {
   type SecretKeyStatus,
 } from '@/services/integrationsApi';
 import { showToast } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
 
 export const INTEGRATIONS_SECTION_ID = 'integrations';
 
@@ -939,9 +940,14 @@ const IntegrationsSection: React.FC = () => {
                   size="sm"
                   variant="secondary"
                   disabled={resetProviderMutation.isPending}
-                  onClick={() => {
+                  onClick={async () => {
                     if (!selectedProviderKey) return;
-                    const confirmed = window.confirm('Resetting removes all BQE connections, rules, and stored credentials. Continue?');
+                    const confirmed = await confirmAction({
+                      title: 'Reset Provider',
+                      message: 'Resetting removes all BQE connections, rules, and stored credentials. Continue?',
+                      confirmLabel: 'Reset',
+                      tone: 'warning',
+                    });
                     if (!confirmed) return;
                     resetProviderMutation.mutate();
                   }}

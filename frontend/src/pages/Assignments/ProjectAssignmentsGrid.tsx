@@ -31,9 +31,13 @@ import TopBarPortal from '@/components/layout/TopBarPortal';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
-import { showToast as showToastBus } from '@/lib/toastBus';
+import { emitToast, showToast as showToastBus } from '@/lib/toastBus';
 import { getFlag } from '@/lib/flags';
 import { confirmAction } from '@/lib/confirmAction';
+import ActionBar from '@/components/ux/ActionBar';
+import SaveStateBadge, { type SaveState } from '@/components/ux/SaveStateBadge';
+import { usePageShortcuts } from '@/hooks/usePageShortcuts';
+import { useRouteUiState } from '@/hooks/useRouteUiState';
 import MobileProjectAccordions from '@/pages/Assignments/project/components/MobileProjectAccordions';
 import MobileProjectAddAssignmentSheet from '@/pages/Assignments/project/components/MobileProjectAddAssignmentSheet';
 import MobileProjectAssignmentSheet from '@/pages/Assignments/project/components/MobileProjectAssignmentSheet';
@@ -83,9 +87,10 @@ const isDateInWeek = (dateStr: string, weekStartStr: string) => {
 };
 
 const ProjectAssignmentsGrid: React.FC = () => {
-  const pageStateEnabled = getFlag('FF_PAGE_STATE_PRIMITIVES', false);
+  const pageStateEnabled = true;
   const { state: deptState } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
+  const { state: routeUiState, update: updateRouteUiState } = useRouteUiState('project-assignments');
   const auth = useAuth();
   const canUseAutoHours = isAdminOrManager(auth.user);
   const canEditAssignments = true;
@@ -104,7 +109,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [projectsData, setProjectsData] = useState<Project[]>([]);
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [, setHoursByPerson] = useState<Record<number, Record<string, number>>>({});
-  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(new Set());
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(new Set(routeUiState.expandedIds || []));
   const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
   const [loadedProjectIds, setLoadedProjectIds] = useState<Set<number>>(new Set());
   const [mobileAssignmentPageByProject, setMobileAssignmentPageByProject] = useState<Record<number, number>>({});
@@ -125,6 +130,32 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const [projectsPage, setProjectsPage] = useState(1);
   const [projectsPageSize] = useState(50);
   const [hasMoreProjects, setHasMoreProjects] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveStateMessage, setSaveStateMessage] = useState<string | undefined>(undefined);
+  const saveStateTimerRef = useRef<number | null>(null);
+  const lastRetryRef = useRef<null | (() => Promise<void>)>(null);
+  const markSaveState = useCallback((nextState: SaveState, message?: string, autoResetMs = 0) => {
+    setSaveState(nextState);
+    setSaveStateMessage(message);
+    if (saveStateTimerRef.current) {
+      window.clearTimeout(saveStateTimerRef.current);
+      saveStateTimerRef.current = null;
+    }
+    if (autoResetMs > 0) {
+      saveStateTimerRef.current = window.setTimeout(() => {
+        setSaveState('idle');
+        setSaveStateMessage(undefined);
+        saveStateTimerRef.current = null;
+      }, autoResetMs);
+    }
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (saveStateTimerRef.current) {
+        window.clearTimeout(saveStateTimerRef.current);
+      }
+    };
+  }, []);
 
   const [phaseMapping, setPhaseMapping] = useState<DeliverablePhaseMappingSettings | null>(null);
   const [phaseMappingError, setPhaseMappingError] = useState<string | null>(null);
@@ -249,6 +280,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }));
   }, [assignmentsData, projectsData, expandedProjectIds]);
   const visibleProjects = useMemo(() => projectsWithAssignments, [projectsWithAssignments]);
+  useEffect(() => {
+    updateRouteUiState({ expandedIds: Array.from(expandedProjectIds) });
+  }, [expandedProjectIds, updateRouteUiState]);
 
   useEffect(() => {
     setLoadedProjectIds(new Set());
@@ -334,7 +368,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [addSearchToken, searchInput.length, searchTokens.length]);
 
   const resetProjectAssignmentsState = useCallback(() => {
-    setExpandedProjectIds(new Set());
     setLoadedProjectIds(new Set());
     setLoadingAssignments(new Set());
     setAssignmentsData([]);
@@ -427,6 +460,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       onCellMouseDown: csMouseDown,
       onCellMouseEnter: csMouseEnter,
       onCellSelect: csSelect,
+      clearSelection: csClear,
       getSelectedCells,
       isCellSelected: csIsSelected,
     },
@@ -476,6 +510,26 @@ const ProjectAssignmentsGrid: React.FC = () => {
       return { projectId: Number(projectId), assignmentId: Number(assignmentId), week: cell.weekKey };
     });
   }, [getSelectedCells]);
+  const focusProjectAssignmentsSearch = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const input = document.getElementById('project-assignments-search') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
+  }, []);
+  const getHoursForCell = useCallback((projectId: number, assignmentId: number, week: string) => {
+    const project = visibleProjects.find((item) => item.id === projectId);
+    const assignment = project?.assignments?.find((row) => row.id === assignmentId);
+    return Number(assignment?.weeklyHours?.[week] || 0);
+  }, [visibleProjects]);
+  const selectedHoursTotal = useMemo(
+    () => selectedCells.reduce((sum, cell) => sum + getHoursForCell(cell.projectId, cell.assignmentId, cell.week), 0),
+    [getHoursForCell, selectedCells]
+  );
+  const selectedHoursLabel = useMemo(() => {
+    const rounded = Math.round(selectedHoursTotal * 100) / 100;
+    if (Number.isInteger(rounded)) return `${rounded}`;
+    return rounded.toFixed(2).replace(/\.?0+$/, '');
+  }, [selectedHoursTotal]);
 
   const findAssignment = useCallback((projectId: number, assignmentId: number) => {
     const project = visibleProjects.find(p => p.id === projectId);
@@ -930,10 +984,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
   };
 
   const handleAssignmentRoleChange = async (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => {
-    await updateAssignmentRoleAction({ assignmentsApi, setPeople: setPeople as any, setAssignmentsData, people: people as any, personId, assignmentId, roleId, roleName, showToast: (msg, type) => showToastBus(msg, type) });
+    markSaveState('saving', 'Updating role...');
+    try {
+      await updateAssignmentRoleAction({ assignmentsApi, setPeople: setPeople as any, setAssignmentsData, people: people as any, personId, assignmentId, roleId, roleName, showToast: (msg, type) => showToastBus(msg, type) });
+      markSaveState('saved', 'Role updated', 1200);
+    } catch {
+      markSaveState('error', 'Role update failed');
+    }
   };
 
   const updateAssignmentHours = async (projectId: number, assignmentId: number, week: string, hours: number) => {
+    markSaveState('saving', 'Saving...');
     const assignment = assignmentById.get(assignmentId);
     if (!assignment) return;
     const isPlaceholder = assignment.person == null;
@@ -942,9 +1003,25 @@ const ProjectAssignmentsGrid: React.FC = () => {
     setAssignmentsData(prev => prev.map(a => a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a));
     try {
       await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi, { skipIfMatch: isPlaceholder });
+      markSaveState('saved', 'Saved', 1200);
     } catch (e: any) {
       setAssignmentsData(prev => prev.map(a => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
       showToastBus(e?.message || 'Failed to update hours', 'error');
+      markSaveState('error', 'Save failed');
+      lastRetryRef.current = async () => {
+        await updateAssignmentHours(projectId, assignmentId, week, hours);
+      };
+      emitToast({
+        type: 'error',
+        message: 'Failed to update hours',
+        action: {
+          label: 'Retry',
+          onClick: async () => {
+            if (!lastRetryRef.current) return;
+            await lastRetryRef.current();
+          },
+        },
+      });
     }
   };
 
@@ -969,12 +1046,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
       personName: person.name,
       personDepartmentId: person.department ?? (a as any).personDepartmentId ?? null,
     } : a));
+    markSaveState('saving', 'Replacing placeholder...');
     try {
       await updateAssignment(assignmentId, { person: person.id }, assignmentsApi);
       showToastBus('Assignment updated', 'success');
+      markSaveState('saved', 'Assignment updated', 1200);
     } catch (e: any) {
       setAssignmentsData(prev => prev.map(a => a.id === assignmentId ? prevAssignment : a));
       showToastBus(e?.message || 'Failed to replace placeholder', 'error');
+      markSaveState('error', 'Update failed');
     }
   };
 
@@ -1047,6 +1127,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [enqueueAssignmentEvent]);
 
   const updateMultipleCells = async (cells: Array<{ rowKey: string; weekKey: string }>, hours: number) => {
+    markSaveState('saving', 'Saving...');
     const updates = new Map<number, Record<string, number>>();
     cells.forEach((cell) => {
       const [, assignmentIdStr] = cell.rowKey.split(':');
@@ -1066,10 +1147,137 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const isPlaceholder = assignmentById.get(payload[0].assignmentId)?.person == null;
         await updateAssignment(payload[0].assignmentId, { weeklyHours: payload[0].weeklyHours }, assignmentsApi, { skipIfMatch: isPlaceholder });
       }
+      markSaveState('saved', 'Saved', 1200);
     } catch (e: any) {
       showToastBus(e?.message || 'Failed to update hours', 'error');
+      markSaveState('error', 'Save failed');
+      lastRetryRef.current = async () => {
+        await updateMultipleCells(cells, hours);
+      };
+      emitToast({
+        type: 'error',
+        message: 'Failed to update some cells',
+        action: {
+          label: 'Retry',
+          onClick: async () => {
+            if (!lastRetryRef.current) return;
+            await lastRetryRef.current();
+          },
+        },
+      });
     }
   };
+
+  const copyForwardSelectedRange = useCallback(async () => {
+    if (!selectedCell || selectedCells.length <= 1) return;
+    const sourceHours = getHoursForCell(selectedCell.projectId, selectedCell.assignmentId, selectedCell.week);
+    const targets = selectedCells
+      .filter((cell) => !(cell.projectId === selectedCell.projectId && cell.assignmentId === selectedCell.assignmentId && cell.week === selectedCell.week))
+      .map((cell) => ({ rowKey: `${cell.projectId}:${cell.assignmentId}`, weekKey: cell.week }));
+    if (!targets.length) return;
+    markSaveState('saving', 'Copying hours...');
+    try {
+      await updateMultipleCells(targets, sourceHours);
+      markSaveState('saved', `Copied ${sourceHours}h`, 1400);
+      showToastBus(`Copied ${sourceHours}h to ${targets.length} cells`, 'success');
+    } catch {
+      markSaveState('error', 'Copy forward failed');
+    }
+  }, [selectedCell, selectedCells, getHoursForCell, updateMultipleCells, markSaveState]);
+
+  const handlePasteIntoGrid = useCallback(async (rawText: string) => {
+    if (!selectedCell) return false;
+    const raw = (rawText || '').trim();
+    if (!raw) return false;
+    const lines = raw.split(/\r?\n/).filter((line) => line.length > 0);
+    if (!lines.length) return false;
+    const matrix = lines.map((line) => line.split('\t').map((cell) => Number(cell.trim())));
+    if (!matrix.some((row) => row.some((value) => Number.isFinite(value)))) return false;
+
+    if (matrix.length === 1 && matrix[0].length === 1 && selectedCells.length > 1) {
+      const cells = selectedCells.map((cell) => ({ rowKey: `${cell.projectId}:${cell.assignmentId}`, weekKey: cell.week }));
+      markSaveState('saving', 'Pasting...');
+      try {
+        await updateMultipleCells(cells, matrix[0][0]);
+        markSaveState('saved', 'Paste applied', 1200);
+        return true;
+      } catch {
+        markSaveState('error', 'Paste failed');
+        return false;
+      }
+    }
+
+    const startRowIndex = rowOrder.indexOf(`${selectedCell.projectId}:${selectedCell.assignmentId}`);
+    const startWeekIndex = weeks.findIndex((week) => week.date === selectedCell.week);
+    if (startRowIndex < 0 || startWeekIndex < 0) return false;
+
+    const updatesByValue = new Map<number, Array<{ rowKey: string; weekKey: string }>>();
+    matrix.forEach((row, rIdx) => {
+      row.forEach((value, cIdx) => {
+        if (!Number.isFinite(value)) return;
+        const rowKey = rowOrder[startRowIndex + rIdx];
+        const weekKey = weeks[startWeekIndex + cIdx]?.date;
+        if (!rowKey || !weekKey) return;
+        const list = updatesByValue.get(value) || [];
+        list.push({ rowKey, weekKey });
+        updatesByValue.set(value, list);
+      });
+    });
+    if (!updatesByValue.size) return false;
+    markSaveState('saving', 'Pasting...');
+    try {
+      for (const [value, cells] of updatesByValue.entries()) {
+        await updateMultipleCells(cells, value);
+      }
+      markSaveState('saved', 'Paste applied', 1200);
+      return true;
+    } catch {
+      markSaveState('error', 'Paste failed');
+      return false;
+    }
+  }, [selectedCell, selectedCells, rowOrder, weeks, updateMultipleCells, markSaveState]);
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      const rawText = event.clipboardData?.getData('text/plain') || '';
+      if (!rawText) return;
+      event.preventDefault();
+      void handlePasteIntoGrid(rawText);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [handlePasteIntoGrid]);
+
+  usePageShortcuts({
+    bindings: [
+      {
+        id: 'project-assignments-focus-search',
+        keys: ['/'],
+        description: 'Focus project assignments search',
+        action: focusProjectAssignmentsSearch,
+      },
+      {
+        id: 'project-assignments-escape',
+        keys: ['escape'],
+        description: 'Close assignment overlays',
+        action: () => {
+          setMobileAssignmentTarget(null);
+          csClear();
+        },
+      },
+      {
+        id: 'project-assignments-copy-forward',
+        keys: ['meta+shift+f', 'ctrl+shift+f'],
+        description: 'Copy selected value forward',
+        when: () => selectedCells.length > 1,
+        action: () => { void copyForwardSelectedRange(); },
+      },
+    ],
+  });
 
   const isContiguousSelection = (): { ok: boolean; reason?: string } => {
     if (!selectedCells || selectedCells.length <= 1) return { ok: true };
@@ -1097,6 +1305,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const saveEdit = async () => {
     if (!editingCell || saveEditInFlightRef.current) return;
     saveEditInFlightRef.current = true;
+    markSaveState('saving', 'Saving...');
     const numValue = sanitizeHours(editingValue);
 
     try {
@@ -1118,8 +1327,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
         const next = { personId: editingCell.personId, assignmentId: editingCell.assignmentId, week: weeks[currentIdx + 1].date };
         csSelect(`${next.personId}:${next.assignmentId}`, next.week, false);
       }
+      markSaveState('saved', 'Saved', 1200);
     } catch (err: any) {
       showToastBus('Failed to save hours: ' + (err?.message || 'Unknown error'), 'error');
+      markSaveState('error', 'Save failed');
     } finally {
       saveEditInFlightRef.current = false;
       setEditingCell(null);
@@ -1319,6 +1530,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     });
     if (!confirmed) return;
     const assignment = assignmentById.get(assignmentId);
+    markSaveState('saving', 'Removing assignment...');
     try {
       await deleteAssignment(assignmentId, assignmentsApi, {
         projectId,
@@ -1326,8 +1538,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
         updatedAt: assignment?.updatedAt ?? new Date().toISOString(),
       });
       setAssignmentsData(prev => prev.filter(a => a.id !== assignmentId));
+      markSaveState('saved', 'Assignment removed', 1200);
     } catch (e: any) {
       showToastBus(e?.message || 'Failed to delete assignment', 'error');
+      markSaveState('error', 'Remove failed');
     }
   };
 
@@ -1336,6 +1550,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     person: { id: number; name: string; department?: number | null },
     role?: ProjectRole | null
   ) => {
+    markSaveState('saving', 'Adding assignment...');
     try {
       const created = await createAssignment({
         person: person.id,
@@ -1348,12 +1563,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
       } as Assignment;
       setAssignmentsData(prev => [...prev, normalized]);
       showToastBus('Assignment created', 'success');
+      markSaveState('saved', 'Assignment added', 1200);
     } catch (e: any) {
       showToastBus(e?.message || 'Failed to create assignment', 'error');
+      markSaveState('error', 'Add failed');
     }
   };
 
   const addRolePlaceholderToProject = async (projectId: number, role: ProjectRole & { departmentName?: string }) => {
+    markSaveState('saving', 'Adding placeholder...');
     try {
       const created = await createAssignment({ project: projectId, roleOnProjectId: role.id }, assignmentsApi);
       const normalized = {
@@ -1363,8 +1581,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
       } as Assignment;
       setAssignmentsData(prev => [...prev, normalized]);
       showToastBus('Placeholder role added', 'success');
+      markSaveState('saved', 'Placeholder added', 1200);
     } catch (e: any) {
       showToastBus(e?.message || 'Failed to add placeholder role', 'error');
+      markSaveState('error', 'Add failed');
     }
   };
 
@@ -1785,35 +2005,48 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
   const topBarHeader = (
     <div className="flex flex-col gap-2 min-w-0 w-full">
-      <div className="flex flex-wrap items-center gap-3 min-w-0">
-        <div className="min-w-[120px]">
-          <div className="text-lg font-semibold text-[var(--text)] leading-tight">Project Assignments</div>
-          {isFetching || projectsLoading ? (
-            <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
-          ) : null}
-        </div>
-        <div className="min-w-0 flex-1">
-          <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
-        </div>
-        <HeaderActions
-          onExpandAll={() => {
-            const next = new Set(
-              (projectsData || [])
-                .map(p => p.id)
-                .filter((id): id is number => typeof id === 'number')
-            );
-            setExpandedProjectIds(next);
-            void refreshAllAssignments();
-          }}
-          onCollapseAll={() => setExpandedProjectIds(new Set())}
-          onRefreshAll={async () => {
-            await snapshot.loadData();
-            await fetchProjectsPage(1, { append: false });
-            await refreshAllAssignments();
-          }}
-          disabled={loading}
-        />
-      </div>
+      <ActionBar
+        secondary={(
+          <div className="min-w-[120px]">
+            <div className="text-lg font-semibold text-[var(--text)] leading-tight">Project Assignments</div>
+            {isFetching || projectsLoading ? (
+              <div className="text-[10px] text-[var(--muted)]">Refreshing…</div>
+            ) : null}
+          </div>
+        )}
+        overflow={(
+          <div className="min-w-0 flex-1">
+            <WeeksSelector value={weeksHorizon} onChange={setWeeksHorizon} />
+          </div>
+        )}
+        danger={(
+          <SaveStateBadge
+            state={saveState}
+            message={saveStateMessage}
+            onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
+          />
+        )}
+        primary={(
+          <HeaderActions
+            onExpandAll={() => {
+              const next = new Set(
+                (projectsData || [])
+                  .map(p => p.id)
+                  .filter((id): id is number => typeof id === 'number')
+              );
+              setExpandedProjectIds(next);
+              void refreshAllAssignments();
+            }}
+            onCollapseAll={() => setExpandedProjectIds(new Set())}
+            onRefreshAll={async () => {
+              await snapshot.loadData();
+              await fetchProjectsPage(1, { append: false });
+              await refreshAllAssignments();
+            }}
+            disabled={loading}
+          />
+        )}
+      />
       <div className="flex flex-wrap items-center gap-1">
         <StatusFilterChips
           options={statusFilterOptions as unknown as readonly string[]}
@@ -1822,6 +2055,28 @@ const ProjectAssignmentsGrid: React.FC = () => {
           onToggle={(s) => toggleStatusFilter(s as any)}
         />
       </div>
+      {isMobileLayout && selectedCells.length > 0 ? (
+        <div className="flex items-center gap-2 p-2 rounded border border-[var(--border)] bg-[var(--surface)]">
+          <span className="text-xs text-[var(--muted)]">
+            {selectedCells.length} selected • {selectedHoursLabel}h
+          </span>
+          <button
+            type="button"
+            className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            onClick={() => { void copyForwardSelectedRange(); }}
+            disabled={selectedCells.length < 2}
+          >
+            Copy Forward
+          </button>
+          <button
+            type="button"
+            className="px-2 py-0.5 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
+            onClick={csClear}
+          >
+            Clear Selection
+          </button>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[240px]">
           <label className="sr-only" htmlFor="project-assignments-search">Search projects</label>
@@ -1887,8 +2142,34 @@ const ProjectAssignmentsGrid: React.FC = () => {
     </div>
   );
 
+  const selectedActionsTopBarLeft = !isMobileLayout && selectedCells.length > 0 ? (
+    <TopBarPortal side="left">
+      <div className="flex items-center gap-2 ml-1 px-2 py-1 rounded border border-[var(--border)] bg-[var(--surface)] whitespace-nowrap">
+        <span className="text-xs text-[var(--muted)]">
+          {selectedCells.length} selected • {selectedHoursLabel}h
+        </span>
+        <button
+          type="button"
+          className="px-2 py-0.5 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+          onClick={() => { void copyForwardSelectedRange(); }}
+          disabled={selectedCells.length < 2}
+        >
+          Copy Forward
+        </button>
+        <button
+          type="button"
+          className="px-2 py-0.5 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
+          onClick={csClear}
+        >
+          Clear Selection
+        </button>
+      </div>
+    </TopBarPortal>
+  ) : null;
+
   return (
     <Layout>
+      {selectedActionsTopBarLeft}
       {isMobileLayout ? (
         <div className="flex-1 flex flex-col min-w-0 px-4 py-4 space-y-4">
           {topBarHeader}
