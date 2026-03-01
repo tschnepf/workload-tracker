@@ -30,6 +30,7 @@ import hashlib
 import json
 import io
 import time
+import logging
 from datetime import datetime, timedelta, date
 import os
 from assignments.models import Assignment
@@ -462,15 +463,16 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'], url_path='search')
     def search(self, request):
+        started_at = time.perf_counter()
         data = request.data or {}
 
         include_inactive = str(data.get('include_inactive') or request.query_params.get('include_inactive') or '').lower() in ('1', 'true', 'yes', 'on')
         queryset = (
             Person.objects
-            .select_related('department', 'role')
+            .select_related('department', 'department__vertical', 'role')
             .only(
                 'id', 'name', 'weekly_capacity', 'role', 'department', 'location', 'notes', 'created_at', 'updated_at',
-                'department__name', 'role__name', 'is_active', 'hire_date'
+                'department__name', 'department__vertical_id', 'department__vertical__name', 'role__name', 'is_active', 'hire_date'
             )
         )
         if not include_inactive:
@@ -485,16 +487,33 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             try:
                 dept_id = int(dept_param)
                 if include_children:
-                    ids = set()
-                    stack = [dept_id]
-                    while stack:
-                        current = stack.pop()
-                        if current in ids:
-                            continue
-                        ids.add(current)
-                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
-                            if d not in ids:
-                                stack.append(d)
+                    # Use cached descendant graph to avoid N+1 department traversal queries.
+                    try:
+                        _ver = cache.get('dept_desc_ver', 1)
+                    except Exception:
+                        _ver = 1
+                    cache_key = f"dept_desc:v{_ver}:{dept_id}"
+                    ids = cache.get(cache_key)
+                    if ids is None:
+                        rows = Department.objects.values_list('id', 'parent_department_id')
+                        children = {}
+                        for _id, parent in rows:
+                            children.setdefault(parent, []).append(_id)
+                        ids_set = set()
+                        stack = [dept_id]
+                        while stack:
+                            current = stack.pop()
+                            if current in ids_set:
+                                continue
+                            ids_set.add(current)
+                            for child in children.get(current, []):
+                                if child not in ids_set:
+                                    stack.append(child)
+                        ids = list(ids_set)
+                        try:
+                            cache.set(cache_key, ids, timeout=int(os.getenv('DEPT_DESC_CACHE_TTL', '300')))
+                        except Exception:  # nosec B110
+                            pass
                     queryset = queryset.filter(department_id__in=list(ids))
                 else:
                     queryset = queryset.filter(department_id=dept_id)
@@ -569,12 +588,33 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         page_obj, paginator, next_url, prev_url = self._paginate_post_queryset(request, queryset, data)
         serializer = self.get_serializer(page_obj.object_list, many=True)
 
-        return Response({
+        response = Response({
             'count': paginator.count,
             'next': next_url,
             'previous': prev_url,
             'results': serializer.data,
         })
+        try:
+            logging.getLogger('performance').info(
+                'endpoint_timing %s',
+                json.dumps(
+                    {
+                        'endpoint': 'people_search',
+                        'path': request.path,
+                        'method': request.method,
+                        'status_code': response.status_code,
+                        'duration_ms': round((time.perf_counter() - started_at) * 1000.0, 2),
+                        'result_count': len(serializer.data),
+                        'request_id': getattr(request, 'request_id', None),
+                        'user_id': getattr(getattr(request, 'user', None), 'id', None),
+                    },
+                    sort_keys=True,
+                    default=str,
+                ),
+            )
+        except Exception:  # nosec B110
+            pass
+        return response
 
     @action(detail=True, methods=['get'], throttle_classes=[HotEndpointThrottle])
     def utilization(self, request, pk=None):

@@ -144,6 +144,11 @@ services:
       - DRF_THROTTLE_ANON=${DRF_THROTTLE_ANON:-}
       - DRF_THROTTLE_USER=${DRF_THROTTLE_USER:-}
       - DRF_THROTTLE_LOGIN=${DRF_THROTTLE_LOGIN:-}
+      - DRF_THROTTLE_TOKEN_OBTAIN=${DRF_THROTTLE_TOKEN_OBTAIN:-}
+      - DRF_THROTTLE_TOKEN_REFRESH=${DRF_THROTTLE_TOKEN_REFRESH:-}
+      - ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS=${ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS:-}
+      - GRID_SNAPSHOT_CACHE_TTL_SECONDS=${GRID_SNAPSHOT_CACHE_TTL_SECONDS:-}
+      - SNAPSHOT_CACHE_SWR_SECONDS=${SNAPSHOT_CACHE_SWR_SECONDS:-}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
@@ -756,9 +761,15 @@ import sys
 log_path = pathlib.Path(sys.argv[1])
 out_path = pathlib.Path(sys.argv[2])
 counts = {}
+status_by_endpoint = {}
 patterns = [
     re.compile(r'"status"\s*:\s*(\d{3})'),
     re.compile(r"\bstatus=(\d{3})\b"),
+    re.compile(r'"status_code"\s*:\s*(\d{3})'),
+]
+path_patterns = [
+    re.compile(r'"path"\s*:\s*"([^"]+)"'),
+    re.compile(r"\bpath=([^\s,]+)"),
 ]
 if log_path.exists():
     for line in log_path.read_text(errors="ignore").splitlines():
@@ -770,7 +781,17 @@ if log_path.exists():
                 break
         if code:
             counts[code] = counts.get(code, 0) + 1
-out_path.write_text(json.dumps({"statusCounts": counts}, indent=2) + "\n")
+            path = None
+            for path_pattern in path_patterns:
+                pm = path_pattern.search(line)
+                if pm:
+                    path = pm.group(1)
+                    break
+            if path:
+                endpoint = path.split("?", 1)[0]
+                endpoint_counts = status_by_endpoint.setdefault(endpoint, {})
+                endpoint_counts[code] = endpoint_counts.get(code, 0) + 1
+out_path.write_text(json.dumps({"statusCounts": counts, "statusByEndpoint": status_by_endpoint}, indent=2) + "\n")
 PY
 }
 
@@ -804,6 +825,9 @@ run_ui_checks "post"
 
 if ! "${ROOT_DIR}/scripts/load/analyze-load.sh" --report-dir "${REPORT_DIR}"; then
   echo "Warning: load analysis script failed for ${REPORT_DIR}" >&2
+fi
+if [[ ! -s "${REPORT_DIR}/endpoint-latency.json" ]]; then
+  printf '{\n  "rows": []\n}\n' > "${REPORT_DIR}/endpoint-latency.json"
 fi
 
 echo "Load test run complete:"

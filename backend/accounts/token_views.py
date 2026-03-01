@@ -71,7 +71,7 @@ class UsernameOrEmailTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class ThrottledTokenObtainPairView(TokenObtainPairView):
     permission_classes = [AllowAny]
-    throttle_scope = 'login'
+    throttle_scope = 'token_obtain'
     serializer_class = UsernameOrEmailTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):  # type: ignore[override]
@@ -90,7 +90,7 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
 
 class ThrottledTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
-    throttle_scope = 'login'
+    throttle_scope = 'token_refresh'
 
     def post(self, request, *args, **kwargs):  # type: ignore[override]
         # Build serializer input, tolerating empty/invalid JSON bodies

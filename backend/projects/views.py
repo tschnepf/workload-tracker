@@ -33,6 +33,7 @@ from people.models import Person
 from departments.models import Department
 from core.search_tokens import parse_search_tokens, apply_token_filter
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
+from core.perf import endpoint_timing
 from django.shortcuts import get_object_or_404
 import hashlib
 import json
@@ -96,6 +97,8 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             .select_related('vertical')
             .only(
                 'id', 'name', 'status', 'client', 'description', 'project_number', 'assigned_names_text',
+                'notes', 'notes_json', 'bqe_client_name', 'bqe_client_id', 'client_sync_policy_state',
+                'auto_hours_template_id',
                 'start_date', 'end_date', 'estimated_hours', 'is_active', 'created_at', 'updated_at',
                 'vertical_id', 'vertical__name'
             )
@@ -114,54 +117,62 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     
     def list(self, request, *args, **kwargs):
         """Get all projects with conditional request support (ETag/Last-Modified) and bulk loading"""
-        queryset = self.get_queryset()
-        
-        # Check if bulk loading is requested
-        if request.query_params.get('all') == 'true':
-            # Return all projects without pagination (Phase 2 optimization)
-            serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
-        
-        # Get the latest update timestamp
-        last_modified = queryset.aggregate(Max('updated_at'))['updated_at__max']
-        
-        if last_modified:
-            # ETag simplification: base on max(updated_at) only (avoid count())
-            etag_content = last_modified.isoformat()
-            etag = hashlib.sha256(etag_content.encode()).hexdigest()
-            
-            # Check If-None-Match header (ETag)
-            if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
-            if if_none_match and if_none_match.strip('"') == etag:
-                response = HttpResponseNotModified()
-                response['ETag'] = f'"{etag}"'
-                return response
-            
-            # Check If-Modified-Since header
-            if_modified_since = request.META.get('HTTP_IF_MODIFIED_SINCE')
-            if if_modified_since:
-                try:
-                    from django.utils.http import parse_http_date
-                    if_modified_timestamp = parse_http_date(if_modified_since)
-                    last_modified_timestamp = last_modified.timestamp()
-                    
-                    if last_modified_timestamp <= if_modified_timestamp:
-                        response = HttpResponseNotModified()
-                        response['ETag'] = f'"{etag}"'
-                        response['Last-Modified'] = http_date(last_modified_timestamp)
-                        return response
-                except ValueError:
-                    pass  # Invalid date format, ignore
-        
-        # Get the data and return with cache headers
-        response = super().list(request, *args, **kwargs)
-        
-        if last_modified:
-            response['ETag'] = f'"{etag}"'
-            response['Last-Modified'] = http_date(last_modified.timestamp())
-            response['Cache-Control'] = 'private, max-age=30'  # 30 seconds cache for authenticated responses
+        with endpoint_timing('projects_list', request) as perf:
+            queryset = self.get_queryset()
 
-        return response
+            # Check if bulk loading is requested
+            if request.query_params.get('all') == 'true':
+                serializer = self.get_serializer(queryset, many=True)
+                response = Response(serializer.data)
+                perf.tag('mode', 'all')
+                perf.tag('status_code', response.status_code)
+                return response
+
+            # Get the latest update timestamp
+            last_modified = queryset.aggregate(Max('updated_at'))['updated_at__max']
+
+            if last_modified:
+                # ETag simplification: base on max(updated_at) only (avoid count())
+                etag_content = last_modified.isoformat()
+                etag = hashlib.sha256(etag_content.encode()).hexdigest()
+
+                # Check If-None-Match header (ETag)
+                if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+                if if_none_match and if_none_match.strip('"') == etag:
+                    response = HttpResponseNotModified()
+                    response['ETag'] = f'"{etag}"'
+                    perf.tag('cache_hit', True)
+                    perf.tag('status_code', response.status_code)
+                    return response
+
+                # Check If-Modified-Since header
+                if_modified_since = request.META.get('HTTP_IF_MODIFIED_SINCE')
+                if if_modified_since:
+                    try:
+                        from django.utils.http import parse_http_date
+                        if_modified_timestamp = parse_http_date(if_modified_since)
+                        last_modified_timestamp = last_modified.timestamp()
+
+                        if last_modified_timestamp <= if_modified_timestamp:
+                            response = HttpResponseNotModified()
+                            response['ETag'] = f'"{etag}"'
+                            response['Last-Modified'] = http_date(last_modified_timestamp)
+                            perf.tag('cache_hit', True)
+                            perf.tag('status_code', response.status_code)
+                            return response
+                    except ValueError:
+                        pass  # Invalid date format, ignore
+
+            # Get the data and return with cache headers
+            response = super().list(request, *args, **kwargs)
+
+            if last_modified:
+                response['ETag'] = f'"{etag}"'
+                response['Last-Modified'] = http_date(last_modified.timestamp())
+                response['Cache-Control'] = 'private, max-age=30'  # 30 seconds cache for authenticated responses
+
+            perf.tag('status_code', response.status_code)
+            return response
 
     def _parse_include_tokens(self, data: dict, request) -> set[str]:
         raw = data.get('include')
@@ -270,6 +281,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'], url_path='search')
     def search(self, request):
+        started_at = time.perf_counter()
         data = request.data or {}
         include_tokens = self._parse_include_tokens(data, request)
         include_role_map = 'role_map' in include_tokens
@@ -602,8 +614,28 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 project_ids,
                 include_inactive=include_inactive_roles,
             )
-
-        return Response(response_payload)
+        response = Response(response_payload)
+        try:
+            logging.getLogger('performance').info(
+                'endpoint_timing %s',
+                json.dumps(
+                    {
+                        'endpoint': 'projects_search',
+                        'path': request.path,
+                        'method': request.method,
+                        'status_code': response.status_code,
+                        'duration_ms': round((time.perf_counter() - started_at) * 1000.0, 2),
+                        'result_count': len(results),
+                        'request_id': getattr(request, 'request_id', None),
+                        'user_id': getattr(getattr(request, 'user', None), 'id', None),
+                    },
+                    sort_keys=True,
+                    default=str,
+                ),
+            )
+        except Exception:  # nosec B110
+            pass
+        return response
 
     def _paginate_post_queryset(self, request, queryset, data=None):
         """Paginate using body-provided page/page_size for POST search endpoints."""

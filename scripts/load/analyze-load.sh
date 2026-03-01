@@ -328,6 +328,23 @@ if prev_write is not None:
     delta_lines.append(f"- Write p95 delta (ms): {write_p95 - prev_write:+.1f}")
 
 status_counts = backend_counts.get("statusCounts", {}) if isinstance(backend_counts, dict) else {}
+status_by_endpoint = backend_counts.get("statusByEndpoint", {}) if isinstance(backend_counts, dict) else {}
+top_backend_endpoint_failures = []
+if isinstance(status_by_endpoint, dict):
+    rows = []
+    for endpoint, codes in status_by_endpoint.items():
+        if not isinstance(codes, dict):
+            continue
+        for code, count in codes.items():
+            try:
+                status_code = int(code)
+                value = int(count)
+            except Exception:
+                continue
+            if status_code >= 400:
+                rows.append({"endpoint": endpoint, "status": status_code, "count": value})
+    rows.sort(key=lambda row: row["count"], reverse=True)
+    top_backend_endpoint_failures = rows[:10]
 
 weak_points = report_dir / "weak-points.md"
 lines = []
@@ -348,6 +365,10 @@ lines.append(f"- Write p99: `{write_p99:.1f} ms`")
 lines.append(f"- Status counters: 409={status_409}, 412={status_412}, 429={status_429}, 5xx={status_5xx}")
 if status_counts:
     lines.append(f"- Backend log status counts: `{json.dumps(status_counts, sort_keys=True)}`")
+if top_backend_endpoint_failures:
+    lines.append("- Backend endpoint/status hotspots:")
+    for row in top_backend_endpoint_failures[:5]:
+        lines.append(f"  - `{row['endpoint']}` status `{row['status']}`: {row['count']} hits")
 if auth_failures > 0:
     lines.append(f"- Auth failures: `{auth_failures}`")
 if delta_lines:

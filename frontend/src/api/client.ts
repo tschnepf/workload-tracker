@@ -36,6 +36,28 @@ export class ApiError extends Error {
 // Shared error mapping to keep parity with legacy layer
 
 let refreshPromise: Promise<string | null> | null = null;
+const ETAG_RETRY_MAX_ATTEMPTS = Math.max(
+  1,
+  Number(((import.meta as any)?.env?.VITE_IF_MATCH_RETRY_MAX_ATTEMPTS ?? 2) || 2),
+);
+const ETAG_RETRY_BASE_DELAY_MS = Math.max(
+  20,
+  Number(((import.meta as any)?.env?.VITE_IF_MATCH_RETRY_BASE_DELAY_MS ?? 120) || 120),
+);
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+function jitterBackoffMs(attempt: number): number {
+  const exp = ETAG_RETRY_BASE_DELAY_MS * Math.pow(2, Math.max(0, attempt));
+  const jitter = Math.random() * ETAG_RETRY_BASE_DELAY_MS;
+  return exp + jitter;
+}
+
+function isWeakEtag(value?: string): boolean {
+  return !!value && /^\s*W\//.test(value);
+}
 
 function withAuth(headers?: Record<string, string>): Record<string, string> {
   const token = getAccessToken();
@@ -149,38 +171,34 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
       // Retry once
       res = await call();
     } else if (status === 412 && !skipIfMatch) {
-      // ETag mismatch: refresh ETag and retry once; if still failing, try without If-Match
-      try {
-        const getRes = await rawClient.GET(path as any, { ...restOpts, headers: withAuth(restOpts?.headers) });
-        const newEtag = getRes.response?.headers?.get?.('etag');
-        if (newEtag) etagStore.set(keyPath, newEtag);
-        // Rebuild headers with fresh If-Match
-        let retryHeaders = withAuth(restOpts?.headers);
-        let etag = etagStore.get(keyPath);
-        if (etag && /^\s*W\//.test(etag)) etag = undefined; // don't use weak for If-Match
-        if (etag) retryHeaders = { ...retryHeaders, 'If-Match': etag };
-        res = await (async () => {
-          switch (method) {
-            case 'POST': return rawClient.POST(path as any, { ...req, headers: retryHeaders });
-            case 'PUT': return rawClient.PUT(path as any, { ...req, headers: retryHeaders });
-            case 'PATCH': return rawClient.PATCH(path as any, { ...req, headers: retryHeaders });
-            case 'DELETE': return rawClient.DELETE(path as any, { ...req, headers: retryHeaders });
+      // Bounded optimistic-concurrency retries:
+      // re-fetch latest ETag before each retry and apply jittered backoff.
+      for (let attempt = 0; attempt < ETAG_RETRY_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          if (attempt > 0) {
+            await sleepMs(jitterBackoffMs(attempt - 1));
           }
-        })();
-
-        // If still failing with 412, drop If-Match and proceed (server spec: absent If-Match proceeds)
-        if (res.error && (res.response?.status === 412)) {
-          const noMatchHeaders = withAuth(restOpts?.headers);
+          const getRes = await rawClient.GET(path as any, {
+            ...restOpts,
+            headers: withAuth(restOpts?.headers),
+          });
+          const newEtag = getRes.response?.headers?.get?.('etag');
+          if (!newEtag || isWeakEtag(newEtag)) break;
+          etagStore.set(keyPath, newEtag);
+          const retryHeaders = { ...withAuth(restOpts?.headers), 'If-Match': newEtag };
           res = await (async () => {
             switch (method) {
-              case 'POST': return rawClient.POST(path as any, { ...req, headers: noMatchHeaders });
-              case 'PUT': return rawClient.PUT(path as any, { ...req, headers: noMatchHeaders });
-              case 'PATCH': return rawClient.PATCH(path as any, { ...req, headers: noMatchHeaders });
-              case 'DELETE': return rawClient.DELETE(path as any, { ...req, headers: noMatchHeaders });
+              case 'POST': return rawClient.POST(path as any, { ...req, headers: retryHeaders });
+              case 'PUT': return rawClient.PUT(path as any, { ...req, headers: retryHeaders });
+              case 'PATCH': return rawClient.PATCH(path as any, { ...req, headers: retryHeaders });
+              case 'DELETE': return rawClient.DELETE(path as any, { ...req, headers: retryHeaders });
             }
           })();
+          if (!res.error || res.response?.status !== 412) break;
+        } catch {
+          break;
         }
-      } catch {}
+      }
     }
   }
 

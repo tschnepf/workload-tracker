@@ -315,6 +315,14 @@ def _rate(env_key: str, default: str) -> str:
     v = v.strip()
     return v if ('/' in v and v.split('/', 1)[0].isdigit()) else default
 
+
+def _int_non_negative(env_key: str, default: int) -> int:
+    raw = os.getenv(env_key, str(default))
+    try:
+        return max(0, int(raw))
+    except Exception:
+        return max(0, int(default))
+
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -355,6 +363,11 @@ REST_FRAMEWORK = {
         'grid_snapshot': _rate('DRF_THROTTLE_GRID_SNAPSHOT', '600/min'),
         'ui_bootstrap': _rate('DRF_THROTTLE_UI_BOOTSTRAP', '120/min'),
         'reports_departments_overview': _rate('DRF_THROTTLE_REPORTS_DEPARTMENTS_OVERVIEW', '120/min'),
+        # Dedicated auth endpoint throttle scopes to avoid refresh/login coupling.
+        # Defaults preserve moderate brute-force resistance on obtain and allow
+        # higher refresh throughput under concurrent active sessions.
+        'token_obtain': _rate('DRF_THROTTLE_TOKEN_OBTAIN', '30/min'),
+        'token_refresh': _rate('DRF_THROTTLE_TOKEN_REFRESH', '120/min'),
         'login': _rate('DRF_THROTTLE_LOGIN', '10/min'),
         # Backup/restore endpoints (Phase 0: Step 0.3)
         # Keep practical defaults and let tests override stricter limits when needed.
@@ -444,6 +457,10 @@ else:
 # Optionally set DASHBOARD_CACHE_TTL to override just the dashboard cache TTL.
 # Precedence: DASHBOARD_CACHE_TTL > AGGREGATE_CACHE_TTL > 30s default in view fallback.
 AGGREGATE_CACHE_TTL = int(os.getenv('AGGREGATE_CACHE_TTL', '30'))
+# Snapshot/page endpoint-specific cache controls (seconds)
+ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS = _int_non_negative('ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS', 20)
+GRID_SNAPSHOT_CACHE_TTL_SECONDS = _int_non_negative('GRID_SNAPSHOT_CACHE_TTL_SECONDS', 20)
+SNAPSHOT_CACHE_SWR_SECONDS = _int_non_negative('SNAPSHOT_CACHE_SWR_SECONDS', 30)
 # DASHBOARD_CACHE_TTL is intentionally not set by default; set via env when needed.
 
 # CORS/CSRF

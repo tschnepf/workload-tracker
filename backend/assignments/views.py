@@ -58,6 +58,7 @@ from roles.models import Role
 from core.search_tokens import parse_search_tokens, apply_token_filter, build_token_query
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from core.cache_keys import build_aggregate_cache_key
+from core.perf import endpoint_timing
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
@@ -2950,215 +2951,232 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         Uses Monday as canonical API week keys and tolerates +/- 3 days against stored JSON keys.
         Includes short-TTL caching and conditional ETag/Last-Modified handling.
         """
-        # Parse and clamp weeks
-        try:
-            weeks = int(request.query_params.get('weeks', 12))
-        except ValueError:
-            weeks = 12
-        if weeks < 1:
-            weeks = 1
-        if weeks > 52:
-            weeks = 52
-        try:
-            maybe_sync_overhead_assignments(weeks=weeks)
-        except Exception:  # nosec B110
-            pass
-
-        # Build people queryset with optional department scoping
-        people_qs = Person.objects.filter(is_active=True).select_related('department')
-        dept_param = request.query_params.get('department')
-        include_children = request.query_params.get('include_children') == '1'
-        vertical_param = request.query_params.get('vertical')
-        cache_scope = 'all'
-        if dept_param not in (None, ""):
+        with endpoint_timing('grid_snapshot', request) as perf:
+            # Parse and clamp weeks
             try:
-                dept_id = int(dept_param)
-                if include_children:
-                    # BFS for descendants
-                    ids = set()
-                    stack = [dept_id]
-                    while stack:
-                        current = stack.pop()
-                        if current in ids:
-                            continue
-                        ids.add(current)
-                        for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
-                            if d not in ids:
-                                stack.append(d)
-                    people_qs = people_qs.filter(department_id__in=list(ids))
-                    cache_scope = f'dept_{dept_id}_children'
-                else:
-                    people_qs = people_qs.filter(department_id=dept_id)
-                    cache_scope = f'dept_{dept_id}'
-            except (TypeError, ValueError):  # nosec B110
+                weeks = int(request.query_params.get('weeks', 12))
+            except ValueError:
+                weeks = 12
+            if weeks < 1:
+                weeks = 1
+            if weeks > 52:
+                weeks = 52
+            try:
+                maybe_sync_overhead_assignments(weeks=weeks)
+            except Exception:  # nosec B110
                 pass
-        dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
-        dept_filters = self._parse_department_filters(dept_filters_raw)
-        if dept_filters:
-            people_qs = self._apply_people_department_filters(people_qs, dept_filters)
+
+            # Build people queryset with optional department scoping
+            people_qs = Person.objects.filter(is_active=True).select_related('department')
+            dept_param = request.query_params.get('department')
+            include_children = request.query_params.get('include_children') == '1'
+            vertical_param = request.query_params.get('vertical')
+            cache_scope = 'all'
+            if dept_param not in (None, ""):
+                try:
+                    dept_id = int(dept_param)
+                    if include_children:
+                        ids = set()
+                        stack = [dept_id]
+                        while stack:
+                            current = stack.pop()
+                            if current in ids:
+                                continue
+                            ids.add(current)
+                            for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                                if d not in ids:
+                                    stack.append(d)
+                        people_qs = people_qs.filter(department_id__in=list(ids))
+                        cache_scope = f'dept_{dept_id}_children'
+                    else:
+                        people_qs = people_qs.filter(department_id=dept_id)
+                        cache_scope = f'dept_{dept_id}'
+                except (TypeError, ValueError):  # nosec B110
+                    pass
+            dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
+            dept_filters = self._parse_department_filters(dept_filters_raw)
+            if dept_filters:
+                people_qs = self._apply_people_department_filters(people_qs, dept_filters)
+                try:
+                    df_key = hashlib.sha256(
+                        json.dumps(
+                            sorted(dept_filters, key=lambda f: (f['departmentId'], f['op'])),
+                            separators=(',', ':'),
+                            sort_keys=True,
+                        ).encode()
+                    ).hexdigest()[:8]
+                    cache_scope = f"{cache_scope}_df{df_key}"
+                except Exception:
+                    cache_scope = f"{cache_scope}_df"
+            if vertical_param not in (None, ""):
+                try:
+                    people_qs = people_qs.filter(department__vertical_id=int(vertical_param))
+                    cache_scope = f"{cache_scope}_v{int(vertical_param)}"
+                except Exception:  # nosec B110
+                    pass
+
+            # Prefetch active assignments with minimal fields
+            asn_qs = Assignment.objects.filter(is_active=True)
+            if vertical_param not in (None, ""):
+                try:
+                    asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
+                except Exception:  # nosec B110
+                    pass
+            asn_qs = asn_qs.only('weekly_hours', 'person_id', 'updated_at')
+            people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
+
+            # Build cache key and endpoint-specific short TTL caching.
             try:
-                df_key = hashlib.sha256(json.dumps(sorted(dept_filters, key=lambda f: (f['departmentId'], f['op'])), separators=(',', ':'), sort_keys=True).encode()).hexdigest()[:8]
-                cache_scope = f"{cache_scope}_df{df_key}"
+                version = cache.get('analytics_cache_version', 1)
             except Exception:
-                cache_scope = f"{cache_scope}_df"
-        if vertical_param not in (None, ""):
+                version = 1
+            cache_key = build_aggregate_cache_key(
+                'assignments.grid_snapshot',
+                request,
+                filters={
+                    'version': int(version),
+                    'weeks': weeks,
+                    'scope': cache_scope,
+                },
+            )
+            cache_ttl_seconds = max(0, int(getattr(settings, 'GRID_SNAPSHOT_CACHE_TTL_SECONDS', 20)))
+            swr_seconds = max(0, int(getattr(settings, 'SNAPSHOT_CACHE_SWR_SECONDS', 30)))
+            use_cache = cache_ttl_seconds > 0 and request.query_params.get('nocache') != '1'
+
+            # Compute conservative validators across People + Assignments
+            ppl_aggr = people_qs.aggregate(last_modified=Max('updated_at'))
+            asn_aggr = Assignment.objects.filter(person__in=people_qs).aggregate(last_modified=Max('updated_at'))
+            lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
+            last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
             try:
-                people_qs = people_qs.filter(department__vertical_id=int(vertical_param))
-                cache_scope = f"{cache_scope}_v{int(vertical_param)}"
-            except Exception:  # nosec B110
-                pass
+                active_count = people_qs.count()
+            except Exception:
+                active_count = 0
+            etag_content = f"{weeks}-{cache_scope}-{active_count}-" + (last_modified.isoformat() if last_modified else 'none')
+            etag = hashlib.sha256(etag_content.encode()).hexdigest()
 
-        # Prefetch active assignments with minimal fields
-        asn_qs = Assignment.objects.filter(is_active=True)
-        if vertical_param not in (None, ""):
-            try:
-                asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
-            except Exception:  # nosec B110
-                pass
-        asn_qs = asn_qs.only('weekly_hours', 'person_id', 'updated_at')
-        people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
-
-        # Build cache key and short-TTL caching
-        try:
-            version = cache.get('analytics_cache_version', 1)
-        except Exception:
-            version = 1
-        cache_key = build_aggregate_cache_key(
-            'assignments.grid_snapshot',
-            request,
-            filters={
-                'version': int(version),
-                'weeks': weeks,
-                'scope': cache_scope,
-            },
-        )
-        use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
-
-        # Compute conservative validators across People + Assignments
-        ppl_aggr = people_qs.aggregate(last_modified=Max('updated_at'))
-        asn_aggr = Assignment.objects.filter(person__in=people_qs).aggregate(last_modified=Max('updated_at'))
-        lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
-        last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
-        # Include active people count in ETag to invalidate when users toggle active/inactive
-        active_count = 0
-        try:
-            active_count = people_qs.count()
-        except Exception:
-            active_count = 0
-        etag_content = f"{weeks}-{cache_scope}-{active_count}-" + (last_modified.isoformat() if last_modified else 'none')
-        etag = hashlib.sha256(etag_content.encode()).hexdigest()
-
-        # Conditional request handling
-        inm = request.META.get('HTTP_IF_NONE_MATCH')
-        if inm and inm.strip('"') == etag:
-            resp = HttpResponseNotModified()
-            resp['ETag'] = f'"{etag}"'
-            if last_modified:
-                resp['Last-Modified'] = http_date(last_modified.timestamp())
-            return resp
-        ims = request.META.get('HTTP_IF_MODIFIED_SINCE')
-        if last_modified and ims:
-            try:
-                from django.utils.http import parse_http_date
-                if_modified_ts = parse_http_date(ims)
-                if int(last_modified.timestamp()) <= if_modified_ts:
-                    resp = HttpResponseNotModified()
-                    resp['ETag'] = f'"{etag}"'
+            # Conditional request handling
+            inm = request.META.get('HTTP_IF_NONE_MATCH')
+            if inm and inm.strip('"') == etag:
+                resp = HttpResponseNotModified()
+                resp['ETag'] = f'"{etag}"'
+                if last_modified:
                     resp['Last-Modified'] = http_date(last_modified.timestamp())
-                    return resp
-            except Exception:  # nosec B110
-                pass
+                perf.tag('cache_hit', True)
+                perf.tag('status_code', resp.status_code)
+                return resp
+            ims = request.META.get('HTTP_IF_MODIFIED_SINCE')
+            if last_modified and ims:
+                try:
+                    from django.utils.http import parse_http_date
+                    if_modified_ts = parse_http_date(ims)
+                    if int(last_modified.timestamp()) <= if_modified_ts:
+                        resp = HttpResponseNotModified()
+                        resp['ETag'] = f'"{etag}"'
+                        resp['Last-Modified'] = http_date(last_modified.timestamp())
+                        perf.tag('cache_hit', True)
+                        perf.tag('status_code', resp.status_code)
+                        return resp
+                except Exception:  # nosec B110
+                    pass
 
-        payload = None
-        if use_cache:
-            try:
-                payload = cache.get(cache_key)
-            except Exception:
-                payload = None
-
-        if payload is None:
-            # Single-flight lock to prevent stampedes
-            lock_key = f"lock:{cache_key}"
-            got_lock = False
+            payload = None
             if use_cache:
                 try:
-                    got_lock = cache.add(lock_key, '1', timeout=10)
+                    payload = cache.get(cache_key)
                 except Exception:
-                    got_lock = True
-            try:
-                if not got_lock and use_cache:
-                    t0 = time.time()
-                    while time.time() - t0 < 2.0:
-                        try:
-                            payload = cache.get(cache_key)
-                            if payload is not None:
-                                break
-                        except Exception:  # nosec B110
-                            pass
-                        time.sleep(0.05)
-                if payload is None:
-                    # Compute week keys (Sundays)
-                    from core.week_utils import sunday_of_week
-                    today = date.today()
-                    start_sunday = sunday_of_week(today)
-                    week_keys = [(start_sunday + timedelta(weeks=w)).isoformat() for w in range(weeks)]
+                    payload = None
+            perf.tag('cache_hit', payload is not None)
 
-                    # Build people list
-                    people_list = []
-                    for p in people_qs:
-                        people_list.append({
-                            'id': p.id,
-                            'name': p.name,
-                            'weeklyCapacity': p.weekly_capacity or 0,
-                            'department': p.department_id,
-                        })
-
-                    # Build hours map per person
-                    def hours_for_week_from_json(weekly_hours: dict, sunday_key: str) -> float:
-                        if not weekly_hours:
-                            return 0.0
-                        try:
-                            return float(weekly_hours.get(sunday_key) or 0)
-                        except (TypeError, ValueError):
-                            return 0.0
-
-                    hours_by_person = {}
-                    for p in people_qs:
-                        wk_map = {}
-                        # iterate prefetched assignments
-                        for wk in week_keys:
-                            wk_total = 0.0
-                            for a in getattr(p, 'assignments').all():
-                                wh = a.weekly_hours or {}
-                                wk_total += hours_for_week_from_json(wh, wk)
-                            if wk_total != 0.0:
-                                # store non-zero to keep payload compact; client may treat missing as 0
-                                wk_map[wk] = round(wk_total, 2)
-                        hours_by_person[p.id] = wk_map
-
-                    payload = {
-                        'weekKeys': week_keys,
-                        'people': people_list,
-                        'hoursByPerson': hours_by_person,
-                    }
-                    if use_cache:
-                        try:
-                            cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
-                        except Exception:  # nosec B110
-                            pass
-            finally:
+            if payload is None:
+                lock_key = f"lock:{cache_key}"
+                got_lock = False
                 if use_cache:
                     try:
-                        cache.delete(lock_key)
-                    except Exception:  # nosec B110
-                        pass
+                        got_lock = cache.add(lock_key, '1', timeout=10)
+                    except Exception:
+                        got_lock = True
+                try:
+                    if not got_lock and use_cache:
+                        t0 = time.time()
+                        while time.time() - t0 < 2.0:
+                            try:
+                                payload = cache.get(cache_key)
+                                if payload is not None:
+                                    break
+                            except Exception:  # nosec B110
+                                pass
+                            time.sleep(0.05)
+                    if payload is None:
+                        # Compute week keys (Sundays)
+                        from core.week_utils import sunday_of_week
+                        today = date.today()
+                        start_sunday = sunday_of_week(today)
+                        week_keys = [(start_sunday + timedelta(weeks=w)).isoformat() for w in range(weeks)]
+                        week_key_set = set(week_keys)
 
-        response = Response(payload)
-        response['ETag'] = f'"{etag}"'
-        if last_modified:
-            response['Last-Modified'] = http_date(last_modified.timestamp())
-        response['Cache-Control'] = 'private, max-age=30'
-        return response
+                        people = list(people_qs)
+                        people_list = []
+                        hours_by_person = {}
+                        for person in people:
+                            people_list.append(
+                                {
+                                    'id': person.id,
+                                    'name': person.name,
+                                    'weeklyCapacity': person.weekly_capacity or 0,
+                                    'department': person.department_id,
+                                }
+                            )
+                            totals: dict[str, float] = {}
+                            for assignment in getattr(person, 'assignments').all():
+                                weekly_hours = assignment.weekly_hours or {}
+                                if not isinstance(weekly_hours, dict):
+                                    continue
+                                for raw_week_key, raw_hours in weekly_hours.items():
+                                    week_key = str(raw_week_key)
+                                    if week_key not in week_key_set:
+                                        continue
+                                    try:
+                                        hours = float(raw_hours or 0)
+                                    except (TypeError, ValueError):
+                                        continue
+                                    if hours == 0.0:
+                                        continue
+                                    totals[week_key] = totals.get(week_key, 0.0) + hours
+                            compact_totals = {
+                                week_key: round(hours, 2)
+                                for week_key, hours in totals.items()
+                                if round(hours, 2) != 0.0
+                            }
+                            hours_by_person[person.id] = compact_totals
+
+                        payload = {
+                            'weekKeys': week_keys,
+                            'people': people_list,
+                            'hoursByPerson': hours_by_person,
+                        }
+                        if use_cache:
+                            try:
+                                cache.set(cache_key, payload, timeout=cache_ttl_seconds)
+                            except Exception:  # nosec B110
+                                pass
+                finally:
+                    if use_cache:
+                        try:
+                            cache.delete(lock_key)
+                        except Exception:  # nosec B110
+                            pass
+
+            response = Response(payload)
+            response['ETag'] = f'"{etag}"'
+            if last_modified:
+                response['Last-Modified'] = http_date(last_modified.timestamp())
+            if cache_ttl_seconds > 0:
+                response['Cache-Control'] = f'private, max-age={cache_ttl_seconds}, stale-while-revalidate={swr_seconds}'
+            else:
+                response['Cache-Control'] = 'private, no-store'
+            perf.tag('status_code', response.status_code)
+            return response
 
     @extend_schema(
         description="Start async grid snapshot job and return task ID for polling.",
@@ -3206,7 +3224,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         return Response({'jobId': job.id}, status=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
-        description="Bulk update weekly hours for multiple assignments in a single transaction.",
+        description="Bulk update weekly hours for multiple assignments with per-item status results.",
         request=inline_serializer(
             name='BulkUpdateHoursRequest',
             fields={
@@ -3223,60 +3241,94 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'results': serializers.ListField(child=inline_serializer(name='BulkUpdateResultItem', fields={
                     'assignmentId': serializers.IntegerField(),
                     'status': serializers.CharField(),
-                    'etag': serializers.CharField(),
+                    'etag': serializers.CharField(allow_blank=True),
                 })),
             }
         )
     )
     @action(detail=False, methods=['patch'], url_path='bulk_update_hours')
     def bulk_update_hours(self, request):
-        """All-or-nothing bulk weekly hours update with per-item results and refreshed ETags."""
-        from django.db import transaction
+        """Bulk weekly-hours update with structured per-item outcomes.
+
+        Behavior is intentionally additive and non-breaking:
+        - keeps request-level 200 for mixed valid/missing rows,
+        - reports each item status (`ok`, `noop`, `missing`, `invalid`),
+        - avoids rewriting unchanged weekly_hours maps.
+        """
         data = request.data or {}
         updates = data.get('updates') or []
         if not isinstance(updates, list) or len(updates) == 0:
             return Response({'detail': 'updates[] required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate shapes early
         try:
-            normalized = []
-            for u in updates:
-                aid = int(u.get('assignmentId'))
-                wh = u.get('weeklyHours') or {}
-                if not isinstance(wh, dict):
-                    return Response({'detail': f'invalid weeklyHours for assignmentId {aid}'}, status=status.HTTP_400_BAD_REQUEST)
-                normalized.append((aid, wh))
+            normalized_inputs: list[tuple[int, dict]] = []
+            for idx, row in enumerate(updates):
+                if not isinstance(row, dict):
+                    return Response({'detail': f'updates[{idx}] must be an object'}, status=status.HTTP_400_BAD_REQUEST)
+                aid = int(row.get('assignmentId'))
+                weekly_hours = row.get('weeklyHours') or {}
+                if not isinstance(weekly_hours, dict):
+                    return Response(
+                        {'detail': f'updates[{idx}].weeklyHours must be an object'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                normalized_inputs.append((aid, weekly_hours))
         except Exception:
             return Response({'detail': 'Invalid updates payload'}, status=status.HTTP_400_BAD_REQUEST)
 
-        with transaction.atomic():
-            # Load all assignments first
-            asn_map = {a.id: a for a in Assignment.objects.select_for_update().filter(id__in=[aid for aid, _ in normalized])}
-            if len(asn_map) != len(normalized):
-                return Response({'detail': 'One or more assignments not found'}, status=status.HTTP_404_NOT_FOUND)
+        # De-duplicate by assignmentId with "last write wins" semantics.
+        dedup_order: list[int] = []
+        dedup_updates: dict[int, dict] = {}
+        for aid, weekly_hours in normalized_inputs:
+            if aid not in dedup_updates:
+                dedup_order.append(aid)
+            dedup_updates[aid] = weekly_hours
 
-            # Apply updates and validate capacity via serializer per item
-            for aid, wh in normalized:
-                a = asn_map[aid]
-                ser = AssignmentSerializer(instance=a, data={'weeklyHours': wh}, partial=True)
-                if not ser.is_valid():
-                    return Response({'detail': ser.errors}, status=status.HTTP_409_CONFLICT)
-                ser.save()
+        assignments = Assignment.objects.filter(id__in=dedup_order)
+        assignment_map = {assignment.id: assignment for assignment in assignments}
 
-        # Success, compute refreshed ETags
-        results = []
-        for aid, _ in normalized:
-            a = Assignment.objects.get(id=aid)
-            # ETag based on updated_at via ETagConditionalMixin logic
+        def _etag_for_assignment(assignment: Assignment) -> str:
+            lm = getattr(assignment, 'updated_at', None)
             try:
-                lm = getattr(a, 'updated_at', None)
-                payload = lm.isoformat() if lm else str(a.id)
-                etag = hashlib.sha256(payload.encode()).hexdigest()
+                payload = lm.isoformat() if lm else str(assignment.id)
+                return hashlib.sha256(payload.encode()).hexdigest()
             except Exception:
-                etag = hashlib.sha256(str(a.id).encode()).hexdigest()
-            results.append({'assignmentId': a.id, 'status': 'ok', 'etag': etag})
+                return hashlib.sha256(str(assignment.id).encode()).hexdigest()
 
-        return Response({'success': True, 'results': results})
+        def _normalized_hours_map(value: dict | None) -> dict[str, float]:
+            if not isinstance(value, dict):
+                return {}
+            normalized_map: dict[str, float] = {}
+            for week_key, hours in value.items():
+                try:
+                    normalized_map[str(week_key)] = round(float(hours or 0), 4)
+                except (TypeError, ValueError):
+                    continue
+            return normalized_map
+
+        results: list[dict] = []
+        for aid in dedup_order:
+            assignment = assignment_map.get(aid)
+            if assignment is None:
+                results.append({'assignmentId': aid, 'status': 'missing', 'etag': ''})
+                continue
+
+            serializer = AssignmentSerializer(instance=assignment, data={'weeklyHours': dedup_updates[aid]}, partial=True)
+            if not serializer.is_valid():
+                results.append({'assignmentId': assignment.id, 'status': 'invalid', 'etag': _etag_for_assignment(assignment)})
+                continue
+
+            incoming_weekly_hours = serializer.validated_data.get('weekly_hours', {})
+            if _normalized_hours_map(assignment.weekly_hours) == _normalized_hours_map(incoming_weekly_hours):
+                results.append({'assignmentId': assignment.id, 'status': 'noop', 'etag': _etag_for_assignment(assignment)})
+                continue
+
+            assignment.weekly_hours = incoming_weekly_hours
+            assignment.save(update_fields=['weekly_hours', 'updated_at'])
+            results.append({'assignmentId': assignment.id, 'status': 'ok', 'etag': _etag_for_assignment(assignment)})
+
+        success = all(item['status'] in ('ok', 'noop') for item in results)
+        return Response({'success': success, 'results': results})
 
     def create(self, request, *args, **kwargs):
         """Create assignment with validation"""
@@ -3882,7 +3934,8 @@ class AssignmentsPageSnapshotView(APIView):
 
         bundle_enabled = include_auto_hours and bool(settings.FEATURES.get('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', True))
 
-        use_cache = allow_cache and bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
+        page_cache_ttl_seconds = max(0, int(getattr(settings, 'ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS', 20)))
+        use_cache = allow_cache and page_cache_ttl_seconds > 0
         cache_key = None
         if use_cache:
             try:
@@ -4072,16 +4125,26 @@ class AssignmentsPageSnapshotView(APIView):
 
         if use_cache and cache_key:
             try:
-                cache.set(cache_key, payload, timeout=int(os.getenv('AGGREGATE_CACHE_TTL', '30')))
+                cache.set(cache_key, payload, timeout=page_cache_ttl_seconds)
             except Exception:  # nosec B110
                 pass
         return payload, None
 
     def get(self, request):
-        payload, error_response = self._build_snapshot_payload(request, allow_cache=True)
-        if error_response is not None:
-            return error_response
-        return Response(payload)
+        with endpoint_timing('ui_assignments_page', request) as perf:
+            payload, error_response = self._build_snapshot_payload(request, allow_cache=True)
+            if error_response is not None:
+                perf.tag('status_code', error_response.status_code)
+                return error_response
+            response = Response(payload)
+            cache_ttl_seconds = max(0, int(getattr(settings, 'ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS', 20)))
+            swr_seconds = max(0, int(getattr(settings, 'SNAPSHOT_CACHE_SWR_SECONDS', 30)))
+            if cache_ttl_seconds > 0:
+                response['Cache-Control'] = f'private, max-age={cache_ttl_seconds}, stale-while-revalidate={swr_seconds}'
+            else:
+                response['Cache-Control'] = 'private, no-store'
+            perf.tag('status_code', response.status_code)
+            return response
 
     @extend_schema(
         request=inline_serializer(
