@@ -19,6 +19,14 @@ services:
       - SENTRY_DSN=${SENTRY_DSN:-}
       - DEBUG=false
       - DJANGO_SETTINGS_MODULE=config.settings
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:${PGBOUNCER_PORT:-6432}/${POSTGRES_DB:-workload_tracker}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-workload_tracker}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=${PGBOUNCER_PORT:-6432}
+      - DISABLE_SERVER_SIDE_CURSORS=${DISABLE_SERVER_SIDE_CURSORS:-true}
+      - ASSIGNMENT_HOURS_STORAGE_MODE=${ASSIGNMENT_HOURS_STORAGE_MODE:-normalized}
+      - SNAPSHOT_SCOPE_INVALIDATION_ENABLED=${SNAPSHOT_SCOPE_INVALIDATION_ENABLED:-true}
+      - SNAPSHOT_INVALIDATION_CHANNEL=${SNAPSHOT_INVALIDATION_CHANNEL:-snapshot_invalidation}
       - SILK_ENABLED=false  # Disable Silk profiling in production
       - ASYNC_JOBS=true
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
@@ -49,6 +57,8 @@ services:
     depends_on:
       migrator:
         condition: service_completed_successfully
+      pgbouncer:
+        condition: service_started
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -150,6 +160,30 @@ services:
       - postgres_data_v17:/var/lib/postgresql/data
       - ./backups:/backups  # Mount backup directory
 
+  # PgBouncer connection pooling (reuse Unraid production pattern)
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      - DB_HOST=db
+      - DB_PORT=${POSTGRES_PORT:-5432}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DB_NAME=${POSTGRES_DB:-workload_tracker}
+      - AUTH_TYPE=${PGBOUNCER_AUTH_TYPE:-scram-sha-256}
+      - POOL_MODE=${PGBOUNCER_POOL_MODE:-transaction}
+      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-1500}
+      - DEFAULT_POOL_SIZE=${PGBOUNCER_DEFAULT_POOL_SIZE:-60}
+      - RESERVE_POOL_SIZE=${PGBOUNCER_RESERVE_POOL_SIZE:-20}
+      - MAX_DB_CONNECTIONS=${PGBOUNCER_MAX_DB_CONNECTIONS:-120}
+      - LISTEN_PORT=${PGBOUNCER_PORT:-6432}
+      - IGNORE_STARTUP_PARAMETERS=${PGBOUNCER_IGNORE_STARTUP_PARAMETERS:-extra_float_digits,options}
+      - SERVER_RESET_QUERY=${PGBOUNCER_SERVER_RESET_QUERY:-DISCARD ALL}
+      - ADMIN_USERS=${PGBOUNCER_ADMIN_USERS:-postgres}
+    depends_on:
+      db:
+        condition: service_started
+    restart: unless-stopped
+
   # Celery worker for background jobs (production)
   worker:
     build:
@@ -168,6 +202,14 @@ services:
       - RUN_MIGRATIONS_ON_START=false
       - DEBUG=false
       - DJANGO_SETTINGS_MODULE=config.settings
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:${PGBOUNCER_PORT:-6432}/${POSTGRES_DB:-workload_tracker}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-workload_tracker}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=${PGBOUNCER_PORT:-6432}
+      - DISABLE_SERVER_SIDE_CURSORS=${DISABLE_SERVER_SIDE_CURSORS:-true}
+      - ASSIGNMENT_HOURS_STORAGE_MODE=${ASSIGNMENT_HOURS_STORAGE_MODE:-normalized}
+      - SNAPSHOT_SCOPE_INVALIDATION_ENABLED=${SNAPSHOT_SCOPE_INVALIDATION_ENABLED:-true}
+      - SNAPSHOT_INVALIDATION_CHANNEL=${SNAPSHOT_INVALIDATION_CHANNEL:-snapshot_invalidation}
       - ASYNC_JOBS=true
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
@@ -185,6 +227,8 @@ services:
       migrator:
         condition: service_completed_successfully
       db:
+        condition: service_started
+      pgbouncer:
         condition: service_started
       redis:
         condition: service_started
@@ -209,6 +253,14 @@ services:
       - RUN_MIGRATIONS_ON_START=false
       - DEBUG=false
       - DJANGO_SETTINGS_MODULE=config.settings
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:${PGBOUNCER_PORT:-6432}/${POSTGRES_DB:-workload_tracker}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-workload_tracker}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=${PGBOUNCER_PORT:-6432}
+      - DISABLE_SERVER_SIDE_CURSORS=${DISABLE_SERVER_SIDE_CURSORS:-true}
+      - ASSIGNMENT_HOURS_STORAGE_MODE=${ASSIGNMENT_HOURS_STORAGE_MODE:-normalized}
+      - SNAPSHOT_SCOPE_INVALIDATION_ENABLED=${SNAPSHOT_SCOPE_INVALIDATION_ENABLED:-true}
+      - SNAPSHOT_INVALIDATION_CHANNEL=${SNAPSHOT_INVALIDATION_CHANNEL:-snapshot_invalidation}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
@@ -223,6 +275,8 @@ services:
       migrator:
         condition: service_completed_successfully
       db:
+        condition: service_started
+      pgbouncer:
         condition: service_started
       redis:
         condition: service_started
@@ -245,6 +299,14 @@ services:
       - RUN_MIGRATIONS_ON_START=false
       - DEBUG=false
       - DJANGO_SETTINGS_MODULE=config.settings
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:${PGBOUNCER_PORT:-6432}/${POSTGRES_DB:-workload_tracker}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-workload_tracker}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=${PGBOUNCER_PORT:-6432}
+      - DISABLE_SERVER_SIDE_CURSORS=${DISABLE_SERVER_SIDE_CURSORS:-true}
+      - ASSIGNMENT_HOURS_STORAGE_MODE=${ASSIGNMENT_HOURS_STORAGE_MODE:-normalized}
+      - SNAPSHOT_SCOPE_INVALIDATION_ENABLED=${SNAPSHOT_SCOPE_INVALIDATION_ENABLED:-true}
+      - SNAPSHOT_INVALIDATION_CHANNEL=${SNAPSHOT_INVALIDATION_CHANNEL:-snapshot_invalidation}
       - ASYNC_JOBS=true
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1}
@@ -262,6 +324,8 @@ services:
       migrator:
         condition: service_completed_successfully
       db:
+        condition: service_started
+      pgbouncer:
         condition: service_started
       redis:
         condition: service_started

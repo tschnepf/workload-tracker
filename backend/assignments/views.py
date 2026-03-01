@@ -14,6 +14,7 @@ from rest_framework.decorators import action
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.settings import api_settings
+from django.db import transaction
 from django.db.models import Sum, Max, Min, Prefetch, Value, Count, Q, Exists, OuterRef  # noqa: F401
 from core.deliverable_phase import build_project_week_classification
 from core.choices import MembershipEventType
@@ -21,6 +22,8 @@ from django.db.models.functions import Coalesce, Lower
 from .models import Assignment, ProjectWeeklyHoursRollup, ProjectAssignmentCountsRollup
 from .analytics import compute_role_capacity
 from .overhead import maybe_sync_overhead_assignments
+from .week_hours_service import sync_assignment_week_hours
+from .read_queries import build_grid_snapshot_payload_normalized
 from departments.models import Department
 from departments.serializers import DepartmentSerializer
 from .serializers import AssignmentSerializer
@@ -58,6 +61,7 @@ from roles.models import Role
 from core.search_tokens import parse_search_tokens, apply_token_filter, build_token_query
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from core.cache_keys import build_aggregate_cache_key
+from core.cache_scopes import request_scope_version
 from core.perf import endpoint_timing
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
@@ -837,10 +841,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         try:
             cache_key = None
             try:
+                scope_version = request_scope_version(request)
                 cache_key = build_aggregate_cache_key(
                     'assignments.project_grid_snapshot',
                     request,
                     filters={
+                        'scope_version': int(scope_version),
                         'weeks': request.query_params.get('weeks', '12'),
                         'department': request.query_params.get('department', ''),
                         'include_children': request.query_params.get('include_children', ''),
@@ -3030,11 +3036,13 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 version = cache.get('analytics_cache_version', 1)
             except Exception:
                 version = 1
+            scope_version = request_scope_version(request)
             cache_key = build_aggregate_cache_key(
                 'assignments.grid_snapshot',
                 request,
                 filters={
                     'version': int(version),
+                    'scope_version': int(scope_version),
                     'weeks': weeks,
                     'scope': cache_scope,
                 },
@@ -3052,7 +3060,9 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 active_count = people_qs.count()
             except Exception:
                 active_count = 0
-            etag_content = f"{weeks}-{cache_scope}-{active_count}-" + (last_modified.isoformat() if last_modified else 'none')
+            etag_content = f"{weeks}-{cache_scope}-{active_count}-{scope_version}-" + (
+                last_modified.isoformat() if last_modified else 'none'
+            )
             etag = hashlib.sha256(etag_content.encode()).hexdigest()
 
             # Conditional request handling
@@ -3108,53 +3118,66 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                                 pass
                             time.sleep(0.05)
                     if payload is None:
-                        # Compute week keys (Sundays)
-                        from core.week_utils import sunday_of_week
-                        today = date.today()
-                        start_sunday = sunday_of_week(today)
-                        week_keys = [(start_sunday + timedelta(weeks=w)).isoformat() for w in range(weeks)]
-                        week_key_set = set(week_keys)
+                        storage_mode = getattr(settings, 'ASSIGNMENT_HOURS_STORAGE_MODE', 'dual')
+                        use_normalized = storage_mode == 'normalized'
+                        if use_normalized:
+                            try:
+                                payload = build_grid_snapshot_payload_normalized(
+                                    people_qs=people_qs,
+                                    weeks=weeks,
+                                    vertical_id=int(vertical_param) if vertical_param not in (None, "") else None,
+                                )
+                            except Exception:
+                                payload = None
 
-                        people = list(people_qs)
-                        people_list = []
-                        hours_by_person = {}
-                        for person in people:
-                            people_list.append(
-                                {
-                                    'id': person.id,
-                                    'name': person.name,
-                                    'weeklyCapacity': person.weekly_capacity or 0,
-                                    'department': person.department_id,
+                        if payload is None:
+                            # Compute week keys (Sundays) from legacy JSON map.
+                            from core.week_utils import sunday_of_week
+                            today = date.today()
+                            start_sunday = sunday_of_week(today)
+                            week_keys = [(start_sunday + timedelta(weeks=w)).isoformat() for w in range(weeks)]
+                            week_key_set = set(week_keys)
+
+                            people = list(people_qs)
+                            people_list = []
+                            hours_by_person = {}
+                            for person in people:
+                                people_list.append(
+                                    {
+                                        'id': person.id,
+                                        'name': person.name,
+                                        'weeklyCapacity': person.weekly_capacity or 0,
+                                        'department': person.department_id,
+                                    }
+                                )
+                                totals: dict[str, float] = {}
+                                for assignment in getattr(person, 'assignments').all():
+                                    weekly_hours = assignment.weekly_hours or {}
+                                    if not isinstance(weekly_hours, dict):
+                                        continue
+                                    for raw_week_key, raw_hours in weekly_hours.items():
+                                        week_key = str(raw_week_key)
+                                        if week_key not in week_key_set:
+                                            continue
+                                        try:
+                                            hours = float(raw_hours or 0)
+                                        except (TypeError, ValueError):
+                                            continue
+                                        if hours == 0.0:
+                                            continue
+                                        totals[week_key] = totals.get(week_key, 0.0) + hours
+                                compact_totals = {
+                                    week_key: round(hours, 2)
+                                    for week_key, hours in totals.items()
+                                    if round(hours, 2) != 0.0
                                 }
-                            )
-                            totals: dict[str, float] = {}
-                            for assignment in getattr(person, 'assignments').all():
-                                weekly_hours = assignment.weekly_hours or {}
-                                if not isinstance(weekly_hours, dict):
-                                    continue
-                                for raw_week_key, raw_hours in weekly_hours.items():
-                                    week_key = str(raw_week_key)
-                                    if week_key not in week_key_set:
-                                        continue
-                                    try:
-                                        hours = float(raw_hours or 0)
-                                    except (TypeError, ValueError):
-                                        continue
-                                    if hours == 0.0:
-                                        continue
-                                    totals[week_key] = totals.get(week_key, 0.0) + hours
-                            compact_totals = {
-                                week_key: round(hours, 2)
-                                for week_key, hours in totals.items()
-                                if round(hours, 2) != 0.0
-                            }
-                            hours_by_person[person.id] = compact_totals
+                                hours_by_person[person.id] = compact_totals
 
-                        payload = {
-                            'weekKeys': week_keys,
-                            'people': people_list,
-                            'hoursByPerson': hours_by_person,
-                        }
+                            payload = {
+                                'weekKeys': week_keys,
+                                'people': people_list,
+                                'hoursByPerson': hours_by_person,
+                            }
                         if use_cache:
                             try:
                                 cache.set(cache_key, payload, timeout=cache_ttl_seconds)
@@ -3284,8 +3307,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 dedup_order.append(aid)
             dedup_updates[aid] = weekly_hours
 
-        assignments = Assignment.objects.filter(id__in=dedup_order)
-        assignment_map = {assignment.id: assignment for assignment in assignments}
+        assignment_map: dict[int, Assignment] = {}
 
         def _etag_for_assignment(assignment: Assignment) -> str:
             lm = getattr(assignment, 'updated_at', None)
@@ -3307,25 +3329,32 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return normalized_map
 
         results: list[dict] = []
-        for aid in dedup_order:
-            assignment = assignment_map.get(aid)
-            if assignment is None:
-                results.append({'assignmentId': aid, 'status': 'missing', 'etag': ''})
-                continue
+        with transaction.atomic():
+            assignments = Assignment.objects.select_for_update().filter(id__in=dedup_order)
+            assignment_map = {assignment.id: assignment for assignment in assignments}
+            for aid in dedup_order:
+                assignment = assignment_map.get(aid)
+                if assignment is None:
+                    results.append({'assignmentId': aid, 'status': 'missing', 'etag': ''})
+                    continue
 
-            serializer = AssignmentSerializer(instance=assignment, data={'weeklyHours': dedup_updates[aid]}, partial=True)
-            if not serializer.is_valid():
-                results.append({'assignmentId': assignment.id, 'status': 'invalid', 'etag': _etag_for_assignment(assignment)})
-                continue
+                serializer = AssignmentSerializer(instance=assignment, data={'weeklyHours': dedup_updates[aid]}, partial=True)
+                if not serializer.is_valid():
+                    results.append({'assignmentId': assignment.id, 'status': 'invalid', 'etag': _etag_for_assignment(assignment)})
+                    continue
 
-            incoming_weekly_hours = serializer.validated_data.get('weekly_hours', {})
-            if _normalized_hours_map(assignment.weekly_hours) == _normalized_hours_map(incoming_weekly_hours):
-                results.append({'assignmentId': assignment.id, 'status': 'noop', 'etag': _etag_for_assignment(assignment)})
-                continue
+                incoming_weekly_hours = serializer.validated_data.get('weekly_hours', {})
+                if _normalized_hours_map(assignment.weekly_hours) == _normalized_hours_map(incoming_weekly_hours):
+                    results.append({'assignmentId': assignment.id, 'status': 'noop', 'etag': _etag_for_assignment(assignment)})
+                    continue
 
-            assignment.weekly_hours = incoming_weekly_hours
-            assignment.save(update_fields=['weekly_hours', 'updated_at'])
-            results.append({'assignmentId': assignment.id, 'status': 'ok', 'etag': _etag_for_assignment(assignment)})
+                assignment.weekly_hours = incoming_weekly_hours
+                assignment.save(update_fields=['weekly_hours', 'updated_at'])
+                try:
+                    sync_assignment_week_hours(assignment, incoming_weekly_hours, clear_missing=True)
+                except Exception:  # nosec B110
+                    pass
+                results.append({'assignmentId': assignment.id, 'status': 'ok', 'etag': _etag_for_assignment(assignment)})
 
         success = all(item['status'] in ('ok', 'noop') for item in results)
         return Response({'success': success, 'results': results})
@@ -3937,9 +3966,11 @@ class AssignmentsPageSnapshotView(APIView):
         page_cache_ttl_seconds = max(0, int(getattr(settings, 'ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS', 20)))
         use_cache = allow_cache and page_cache_ttl_seconds > 0
         cache_key = None
+        scope_version = request_scope_version(request)
         if use_cache:
             try:
                 cache_filters = {
+                    'scope_version': int(scope_version),
                     'weeks': request.query_params.get('weeks', '12'),
                     'department': request.query_params.get('department', ''),
                     'include_children': request.query_params.get('include_children', ''),
@@ -3970,8 +4001,55 @@ class AssignmentsPageSnapshotView(APIView):
         project_snapshot = None
         try:
             if 'assignment' in include_set:
-                resp = viewset.grid_snapshot(request)
-                assignment_snapshot = getattr(resp, 'data', None)
+                storage_mode = getattr(settings, 'ASSIGNMENT_HOURS_STORAGE_MODE', 'dual')
+                if storage_mode == 'normalized':
+                    try:
+                        weeks = int(request.query_params.get('weeks', 12))
+                    except Exception:
+                        weeks = 12
+                    weeks = max(1, min(52, weeks))
+                    people_qs = Person.objects.filter(is_active=True).select_related('department')
+                    dept_param = request.query_params.get('department')
+                    include_children = request.query_params.get('include_children') == '1'
+                    if dept_param not in (None, ""):
+                        try:
+                            dept_id = int(dept_param)
+                            if include_children:
+                                ids = set()
+                                stack = [dept_id]
+                                while stack:
+                                    current = stack.pop()
+                                    if current in ids:
+                                        continue
+                                    ids.add(current)
+                                    for d in Department.objects.filter(parent_department_id=current).values_list('id', flat=True):
+                                        if d not in ids:
+                                            stack.append(d)
+                                people_qs = people_qs.filter(department_id__in=list(ids))
+                            else:
+                                people_qs = people_qs.filter(department_id=dept_id)
+                        except Exception:
+                            pass
+                    dept_filters_raw = request.query_params.get('department_filters') or request.query_params.get('departmentFilters')
+                    dept_filters = self._parse_department_filters(dept_filters_raw)
+                    if dept_filters:
+                        people_qs = self._apply_people_department_filters(people_qs, dept_filters)
+                    vertical_param = request.query_params.get('vertical')
+                    vertical_id = None
+                    if vertical_param not in (None, ""):
+                        try:
+                            vertical_id = int(vertical_param)
+                            people_qs = people_qs.filter(department__vertical_id=vertical_id)
+                        except Exception:
+                            vertical_id = None
+                    assignment_snapshot = build_grid_snapshot_payload_normalized(
+                        people_qs=people_qs,
+                        weeks=weeks,
+                        vertical_id=vertical_id,
+                    )
+                else:
+                    resp = viewset.grid_snapshot(request)
+                    assignment_snapshot = getattr(resp, 'data', None)
         except Exception:
             assignment_snapshot = None
         try:

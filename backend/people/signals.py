@@ -7,6 +7,7 @@ from .models import Person
 from assignments.rollup_service import queue_project_rollup_refresh
 from assignments.models import Assignment
 from projects.assigned_names import enqueue_assigned_names_rebuild_on_commit
+from core.cache_scopes import bump_snapshot_scopes
 
 
 def _bump_analytics_cache_version():
@@ -24,6 +25,10 @@ def _bump_analytics_cache_version():
 @receiver([post_save, post_delete], sender=Person)
 def invalidate_on_person_change(sender, instance, **kwargs):
     _bump_analytics_cache_version()
+    try:
+        bump_snapshot_scopes(department_ids=[instance.department_id] if getattr(instance, 'department_id', None) else [])
+    except Exception:
+        pass
 
 
 @receiver(pre_save, sender=Person)

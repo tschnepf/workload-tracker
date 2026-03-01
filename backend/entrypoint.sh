@@ -3,8 +3,8 @@ set -e
 
 echo "Waiting for database readiness (pg_isready)..."
 # Allow overrides via env, default to compose service defaults
-DB_HOST=${POSTGRES_HOST:-db}
-DB_PORT=${POSTGRES_PORT:-5432}
+DB_HOST=${DB_WAIT_HOST:-${POSTGRES_HOST:-db}}
+DB_PORT=${DB_WAIT_PORT:-${POSTGRES_PORT:-5432}}
 DB_USER=${POSTGRES_USER:-postgres}
 DB_NAME=${POSTGRES_DB:-postgres}
 
@@ -46,7 +46,11 @@ fi
 
 # Dev-safe repair for SimpleJWT blacklist tables when schema mismatches occur
 if [ "$IS_CELERY" -eq 0 ]; then
-  python manage.py repair_token_blacklist --yes || echo "repair_token_blacklist failed or skipped; continuing"
+  if [ "${AUTO_FIX_JWT_BLACKLIST:-true}" = "true" ] || [ "${AUTO_FIX_JWT_BLACKLIST:-true}" = "1" ]; then
+    python manage.py repair_token_blacklist --yes || echo "repair_token_blacklist failed or skipped; continuing"
+  else
+    echo "Skipping repair_token_blacklist (AUTO_FIX_JWT_BLACKLIST=${AUTO_FIX_JWT_BLACKLIST})"
+  fi
 else
   echo "Skipping repair_token_blacklist for Celery processes"
 fi

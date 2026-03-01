@@ -131,6 +131,30 @@ rewrite_compose "${ROOT_DIR}/docker-compose.prod.yml" "${PROD_COMPOSE_TMP}"
 cp "${ROOT_DIR}/docker-compose.no-host-db-ports.yml" "${NOHOST_COMPOSE_TMP}"
 cat > "${HARNESS_COMPOSE_TMP}" <<'EOF'
 services:
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DB_NAME=${POSTGRES_DB:-workload_tracker}
+      - AUTH_TYPE=scram-sha-256
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=1500
+      - DEFAULT_POOL_SIZE=60
+      - RESERVE_POOL_SIZE=20
+      - MAX_DB_CONNECTIONS=120
+      - LISTEN_PORT=6432
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits,options
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - ADMIN_USERS=${POSTGRES_USER:-postgres}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - tracker-network
+      - default
   migrator:
     image: alpine:3.20
     entrypoint: ["/bin/sh", "-lc"]
@@ -139,6 +163,15 @@ services:
   backend:
     command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --worker-class sync --max-requests 1000 --max-requests-jitter 50
     environment:
+      - RUN_MIGRATIONS_ON_START=false
+      - AUTO_FIX_JWT_BLACKLIST=false
+      - DB_WAIT_HOST=db
+      - DB_WAIT_PORT=5432
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:6432/${POSTGRES_DB:-workload_tracker}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-workload_tracker}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=6432
+      - DISABLE_SERVER_SIDE_CURSORS=true
       - SECRET_KEY=${SECRET_KEY}
       - RESTORE_JOB_TOKEN_SECRET=${RESTORE_JOB_TOKEN_SECRET}
       - DRF_THROTTLE_ANON=${DRF_THROTTLE_ANON:-}
@@ -149,6 +182,9 @@ services:
       - ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS=${ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS:-}
       - GRID_SNAPSHOT_CACHE_TTL_SECONDS=${GRID_SNAPSHOT_CACHE_TTL_SECONDS:-}
       - SNAPSHOT_CACHE_SWR_SECONDS=${SNAPSHOT_CACHE_SWR_SECONDS:-}
+      - ASSIGNMENT_HOURS_STORAGE_MODE=${ASSIGNMENT_HOURS_STORAGE_MODE:-normalized}
+      - SNAPSHOT_SCOPE_INVALIDATION_ENABLED=${SNAPSHOT_SCOPE_INVALIDATION_ENABLED:-true}
+      - SNAPSHOT_INVALIDATION_CHANNEL=${SNAPSHOT_INVALIDATION_CHANNEL:-snapshot_invalidation}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
@@ -157,6 +193,16 @@ services:
       - CSRF_TRUSTED_ORIGINS=http://localhost:${BACKEND_PORT},http://127.0.0.1:${BACKEND_PORT},http://localhost:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT}
   worker:
     environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:6432/${POSTGRES_DB:-workload_tracker}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-workload_tracker}
+      - DB_WAIT_HOST=db
+      - DB_WAIT_PORT=5432
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=6432
+      - DISABLE_SERVER_SIDE_CURSORS=true
+      - ASSIGNMENT_HOURS_STORAGE_MODE=${ASSIGNMENT_HOURS_STORAGE_MODE:-normalized}
+      - SNAPSHOT_SCOPE_INVALIDATION_ENABLED=${SNAPSHOT_SCOPE_INVALIDATION_ENABLED:-true}
+      - SNAPSHOT_INVALIDATION_CHANNEL=${SNAPSHOT_INVALIDATION_CHANNEL:-snapshot_invalidation}
       - SECRET_KEY=${SECRET_KEY}
       - RESTORE_JOB_TOKEN_SECRET=${RESTORE_JOB_TOKEN_SECRET}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
@@ -167,6 +213,16 @@ services:
       - CSRF_TRUSTED_ORIGINS=http://localhost:${BACKEND_PORT},http://127.0.0.1:${BACKEND_PORT},http://localhost:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT}
   worker_db:
     environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:6432/${POSTGRES_DB:-workload_tracker}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-workload_tracker}
+      - DB_WAIT_HOST=db
+      - DB_WAIT_PORT=5432
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=6432
+      - DISABLE_SERVER_SIDE_CURSORS=true
+      - ASSIGNMENT_HOURS_STORAGE_MODE=${ASSIGNMENT_HOURS_STORAGE_MODE:-normalized}
+      - SNAPSHOT_SCOPE_INVALIDATION_ENABLED=${SNAPSHOT_SCOPE_INVALIDATION_ENABLED:-true}
+      - SNAPSHOT_INVALIDATION_CHANNEL=${SNAPSHOT_INVALIDATION_CHANNEL:-snapshot_invalidation}
       - SECRET_KEY=${SECRET_KEY}
       - RESTORE_JOB_TOKEN_SECRET=${RESTORE_JOB_TOKEN_SECRET}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
@@ -177,6 +233,16 @@ services:
       - CSRF_TRUSTED_ORIGINS=http://localhost:${BACKEND_PORT},http://127.0.0.1:${BACKEND_PORT},http://localhost:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT}
   worker_beat:
     environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:6432/${POSTGRES_DB:-workload_tracker}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-workload_tracker}
+      - DB_WAIT_HOST=db
+      - DB_WAIT_PORT=5432
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=6432
+      - DISABLE_SERVER_SIDE_CURSORS=true
+      - ASSIGNMENT_HOURS_STORAGE_MODE=${ASSIGNMENT_HOURS_STORAGE_MODE:-normalized}
+      - SNAPSHOT_SCOPE_INVALIDATION_ENABLED=${SNAPSHOT_SCOPE_INVALIDATION_ENABLED:-true}
+      - SNAPSHOT_INVALIDATION_CHANNEL=${SNAPSHOT_INVALIDATION_CHANNEL:-snapshot_invalidation}
       - SECRET_KEY=${SECRET_KEY}
       - RESTORE_JOB_TOKEN_SECRET=${RESTORE_JOB_TOKEN_SECRET}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-workload-redis-prod}@redis:6379/1
@@ -247,7 +313,9 @@ restore_snapshot_into_isolated_db() {
   gzip -dc "${SNAPSHOT_FILE}" | compose exec -T db psql -U postgres -d workload_tracker
   compose start backend worker >/dev/null
   wait_for_backend
-  compose exec -T backend python manage.py migrate --noinput
+  compose exec -T \
+    -e DATABASE_URL="postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-workload_tracker}" \
+    backend python manage.py migrate --noinput
 }
 
 seed_load_data() {
@@ -727,7 +795,6 @@ start_samplers() {
 
 run_k6() {
   local k6_status
-  set +e
   docker run --rm \
     --network "${PROJECT_NAME}_tracker-network" \
     -v "${LOAD_ROOT}:/work" \
@@ -742,12 +809,14 @@ run_k6() {
     --out "json=/work/${REPORT_REL}/k6-raw.json" \
     > "${REPORT_DIR}/k6-console.log" 2>&1
   k6_status=$?
-  set -e
   echo "${k6_status}" > "${REPORT_DIR}/k6-exit-code.txt"
   return "${k6_status}"
 }
 
 aggregate_logs() {
+  : > "${REPORT_DIR}/backend.log"
+  : > "${REPORT_DIR}/worker.log"
+  : > "${REPORT_DIR}/redis.log"
   compose logs --no-color backend > "${REPORT_DIR}/backend.log" || true
   compose logs --no-color worker > "${REPORT_DIR}/worker.log" || true
   compose logs --no-color redis > "${REPORT_DIR}/redis.log" || true
@@ -793,10 +862,126 @@ if log_path.exists():
                 endpoint_counts[code] = endpoint_counts.get(code, 0) + 1
 out_path.write_text(json.dumps({"statusCounts": counts, "statusByEndpoint": status_by_endpoint}, indent=2) + "\n")
 PY
+
+  python3 - "${REPORT_DIR}/backend.log" "${REPORT_DIR}/endpoint-db-breakdown.json" <<'PY'
+import json
+import pathlib
+import re
+
+log_path = pathlib.Path(__import__('sys').argv[1])
+out_path = pathlib.Path(__import__('sys').argv[2])
+pat = re.compile(r'endpoint_timing\s+(\{.*\})')
+rows = []
+if log_path.exists():
+    for line in log_path.read_text(errors="ignore").splitlines():
+        m = pat.search(line)
+        if not m:
+            continue
+        try:
+            payload = json.loads(m.group(1))
+        except Exception:
+            continue
+        rows.append(payload)
+
+grouped = {}
+for row in rows:
+    endpoint = str(row.get("endpoint") or "<unknown>")
+    g = grouped.setdefault(endpoint, {"count": 0, "durations": [], "dbTimes": [], "dbQueries": []})
+    g["count"] += 1
+    try:
+        g["durations"].append(float(row.get("duration_ms") or 0.0))
+    except Exception:
+        pass
+    try:
+        g["dbTimes"].append(float(row.get("db_time_ms") or 0.0))
+    except Exception:
+        pass
+    try:
+        g["dbQueries"].append(int(row.get("db_query_count") or 0))
+    except Exception:
+        pass
+
+def pct(values, p):
+    if not values:
+        return 0.0
+    s = sorted(values)
+    idx = (len(s) - 1) * (p / 100.0)
+    lo = int(idx)
+    hi = min(lo + 1, len(s) - 1)
+    frac = idx - lo
+    return s[lo] * (1 - frac) + s[hi] * frac
+
+endpoint_rows = []
+for endpoint, g in grouped.items():
+    endpoint_rows.append({
+        "endpoint": endpoint,
+        "count": g["count"],
+        "durationP95Ms": round(pct(g["durations"], 95), 2),
+        "durationP99Ms": round(pct(g["durations"], 99), 2),
+        "dbTimeP95Ms": round(pct(g["dbTimes"], 95), 2),
+        "dbQueryCountP95": int(round(pct(g["dbQueries"], 95), 0)),
+    })
+endpoint_rows.sort(key=lambda r: (r["durationP95Ms"], r["count"]), reverse=True)
+out_path.write_text(json.dumps({"rows": endpoint_rows}, indent=2) + "\n")
+PY
+}
+
+generate_queue_recovery() {
+  python3 - "${REPORT_DIR}/redis-queue-depth.log" "${REPORT_DIR}/queue-recovery.json" <<'PY'
+import json
+import pathlib
+import re
+import datetime as dt
+import sys
+
+in_path = pathlib.Path(sys.argv[1])
+out_path = pathlib.Path(sys.argv[2])
+if not in_path.exists():
+    out_path.write_text(json.dumps({"rows": [], "peakDepth": 0, "recoverySeconds": None}, indent=2) + "\n")
+    raise SystemExit(0)
+
+rows = []
+pat = re.compile(r'^(?P<ts>\S+)\s+celery=(?P<celery>\d+)\s+db_maintenance=(?P<dbm>\d+)')
+for line in in_path.read_text(errors="ignore").splitlines():
+    m = pat.search(line.strip())
+    if not m:
+        continue
+    ts = m.group("ts")
+    celery = int(m.group("celery"))
+    dbm = int(m.group("dbm"))
+    rows.append({"ts": ts, "celery": celery, "dbMaintenance": dbm, "total": celery + dbm})
+
+peak = max((r["total"] for r in rows), default=0)
+baseline = rows[0]["total"] if rows else 0
+peak_idx = None
+for i, r in enumerate(rows):
+    if r["total"] == peak:
+        peak_idx = i
+        break
+
+recovery_seconds = None
+if rows and peak_idx is not None:
+    for r in rows[peak_idx:]:
+        if r["total"] <= baseline:
+            try:
+                t0 = dt.datetime.fromisoformat(rows[peak_idx]["ts"].replace("Z", "+00:00"))
+                t1 = dt.datetime.fromisoformat(r["ts"].replace("Z", "+00:00"))
+                recovery_seconds = int((t1 - t0).total_seconds())
+            except Exception:
+                recovery_seconds = None
+            break
+
+out_path.write_text(json.dumps({
+    "rows": rows,
+    "baselineDepth": baseline,
+    "peakDepth": peak,
+    "recoverySeconds": recovery_seconds,
+}, indent=2) + "\n")
+PY
 }
 
 echo "Starting isolated production-like stack (${PROJECT_NAME}) ..."
-SERVICES=(db redis backend worker)
+SERVICES=(db redis pgbouncer backend worker)
 if [[ "${SKIP_UI_CHECKS}" -ne 1 ]]; then
   SERVICES+=(frontend)
 fi
@@ -821,6 +1006,7 @@ set -e
 stop_samplers
 capture_sql_snapshot "post"
 aggregate_logs
+generate_queue_recovery
 run_ui_checks "post"
 
 if ! "${ROOT_DIR}/scripts/load/analyze-load.sh" --report-dir "${REPORT_DIR}"; then

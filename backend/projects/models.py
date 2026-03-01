@@ -69,6 +69,10 @@ class Project(models.Model):
     class Meta:
         ordering = ['-created_at', 'name']
         indexes = [
+            models.Index(fields=['is_active', 'status'], name='project_active_status_idx'),
+            models.Index(fields=['updated_at'], name='project_updated_idx'),
+            models.Index(fields=['is_active', 'updated_at'], name='project_active_updated_idx'),
+            models.Index(fields=['client', 'name'], name='projects_client_name_idx'),
             models.Index(fields=['bqe_client_id'], name='idx_project_bqe_client_id'),
             models.Index(fields=['bqe_client_name'], name='idx_project_bqe_client_name'),
             models.Index(fields=['vertical'], name='idx_project_vertical'),

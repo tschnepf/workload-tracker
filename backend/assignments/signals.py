@@ -6,10 +6,12 @@ from django.utils import timezone
 
 from assignments.models import Assignment
 from assignments.rollup_service import queue_project_rollup_refresh
+from assignments.week_hours_service import sync_assignment_week_hours
 from projects.assigned_names import enqueue_assigned_names_rebuild_on_commit
 from deliverables.models import DeliverableAssignment, DeliverableTask
 from deliverables.services import DeliverableQATaskService
 from core.choices import DeliverableTaskCompletionStatus
+from core.cache_scopes import bump_snapshot_scopes
 from assignments.utils.project_membership import is_current_project_assignee
 
 
@@ -41,6 +43,23 @@ def capture_assignment_project(sender, instance, **kwargs):
 @receiver([post_save, post_delete], sender=Assignment)
 def invalidate_on_assignment_change(sender, instance, **kwargs):
     _bump_analytics_cache_version()
+    department_ids = []
+    if getattr(instance, 'department_id', None):
+        department_ids.append(instance.department_id)
+    try:
+        if getattr(instance, 'person', None) and instance.person and instance.person.department_id:
+            department_ids.append(instance.person.department_id)
+    except Exception:  # nosec B110
+        pass
+    bump_snapshot_scopes(
+        project_ids=[instance.project_id] if getattr(instance, 'project_id', None) else [],
+        department_ids=department_ids,
+    )
+    if 'created' in kwargs:
+        try:
+            transaction.on_commit(lambda: sync_assignment_week_hours(instance, instance.weekly_hours, clear_missing=True))
+        except Exception:  # nosec B110
+            pass
     try:
         if instance.project_id:
             transaction.on_commit(lambda: queue_project_rollup_refresh([instance.project_id]))

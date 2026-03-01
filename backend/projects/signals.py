@@ -8,6 +8,7 @@ from django.dispatch import receiver
 from django.utils.text import slugify
 
 from .models import Project, ProjectRisk
+from core.cache_scopes import bump_snapshot_scopes
 
 
 def _marker_filename(project) -> str:
@@ -72,6 +73,10 @@ def create_marker_on_first_attachment(sender, instance: ProjectRisk, **kwargs):
 
 @receiver(post_save, sender=Project)
 def sync_overhead_assignments_on_project_save(sender, instance: Project, **kwargs):
+    try:
+        bump_snapshot_scopes(project_ids=[instance.id] if getattr(instance, 'id', None) else [])
+    except Exception:
+        pass
     try:
         name = (instance.name or '').lower()
     except Exception:

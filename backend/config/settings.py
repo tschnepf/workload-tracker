@@ -461,6 +461,15 @@ AGGREGATE_CACHE_TTL = int(os.getenv('AGGREGATE_CACHE_TTL', '30'))
 ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS = _int_non_negative('ASSIGNMENTS_PAGE_CACHE_TTL_SECONDS', 20)
 GRID_SNAPSHOT_CACHE_TTL_SECONDS = _int_non_negative('GRID_SNAPSHOT_CACHE_TTL_SECONDS', 20)
 SNAPSHOT_CACHE_SWR_SECONDS = _int_non_negative('SNAPSHOT_CACHE_SWR_SECONDS', 30)
+# Assignment hours storage strategy:
+# - dual: write JSON + normalized rows, read path may progressively adopt normalized queries
+# - normalized: canonical read/write through normalized rows (JSON kept for compatibility window)
+ASSIGNMENT_HOURS_STORAGE_MODE = os.getenv('ASSIGNMENT_HOURS_STORAGE_MODE', 'dual').strip().lower() or 'dual'
+if ASSIGNMENT_HOURS_STORAGE_MODE not in ('dual', 'normalized'):
+    ASSIGNMENT_HOURS_STORAGE_MODE = 'dual'
+# Scoped snapshot invalidation controls for read-after-write guarantees.
+SNAPSHOT_SCOPE_INVALIDATION_ENABLED = os.getenv('SNAPSHOT_SCOPE_INVALIDATION_ENABLED', 'true').lower() == 'true'
+SNAPSHOT_INVALIDATION_CHANNEL = os.getenv('SNAPSHOT_INVALIDATION_CHANNEL', 'snapshot_invalidation')
 # DASHBOARD_CACHE_TTL is intentionally not set by default; set via env when needed.
 
 # CORS/CSRF

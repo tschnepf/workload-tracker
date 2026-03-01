@@ -42,12 +42,34 @@ load_root = pathlib.Path(sys.argv[2]).resolve()
 summary_path = report_dir / "k6-summary.json"
 manifest_path = report_dir / "seed-manifest.json"
 backend_counts_path = report_dir / "backend-status-counts.json"
+endpoint_db_breakdown_path = report_dir / "endpoint-db-breakdown.json"
+queue_recovery_path = report_dir / "queue-recovery.json"
 lock_waits_path = report_dir / "sql" / "post" / "03_lock_waits.txt"
 raw_path = report_dir / "k6-raw.json"
 latest_summary_path = load_root / "reports" / "latest-summary.json"
 
 if not summary_path.exists():
     raise SystemExit(f"k6 summary not found at {summary_path}")
+
+required_files = [
+    summary_path,
+    raw_path,
+    report_dir / "docker-stats.log",
+    report_dir / "redis-queue-depth.log",
+    backend_counts_path,
+    endpoint_db_breakdown_path,
+    queue_recovery_path,
+]
+missing_files = [str(path) for path in required_files if not path.exists()]
+
+pre_sql = sorted((report_dir / "sql" / "pre").glob("*.txt"))
+post_sql = sorted((report_dir / "sql" / "post").glob("*.txt"))
+if not pre_sql:
+    missing_files.append(str(report_dir / "sql" / "pre" / "*.txt"))
+if not post_sql:
+    missing_files.append(str(report_dir / "sql" / "post" / "*.txt"))
+if missing_files:
+    raise SystemExit("missing required artifacts: " + ", ".join(missing_files))
 
 summary = json.loads(summary_path.read_text())
 manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
@@ -385,6 +407,8 @@ lines.append("- Docker stats sample: `docker-stats.log`")
 lines.append("- Redis queue depth sample: `redis-queue-depth.log`")
 lines.append("- SQL diagnostics: `sql/pre/*.txt`, `sql/post/*.txt`")
 lines.append("- Backend logs: `backend.log`")
+lines.append("- Endpoint DB breakdown: `endpoint-db-breakdown.json`")
+lines.append("- Queue recovery: `queue-recovery.json`")
 if top_failure_ops:
     lines.append("")
     lines.append("### Top Failing Endpoint/Ops")

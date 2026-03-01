@@ -5,6 +5,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from assignments.models import Assignment
+from assignments.models import AssignmentWeekHour
 from people.models import Person
 from projects.models import Project
 
@@ -68,6 +69,13 @@ class BulkUpdateHoursTests(TestCase):
         self.assignment_b.refresh_from_db()
         self.assertEqual(float(self.assignment_a.weekly_hours[self.sunday]), 8.0)
         self.assertEqual(float(self.assignment_b.weekly_hours[self.sunday]), 12.0)
+        self.assertTrue(
+            AssignmentWeekHour.objects.filter(
+                assignment_id=self.assignment_b.id,
+                week_start=date.fromisoformat(self.sunday),
+                hours=12.0,
+            ).exists()
+        )
 
     def test_bulk_update_hours_requires_non_empty_updates(self):
         response = self.client.patch('/api/assignments/bulk_update_hours/', {'updates': []}, format='json')

@@ -4,6 +4,7 @@ All fields defined but only some used initially.
 """
 
 from django.db import models
+from django.db.models.functions import Lower
 
 class Person(models.Model):
     """Complete person model - all fields from Day 1, use progressively"""
@@ -46,6 +47,12 @@ class Person(models.Model):
     class Meta:
         ordering = ['name']
         verbose_name_plural = 'People'
+        indexes = [
+            models.Index(fields=['is_active', 'department'], name='person_active_dept_idx'),
+            models.Index(fields=['updated_at'], name='person_updated_idx'),
+            models.Index(Lower('name'), name='person_name_lower_idx'),
+            models.Index(Lower('email'), name='person_email_lower_idx'),
+        ]
     
     def __str__(self):
         return self.name

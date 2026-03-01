@@ -113,6 +113,34 @@ class Assignment(models.Model):
         return self.project_name or "Unknown Project"
 
 
+class AssignmentWeekHour(models.Model):
+    """Normalized assignment hours by week (canonical Sunday key)."""
+
+    assignment = models.ForeignKey('assignments.Assignment', on_delete=models.CASCADE, related_name='week_hours')
+    person = models.ForeignKey('people.Person', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignment_week_hours')
+    project = models.ForeignKey('projects.Project', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignment_week_hours')
+    department = models.ForeignKey('departments.Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='assignment_week_hours')
+    week_start = models.DateField(help_text="Canonical Sunday ISO date")
+    hours = models.FloatField(default=0.0, validators=[MinValueValidator(0.0)])
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['assignment', 'week_start'],
+                name='uniq_assignment_week_hours',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['assignment', 'week_start'], name='idx_awh_assignment_week'),
+            models.Index(fields=['person', 'week_start'], name='idx_awh_person_week'),
+            models.Index(fields=['project', 'week_start'], name='idx_awh_project_week'),
+            models.Index(fields=['department', 'week_start'], name='idx_awh_department_week'),
+            models.Index(fields=['week_start'], name='idx_awh_week_start'),
+        ]
+        ordering = ['assignment_id', 'week_start']
+
+
 class ProjectWeeklyHoursRollup(models.Model):
     """Per-project weekly hours rollup scoped by effective department.
 

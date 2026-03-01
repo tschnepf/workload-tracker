@@ -5,7 +5,9 @@ RETROFIT: Support weekly hours for 12-week planning horizon
 
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
+from django.db import transaction
 from .models import Assignment
+from .week_hours_service import sync_assignment_week_hours
 from projects.models import Project, ProjectRole
 from skills.serializers import PersonSkillSummarySerializer
 
@@ -191,7 +193,23 @@ class AssignmentSerializer(serializers.ModelSerializer):
                     validated_data['department'] = role_obj.department
             except Exception:  # nosec B110
                 pass
-        return super().create(validated_data)
+        with transaction.atomic():
+            assignment = super().create(validated_data)
+            try:
+                sync_assignment_week_hours(assignment, assignment.weekly_hours, clear_missing=True)
+            except Exception:  # nosec B110
+                pass
+        return assignment
+
+    def update(self, instance, validated_data):
+        """Update assignment and keep normalized week-hour rows in sync."""
+        with transaction.atomic():
+            assignment = super().update(instance, validated_data)
+            try:
+                sync_assignment_week_hours(assignment, assignment.weekly_hours, clear_missing=True)
+            except Exception:  # nosec B110
+                pass
+        return assignment
     
     def to_representation(self, instance):
         """Add computed fields to the response"""
