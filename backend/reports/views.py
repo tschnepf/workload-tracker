@@ -622,6 +622,7 @@ class RoleCapacityBootstrapView(APIView):
             OpenApiParameter(name='role_ids', type=str, required=False, description='Optional CSV of role ids to include.'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Optional vertical id filter.'),
             OpenApiParameter(name='include_inactive', type=bool, required=False, description='Include inactive departments in department metadata list.'),
+            OpenApiParameter(name='filter_out_lt5h', type=bool, required=False, description='Exclude people assigned under 5h in each of the next 4 weeks from capacity and assigned calculations.'),
         ],
     )
     def get(self, request):
@@ -649,6 +650,7 @@ class RoleCapacityBootstrapView(APIView):
             weeks = 12
 
         include_inactive = str(request.query_params.get('include_inactive') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+        filter_out_lt5h = str(request.query_params.get('filter_out_lt5h') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
         role_ids_param = str(request.query_params.get('role_ids') or '').strip()
         role_ids = None
@@ -667,6 +669,7 @@ class RoleCapacityBootstrapView(APIView):
             week_keys=week_keys,
             role_ids=role_ids,
             vertical_id=vertical_id,
+            filter_out_lt5h=filter_out_lt5h,
         )
 
         departments_qs = Department.objects.order_by('name')

@@ -393,6 +393,19 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             pass
         queryset = self.get_queryset()
         queryset = self._apply_common_filters(request, queryset)
+        tokens = parse_search_tokens(request=request)
+        assignment_fields = [
+            'person__name',
+            'person__role__name',
+            'role_on_project_ref__name',
+            'role_on_project',
+            'project__name',
+            'project__client',
+            'project__project_number',
+            'project__description',
+            'project_name',
+        ]
+        queryset = apply_token_filter(queryset, tokens, assignment_fields)
 
         # Optional ordering (opt-in). Defaults remain unchanged.
         ordering_param = request.query_params.get('ordering')
@@ -575,6 +588,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         tokens = parse_search_tokens(request=request, data=data)
         assignment_fields = [
             'person__name',
+            'person__role__name',
             'role_on_project_ref__name',
             'role_on_project',
             'project__name',
@@ -673,7 +687,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 pass
 
-        person_tokens_q = build_token_query(tokens, ['name'])
+        person_tokens_q = build_token_query(tokens, ['name', 'role__name'])
         person_match_ids: Set[int] = set()
         if person_tokens_q is not None:
             person_match_ids = set(people_qs.filter(person_tokens_q).values_list('id', flat=True))
@@ -1416,6 +1430,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of future weeks (4,8,12,16,20). Default 12'),
             OpenApiParameter(name='role_ids', type=str, required=False, description='CSV of department ProjectRole IDs to include'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='filter_out_lt5h', type=bool, required=False, description='Exclude people assigned under 5h in each of the next 4 weeks from capacity and assigned calculations.'),
         ],
         responses=inline_serializer(
             name='RoleCapacityTimelineResponse',
@@ -1471,6 +1486,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = 12
         if weeks not in (4, 8, 12, 16, 20):
             weeks = 12
+        filter_out_lt5h = str(request.query_params.get('filter_out_lt5h') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
         # Build week keys (Sundays) for current + N-1 weeks
         today = date.today()
@@ -1515,7 +1531,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 cache_key = f"rc:{'all' if dept_id is None else dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}:v{vertical_id if vertical_id is not None else 'all'}"
                 cache_version = int(cache.get('analytics_cache_version', 1) or 1)
                 cache_key = (
-                    f"{cache_key}:cv{cache_version}:tplmap{1 if settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True) else 0}"
+                    f"{cache_key}:cv{cache_version}:tplmap{1 if settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True) else 0}:lt5h{1 if filter_out_lt5h else 0}"
                 )
                 cached = cache.get(cache_key)
                 if cached is not None:
@@ -1531,6 +1547,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             week_keys=week_keys,
             role_ids=role_ids or None,
             vertical_id=vertical_id,
+            filter_out_lt5h=filter_out_lt5h,
         )
         payload = {'weekKeys': wk_strs, 'roles': roles_payload, 'series': series, 'summary': summary}
         # Set cache (best‑effort)
@@ -1546,6 +1563,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'dept_id': dept_id,
                     'weeks': weeks,
                     'roles_count': len(role_ids or []),
+                    'filter_out_lt5h': filter_out_lt5h,
                     'duration_ms': int((t1 - t0) * 1000),
                     'mapped_projected_hours': float(summary.get('mappedProjectedHours') or 0.0),
                     'unmapped_project_role_hours': float(summary.get('unmappedProjectRoleHours') or 0.0),

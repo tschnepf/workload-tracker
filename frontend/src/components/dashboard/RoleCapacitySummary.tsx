@@ -18,6 +18,22 @@ const utilizationTone = (pct: number) => {
   return { bar: '#ef4444', text: 'text-red-300' };
 };
 
+type RoleHeatmapCell = {
+  weekKey: string;
+  demand: number;
+  assigned: number;
+  capacity: number;
+  available: number;
+  people: number;
+  utilization: number;
+};
+
+type RoleHeatmapRow = {
+  roleName: string;
+  latestUtilization: number;
+  cells: RoleHeatmapCell[];
+};
+
 interface RoleCapacitySummaryProps {
   title?: string;
   className?: string;
@@ -35,16 +51,28 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [weekKeys, setWeekKeys] = React.useState<string[]>([]);
-  const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; projected?: number[]; demand?: number[]; capacity: number[] }>>([]);
+  const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; projected?: number[]; demand?: number[]; capacity: number[]; people?: number[] }>>([]);
   const [summary, setSummary] = React.useState<{
     mappedProjectedHours?: number;
     unmappedProjectRoleHours?: number;
     mappedTemplateRolePairsUsed?: number;
   } | null>(null);
+  const [filterOutLt5h, setFilterOutLt5h] = React.useState(false);
   const [showTrend, setShowTrend] = React.useState(false);
+  const [hoveredCell, setHoveredCell] = React.useState<{
+    roleName: string;
+    weekLabel: string;
+    utilization: number;
+    assigned: number;
+    available: number;
+    capacity: number;
+    people: number;
+    demand: number;
+    left: number;
+    top: number;
+  } | null>(null);
   const refreshTimerRef = React.useRef<number | null>(null);
-  const summaryRef = React.useRef<HTMLDivElement | null>(null);
-  const [summaryHeight, setSummaryHeight] = React.useState(0);
+  const heatmapScrollRef = React.useRef<HTMLDivElement | null>(null);
   const hasBootstrappedRef = React.useRef(false);
 
   const refresh = React.useCallback(async () => {
@@ -57,6 +85,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
             department: deptState.selectedDepartmentId ?? undefined,
             weeks,
             vertical: verticalState.selectedVerticalId ?? undefined,
+            filter_out_lt5h: filterOutLt5h ? 1 : 0,
           });
           hasBootstrappedRef.current = true;
           setWeekKeys(bootstrap.timeline?.weekKeys || []);
@@ -72,6 +101,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
         department: deptState.selectedDepartmentId ?? null,
         weeks,
         vertical: verticalState.selectedVerticalId ?? undefined,
+        filterOutLt5h,
       });
       setWeekKeys(res.weekKeys || []);
       setSeries(res.series || []);
@@ -84,7 +114,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [deptState.selectedDepartmentId, weeks, verticalState.selectedVerticalId]);
+  }, [deptState.selectedDepartmentId, weeks, verticalState.selectedVerticalId, filterOutLt5h]);
 
   React.useEffect(() => {
     refresh();
@@ -110,48 +140,76 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
     };
   }, [refresh]);
 
-  const summaryRows = React.useMemo(() => {
-    if (!series.length) return [];
-    const idx = weekKeys.length > 0 ? weekKeys.length - 1 : series[0].assigned.length - 1;
-    const prevIdx = Math.max(0, idx - 1);
+  const formattedWeekLabel = React.useCallback((weekKey: string) => {
+    const date = new Date(`${weekKey}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return weekKey;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }, []);
+
+  const roleRows = React.useMemo<RoleHeatmapRow[]>(() => {
+    if (!series.length || !weekKeys.length) return [];
     return series.map((role) => {
-      const demand = Number(((role.demand && role.demand.length > 0) ? role.demand[idx] : role.assigned[idx]) ?? 0);
-      const assigned = Number(role.assigned[idx] ?? 0);
-      const capacity = Number(role.capacity[idx] ?? 0);
-      const prevDemand = Number(((role.demand && role.demand.length > 0) ? role.demand[prevIdx] : role.assigned[prevIdx]) ?? 0);
-      const prevCapacity = Number(role.capacity[prevIdx] ?? 0);
-      const utilization = capacity > 0 ? Math.round((demand / capacity) * 100) : 0;
-      const prevUtilization = prevCapacity > 0 ? Math.round((prevDemand / prevCapacity) * 100) : utilization;
-      const delta = utilization - prevUtilization;
+      const cells = weekKeys.map((weekKey, idx) => {
+        const demand = Number(((role.demand && role.demand.length > 0) ? role.demand[idx] : role.assigned[idx]) ?? 0);
+        const assigned = Number(role.assigned[idx] ?? 0);
+        const capacity = Number(role.capacity[idx] ?? 0);
+        const people = Number(role.people?.[idx] ?? 0);
+        const utilization = capacity > 0 ? Math.round((assigned / capacity) * 100) : 0;
+        return {
+          weekKey,
+          demand,
+          assigned,
+          capacity,
+          available: Math.max(0, capacity - assigned),
+          people,
+          utilization,
+        };
+      });
       return {
         roleName: role.roleName,
-        demand,
-        assigned,
-        capacity,
-        utilization,
-        delta,
+        latestUtilization: cells[cells.length - 1]?.utilization ?? 0,
+        cells,
       };
     });
   }, [series, weekKeys]);
 
-  React.useLayoutEffect(() => {
-    const node = summaryRef.current;
-    if (!node) return;
-    const update = () => {
-      const next = node.getBoundingClientRect().height;
-      if (next && Math.abs(next - summaryHeight) > 1) {
-        setSummaryHeight(next);
-      }
-    };
-    update();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => update());
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [summaryRows.length, summaryHeight]);
+  React.useEffect(() => {
+    if (showTrend) setHoveredCell(null);
+  }, [showTrend]);
 
-  const trendMinHeight = 420;
-  const contentMinHeight = Math.max(summaryHeight, trendMinHeight);
+  React.useLayoutEffect(() => {
+    const node = heatmapScrollRef.current;
+    if (!node) return;
+    const onScroll = () => setHoveredCell(null);
+    node.addEventListener('scroll', onScroll);
+    return () => node.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const handleCellHover = React.useCallback(
+    (
+      event: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>,
+      roleName: string,
+      cell: RoleHeatmapCell,
+    ) => {
+      const scrollHost = heatmapScrollRef.current;
+      if (!scrollHost) return;
+      const hostRect = scrollHost.getBoundingClientRect();
+      const targetRect = event.currentTarget.getBoundingClientRect();
+      setHoveredCell({
+        roleName,
+        weekLabel: formattedWeekLabel(cell.weekKey),
+        utilization: cell.utilization,
+        assigned: cell.assigned,
+        available: cell.available,
+        capacity: cell.capacity,
+        people: cell.people,
+        demand: cell.demand,
+        left: targetRect.left - hostRect.left + targetRect.width / 2,
+        top: targetRect.top - hostRect.top - 12,
+      });
+    },
+    [formattedWeekLabel],
+  );
 
   return (
     <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] ${className ?? ''}`}>
@@ -194,10 +252,10 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
             </button>
           ))}
         </div>
-        <div className="text-xs text-[var(--muted)]">Latest period</div>
+        <div className="text-xs text-[var(--muted)]">Weekly view</div>
       </div>
 
-      <div className="mt-4" style={{ minHeight: contentMinHeight }}>
+      <div className="mt-4 min-h-[420px]">
         {loading ? (
           <div className="text-sm text-[var(--muted)]">Loading role capacity…</div>
         ) : error ? (
@@ -218,31 +276,94 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
             )}
           </div>
         ) : (
-          <div ref={summaryRef} className={summaryRows.length > 0 ? 'space-y-3' : ''}>
-            {summaryRows.length === 0 ? (
+          <div className="space-y-3">
+            {roleRows.length === 0 ? (
               <div className="text-sm text-[var(--muted)]">No role capacity data.</div>
             ) : (
-              summaryRows.map((row) => {
-                const tone = utilizationTone(row.utilization);
-                return (
-                  <div key={row.roleName} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-[var(--text)] font-medium">{row.roleName}</span>
-                      <span className={`${tone.text}`}>{row.utilization}%</span>
+              <div className="space-y-2">
+                <div className="text-[11px] text-[var(--muted)]">
+                  Weekly utilization heat map by role. Hover a square for role/week details.
+                </div>
+                <div ref={heatmapScrollRef} className="relative overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]/35 p-1">
+                  <table className="w-max border-separate border-spacing-0 text-xs">
+                    <tbody>
+                      {roleRows.map((row) => {
+                        const tone = utilizationTone(row.latestUtilization);
+                        return (
+                          <tr key={row.roleName}>
+                            <td className="sticky left-0 z-10 bg-[var(--surface)]/95 px-1.5 py-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="whitespace-nowrap text-[var(--text)]">{row.roleName}</span>
+                                <span className={`${tone.text} text-[10px]`}>{row.latestUtilization}%</span>
+                              </div>
+                            </td>
+                            {row.cells.map((cell) => {
+                              const cellTone = utilizationTone(cell.utilization);
+                              const tooltipText = [
+                                `${row.roleName} • ${formattedWeekLabel(cell.weekKey)}`,
+                                `Utilization: ${cell.utilization}%`,
+                                `Assigned / Available: ${Math.round(cell.assigned)}h / ${Math.round(cell.available)}h`,
+                                `Capacity: ${Math.round(cell.capacity)}h`,
+                                `Demand (incl. projected): ${Math.round(cell.demand)}h`,
+                                `Active people: ${cell.people}`,
+                              ].join('\n');
+                              return (
+                                <td key={`${row.roleName}-${cell.weekKey}`} className="p-0 text-center leading-none">
+                                  <button
+                                    type="button"
+                                    className="block h-4 w-4 rounded-none border-0 transition-transform hover:scale-105 focus-visible:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                                    style={{ backgroundColor: cellTone.bar, opacity: 0.88 }}
+                                    title={tooltipText}
+                                    aria-label={tooltipText}
+                                    onMouseEnter={(event) => handleCellHover(event, row.roleName, cell)}
+                                    onMouseMove={(event) => handleCellHover(event, row.roleName, cell)}
+                                    onMouseLeave={() => setHoveredCell(null)}
+                                    onFocus={(event) => handleCellHover(event, row.roleName, cell)}
+                                    onBlur={() => setHoveredCell(null)}
+                                  />
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {hoveredCell ? (
+                    <div
+                      role="tooltip"
+                      className="pointer-events-none absolute z-30 w-52 -translate-x-1/2 -translate-y-full rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-2 text-[11px] text-[var(--text)] shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+                      style={{
+                        left: hoveredCell.left,
+                        top: hoveredCell.top,
+                      }}
+                    >
+                      <div className="font-medium">{hoveredCell.roleName}</div>
+                      <div className="text-[var(--muted)]">{hoveredCell.weekLabel}</div>
+                      <div className="mt-1.5">Utilization: {hoveredCell.utilization}%</div>
+                      <div>Assigned / Available: {Math.round(hoveredCell.assigned)}h / {Math.round(hoveredCell.available)}h</div>
+                      <div>Capacity: {Math.round(hoveredCell.capacity)}h</div>
+                      <div>Demand: {Math.round(hoveredCell.demand)}h</div>
+                      <div>Active people: {hoveredCell.people}</div>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
-                      <span>{Math.round(row.demand)}h demand ({Math.round(row.assigned)}h assigned) / {Math.round(row.capacity)}h</span>
-                      <span>{row.delta >= 0 ? '+' : ''}{row.delta}%</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-[var(--surface)]/70">
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${Math.min(120, row.utilization)}%`, backgroundColor: tone.bar }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-3 text-[10px] text-[var(--muted)]">
+                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: '#60a5fa' }} />0-70%</div>
+                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: '#34d399' }} />71-85%</div>
+                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: '#f59e0b' }} />86-100%</div>
+                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: '#ef4444' }} />100%+</div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-[11px] text-[var(--muted)]">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded border border-[var(--border)] bg-[var(--surface)]"
+                    checked={filterOutLt5h}
+                    onChange={(event) => setFilterOutLt5h(event.target.checked)}
+                  />
+                  Filter Out &lt;5hr
+                </label>
+              </div>
             )}
             {(summary?.unmappedProjectRoleHours || 0) > 0 ? (
               <div className="mt-3 text-xs text-amber-300">

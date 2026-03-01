@@ -1144,7 +1144,7 @@ export const departmentsApi = {
 // Assignment API
 export const assignmentsApi = {
   // Get all assignments with pagination support and optional project filtering
-  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> }) => {
+  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }> }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
@@ -1158,6 +1158,9 @@ export const assignmentsApi = {
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
     if (params?.department_filters && params.department_filters.length) {
       queryParams.set('department_filters', JSON.stringify(params.department_filters));
+    }
+    if (params?.search_tokens && params.search_tokens.length) {
+      queryParams.set('search_tokens', JSON.stringify(params.search_tokens));
     }
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     // Avoid any intermediate caching layers returning stale data after writes
@@ -1239,7 +1242,7 @@ export const assignmentsApi = {
 
   // Get all assignments (bulk API - Phase 2 optimization)
   listAll: async (
-    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[]; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> },
+    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[]; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }> },
     options?: { noCache?: boolean }
   ): Promise<Assignment[]> => {
     const sp = new URLSearchParams();
@@ -1251,6 +1254,9 @@ export const assignmentsApi = {
     if (filters?.vertical != null) sp.set('vertical', String(filters.vertical));
     if (filters?.department_filters && filters.department_filters.length) {
       sp.set('department_filters', JSON.stringify(filters.department_filters));
+    }
+    if (filters?.search_tokens && filters.search_tokens.length) {
+      sp.set('search_tokens', JSON.stringify(filters.search_tokens));
     }
     const qs = sp.toString();
     if (options?.noCache) {
@@ -1616,6 +1622,7 @@ export const reportsApi = {
     role_ids?: string;
     vertical?: number;
     include_inactive?: 0 | 1;
+    filter_out_lt5h?: 0 | 1;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.weeks != null) queryParams.set('weeks', String(params.weeks));
@@ -1623,6 +1630,7 @@ export const reportsApi = {
     if (params?.role_ids) queryParams.set('role_ids', params.role_ids);
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
     if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
+    if (params?.filter_out_lt5h != null) queryParams.set('filter_out_lt5h', String(params.filter_out_lt5h));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApiCached<RoleCapacityBootstrapResponse>(`/reports/role-capacity/bootstrap/${queryString}`);
   },

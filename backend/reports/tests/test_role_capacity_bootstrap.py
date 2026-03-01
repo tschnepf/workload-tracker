@@ -21,22 +21,22 @@ class RoleCapacityBootstrapApiTests(TestCase):
         self.client.force_authenticate(self.user)
 
         vertical = Vertical.objects.create(name='Bootstrap Vertical')
-        department = Department.objects.create(name='Bootstrap Department', vertical=vertical, is_active=True)
-        project = Project.objects.create(name='Bootstrap Project', vertical=vertical, is_active=True)
-        role = Role.objects.create(name='Bootstrap Role', is_active=True, sort_order=1)
+        self.department = Department.objects.create(name='Bootstrap Department', vertical=vertical, is_active=True)
+        self.project = Project.objects.create(name='Bootstrap Project', vertical=vertical, is_active=True)
+        self.role = Role.objects.create(name='Bootstrap Role', is_active=True, sort_order=1)
         person = Person.objects.create(
             name='Bootstrap Person',
-            department=department,
-            role=role,
+            department=self.department,
+            role=self.role,
             weekly_capacity=40,
             is_active=True,
         )
         today = date.today()
-        sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        self.sunday = today - timedelta(days=(today.weekday() + 1) % 7)
         Assignment.objects.create(
             person=person,
-            project=project,
-            weekly_hours={sunday.isoformat(): 10},
+            project=self.project,
+            weekly_hours={self.sunday.isoformat(): 10},
             is_active=True,
         )
 
@@ -53,3 +53,52 @@ class RoleCapacityBootstrapApiTests(TestCase):
             self.assertIn('capacity', row)
             self.assertIn('projected', row)
             self.assertIn('demand', row)
+
+    def test_bootstrap_filter_out_lt5h_excludes_low_hour_people(self):
+        low_person = Person.objects.create(
+            name='Bootstrap Low Person',
+            department=self.department,
+            role=self.role,
+            weekly_capacity=40,
+            is_active=True,
+        )
+        Assignment.objects.create(
+            person=low_person,
+            project=self.project,
+            weekly_hours={self.sunday.isoformat(): 2},
+            is_active=True,
+        )
+
+        baseline = self.client.get(
+            '/api/reports/role-capacity/bootstrap/',
+            {'weeks': 4, 'department': self.department.id, 'role_ids': str(self.role.id)},
+        )
+        self.assertEqual(baseline.status_code, status.HTTP_200_OK, baseline.content)
+        baseline_payload = baseline.json()
+        baseline_series = baseline_payload['timeline']['series']
+        self.assertTrue(baseline_series)
+        baseline_row = baseline_series[0]
+        week0 = self.sunday.isoformat()
+        idx0 = baseline_payload['timeline']['weekKeys'].index(week0)
+        self.assertAlmostEqual(float(baseline_row['assigned'][idx0]), 12.0)
+        self.assertAlmostEqual(float(baseline_row['capacity'][idx0]), 80.0)
+        self.assertEqual(int(baseline_row['people'][idx0]), 2)
+
+        filtered = self.client.get(
+            '/api/reports/role-capacity/bootstrap/',
+            {
+                'weeks': 4,
+                'department': self.department.id,
+                'role_ids': str(self.role.id),
+                'filter_out_lt5h': 1,
+            },
+        )
+        self.assertEqual(filtered.status_code, status.HTTP_200_OK, filtered.content)
+        filtered_payload = filtered.json()
+        filtered_series = filtered_payload['timeline']['series']
+        self.assertTrue(filtered_series)
+        filtered_row = filtered_series[0]
+        idx0 = filtered_payload['timeline']['weekKeys'].index(week0)
+        self.assertAlmostEqual(float(filtered_row['assigned'][idx0]), 10.0)
+        self.assertAlmostEqual(float(filtered_row['capacity'][idx0]), 40.0)
+        self.assertEqual(int(filtered_row['people'][idx0]), 1)

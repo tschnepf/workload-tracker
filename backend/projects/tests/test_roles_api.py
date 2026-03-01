@@ -6,6 +6,7 @@ from projects.models import ProjectRole
 from projects.models import Project
 from people.models import Person
 from assignments.models import Assignment
+from roles.models import Role
 
 
 class ProjectRolesApiTests(TestCase):
@@ -188,3 +189,32 @@ class ProjectRolesApiTests(TestCase):
         roles = res.json().get('rolesByDepartment', {}).get(str(self.dept.id), [])
         self.assertIn('Active Role', [role['name'] for role in roles])
         self.assertIn('Inactive Role', [role['name'] for role in roles])
+
+    def test_search_tokens_match_assigned_people_role_names(self):
+        director_role = Role.objects.create(name='Director')
+        engineer_role = Role.objects.create(name='Engineer')
+
+        project_director = Project.objects.create(name='Director Project', status='active')
+        project_engineer = Project.objects.create(name='Engineer Project', status='active')
+
+        director = Person.objects.create(name='Dana', weekly_capacity=36, department=self.dept, role=director_role)
+        engineer = Person.objects.create(name='Eli', weekly_capacity=36, department=self.dept, role=engineer_role)
+        director_two = Person.objects.create(name='Drew', weekly_capacity=36, department=self.dept, role=director_role)
+        Assignment.objects.create(person=director, project=project_director, weekly_hours={}, is_active=True)
+        Assignment.objects.create(person=director_two, project=project_director, weekly_hours={}, is_active=True)
+        Assignment.objects.create(person=engineer, project=project_engineer, weekly_hours={}, is_active=True)
+
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            '/api/projects/search/',
+            {
+                'search_tokens': [{'term': 'director', 'op': 'and'}],
+                'page_size': 25,
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        names = [item['name'] for item in res.json().get('results', [])]
+        self.assertIn(project_director.name, names)
+        self.assertNotIn(project_engineer.name, names)
+        self.assertEqual(names.count(project_director.name), 1)

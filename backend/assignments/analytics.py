@@ -12,11 +12,73 @@ from roles.models import Role
 from core.models import AutoHoursRoleSetting, AutoHoursTemplateRoleSetting
 
 
+def _eligible_role_capacity_people_ids(
+    dept_id: int | None,
+    role_ids: List[int] | None,
+    vertical_id: int | None,
+    week_keys: List[str],
+    min_hours_per_week: float,
+    weeks_to_check: int,
+) -> set[int]:
+    eval_weeks = max(0, min(int(weeks_to_check or 0), len(week_keys)))
+    if eval_weeks == 0:
+        return set()
+    eval_week_keys = week_keys[:eval_weeks]
+
+    asn_qs = Asn.objects.filter(is_active=True, person__is_active=True)
+    if dept_id is not None:
+        asn_qs = asn_qs.filter(person__department_id=dept_id)
+    if vertical_id is not None:
+        asn_qs = asn_qs.filter(project__vertical_id=vertical_id)
+    asn_qs = asn_qs.select_related('person').only(
+        'person_id',
+        'weekly_hours',
+        'person__role_id',
+        'person__hire_date',
+        'person__is_active',
+    )
+
+    totals_by_person: Dict[int, List[float]] = {}
+    for asn in asn_qs.iterator():
+        rid = getattr(asn.person, 'role_id', None)
+        if not rid:
+            continue
+        if role_ids and rid not in role_ids:
+            continue
+        pid = int(getattr(asn, 'person_id', 0) or 0)
+        if pid <= 0:
+            continue
+        hire = getattr(asn.person, 'hire_date', None)
+        hire_str = hire.isoformat() if hire else None
+        wh = getattr(asn, 'weekly_hours', None) or {}
+        weekly_totals = totals_by_person.setdefault(pid, [0.0 for _ in range(eval_weeks)])
+        for idx, wk in enumerate(eval_week_keys):
+            if hire_str and wk < hire_str:
+                continue
+            try:
+                hours = float(wh.get(wk) or 0.0)
+            except Exception:
+                hours = 0.0
+            if hours <= 0:
+                continue
+            weekly_totals[idx] += hours
+
+    threshold = float(min_hours_per_week or 0.0)
+    return {
+        pid
+        for pid, totals in totals_by_person.items()
+        if any(float(total or 0.0) >= threshold for total in totals)
+    }
+
+
 def _python_role_capacity(
     dept_id: int | None,
     week_keys: List[date],
     role_ids: List[int] | None,
     vertical_id: int | None = None,
+    filter_out_lt5h: bool = False,
+    low_hours_threshold: float = 5.0,
+    low_hours_weeks: int = 4,
 ) -> Tuple[List[str], List[Dict], List[Dict], Dict]:
     """Optimized Python implementation (portable across DB vendors).
 
@@ -40,14 +102,32 @@ def _python_role_capacity(
     if vertical_id is not None:
         people_qs = people_qs.filter(department__vertical_id=vertical_id)
     people_qs = people_qs.only('id', 'role_id', 'weekly_capacity', 'hire_date')
-    people_by_role: Dict[int, List[Tuple[int, date | None]]] = {}
+    people_by_role: Dict[int, List[Tuple[int, date | None, int]]] = {}
     for p in people_qs.iterator():
         rid = getattr(p, 'role_id', None)
         if not rid:
             continue
         if role_ids and rid not in role_ids:
             continue
-        people_by_role.setdefault(rid, []).append((int(getattr(p, 'weekly_capacity', 0) or 0), getattr(p, 'hire_date', None)))
+        pid = int(getattr(p, 'id', 0) or 0)
+        if pid <= 0:
+            continue
+        people_by_role.setdefault(rid, []).append((
+            int(getattr(p, 'weekly_capacity', 0) or 0),
+            getattr(p, 'hire_date', None),
+            pid,
+        ))
+
+    eligible_person_ids: set[int] | None = None
+    if filter_out_lt5h:
+        eligible_person_ids = _eligible_role_capacity_people_ids(
+            dept_id=dept_id,
+            role_ids=role_ids,
+            vertical_id=vertical_id,
+            week_keys=wk_strs,
+            min_hours_per_week=low_hours_threshold,
+            weeks_to_check=low_hours_weeks,
+        )
 
     caps: Dict[Tuple[str, int], float] = {}
     heads: Dict[Tuple[str, int], int] = {}
@@ -55,7 +135,9 @@ def _python_role_capacity(
         for wk in week_keys:
             total = 0.0
             count = 0
-            for cap, hire in lst:
+            for cap, hire, pid in lst:
+                if eligible_person_ids is not None and pid not in eligible_person_ids:
+                    continue
                 if hire and hire > wk:
                     continue
                 total += float(cap or 0)
@@ -77,6 +159,9 @@ def _python_role_capacity(
         if not rid:
             continue
         if role_ids and rid not in role_ids:
+            continue
+        pid = int(getattr(a, 'person_id', 0) or 0)
+        if eligible_person_ids is not None and pid not in eligible_person_ids:
             continue
         wh = getattr(a, 'weekly_hours', None) or {}
         hire = getattr(a.person, 'hire_date', None)
@@ -211,6 +296,9 @@ def _postgres_role_capacity(
     week_keys: List[date],
     role_ids: List[int] | None,
     vertical_id: int | None = None,
+    filter_out_lt5h: bool = False,
+    low_hours_threshold: float = 5.0,
+    low_hours_weeks: int = 4,
 ) -> Tuple[List[str], List[Dict], List[Dict], Dict]:
     """Postgres JSONB implementation using lateral expansion and GIN prefilter.
     If anything goes wrong, callers should fallback to the Python path.
@@ -315,18 +403,71 @@ def compute_role_capacity(
     week_keys: List[date],
     role_ids: List[int] | None,
     vertical_id: int | None = None,
+    filter_out_lt5h: bool = False,
+    low_hours_threshold: float = 5.0,
+    low_hours_weeks: int = 4,
 ) -> Tuple[List[str], List[Dict], List[Dict], Dict]:
     """Dispatch to the best implementation based on DB vendor.
     Falls back safely to the Python path if Postgres query fails.
     """
+    if filter_out_lt5h:
+        return _python_role_capacity(
+            dept_id,
+            week_keys,
+            role_ids,
+            vertical_id=vertical_id,
+            filter_out_lt5h=filter_out_lt5h,
+            low_hours_threshold=low_hours_threshold,
+            low_hours_weeks=low_hours_weeks,
+        )
     if bool(settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True)):
-        return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=vertical_id)
+        return _python_role_capacity(
+            dept_id,
+            week_keys,
+            role_ids,
+            vertical_id=vertical_id,
+            filter_out_lt5h=filter_out_lt5h,
+            low_hours_threshold=low_hours_threshold,
+            low_hours_weeks=low_hours_weeks,
+        )
     if vertical_id is not None:
-        return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=vertical_id)
+        return _python_role_capacity(
+            dept_id,
+            week_keys,
+            role_ids,
+            vertical_id=vertical_id,
+            filter_out_lt5h=filter_out_lt5h,
+            low_hours_threshold=low_hours_threshold,
+            low_hours_weeks=low_hours_weeks,
+        )
     if connection.vendor == 'postgresql':
         try:
-            return _postgres_role_capacity(dept_id, week_keys, role_ids, vertical_id=None)
+            return _postgres_role_capacity(
+                dept_id,
+                week_keys,
+                role_ids,
+                vertical_id=None,
+                filter_out_lt5h=filter_out_lt5h,
+                low_hours_threshold=low_hours_threshold,
+                low_hours_weeks=low_hours_weeks,
+            )
         except Exception:
             # Fall back to Python path on any SQL/driver error
-            return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=None)
-    return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=None)
+            return _python_role_capacity(
+                dept_id,
+                week_keys,
+                role_ids,
+                vertical_id=None,
+                filter_out_lt5h=filter_out_lt5h,
+                low_hours_threshold=low_hours_threshold,
+                low_hours_weeks=low_hours_weeks,
+            )
+    return _python_role_capacity(
+        dept_id,
+        week_keys,
+        role_ids,
+        vertical_id=None,
+        filter_out_lt5h=filter_out_lt5h,
+        low_hours_threshold=low_hours_threshold,
+        low_hours_weeks=low_hours_weeks,
+    )

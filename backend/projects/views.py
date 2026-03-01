@@ -378,7 +378,10 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Apply search tokens early to reduce scope
         tokens = parse_search_tokens(request=request, data=data)
         project_fields = ['name', 'client', 'project_number', 'description', 'assigned_names_text']
-        queryset = apply_token_filter(queryset, tokens, project_fields)
+        assignment_people_fields = ['assignment__person__role__name']
+        queryset = apply_token_filter(queryset, tokens, project_fields + assignment_people_fields)
+        if tokens:
+            queryset = queryset.distinct()
 
         # Department filter application (assignment-driven, parity with UI)
         if include_all or include_any or exclude_only:
@@ -1320,7 +1323,10 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Tokenized search (parity with search endpoint)
         tokens = parse_search_tokens(request=request)
         project_fields = ['name', 'client', 'project_number', 'description', 'assigned_names_text']
-        queryset = apply_token_filter(queryset, tokens, project_fields)
+        assignment_people_fields = ['assignment__person__role__name']
+        queryset = apply_token_filter(queryset, tokens, project_fields + assignment_people_fields)
+        if tokens:
+            queryset = queryset.distinct()
 
         # Department filter application (assignment-driven, parity with UI)
         if include_all or include_any or exclude_only:

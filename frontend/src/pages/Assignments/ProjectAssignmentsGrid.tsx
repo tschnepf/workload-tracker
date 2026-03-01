@@ -1369,6 +1369,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         include_children: inc,
         department_filters: deptFilters,
         vertical: verticalState.selectedVerticalId ?? undefined,
+        search_tokens: searchTokenPayload.length ? searchTokenPayload : undefined,
       });
       const rows = Array.isArray((res as any)) ? (res as any) : (res?.results || []);
       all.push(...rows);
@@ -1392,11 +1393,18 @@ const ProjectAssignmentsGrid: React.FC = () => {
       include_children: inc,
       department_filters: deptFilters,
       vertical: verticalState.selectedVerticalId ?? undefined,
+      search_tokens: searchTokenPayload.length ? searchTokenPayload : undefined,
     });
     const rows = Array.isArray(res as any) ? (res as any) : (res?.results || []);
     const hasMore = Boolean((res as any)?.next);
     return { rows, hasMore };
-  }, []);
+  }, [
+    deptState.selectedDepartmentId,
+    deptState.includeChildren,
+    departmentFiltersPayload,
+    verticalState.selectedVerticalId,
+    searchTokenPayload,
+  ]);
 
   const loadProjectAssignmentsPage = useCallback(async (projectId: number, page: number, opts?: { append?: boolean }) => {
     setMobileLoadingMoreByProject(prev => new Set(prev).add(projectId));
@@ -1473,6 +1481,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         department_filters: deptFilters,
         include_placeholders: 1,
         vertical: verticalState.selectedVerticalId ?? undefined,
+        search_tokens: searchTokenPayload.length ? searchTokenPayload : undefined,
       }, { noCache: true });
       const allAssignments = Array.isArray(bulk) ? bulk : [];
       setAssignmentsData(prev => {
@@ -1486,7 +1495,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } finally {
       setLoadingAssignments(new Set());
     }
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, projectsData]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, searchTokenPayload, projectsData]);
 
   const toggleProjectExpanded = (projectId: number) => {
     const getMainScrollContainer = () => bodyScrollRef.current?.closest('main') as HTMLElement | null;

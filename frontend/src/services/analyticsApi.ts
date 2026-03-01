@@ -109,12 +109,13 @@ export async function getAssignedHoursDeliverableTimeline(opts?: { weeks?: numbe
 }
 
 // Role capacity vs assigned timeline per department
-export async function getRoleCapacityTimeline(opts: { department?: number | null; weeks?: number; roleIdsCsv?: string; vertical?: number }) {
+export async function getRoleCapacityTimeline(opts: { department?: number | null; weeks?: number; roleIdsCsv?: string; vertical?: number; filterOutLt5h?: boolean }) {
   const sp = new URLSearchParams();
   if (opts.department != null) sp.set('department', String(opts.department));
   if (opts.weeks != null) sp.set('weeks', String(opts.weeks));
   if (opts.roleIdsCsv) sp.set('role_ids', opts.roleIdsCsv);
   if (opts.vertical != null) sp.set('vertical', String(opts.vertical));
+  if (opts.filterOutLt5h) sp.set('filter_out_lt5h', '1');
   const qs = `?${sp.toString()}`;
   const endpoint = `/assignments/analytics_role_capacity/${qs}`;
   return withCachedGet(endpoint, async () => {
