@@ -1,0 +1,13 @@
+{
+  "runId": "",
+  "prefix": "",
+  "weekKeys": [],
+  "ids": {
+    "projectIds": [],
+    "personIds": [],
+    "assignmentIds": [],
+    "hotAssignmentIds": [],
+    "departmentIds": [],
+    "roleIds": []
+  }
+}

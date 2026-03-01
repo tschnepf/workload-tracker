@@ -16,6 +16,8 @@ help:
 	@echo "  make openapi-schema  - Dump OpenAPI schema to backend/openapi.json"
 	@echo "  make openapi-client  - Generate frontend OpenAPI TS types"
 	@echo "  make test           - Run tests"
+	@echo "  make load-test-quick - Run quick 50-100 user stack concurrency load test"
+	@echo "  make load-test-soak  - Run 60-minute confirmation soak load test"
 	@echo "  make clean          - Clean up containers and volumes"
 	@echo ""
 	@echo "Production:"
@@ -169,3 +171,11 @@ restore-latest:
 reset-throttles:
 	@echo "Clearing DRF throttle keys from Redis (DB 1)..."
 	@docker-compose exec redis sh -lc 'for k in $$(redis-cli -n 1 --scan --pattern "*throttle*" | sort -u); do redis-cli -n 1 DEL "$$k" >/dev/null; done; echo done'
+
+.PHONY: load-test-quick
+load-test-quick:
+	@./scripts/load/run-load.sh --mode quick --run-id $$(date +%Y%m%d%H%M%S)
+
+.PHONY: load-test-soak
+load-test-soak:
+	@./scripts/load/run-load.sh --mode soak --run-id $$(date +%Y%m%d%H%M%S)

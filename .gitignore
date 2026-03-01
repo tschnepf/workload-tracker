@@ -69,6 +69,11 @@ CON.txt
 **/.cache
 DB-Prod-Dumps/workload-tracker_dev_workload_tracker_prod_20260126T210259Z.pgcustom
 
+# Load-test generated artifacts
+tests/load/reports/*
+!tests/load/reports/.gitkeep
+tests/load/data/source_snapshot.sql.gz
+
 # Local Ubuntu deployment overrides (do not commit)
 .env-ubuntu
 docker-compose.ubuntu.yml

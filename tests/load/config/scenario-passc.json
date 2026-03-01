@@ -1,0 +1,85 @@
+{
+  "target": {
+    "baseUrl": "http://backend:8000",
+    "refreshCookieName": "refresh_token"
+  },
+  "thresholds": {
+    "errorRate": 0.01,
+    "readP95Ms": 1000,
+    "writeP95Ms": 1500
+  },
+  "weights": {
+    "reads": 55,
+    "writes": 45,
+    "readOps": {
+      "projectsSearch": 24,
+      "projectsList": 16,
+      "peopleSearch": 24,
+      "gridSnapshot": 20,
+      "uiAssignmentsPage": 16
+    },
+    "writeOps": {
+      "createProject": 16,
+      "updateProject": 16,
+      "createPerson": 16,
+      "updatePerson": 16,
+      "createAssignment": 18,
+      "bulkUpdateHours": 18
+    }
+  },
+  "quick": {
+    "mixed": {
+      "startVUs": 10,
+      "stages": [
+        { "duration": "5m", "target": 50 },
+        { "duration": "10m", "target": 50 },
+        { "duration": "5m", "target": 100 },
+        { "duration": "5m", "target": 10 }
+      ]
+    },
+    "hotspot": {
+      "vus": 10,
+      "startTime": "12m",
+      "duration": "5m"
+    },
+    "auth": {
+      "vus": 2,
+      "duration": "25m"
+    }
+  },
+  "soak": {
+    "mixed": {
+      "startVUs": 20,
+      "stages": [
+        { "duration": "10m", "target": 50 },
+        { "duration": "2m", "target": 100 },
+        { "duration": "8m", "target": 50 },
+        { "duration": "2m", "target": 100 },
+        { "duration": "8m", "target": 50 },
+        { "duration": "2m", "target": 100 },
+        { "duration": "8m", "target": 50 },
+        { "duration": "2m", "target": 100 },
+        { "duration": "8m", "target": 50 },
+        { "duration": "2m", "target": 100 },
+        { "duration": "8m", "target": 50 }
+      ]
+    },
+    "hotspot": {
+      "vus": 10,
+      "startTime": "25m",
+      "duration": "10m"
+    },
+    "auth": {
+      "vus": 4,
+      "duration": "60m"
+    }
+  },
+  "timing": {
+    "thinkTimeMinSeconds": 0.2,
+    "thinkTimeMaxSeconds": 1.2,
+    "refreshEveryIterations": 20
+  },
+  "hotspot": {
+    "staleEtagEvery": 20
+  }
+}
