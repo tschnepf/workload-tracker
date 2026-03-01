@@ -35,7 +35,12 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [weekKeys, setWeekKeys] = React.useState<string[]>([]);
-  const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[] }>>([]);
+  const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; projected?: number[]; demand?: number[]; capacity: number[] }>>([]);
+  const [summary, setSummary] = React.useState<{
+    mappedProjectedHours?: number;
+    unmappedProjectRoleHours?: number;
+    mappedTemplateRolePairsUsed?: number;
+  } | null>(null);
   const [showTrend, setShowTrend] = React.useState(false);
   const refreshTimerRef = React.useRef<number | null>(null);
   const summaryRef = React.useRef<HTMLDivElement | null>(null);
@@ -56,6 +61,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
           hasBootstrappedRef.current = true;
           setWeekKeys(bootstrap.timeline?.weekKeys || []);
           setSeries(bootstrap.timeline?.series || []);
+          setSummary(bootstrap.summary || null);
           return;
         } catch {
           // Fall through to existing timeline endpoint.
@@ -69,10 +75,12 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
       });
       setWeekKeys(res.weekKeys || []);
       setSeries(res.series || []);
+      setSummary(res.summary || null);
     } catch (e: any) {
       setError(e?.message || 'Failed to load role capacity summary');
       setWeekKeys([]);
       setSeries([]);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -107,15 +115,17 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
     const idx = weekKeys.length > 0 ? weekKeys.length - 1 : series[0].assigned.length - 1;
     const prevIdx = Math.max(0, idx - 1);
     return series.map((role) => {
+      const demand = Number(((role.demand && role.demand.length > 0) ? role.demand[idx] : role.assigned[idx]) ?? 0);
       const assigned = Number(role.assigned[idx] ?? 0);
       const capacity = Number(role.capacity[idx] ?? 0);
-      const prevAssigned = Number(role.assigned[prevIdx] ?? 0);
+      const prevDemand = Number(((role.demand && role.demand.length > 0) ? role.demand[prevIdx] : role.assigned[prevIdx]) ?? 0);
       const prevCapacity = Number(role.capacity[prevIdx] ?? 0);
-      const utilization = capacity > 0 ? Math.round((assigned / capacity) * 100) : 0;
-      const prevUtilization = prevCapacity > 0 ? Math.round((prevAssigned / prevCapacity) * 100) : utilization;
+      const utilization = capacity > 0 ? Math.round((demand / capacity) * 100) : 0;
+      const prevUtilization = prevCapacity > 0 ? Math.round((prevDemand / prevCapacity) * 100) : utilization;
       const delta = utilization - prevUtilization;
       return {
         roleName: role.roleName,
+        demand,
         assigned,
         capacity,
         utilization,
@@ -221,7 +231,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
                       <span className={`${tone.text}`}>{row.utilization}%</span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
-                      <span>{Math.round(row.assigned)}h / {Math.round(row.capacity)}h</span>
+                      <span>{Math.round(row.demand)}h demand ({Math.round(row.assigned)}h assigned) / {Math.round(row.capacity)}h</span>
                       <span>{row.delta >= 0 ? '+' : ''}{row.delta}%</span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-[var(--surface)]/70">
@@ -234,6 +244,11 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
                 );
               })
             )}
+            {(summary?.unmappedProjectRoleHours || 0) > 0 ? (
+              <div className="mt-3 text-xs text-amber-300">
+                {Math.round(summary?.unmappedProjectRoleHours || 0)}h forecast demand is unmapped from project-role to people-role.
+              </div>
+            ) : null}
           </div>
         )}
       </div>

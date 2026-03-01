@@ -281,6 +281,19 @@ const ProjectsList: React.FC = () => {
   const refetchProjectsSafe = useCallback(async () => {
     try { await refetchProjects(); } catch {}
   }, [refetchProjects]);
+  const [forceRefreshing, setForceRefreshing] = useState(false);
+  const handleForceRefresh = useCallback(async () => {
+    if (forceRefreshing) return;
+    setForceRefreshing(true);
+    try {
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['projects'], refetchType: 'active' }),
+        invalidateFilterMeta(),
+      ]);
+    } finally {
+      setForceRefreshing(false);
+    }
+  }, [forceRefreshing, queryClient, invalidateFilterMeta]);
 
   const { data: departments = [] } = useQuery<Department[], Error>({
     queryKey: ['departmentsAll', verticalState.selectedVerticalId ?? null],
@@ -1126,6 +1139,15 @@ const ProjectsList: React.FC = () => {
       {searchBar}
       <button
         type="button"
+        className="h-10 inline-flex items-center px-3 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+        onClick={() => { void handleForceRefresh(); }}
+        title="Force refresh projects list"
+        disabled={forceRefreshing}
+      >
+        {forceRefreshing ? 'Refreshing...' : 'Refresh'}
+      </button>
+      <button
+        type="button"
         className="h-10 inline-flex items-center px-3 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
         onClick={openCreateDrawer}
         title="Create new project"
@@ -1371,6 +1393,14 @@ const ProjectsList: React.FC = () => {
               onClick={() => setMobileFiltersOpen(true)}
             >
               Filters
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)] disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={() => { void handleForceRefresh(); }}
+              disabled={forceRefreshing}
+            >
+              {forceRefreshing ? 'Refreshing...' : 'Refresh'}
             </button>
             <button
               type="button"

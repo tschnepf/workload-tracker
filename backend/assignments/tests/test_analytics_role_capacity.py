@@ -20,10 +20,11 @@ class AnalyticsRoleCapacityTests(TestCase):
         request = self.factory.get('/api/assignments/analytics_role_capacity/?weeks=12&nocache=1')
         force_authenticate(request, user=self.user)
         view = AssignmentViewSet.as_view({'get': 'analytics_role_capacity'})
-        with patch('assignments.views.compute_role_capacity', return_value=([], [], [])):
+        with patch('assignments.views.compute_role_capacity', return_value=([], [], [], {})):
             resp = view(request)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.data
         self.assertIn('weekKeys', data)
         self.assertIn('roles', data)
         self.assertIn('series', data)
+        self.assertIn('summary', data)

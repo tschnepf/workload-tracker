@@ -23,6 +23,7 @@ import { applyHoursToCellsOptimistic } from '@/assignments/updateHoursOptimistic
 import { autoHoursTemplatesApi, projectsApi } from '@/services/api';
 import { isAdminOrManager } from '@/utils/roleAccess';
 import { confirmAction } from '@/lib/confirmAction';
+import { showToast } from '@/lib/toastBus';
 
 interface Props {
   project: Project;
@@ -450,6 +451,46 @@ const ProjectDetailsPanel: React.FC<Props> = ({
     ?? (selectedAutoHoursTemplateId ? `Template #${selectedAutoHoursTemplateId}` : 'Global default');
   const isAutoHoursTemplateMissing =
     !!selectedAutoHoursTemplateId && !autoHoursTemplates.some(t => t.id === selectedAutoHoursTemplateId);
+  const promptAndUpdateHours = React.useCallback(async (
+    reason: 'start_date_changed' | 'template_changed',
+    nextStartDate: string | null,
+    nextTemplateId: number | null
+  ) => {
+    if (!project.id) return;
+    if (!nextStartDate) {
+      showToast('Set a project start date before updating hours from template changes.', 'info');
+      return;
+    }
+    const templateName =
+      (nextTemplateId != null
+        ? (autoHoursTemplates.find((t) => t.id === nextTemplateId)?.name || `Template #${nextTemplateId}`)
+        : 'Global default');
+    const ok = await confirmAction({
+      title: 'Update Hours and Roles?',
+      message: `Do you want to update hours based on the new start date (${nextStartDate}) and template (${templateName})?`,
+      confirmLabel: 'Update Hours and Roles',
+      tone: 'warning',
+    });
+    if (!ok) return;
+    try {
+      const summary = await projectsApi.reseedAutoHours(project.id, { reason });
+      await reloadAssignments(project.id);
+      await invalidateFilterMeta();
+      await refetchProject();
+      const updated = Number(summary?.updatedAssignments || 0);
+      const created = Number((summary as any)?.createdAssignments || 0);
+      if (created > 0) {
+        showToast(
+          `Added ${created} missing role assignment${created === 1 ? '' : 's'} and updated ${updated} assignment${updated === 1 ? '' : 's'}.`,
+          'success'
+        );
+      } else {
+        showToast(`Updated hours for ${updated} assignment${updated === 1 ? '' : 's'}.`, 'success');
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to update assignment hours.', 'error');
+    }
+  }, [project.id, autoHoursTemplates, reloadAssignments, invalidateFilterMeta, refetchProject]);
 
   return (
     <>
@@ -672,7 +713,15 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                 <InlineDate
                   value={(localPatch.startDate ?? project.startDate) || null}
                   onCommit={async (v) => {
-                    await commitField('startDate', v || null);
+                    const previousStartDate = ((localPatch.startDate ?? project.startDate) || null) as string | null;
+                    const nextStartDate = (v || null) as string | null;
+                    await commitField('startDate', nextStartDate);
+                    if (previousStartDate === nextStartDate) return;
+                    await promptAndUpdateHours(
+                      'start_date_changed',
+                      nextStartDate,
+                      (selectedAutoHoursTemplateId != null ? Number(selectedAutoHoursTemplateId) : null)
+                    );
                   }}
                   onStartEdit={() => clearFieldError('startDate')}
                   onDraftChange={() => clearFieldError('startDate')}
@@ -708,8 +757,12 @@ const ProjectDetailsPanel: React.FC<Props> = ({
                   className="min-w-[220px] bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded px-2 py-1 text-sm focus:border-[var(--primary)] disabled:opacity-60"
                   value={selectedAutoHoursTemplateId ?? ''}
                   onChange={async (e) => {
+                    const previousTemplateId = selectedAutoHoursTemplateId != null ? Number(selectedAutoHoursTemplateId) : null;
                     const next = e.target.value ? Number(e.target.value) : null;
                     await commitField('autoHoursTemplateId', next);
+                    if (previousTemplateId === next) return;
+                    const effectiveStartDate = ((localPatch.startDate ?? project.startDate) || null) as string | null;
+                    await promptAndUpdateHours('template_changed', effectiveStartDate, next);
                   }}
                   disabled={!canEditAutoHoursTemplate || autoHoursTemplatesLoading}
                   aria-label="Auto hours template"

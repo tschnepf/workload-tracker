@@ -132,7 +132,16 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
     if (!headers['If-Match'] && !etag && isDetailResource) {
       try {
         // Seed ETag by retrieving the latest representation for this detail resource
-        const getOpts: any = { ...restOpts, headers: withAuth(restOpts?.headers) };
+        const getOpts: any = {
+          ...restOpts,
+          // Force a network round-trip so ETag seeding never reuses a stale cached detail response.
+          cache: 'no-store',
+          headers: {
+            ...withAuth(restOpts?.headers),
+            'Cache-Control': 'no-cache',
+            Pragma: 'no-cache',
+          },
+        };
         delete getOpts.body; // ensure no body on GET
         const getRes = await rawClient.GET(path as any, getOpts);
         const seeded = getRes?.response?.headers?.get?.('etag');
@@ -178,10 +187,18 @@ async function baseWrite(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: any,
           if (attempt > 0) {
             await sleepMs(jitterBackoffMs(attempt - 1));
           }
-          const getRes = await rawClient.GET(path as any, {
+          const getOpts: any = {
             ...restOpts,
-            headers: withAuth(restOpts?.headers),
-          });
+            // Ensure 412 recovery always re-reads latest ETag from backend, not browser cache.
+            cache: 'no-store',
+            headers: {
+              ...withAuth(restOpts?.headers),
+              'Cache-Control': 'no-cache',
+              Pragma: 'no-cache',
+            },
+          };
+          delete getOpts.body;
+          const getRes = await rawClient.GET(path as any, getOpts);
           const newEtag = getRes.response?.headers?.get?.('etag');
           if (!newEtag || isWeakEtag(newEtag)) break;
           etagStore.set(keyPath, newEtag);

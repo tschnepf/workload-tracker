@@ -54,7 +54,12 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   const initializedSelection = React.useRef(false);
   const hasBootstrappedRef = React.useRef(false);
   const [weekKeys, setWeekKeys] = React.useState<string[]>([]);
-  const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[] }>>([]);
+  const [series, setSeries] = React.useState<Array<{ roleId: number; roleName: string; assigned: number[]; projected?: number[]; demand?: number[]; capacity: number[] }>>([]);
+  const [summary, setSummary] = React.useState<{
+    mappedProjectedHours?: number;
+    unmappedProjectRoleHours?: number;
+    mappedTemplateRolePairsUsed?: number;
+  } | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const refreshTimerRef = React.useRef<number | null>(null);
@@ -102,6 +107,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
           );
           setWeekKeys(bootstrap.timeline?.weekKeys || []);
           setSeries(bootstrap.timeline?.series || []);
+          setSummary(bootstrap.summary || null);
           return;
         } catch {
           // Fallback below to existing timeline endpoint path.
@@ -124,10 +130,12 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
       }
       setWeekKeys(res.weekKeys || []);
       setSeries(res.series || []);
+      setSummary(res.summary || null);
     } catch (e: any) {
       setError(e?.message || 'Failed to load role capacity timeline');
       setWeekKeys([]);
       setSeries([]);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -247,6 +255,11 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
         <div className="w-full">
           <h2 className="text-lg font-semibold text-[var(--text)] mb-2">{title}</h2>
           {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
+          {!error && (summary?.unmappedProjectRoleHours || 0) > 0 && (
+            <div className="text-amber-300 text-xs mb-2">
+              {Math.round(summary?.unmappedProjectRoleHours || 0)}h forecast demand is unmapped from project-role to people-role.
+            </div>
+          )}
           <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-6 lg:items-start">
             <div className="flex-1 overflow-x-auto md:overflow-visible max-h-[70vh]">
               {!error && (

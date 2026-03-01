@@ -60,6 +60,18 @@ AUTO_HOURS_MAX_WEEKS_COUNT = AUTO_HOURS_MAX_WEEKS_BEFORE + 1
 AUTO_HOURS_DEFAULT_WEEKS_COUNT = 6
 
 
+def _bump_analytics_cache_version() -> None:
+    key = 'analytics_cache_version'
+    try:
+        cache.incr(key)
+    except Exception:
+        current = cache.get(key, 1)
+        try:
+            cache.set(key, int(current) + 1, None)
+        except Exception:
+            pass
+
+
 class UiBootstrapThrottle(ScopedRateThrottle):
     scope = 'ui_bootstrap'
 
@@ -1143,7 +1155,8 @@ class AutoHoursRoleSettingsView(APIView):
         roles = list(roles_qs.order_by('department_id', 'sort_order', 'name'))
         role_ids = [r.id for r in roles]
         settings_map = {
-            s.role_id: s for s in AutoHoursRoleSetting.objects.filter(role_id__in=role_ids)
+            s.role_id: s
+            for s in AutoHoursRoleSetting.objects.filter(role_id__in=role_ids).prefetch_related('people_roles')
         }
         items = []
         for role in roles:
@@ -1177,6 +1190,12 @@ class AutoHoursRoleSettingsView(APIView):
                         role_count = max(0, int(count_raw))
                 except Exception:
                     role_count = 1
+            people_role_ids: list[int] = []
+            if setting:
+                try:
+                    people_role_ids = sorted(int(rid) for rid in setting.people_roles.values_list('id', flat=True))
+                except Exception:
+                    people_role_ids = []
             items.append({
                 'roleId': role.id,
                 'roleName': role.name,
@@ -1184,6 +1203,7 @@ class AutoHoursRoleSettingsView(APIView):
                 'departmentName': getattr(role.department, 'name', ''),
                 'percentByWeek': hours_by_week,
                 'roleCount': role_count,
+                'peopleRoleIds': people_role_ids,
                 'weeksCount': weeks_count,
                 'isActive': role.is_active,
                 'sortOrder': role.sort_order,
@@ -1203,6 +1223,7 @@ class AutoHoursRoleSettingsView(APIView):
                         'departmentName': serializers.CharField(),
                         'percentByWeek': serializers.DictField(child=serializers.FloatField()),
                         'roleCount': serializers.IntegerField(),
+                        'peopleRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                         'weeksCount': serializers.IntegerField(),
                         'isActive': serializers.BooleanField(),
                         'sortOrder': serializers.IntegerField(),
@@ -1275,6 +1296,7 @@ class AutoHoursRoleSettingsView(APIView):
                         'percentByWeek': serializers.DictField(child=serializers.FloatField(), required=False),
                         'percentPerWeek': serializers.FloatField(required=False),
                         'roleCount': serializers.IntegerField(required=False),
+                        'peopleRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                     },
                     many=True,
                 ),
@@ -1292,6 +1314,7 @@ class AutoHoursRoleSettingsView(APIView):
                         'departmentName': serializers.CharField(),
                         'percentByWeek': serializers.DictField(child=serializers.FloatField()),
                         'roleCount': serializers.IntegerField(),
+                        'peopleRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                         'weeksCount': serializers.IntegerField(),
                         'isActive': serializers.BooleanField(),
                         'sortOrder': serializers.IntegerField(),
@@ -1330,8 +1353,9 @@ class AutoHoursRoleSettingsView(APIView):
             except Exception:
                 return Response({'error': 'department_id must be an integer'}, status=400)
 
-        updates: list[tuple[int, dict, int | None]] = []
+        updates: list[tuple[int, dict, int | None, list[int] | None]] = []
         role_ids: list[int] = []
+        all_people_role_ids: set[int] = set()
         for item in settings:
             try:
                 role_id = int(item.get('roleId'))
@@ -1357,7 +1381,20 @@ class AutoHoursRoleSettingsView(APIView):
                     return Response({'error': f'invalid roleCount for roleId {role_id}'}, status=400)
                 if role_count < 0:
                     return Response({'error': 'roleCount must be >= 0'}, status=400)
-            updates.append((role_id, hours_by_week, role_count))
+            people_role_ids: list[int] | None = None
+            if 'peopleRoleIds' in item:
+                raw_people_role_ids = item.get('peopleRoleIds')
+                if raw_people_role_ids is None:
+                    people_role_ids = []
+                elif not isinstance(raw_people_role_ids, list):
+                    return Response({'error': f'peopleRoleIds must be a list for roleId {role_id}'}, status=400)
+                else:
+                    try:
+                        people_role_ids = sorted({int(rid) for rid in raw_people_role_ids})
+                    except Exception:
+                        return Response({'error': f'invalid peopleRoleIds for roleId {role_id}'}, status=400)
+                    all_people_role_ids.update(people_role_ids)
+            updates.append((role_id, hours_by_week, role_count, people_role_ids))
             role_ids.append(role_id)
 
         if role_ids:
@@ -1369,11 +1406,17 @@ class AutoHoursRoleSettingsView(APIView):
             if missing:
                 return Response({'error': f'unknown roleId(s): {missing}'}, status=400)
 
+        if all_people_role_ids:
+            existing_people_roles = set(Role.objects.filter(id__in=all_people_role_ids).values_list('id', flat=True))
+            missing_people_roles = sorted(rid for rid in all_people_role_ids if rid not in existing_people_roles)
+            if missing_people_roles:
+                return Response({'error': f'unknown peopleRoleIds: {missing_people_roles}'}, status=400)
+
         if weeks_count is not None:
             self._set_weeks_count(phase, weeks_count)
 
         with transaction.atomic():
-            for role_id, hours_by_week, role_count in updates:
+            for role_id, hours_by_week, role_count, people_role_ids in updates:
                 obj, _ = AutoHoursRoleSetting.objects.get_or_create(role_id=role_id)
                 try:
                     obj.standard_percent_of_capacity = Decimal(str(hours_by_week.get('0', 0)))
@@ -1393,7 +1436,10 @@ class AutoHoursRoleSettingsView(APIView):
                 else:
                     obj.ramp_percent_by_week = hours_by_week
                     obj.save(update_fields=['standard_percent_of_capacity', 'ramp_percent_by_week', 'updated_at'])
+                if people_role_ids is not None:
+                    obj.people_roles.set(people_role_ids)
 
+        _bump_analytics_cache_version()
         return self.get(request)
 
 
@@ -1765,7 +1811,7 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
         return Response({'detail': 'deleted'})
 
 
-class AutoHoursTemplateDuplicateView(APIView):
+class AutoHoursTemplateDuplicateView(AutoHoursTemplatesView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
 
     @extend_schema(
@@ -1814,18 +1860,17 @@ class AutoHoursTemplateDuplicateView(APIView):
             obj.excluded_roles.set(base.excluded_roles.all())
             obj.excluded_departments.set(base.excluded_departments.all())
 
-            base_settings = AutoHoursTemplateRoleSetting.objects.filter(template_id=base.id)
-            clone_settings = [
-                AutoHoursTemplateRoleSetting(
+            base_settings = list(
+                AutoHoursTemplateRoleSetting.objects.filter(template_id=base.id).prefetch_related('people_roles')
+            )
+            for setting in base_settings:
+                cloned = AutoHoursTemplateRoleSetting.objects.create(
                     template_id=obj.id,
                     role_id=setting.role_id,
                     ramp_percent_by_phase=setting.ramp_percent_by_phase or {},
                     role_count_by_phase=setting.role_count_by_phase or {},
                 )
-                for setting in base_settings
-            ]
-            if clone_settings:
-                AutoHoursTemplateRoleSetting.objects.bulk_create(clone_settings)
+                cloned.people_roles.set(setting.people_roles.values_list('id', flat=True))
 
         return Response({
             'id': obj.id,
@@ -2067,6 +2112,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                 'departmentName': serializers.CharField(),
                 'percentByWeek': serializers.DictField(child=serializers.FloatField()),
                 'roleCount': serializers.IntegerField(),
+                'peopleRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'weeksCount': serializers.IntegerField(),
                 'isActive': serializers.BooleanField(),
                 'sortOrder': serializers.IntegerField(),
@@ -2103,13 +2149,18 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         roles = list(roles_qs.order_by('department_id', 'sort_order', 'name'))
         role_ids = [r.id for r in roles]
         settings_map = {
-            s.role_id: s for s in AutoHoursTemplateRoleSetting.objects.filter(template_id=template_id, role_id__in=role_ids)
+            s.role_id: s
+            for s in AutoHoursTemplateRoleSetting.objects.filter(
+                template_id=template_id,
+                role_id__in=role_ids,
+            ).prefetch_related('people_roles')
         }
         items = []
         for role in roles:
             setting = settings_map.get(role.id)
             hours_by_week = self._empty_hours_by_week()
             role_count = 1
+            people_role_ids: list[int] = []
             if setting:
                 raw = (setting.ramp_percent_by_phase or {}).get(phase) or {}
                 if isinstance(raw, dict):
@@ -2125,6 +2176,10 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                         role_count = max(0, int(count_raw))
                 except Exception:
                     role_count = 1
+                try:
+                    people_role_ids = sorted(int(rid) for rid in setting.people_roles.values_list('id', flat=True))
+                except Exception:
+                    people_role_ids = []
             items.append({
                 'roleId': role.id,
                 'roleName': role.name,
@@ -2132,6 +2187,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                 'departmentName': getattr(role.department, 'name', ''),
                 'percentByWeek': hours_by_week,
                 'roleCount': role_count,
+                'peopleRoleIds': people_role_ids,
                 'weeksCount': weeks_count,
                 'isActive': role.is_active,
                 'sortOrder': role.sort_order,
@@ -2149,6 +2205,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                         'roleId': serializers.IntegerField(),
                         'percentByWeek': serializers.DictField(child=serializers.FloatField(), required=False),
                         'roleCount': serializers.IntegerField(required=False),
+                        'peopleRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                     },
                     many=True,
                 ),
@@ -2163,6 +2220,7 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                 'departmentName': serializers.CharField(),
                 'percentByWeek': serializers.DictField(child=serializers.FloatField()),
                 'roleCount': serializers.IntegerField(),
+                'peopleRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'weeksCount': serializers.IntegerField(),
                 'isActive': serializers.BooleanField(),
                 'sortOrder': serializers.IntegerField(),
@@ -2197,8 +2255,9 @@ class AutoHoursTemplateRoleSettingsView(APIView):
             except Exception:
                 return Response({'error': 'department_id must be an integer'}, status=400)
 
-        updates: list[tuple[int, dict, int | None]] = []
+        updates: list[tuple[int, dict, int | None, list[int] | None]] = []
         role_ids: list[int] = []
+        all_people_role_ids: set[int] = set()
         for item in settings:
             try:
                 role_id = int(item.get('roleId'))
@@ -2216,7 +2275,20 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                     return Response({'error': f'invalid roleCount for roleId {role_id}'}, status=400)
                 if role_count < 0:
                     return Response({'error': 'roleCount must be >= 0'}, status=400)
-            updates.append((role_id, hours_by_week, role_count))
+            people_role_ids: list[int] | None = None
+            if 'peopleRoleIds' in item:
+                raw_people_role_ids = item.get('peopleRoleIds')
+                if raw_people_role_ids is None:
+                    people_role_ids = []
+                elif not isinstance(raw_people_role_ids, list):
+                    return Response({'error': f'peopleRoleIds must be a list for roleId {role_id}'}, status=400)
+                else:
+                    try:
+                        people_role_ids = sorted({int(rid) for rid in raw_people_role_ids})
+                    except Exception:
+                        return Response({'error': f'invalid peopleRoleIds for roleId {role_id}'}, status=400)
+                    all_people_role_ids.update(people_role_ids)
+            updates.append((role_id, hours_by_week, role_count, people_role_ids))
             role_ids.append(role_id)
 
         if role_ids:
@@ -2234,11 +2306,17 @@ class AutoHoursTemplateRoleSettingsView(APIView):
             if missing:
                 return Response({'error': f'unknown or excluded roleId(s): {missing}'}, status=400)
 
+        if all_people_role_ids:
+            existing_people_roles = set(Role.objects.filter(id__in=all_people_role_ids).values_list('id', flat=True))
+            missing_people_roles = sorted(rid for rid in all_people_role_ids if rid not in existing_people_roles)
+            if missing_people_roles:
+                return Response({'error': f'unknown peopleRoleIds: {missing_people_roles}'}, status=400)
+
         if weeks_count is not None:
             self._set_weeks_count(template, phase, weeks_count)
 
         with transaction.atomic():
-            for role_id, hours_by_week, role_count in updates:
+            for role_id, hours_by_week, role_count, people_role_ids in updates:
                 obj, _ = AutoHoursTemplateRoleSetting.objects.get_or_create(template_id=template_id, role_id=role_id)
                 by_phase = obj.ramp_percent_by_phase or {}
                 by_phase[phase] = hours_by_week
@@ -2250,7 +2328,10 @@ class AutoHoursTemplateRoleSettingsView(APIView):
                     obj.save(update_fields=['ramp_percent_by_phase', 'role_count_by_phase', 'updated_at'])
                 else:
                     obj.save(update_fields=['ramp_percent_by_phase', 'updated_at'])
+                if people_role_ids is not None:
+                    obj.people_roles.set(people_role_ids)
 
+        _bump_analytics_cache_version()
         return self.get(request, template_id=template_id)
 
 

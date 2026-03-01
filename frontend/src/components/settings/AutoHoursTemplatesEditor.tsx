@@ -1,10 +1,11 @@
 import React from 'react';
 import Button from '@/components/ui/Button';
-import { autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
+import { autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, rolesApi, type AutoHoursRoleSetting } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, resolveUtilizationLevel, utilizationLevelToClasses } from '@/util/utilization';
+import type { Role as PeopleRole } from '@/types/models';
 import type { AutoHoursTemplate, DeliverablePhaseMappingPhase } from '@/types/models';
 
 const AutoHoursTemplatesEditor: React.FC = () => {
@@ -15,11 +16,13 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const [weeksConfig, setWeeksConfig] = React.useState({ max: FALLBACK_MAX_WEEKS_COUNT, default: FALLBACK_DEFAULT_WEEKS_COUNT });
   const maxWeeksCount = weeksConfig.max;
   const defaultWeeksCount = weeksConfig.default;
-  const roleColumnWidth = 160;
+  const roleColumnWidth = 360;
   const xToGridGap = 15;
   const roleCountControlWidth = 72;
   const roleCountControlOffset = 20;
   const roleCellPaddingRight = xToGridGap + roleCountControlOffset + roleCountControlWidth;
+  const weekColumnWidth = 64;
+  const statusColumnWidth = 88;
   const [templates, setTemplates] = React.useState<AutoHoursTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = React.useState<boolean>(false);
   const GLOBAL_TEMPLATE_ID = 'global' as const;
@@ -33,13 +36,15 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const [allRoles, setAllRoles] = React.useState<AutoHoursRoleSetting[]>([]);
   const [updatingExclusions, setUpdatingExclusions] = React.useState(false);
   const [rows, setRows] = React.useState<AutoHoursRoleSetting[]>([]);
+  const [peopleRoles, setPeopleRoles] = React.useState<PeopleRole[]>([]);
+  const [activePeopleRoleMenuRowId, setActivePeopleRoleMenuRowId] = React.useState<number | null>(null);
   const rowsRef = React.useRef<AutoHoursRoleSetting[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [saving, setSaving] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const [dirty, setDirty] = React.useState<boolean>(false);
   const [selectedPhase, setSelectedPhase] = React.useState<string>('sd');
-  const [inputMode, setInputMode] = React.useState<'percent' | 'hours'>('percent');
+  const [inputMode, setInputMode] = React.useState<'percent' | 'hours'>('hours');
   const [phaseOptions, setPhaseOptions] = React.useState<Array<{ value: string; label: string }>>([
     { value: 'sd', label: 'SD' },
     { value: 'dd', label: 'DD' },
@@ -153,6 +158,13 @@ const AutoHoursTemplatesEditor: React.FC = () => {
       .map((id) => map.get(id))
       .filter(Boolean) as AutoHoursRoleSetting[];
   }, [allRoles, excludedRoleIds]);
+  const peopleRoleById = React.useMemo(() => {
+    const map = new Map<number, PeopleRole>();
+    peopleRoles.forEach((role) => {
+      map.set(Number(role.id), role);
+    });
+    return map;
+  }, [peopleRoles]);
 
   const [selectedCells, setSelectedCells] = React.useState<Set<string>>(new Set());
   const selectedCellsRef = React.useRef<Set<string>>(new Set());
@@ -515,6 +527,17 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     return () => window.removeEventListener('mousedown', onDown);
   }, [clearSelection, finalizeBulkEdit]);
 
+  React.useEffect(() => {
+    const onDown = (ev: MouseEvent) => {
+      const target = ev.target as HTMLElement | null;
+      const inRoleMenu = target?.closest('[data-people-role-menu]');
+      if (inRoleMenu) return;
+      setActivePeopleRoleMenuRowId(null);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, []);
+
   const getCellClasses = React.useCallback((value: number, isSelected: boolean) => {
     const clamped = Math.min(100, Math.max(0, Number(value) || 0));
     const hoursEquivalent = inputMode === 'hours'
@@ -603,6 +626,25 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   }, [selectedPhase]);
 
   React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const list = await rolesApi.listAll({ include_inactive: 1 });
+        if (!mounted) return;
+        const sorted = [...(list || [])].sort((a, b) => {
+          const activeCmp = Number(Boolean(b.isActive)) - Number(Boolean(a.isActive));
+          if (activeCmp !== 0) return activeCmp;
+          return String(a.name || '').localeCompare(String(b.name || ''));
+        });
+        setPeopleRoles(sorted);
+      } catch {
+        // keep template editor functional when roles lookup fails
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  React.useEffect(() => {
     if (selectedTemplateId === GLOBAL_TEMPLATE_ID) {
       setTemplateName('');
       setTemplateDescription('');
@@ -642,6 +684,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         }));
       }
       setRows(settings);
+      setActivePeopleRoleMenuRowId(null);
       setDirty(false);
       clearSelection();
     } catch (e: any) {
@@ -711,6 +754,32 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     setDirty(true);
   };
 
+  const updateRowPeopleRoleIds = (roleId: number, selectedIds: number[]) => {
+    const nextIds = Array.from(new Set(selectedIds)).sort((a, b) => a - b);
+    setRows((prev) => prev.map((row) => {
+      if (row.roleId !== roleId) return row;
+      return { ...row, peopleRoleIds: nextIds };
+    }));
+    setDirty(true);
+  };
+
+  const removeRowPeopleRoleId = (roleId: number, peopleRoleId: number) => {
+    const row = rowsRef.current.find((item) => item.roleId === roleId);
+    if (!row) return;
+    const nextIds = (row.peopleRoleIds || []).filter((id) => id !== peopleRoleId);
+    updateRowPeopleRoleIds(roleId, nextIds);
+  };
+
+  const addMappedPeopleRole = (roleId: number, peopleRoleId: number) => {
+    if (!Number.isFinite(Number(peopleRoleId))) return;
+    const row = rowsRef.current.find((item) => item.roleId === roleId);
+    const mappedIds = row?.peopleRoleIds || [];
+    if (!mappedIds.includes(Number(peopleRoleId))) {
+      updateRowPeopleRoleIds(roleId, [...mappedIds, Number(peopleRoleId)]);
+    }
+    setActivePeopleRoleMenuRowId(null);
+  };
+
   const handleWeeksCountChange = (value: string) => {
     if (value.trim() === '') {
       if (weeksCount === 0) return;
@@ -742,6 +811,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
         roleId: row.roleId,
         percentByWeek: row.percentByWeek || {},
         ...(row.roleCount != null ? { roleCount: row.roleCount } : {}),
+        peopleRoleIds: row.peopleRoleIds || [],
       }));
       let nextRows: AutoHoursRoleSetting[] = [];
       if (selectedTemplateId === GLOBAL_TEMPLATE_ID) {
@@ -1285,9 +1355,9 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                       <colgroup>
                         <col style={{ width: roleColumnWidth + xToGridGap }} />
                         {weeks.map((weekKey) => (
-                          <col key={`wk-${weekKey}`} style={{ width: 52 }} />
+                          <col key={`wk-${weekKey}`} style={{ width: weekColumnWidth }} />
                         ))}
-                        <col style={{ width: 52 }} />
+                        <col style={{ width: statusColumnWidth }} />
                       </colgroup>
                       <thead className="text-[var(--muted)]">
                         <tr className="border-b border-[var(--border)]">
@@ -1305,51 +1375,105 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--border)]">
-                        {group.rows.map((row) => (
+                        {group.rows.map((row) => {
+                          const mappedRoleIdSet = new Set((row.peopleRoleIds || []).map((id) => Number(id)));
+                          const availablePeopleRoles = peopleRoles.filter((role) => !mappedRoleIdSet.has(Number(role.id)));
+                          const showPeopleRoleDropdown = activePeopleRoleMenuRowId === row.roleId
+                            && availablePeopleRoles.length > 0;
+                          const mappedPeopleRoles = (row.peopleRoleIds || [])
+                            .map((id) => peopleRoleById.get(id))
+                            .filter(Boolean) as PeopleRole[];
+                          return (
                           <tr key={row.roleId} className="hover:bg-[var(--surfaceHover)] transition-colors">
                             <td className="py-2 pr-0 text-[var(--text)]">
-                              <div
-                                className="relative"
-                                style={{
-                                  paddingRight: roleCellPaddingRight,
-                                }}
-                              >
-                                <span className="block truncate">{row.roleName}</span>
-                                <div
-                                  className="absolute top-0 flex items-center gap-1"
-                                  style={{ right: xToGridGap + roleCountControlOffset }}
-                                >
-                                  <button
-                                    type="button"
-                                    className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
-                                    onClick={() => adjustRoleCount(row.roleId, -1)}
-                                    title="Decrease role count"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="text-xs text-[var(--muted)] w-4 text-center">
-                                    {Number.isFinite(row.roleCount) ? row.roleCount : 1}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
-                                    onClick={() => adjustRoleCount(row.roleId, 1)}
-                                    title="Increase role count"
-                                  >
-                                    +
-                                  </button>
+                              <div className="space-y-2">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <span className="block truncate">{row.roleName}</span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
+                                        onClick={() => adjustRoleCount(row.roleId, -1)}
+                                        title="Decrease role count"
+                                      >
+                                        −
+                                      </button>
+                                      <span className="text-xs text-[var(--muted)] w-4 text-center">
+                                        {Number.isFinite(row.roleCount) ? row.roleCount : 1}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="h-5 w-5 rounded border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--primary)] text-xs leading-none"
+                                        onClick={() => adjustRoleCount(row.roleId, 1)}
+                                        title="Increase role count"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                    {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
+                                      <button
+                                        type="button"
+                                        className="text-sm text-red-400 hover:text-red-300 px-1"
+                                        onClick={() => handleExcludeRole(row.roleId)}
+                                        disabled={updatingExclusions}
+                                        title="Remove role from template"
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex w-[240px] shrink-0 items-center gap-2" data-people-role-menu>
+                                    <div className="relative flex-1">
+                                      <button
+                                        type="button"
+                                        className="w-full px-1 py-1 text-xs text-[var(--muted)] text-left hover:text-[var(--text)] disabled:opacity-60"
+                                        onClick={() => {
+                                          setActivePeopleRoleMenuRowId((prev) => (prev === row.roleId ? null : row.roleId));
+                                        }}
+                                        disabled={availablePeopleRoles.length === 0}
+                                      >
+                                        {availablePeopleRoles.length === 0 ? 'No roles available' : 'Add Mapped Role'}
+                                      </button>
+                                      {showPeopleRoleDropdown && (
+                                        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-44 overflow-auto rounded border border-[var(--border)] bg-[var(--card)] shadow-lg">
+                                          {availablePeopleRoles.map((role) => (
+                                            <button
+                                              key={role.id}
+                                              type="button"
+                                              className="block w-full px-2 py-1.5 text-left text-xs text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                                              onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                addMappedPeopleRole(row.roleId, Number(role.id));
+                                              }}
+                                            >
+                                              {role.name}{role.isActive ? '' : ' (inactive)'}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                                {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
-                                  <button
-                                    type="button"
-                                    className="absolute top-0 text-sm text-red-400 hover:text-red-300 px-1"
-                                    style={{ right: xToGridGap }}
-                                    onClick={() => handleExcludeRole(row.roleId)}
-                                    disabled={updatingExclusions}
-                                    title="Remove role from template"
-                                  >
-                                    ×
-                                  </button>
+                                {mappedPeopleRoles.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {mappedPeopleRoles.map((mappedRole) => (
+                                      <span
+                                        key={`mapped-${row.roleId}-${mappedRole.id}`}
+                                        className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[10px] text-[var(--text)]"
+                                      >
+                                        <span>{mappedRole.name}{mappedRole.isActive ? '' : ' (inactive)'}</span>
+                                        <button
+                                          type="button"
+                                          className="text-red-400 hover:text-red-300 leading-none"
+                                          onClick={() => removeRowPeopleRoleId(row.roleId, Number(mappedRole.id))}
+                                          title="Remove mapped people role"
+                                        >
+                                          ×
+                                        </button>
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             </td>
@@ -1475,7 +1599,8 @@ const AutoHoursTemplatesEditor: React.FC = () => {
                               {row.isActive ? 'Active' : 'Inactive'}
                             </td>
                           </tr>
-                        ))}
+                        );
+                        })}
                       </tbody>
                     </table>
                     {index < groupedRows.length - 1 && (

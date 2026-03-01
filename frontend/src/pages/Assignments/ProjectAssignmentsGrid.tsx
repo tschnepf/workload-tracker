@@ -26,6 +26,7 @@ import AutoHoursActionButtons from '@/pages/Assignments/grid/components/AutoHour
 import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
 import HeaderActions from '@/components/compact/HeaderActions';
 import AssignmentsFilterMenu from '@/components/compact/AssignmentsFilterMenu';
+import WeeksHorizonField from '@/components/compact/WeeksHorizonField';
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
@@ -2071,6 +2072,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const topBarHeader = (
     <div className="flex items-center gap-1 min-w-0 w-full">
       {searchBar}
+      <WeeksHorizonField value={weeksHorizon} onChange={setWeeksHorizon} />
       <HeaderActions
         onExpandAll={() => {
           const next = new Set(
@@ -2092,8 +2094,6 @@ const ProjectAssignmentsGrid: React.FC = () => {
         compactLabels={{ expandAll: 'EA', collapseAll: 'CA', refreshAll: 'RE' }}
       />
       <AssignmentsFilterMenu
-        weeksValue={weeksHorizon}
-        onWeeksChange={setWeeksHorizon}
         statusOptions={statusFilterOptions as unknown as readonly string[]}
         selectedStatuses={selectedStatusFilters as unknown as Set<string>}
         formatStatus={(status) => formatFilterStatus(status as any)}

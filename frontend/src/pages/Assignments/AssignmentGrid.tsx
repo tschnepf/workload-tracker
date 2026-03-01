@@ -55,6 +55,7 @@ import { getFlag } from '@/lib/flags';
 import { useAssignmentsInteractionStore } from '@/pages/Assignments/grid/useAssignmentsInteractionStore';
 import HeaderActions from '@/components/compact/HeaderActions';
 import AssignmentsFilterMenu from '@/components/compact/AssignmentsFilterMenu';
+import WeeksHorizonField from '@/components/compact/WeeksHorizonField';
 import { buildProjectAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import TopBarPortal from '@/components/layout/TopBarPortal';
 import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
@@ -2936,6 +2937,7 @@ const AssignmentGrid: React.FC = () => {
   const topBarHeader = (
     <div className="flex items-center gap-1 min-w-0 w-full">
       {searchBar}
+      <WeeksHorizonField value={weeksHorizon} onChange={setWeeksHorizon} />
       <HeaderActions
         onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
         onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
@@ -2945,8 +2947,6 @@ const AssignmentGrid: React.FC = () => {
         compactLabels={{ expandAll: 'EA', collapseAll: 'CA', refreshAll: 'RE' }}
       />
       <AssignmentsFilterMenu
-        weeksValue={weeksHorizon}
-        onWeeksChange={setWeeksHorizon}
         statusOptions={statusFilterOptions as unknown as readonly string[]}
         selectedStatuses={selectedStatusFilters as unknown as Set<string>}
         formatStatus={(status) => formatFilterStatus(status as any)}
@@ -3056,9 +3056,8 @@ const AssignmentGrid: React.FC = () => {
         >
           Refresh
         </button>
+        <WeeksHorizonField value={weeksHorizon} onChange={setWeeksHorizon} className="h-8 px-2" />
         <AssignmentsFilterMenu
-          weeksValue={weeksHorizon}
-          onWeeksChange={setWeeksHorizon}
           statusOptions={statusFilterOptions as unknown as readonly string[]}
           selectedStatuses={selectedStatusFilters as unknown as Set<string>}
           formatStatus={(status) => formatFilterStatus(status as any)}

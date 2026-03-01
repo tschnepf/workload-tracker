@@ -616,6 +616,7 @@ export type AutoHoursRoleSetting = {
   departmentName: string;
   percentByWeek: Record<string, number>;
   roleCount?: number;
+  peopleRoleIds?: number[];
   weeksCount?: number;
   isActive: boolean;
   sortOrder: number;
@@ -639,7 +640,7 @@ export const autoHoursSettingsApi = {
   },
   update: async (
     departmentId: number | null | undefined,
-    settings: Array<{ roleId: number; percentByWeek: Record<string, number>; roleCount?: number }>,
+    settings: Array<{ roleId: number; percentByWeek: Record<string, number>; roleCount?: number; peopleRoleIds?: number[] }>,
     phase?: string | null,
     weeksCount?: number
   ): Promise<AutoHoursSettingsResponse> => {
@@ -702,7 +703,7 @@ export const autoHoursTemplatesApi = {
   },
   updateSettings: async (
     templateId: number,
-    settings: Array<{ roleId: number; percentByWeek: Record<string, number>; roleCount?: number }>,
+    settings: Array<{ roleId: number; percentByWeek: Record<string, number>; roleCount?: number; peopleRoleIds?: number[] }>,
     phase: string,
     departmentId?: number | null,
     weeksCount?: number
@@ -840,6 +841,33 @@ export const projectsApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as unknown as Project;
+  },
+
+  reseedAutoHours: async (
+    id: number,
+    payload?: { reason?: string }
+  ): Promise<{
+    updatedAssignments: number;
+    updatedPlaceholderAssignments: number;
+    updatedStaffedAssignments: number;
+    createdAssignments?: number;
+    createdPlaceholderAssignments?: number;
+    skippedAssignmentsNoRoleSettings: number;
+    consideredAssignments: number;
+  }> => {
+    return fetchApi<{
+      updatedAssignments: number;
+      updatedPlaceholderAssignments: number;
+      updatedStaffedAssignments: number;
+      createdAssignments?: number;
+      createdPlaceholderAssignments?: number;
+      skippedAssignmentsNoRoleSettings: number;
+      consideredAssignments: number;
+    }>(`/projects/${id}/reseed-auto-hours/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload || {}),
+    });
   },
 
   // Delete project
@@ -1566,7 +1594,12 @@ export type RoleCapacityBootstrapResponse = {
   roles: Array<{ id: number; name: string }>;
   timeline: {
     weekKeys: string[];
-    series: Array<{ roleId: number; roleName: string; assigned: number[]; capacity: number[]; people?: number[] }>;
+    series: Array<{ roleId: number; roleName: string; assigned: number[]; projected?: number[]; demand?: number[]; capacity: number[]; people?: number[] }>;
+  };
+  summary?: {
+    mappedProjectedHours?: number;
+    unmappedProjectRoleHours?: number;
+    mappedTemplateRolePairsUsed?: number;
   };
 };
 

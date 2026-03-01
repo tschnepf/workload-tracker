@@ -97,5 +97,24 @@ class RoleViewSet(viewsets.ModelViewSet):
                 'error': f'Cannot delete role "{role.name}" as it is assigned to {people_count} people. '
                          'Please reassign those people to other roles first.'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
+        from core.models import AutoHoursRoleSetting, AutoHoursTemplateRoleSetting
+        global_mapping_count = AutoHoursRoleSetting.objects.filter(people_roles=role).count()
+        if global_mapping_count > 0:
+            return Response({
+                'error': (
+                    f'Cannot delete role "{role.name}" as it is used by {global_mapping_count} '
+                    'global project-role mapping(s). Remove those mappings first.'
+                )
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        mapping_count = AutoHoursTemplateRoleSetting.objects.filter(people_roles=role).count()
+        if mapping_count > 0:
+            return Response({
+                'error': (
+                    f'Cannot delete role "{role.name}" as it is used by {mapping_count} '
+                    'project template role mapping(s). Remove those mappings first.'
+                )
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         return super().destroy(request, *args, **kwargs)

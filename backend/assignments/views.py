@@ -1429,9 +1429,20 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'roleId': serializers.IntegerField(),
                     'roleName': serializers.CharField(),
                     'assigned': serializers.ListField(child=serializers.FloatField()),
+                    'projected': serializers.ListField(child=serializers.FloatField(), required=False),
+                    'demand': serializers.ListField(child=serializers.FloatField(), required=False),
                     'capacity': serializers.ListField(child=serializers.FloatField()),
                     'people': serializers.ListField(child=serializers.IntegerField(), required=False),
                 })),
+                'summary': inline_serializer(
+                    name='RoleCapacitySummary',
+                    fields={
+                        'mappedProjectedHours': serializers.FloatField(required=False),
+                        'unmappedProjectRoleHours': serializers.FloatField(required=False),
+                        'mappedTemplateRolePairsUsed': serializers.IntegerField(required=False),
+                    },
+                    required=False,
+                ),
             }
         )
     )
@@ -1486,13 +1497,26 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             role_ids = [r.id for r in roles]
 
         if not roles:
-            return Response({'weekKeys': [wk.strftime('%Y-%m-%d') for wk in week_keys], 'roles': [], 'series': []})
+            return Response({
+                'weekKeys': [wk.strftime('%Y-%m-%d') for wk in week_keys],
+                'roles': [],
+                'series': [],
+                'summary': {
+                    'mappedProjectedHours': 0.0,
+                    'unmappedProjectRoleHours': 0.0,
+                    'mappedTemplateRolePairsUsed': 0,
+                },
+            })
 
         # Short‑TTL cache (acceptable 60s staleness)
         cache_key = None
         if request.query_params.get('nocache') != '1':
             try:
                 cache_key = f"rc:{'all' if dept_id is None else dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}:v{vertical_id if vertical_id is not None else 'all'}"
+                cache_version = int(cache.get('analytics_cache_version', 1) or 1)
+                cache_key = (
+                    f"{cache_key}:cv{cache_version}:tplmap{1 if settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True) else 0}"
+                )
                 cached = cache.get(cache_key)
                 if cached is not None:
                     return Response(cached)
@@ -1500,14 +1524,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 # Cache must never break the request path
                 cache_key = None
 
+        summary = {}
         # Compute role capacity via vendor-aware helper (Postgres JSONB path or optimized Python fallback)
-        wk_strs, roles_payload, series = compute_role_capacity(
+        wk_strs, roles_payload, series, summary = compute_role_capacity(
             dept_id=dept_id,
             week_keys=week_keys,
             role_ids=role_ids or None,
             vertical_id=vertical_id,
         )
-        payload = {'weekKeys': wk_strs, 'roles': roles_payload, 'series': series}
+        payload = {'weekKeys': wk_strs, 'roles': roles_payload, 'series': series, 'summary': summary}
         # Set cache (best‑effort)
         try:
             if cache_key and request.query_params.get('nocache') != '1':
@@ -1522,6 +1547,9 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'weeks': weeks,
                     'roles_count': len(role_ids or []),
                     'duration_ms': int((t1 - t0) * 1000),
+                    'mapped_projected_hours': float(summary.get('mappedProjectedHours') or 0.0),
+                    'unmapped_project_role_hours': float(summary.get('unmappedProjectRoleHours') or 0.0),
+                    'mapped_template_role_pairs_used': int(summary.get('mappedTemplateRolePairsUsed') or 0),
                 })
             except Exception:  # nosec B110
                 pass
@@ -3778,6 +3806,7 @@ class AssignmentsPageSnapshotView(APIView):
     def _build_role_setting_item(self, role, setting, phase: str, weeks_count: int, *, template_mode: bool):
         hours_by_week = self._empty_hours_by_week()
         role_count = 1
+        people_role_ids: list[int] = []
         if setting:
             raw = None
             if template_mode:
@@ -3806,6 +3835,10 @@ class AssignmentsPageSnapshotView(APIView):
                     role_count = max(0, int(count_raw))
             except Exception:
                 role_count = 1
+            try:
+                people_role_ids = sorted(int(rid) for rid in setting.people_roles.values_list('id', flat=True))
+            except Exception:
+                people_role_ids = []
         return {
             'roleId': role.id,
             'roleName': role.name,
@@ -3813,6 +3846,7 @@ class AssignmentsPageSnapshotView(APIView):
             'departmentName': getattr(role.department, 'name', ''),
             'percentByWeek': hours_by_week,
             'roleCount': role_count,
+            'peopleRoleIds': people_role_ids,
             'weeksCount': weeks_count,
             'isActive': role.is_active,
             'sortOrder': role.sort_order,
@@ -3835,7 +3869,7 @@ class AssignmentsPageSnapshotView(APIView):
         role_ids = [r.id for r in roles]
 
         global_settings = {
-            s.role_id: s for s in AutoHoursRoleSetting.objects.filter(role_id__in=role_ids)
+            s.role_id: s for s in AutoHoursRoleSetting.objects.filter(role_id__in=role_ids).prefetch_related('people_roles')
         }
         global_config = AutoHoursGlobalSettings.get_active()
         global_weeks_by_phase = global_config.weeks_by_phase or {}
@@ -3889,7 +3923,7 @@ class AssignmentsPageSnapshotView(APIView):
             template_rows = AutoHoursTemplateRoleSetting.objects.filter(
                 template_id__in=template_ids,
                 role_id__in=role_ids,
-            )
+            ).prefetch_related('people_roles')
             template_setting_map: Dict[tuple[int, int], AutoHoursTemplateRoleSetting] = {
                 (row.template_id, row.role_id): row for row in template_rows
             }

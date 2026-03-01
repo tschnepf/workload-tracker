@@ -35,6 +35,7 @@ from core.search_tokens import parse_search_tokens, apply_token_filter
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from core.perf import endpoint_timing
 from django.shortcuts import get_object_or_404
+from .auto_hours_seed import seed_project_auto_hours_placeholders, reseed_project_assignment_hours
 import hashlib
 import json
 import time
@@ -43,6 +44,8 @@ try:
     from .tasks import export_projects_excel_task
 except Exception:
     export_projects_excel_task = None  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 class ProjectAvailabilityThrottle(UserRateThrottle):
     scope = 'project_availability'
@@ -679,11 +682,50 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         project = serializer.save()
+        try:
+            seed_project_auto_hours_placeholders(project)
+        except Exception:  # nosec B110
+            logger.exception("project_auto_hours_seed_failed project_id=%s", getattr(project, "id", None))
         self._log_project_audit('create_project', project)
 
     def perform_destroy(self, instance):
         self._log_project_audit('delete_project', instance)
         instance.delete()
+
+    @extend_schema(
+        request=inline_serializer(
+            name='ProjectReseedAutoHoursRequest',
+            fields={
+                'reason': serializers.CharField(required=False),
+            },
+        ),
+        responses=inline_serializer(
+            name='ProjectReseedAutoHoursResponse',
+            fields={
+                'updatedAssignments': serializers.IntegerField(),
+                'updatedPlaceholderAssignments': serializers.IntegerField(),
+                'updatedStaffedAssignments': serializers.IntegerField(),
+                'createdAssignments': serializers.IntegerField(required=False),
+                'createdPlaceholderAssignments': serializers.IntegerField(required=False),
+                'createdPlaceholderDeliverables': serializers.IntegerField(required=False),
+                'updatedPlaceholderDeliverables': serializers.IntegerField(required=False),
+                'skippedAssignmentsNoRoleSettings': serializers.IntegerField(),
+                'consideredAssignments': serializers.IntegerField(),
+            },
+        ),
+    )
+    @action(detail=True, methods=['post'], url_path='reseed-auto-hours')
+    def reseed_auto_hours(self, request, pk=None):
+        project = get_object_or_404(Project, pk=pk)
+        if not project.start_date:
+            return Response({'error': 'project start date is required to update hours'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            summary = reseed_project_assignment_hours(project)
+        except ValueError as exc:
+            if str(exc) == 'project_start_date_required':
+                return Response({'error': 'project start date is required to update hours'}, status=status.HTTP_400_BAD_REQUEST)
+            raise
+        return Response(summary)
 
     @extend_schema(
         responses=inline_serializer(name='ProjectPreDeliverableSettingsResponse', fields={

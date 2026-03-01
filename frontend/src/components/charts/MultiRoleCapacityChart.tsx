@@ -4,6 +4,8 @@ export interface RoleSeries {
   roleId: number;
   roleName: string;
   assigned: number[]; // per week
+  projected?: number[]; // per week
+  demand?: number[]; // assigned + projected per week
   capacity: number[]; // per week
   people?: number[]; // per week headcount (optional)
 }
@@ -63,19 +65,25 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
   // Optionally normalize to percent of capacity per role and week
   const normalized = mode === 'percent';
   const seriesData = series.map((s) => {
+    const demandValues = (s.demand && s.demand.length > 0) ? s.demand : s.assigned;
     if (!normalized) return s;
     const assignedPct = s.assigned.map((v, i) => {
       const cap = s.capacity[i] || 0;
       return cap > 0 ? (v / cap) * 100 : 0;
     });
+    const demandPct = demandValues.map((v, i) => {
+      const cap = s.capacity[i] || 0;
+      return cap > 0 ? (v / cap) * 100 : 0;
+    });
     const capacityPct = s.capacity.map((cap) => (cap > 0 ? 100 : 0));
-    return { ...s, assigned: assignedPct, capacity: capacityPct } as RoleSeries;
+    return { ...s, assigned: assignedPct, demand: demandPct, capacity: capacityPct } as RoleSeries;
   });
 
   // Compute Y-domain
   let maxY = normalized ? 100 : 10;
   for (const s of seriesData) {
-    for (const v of [...s.assigned, ...s.capacity]) maxY = Math.max(maxY, v || 0);
+    const demandValues = (s.demand && s.demand.length > 0) ? s.demand : s.assigned;
+    for (const v of [...s.assigned, ...s.capacity, ...demandValues]) maxY = Math.max(maxY, v || 0);
   }
   if (!normalized) maxY *= 1.15;
   const x = (i: number) => padLeft + i * step;
@@ -89,8 +97,10 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     x: number;
     y: number; // anchor near assigned line
     rawAssigned: number;
+    rawProjected: number;
+    rawDemand: number;
     rawCapacity: number;
-    pctAssigned: number;
+    pctDemand: number;
     availableHours: number;
     availablePct: number;
     peopleCount?: number;
@@ -188,7 +198,9 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
         {/* Series */}
         {seriesData.map((s) => {
           const color = roleColorForId(s.roleId);
+          const demandValues = (s.demand && s.demand.length > 0) ? s.demand : s.assigned;
           const assignedPath = linePath(s.assigned);
+          const demandPath = linePath(demandValues);
           const capacityPath = linePath(s.capacity);
           return (
             <g key={s.roleId}>
@@ -196,6 +208,8 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
               <path d={capacityPath} stroke={color} strokeDasharray="6,4" strokeWidth={2} fill="none" />
               {/* assigned solid */}
               <path d={assignedPath} stroke={color} strokeWidth={2} fill="none" />
+              {/* demand dotted */}
+              <path d={demandPath} stroke={color} strokeDasharray="2,3" strokeWidth={2.5} fill="none" opacity={0.85} />
             </g>
           );
         })}
@@ -211,12 +225,15 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
               if (!sRaw) return null;
               const i = hover.i;
               const color = hover.color;
+              const demand = (sRaw.demand && sRaw.demand.length > 0) ? sRaw.demand[i] : sRaw.assigned[i];
               const ay = y(normalized ? (sRaw.assigned[i] && sRaw.capacity[i] ? (sRaw.assigned[i] / (sRaw.capacity[i] || 1)) * 100 : 0) : (sRaw.assigned[i] || 0));
+              const dy = y(normalized ? (demand && sRaw.capacity[i] ? ((demand || 0) / (sRaw.capacity[i] || 1)) * 100 : 0) : (demand || 0));
               const cy = y(normalized ? (sRaw.capacity[i] > 0 ? 100 : 0) : (sRaw.capacity[i] || 0));
               const ax = x(i);
               return (
                 <g>
                   <circle cx={ax} cy={ay} r={3} fill={color} />
+                  <rect x={ax - 2.5} y={dy - 2.5} width={5} height={5} fill={color} opacity={0.9} />
                   <circle cx={ax} cy={cy} r={3} fill={color} opacity={0.7} />
                 </g>
               );
@@ -244,27 +261,31 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             // Choose nearest role series to cursor at this x
             let best: null | { roleId: number; roleName: string; dist: number } = null;
             for (const s of seriesData) {
+              const demand = (s.demand && s.demand.length > 0) ? s.demand[i] : s.assigned[i];
               const ay = y(s.assigned[i] || 0);
+              const dy = y(demand || 0);
               const cy = y(s.capacity[i] || 0);
-              const d = Math.min(Math.abs(ay - my), Math.abs(cy - my));
+              const d = Math.min(Math.abs(ay - my), Math.abs(cy - my), Math.abs(dy - my));
               if (!best || d < best.dist) best = { roleId: s.roleId, roleName: s.roleName, dist: d };
             }
             if (!best) { setHover(null); return; }
             const raw = series.find(r => r.roleId === best!.roleId);
             if (!raw) { setHover(null); return; }
             const rawAssigned = Number(raw.assigned[i] || 0);
+            const rawDemand = Number((raw.demand && raw.demand.length > 0 ? raw.demand[i] : raw.assigned[i]) || 0);
+            const rawProjected = Number((raw.projected && raw.projected.length > 0 ? raw.projected[i] : Math.max(0, rawDemand - rawAssigned)) || 0);
             const rawCapacity = Number(raw.capacity[i] || 0);
-            const pctAssigned = rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0;
-            const availableHours = Math.max(0, rawCapacity - rawAssigned);
-            const availablePct = rawCapacity > 0 ? Math.max(0, 100 - pctAssigned) : 0;
+            const pctDemand = rawCapacity > 0 ? (rawDemand / rawCapacity) * 100 : 0;
+            const availableHours = Math.max(0, rawCapacity - rawDemand);
+            const availablePct = rawCapacity > 0 ? Math.max(0, 100 - pctDemand) : 0;
             // Median available across displayed roles for this week
             const valuesH: number[] = [];
             const valuesP: number[] = [];
             for (const r of series) {
               const cap = Number(r.capacity[i] || 0);
-              const asn = Number(r.assigned[i] || 0);
-              const avh = Math.max(0, cap - asn);
-              const avp = cap > 0 ? Math.max(0, 100 - (asn / (cap || 1)) * 100) : 0;
+              const demand = Number((r.demand && r.demand.length > 0 ? r.demand[i] : r.assigned[i]) || 0);
+              const avh = Math.max(0, cap - demand);
+              const avp = cap > 0 ? Math.max(0, 100 - (demand / (cap || 1)) * 100) : 0;
               valuesH.push(avh);
               valuesP.push(avp);
             }
@@ -278,9 +299,26 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             const medianAvailablePct = median(valuesP);
 
             const color = roleColorForId(best.roleId);
-            const ayPlot = y(normalized ? (rawCapacity > 0 ? (rawAssigned / rawCapacity) * 100 : 0) : rawAssigned);
+            const ayPlot = y(normalized ? (rawCapacity > 0 ? (rawDemand / rawCapacity) * 100 : 0) : rawDemand);
             const peopleCount = (raw.people && raw.people[i] != null) ? Number(raw.people[i]) : undefined;
-            setHover({ i, roleId: best.roleId, roleName: best.roleName, x: mx, y: ayPlot, rawAssigned, rawCapacity, pctAssigned, availableHours, availablePct, peopleCount, medianAvailableHours, medianAvailablePct, color });
+            setHover({
+              i,
+              roleId: best.roleId,
+              roleName: best.roleName,
+              x: mx,
+              y: ayPlot,
+              rawAssigned,
+              rawProjected,
+              rawDemand,
+              rawCapacity,
+              pctDemand,
+              availableHours,
+              availablePct,
+              peopleCount,
+              medianAvailableHours,
+              medianAvailablePct,
+              color,
+            });
           }}
         />
 
@@ -320,8 +358,9 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             <strong style={{ fontWeight: 600 }}>{hover.roleName}{hover.peopleCount != null ? ` (${hover.peopleCount})` : ''}</strong>
           </div>
           <div style={{ color: 'var(--muted)' }}>{weekKeys[hover.i]}</div>
-          <div>Assigned: {Math.round(hover.rawAssigned)}h, Available: {Math.round(hover.availableHours)}h</div>
-          <div>Assigned: {Math.round(hover.pctAssigned)}%, Available: {Math.round(hover.availablePct)}%</div>
+          <div>Demand: {Math.round(hover.rawDemand)}h, Assigned: {Math.round(hover.rawAssigned)}h</div>
+          <div>Projected: {Math.round(hover.rawProjected)}h, Available: {Math.round(hover.availableHours)}h</div>
+          <div>Demand: {Math.round(hover.pctDemand)}%, Available: {Math.round(hover.availablePct)}%</div>
           <div style={{ marginTop: 4, color: 'var(--muted)' }}>Median available: {Math.round(hover.medianAvailableHours)}h, {Math.round(hover.medianAvailablePct)}%</div>
           </div>
         );
@@ -334,7 +373,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
             <div key={s.roleId} className="flex items-center gap-2 text-xs text-[var(--text)]">
               <span style={{ background: roleColorForId(s.roleId), width: 12, height: 2, display: 'inline-block' }}></span>
               <span>{s.roleName}</span>
-              <span className="text-[var(--muted)]">(solid: {normalized ? '% assigned' : 'assigned'}, dashed: {normalized ? '100% cap' : 'capacity'})</span>
+              <span className="text-[var(--muted)]">(solid: {normalized ? '% assigned' : 'assigned'}, dotted: {normalized ? '% demand' : 'demand'}, dashed: {normalized ? '100% cap' : 'capacity'})</span>
             </div>
           ))}
         </div>

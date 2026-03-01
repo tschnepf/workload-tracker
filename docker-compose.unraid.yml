@@ -88,7 +88,7 @@ services:
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - RUN_MIGRATIONS_ON_START=${RUN_MIGRATIONS_ON_START:-true}
       - SENTRY_DSN=${SENTRY_DSN}
-      - SECURE_SSL_REDIRECT=${SECURE_SSL_REDIRECT:-false}
+      - SECURE_SSL_REDIRECT=${SECURE_SSL_REDIRECT:-true}
       - SILK_ENABLED=${SILK_ENABLED:-false}
     volumes:
       - /mnt/user/appdata/workload-tracker/backups:/backups:rw

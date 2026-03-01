@@ -20,7 +20,7 @@ from people.models import Person
 from people.services import CapacityAnalysisService
 from skills.models import PersonSkill
 from assignments.models import Assignment
-from assignments.analytics import _python_role_capacity
+from assignments.analytics import compute_role_capacity
 from projects.models import Project
 from core.cache_keys import build_aggregate_cache_key
 
@@ -662,7 +662,7 @@ class RoleCapacityBootstrapView(APIView):
         days_since_sunday = (today.weekday() + 1) % 7
         start_sunday = today if days_since_sunday == 0 else (today - timedelta(days=days_since_sunday))
         week_keys = [start_sunday + timedelta(days=7 * idx) for idx in range(weeks)]
-        wk_strs, roles_payload, series = _python_role_capacity(
+        wk_strs, roles_payload, series, summary = compute_role_capacity(
             dept_id=dept_id,
             week_keys=week_keys,
             role_ids=role_ids,
@@ -683,6 +683,7 @@ class RoleCapacityBootstrapView(APIView):
                 'weekKeys': wk_strs,
                 'series': series,
             },
+            'summary': summary,
         })
 
 

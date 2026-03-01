@@ -242,6 +242,11 @@ class AutoHoursRoleSetting(models.Model):
     ramp_percent_by_phase = models.JSONField(default=dict, blank=True)
     # Map of phase -> role count (int)
     role_count_by_phase = models.JSONField(default=dict, blank=True)
+    people_roles = models.ManyToManyField(
+        'roles.Role',
+        blank=True,
+        related_name='auto_hours_global_role_mappings',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -307,6 +312,11 @@ class AutoHoursTemplateRoleSetting(models.Model):
 
     template = models.ForeignKey('core.AutoHoursTemplate', on_delete=models.CASCADE, related_name='role_settings')
     role = models.ForeignKey('projects.ProjectRole', on_delete=models.CASCADE, related_name='auto_hours_template_settings')
+    people_roles = models.ManyToManyField(
+        'roles.Role',
+        blank=True,
+        related_name='auto_hours_template_role_mappings',
+    )
     # Map of phase -> weeks-before -> percent (keys: "sd","dd","ifp","ifc")
     ramp_percent_by_phase = models.JSONField(default=dict, blank=True)
     # Map of phase -> role count (int)

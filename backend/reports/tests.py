@@ -257,6 +257,7 @@ class ReportsBootstrapEndpointsTests(TestCase):
         self.assertIn('timeline', data)
         self.assertIn('weekKeys', data['timeline'])
         self.assertIn('series', data['timeline'])
+        self.assertIn('summary', data)
         self.assertGreaterEqual(len(data['roles']), 1)
         self.assertGreaterEqual(len(data['timeline']['weekKeys']), 1)
 

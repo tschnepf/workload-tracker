@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import Dict, List, Tuple
 from datetime import date
 from django.db import connection
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
+from django.conf import settings
 
 from people.models import Person
 from .models import Assignment as Asn
 from roles.models import Role
+from core.models import AutoHoursRoleSetting, AutoHoursTemplateRoleSetting
 
 
 def _python_role_capacity(
@@ -15,7 +17,7 @@ def _python_role_capacity(
     week_keys: List[date],
     role_ids: List[int] | None,
     vertical_id: int | None = None,
-) -> Tuple[List[str], List[Dict], List[Dict]]:
+) -> Tuple[List[str], List[Dict], List[Dict], Dict]:
     """Optimized Python implementation (portable across DB vendors).
 
     Returns (week_keys_str, roles_payload, series_payload).
@@ -91,17 +93,117 @@ def _python_role_capacity(
                 continue
             assigned[(k, rid)] = assigned.get((k, rid), 0.0) + hours
 
+    projected: Dict[Tuple[str, int], float] = {}
+    mapped_projected_hours = 0.0
+    unmapped_project_role_hours = 0.0
+    mapped_template_role_pairs_used: set[tuple[int, int]] = set()
+
+    if bool(settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True)):
+        placeholder_qs = Asn.objects.filter(
+            is_active=True,
+            person_id__isnull=True,
+            role_on_project_ref_id__isnull=False,
+        )
+        if dept_id is not None:
+            placeholder_qs = placeholder_qs.filter(
+                Q(department_id=dept_id) | Q(role_on_project_ref__department_id=dept_id)
+            )
+        if vertical_id is not None:
+            placeholder_qs = placeholder_qs.filter(project__vertical_id=vertical_id)
+        placeholder_qs = placeholder_qs.select_related('project').only(
+            'weekly_hours',
+            'role_on_project_ref_id',
+            'project__auto_hours_template_id',
+            'department_id',
+        )
+
+        assignments = list(placeholder_qs.iterator())
+        template_ids = sorted(
+            {
+                int(a.project.auto_hours_template_id)
+                for a in assignments
+                if getattr(a, 'project', None) and getattr(a.project, 'auto_hours_template_id', None)
+            }
+        )
+        project_role_ids = sorted(
+            {int(a.role_on_project_ref_id) for a in assignments if getattr(a, 'role_on_project_ref_id', None)}
+        )
+        template_mapping: Dict[tuple[int, int], List[int]] = {}
+        global_mapping: Dict[int, List[int]] = {}
+        if template_ids and project_role_ids:
+            settings_rows = AutoHoursTemplateRoleSetting.objects.filter(
+                template_id__in=template_ids,
+                role_id__in=project_role_ids,
+            ).prefetch_related('people_roles')
+            for row in settings_rows:
+                people_role_ids = sorted(int(rid) for rid in row.people_roles.values_list('id', flat=True))
+                template_mapping[(int(row.template_id), int(row.role_id))] = people_role_ids
+        if project_role_ids:
+            global_rows = AutoHoursRoleSetting.objects.filter(
+                role_id__in=project_role_ids,
+            ).prefetch_related('people_roles')
+            for row in global_rows:
+                people_role_ids = sorted(int(rid) for rid in row.people_roles.values_list('id', flat=True))
+                global_mapping[int(row.role_id)] = people_role_ids
+
+        for asn in assignments:
+            project = getattr(asn, 'project', None)
+            template_id = int(project.auto_hours_template_id) if project and project.auto_hours_template_id else None
+            project_role_id = int(asn.role_on_project_ref_id) if asn.role_on_project_ref_id else None
+            if not project_role_id:
+                continue
+            mapped_people_roles: List[int] = []
+            mapped_key: tuple[int, int] | None = None
+            if template_id:
+                key = (template_id, project_role_id)
+                mapped_people_roles = template_mapping.get(key) or []
+                if mapped_people_roles:
+                    mapped_key = key
+            else:
+                mapped_people_roles = global_mapping.get(project_role_id) or []
+                if mapped_people_roles:
+                    mapped_key = (0, project_role_id)
+            wh = getattr(asn, 'weekly_hours', None) or {}
+            for wk in wk_strs:
+                try:
+                    hours = float(wh.get(wk) or 0.0)
+                except Exception:
+                    hours = 0.0
+                if hours <= 0:
+                    continue
+                if not mapped_people_roles:
+                    unmapped_project_role_hours += hours
+                    continue
+                if mapped_key is not None:
+                    mapped_template_role_pairs_used.add(mapped_key)
+                mapped_projected_hours += hours
+                split = hours / float(len(mapped_people_roles))
+                for rid in mapped_people_roles:
+                    if role_ids and rid not in role_ids:
+                        continue
+                    projected[(wk, rid)] = projected.get((wk, rid), 0.0) + split
+
     series: List[Dict] = []
     for r in roles:
+        assigned_series = [float(assigned.get((wk, r.id), 0.0)) for wk in wk_strs]
+        projected_series = [float(projected.get((wk, r.id), 0.0)) for wk in wk_strs]
+        demand_series = [float(assigned_series[i] + projected_series[i]) for i in range(len(wk_strs))]
         series.append({
             'roleId': r.id,
             'roleName': r.name,
-            'assigned': [float(assigned.get((wk, r.id), 0.0)) for wk in wk_strs],
+            'assigned': assigned_series,
+            'projected': projected_series,
+            'demand': demand_series,
             'capacity': [float(caps.get((wk, r.id), 0.0)) for wk in wk_strs],
             'people': [int(heads.get((wk, r.id), 0)) for wk in wk_strs],
         })
 
-    return wk_strs, roles_payload, series
+    summary = {
+        'mappedProjectedHours': round(mapped_projected_hours, 2),
+        'unmappedProjectRoleHours': round(unmapped_project_role_hours, 2),
+        'mappedTemplateRolePairsUsed': len(mapped_template_role_pairs_used),
+    }
+    return wk_strs, roles_payload, series, summary
 
 
 def _postgres_role_capacity(
@@ -109,7 +211,7 @@ def _postgres_role_capacity(
     week_keys: List[date],
     role_ids: List[int] | None,
     vertical_id: int | None = None,
-) -> Tuple[List[str], List[Dict], List[Dict]]:
+) -> Tuple[List[str], List[Dict], List[Dict], Dict]:
     """Postgres JSONB implementation using lateral expansion and GIN prefilter.
     If anything goes wrong, callers should fallback to the Python path.
     """
@@ -189,15 +291,23 @@ def _postgres_role_capacity(
 
     series: List[Dict] = []
     for r in roles:
+        assigned_series = [float(assigned.get((wk, r.id), 0.0)) for wk in wk_strs]
         series.append({
             'roleId': r.id,
             'roleName': r.name,
-            'assigned': [float(assigned.get((wk, r.id), 0.0)) for wk in wk_strs],
+            'assigned': assigned_series,
+            'projected': [0.0 for _ in wk_strs],
+            'demand': assigned_series,
             'capacity': [float(caps.get((wk, r.id), 0.0)) for wk in wk_strs],
             'people': [int(heads.get((wk, r.id), 0)) for wk in wk_strs],
         })
 
-    return wk_strs, roles_payload, series
+    summary = {
+        'mappedProjectedHours': 0.0,
+        'unmappedProjectRoleHours': 0.0,
+        'mappedTemplateRolePairsUsed': 0,
+    }
+    return wk_strs, roles_payload, series, summary
 
 
 def compute_role_capacity(
@@ -205,10 +315,12 @@ def compute_role_capacity(
     week_keys: List[date],
     role_ids: List[int] | None,
     vertical_id: int | None = None,
-) -> Tuple[List[str], List[Dict], List[Dict]]:
+) -> Tuple[List[str], List[Dict], List[Dict], Dict]:
     """Dispatch to the best implementation based on DB vendor.
     Falls back safely to the Python path if Postgres query fails.
     """
+    if bool(settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True)):
+        return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=vertical_id)
     if vertical_id is not None:
         return _python_role_capacity(dept_id, week_keys, role_ids, vertical_id=vertical_id)
     if connection.vendor == 'postgresql':

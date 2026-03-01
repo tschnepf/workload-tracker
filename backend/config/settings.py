@@ -274,6 +274,7 @@ FEATURES.update({
     'JOB_RESTORE_TOKEN_MODE': os.getenv('JOB_RESTORE_TOKEN_MODE', 'true').lower() == 'true',
     'FF_UI_BOOTSTRAP': os.getenv('FF_UI_BOOTSTRAP', 'true').lower() == 'true',
     'FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE': os.getenv('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', 'true').lower() == 'true',
+    'FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING': os.getenv('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', 'true').lower() == 'true',
     'FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS': os.getenv('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', 'true').lower() == 'true',
     'FF_MODERATE_PAGES_SNAPSHOTS': os.getenv('FF_MODERATE_PAGES_SNAPSHOTS', 'true').lower() == 'true',
     # Always-on flag for safe server-side weekly-hours operations
@@ -364,10 +365,10 @@ REST_FRAMEWORK = {
         'ui_bootstrap': _rate('DRF_THROTTLE_UI_BOOTSTRAP', '120/min'),
         'reports_departments_overview': _rate('DRF_THROTTLE_REPORTS_DEPARTMENTS_OVERVIEW', '120/min'),
         # Dedicated auth endpoint throttle scopes to avoid refresh/login coupling.
-        # Defaults preserve moderate brute-force resistance on obtain and allow
+        # Defaults preserve brute-force resistance on obtain while allowing
         # higher refresh throughput under concurrent active sessions.
-        'token_obtain': _rate('DRF_THROTTLE_TOKEN_OBTAIN', '30/min'),
-        'token_refresh': _rate('DRF_THROTTLE_TOKEN_REFRESH', '120/min'),
+        'token_obtain': _rate('DRF_THROTTLE_TOKEN_OBTAIN', '120/min'),
+        'token_refresh': _rate('DRF_THROTTLE_TOKEN_REFRESH', '600/min'),
         'login': _rate('DRF_THROTTLE_LOGIN', '10/min'),
         # Backup/restore endpoints (Phase 0: Step 0.3)
         # Keep practical defaults and let tests override stricter limits when needed.
@@ -406,7 +407,7 @@ if not OPENAPI_PUBLIC:
     ]
 
 # SimpleJWT configuration
-_jwt_access_minutes = int(os.getenv('JWT_ACCESS_MINUTES', '60'))
+_jwt_access_minutes = int(os.getenv('JWT_ACCESS_MINUTES', '120'))
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=_jwt_access_minutes),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),

@@ -2,8 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 interface Props {
-  weeksValue: number;
-  onWeeksChange: (next: number) => void;
   statusOptions: readonly string[];
   selectedStatuses: Set<string>;
   formatStatus: (status: string) => string;
@@ -12,19 +10,9 @@ interface Props {
   buttonTitle?: string;
   className?: string;
   align?: 'left' | 'right';
-  minWeeks?: number;
-  maxWeeks?: number;
-  defaultWeeks?: number;
-}
-
-const clampWeeks = (value: number, minWeeks: number, maxWeeks: number) => {
-  if (!Number.isFinite(value)) return minWeeks;
-  return Math.max(minWeeks, Math.min(maxWeeks, value));
 };
 
 const AssignmentsFilterMenu: React.FC<Props> = ({
-  weeksValue,
-  onWeeksChange,
   statusOptions,
   selectedStatuses,
   formatStatus,
@@ -33,12 +21,8 @@ const AssignmentsFilterMenu: React.FC<Props> = ({
   buttonTitle = 'Open filters',
   className,
   align = 'right',
-  minWeeks = 1,
-  maxWeeks = 52,
-  defaultWeeks = 20,
 }) => {
   const [open, setOpen] = useState(false);
-  const [weeksInput, setWeeksInput] = useState(String(weeksValue));
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -56,10 +40,6 @@ const AssignmentsFilterMenu: React.FC<Props> = ({
     );
     setMenuPos({ top: rect.bottom + 4, left, width });
   }, [align]);
-
-  useEffect(() => {
-    setWeeksInput(String(weeksValue));
-  }, [weeksValue]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -91,24 +71,9 @@ const AssignmentsFilterMenu: React.FC<Props> = ({
     };
   }, [open, updateMenuPosition]);
 
-  const commitWeeks = useCallback(() => {
-    if (!weeksInput.trim()) {
-      setWeeksInput(String(weeksValue));
-      return;
-    }
-    const parsed = Number.parseInt(weeksInput, 10);
-    if (Number.isNaN(parsed)) {
-      setWeeksInput(String(weeksValue));
-      return;
-    }
-    const clamped = clampWeeks(parsed, minWeeks, maxWeeks);
-    setWeeksInput(String(clamped));
-    if (clamped !== weeksValue) onWeeksChange(clamped);
-  }, [weeksInput, weeksValue, minWeeks, maxWeeks, onWeeksChange]);
-
   const showAllActive = selectedStatuses.size === 0 || selectedStatuses.has('Show All');
   const selectedStatusCount = Array.from(selectedStatuses).filter((status) => status !== 'Show All').length;
-  const activeCount = selectedStatusCount + (weeksValue !== defaultWeeks ? 1 : 0);
+  const activeCount = selectedStatusCount;
   const buttonText = activeCount > 0 ? `${buttonLabel} (${activeCount})` : buttonLabel;
 
   return (
@@ -133,36 +98,6 @@ const AssignmentsFilterMenu: React.FC<Props> = ({
           aria-label="Assignment filters"
         >
           <div className="space-y-3">
-            <div className="space-y-1">
-              <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Weeks</div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={minWeeks}
-                  max={maxWeeks}
-                  value={weeksInput}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    if (next === '') {
-                      setWeeksInput('');
-                      return;
-                    }
-                    if (!/^\d+$/.test(next)) return;
-                    setWeeksInput(next);
-                  }}
-                  onBlur={commitWeeks}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      commitWeeks();
-                    }
-                  }}
-                  aria-label="Weeks horizon"
-                  className="w-20 px-2 py-1 rounded border border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
-                />
-                <span className="text-xs text-[var(--muted)]">weeks</span>
-              </div>
-            </div>
             <div className="space-y-1">
               <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Status</div>
               <div className="max-h-[220px] overflow-y-auto space-y-1 pr-1 scrollbar-theme">
