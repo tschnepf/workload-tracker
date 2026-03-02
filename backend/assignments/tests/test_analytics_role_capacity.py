@@ -28,3 +28,15 @@ class AnalyticsRoleCapacityTests(TestCase):
         self.assertIn('roles', data)
         self.assertIn('series', data)
         self.assertIn('summary', data)
+
+    def test_allows_52_week_horizon(self):
+        request = self.factory.get('/api/assignments/analytics_role_capacity/?weeks=52&nocache=1')
+        force_authenticate(request, user=self.user)
+        view = AssignmentViewSet.as_view({'get': 'analytics_role_capacity'})
+
+        with patch('assignments.views.compute_role_capacity', return_value=([], [], [], {})) as mocked_compute:
+            resp = view(request)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(mocked_compute.called)
+        self.assertEqual(len(mocked_compute.call_args.kwargs.get('week_keys', [])), 52)

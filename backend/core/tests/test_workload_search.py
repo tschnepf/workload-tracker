@@ -74,7 +74,7 @@ class WorkloadSearchParseTests(SimpleTestCase):
 
 class WorkloadSearchTotalsTests(TestCase):
     def setUp(self):
-        role = Role.objects.create(name='Engineer')
+        role = Role.objects.create(name=f'Engineer {self._testMethodName}')
         self.person = Person.objects.create(name='Worker', weekly_capacity=36, role=role)
         self.project = Project.objects.create(name='Workload Project', status='active')
         self.assignment = Assignment.objects.create(

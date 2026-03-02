@@ -3,7 +3,9 @@ from drf_spectacular.utils import extend_schema_field, OpenApiTypes
 from django.http import QueryDict
 from django.urls import reverse
 import json
-from .models import Project, ProjectRisk, ProjectRiskEdit, ProjectChangeLog
+import re
+from .models import Project, ProjectRisk, ProjectRiskEdit, ProjectChangeLog, ProjectStatusDefinition
+from .status_definitions import normalize_status_key, status_exists
 from verticals.models import Vertical
 from departments.models import Department
 
@@ -17,6 +19,62 @@ class ProjectFilterEntrySerializer(serializers.Serializer):
 
 class ProjectFilterMetadataSerializer(serializers.Serializer):
     projectFilters = serializers.DictField(child=ProjectFilterEntrySerializer())
+
+
+class ProjectStatusDefinitionSerializer(serializers.ModelSerializer):
+    colorHex = serializers.CharField(source='color_hex')
+    includeInAnalytics = serializers.BooleanField(source='include_in_analytics', required=False)
+    treatAsCaWhenNoDeliverable = serializers.BooleanField(source='treat_as_ca_when_no_deliverable', required=False)
+    isSystem = serializers.BooleanField(source='is_system', read_only=True)
+    isActive = serializers.BooleanField(source='is_active', required=False)
+    sortOrder = serializers.IntegerField(source='sort_order', required=False)
+    inUseCount = serializers.IntegerField(read_only=True)
+    canDelete = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = ProjectStatusDefinition
+        fields = [
+            'key',
+            'label',
+            'colorHex',
+            'includeInAnalytics',
+            'treatAsCaWhenNoDeliverable',
+            'isSystem',
+            'isActive',
+            'sortOrder',
+            'inUseCount',
+            'canDelete',
+        ]
+        read_only_fields = ['isSystem', 'inUseCount', 'canDelete']
+
+    def validate_key(self, value: str) -> str:
+        key = normalize_status_key(value)
+        if not re.fullmatch(r'[a-z][a-z0-9_]{1,63}', key):
+            raise serializers.ValidationError(
+                "Key must start with a letter and contain only lowercase letters, numbers, and underscores."
+            )
+        return key
+
+    def validate_colorHex(self, value: str) -> str:
+        if not re.fullmatch(r'^#[0-9a-fA-F]{6}$', value or ''):
+            raise serializers.ValidationError('Color must be a valid hex code in #RRGGBB format.')
+        return value.lower()
+
+    def validate(self, attrs):
+        include_in_analytics = attrs.get('include_in_analytics')
+        treat_as_ca = attrs.get('treat_as_ca_when_no_deliverable')
+
+        if include_in_analytics is None and self.instance is not None:
+            include_in_analytics = bool(getattr(self.instance, 'include_in_analytics', False))
+        if treat_as_ca is None and self.instance is not None:
+            treat_as_ca = bool(getattr(self.instance, 'treat_as_ca_when_no_deliverable', False))
+
+        if bool(treat_as_ca) and not bool(include_in_analytics):
+            raise serializers.ValidationError({
+                'treatAsCaWhenNoDeliverable': 'CA override requires "Include in analytics" to be enabled.'
+            })
+        return attrs
+
 
 class ProjectSerializer(serializers.ModelSerializer):
     vertical = serializers.PrimaryKeyRelatedField(queryset=Vertical.objects.all(), required=False, allow_null=True)
@@ -76,6 +134,14 @@ class ProjectSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError('Name is required')
         return value
+
+    def validate_status(self, value):
+        key = normalize_status_key(value)
+        if not key:
+            raise serializers.ValidationError('Status is required')
+        if not status_exists(key):
+            raise serializers.ValidationError('Unknown project status key')
+        return key
 
 
 class ProjectAvailabilityItemSerializer(serializers.Serializer):

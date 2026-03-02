@@ -5,6 +5,7 @@ import StatusBadge from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
 import ProjectNameQuickViewButton from '@/pages/Assignments/projectAssignments/components/ProjectNameQuickViewButton';
 import type { DeliverableMarker, ProjectWithAssignments } from '@/pages/Assignments/projectAssignments/types';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 const EMPTY_MARKERS: DeliverableMarker[] = [];
 
@@ -68,6 +69,7 @@ const ProjectSummaryRow: React.FC<ProjectSummaryRowProps> = React.memo(({
   onToggleExpanded,
   onAddPersonClick,
 }) => {
+  const { definitionMap, statusOptionKeys } = useProjectStatusDefinitions();
   return (
     <div
       className="grid items-stretch gap-px p-2 hover:bg-[var(--surfaceHover)] transition-colors cursor-pointer"
@@ -107,6 +109,7 @@ const ProjectSummaryRow: React.FC<ProjectSummaryRowProps> = React.memo(({
           <StatusBadge
             status={(project.status as any) || 'active'}
             variant="editable"
+            definitionMap={definitionMap}
             onClick={() => project.id && onToggleStatusDropdown(project.id)}
             isUpdating={isUpdating}
           />
@@ -119,6 +122,8 @@ const ProjectSummaryRow: React.FC<ProjectSummaryRowProps> = React.memo(({
               projectId={project.id}
               disabled={isUpdating}
               closeOnSelect={false}
+              statusOptions={statusOptionKeys}
+              definitionMap={definitionMap}
             />
           )}
         </div>

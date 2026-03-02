@@ -1,12 +1,21 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ProjectViewSet, ProjectAuditLogsView, ProjectChangeLogView
-from django.urls import include
+from .views import ProjectViewSet, ProjectAuditLogsView, ProjectChangeLogView, ProjectStatusDefinitionViewSet
 
 router = DefaultRouter()
 router.register(r'', ProjectViewSet)
 
 urlpatterns = [
+    path(
+        'status-definitions/',
+        ProjectStatusDefinitionViewSet.as_view({'get': 'list', 'post': 'create'}),
+        name='project_status_definitions',
+    ),
+    path(
+        'status-definitions/<str:key>/',
+        ProjectStatusDefinitionViewSet.as_view({'patch': 'partial_update', 'delete': 'destroy'}),
+        name='project_status_definition_detail',
+    ),
     # Register role endpoints before router URLs so specific subpaths
     # like 'project-roles/' are not shadowed by the project detail route.
     path('', include('projects.urls_roles')),

@@ -5,41 +5,32 @@ import {
   projectMatchesActiveWithDates,
   projectMatchesActiveWithoutDates,
 } from '@/components/projects/statusFilterUtils';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
+import { DEFAULT_PROJECT_STATUS_FILTER_KEYS } from '@/components/projects/status.catalog';
+import { formatStatus } from '@/components/projects/status.utils';
 
 export type StatusFilter =
-  | 'active'
-  | 'active_ca'
+  | string
   | 'active_with_dates'
   | 'active_no_deliverables'
-  | 'on_hold'
-  | 'completed'
-  | 'cancelled'
   | 'Show All';
 
 export function useProjectStatusFilters(deliverables: Deliverable[]) {
-  const statusFilterOptions = [
-    'active',
-    'active_ca',
-    'active_with_dates',
-    'active_no_deliverables',
-    'on_hold',
-    'completed',
-    'cancelled',
-    'Show All',
-  ] as const;
-  const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<StatusFilter>>(new Set<StatusFilter>(['active', 'active_ca']));
+  const { statusOptionKeys, definitionMap } = useProjectStatusDefinitions();
+  const statusFilterOptions = useMemo(
+    () => [...statusOptionKeys, 'active_with_dates', 'active_no_deliverables', 'Show All'] as readonly StatusFilter[],
+    [statusOptionKeys]
+  );
+  const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<StatusFilter>>(
+    new Set<StatusFilter>(DEFAULT_PROJECT_STATUS_FILTER_KEYS as unknown as StatusFilter[])
+  );
 
   const formatFilterStatus = (status: StatusFilter): string => {
     switch (status) {
-      case 'active_ca': return 'Active (CA)';
       case 'active_with_dates': return 'Active - With Dates';
       case 'active_no_deliverables': return 'Active - No Deliverables';
-      case 'on_hold': return 'On Hold';
-      case 'completed': return 'Completed';
-      case 'cancelled': return 'Cancelled';
-      case 'active': return 'Active';
       case 'Show All': return 'Show All';
-      default: return String(status);
+      default: return formatStatus(status, definitionMap);
     }
   };
 

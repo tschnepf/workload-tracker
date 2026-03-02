@@ -12,9 +12,7 @@ class UserProfileSignalTests(TestCase):
     @override_settings(ENABLE_PROFILE_AUTO_CREATE=True)
     def test_signal_creates_single_profile_when_called_twice(self):
         user = self.User.objects.create_user(username='u-idem', password='pw')
-
-        # In test settings, auto-create may be disabled; assert zero to begin with
-        self.assertEqual(UserProfile.objects.filter(user=user).count(), 0)
+        self.assertEqual(UserProfile.objects.filter(user=user).count(), 1)
 
         # Simulate double invocation of the post_save handler
         create_user_profile(sender=self.User, instance=user, created=True)
@@ -26,8 +24,9 @@ class UserProfileSignalTests(TestCase):
     @override_settings(ENABLE_PROFILE_AUTO_CREATE=True)
     def test_signal_ignores_when_created_false(self):
         user = self.User.objects.create_user(username='u-ignore', password='pw')
-        self.assertEqual(UserProfile.objects.filter(user=user).count(), 0)
+        before = UserProfile.objects.filter(user=user).count()
+        self.assertEqual(before, 1)
 
         # Calling with created=False should not create a profile
         create_user_profile(sender=self.User, instance=user, created=False)
-        self.assertEqual(UserProfile.objects.filter(user=user).count(), 0)
+        self.assertEqual(UserProfile.objects.filter(user=user).count(), before)

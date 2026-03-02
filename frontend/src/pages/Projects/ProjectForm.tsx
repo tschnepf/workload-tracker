@@ -2,7 +2,7 @@
  * Project Form - Create/Edit project with VSCode dark theme
  */
 
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useNavigate, useParams } from 'react-router';
 import { Project, AutoHoursTemplate } from '@/types/models';
@@ -19,6 +19,8 @@ import Input from '@/components/ui/Input';
 import DatePickerInput from '@/components/ui/DatePickerInput';
 import Card from '@/components/ui/Card';
 import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
+import { formatStatus } from '@/components/projects/status.utils';
 
 interface ProjectFormProps {
   embedded?: boolean;
@@ -37,6 +39,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
   const canEditAutoHoursTemplate = isAdminOrManager(auth?.user);
   const { state: verticalState } = useVerticalFilter();
   const { verticals, isLoading: verticalsLoading } = useVerticals({ includeInactive: true });
+  const { activeDefinitions, definitionMap } = useProjectStatusDefinitions();
 
   const [formData, setFormData] = useState<Partial<Project>>({
     name: '',
@@ -49,6 +52,24 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
     autoHoursTemplateId: null,
     vertical: verticalState.selectedVerticalId ?? null,
   });
+  const statusSelectOptions = useMemo(() => {
+    const out = [...activeDefinitions];
+    const current = (formData.status || '').toLowerCase();
+    if (!current) return out;
+    if (out.some((item) => item.key === current)) return out;
+    const existing = definitionMap[current];
+    if (existing) return [...out, existing];
+    return [...out, {
+      key: current,
+      label: formatStatus(current, definitionMap),
+      colorHex: '#64748b',
+      includeInAnalytics: false,
+      treatAsCaWhenNoDeliverable: false,
+      isSystem: false,
+      isActive: false,
+      sortOrder: 9999,
+    }];
+  }, [activeDefinitions, definitionMap, formData.status]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -449,11 +470,11 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 onChange={(e) => handleChange('status', e.target.value)}
                 className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
               >
-                <option value="active">Active</option>
-                <option value="active_ca">Active CA</option>
-                <option value="on_hold">On Hold</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                {statusSelectOptions.map((status) => (
+                  <option key={status.key} value={status.key}>
+                    {formatStatus(status.key, definitionMap)}
+                  </option>
+                ))}
               </select>
             </div>
 

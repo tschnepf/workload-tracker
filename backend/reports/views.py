@@ -618,7 +618,7 @@ class RoleCapacityBootstrapView(APIView):
     @extend_schema(
         parameters=[
             OpenApiParameter(name='department', type=int, required=False, description='Optional department id filter.'),
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of future weeks (4,8,12,16,20). Default 12.'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of future weeks (4,8,12,16,20,26,52). Default 12.'),
             OpenApiParameter(name='role_ids', type=str, required=False, description='Optional CSV of role ids to include.'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Optional vertical id filter.'),
             OpenApiParameter(name='include_inactive', type=bool, required=False, description='Include inactive departments in department metadata list.'),
@@ -646,7 +646,7 @@ class RoleCapacityBootstrapView(APIView):
             weeks = int(request.query_params.get('weeks', 12))
         except Exception:
             weeks = 12
-        if weeks not in (4, 8, 12, 16, 20):
+        if weeks not in (4, 8, 12, 16, 20, 26, 52):
             weeks = 12
 
         include_inactive = str(request.query_params.get('include_inactive') or '').strip().lower() in {'1', 'true', 'yes', 'on'}

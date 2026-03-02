@@ -10,21 +10,55 @@ import os
 
 from .storage import RiskAttachmentStorage
 
+
+class ProjectStatusDefinition(models.Model):
+    key = models.CharField(max_length=64, unique=True)
+    label = models.CharField(max_length=80)
+    color_hex = models.CharField(max_length=7, default='#64748b')
+    include_in_analytics = models.BooleanField(default=False)
+    treat_as_ca_when_no_deliverable = models.BooleanField(default=False)
+    is_system = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'label', 'key']
+        indexes = [
+            models.Index(fields=['is_active', 'sort_order'], name='proj_status_active_sort_idx'),
+            models.Index(fields=['include_in_analytics'], name='proj_status_include_ana_idx'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.label} ({self.key})"
+
+    def save(self, *args, **kwargs):  # pragma: no cover
+        self.key = (self.key or '').strip().lower()
+        self.label = (self.label or '').strip() or self.key.replace('_', ' ').title()
+        super().save(*args, **kwargs)
+        try:
+            from .status_definitions import clear_status_definitions_cache
+            clear_status_definitions_cache()
+        except Exception:
+            pass
+
+    def delete(self, *args, **kwargs):  # pragma: no cover
+        super().delete(*args, **kwargs)
+        try:
+            from .status_definitions import clear_status_definitions_cache
+            clear_status_definitions_cache()
+        except Exception:
+            pass
+
+
 class Project(models.Model):
     """Project model - create Day 1, migrate to in Chunk 5"""
     
     name = models.CharField(max_length=200)
     
     # Basic project info (use from Chunk 5)
-    status = models.CharField(max_length=20, choices=[
-        ('planning', 'Planning'),
-        ('active', 'Active'),
-        ('active_ca', 'Active CA'),
-        ('on_hold', 'On Hold'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
-        ('inactive', 'Inactive'),
-    ], default='active')
+    status = models.CharField(max_length=64, default='active')
     client = models.CharField(max_length=100, blank=True, default='Internal')
     description = models.TextField(blank=True)
     # Denormalized searchable text of assigned people names (for fast project search)

@@ -102,3 +102,9 @@ class RoleCapacityBootstrapApiTests(TestCase):
         self.assertAlmostEqual(float(filtered_row['assigned'][idx0]), 10.0)
         self.assertAlmostEqual(float(filtered_row['capacity'][idx0]), 40.0)
         self.assertEqual(int(filtered_row['people'][idx0]), 1)
+
+    def test_bootstrap_allows_52_week_horizon(self):
+        resp = self.client.get('/api/reports/role-capacity/bootstrap/?weeks=52')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        payload = resp.json()
+        self.assertEqual(len(payload.get('timeline', {}).get('weekKeys', [])), 52)

@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import Card from '@/components/ui/Card';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useAssignedHoursTimelineData, type TimelineWeeks } from '@/hooks/useAssignedHoursTimelineData';
@@ -54,7 +54,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
   const includeChildren = useGlobalDepartmentFilter ? deptState.includeChildren : !!includeChildrenOverride;
   const statusData = useAssignedHoursTimelineData({ weeks, departmentId, includeChildren, vertical: verticalState.selectedVerticalId ?? null });
-  const deliverableData = useAssignedHoursDeliverableTimelineData({ weeks, departmentId, includeChildren, includeActiveCa: true, vertical: verticalState.selectedVerticalId ?? null });
+  const deliverableData = useAssignedHoursDeliverableTimelineData({ weeks, departmentId, includeChildren, vertical: verticalState.selectedVerticalId ?? null });
 
   // Category expansion (SD/DD/IFP/IFC/Masterplan/Bulletins/CA)
   const [openCategory, setOpenCategory] = React.useState<null | 'sd' | 'dd' | 'ifp' | 'ifc' | 'masterplan' | 'bulletins' | 'ca'>(null);
@@ -67,7 +67,6 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
         weeks,
         department: departmentId != null ? Number(departmentId) : undefined,
         include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
-        include_active_ca: 1,
         vertical: verticalState.selectedVerticalId ?? undefined,
         debug: 1,
       });
@@ -99,7 +98,6 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
         weeks,
         department: departmentId != null ? Number(departmentId) : undefined,
         include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
-        include_active_ca: 1,
         vertical: verticalState.selectedVerticalId ?? undefined,
         debug: 1,
       });
@@ -160,6 +158,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   };
 
   // Build stacked areas depending on mode
+  let statusLayers: Array<{ key: string; label: string; colorHex: string; top: number[]; bottom: number[] }> = [];
   let yTopA: number[] = [];
   let yTopB: number[] = [];
   let yTopC: number[] = [];
@@ -170,13 +169,19 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   let yTopH: number[] = [];
 
   if (mode === 'status') {
-    const s = statusData.series;
-    const cum1 = s.active.map((v) => v);
-    const cum2 = s.active.map((v, i) => v + (s.active_ca[i] || 0));
-    const cum3 = s.active.map((v, i) => v + (s.active_ca[i] || 0) + (s.other[i] || 0));
-    yTopA = cum1.map(scaleY); // active
-    yTopB = cum2.map(scaleY); // active + active_ca
-    yTopC = cum3.map(scaleY); // all
+    const running = new Array(n).fill(0);
+    for (const item of statusData.series) {
+      const values = new Array(n).fill(0).map((_, i) => Number(item.values?.[i] || 0));
+      const prev = [...running];
+      for (let i = 0; i < n; i++) running[i] += values[i];
+      statusLayers.push({
+        key: item.key,
+        label: item.label,
+        colorHex: item.colorHex || '#64748b',
+        top: running.map(scaleY),
+        bottom: prev.map(scaleY),
+      });
+    }
   } else {
     const s = deliverableData.series as any;
     const cum1 = s.sd.map((v: number) => v);
@@ -200,9 +205,6 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   const baseLine = new Array(n).fill(PAD_TOP + innerH);
 
   // Colors
-  const C_EMERALD = '#34d399'; // status Active
-  const C_BLUE = '#60a5fa';    // status Active CA
-  const C_SLATE = '#64748b';   // status Other
   const C_GRAY = '#9ca3af';    // Other swatch
   // Deliverables align with calendar.utils typeColors
   const D_SD = '#f59e0b';
@@ -298,12 +300,12 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
               {/* Stacked areas: order matters (draw bottom first) */}
               {mode === 'status' ? (
                 <>
-                  <path d={buildAreaPath(xs, yTopA, baseLine)} fill={C_EMERALD} fillOpacity={0.28} />
-                  <path d={buildLinePath(xs, yTopA)} stroke={C_EMERALD} strokeWidth={2} fill="none" />
-                  <path d={buildAreaPath(xs, yTopB, yTopA)} fill={C_BLUE} fillOpacity={0.28} />
-                  <path d={buildLinePath(xs, yTopB)} stroke={C_BLUE} strokeWidth={2} fill="none" />
-                  <path d={buildAreaPath(xs, yTopC, yTopB)} fill={C_SLATE} fillOpacity={0.22} />
-                  <path d={buildLinePath(xs, yTopC)} stroke={C_SLATE} strokeWidth={2} fill="none" />
+                  {statusLayers.map((layer) => (
+                    <g key={layer.key}>
+                      <path d={buildAreaPath(xs, layer.top, layer.bottom)} fill={layer.colorHex} fillOpacity={0.28} />
+                      <path d={buildLinePath(xs, layer.top)} stroke={layer.colorHex} strokeWidth={2} fill="none" />
+                    </g>
+                  ))}
                 </>
               ) : (
                 <>
@@ -339,9 +341,12 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
             <div className={`mt-2 flex items-center gap-4 text-xs ${mode === 'deliverable' ? 'hidden' : ''}`}>
               {mode === 'status' ? (
                 <>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: C_EMERALD }} /> <span className="text-[var(--text)]">Active</span></div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: C_BLUE }} /> <span className="text-[var(--text)]">Active CA</span></div>
-                  <div className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: C_SLATE }} /> <span className="text-[var(--text)]">Other</span></div>
+                  {statusLayers.map((layer) => (
+                    <div key={`legend-${layer.key}`} className="flex items-center gap-2">
+                      <span className="inline-block w-3 h-3 rounded-sm" style={{ background: layer.colorHex }} />
+                      <span className="text-[var(--text)]">{layer.label}</span>
+                    </div>
+                  ))}
                 </>
               ) : (
                 <>
@@ -409,7 +414,14 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                           aria-expanded={isOpen}
                         >
                           <span className="flex items-center gap-2 text-[var(--text)]">
-                            <span className={`inline-block transform transition-transform ${isOpen ? 'rotate-90' : ''}`}>Γû╢</span>
+                            <span
+                              className={`inline-flex transform transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                              aria-hidden="true"
+                            >
+                              <svg viewBox="0 0 20 20" className="h-3 w-3 fill-current">
+                                <path d="M7 5l6 5-6 5V5z" />
+                              </svg>
+                            </span>
                             {rawLabel === 'Unspecified' && <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#9ca3af' }} />}
                             <span className="truncate" title={displayLabel}>{displayLabel}</span>
                           </span>

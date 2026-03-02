@@ -155,6 +155,9 @@ class BQEClientsSyncTests(TestCase):
         )
 
         class DummyClient:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
             def fetch(self, updated_since=None):
                 yield [{
                     'id': 'guid-legacy-77',

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Assignment Grid - Real implementation of the spreadsheet-like assignment interface
  * Replaces the form-based AssignmentForm with a modern grid view
  */
@@ -72,6 +72,7 @@ import { confirmAction } from '@/lib/confirmAction';
 import SaveStateBadge, { type SaveState } from '@/components/ux/SaveStateBadge';
 import { usePageShortcuts } from '@/hooks/usePageShortcuts';
 import { classifyWorkloadTokenTerm, hasInvalidWorkloadLikeTokens, normalizeWorkloadAliasTerm } from '@/utils/workloadSearch';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 // Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
 
@@ -267,6 +268,15 @@ const AssignmentGrid: React.FC = () => {
   // async job state provided by useAssignmentsSnapshot
   // New multi-select project status filters (aggregate selection)
   const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter, matchesStatusFilters } = useProjectStatusFilters(deliverables);
+  const { definitions: statusDefinitions } = useProjectStatusDefinitions();
+  const activeLikeStatusKeys = useMemo(() => {
+    return new Set(
+      statusDefinitions
+        .filter((item) => item.includeInAnalytics)
+        .map((item) => (item.key || '').toLowerCase())
+        .filter(Boolean)
+    );
+  }, [statusDefinitions]);
   const statusFilterList = useMemo(
     () => Array.from(selectedStatusFilters).filter((s) => s !== 'Show All'),
     [selectedStatusFilters]
@@ -1190,7 +1200,7 @@ const AssignmentGrid: React.FC = () => {
         if (!project?.id) return;
         
         const isActive = project.isActive === true;
-        const hasActiveStatus = ['active', 'active_ca'].includes(project.status?.toLowerCase() || '');
+        const hasActiveStatus = activeLikeStatusKeys.has((project.status || '').toLowerCase());
         
         if (isActive || hasActiveStatus) {
           activeProjectIds.add(project.id);
@@ -1214,6 +1224,7 @@ const AssignmentGrid: React.FC = () => {
     // Memoization dependencies (recompute when these change):
     assignmentsData,           // Assignment data array
     projectsData,             // Project data array
+    activeLikeStatusKeys,
     // Note: Department filter state not needed here as data is pre-filtered
   ]);
 
@@ -2892,7 +2903,7 @@ const AssignmentGrid: React.FC = () => {
   const { data: schemeData } = useUtilizationScheme({ enabled: false });
   const scheme = schemeData ?? defaultUtilizationScheme;
   const searchBar = (
-    <div className={isMobileLayout ? 'w-full min-w-0' : 'w-[320px] min-w-[220px] max-w-[34vw] shrink-0'}>
+    <div className={`relative group ${isMobileLayout ? 'w-full min-w-0' : 'w-[320px] min-w-[220px] max-w-[34vw] shrink-0'}`}>
       <label className="sr-only" htmlFor="assignments-search">Search assignments</label>
       <div className="h-10 flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
         <div className="h-full flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
@@ -2946,13 +2957,17 @@ const AssignmentGrid: React.FC = () => {
             value={searchInput}
             onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
             onKeyDown={handleSearchKeyDown}
-            placeholder={searchTokens.length ? 'Add another filter...' : 'Search people, projects, or clients (Enter)'}
+            placeholder="Search"
             className="h-full flex-1 min-w-[140px] px-1 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
           />
         </div>
       </div>
-      <div className="mt-1 text-[10px] text-[var(--muted)]">
-        Supports: available, optimal, full, overallocated, &lt;30, &gt;14, &lt;30, 10-20
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-[340px] max-w-[95vw] rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 text-[10px] text-[var(--muted)] shadow-lg group-hover:block group-focus-within:block"
+      >
+        <p>Press Enter to add a filter token. Use OR / AND / NOT to combine filters.</p>
+        <p className="mt-1">Workload filters: available, optimal, full, overallocated, &lt;30, &gt;14, 10-20.</p>
       </div>
       {workloadHintVisible ? (
         <div className="mt-0.5 text-[10px] text-amber-500">

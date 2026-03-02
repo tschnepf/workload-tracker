@@ -12,13 +12,19 @@ from django.db.models.functions import Coalesce
 from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date, parse_http_date
 from django.conf import settings
-from accounts.permissions import is_admin_or_manager
+from accounts.permissions import is_admin_or_manager, is_admin_user
 from accounts.serializers import AdminAuditLogSerializer
 from django.core.cache import cache
 from django.utils import timezone
-from .models import Project, ProjectChangeLog, ProjectRole
+from .models import Project, ProjectChangeLog, ProjectRole, ProjectStatusDefinition
 from core.etag import ETagConditionalMixin
-from .serializers import ProjectSerializer, ProjectFilterMetadataSerializer, ProjectAvailabilityItemSerializer, ProjectChangeLogSerializer
+from .serializers import (
+    ProjectSerializer,
+    ProjectFilterMetadataSerializer,
+    ProjectAvailabilityItemSerializer,
+    ProjectChangeLogSerializer,
+    ProjectStatusDefinitionSerializer,
+)
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from rest_framework import serializers
 import logging
@@ -55,11 +61,104 @@ try:
     from .tasks import export_projects_excel_task
 except Exception:
     export_projects_excel_task = None  # type: ignore
+from .status_definitions import get_status_keys_included_in_analytics, clear_status_definitions_cache
 
 logger = logging.getLogger(__name__)
 
 class ProjectAvailabilityThrottle(UserRateThrottle):
     scope = 'project_availability'
+
+
+class ProjectStatusDefinitionViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'key'
+    serializer_class = ProjectStatusDefinitionSerializer
+
+    def _queryset(self):
+        return ProjectStatusDefinition.objects.all().order_by('sort_order', 'label', 'key')
+
+    def _serialize(self, queryset):
+        rows = list(queryset)
+        in_use = {
+            row['status']: row['count']
+            for row in (
+                Project.objects.values('status')
+                .annotate(count=Count('id'))
+            )
+        }
+        payload = []
+        for item in rows:
+            key = (item.key or '').strip().lower()
+            count = int(in_use.get(key, 0))
+            payload.append({
+                'key': key,
+                'label': item.label,
+                'color_hex': item.color_hex,
+                'include_in_analytics': item.include_in_analytics,
+                'treat_as_ca_when_no_deliverable': item.treat_as_ca_when_no_deliverable,
+                'is_system': item.is_system,
+                'is_active': item.is_active,
+                'sort_order': item.sort_order,
+                'inUseCount': count,
+                'canDelete': (not item.is_system) and count == 0,
+            })
+        return ProjectStatusDefinitionSerializer(payload, many=True).data
+
+    def _require_admin(self, request):
+        return is_admin_user(getattr(request, 'user', None))
+
+    def list(self, request):
+        data = self._serialize(self._queryset())
+        return Response(data)
+
+    def create(self, request):
+        if not self._require_admin(request):
+            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = ProjectStatusDefinitionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(is_system=False)
+        clear_status_definitions_cache()
+        data = self._serialize(self._queryset())
+        created = next((row for row in data if row.get('key') == serializer.instance.key), serializer.data)
+        return Response(created, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, key=None):
+        if not self._require_admin(request):
+            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        obj = ProjectStatusDefinition.objects.filter(key=(key or '').strip().lower()).first()
+        if not obj:
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        if 'key' in request.data and (request.data.get('key') or '').strip().lower() != obj.key:
+            return Response({'key': ['Status key is immutable']}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = ProjectStatusDefinitionSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        clear_status_definitions_cache()
+        data = self._serialize(self._queryset())
+        updated = next((row for row in data if row.get('key') == obj.key), serializer.data)
+        return Response(updated)
+
+    def destroy(self, request, key=None):
+        if not self._require_admin(request):
+            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        obj = ProjectStatusDefinition.objects.filter(key=(key or '').strip().lower()).first()
+        if not obj:
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        in_use_count = int(Project.objects.filter(status=obj.key).count())
+        if obj.is_system:
+            return Response(
+                {'code': 'system_status', 'detail': 'System statuses cannot be deleted.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if in_use_count > 0:
+            return Response(
+                {'code': 'in_use', 'detail': f'Status is used by {in_use_count} project(s).'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        obj.delete()
+        clear_status_definitions_cache()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
@@ -554,6 +653,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     ]
 
                     needs_future_deliverables = wants_with_dates or wants_no_dates or wants_missing_qa
+                    active_analytics_statuses = get_status_keys_included_in_analytics(active_only=True) or {'active'}
                     if needs_future_deliverables:
                         today = timezone.now().date()
                         future_deliverables = Deliverable.objects.filter(
@@ -631,9 +731,9 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     if base_statuses:
                         status_q |= Q(status__in=base_statuses)
                     if wants_with_dates:
-                        status_q |= Q(status='active', has_future_deliverables=True)
+                        status_q |= Q(status__in=list(active_analytics_statuses), has_future_deliverables=True)
                     if wants_no_dates:
-                        status_q |= Q(status='active', has_future_deliverables=False)
+                        status_q |= Q(status__in=list(active_analytics_statuses), has_future_deliverables=False)
                     if wants_no_assignments:
                         status_q |= Q(assignment_count=0)
                     if wants_missing_qa:
@@ -1659,6 +1759,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         ]
 
                         needs_future_deliverables = wants_with_dates or wants_no_dates or wants_missing_qa
+                        active_analytics_statuses = get_status_keys_included_in_analytics(active_only=True) or {'active'}
                         if needs_future_deliverables:
                             future_deliverables = Deliverable.objects.filter(
                                 project_id=OuterRef('pk'),
@@ -1677,9 +1778,9 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         if base_statuses:
                             status_q |= Q(status__in=base_statuses)
                         if wants_with_dates:
-                            status_q |= Q(status='active', has_future_deliverables=True)
+                            status_q |= Q(status__in=list(active_analytics_statuses), has_future_deliverables=True)
                         if wants_no_dates:
-                            status_q |= Q(status='active', has_future_deliverables=False)
+                            status_q |= Q(status__in=list(active_analytics_statuses), has_future_deliverables=False)
                         if wants_no_assignments:
                             status_q |= Q(assignment_count=0)
                         if wants_missing_qa:

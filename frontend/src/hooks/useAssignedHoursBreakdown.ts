@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { getProjectGridSnapshot } from '@/services/projectAssignmentsApi';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 export type HorizonWeeks = 4 | 8 | 12 | 16;
 
 export type Slice = {
-  key: 'active' | 'active_ca' | 'other';
+  key: string;
   label: string;
   value: number; // hours
   color: string;
@@ -19,13 +20,13 @@ type Args = {
 };
 
 export function useAssignedHoursBreakdown({ weeks, departmentId, includeChildren, vertical }: Args) {
+  const { definitions } = useProjectStatusDefinitions();
+  const includedDefinitions = definitions.filter((item) => item.includeInAnalytics);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [slices, setSlices] = useState<Slice[]>([
-    { key: 'active', label: 'Active', value: 0, color: '#34d399' },
-    { key: 'active_ca', label: 'Active CA', value: 0, color: '#60a5fa' },
-    { key: 'other', label: 'Other', value: 0, color: '#64748b' },
-  ]);
+  const [slices, setSlices] = useState<Slice[]>(
+    includedDefinitions.map((item) => ({ key: item.key, label: item.label, value: 0, color: item.colorHex || '#64748b' }))
+  );
 
   useAuthenticatedEffect(() => {
     let mounted = true;
@@ -45,12 +46,14 @@ export function useAssignedHoursBreakdown({ weeks, departmentId, includeChildren
         const weekKeys = snap.weekKeys || [];
         const hoursByProject = snap.hoursByProject || {};
 
-        let activeHours = 0;
-        let activeCaHours = 0;
-        let otherHours = 0;
+        const totalsByStatus = new Map<string, number>();
+        for (const item of includedDefinitions) {
+          totalsByStatus.set(item.key.toLowerCase(), 0);
+        }
 
         for (const p of snap.projects || []) {
           const status = (p.status || '').toLowerCase();
+          if (!totalsByStatus.has(status)) continue;
           const wkmap = hoursByProject[String(p.id)] || {};
           let sum = 0;
           for (const wk of weekKeys) {
@@ -58,16 +61,19 @@ export function useAssignedHoursBreakdown({ weeks, departmentId, includeChildren
             if (typeof v === 'number' && isFinite(v)) sum += v;
           }
           if (sum <= 0) continue;
-          if (status === 'active') activeHours += sum;
-          else if (status === 'active_ca') activeCaHours += sum;
-          else otherHours += sum;
+          totalsByStatus.set(status, (totalsByStatus.get(status) || 0) + sum);
         }
 
-        setSlices([
-          { key: 'active', label: 'Active', value: activeHours, color: '#34d399' },
-          { key: 'active_ca', label: 'Active CA', value: activeCaHours, color: '#60a5fa' },
-          { key: 'other', label: 'Other', value: otherHours, color: '#64748b' },
-        ]);
+        const nextSlices: Slice[] = includedDefinitions.map((item) => {
+          const key = item.key.toLowerCase();
+          return {
+            key,
+            label: item.label,
+            value: totalsByStatus.get(key) || 0,
+            color: item.colorHex || '#64748b',
+          };
+        });
+        setSlices(nextSlices);
       } catch (e: any) {
         if (!mounted) return;
         setError(e?.message || 'Failed to load assigned hours');
@@ -78,7 +84,7 @@ export function useAssignedHoursBreakdown({ weeks, departmentId, includeChildren
     return () => {
       mounted = false;
     };
-  }, [weeks, departmentId, includeChildren, vertical]);
+  }, [weeks, departmentId, includeChildren, vertical, includedDefinitions]);
 
   const total = Math.max(0, slices.reduce((s, x) => s + x.value, 0));
   return { loading, error, slices, total };

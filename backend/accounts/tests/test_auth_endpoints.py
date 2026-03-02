@@ -1,5 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -25,10 +26,13 @@ class AuthEndpointsTests(TestCase):
         access = resp.data.get('access')
         refresh = resp.data.get('refresh')
         self.assertTrue(access)
+        if not refresh:
+            refresh = resp.cookies.get(settings.REFRESH_COOKIE_NAME).value if resp.cookies.get(settings.REFRESH_COOKIE_NAME) else None
         self.assertTrue(refresh)
 
         # Refresh
-        resp2 = self.client.post('/api/token/refresh/', { 'refresh': refresh }, format='json')
+        refresh_payload = { 'refresh': refresh } if resp.data.get('refresh') else {}
+        resp2 = self.client.post('/api/token/refresh/', refresh_payload, format='json')
         self.assertEqual(resp2.status_code, status.HTTP_200_OK)
         self.assertTrue(resp2.data.get('access'))
 
@@ -93,4 +97,3 @@ class AuthEndpointsTests(TestCase):
         self.assertEqual(self.client.get('/api/auth/me/').status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.client.patch('/api/auth/settings/', { 'settings': {} }, format='json').status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.client.post('/api/auth/link_person/', { 'person_id': None }, format='json').status_code, status.HTTP_401_UNAUTHORIZED)
-

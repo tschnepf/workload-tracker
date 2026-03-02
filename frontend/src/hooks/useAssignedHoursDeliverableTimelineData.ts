@@ -4,7 +4,7 @@ import { getAssignedHoursDeliverableTimeline } from '@/services/analyticsApi';
 
 export type TimelineWeeks = 4 | 8 | 12 | 16;
 
-export function useAssignedHoursDeliverableTimelineData({ weeks, departmentId, includeChildren, includeActiveCa = true, vertical }: { weeks: TimelineWeeks; departmentId?: number | null; includeChildren?: boolean; includeActiveCa?: boolean; vertical?: number | null; }) {
+export function useAssignedHoursDeliverableTimelineData({ weeks, departmentId, includeChildren, vertical }: { weeks: TimelineWeeks; departmentId?: number | null; includeChildren?: boolean; vertical?: number | null; }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekKeys, setWeekKeys] = useState<string[]>([]);
@@ -22,7 +22,6 @@ export function useAssignedHoursDeliverableTimelineData({ weeks, departmentId, i
           weeks,
           department: departmentId != null ? Number(departmentId) : undefined,
           include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
-          include_active_ca: includeActiveCa ? 1 : 0,
           vertical: vertical ?? undefined,
           debug: debugFlag ? 1 : undefined,
         });
@@ -37,7 +36,6 @@ export function useAssignedHoursDeliverableTimelineData({ weeks, departmentId, i
             weeks,
             departmentId,
             includeChildren,
-            includeActiveCa,
             entries: (res as any).unspecifiedDebug,
           });
         }
@@ -49,7 +47,7 @@ export function useAssignedHoursDeliverableTimelineData({ weeks, departmentId, i
       }
     })();
     return () => { mounted = false; };
-  }, [weeks, departmentId, includeChildren, includeActiveCa, vertical]);
+  }, [weeks, departmentId, includeChildren, vertical]);
 
   const totalByWeek = (weekKeys.length ? weekKeys : new Array(weeks).fill('')).map((_, i) => {
     let extraSum = 0;

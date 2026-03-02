@@ -30,6 +30,7 @@ from .serializers import AssignmentSerializer
 from people.models import Person
 from projects.models import Project  # noqa: F401
 from projects.models import ProjectRole
+from projects.status_definitions import get_included_status_definitions, status_included_in_analytics
 from projects.change_log import record_project_change
 from projects.roles_serializers import ProjectRoleItemSerializer
 from core.models import (
@@ -75,6 +76,8 @@ try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
     generate_grid_snapshot_async = None  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 
 class HotEndpointThrottle(UserRateThrottle):
@@ -1579,7 +1582,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         ),
         parameters=[
             OpenApiParameter(name='department', type=int, required=True, description='Department ID'),
-            OpenApiParameter(name='weeks', type=int, required=False, description='Number of future weeks (4,8,12,16,20). Default 12'),
+            OpenApiParameter(name='weeks', type=int, required=False, description='Number of future weeks (4,8,12,16,20,26,52). Default 12'),
             OpenApiParameter(name='role_ids', type=str, required=False, description='CSV of department ProjectRole IDs to include'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='filter_out_lt5h', type=bool, required=False, description='Exclude people assigned under 5h in each of the next 4 weeks from capacity and assigned calculations.'),
@@ -1636,7 +1639,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             weeks = int(request.query_params.get('weeks', 12))
         except Exception:
             weeks = 12
-        if weeks not in (4, 8, 12, 16, 20):
+        if weeks not in (4, 8, 12, 16, 20, 26, 52):
             weeks = 12
         filter_out_lt5h = str(request.query_params.get('filter_out_lt5h') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
@@ -2674,8 +2677,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @extend_schema(
         description=(
             "Assigned hours weekly timeline aggregated by project status for N weeks ahead.\n\n"
-            "Categories reflect Project.status controlled vocabulary: 'active', 'active_ca', and 'other'.\n"
-            "Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }"
+            "Categories reflect project statuses with 'include_in_analytics=true'.\n"
+            "Response: { weekKeys: [..], series: [{ key, label, colorHex, values }], totalByWeek: number[] }"
         ),
         parameters=[
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks (1-52), default 12'),
@@ -2687,11 +2690,17 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             name='AssignedHoursStatusTimelineResponse',
             fields={
                 'weekKeys': serializers.ListField(child=serializers.CharField()),
-                'series': inline_serializer(name='StatusSeries', fields={
-                    'active': serializers.ListField(child=serializers.FloatField()),
-                    'active_ca': serializers.ListField(child=serializers.FloatField()),
-                    'other': serializers.ListField(child=serializers.FloatField()),
-                }),
+                'series': serializers.ListField(
+                    child=inline_serializer(
+                        name='StatusSeriesItem',
+                        fields={
+                            'key': serializers.CharField(),
+                            'label': serializers.CharField(),
+                            'colorHex': serializers.CharField(),
+                            'values': serializers.ListField(child=serializers.FloatField()),
+                        },
+                    )
+                ),
                 'totalByWeek': serializers.ListField(child=serializers.FloatField()),
             }
         )
@@ -2787,30 +2796,65 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             for row in Proj.objects.filter(id__in=pids).values('id', 'status'):
                 status_map[row['id']] = (row['status'] or '').lower()
 
-        sums_active = [0.0] * len(week_keys)
-        sums_active_ca = [0.0] * len(week_keys)
-        sums_other = [0.0] * len(week_keys)
+        included_statuses = get_included_status_definitions()
+        series_by_status: dict[str, dict[str, object]] = {}
+        for item in included_statuses:
+            key = (item.get('key') or '').strip().lower()
+            if not key:
+                continue
+            series_by_status[key] = {
+                'key': key,
+                'label': item.get('label') or key.replace('_', ' ').title(),
+                'colorHex': item.get('colorHex') or '#64748b',
+                'values': [0.0] * len(week_keys),
+            }
+
+        unknown_status_keys: set[str] = set()
         for idx, wk in enumerate(week_keys):
             for pid, wkmap in by_project.items():
                 val = float(wkmap.get(wk, 0.0))
                 if not val:
                     continue
-                st = status_map.get(pid, '')
-                if st == 'active':
-                    sums_active[idx] += val
-                elif st == 'active_ca':
-                    sums_active_ca[idx] += val
-                else:
-                    sums_other[idx] += val
+                status_key = (status_map.get(pid) or '').strip().lower()
+                series_item = series_by_status.get(status_key)
+                if not series_item:
+                    if status_key:
+                        unknown_status_keys.add(status_key)
+                    continue
+                values = series_item['values']
+                if isinstance(values, list):
+                    values[idx] = round(float(values[idx]) + val, 2)
 
-        total_by_week = [round(sums_active[i] + sums_active_ca[i] + sums_other[i], 2) for i in range(len(week_keys))]
+        if unknown_status_keys:
+            logger.warning(
+                "analytics_status_timeline skipped projects with statuses not included in analytics: %s",
+                sorted(unknown_status_keys),
+            )
+
+        series = []
+        for item in included_statuses:
+            key = (item.get('key') or '').strip().lower()
+            series_item = series_by_status.get(key)
+            if not series_item:
+                continue
+            values = [round(float(v), 2) for v in (series_item.get('values') or [])]
+            series.append({
+                'key': series_item.get('key') or key,
+                'label': series_item.get('label') or key.replace('_', ' ').title(),
+                'colorHex': series_item.get('colorHex') or '#64748b',
+                'values': values,
+            })
+
+        total_by_week = [0.0] * len(week_keys)
+        for item in series:
+            values = item.get('values') if isinstance(item, dict) else None
+            if not isinstance(values, list):
+                continue
+            for i, v in enumerate(values):
+                total_by_week[i] = round(total_by_week[i] + float(v or 0), 2)
         payload = {
             'weekKeys': week_keys,
-            'series': {
-                'active': [round(x, 2) for x in sums_active],
-                'active_ca': [round(x, 2) for x in sums_active_ca],
-                'other': [round(x, 2) for x in sums_other],
-            },
+            'series': series,
             'totalByWeek': total_by_week,
         }
         try:
@@ -2823,7 +2867,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @extend_schema(
         description=(
             "Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.\n\n"
-            "Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.\n"
+            "Uses shared classification (forward-select next deliverable, Monday exception, status CA override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.\n"
             "Classification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.\n"
             "Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.\n"
             "Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }"
@@ -2833,7 +2877,6 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
-            OpenApiParameter(name='include_active_ca', type=int, required=False, description='0|1 include active_ca status in addition to active (default 0)')
         ],
         responses=inline_serializer(
             name='AssignedHoursDeliverableTimelineResponse',
@@ -2877,8 +2920,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     f"w={request.query_params.get('weeks','12')}:"
                     f"d={request.query_params.get('department','')}:"
                     f"c={request.query_params.get('include_children','')}:"
-                    f"v={request.query_params.get('vertical','')}:"
-                    f"ac={request.query_params.get('include_active_ca','0')}"
+                    f"v={request.query_params.get('vertical','')}"
                 )
                 cached = cache.get(cache_key)
                 if cached:
@@ -2917,8 +2959,6 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 dept_ids = None
 
-        include_active_ca = (request.query_params.get('include_active_ca') == '1')
-
         # Build weeks (Sundays)
         from core.week_utils import sunday_of_week
         today = date.today()
@@ -2956,8 +2996,24 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     m[wk] = round(m.get(wk, 0.0) + h, 2)
 
         pids = list(by_project_week.keys())
+        def _empty_payload():
+            return {
+                'weekKeys': week_keys,
+                'series': {
+                    'sd': [0] * weeks,
+                    'dd': [0] * weeks,
+                    'ifp': [0] * weeks,
+                    'ifc': [0] * weeks,
+                    'masterplan': [0] * weeks,
+                    'bulletins': [0] * weeks,
+                    'ca': [0] * weeks,
+                    'other': [0] * weeks,
+                },
+                'extras': [],
+                'totalByWeek': [0] * weeks,
+            }
         if not pids:
-            return Response({'weekKeys': week_keys, 'series': {'sd': [0]*weeks, 'dd': [0]*weeks, 'ifp': [0]*weeks, 'ifc': [0]*weeks, 'bulletins': [0]*weeks}, 'extras': [], 'totalByWeek': [0]*weeks})
+            return Response(_empty_payload())
 
         # Project statuses and names (for debug context)
         status_map = {}
@@ -2966,15 +3022,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             status_map[row['id']] = (row['status'] or '').lower()
             name_map[row['id']] = row.get('name') or f"Project {row['id']}"
 
-        # Filter project ids to active (and optional active_ca)
+        # Filter project ids to statuses that opt in to analytics.
         filtered_pids = []
         for pid in pids:
-            st = status_map.get(pid, '')
-            if st == 'active' or (include_active_ca and st == 'active_ca'):
+            if status_included_in_analytics(status_map.get(pid)):
                 filtered_pids.append(pid)
 
         if not filtered_pids:
-            return Response({'weekKeys': week_keys, 'series': {'sd': [0]*weeks, 'dd': [0]*weeks, 'ifp': [0]*weeks, 'ifc': [0]*weeks, 'bulletins': [0]*weeks}, 'extras': [], 'totalByWeek': [0]*weeks})
+            return Response(_empty_payload())
 
         # Load deliverables for these projects
         deliv_rows = list(Deliverable.objects.filter(project_id__in=filtered_pids).values('project_id', 'percentage', 'description', 'date'))

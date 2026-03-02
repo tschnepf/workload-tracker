@@ -18,6 +18,7 @@ from integrations.registry import get_registry
 from integrations.providers.bqe.projects_client import BQEProjectsClient
 from integrations.logging_utils import integration_log_extra
 from projects.models import Project
+from projects.status_definitions import status_exists
 
 logger = logging.getLogger(__name__)
 
@@ -264,11 +265,16 @@ def _map_status(remote_status: str) -> Optional[str]:
     if not normalized:
         return None
     if normalized in ('archived', 'inactive', 'closed'):
-        return 'inactive'
-    if normalized in ('active', 'open'):
-        return 'active'
-    if normalized in ('planning',):
-        return 'planning'
-    if normalized in ('completed', 'complete'):
-        return 'completed'
-    return normalized
+        mapped = 'inactive'
+    elif normalized in ('active', 'open'):
+        mapped = 'active'
+    elif normalized in ('planning',):
+        mapped = 'planning'
+    elif normalized in ('completed', 'complete'):
+        mapped = 'completed'
+    else:
+        mapped = normalized
+    if status_exists(mapped):
+        return mapped
+    logger.warning("bqe_sync_unknown_status status=%s fallback=active", mapped)
+    return 'active'

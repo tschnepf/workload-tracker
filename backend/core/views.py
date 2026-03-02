@@ -43,6 +43,7 @@ from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
 from assignments.models import Assignment  # type: ignore
 from projects.models import ProjectRole as DepartmentProjectRole
+from projects.models import ProjectStatusDefinition
 from people.models import Person
 from people.serializers import PersonSerializer
 from departments.models import Department
@@ -54,6 +55,7 @@ from verticals.serializers import VerticalSerializer
 from skills.models import SkillTag, PersonSkill
 from skills.serializers import SkillTagSerializer, PersonSkillSerializer, PersonSkillSummarySerializer
 from core.search_tokens import parse_search_tokens, apply_token_filter
+from projects.serializers import ProjectStatusDefinitionSerializer
 
 AUTO_HOURS_MAX_WEEKS_BEFORE = 17
 AUTO_HOURS_MAX_WEEKS_COUNT = AUTO_HOURS_MAX_WEEKS_BEFORE + 1
@@ -882,6 +884,7 @@ class SettingsPageSnapshotView(APIView):
         {'id': 'role-management', 'title': 'Role Management', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
         {'id': 'verticals', 'title': 'Verticals', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'department-project-roles', 'title': 'Department Project Roles', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'project-statuses', 'title': 'Project Statuses', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'utilization-scheme', 'title': 'Utilization Scheme', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
         {'id': 'pre-deliverables', 'title': 'Pre-Deliverables', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'project-templates', 'title': 'Project Template', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
@@ -918,6 +921,9 @@ class SettingsPageSnapshotView(APIView):
             return {'departments': departments}
         if section_id == 'role-management':
             return {'roles': RoleSerializer(Role.objects.filter(is_active=True).order_by('sort_order', 'name', 'id'), many=True).data}
+        if section_id == 'project-statuses':
+            rows = ProjectStatusDefinition.objects.all().order_by('sort_order', 'label', 'key')
+            return {'projectStatuses': ProjectStatusDefinitionSerializer(rows, many=True).data}
         if section_id == 'verticals':
             return {'verticals': VerticalSerializer(Vertical.objects.order_by('name'), many=True).data}
         if section_id == 'utilization-scheme':

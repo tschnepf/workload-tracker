@@ -5,10 +5,12 @@ import { useProjectQuickViewPopover } from '@/components/projects/quickview';
 import { useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/services/api';
 import { allStatusOptions, formatStatus, getStatusColor } from '@/components/projects/status.utils';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 export type ProjectItem = { id: number; name: string | null; client?: string | null; status?: string | null; nextDeliverableDate?: string | null };
 
 const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> = ({ projects, className }) => {
+  const { allStatusOptions: statusOptions, definitionMap } = useProjectStatusDefinitions();
   // Status filter (default: Active + Active CA)
   const [selected, setSelected] = React.useState<string[]>(['active', 'active_ca']);
   const toggle = (s: string) => setSelected(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
@@ -58,15 +60,16 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
           >
             Show All
           </button>
-          {allStatusOptions.map((s) => (
+          {(statusOptions.length > 0 ? statusOptions : allStatusOptions).map((s) => (
             <button
               key={s}
               onClick={() => toggle(s)}
-              className={`px-2 py-0.5 rounded text-xs border ${selected.includes(s) ? 'bg-[var(--surface)] border-[var(--border)]' : 'bg-transparent border-[var(--border)]'} ${getStatusColor(s)}`}
+              className={`px-2 py-0.5 rounded text-xs border ${selected.includes(s) ? 'bg-[var(--surface)] border-[var(--border)]' : 'bg-transparent border-[var(--border)]'}`}
+              style={{ color: getStatusColor(s, definitionMap) }}
               aria-pressed={selected.includes(s)}
-              title={`Filter by ${formatStatus(s)}`}
+              title={`Filter by ${formatStatus(s, definitionMap)}`}
             >
-              {formatStatus(s)}
+              {formatStatus(s, definitionMap)}
             </button>
           ))}
         </div>
@@ -108,7 +111,9 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
                           <span className="truncate">{p.name || `Project ${p.id}`}</span>
                         )}
                       </div>
-                      <div className={`text-xs whitespace-nowrap ${getStatusColor(p.status || '')}`}>{formatStatus(p.status || '')}</div>
+                      <div className="text-xs whitespace-nowrap" style={{ color: getStatusColor(p.status || '', definitionMap) }}>
+                        {formatStatus(p.status || '', definitionMap)}
+                      </div>
                     </li>
                   ))}
                 </ul>

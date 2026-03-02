@@ -17,8 +17,8 @@ class AssignmentSearchPeopleRolesTests(TestCase):
         self.client.force_authenticate(self.user)
 
     def test_search_tokens_match_people_role_names(self):
-        director_role = Role.objects.create(name='Director')
-        engineer_role = Role.objects.create(name='Engineer')
+        director_role = Role.objects.create(name=f'Director {self._testMethodName}')
+        engineer_role = Role.objects.create(name=f'Engineer {self._testMethodName}')
 
         director = Person.objects.create(name='Director Person', weekly_capacity=36, role=director_role)
         engineer = Person.objects.create(name='Engineer Person', weekly_capacity=36, role=engineer_role)
@@ -51,8 +51,8 @@ class AssignmentSearchPeopleRolesTests(TestCase):
         self.assertNotIn(str(engineer.id), counts)
 
     def test_list_search_tokens_match_people_role_names(self):
-        director_role = Role.objects.create(name='Director')
-        engineer_role = Role.objects.create(name='Engineer')
+        director_role = Role.objects.create(name=f'Director {self._testMethodName}')
+        engineer_role = Role.objects.create(name=f'Engineer {self._testMethodName}')
 
         director = Person.objects.create(name='Director Person', weekly_capacity=36, role=director_role)
         engineer = Person.objects.create(name='Engineer Person', weekly_capacity=36, role=engineer_role)
@@ -72,7 +72,7 @@ class AssignmentSearchPeopleRolesTests(TestCase):
         self.assertEqual(result_person_ids, {director.id})
 
     def test_search_workload_tokens_match_by_visible_week_window(self):
-        role = Role.objects.create(name='Engineer')
+        role = Role.objects.create(name=f'Engineer {self._testMethodName}')
         p_available = Person.objects.create(name='Available Person', weekly_capacity=36, role=role)
         p_over = Person.objects.create(name='Over Person', weekly_capacity=36, role=role)
         project = Project.objects.create(name='Workload Search Project', status='active')

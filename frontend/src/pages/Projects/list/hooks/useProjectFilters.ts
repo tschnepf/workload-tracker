@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Project } from '@/types/models';
 import type { ProjectFilterMetadataResponse } from '@/types/models';
-import { formatStatus, statusOptions } from '@/components/projects/StatusBadge';
+import { formatStatus } from '@/components/projects/StatusBadge';
 import { trackPerformanceEvent } from '@/utils/monitoring';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
+import { DEFAULT_PROJECT_STATUS_FILTER_KEYS } from '@/components/projects/status.catalog';
 import {
   buildFutureDeliverableLookupFromMetadata,
   projectMatchesActiveWithDates,
@@ -18,23 +20,27 @@ export function useProjectFilters(
     serverSide?: boolean;
   }
 ) {
+  const { filterStatusOptions, definitionMap } = useProjectStatusDefinitions();
+  const defaultStatuses = useMemo(
+    () => new Set<string>(DEFAULT_PROJECT_STATUS_FILTER_KEYS as unknown as string[]),
+    []
+  );
   // Persisted status filters (default to Active + Active CA)
   const STORAGE_KEY = 'projects.selectedStatusFilters.v1';
   const loadSelectedStatusFilters = (): Set<string> => {
     try {
-      if (typeof window === 'undefined') return new Set(['active', 'active_ca']);
+      if (typeof window === 'undefined') return new Set(defaultStatuses);
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return new Set(['active', 'active_ca']);
+      if (!raw) return new Set(defaultStatuses);
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return new Set(['active', 'active_ca']);
-      const allowed = new Set<string>(statusOptions as unknown as string[]);
+      if (!Array.isArray(parsed)) return new Set(defaultStatuses);
       const cleaned = parsed
         .map((s) => (typeof s === 'string' ? s : ''))
-        .filter((s) => s && allowed.has(s));
+        .filter((s) => !!s);
       if (cleaned.includes('Show All')) return new Set(['Show All']);
-      return cleaned.length > 0 ? new Set(cleaned) : new Set(['active', 'active_ca']);
+      return cleaned.length > 0 ? new Set(cleaned) : new Set(defaultStatuses);
     } catch {
-      return new Set(['active', 'active_ca']);
+      return new Set(defaultStatuses);
     }
   };
   const [selectedStatusFilters, setSelectedStatusFilters] = useState<Set<string>>(loadSelectedStatusFilters);
@@ -46,10 +52,9 @@ export function useProjectFilters(
     if (status === 'Show All') return 'Show All';
     if (status === 'active_no_deliverables') return 'Active - No Dates';
     if (status === 'active_with_dates') return 'Active - With Dates';
-    if (status === 'active_ca') return 'Active CA';
     if (status === 'no_assignments') return 'No Assignments';
     if (status === 'missing_qa') return 'Missing QA';
-    return formatStatus(status);
+    return formatStatus(status, definitionMap);
   };
 
   const toggleStatusFilter = (status: string) => {
@@ -74,6 +79,18 @@ export function useProjectFilters(
   }
 
   // Persist status filters to localStorage
+  useEffect(() => {
+    const allowed = new Set<string>(filterStatusOptions as unknown as string[]);
+    setSelectedStatusFilters((prev) => {
+      if (prev.size === 0) return prev;
+      if (prev.has('Show All')) return new Set(['Show All']);
+      const next = new Set(Array.from(prev).filter((value) => allowed.has(value)));
+      if (next.size === 0) return new Set(defaultStatuses);
+      if (next.size === prev.size && Array.from(next).every((value) => prev.has(value))) return prev;
+      return next;
+    });
+  }, [defaultStatuses, filterStatusOptions]);
+
   useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
@@ -111,7 +128,7 @@ export function useProjectFilters(
       return options.extraStatusMatchers[statusFilter](project, metadata);
     }
     return project.status === statusFilter;
-  }, [futureDeliverableLookup, filterMetadata, options?.extraStatusMatchers]);
+  }, [futureDeliverableLookup, options?.extraStatusMatchers]);
 
   const filteredProjects = useMemo(() => {
     if (options?.serverSide) return projects;
@@ -221,5 +238,6 @@ export function useProjectFilters(
     // derived
     filteredProjects,
     sortedProjects,
+    statusOptions: filterStatusOptions,
   } as const;
 }

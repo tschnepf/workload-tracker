@@ -4,6 +4,7 @@ import RoleManagementSection, { ROLE_MANAGEMENT_SECTION_ID } from './RoleManagem
 import VerticalsSection, { VERTICALS_SECTION_ID } from './VerticalsSection';
 import UtilizationSection, { UTILIZATION_SECTION_ID } from './UtilizationSection';
 import DepartmentRolesSection, { DEPARTMENT_ROLES_SECTION_ID } from './DepartmentRolesSection';
+import ProjectStatusesSection, { PROJECT_STATUSES_SECTION_ID } from './ProjectStatusesSection';
 import PreDeliverablesSection, { PRE_DELIVERABLES_SECTION_ID } from './PreDeliverablesSection';
 import AutoHoursSection, { AUTO_HOURS_SECTION_ID } from './AutoHoursSection';
 import CalendarFeedsSection, { CALENDAR_FEEDS_SECTION_ID } from './CalendarFeedsSection';
@@ -43,6 +44,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     requiresAdmin: true,
     allowManager: true,
     component: DepartmentRolesSection,
+  },
+  {
+    id: PROJECT_STATUSES_SECTION_ID,
+    title: 'Project Statuses',
+    requiresAdmin: true,
+    component: ProjectStatusesSection,
   },
   {
     id: UTILIZATION_SECTION_ID,

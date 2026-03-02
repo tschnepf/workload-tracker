@@ -9,7 +9,7 @@ import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import { Link } from 'react-router';
 
-const WEEK_OPTIONS: Array<4 | 8 | 12 | 16> = [4, 8, 12, 16];
+const WEEK_OPTIONS: Array<4 | 8 | 12 | 16 | 26 | 52> = [4, 8, 12, 16, 26, 52];
 
 const utilizationTone = (pct: number) => {
   if (pct <= 70) return { bar: '#60a5fa', text: 'text-blue-300' };
@@ -47,7 +47,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
 }) => {
   const { state: deptState } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
-  const [weeks, setWeeks] = React.useState<4 | 8 | 12 | 16>(12);
+  const [weeks, setWeeks] = React.useState<4 | 8 | 12 | 16 | 26 | 52>(12);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [weekKeys, setWeekKeys] = React.useState<string[]>([]);
@@ -57,7 +57,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
     unmappedProjectRoleHours?: number;
     mappedTemplateRolePairsUsed?: number;
   } | null>(null);
-  const [filterOutLt5h, setFilterOutLt5h] = React.useState(false);
+  const [filterOutLt5h, setFilterOutLt5h] = React.useState(true);
   const [showTrend, setShowTrend] = React.useState(false);
   const [hoveredCell, setHoveredCell] = React.useState<{
     roleName: string;

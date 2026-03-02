@@ -5,8 +5,8 @@ Rules:
 - Forward-select the next deliverable at/after the target week (Sunday key).
 - Monday exception: if the chosen deliverable falls on Monday and equals the
   current week, attribute to the next deliverable instead.
-- Active-CA override: if project status is 'active_ca' treat the week as 'ca'
-  if no next deliverable exists.
+- Status CA override: if project status has CA override enabled, treat the
+  week as 'ca' if no next deliverable exists.
 
 Returns phase keys as strings (controlled vocabulary + user-defined phases).
 """
@@ -18,6 +18,7 @@ from django.core.cache import cache
 import re
 from core.choices import DeliverablePhase
 from core.week_utils import sunday_of_week
+from projects.status_definitions import status_uses_ca_override
 
 
 _PHASE_MAPPING_CACHE_KEY = 'deliverable_phase_mapping_settings'
@@ -152,11 +153,13 @@ def classify_week_for_project(
     week_key: str,
     project_status: Optional[str],
     deliverables: Iterable[Dict[str, Any]],
+    *,
+    project_status_treat_as_ca: Optional[bool] = None,
 ) -> str:
     """Classify a single Sunday week for a project using forward selection.
 
     - Uses the Monday exception.
-    - If no next deliverable exists and status == 'active_ca', returns CA.
+    - If no next deliverable exists and status CA override is enabled, returns CA.
     - Otherwise falls back to the last deliverable's classification if any; if
       no deliverables at all, returns OTHER.
     """
@@ -181,7 +184,10 @@ def classify_week_for_project(
             break
     if chosen is None:
         # No next deliverable
-        if (project_status or '').lower() == 'active_ca':
+        treat_as_ca = project_status_treat_as_ca
+        if treat_as_ca is None:
+            treat_as_ca = status_uses_ca_override(project_status)
+        if treat_as_ca:
             return DeliverablePhase.CA.value
         # Fallback to last deliverable if any
         if rows:
@@ -207,9 +213,10 @@ def build_project_week_classification(
 ) -> List[str]:
     """Return a list of phase keys for each week key."""
     rows = _normalize_deliverables(deliverables)
+    status_treat_as_ca = status_uses_ca_override(project_status)
     out: List[str] = []
     for wk in week_keys:
         # Reuse single-week classifier to avoid duplicating logic.
-        phase = classify_week_for_project(wk, project_status, rows)
+        phase = classify_week_for_project(wk, project_status, rows, project_status_treat_as_ca=status_treat_as_ca)
         out.append(phase)
     return out

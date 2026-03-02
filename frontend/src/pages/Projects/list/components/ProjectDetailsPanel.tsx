@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
 import type { Project, Assignment, Person, AutoHoursTemplate, Department } from '@/types/models';
-import StatusBadge, { getStatusColor, formatStatus, editableStatusOptions } from '@/components/projects/StatusBadge';
 import ProjectStatusDropdown from '@/components/projects/ProjectStatusDropdown';
 import { InlineText, InlineTextarea, InlineDate } from '@/components/ui/InlineEdit';
 import ProjectPreDeliverableSettings from '@/components/projects/ProjectPreDeliverableSettings';

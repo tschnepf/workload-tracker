@@ -1,14 +1,7 @@
-// Centralized status options for Projects filter bar
-// Includes standard statuses plus special filter-only markers
+import { FALLBACK_PROJECT_STATUS_DEFINITIONS, SPECIAL_PROJECT_STATUS_FILTER_TOKENS } from './status.catalog';
+
+// Fallback options used before server definitions load.
 export const statusOptions = [
-  'active',
-  'active_ca',
-  'active_with_dates',
-  'active_no_deliverables',
-  'on_hold',
-  'completed',
-  'cancelled',
-  'no_assignments',
-  'missing_qa',
-  'Show All',
+  ...FALLBACK_PROJECT_STATUS_DEFINITIONS.filter((item) => item.isActive).map((item) => item.key),
+  ...SPECIAL_PROJECT_STATUS_FILTER_TOKENS,
 ] as const;

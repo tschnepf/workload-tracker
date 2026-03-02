@@ -109,7 +109,7 @@ export interface paths {
         /**
          * @description Assigned hours weekly timeline aggregated by deliverable phase for N weeks ahead.
          *
-         *     Uses shared classification (forward-select next deliverable, Monday exception, 'active_ca' override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
+         *     Uses shared classification (forward-select next deliverable, Monday exception, status CA override to 'ca' when no next deliverable). Controlled vocabulary: sd, dd, ifp, ifc, masterplan, bulletins, ca, other. 'extras' retained for compatibility and is typically empty.
          *     Classification rules: description tokens (from Deliverable Phase Mapping Settings) are checked first; if no match, percentage ranges are applied. Defaults: SD 1–40, DD 41–89, IFP 90–99, IFC 100. Unknown values fall to other.
          *     Also groups any description containing 'Bulletin' or 'Addendum' into Bulletins/Addendums.
          *     Response: { weekKeys: [..], series: { sd, dd, ifp, ifc, masterplan, bulletins, ca, other }, extras: [{label, values[]}], totalByWeek }
@@ -156,8 +156,8 @@ export interface paths {
         /**
          * @description Assigned hours weekly timeline aggregated by project status for N weeks ahead.
          *
-         *     Categories reflect Project.status controlled vocabulary: 'active', 'active_ca', and 'other'.
-         *     Response: { weekKeys: [..], series: { active: number[], active_ca: number[], other: number[] }, totalByWeek: number[] }
+         *     Categories reflect project statuses with 'include_in_analytics=true'.
+         *     Response: { weekKeys: [..], series: [{ key, label, colorHex, values }], totalByWeek: number[] }
          */
         get: operations["assignments_analytics_status_timeline_retrieve"];
         put?: never;
@@ -181,7 +181,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Bulk update weekly hours for multiple assignments in a single transaction. */
+        /** @description Bulk update weekly hours for multiple assignments with per-item status results. */
         patch: operations["assignments_bulk_update_hours_partial_update"];
         trace?: never;
     };
@@ -981,7 +981,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["core_project_templates_duplicate_list"];
         put?: never;
         post: operations["core_project_templates_duplicate_create"];
         delete?: never;
@@ -1083,6 +1083,22 @@ export interface paths {
         };
         /** @description Team dashboard with utilization metrics and overview */
         get: operations["dashboard_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/bootstrap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["dashboard_bootstrap_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1647,6 +1663,22 @@ export interface paths {
         patch: operations["departments_partial_update"];
         trace?: never;
     };
+    "/api/departments/snapshot/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["departments_snapshot_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/integrations/connections/": {
         parameters: {
             query?: never;
@@ -2176,6 +2208,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/people/filters_metadata/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Person CRUD API with utilization calculations
+         *     Uses AutoMapped serializer for automatic snake_case â†” camelCase conversion
+         */
+        get: operations["people_filters_metadata_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/people/find_available/": {
         parameters: {
             query?: never;
@@ -2220,17 +2272,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Server-side typeahead for People.
-         *
-         *     Params:
-         *     - q: required search query (min length 2)
-         *     - limit: optional, default 20, max 50
-         *     Returns minimal projection: id, name, department
-         */
-        get: operations["people_search_retrieve"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** @description Search people with tokenized filters and pagination. */
+        post: operations["people_search_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2268,6 +2313,30 @@ export interface paths {
         };
         /** @description Start async skill match job and return task ID for polling. */
         get: operations["people_skill_match_async_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/typeahead/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Server-side typeahead for People.
+         *
+         *     Params:
+         *     - q: required search query (min length 2)
+         *     - limit: optional, default 20, max 50
+         *     Returns minimal projection: id, name, department
+         */
+        get: operations["people_typeahead_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2472,6 +2541,46 @@ export interface paths {
          *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
          */
         get: operations["projects_qa_tasks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/reseed-auto-hours/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        post: operations["projects_reseed_auto_hours_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/change_log/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read-only endpoint for recent project change log entries. */
+        get: operations["projects_change_log_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2690,6 +2799,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/project-roles/bulk/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_project_roles_bulk_retrieve"];
+        put?: never;
+        post: operations["projects_project_roles_bulk_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/project-roles/reorder/": {
         parameters: {
             query?: never;
@@ -2739,6 +2864,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/status-definitions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_status_definitions_list"];
+        put?: never;
+        post: operations["projects_status_definitions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/status-definitions/{key}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["projects_status_definitions_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["projects_status_definitions_partial_update"];
+        trace?: never;
+    };
+    "/api/reports/departments/overview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_departments_overview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/forecast/bootstrap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_forecast_bootstrap_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/pre-deliverable-completion/": {
         parameters: {
             query?: never;
@@ -2763,6 +2952,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["reports_pre_deliverable_team_performance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/role-capacity/bootstrap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_role_capacity_bootstrap_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3071,11 +3276,109 @@ export interface paths {
         /** @description Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks. */
         get: operations["ui_assignments_page_retrieve"];
         put?: never;
+        /** @description Assignments page snapshot: bundles assignment grid snapshot, project grid snapshot, departments, project roles by department, utilization scheme, capabilities, projects list, and deliverables within the visible weeks. */
+        post: operations["ui_assignments_page_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ui/bootstrap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ui_bootstrap_retrieve"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/ui/people-page/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ui_people_page_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ui/settings-page/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ui_settings_page_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ui/skills-page/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ui_skills_page_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/verticals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get all verticals with bulk loading support */
+        get: operations["verticals_list"];
+        put?: never;
+        post: operations["verticals_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/verticals/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["verticals_retrieve"];
+        put: operations["verticals_update"];
+        post?: never;
+        delete: operations["verticals_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["verticals_partial_update"];
         trace?: never;
     };
 }
@@ -3119,7 +3422,7 @@ export interface components {
         };
         AssignedHoursStatusTimelineResponse: {
             weekKeys: string[];
-            series: components["schemas"]["StatusSeries"];
+            series: components["schemas"]["StatusSeriesItem"][];
             totalByWeek: number[];
         };
         /** @description Assignment serializer with weekly hours support */
@@ -3147,6 +3450,10 @@ export interface components {
                 [key: string]: number;
             };
         };
+        AssignmentDepartmentFilterRequest: {
+            departmentId: number;
+            op: components["schemas"]["OpEnum"];
+        };
         AssignmentHoursUpdateRequest: {
             assignmentId: number;
             weeklyHours: {
@@ -3166,11 +3473,16 @@ export interface components {
             page_size?: number;
             department?: number;
             include_children?: number;
+            department_filters?: components["schemas"]["AssignmentDepartmentFilterRequest"][];
+            vertical?: number;
             status_in?: string;
             include_placeholders?: number;
             project?: number;
             person?: number;
             meta_only?: boolean;
+            /** Format: date */
+            workload_week_start?: string;
+            workload_weeks?: number;
             search_tokens?: components["schemas"]["SearchTokenRequest"][];
         };
         AssignmentSearchResponse: {
@@ -3191,6 +3503,11 @@ export interface components {
                 };
             };
         };
+        AssignmentsPageSnapshotPostRequestRequest: {
+            include?: string;
+            auto_hours_phases?: string[];
+            template_ids?: number[];
+        };
         AutoHoursRoleSettingItem: {
             roleId: number;
             roleName: string;
@@ -3200,6 +3517,7 @@ export interface components {
                 [key: string]: number;
             };
             roleCount: number;
+            peopleRoleIds?: number[];
             weeksCount: number;
             isActive: boolean;
             sortOrder: number;
@@ -3217,6 +3535,7 @@ export interface components {
                 [key: string]: number;
             };
             roleCount: number;
+            peopleRoleIds?: number[];
             weeksCount: number;
             isActive: boolean;
             sortOrder: number;
@@ -3229,6 +3548,7 @@ export interface components {
             /** Format: double */
             percentPerWeek?: number;
             roleCount?: number;
+            peopleRoleIds?: number[];
         };
         AutoHoursRoleSettingsResponse: {
             settings: components["schemas"]["AutoHoursRoleSettingItem"][];
@@ -3359,6 +3679,7 @@ export interface components {
                 [key: string]: number;
             };
             roleCount: number;
+            peopleRoleIds?: number[];
             weeksCount: number;
             isActive: boolean;
             sortOrder: number;
@@ -3372,6 +3693,7 @@ export interface components {
                 [key: string]: number;
             };
             roleCount: number;
+            peopleRoleIds?: number[];
             weeksCount: number;
             isActive: boolean;
             sortOrder: number;
@@ -3382,6 +3704,7 @@ export interface components {
                 [key: string]: number;
             };
             roleCount?: number;
+            peopleRoleIds?: number[];
         };
         AutoHoursTemplateRoleSettingsUpdateRequest: {
             weeksCount?: number;
@@ -3822,14 +4145,22 @@ export interface components {
             name: string;
             shortName?: string;
             parentDepartment?: number | null;
+            vertical?: number | null;
+            readonly verticalName: string;
             manager?: number | null;
             readonly managerName: string;
+            secondaryManagers?: number[];
+            readonly secondaryManagerNames: string;
             description?: string;
             isActive: boolean;
             /** Format: date-time */
             readonly createdAt: string;
             /** Format: date-time */
             readonly updatedAt: string;
+        };
+        DepartmentFilterPeopleRequest: {
+            departmentId: number;
+            op: components["schemas"]["OpEnum"];
         };
         DepartmentFilterProjectRequest: {
             departmentId: number;
@@ -3840,7 +4171,9 @@ export interface components {
             name: string;
             shortName?: string;
             parentDepartment?: number | null;
+            vertical?: number | null;
             manager?: number | null;
+            secondaryManagers?: number[];
             description?: string;
             isActive: boolean;
         };
@@ -4475,6 +4808,21 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["SkillTag"][];
         };
+        PaginatedVerticalList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Vertical"][];
+        };
         PaginatedWorkloadForecastItemList: {
             /** @example 123 */
             count: number;
@@ -4571,7 +4919,9 @@ export interface components {
             name?: string;
             shortName?: string;
             parentDepartment?: number | null;
+            vertical?: number | null;
             manager?: number | null;
+            secondaryManagers?: number[];
             description?: string;
             isActive?: boolean;
         };
@@ -4628,7 +4978,7 @@ export interface components {
         };
         PatchedProjectRequest: {
             name?: string;
-            status?: components["schemas"]["ProjectStatusEnum"];
+            status?: string;
             client?: string;
             description?: string;
             notes?: string | null;
@@ -4642,6 +4992,7 @@ export interface components {
             /** @default true */
             isActive: boolean;
             autoHoursTemplateId?: number | null;
+            vertical?: number | null;
         };
         PatchedProjectRiskRequest: {
             description?: string;
@@ -4653,6 +5004,15 @@ export interface components {
         };
         PatchedProjectRoleUpdateRequest: {
             name?: string;
+            isActive?: boolean;
+            sortOrder?: number;
+        };
+        PatchedProjectStatusDefinitionRequest: {
+            key?: string;
+            label?: string;
+            colorHex?: string;
+            includeInAnalytics?: boolean;
+            treatAsCaWhenNoDeliverable?: boolean;
             isActive?: boolean;
             sortOrder?: number;
         };
@@ -4682,16 +5042,49 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @description Vertical serializer with camelCase field mapping */
+        PatchedVerticalRequest: {
+            name?: string;
+            shortName?: string;
+            description?: string;
+            isActive?: boolean;
+        };
         PeopleAutocompleteItem: {
             id: number;
             name: string;
             department?: number | null;
+        };
+        PeopleFiltersDepartment: {
+            id: number;
+            name: string;
+        };
+        PeopleFiltersMetadata: {
+            locations: string[];
+            departments: components["schemas"]["PeopleFiltersDepartment"][];
         };
         PeopleSearchItem: {
             id: number;
             name: string;
             department?: number | null;
             roleName?: string | null;
+        };
+        PeopleSearchRequestRequest: {
+            page?: number;
+            page_size?: number;
+            department?: number;
+            include_children?: number;
+            department_filters?: components["schemas"]["DepartmentFilterPeopleRequest"][];
+            vertical?: number;
+            include_inactive?: number;
+            location?: string[];
+            ordering?: string;
+            search_tokens?: components["schemas"]["SearchTokenPeopleRequest"][];
+        };
+        PeopleSearchResponse: {
+            count: number;
+            next?: string | null;
+            previous?: string | null;
+            results: components["schemas"]["Person"][];
         };
         /** @description Person serializer with department and role integration */
         Person: {
@@ -4704,6 +5097,8 @@ export interface components {
             readonly roleName: string;
             department?: number | null;
             readonly departmentName: string;
+            readonly vertical: number | null;
+            readonly verticalName: string | null;
             location?: string | null;
             /** Format: date */
             hireDate?: string | null;
@@ -4982,7 +5377,7 @@ export interface components {
         Project: {
             readonly id: number;
             name: string;
-            status?: components["schemas"]["ProjectStatusEnum"];
+            status?: string;
             client?: string;
             description?: string;
             notes?: string | null;
@@ -4999,6 +5394,8 @@ export interface components {
             readonly bqeClientId: string;
             readonly clientSyncPolicyState: string;
             autoHoursTemplateId?: number | null;
+            vertical?: number | null;
+            readonly verticalName: string;
             /** Format: date-time */
             readonly createdAt: string;
             /** Format: date-time */
@@ -5016,6 +5413,18 @@ export interface components {
             availableHours: number;
             /** Format: double */
             utilizationPercent: number;
+        };
+        ProjectChangeLog: {
+            readonly id: number;
+            readonly project: number;
+            readonly action: string;
+            readonly detail: unknown;
+            /** Format: date-time */
+            readonly createdAt: string;
+            readonly actor: {
+                [key: string]: unknown;
+            } | null;
+            readonly actorName: string;
         };
         ProjectFilterItem: {
             assignmentCount: number;
@@ -5073,7 +5482,7 @@ export interface components {
         };
         ProjectRequest: {
             name: string;
-            status?: components["schemas"]["ProjectStatusEnum"];
+            status?: string;
             client?: string;
             description?: string;
             notes?: string | null;
@@ -5087,6 +5496,21 @@ export interface components {
             /** @default true */
             isActive: boolean;
             autoHoursTemplateId?: number | null;
+            vertical?: number | null;
+        };
+        ProjectReseedAutoHoursRequestRequest: {
+            reason?: string;
+        };
+        ProjectReseedAutoHoursResponse: {
+            updatedAssignments: number;
+            updatedPlaceholderAssignments: number;
+            updatedStaffedAssignments: number;
+            createdAssignments?: number;
+            createdPlaceholderAssignments?: number;
+            createdPlaceholderDeliverables?: number;
+            updatedPlaceholderDeliverables?: number;
+            skippedAssignmentsNoRoleSettings: number;
+            consideredAssignments: number;
         };
         ProjectRisk: {
             readonly id: number;
@@ -5140,6 +5564,17 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        ProjectRoleBulkGetResponse: {
+            rolesByDepartment: unknown;
+        };
+        ProjectRoleBulkRequestRequest: {
+            department_ids: number[];
+            /** @default false */
+            include_inactive: boolean;
+        };
+        ProjectRoleBulkResponse: {
+            rolesByDepartment: unknown;
+        };
         ProjectRoleClearAssignmentsResponse: {
             cleared: number;
         };
@@ -5192,10 +5627,17 @@ export interface components {
             page?: number;
             page_size?: number;
             ordering?: string;
+            vertical?: number;
             status_in?: string;
             include_children?: number;
+            /** Format: date */
+            workload_week_start?: string;
+            workload_weeks?: number;
             search_tokens?: components["schemas"]["SearchTokenProjectRequest"][];
             department_filters?: components["schemas"]["DepartmentFilterProjectRequest"][];
+            /** @description CSV includes. Supports role_map. */
+            include?: string;
+            include_inactive_roles?: boolean;
             include_deliverable_dates?: boolean;
         };
         ProjectSearchResponse: {
@@ -5205,6 +5647,7 @@ export interface components {
             results: {
                 [key: string]: unknown;
             }[];
+            rolesByDepartment?: unknown;
         };
         ProjectSnapshotMetrics: {
             projectsCount: number;
@@ -5216,17 +5659,27 @@ export interface components {
             people: components["schemas"]["PSTPerson"][];
             roleAggregates: components["schemas"]["PSTRoleAgg"][];
         };
-        /**
-         * @description * `planning` - Planning
-         *     * `active` - Active
-         *     * `active_ca` - Active CA
-         *     * `on_hold` - On Hold
-         *     * `completed` - Completed
-         *     * `cancelled` - Cancelled
-         *     * `inactive` - Inactive
-         * @enum {string}
-         */
-        ProjectStatusEnum: "planning" | "active" | "active_ca" | "on_hold" | "completed" | "cancelled" | "inactive";
+        ProjectStatusDefinition: {
+            key: string;
+            label: string;
+            colorHex: string;
+            includeInAnalytics?: boolean;
+            treatAsCaWhenNoDeliverable?: boolean;
+            readonly isSystem: boolean;
+            isActive?: boolean;
+            sortOrder?: number;
+            readonly inUseCount: number;
+            readonly canDelete: boolean;
+        };
+        ProjectStatusDefinitionRequest: {
+            key: string;
+            label: string;
+            colorHex: string;
+            includeInAnalytics?: boolean;
+            treatAsCaWhenNoDeliverable?: boolean;
+            isActive?: boolean;
+            sortOrder?: number;
+        };
         ProjectTotal: {
             id: number;
             name: string;
@@ -5310,6 +5763,8 @@ export interface components {
         RecentAssignment: {
             person: string;
             project: string;
+            client?: string | null;
+            role?: string | null;
             created: string;
         };
         /** @description Role serializer with camelCase field transformation */
@@ -5332,10 +5787,18 @@ export interface components {
             /** Format: date-time */
             readonly updatedAt: string;
         };
+        RoleCapacitySummary: {
+            /** Format: double */
+            mappedProjectedHours?: number;
+            /** Format: double */
+            unmappedProjectRoleHours?: number;
+            mappedTemplateRolePairsUsed?: number;
+        };
         RoleCapacityTimelineResponse: {
             weekKeys: string[];
             roles: components["schemas"]["ProjectRoleLite"][];
             series: components["schemas"]["RoleSeries"][];
+            summary?: components["schemas"]["RoleCapacitySummary"];
         };
         RoleChange: {
             week_start: string;
@@ -5368,6 +5831,8 @@ export interface components {
             roleId: number;
             roleName: string;
             assigned: number[];
+            projected?: number[];
+            demand?: number[];
             capacity: number[];
             people?: number[];
         };
@@ -5380,6 +5845,10 @@ export interface components {
             skipped?: number;
             events_inserted?: number;
             skipped_due_to_lock?: boolean;
+        };
+        SearchTokenPeopleRequest: {
+            term: string;
+            op: components["schemas"]["OpEnum"];
         };
         SearchTokenProjectRequest: {
             term: string;
@@ -5438,10 +5907,11 @@ export interface components {
          * @enum {string}
          */
         SourceEnum: "project" | "global" | "default";
-        StatusSeries: {
-            active: number[];
-            active_ca: number[];
-            other: number[];
+        StatusSeriesItem: {
+            key: string;
+            label: string;
+            colorHex: string;
+            values: number[];
         };
         TeamOverviewItem: {
             id: number;
@@ -5540,6 +6010,25 @@ export interface components {
             red_min?: number;
             full_capacity_hours?: number;
             zero_is_blank?: boolean;
+        };
+        /** @description Vertical serializer with camelCase field mapping */
+        Vertical: {
+            readonly id: number;
+            name: string;
+            shortName?: string;
+            description?: string;
+            isActive?: boolean;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        /** @description Vertical serializer with camelCase field mapping */
+        VerticalRequest: {
+            name: string;
+            shortName?: string;
+            description?: string;
+            isActive?: boolean;
         };
         WeeksSummary: {
             weeks: number;
@@ -5724,6 +6213,8 @@ export interface operations {
                 department?: number;
                 /** @description 0|1 */
                 include_children?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of weeks (1-52), default 12 */
                 weeks?: number;
             };
@@ -5750,6 +6241,8 @@ export interface operations {
                 department?: number;
                 /** @description 0|1 */
                 include_children?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of weeks (1-52), default 12 */
                 weeks?: number;
             };
@@ -5773,10 +6266,10 @@ export interface operations {
         parameters: {
             query?: {
                 department?: number;
-                /** @description 0|1 include active_ca status in addition to active (default 0) */
-                include_active_ca?: number;
                 /** @description 0|1 */
                 include_children?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of weeks (1-52), default 12 */
                 weeks?: number;
             };
@@ -5801,8 +6294,12 @@ export interface operations {
             query: {
                 /** @description Department ID */
                 department: number;
+                /** @description Exclude people assigned under 5h in each of the next 4 weeks from capacity and assigned calculations. */
+                filter_out_lt5h?: boolean;
                 /** @description CSV of department ProjectRole IDs to include */
                 role_ids?: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of future weeks (4,8,12,16,20). Default 12 */
                 weeks?: number;
             };
@@ -5828,6 +6325,8 @@ export interface operations {
                 department?: number;
                 /** @description 0|1 */
                 include_children?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of weeks (1-52), default 12 */
                 weeks?: number;
             };
@@ -5881,6 +6380,8 @@ export interface operations {
                 page_size?: number;
                 /** @description Filter by person id */
                 person_id?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
             };
             header?: never;
             path?: never;
@@ -5985,8 +6486,12 @@ export interface operations {
         parameters: {
             query?: {
                 department?: number;
+                /** @description JSON array of department filter clauses */
+                department_filters?: string;
                 /** @description 0|1 */
                 include_children?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of weeks (1-52), default 12 */
                 weeks?: number;
             };
@@ -6082,6 +6587,8 @@ export interface operations {
         parameters: {
             query?: {
                 department?: number;
+                /** @description JSON array of department filter clauses */
+                department_filters?: string;
                 /** @description 0|1 */
                 has_future_deliverables?: number;
                 /** @description 0|1 */
@@ -6092,6 +6599,8 @@ export interface operations {
                 project_ids?: string;
                 /** @description CSV of project status filters */
                 status_in?: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of weeks (1-52), default 12 */
                 weeks?: number;
             };
@@ -7195,6 +7704,27 @@ export interface operations {
             };
         };
     };
+    core_project_templates_duplicate_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoHoursTemplateListItem"][];
+                };
+            };
+        };
+    };
     core_project_templates_duplicate_create: {
         parameters: {
             query?: never;
@@ -7378,6 +7908,8 @@ export interface operations {
             query?: {
                 /** @description Filter by department id */
                 department?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of weeks to aggregate (1-12) */
                 weeks?: number;
             };
@@ -7394,6 +7926,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DashboardResponse"];
                 };
+            };
+        };
+    };
+    dashboard_bootstrap_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Filter by department id */
+                department?: number;
+                /** @description Include child departments for people metadata (0|1) */
+                include_children?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
+                /** @description Number of weeks to aggregate (1-12) */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7794,6 +8353,8 @@ export interface operations {
                 page?: number;
                 /** @description YYYY-MM-DD */
                 start?: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
             };
             header?: never;
             path?: never;
@@ -7816,10 +8377,16 @@ export interface operations {
             query?: {
                 /** @description YYYY-MM-DD */
                 end?: string;
+                /** @description none|preview|full (default none) */
+                include_notes?: string;
+                /** @description Include department lead names grouped by project */
+                include_project_leads?: boolean;
                 mine_only?: boolean;
                 /** @description YYYY-MM-DD */
                 start?: string;
                 type_id?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
             };
             header?: never;
             path?: never;
@@ -8707,6 +9274,24 @@ export interface operations {
             };
         };
     };
+    departments_snapshot_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     integrations_connections_list: {
         parameters: {
             query?: {
@@ -9497,7 +10082,10 @@ export interface operations {
     };
     jobs_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Restore-session token (required during restore mode) */
+                rt?: string;
+            };
             header?: never;
             path: {
                 /** @description Background job id */
@@ -9545,7 +10133,10 @@ export interface operations {
     };
     jobs_download_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Restore-session token (required during restore mode) */
+                rt?: string;
+            };
             header?: never;
             path: {
                 /** @description Background job id */
@@ -9597,6 +10188,8 @@ export interface operations {
                 all?: string;
                 /** @description Filter by department id */
                 department?: number;
+                /** @description JSON array of department filter clauses */
+                department_filters?: string;
                 /** @description Include child departments (0|1) */
                 include_children?: number;
                 /** @description Include inactive people (0|1; default 0) */
@@ -9605,6 +10198,8 @@ export interface operations {
                 page?: number;
                 /** @description Page size */
                 page_size?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
             };
             header?: never;
             path?: never;
@@ -9777,6 +10372,8 @@ export interface operations {
                 q?: string;
                 /** @description Substring of name */
                 search?: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
             };
             header?: never;
             path?: never;
@@ -9802,6 +10399,8 @@ export interface operations {
                 include_children?: number;
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 weeks?: number;
             };
             header?: never;
@@ -9839,6 +10438,30 @@ export interface operations {
             };
         };
     };
+    people_filters_metadata_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Include inactive people (0|1; default 0) */
+                include_inactive?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleFiltersMetadata"];
+                };
+            };
+        };
+    };
     people_find_available_list: {
         parameters: {
             query?: {
@@ -9853,6 +10476,8 @@ export interface operations {
                 page?: number;
                 /** @description Comma-separated skill names */
                 skills?: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description YYYY-MM-DD (Monday) week key */
                 week?: string;
             };
@@ -9897,28 +10522,27 @@ export interface operations {
             };
         };
     };
-    people_search_retrieve: {
+    people_search_create: {
         parameters: {
-            query: {
-                /** @description Filter by department id */
-                department?: number;
-                /** @description Max results (1-50) */
-                limit?: number;
-                /** @description Search query (min length 2) */
-                q: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PeopleSearchRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PeopleSearchRequestRequest"];
+                "multipart/form-data": components["schemas"]["PeopleSearchRequestRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeopleSearchItem"];
+                    "application/json": components["schemas"]["PeopleSearchResponse"];
                 };
             };
         };
@@ -9935,6 +10559,8 @@ export interface operations {
                 page?: number;
                 /** @description Comma-separated skill names */
                 skills: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description YYYY-MM-DD (Monday) for availability-aware scoring */
                 week?: string;
             };
@@ -9964,6 +10590,8 @@ export interface operations {
                 limit?: number;
                 /** @description Comma-separated skill names */
                 skills: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description YYYY-MM-DD (Monday) for availability-aware scoring */
                 week?: string;
             };
@@ -9983,6 +10611,34 @@ export interface operations {
             };
         };
     };
+    people_typeahead_retrieve: {
+        parameters: {
+            query: {
+                /** @description Filter by department id */
+                department?: number;
+                /** @description Max results (1-50) */
+                limit?: number;
+                /** @description Search query (min length 2) */
+                q: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleSearchItem"];
+                };
+            };
+        };
+    };
     people_workload_forecast_list: {
         parameters: {
             query?: {
@@ -9991,6 +10647,8 @@ export interface operations {
                 include_children?: number;
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 weeks?: number;
             };
             header?: never;
@@ -10185,6 +10843,8 @@ export interface operations {
                 ordering?: string;
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description YYYY-MM-DD (Sunday key) */
                 week?: string;
             };
@@ -10302,6 +10962,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
+                };
+            };
+        };
+    };
+    projects_reseed_auto_hours_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProjectReseedAutoHoursRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectReseedAutoHoursRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProjectReseedAutoHoursRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectReseedAutoHoursResponse"];
+                };
+            };
+        };
+    };
+    projects_change_log_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectChangeLog"][];
                 };
             };
         };
@@ -10722,6 +11432,50 @@ export interface operations {
             };
         };
     };
+    projects_project_roles_bulk_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleBulkGetResponse"];
+                };
+            };
+        };
+    };
+    projects_project_roles_bulk_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRoleBulkRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRoleBulkRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRoleBulkRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRoleBulkResponse"];
+                };
+            };
+        };
+    };
     projects_project_roles_reorder_create: {
         parameters: {
             query?: never;
@@ -10791,6 +11545,157 @@ export interface operations {
             };
         };
     };
+    projects_status_definitions_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectStatusDefinition"][];
+                };
+            };
+        };
+    };
+    projects_status_definitions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectStatusDefinitionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectStatusDefinitionRequest"];
+                "multipart/form-data": components["schemas"]["ProjectStatusDefinitionRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectStatusDefinition"];
+                };
+            };
+        };
+    };
+    projects_status_definitions_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_status_definitions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectStatusDefinitionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectStatusDefinitionRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectStatusDefinitionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectStatusDefinition"];
+                };
+            };
+        };
+    };
+    reports_departments_overview_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Optional department id filter. */
+                department?: number;
+                /** @description When department is set, include descendant departments. */
+                include_children?: boolean;
+                /** @description Include inactive departments/people. */
+                include_inactive?: boolean;
+                /** @description Tokenized department search. */
+                search?: string;
+                /** @description CSV person status filter: active,inactive. */
+                status_in?: string;
+                /** @description Optional vertical id filter. */
+                vertical?: number;
+                /** @description Number of weeks to aggregate (1-12). */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reports_forecast_bootstrap_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Optional department id filter. */
+                department?: number;
+                /** @description Include descendant departments when department is set. */
+                include_children?: boolean;
+                /** @description Optional vertical id filter. */
+                vertical?: number;
+                /** @description Number of future weeks. Default 8. */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     reports_pre_deliverable_completion_retrieve: {
         parameters: {
             query?: never;
@@ -10826,6 +11731,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PreDeliverableTeamPerformanceResponse"];
                 };
+            };
+        };
+    };
+    reports_role_capacity_bootstrap_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Optional department id filter. */
+                department?: number;
+                /** @description Exclude people assigned under 5h in each of the next 4 weeks from capacity and assigned calculations. */
+                filter_out_lt5h?: boolean;
+                /** @description Include inactive departments in department metadata list. */
+                include_inactive?: boolean;
+                /** @description Optional CSV of role ids to include. */
+                role_ids?: string;
+                /** @description Optional vertical id filter. */
+                vertical?: number;
+                /** @description Number of future weeks (4,8,12,16,20). Default 12. */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11439,10 +12375,14 @@ export interface operations {
     ui_assignments_page_retrieve: {
         parameters: {
             query?: {
+                /** @description CSV of phase keys for auto-hours bundle */
+                auto_hours_phases?: string;
                 department?: number;
+                /** @description JSON array of department filter clauses */
+                department_filters?: string;
                 /** @description 0|1 (project grid) */
                 has_future_deliverables?: number;
-                /** @description CSV: assignment,project (default both) */
+                /** @description CSV: assignment,project,auto_hours (default assignment,project) */
                 include?: string;
                 /** @description 0|1 */
                 include_children?: number;
@@ -11452,6 +12392,10 @@ export interface operations {
                 project_ids?: string;
                 /** @description CSV of project status filters (project grid) */
                 status_in?: string;
+                /** @description CSV of template IDs for templateSettingsByPhase (max 200) */
+                template_ids?: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
                 /** @description Number of weeks (1-52), default 12 */
                 weeks?: number;
             };
@@ -11467,6 +12411,310 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ui_assignments_page_create: {
+        parameters: {
+            query?: {
+                /** @description CSV of phase keys for auto-hours bundle */
+                auto_hours_phases?: string;
+                department?: number;
+                /** @description JSON array of department filter clauses */
+                department_filters?: string;
+                /** @description 0|1 (project grid) */
+                has_future_deliverables?: number;
+                /** @description CSV: assignment,project,auto_hours (default assignment,project) */
+                include?: string;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description 0|1 */
+                include_placeholders?: number;
+                /** @description CSV of project IDs to scope totals (project grid) */
+                project_ids?: string;
+                /** @description CSV of project status filters (project grid) */
+                status_in?: string;
+                /** @description CSV of template IDs for templateSettingsByPhase (max 200) */
+                template_ids?: string;
+                /** @description Filter by vertical id */
+                vertical?: number;
+                /** @description Number of weeks (1-52), default 12 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssignmentsPageSnapshotPostRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssignmentsPageSnapshotPostRequestRequest"];
+                "multipart/form-data": components["schemas"]["AssignmentsPageSnapshotPostRequestRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ui_bootstrap_retrieve: {
+        parameters: {
+            query?: {
+                /** @description CSV include: verticals,capabilities,departments,roles */
+                include?: string;
+                /** @description 0|1 include inactive verticals/departments/roles */
+                include_inactive?: number;
+                /** @description Department vertical scope */
+                vertical?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ui_people_page_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description JSON department clauses */
+                department_filters?: string;
+                /** @description CSV include: filters,people,selected_person_skills */
+                include?: string;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description 0|1 */
+                include_inactive?: number;
+                ordering?: string;
+                page?: number;
+                page_size?: number;
+                search?: string;
+                selected_person_id?: number;
+                vertical?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ui_settings_page_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Optional visible section id to include scoped sectionData */
+                section?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ui_skills_page_retrieve: {
+        parameters: {
+            query?: {
+                /** @description CSV include: departments,people,skill_tags,person_skills */
+                include?: string;
+                /** @description 0|1 */
+                include_inactive?: number;
+                people_page?: number;
+                people_page_size?: number;
+                person_skills_page?: number;
+                person_skills_page_size?: number;
+                skill_tags_page?: number;
+                skill_tags_page_size?: number;
+                vertical?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    verticals_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedVerticalList"];
+                };
+            };
+        };
+    };
+    verticals_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerticalRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VerticalRequest"];
+                "multipart/form-data": components["schemas"]["VerticalRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vertical"];
+                };
+            };
+        };
+    };
+    verticals_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vertical. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vertical"];
+                };
+            };
+        };
+    };
+    verticals_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vertical. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerticalRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VerticalRequest"];
+                "multipart/form-data": components["schemas"]["VerticalRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vertical"];
+                };
+            };
+        };
+    };
+    verticals_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vertical. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    verticals_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vertical. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedVerticalRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedVerticalRequest"];
+                "multipart/form-data": components["schemas"]["PatchedVerticalRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vertical"];
+                };
             };
         };
     };

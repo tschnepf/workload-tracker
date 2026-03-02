@@ -24,6 +24,7 @@ import TooltipPortal from '@/components/ui/TooltipPortal';
 import type { Assignment, Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { confirmAction } from '@/lib/confirmAction';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 type AssignmentListItem = Assignment & { isHistorical?: boolean };
 type ProjectChangeLogEntry = {
@@ -53,6 +54,7 @@ const ProjectDashboard: React.FC = () => {
 
   const auth = useAuth();
   const { state: verticalState } = useVerticalFilter();
+  const { definitionMap } = useProjectStatusDefinitions();
   const queryClient = useQueryClient();
   const { project, loading: projectLoading, error: projectError } = useProject(hasValidId ? projectId : 0);
 
@@ -943,7 +945,7 @@ const ProjectDashboard: React.FC = () => {
                   <div className="relative flex items-center justify-center">
                     <div className="text-sm font-semibold text-[var(--text)] text-center">Project Info</div>
                     <div className="absolute right-0">
-                      <StatusBadge status={project?.status || null} size="xs" />
+                      <StatusBadge status={project?.status || null} size="xs" definitionMap={definitionMap} />
                     </div>
                   </div>
                   <div className="border-t border-[#4a4f57]/60 mt-2" />

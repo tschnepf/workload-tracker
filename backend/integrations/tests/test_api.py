@@ -54,6 +54,8 @@ class IntegrationsApiTests(APITestCase):
         return resp.json()['id']
 
     def _ensure_credentials(self):
+        IntegrationSecretKey.set_plaintext(Fernet.generate_key().decode('utf-8'))
+        reset_key_cache()
         provider = IntegrationProvider.objects.get(key='bqe')
         credential, _ = IntegrationProviderCredential.objects.get_or_create(
             provider=provider,

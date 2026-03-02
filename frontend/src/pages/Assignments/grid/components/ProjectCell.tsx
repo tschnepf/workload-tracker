@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import type { Project } from '@/types/models';
 import StatusBadge from '@/components/projects/StatusBadge';
 import StatusDropdown from '@/components/projects/StatusDropdown';
@@ -9,6 +9,7 @@ import RoleDropdown from '@/roles/components/RoleDropdown';
 import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/services/api';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 export interface ProjectCellProps {
   assignmentId: number;
@@ -25,6 +26,7 @@ export interface ProjectCellProps {
 }
 
 const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, projectName, roleOnProjectId, roleName, personDepartmentId, onRoleChange, getProjectStatus, statusDropdown, projectStatus, onStatusChange }) => {
+  const { definitionMap, statusOptionKeys } = useProjectStatusDefinitions();
   const [openRole, setOpenRole] = React.useState<boolean>(false);
   const roleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
@@ -73,6 +75,7 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
                   <StatusBadge
                     status={projectId ? getProjectStatus(projectId) : null}
                     variant="editable"
+                    definitionMap={definitionMap}
                     onClick={() => projectId && statusDropdown.toggle(dropdownKey)}
                     isUpdating={projectId && projectStatus.isUpdating(projectId)}
                   />
@@ -85,6 +88,8 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
                       projectId={projectId}
                       disabled={projectStatus.isUpdating(projectId)}
                       closeOnSelect={false}
+                      statusOptions={statusOptionKeys}
+                      definitionMap={definitionMap}
                     />
                   )}
                 </>

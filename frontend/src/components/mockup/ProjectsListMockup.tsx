@@ -303,7 +303,7 @@ const ProjectsListMockup: React.FC = () => {
                   
                   {/* Status */}
                   <div className="col-span-2">
-                    <span className={`${getStatusColor(project.status)} text-xs`}>
+                    <span className="text-xs" style={{ color: getStatusColor(project.status) }}>
                       {project.status}
                     </span>
                   </div>
@@ -341,7 +341,7 @@ const ProjectsListMockup: React.FC = () => {
                       </div>
                       <div>
                         <div className="text-[#969696] text-xs">Status:</div>
-                        <div className={getStatusColor(selectedProject.status)}>Active</div>
+                        <div style={{ color: getStatusColor(selectedProject.status) }}>Active</div>
                       </div>
                       <div>
                         <div className="text-[#969696] text-xs">Project Number:</div>

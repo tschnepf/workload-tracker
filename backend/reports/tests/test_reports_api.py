@@ -1,4 +1,4 @@
-﻿from datetime import date, timedelta
+from datetime import date, timedelta
 from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase, override_settings

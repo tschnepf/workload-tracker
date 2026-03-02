@@ -1,5 +1,6 @@
 import React from 'react';
 import StatusBadge, { editableStatusOptions, formatStatus, getStatusColor } from '@/components/projects/StatusBadge';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 interface Props {
   status: string;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 const ProjectStatusDropdown: React.FC<Props> = ({ status, onChange, isOpen, setOpen }) => {
+  const { editableStatusOptions: dynamicStatusOptions, definitionMap } = useProjectStatusDefinitions();
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
@@ -31,17 +33,18 @@ const ProjectStatusDropdown: React.FC<Props> = ({ status, onChange, isOpen, setO
     <div className="relative status-dropdown-container" ref={containerRef}>
       <button
         type="button"
-        className={`${getStatusColor(status || '')} hover:bg-[var(--surfaceHover)] px-1 py-0.5 rounded text-xs transition-colors cursor-pointer flex items-center gap-1`}
+        className="hover:bg-[var(--surfaceHover)] px-1 py-0.5 rounded text-xs transition-colors cursor-pointer flex items-center gap-1"
+        style={{ color: getStatusColor(status || '', definitionMap) }}
         onClick={() => setOpen(!isOpen)}
       >
-        {formatStatus(status || '')}
+        {formatStatus(status || '', definitionMap)}
         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="6,9 12,15 18,9" />
         </svg>
       </button>
       {isOpen && (
         <div className="absolute top-full left-0 mt-1 bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg z-50 min-w-[140px]">
-          {editableStatusOptions.map((opt) => (
+          {(dynamicStatusOptions.length > 0 ? dynamicStatusOptions : editableStatusOptions).map((opt) => (
             <button
               key={opt}
               onClick={(e) => { e.stopPropagation(); onChange(opt); setOpen(false); }}
@@ -50,7 +53,7 @@ const ProjectStatusDropdown: React.FC<Props> = ({ status, onChange, isOpen, setO
               }`}
             >
               <span className="flex items-center gap-2">
-                <StatusBadge status={opt} />
+                <StatusBadge status={opt} definitionMap={definitionMap} />
               </span>
             </button>
           ))}
@@ -61,4 +64,3 @@ const ProjectStatusDropdown: React.FC<Props> = ({ status, onChange, isOpen, setO
 };
 
 export default ProjectStatusDropdown;
-

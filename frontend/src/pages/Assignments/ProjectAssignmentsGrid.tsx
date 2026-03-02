@@ -50,6 +50,7 @@ import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignm
 import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
 import { classifyWorkloadTokenTerm, filterTextCompatibleTokens, hasInvalidWorkloadLikeTokens, normalizeWorkloadAliasTerm } from '@/utils/workloadSearch';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 interface ProjectWithAssignments extends Project {
   assignments: Assignment[];
@@ -301,6 +302,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   }, [deptState.selectedDepartmentId, deptState.includeChildren, deptState.filters, verticalState.selectedVerticalId, weeksHorizon]);
 
   const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter } = useProjectStatusFilters(deliverables);
+  const { definitionMap, statusOptionKeys } = useProjectStatusDefinitions();
 
   const normalizedSearchTokens = useMemo(() => {
     return searchTokens
@@ -1792,6 +1794,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             <StatusBadge
               status={project.id ? getProjectStatus(project.id) : null}
               variant="editable"
+              definitionMap={definitionMap}
               onClick={() => project.id && statusDropdown.toggle(String(project.id))}
               isUpdating={project.id && projectStatus.isUpdating(project.id)}
             />
@@ -1804,6 +1807,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
                 projectId={project.id}
                 disabled={projectStatus.isUpdating(project.id)}
                 closeOnSelect={false}
+                statusOptions={statusOptionKeys}
+                definitionMap={definitionMap}
               />
             )}
           </>
@@ -2040,7 +2045,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   };
 
   const searchBar = (
-    <div className={isMobileLayout ? 'w-full min-w-0' : 'w-[320px] min-w-[220px] max-w-[34vw] shrink-0'}>
+    <div className={`relative group ${isMobileLayout ? 'w-full min-w-0' : 'w-[320px] min-w-[220px] max-w-[34vw] shrink-0'}`}>
       <label className="sr-only" htmlFor="project-assignments-search">Search projects</label>
       <div className="h-10 flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
         <div className="h-full flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
@@ -2094,13 +2099,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
             value={searchInput}
             onChange={(e) => { setSearchInput(e.target.value); setActiveTokenId(null); }}
             onKeyDown={handleSearchKeyDown}
-            placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client or name (Enter)'}
+            placeholder="Search"
             className="h-full flex-1 min-w-[140px] px-1 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
           />
         </div>
       </div>
-      <div className="mt-1 text-[10px] text-[var(--muted)]">
-        Supports: available, optimal, full, overallocated, &lt;30, &gt;14, &lt;30, 10-20
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-[340px] max-w-[95vw] rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 text-[10px] text-[var(--muted)] shadow-lg group-hover:block group-focus-within:block"
+      >
+        <p>Press Enter to add a filter token. Use OR / AND / NOT to combine filters.</p>
+        <p className="mt-1">Workload filters: available, optimal, full, overallocated, &lt;30, &gt;14, 10-20.</p>
       </div>
       {workloadHintVisible ? (
         <div className="mt-0.5 text-[10px] text-amber-500">

@@ -18,7 +18,6 @@ import { trackPerformanceEvent } from '@/utils/monitoring';
 import Layout from '@/components/layout/Layout';
 import ProjectsSkeleton from '@/components/skeletons/ProjectsSkeleton';
 import PageState from '@/components/ui/PageState';
-import { statusOptions } from '@/components/projects/StatusBadge';
 import DeliverablesSectionLoaderComp from '@/pages/Projects/list/components/DeliverablesSectionLoader';
 import FiltersBar from '@/pages/Projects/list/components/FiltersBar';
 import ProjectsTable from '@/pages/Projects/list/components/ProjectsTable';
@@ -89,6 +88,7 @@ const ProjectsList: React.FC = () => {
     forceShowAll,
     onSort,
     formatFilterStatus,
+    statusOptions: projectStatusOptions,
   } = useProjectFilters([], null, { serverSide: true });
 
   const [searchInput, setSearchInput] = useState('');
@@ -1163,7 +1163,7 @@ const ProjectsList: React.FC = () => {
         {detailsPaneOpen ? 'Hide Details' : 'Show Details'}
       </button>
       <StatusFilterMenu
-        statusOptions={statusOptions}
+        statusOptions={projectStatusOptions}
         selectedStatuses={selectedStatusFilters}
         formatStatus={formatFilterStatus}
         onToggleStatus={toggleStatusFilter}
@@ -1470,7 +1470,7 @@ const ProjectsList: React.FC = () => {
       {isMobileLayout ? mobileLayout : desktopLayout}
       <MobileFiltersSheet open={isMobileLayout && mobileFiltersOpen} title="Project Filters" onClose={() => setMobileFiltersOpen(false)}>
         <FiltersBar
-          statusOptions={statusOptions}
+          statusOptions={projectStatusOptions}
           selectedStatusFilters={selectedStatusFilters}
           onToggleStatus={toggleStatusFilter}
           searchTokens={searchTokens}

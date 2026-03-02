@@ -16,6 +16,7 @@ import { useUpdateProject } from '@/hooks/useProjects';
 import { useDebounce } from '@/hooks/useDebounce';
 import { listProjectRoles } from '@/roles/api';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 interface Props {
   projects: Project[];
@@ -86,6 +87,7 @@ const ProjectsTable: React.FC<Props> = ({
   loadMoreOffset = 160,
   onScrollPositionChange,
 }) => {
+  const { definitionMap, statusOptionKeys } = useProjectStatusDefinitions();
   const { state: verticalState } = useVerticalFilter();
   const baseGridCols = 'grid-cols-[repeat(2,minmax(0,0.625fr))_repeat(4,minmax(0,1fr))_repeat(2,minmax(0,0.7fr))_repeat(2,minmax(0,0.6fr))_repeat(2,minmax(0,1fr))_repeat(2,minmax(0,0.8fr))_repeat(4,minmax(0,0.9fr))]';
   const gridColsClass = showDashboardButton
@@ -1071,13 +1073,14 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="relative" data-dropdown>
                 <button
                   type="button"
-                  className={`${getStatusColor(project.status || '')} whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)] ${isStatusUpdating ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  className={`whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)] ${isStatusUpdating ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  style={{ color: getStatusColor(project.status || '', definitionMap) }}
                   onClick={() => !isStatusUpdating && project.id && statusDropdown.toggle(String(project.id))}
                   aria-haspopup="listbox"
                   aria-expanded={statusDropdown.isOpen(String(project.id))}
                   disabled={isStatusUpdating}
                 >
-                  {formatStatus(project.status || '')}
+                  {formatStatus(project.status || '', definitionMap)}
                   {isStatusUpdating && <span className="text-[10px] opacity-70">Updating…</span>}
                   <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1101,6 +1104,8 @@ const ProjectsTable: React.FC<Props> = ({
                     projectId={project.id}
                     disabled={statusUpdatingIds.has(project.id)}
                     closeOnSelect={false}
+                    statusOptions={statusOptionKeys}
+                    definitionMap={definitionMap}
                   />
                 )}
               </div>
@@ -1425,13 +1430,14 @@ const ProjectsTable: React.FC<Props> = ({
                 <div className="relative" data-dropdown>
                   <button
                     type="button"
-                    className={`${getStatusColor(project.status || '')} whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)] ${isStatusUpdating2 ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    className={`whitespace-nowrap text-xs inline-flex items-center gap-1 px-1 py-0.5 rounded hover:text-[var(--text)] ${isStatusUpdating2 ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    style={{ color: getStatusColor(project.status || '', definitionMap) }}
                     onClick={() => !isStatusUpdating2 && project.id && statusDropdown.toggle(String(project.id))}
                     aria-haspopup="listbox"
                     aria-expanded={statusDropdown.isOpen(String(project.id))}
                     disabled={isStatusUpdating2}
                   >
-                    {formatStatus(project.status || '')}
+                    {formatStatus(project.status || '', definitionMap)}
                     {isStatusUpdating2 && <span className="text-[10px] opacity-70">Updating…</span>}
                     <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1455,6 +1461,8 @@ const ProjectsTable: React.FC<Props> = ({
                       projectId={project.id}
                       disabled={statusUpdatingIds.has(project.id)}
                       closeOnSelect={false}
+                      statusOptions={statusOptionKeys}
+                      definitionMap={definitionMap}
                     />
                   )}
                 </div>
@@ -1707,7 +1715,7 @@ const ProjectsTable: React.FC<Props> = ({
               <div className="text-xs text-[var(--muted)]">{project.projectNumber || '—'}</div>
             </div>
             <div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
-              <StatusBadge status={(project.status as any) || 'active'} />
+              <StatusBadge status={(project.status as any) || 'active'} definitionMap={definitionMap} />
               <button
                 type="button"
                 className="text-[var(--primary)] text-xs font-medium"

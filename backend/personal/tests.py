@@ -17,8 +17,8 @@ class PersonalWorkEndpointTests(TestCase):
 
     def test_no_linked_person_returns_404(self):
         user = self.User.objects.create_user(username='u1', password='pw')
-        # Profile exists but person is None
-        UserProfile.objects.create(user=user, person=None)
+        # Ensure profile exists but person remains None.
+        UserProfile.objects.get_or_create(user=user, defaults={'person': None})
         self.client.force_authenticate(user=user)
         resp = self.client.get('/api/personal/work/')
         self.assertEqual(resp.status_code, 404)
@@ -26,7 +26,9 @@ class PersonalWorkEndpointTests(TestCase):
     def test_happy_path_and_etag_cycle(self):
         user = self.User.objects.create_user(username='u2', password='pw')
         person = Person.objects.create(name='P1', weekly_capacity=36)
-        UserProfile.objects.create(user=user, person=person)
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.person = person
+        profile.save(update_fields=['person', 'updated_at'])
         self.client.force_authenticate(user=user)
 
         # First request returns 200 and an ETag
@@ -41,4 +43,3 @@ class PersonalWorkEndpointTests(TestCase):
         # Second request with If-None-Match should produce 304
         resp2 = self.client.get('/api/personal/work/', HTTP_IF_NONE_MATCH=etag)
         self.assertEqual(resp2.status_code, 304)
-

@@ -4,13 +4,18 @@ import { getAssignedHoursStatusTimeline } from '@/services/analyticsApi';
 
 export type TimelineWeeks = 4 | 8 | 12 | 16;
 
-export type TimelineSeriesKey = 'active' | 'active_ca' | 'other';
+export type StatusTimelineSeriesItem = {
+  key: string;
+  label: string;
+  colorHex: string;
+  values: number[];
+};
 
 export type TimelineData = {
   loading: boolean;
   error: string | null;
   weekKeys: string[];
-  series: Record<TimelineSeriesKey, number[]>; // per-week values
+  series: StatusTimelineSeriesItem[]; // per-week values
   totalsByWeek: number[];
   maxY: number;
 };
@@ -26,7 +31,8 @@ export function useAssignedHoursTimelineData({ weeks, departmentId, includeChild
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekKeys, setWeekKeys] = useState<string[]>([]);
-  const [series, setSeries] = useState<Record<TimelineSeriesKey, number[]>>({ active: [], active_ca: [], other: [] });
+  const [series, setSeries] = useState<StatusTimelineSeriesItem[]>([]);
+  const [totalsByWeek, setTotalsByWeek] = useState<number[]>([]);
 
   useAuthenticatedEffect(() => {
     let mounted = true;
@@ -41,9 +47,21 @@ export function useAssignedHoursTimelineData({ weeks, departmentId, includeChild
           vertical: vertical ?? undefined,
         });
         if (!mounted) return;
-        setWeekKeys(res.weekKeys || []);
-        const s = res.series || { active: [], active_ca: [], other: [] };
-        setSeries({ active: s.active || [], active_ca: s.active_ca || [], other: s.other || [] });
+        const nextWeekKeys = res.weekKeys || [];
+        const nextSeries = Array.isArray(res.series) ? res.series : [];
+        setWeekKeys(nextWeekKeys);
+        setSeries(nextSeries);
+        if (Array.isArray(res.totalByWeek) && res.totalByWeek.length) {
+          setTotalsByWeek(res.totalByWeek);
+        } else {
+          const totals = new Array(nextWeekKeys.length).fill(0);
+          for (const item of nextSeries) {
+            for (let i = 0; i < totals.length; i++) {
+              totals[i] += Number(item.values?.[i] || 0);
+            }
+          }
+          setTotalsByWeek(totals);
+        }
       } catch (e: any) {
         if (!mounted) return;
         setError(e?.message || 'Failed to load timeline');
@@ -53,15 +71,6 @@ export function useAssignedHoursTimelineData({ weeks, departmentId, includeChild
     })();
     return () => { mounted = false; };
   }, [weeks, departmentId, includeChildren, vertical]);
-
-  const totalsByWeek = useMemo(() => {
-    const len = Math.max(series.active.length, series.active_ca.length, series.other.length);
-    const out: number[] = new Array(len).fill(0);
-    for (let i = 0; i < len; i++) {
-      out[i] = (series.active[i] || 0) + (series.active_ca[i] || 0) + (series.other[i] || 0);
-    }
-    return out;
-  }, [series]);
 
   const maxY = useMemo(() => {
     return totalsByWeek.reduce((m, v) => (v > m ? v : m), 0);

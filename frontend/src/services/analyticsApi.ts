@@ -77,18 +77,17 @@ export async function getAssignedHoursStatusTimeline(opts?: { weeks?: number; de
     if (!res.data) throw new Error(`HTTP ${res.response?.status ?? 500}`);
     return res.data as unknown as {
       weekKeys: string[];
-      series: { active: number[]; active_ca: number[]; other: number[] };
+      series: Array<{ key: string; label: string; colorHex: string; values: number[] }>;
       totalByWeek: number[];
     };
   });
 }
 
-export async function getAssignedHoursDeliverableTimeline(opts?: { weeks?: number; department?: number; include_children?: 0|1; include_active_ca?: 0|1; debug?: 0|1; vertical?: number }) {
+export async function getAssignedHoursDeliverableTimeline(opts?: { weeks?: number; department?: number; include_children?: 0|1; debug?: 0|1; vertical?: number }) {
   const sp = new URLSearchParams();
   if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
   if (opts?.department != null) sp.set('department', String(opts.department));
   if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
-  if (opts?.include_active_ca != null) sp.set('include_active_ca', String(opts.include_active_ca));
   if (opts?.debug != null) sp.set('debug', String(opts.debug));
   if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
   const qs = sp.toString() ? `?${sp.toString()}` : '';

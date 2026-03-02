@@ -193,8 +193,8 @@ class ProjectRolesApiTests(TestCase):
         self.assertIn('Inactive Role', [role['name'] for role in roles])
 
     def test_search_tokens_match_assigned_people_role_names(self):
-        director_role = Role.objects.create(name='Director')
-        engineer_role = Role.objects.create(name='Engineer')
+        director_role = Role.objects.create(name=f'Director {self._testMethodName}')
+        engineer_role = Role.objects.create(name=f'Engineer {self._testMethodName}')
 
         project_director = Project.objects.create(name='Director Project', status='active')
         project_engineer = Project.objects.create(name='Engineer Project', status='active')
@@ -222,7 +222,7 @@ class ProjectRolesApiTests(TestCase):
         self.assertEqual(names.count(project_director.name), 1)
 
     def test_search_tokens_match_assigned_people_workload(self):
-        role = Role.objects.create(name='Engineer')
+        role = Role.objects.create(name=f'Engineer {self._testMethodName}')
         project_available = Project.objects.create(name='Available Project', status='active')
         project_over = Project.objects.create(name='Overallocated Project', status='active')
         available_person = Person.objects.create(name='Ava', weekly_capacity=36, department=self.dept, role=role)

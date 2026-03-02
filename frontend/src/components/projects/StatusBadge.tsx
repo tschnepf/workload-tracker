@@ -5,9 +5,10 @@ import {
   getStatusBorderColor, 
   formatStatus,
   editableStatusOptions,
-  type ProjectStatus 
+  type ProjectStatus
 } from './status.utils';
 import { statusOptions } from './status.constants';
+import type { ProjectStatusDefinition } from '@/types/models';
 
 // Re-export utilities for backward compatibility
 export { getStatusColor, formatStatus, editableStatusOptions, statusOptions };
@@ -21,6 +22,7 @@ export interface StatusBadgeProps {
   isUpdating?: boolean;
   size?: 'xs' | 'sm' | 'md';
   weight?: 'medium' | 'bold';
+  definitionMap?: Record<string, ProjectStatusDefinition>;
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ 
@@ -30,35 +32,42 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   onClick,
   isUpdating = false,
   size = 'xs',
-  weight = 'medium'
+  weight = 'medium',
+  definitionMap
 }) => {
   const sizeClass = size === 'md' ? 'text-base' : size === 'sm' ? 'text-sm' : 'text-xs';
   const weightClass = weight === 'bold' ? 'font-bold' : 'font-medium';
   const baseClasses = `px-2 py-0.5 rounded ${sizeClass} ${weightClass} inline-flex items-center gap-1 whitespace-nowrap`;
-  const colorClasses = getStatusColor(status);
+  const textColor = getStatusColor(status, definitionMap);
+  const bgColor = getStatusBgColor(status, definitionMap);
+  const borderColor = getStatusBorderColor(status, definitionMap);
   
   // Enhanced styling for different variants
   const variantClasses = variant === 'editable' 
-    ? `${getStatusBgColor(status)} border ${getStatusBorderColor(status)} cursor-pointer hover:opacity-80 transition-opacity`
+    ? 'border cursor-pointer hover:opacity-80 transition-opacity'
     : 'bg-transparent';
     
-  const combinedClasses = `${baseClasses} ${colorClasses} ${variantClasses} ${className}`;
+  const combinedClasses = `${baseClasses} ${variantClasses} ${className}`;
+  const colorStyle: React.CSSProperties = variant === 'editable'
+    ? { color: textColor, backgroundColor: bgColor, borderColor }
+    : { color: textColor };
   
   if (variant === 'editable' && onClick) {
     return (
       <button
         type="button"
         className={`${combinedClasses} ${isUpdating ? 'opacity-60 cursor-wait' : ''}`}
+        style={colorStyle}
         onClick={isUpdating ? undefined : (e) => {
           e.preventDefault();
           e.stopPropagation();
           onClick?.();
         }}
         aria-haspopup="listbox"
-        aria-label={`Change status from ${formatStatus(status)}`}
+        aria-label={`Change status from ${formatStatus(status, definitionMap)}`}
         disabled={isUpdating}
       >
-        {formatStatus(status)}
+        {formatStatus(status, definitionMap)}
         {isUpdating ? (
           <svg className="w-3 h-3 animate-spin motion-reduce:animate-none" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -74,8 +83,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   }
   
   return (
-    <span className={`${combinedClasses} ${isUpdating ? 'opacity-60' : ''}`}>
-      {formatStatus(status)}
+    <span className={`${combinedClasses} ${isUpdating ? 'opacity-60' : ''}`} style={colorStyle}>
+      {formatStatus(status, definitionMap)}
       {isUpdating && (
         <svg className="w-3 h-3 animate-spin motion-reduce:animate-none ml-1" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -87,4 +96,3 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 };
 
 export default StatusBadge;
-

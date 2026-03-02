@@ -18,7 +18,7 @@ type HideControls = {
 export interface RoleCapacityCardProps {
   departmentId?: number | null;
   title?: string;
-  defaultWeeks?: 4 | 8 | 12 | 16 | 20;
+  defaultWeeks?: 4 | 8 | 12 | 16 | 20 | 26 | 52;
   defaultMode?: ChartMode;
   initialSelectedRoleIds?: number[];
   tension?: number; // 0..1 smoothing
@@ -27,7 +27,7 @@ export interface RoleCapacityCardProps {
   responsive?: boolean; // when true, derive chart height from container width
 }
 
-const WEEK_OPTIONS: ReadonlyArray<4 | 8 | 12 | 16 | 20> = [4, 8, 12, 16, 20];
+const WEEK_OPTIONS: ReadonlyArray<4 | 8 | 12 | 16 | 20 | 26 | 52> = [4, 8, 12, 16, 20, 26, 52];
 
 const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   departmentId,

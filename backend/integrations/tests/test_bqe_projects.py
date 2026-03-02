@@ -26,7 +26,7 @@ from integrations.matching import suggest_project_matches, confirm_project_match
 from projects.models import Project
 from integrations.encryption import reset_key_cache
 from integrations.exceptions import IntegrationProviderError
-from integrations.views import _test_bqe_connection
+from integrations.views import _test_bqe_activity_probe, _test_bqe_connection
 
 def _seed_connection_token(connection):
     reset_key_cache()
@@ -252,6 +252,9 @@ class BQESyncTests(TestCase):
         )
 
         class DummyClient:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
             def fetch(self, updated_since=None):
                 yield [{
                     'id': 'guid-legacy-42',

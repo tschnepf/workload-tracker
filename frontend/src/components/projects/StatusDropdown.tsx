@@ -6,6 +6,7 @@
 import React, { useRef, useEffect } from 'react';
 import { editableStatusOptions, formatStatus, getStatusColor, getStatusBgColor, getStatusBorderColor, type ProjectStatus } from './status.utils';
 import { useDropdownAria } from './useDropdownAria';
+import type { ProjectStatusDefinition } from '@/types/models';
 
 export interface StatusDropdownProps {
   currentStatus?: ProjectStatus | null;
@@ -17,6 +18,8 @@ export interface StatusDropdownProps {
   disabled?: boolean;
   // When true, dropdown closes immediately on select; otherwise parent decides (e.g., via optimistic callback)
   closeOnSelect?: boolean;
+  statusOptions?: string[];
+  definitionMap?: Record<string, ProjectStatusDefinition>;
 }
 
 export const StatusDropdown: React.FC<StatusDropdownProps> = ({
@@ -27,7 +30,9 @@ export const StatusDropdown: React.FC<StatusDropdownProps> = ({
   projectId,
   className = '',
   disabled = false,
-  closeOnSelect = true
+  closeOnSelect = true,
+  statusOptions,
+  definitionMap,
 }) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { menuProps, getOptionProps } = useDropdownAria({
@@ -134,8 +139,11 @@ export const StatusDropdown: React.FC<StatusDropdownProps> = ({
       data-dropdown
       {...menuProps}
     >
-      {editableStatusOptions.map((status) => {
+      {(statusOptions && statusOptions.length > 0 ? statusOptions : editableStatusOptions).map((status) => {
         const isSelected = status === currentStatus;
+        const color = getStatusColor(status, definitionMap);
+        const bgColor = getStatusBgColor(status, definitionMap);
+        const borderColor = getStatusBorderColor(status, definitionMap);
         
         return (
           <button
@@ -171,12 +179,14 @@ export const StatusDropdown: React.FC<StatusDropdownProps> = ({
               {/* Status indicator */}
               <div className={`
                 w-2 h-2 rounded-full flex-shrink-0
-                ${getStatusBgColor(status)} ${getStatusBorderColor(status)} border
-              `} />
+                border
+              `}
+              style={{ backgroundColor: bgColor, borderColor }}
+              />
               
               {/* Status text with color */}
-              <span className={`${getStatusColor(status)} font-medium`}>
-                {formatStatus(status)}
+              <span className="font-medium" style={{ color }}>
+                {formatStatus(status, definitionMap)}
               </span>
               
               {/* Selected indicator */}

@@ -9,11 +9,13 @@ import PreDeliverablesSectionEmbedded from '@/components/deliverables/PreDeliver
 import { PROJECT_FILTER_METADATA_KEY } from '@/hooks/useProjectFilterMetadata';
 import { useQueryClient } from '@tanstack/react-query';
 import ProjectDetailsCore from './ProjectDetailsCore';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 
 export const ProjectDetailsContainer: React.FC<{ projectId: number }> = ({ projectId }) => {
   const { close, reposition } = useProjectQuickViewPopover();
   const { project, loading, error } = useProject(projectId);
   const queryClient = useQueryClient();
+  const { definitionMap, statusOptionKeys } = useProjectStatusDefinitions();
   const [statusOpen, setStatusOpen] = React.useState(false);
 
   const { updateStatus, isUpdating } = useProjectStatus({
@@ -50,6 +52,7 @@ export const ProjectDetailsContainer: React.FC<{ projectId: number }> = ({ proje
           <StatusBadge
             status={(project as any)?.status || 'active'}
             variant="editable"
+            definitionMap={definitionMap}
             onClick={() => setStatusOpen(v => !v)}
             isUpdating={isUpdating(project.id)}
           />
@@ -62,6 +65,8 @@ export const ProjectDetailsContainer: React.FC<{ projectId: number }> = ({ proje
               projectId={project.id}
               disabled={isUpdating(project.id)}
               closeOnSelect={false}
+              statusOptions={statusOptionKeys}
+              definitionMap={definitionMap}
             />
           )}
         </div>
