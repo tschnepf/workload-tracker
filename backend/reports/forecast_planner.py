@@ -38,6 +38,20 @@ class PlannerScope:
     vertical_id: int | None
 
 
+@dataclass
+class BaselineEvaluation:
+    demand_by_role: dict[int, list[float]]
+    baseline_total: list[float]
+    baseline_unmapped: list[float]
+    status_stats: dict[str, dict[str, float]]
+    scheduled_included: list[float]
+    scheduled_excluded: list[float]
+    included_by_status: dict[str, list[float]]
+    excluded_by_status: dict[str, list[float]]
+    department_included: dict[int, list[float]]
+    department_excluded: dict[int, list[float]]
+
+
 def parse_int(raw: Any, default: int | None = None) -> int | None:
     if raw in (None, ""):
         return default
@@ -241,16 +255,17 @@ def _evaluate_baseline(
     *,
     scope: PlannerScope,
     status_keys: set[str],
-) -> tuple[
-    dict[int, list[float]],
-    list[float],
-    list[float],
-    dict[str, dict[str, float]],
-]:
+) -> BaselineEvaluation:
     demand_by_role: dict[int, list[float]] = defaultdict(lambda: [0.0] * scope.weeks)
-    total_demand = [0.0] * scope.weeks
-    unmapped = [0.0] * scope.weeks
+    total_demand = [0.0] * scope.weeks  # Included statuses only (planner baseline)
+    unmapped = [0.0] * scope.weeks  # Included statuses only
     status_stats: dict[str, dict[str, float]] = defaultdict(lambda: {"projectCount": 0.0, "hours": 0.0})
+    scheduled_included = [0.0] * scope.weeks
+    scheduled_excluded = [0.0] * scope.weeks
+    included_by_status: dict[str, list[float]] = defaultdict(lambda: [0.0] * scope.weeks)
+    excluded_by_status: dict[str, list[float]] = defaultdict(lambda: [0.0] * scope.weeks)
+    department_included: dict[int, list[float]] = defaultdict(lambda: [0.0] * scope.weeks)
+    department_excluded: dict[int, list[float]] = defaultdict(lambda: [0.0] * scope.weeks)
 
     base_qs = Assignment.objects.filter(is_active=True, project__isnull=False).select_related(
         "project",
@@ -259,10 +274,6 @@ def _evaluate_baseline(
     )
     if scope.vertical_id is not None:
         base_qs = base_qs.filter(project__vertical_id=scope.vertical_id)
-    if status_keys:
-        base_qs = base_qs.filter(project__status__in=list(status_keys))
-    else:
-        base_qs = base_qs.none()
 
     assignments = list(
         base_qs.only(
@@ -275,28 +286,27 @@ def _evaluate_baseline(
             "project__auto_hours_template_id",
             "person__role_id",
             "person__department_id",
+            "role_on_project_ref__department_id",
         )
     )
     if not assignments:
-        return demand_by_role, total_demand, unmapped, status_stats
+        return BaselineEvaluation(
+            demand_by_role=demand_by_role,
+            baseline_total=total_demand,
+            baseline_unmapped=unmapped,
+            status_stats=status_stats,
+            scheduled_included=scheduled_included,
+            scheduled_excluded=scheduled_excluded,
+            included_by_status=included_by_status,
+            excluded_by_status=excluded_by_status,
+            department_included=department_included,
+            department_excluded=department_excluded,
+        )
 
     project_role_ids: set[int] = set()
     template_ids: set[int] = set()
     seen_projects_by_status: dict[str, set[int]] = defaultdict(set)
-    for assignment in assignments:
-        status_key = normalize_status_key(getattr(assignment.project, "status", ""))
-        if status_key and assignment.project_id:
-            seen_projects_by_status[status_key].add(int(assignment.project_id))
-        if assignment.role_on_project_ref_id:
-            project_role_ids.add(int(assignment.role_on_project_ref_id))
-        template_id = getattr(getattr(assignment, "project", None), "auto_hours_template_id", None)
-        if template_id:
-            template_ids.add(int(template_id))
-
-    template_map, global_map = _load_role_mapping_for_project_roles(project_role_ids, template_ids)
-
-    for status_key, project_ids in seen_projects_by_status.items():
-        status_stats[status_key]["projectCount"] = float(len(project_ids))
+    scoped_assignments: list[tuple[Assignment, str, int | None]] = []
 
     for assignment in assignments:
         status_key = normalize_status_key(getattr(assignment.project, "status", ""))
@@ -314,39 +324,85 @@ def _evaluate_baseline(
             if not in_scope:
                 continue
 
+        dept_id = None
+        if assignment.department_id:
+            dept_id = int(assignment.department_id)
+        elif assignment.person_id and getattr(assignment.person, "department_id", None):
+            dept_id = int(getattr(assignment.person, "department_id"))
+        else:
+            role_department = getattr(getattr(assignment, "role_on_project_ref", None), "department_id", None)
+            if role_department:
+                dept_id = int(role_department)
+
+        scoped_assignments.append((assignment, status_key, dept_id))
+        if assignment.project_id:
+            seen_projects_by_status[status_key].add(int(assignment.project_id))
+        if status_key in status_keys and assignment.role_on_project_ref_id:
+            project_role_ids.add(int(assignment.role_on_project_ref_id))
+        template_id = getattr(getattr(assignment, "project", None), "auto_hours_template_id", None)
+        if status_key in status_keys and template_id:
+            template_ids.add(int(template_id))
+
+    template_map, global_map = _load_role_mapping_for_project_roles(project_role_ids, template_ids)
+
+    for status_key, project_ids in seen_projects_by_status.items():
+        status_stats[status_key]["projectCount"] = float(len(project_ids))
+
+    for assignment, status_key, dept_id in scoped_assignments:
+        is_included = status_key in status_keys
         weekly_hours = assignment.weekly_hours or {}
         template_id = getattr(getattr(assignment, "project", None), "auto_hours_template_id", None)
+        mapped_roles: list[int] = []
+        person_role_id = int(getattr(getattr(assignment, "person", None), "role_id", 0) or 0)
         if assignment.person_id:
-            role_id = int(getattr(assignment.person, "role_id", 0) or 0)
-            for idx, week_key in enumerate(scope.week_keys):
-                value = hours_for_week(weekly_hours, week_key)
-                if value <= 0:
-                    continue
-                if role_id > 0:
-                    demand_by_role[role_id][idx] += value
-                total_demand[idx] += value
-                status_stats[status_key]["hours"] += value
-        else:
+            mapped_roles = [person_role_id] if person_role_id > 0 else []
+        elif is_included:
             mapped_roles = _map_project_role_to_people_roles(
                 project_role_id=assignment.role_on_project_ref_id,
                 template_id=int(template_id) if template_id else None,
                 template_map=template_map,
                 global_map=global_map,
             )
-            for idx, week_key in enumerate(scope.week_keys):
-                value = hours_for_week(weekly_hours, week_key)
-                if value <= 0:
-                    continue
-                total_demand[idx] += value
-                status_stats[status_key]["hours"] += value
-                if not mapped_roles:
-                    unmapped[idx] += value
-                    continue
-                split = value / float(len(mapped_roles))
-                for role_id in mapped_roles:
-                    demand_by_role[int(role_id)][idx] += split
 
-    return demand_by_role, total_demand, unmapped, status_stats
+        for idx, week_key in enumerate(scope.week_keys):
+            value = hours_for_week(weekly_hours, week_key)
+            if value <= 0:
+                continue
+
+            status_stats[status_key]["hours"] += value
+            if is_included:
+                scheduled_included[idx] += value
+                included_by_status[status_key][idx] += value
+                if dept_id is not None:
+                    department_included[dept_id][idx] += value
+            else:
+                scheduled_excluded[idx] += value
+                excluded_by_status[status_key][idx] += value
+                if dept_id is not None:
+                    department_excluded[dept_id][idx] += value
+
+            if not is_included:
+                continue
+            total_demand[idx] += value
+            if not mapped_roles:
+                unmapped[idx] += value
+                continue
+            split = value / float(len(mapped_roles))
+            for role_id in mapped_roles:
+                demand_by_role[int(role_id)][idx] += split
+
+    return BaselineEvaluation(
+        demand_by_role=demand_by_role,
+        baseline_total=total_demand,
+        baseline_unmapped=unmapped,
+        status_stats=status_stats,
+        scheduled_included=scheduled_included,
+        scheduled_excluded=scheduled_excluded,
+        included_by_status=included_by_status,
+        excluded_by_status=excluded_by_status,
+        department_included=department_included,
+        department_excluded=department_excluded,
+    )
 
 
 def _build_template_profile(
@@ -528,6 +584,83 @@ def _round_series(values: list[float]) -> list[float]:
     return [round(float(v or 0.0), 2) for v in values]
 
 
+def _month_key_for_week_key(week_key: str) -> str:
+    if isinstance(week_key, str) and len(week_key) >= 7:
+        return week_key[:7]
+    return str(week_key)
+
+
+def _build_month_buckets(week_keys: list[str]) -> tuple[list[str], list[list[int]]]:
+    month_keys: list[str] = []
+    buckets: list[list[int]] = []
+    index: dict[str, int] = {}
+    for week_idx, week_key in enumerate(week_keys):
+        month_key = _month_key_for_week_key(week_key)
+        bucket_idx = index.get(month_key)
+        if bucket_idx is None:
+            index[month_key] = len(month_keys)
+            month_keys.append(month_key)
+            buckets.append([])
+            bucket_idx = len(month_keys) - 1
+        buckets[bucket_idx].append(week_idx)
+    return month_keys, buckets
+
+
+def _rollup_sum(values: list[float], month_buckets: list[list[int]]) -> list[float]:
+    out: list[float] = []
+    for bucket in month_buckets:
+        total = 0.0
+        for idx in bucket:
+            if 0 <= idx < len(values):
+                total += float(values[idx] or 0.0)
+        out.append(total)
+    return out
+
+
+def _rollup_avg(values: list[float], month_buckets: list[list[int]]) -> list[float]:
+    out: list[float] = []
+    for bucket in month_buckets:
+        if not bucket:
+            out.append(0.0)
+            continue
+        total = 0.0
+        for idx in bucket:
+            if 0 <= idx < len(values):
+                total += float(values[idx] or 0.0)
+        out.append(total / float(len(bucket)))
+    return out
+
+
+def _rollup_series_map(series_map: dict[str, list[float]], month_buckets: list[list[int]]) -> dict[str, list[float]]:
+    return {key: _round_series(_rollup_sum(values or [], month_buckets)) for key, values in series_map.items()}
+
+
+def _series_add(left: list[float], right: list[float]) -> list[float]:
+    size = max(len(left), len(right))
+    return [
+        float(left[idx] if idx < len(left) else 0.0) + float(right[idx] if idx < len(right) else 0.0)
+        for idx in range(size)
+    ]
+
+
+def _series_subtract(left: list[float], right: list[float]) -> list[float]:
+    size = max(len(left), len(right))
+    return [
+        float(left[idx] if idx < len(left) else 0.0) - float(right[idx] if idx < len(right) else 0.0)
+        for idx in range(size)
+    ]
+
+
+def _series_ratio_pct(numerator: list[float], denominator: list[float]) -> list[float]:
+    size = max(len(numerator), len(denominator))
+    out: list[float] = []
+    for idx in range(size):
+        num = float(numerator[idx] if idx < len(numerator) else 0.0)
+        den = float(denominator[idx] if idx < len(denominator) else 0.0)
+        out.append((num / den * 100.0) if den > 0 else (100.0 if num > 0 else 0.0))
+    return out
+
+
 def _build_recommendation(
     *,
     week_keys: list[str],
@@ -674,32 +807,42 @@ def evaluate_forecast_planner(
     thresholds = _thresholds_with_defaults(thresholds_payload)
     status_key_set = set(status_keys)
     capacity_by_role, team_capacity, role_names = _capacity_by_role_and_team(scope)
-    baseline_by_role, baseline_total, baseline_unmapped, status_stats = _evaluate_baseline(
+    baseline_eval = _evaluate_baseline(
         scope=scope,
         status_keys=status_key_set,
     )
+    baseline_by_role = baseline_eval.demand_by_role
+    baseline_total = baseline_eval.baseline_total
+    baseline_unmapped = baseline_eval.baseline_unmapped
+    status_stats = baseline_eval.status_stats
     proposed_by_role, proposed_total, proposed_unmapped, project_profiles = _apply_proposed_projects(
         scope=scope,
         projects_payload=projects_payload,
         use_probability_weighting=use_probability_weighting,
     )
+    if use_probability_weighting:
+        _, proposed_total_conservative, _, _ = _apply_proposed_projects(
+            scope=scope,
+            projects_payload=projects_payload,
+            use_probability_weighting=False,
+        )
+    else:
+        proposed_total_conservative = list(proposed_total)
 
     role_ids = sorted(set(capacity_by_role.keys()) | set(baseline_by_role.keys()) | set(proposed_by_role.keys()))
     role_rows: list[dict[str, Any]] = []
+    role_raw_rows: list[dict[str, Any]] = []
     for role_id in role_ids:
-        cap_series = capacity_by_role.get(role_id) or [0.0] * scope.weeks
-        base_series = baseline_by_role.get(role_id) or [0.0] * scope.weeks
-        prop_series = proposed_by_role.get(role_id) or [0.0] * scope.weeks
+        cap_series = [float(v or 0.0) for v in (capacity_by_role.get(role_id) or [0.0] * scope.weeks)]
+        base_series = [float(v or 0.0) for v in (baseline_by_role.get(role_id) or [0.0] * scope.weeks)]
+        prop_series = [float(v or 0.0) for v in (proposed_by_role.get(role_id) or [0.0] * scope.weeks)]
         total_series = [float(base_series[i] or 0.0) + float(prop_series[i] or 0.0) for i in range(scope.weeks)]
-        util_series = []
-        for i in range(scope.weeks):
-            cap = float(cap_series[i] or 0.0)
-            demand = float(total_series[i] or 0.0)
-            util_series.append((demand / cap * 100.0) if cap > 0 else (100.0 if demand > 0 else 0.0))
+        util_series = _series_ratio_pct(total_series, cap_series)
+        role_name = role_names.get(role_id) or f"Role {role_id}"
         role_rows.append(
             {
                 "roleId": role_id,
-                "roleName": role_names.get(role_id) or f"Role {role_id}",
+                "roleName": role_name,
                 "capacity": _round_series(cap_series),
                 "baselineDemand": _round_series(base_series),
                 "proposedDemand": _round_series(prop_series),
@@ -707,14 +850,21 @@ def evaluate_forecast_planner(
                 "utilization": _round_series(util_series),
             }
         )
+        role_raw_rows.append(
+            {
+                "roleId": role_id,
+                "roleName": role_name,
+                "capacity": cap_series,
+                "baselineDemand": base_series,
+                "proposedDemand": prop_series,
+                "totalDemand": total_series,
+                "utilization": util_series,
+            }
+        )
 
     total_demand = [float(baseline_total[i] or 0.0) + float(proposed_total[i] or 0.0) for i in range(scope.weeks)]
     total_unmapped = [float(baseline_unmapped[i] or 0.0) + float(proposed_unmapped[i] or 0.0) for i in range(scope.weeks)]
-    team_utilization = []
-    for idx in range(scope.weeks):
-        cap = float(team_capacity[idx] or 0.0)
-        demand = float(total_demand[idx] or 0.0)
-        team_utilization.append((demand / cap * 100.0) if cap > 0 else (100.0 if demand > 0 else 0.0))
+    team_utilization = _series_ratio_pct(total_demand, team_capacity)
 
     recommendation = _build_recommendation(
         week_keys=scope.week_keys,
@@ -722,9 +872,11 @@ def evaluate_forecast_planner(
         role_rows=role_rows,
         total_unmapped=total_unmapped,
         thresholds=thresholds,
-    )
+        )
 
     start_options: list[dict[str, Any]] = []
+    feasible_start_rows: list[dict[str, Any]] = []
+    week_index = {key: idx for idx, key in enumerate(scope.week_keys)}
     for project_profile in project_profiles:
         start_idx = int(project_profile.get("startIndex") or 0)
         earliest = _earliest_feasible_for_project(
@@ -746,6 +898,106 @@ def evaluate_forecast_planner(
                 "earliestFeasibleStartDate": earliest,
             }
         )
+        requested_start = project_profile.get("requestedStartDate")
+        requested_idx = _index_for_start_date(scope.week_keys, requested_start)
+        earliest_idx = week_index.get(str(earliest or ""), None)
+        delay_weeks = (earliest_idx - requested_idx) if (earliest_idx is not None and earliest_idx >= requested_idx) else None
+        feasible_start_rows.append(
+            {
+                "name": project_profile.get("name"),
+                "templateId": project_profile.get("templateId"),
+                "requestedStartDate": requested_start,
+                "earliestFeasibleStartDate": earliest,
+                "delayWeeks": delay_weeks,
+            }
+        )
+
+    scheduled_included = [float(v or 0.0) for v in baseline_eval.scheduled_included]
+    scheduled_excluded = [float(v or 0.0) for v in baseline_eval.scheduled_excluded]
+    scheduled_total = _series_add(scheduled_included, scheduled_excluded)
+    chart_total_demand = _series_add(scheduled_total, proposed_total)
+    chart_team_utilization = _series_ratio_pct(chart_total_demand, team_capacity)
+
+    confidence_expected = list(chart_total_demand)
+    confidence_high = _series_add(scheduled_total, proposed_total_conservative)
+    confidence_low = [
+        max(float(scheduled_total[idx] or 0.0), (2.0 * float(confidence_expected[idx] or 0.0)) - float(confidence_high[idx] or 0.0))
+        for idx in range(len(confidence_expected))
+    ]
+    if not use_probability_weighting:
+        confidence_low = list(confidence_expected)
+        confidence_high = list(confidence_expected)
+
+    month_keys, month_buckets = _build_month_buckets(scope.week_keys)
+    team_capacity_month = _rollup_sum(team_capacity, month_buckets)
+    scheduled_included_month = _rollup_sum(scheduled_included, month_buckets)
+    scheduled_excluded_month = _rollup_sum(scheduled_excluded, month_buckets)
+    proposed_month = _rollup_sum(proposed_total, month_buckets)
+    chart_total_demand_month = _rollup_sum(chart_total_demand, month_buckets)
+    chart_team_utilization_month = _series_ratio_pct(chart_total_demand_month, team_capacity_month)
+    baseline_unmapped_month = _rollup_sum(baseline_unmapped, month_buckets)
+    proposed_unmapped_month = _rollup_sum(proposed_unmapped, month_buckets)
+    total_unmapped_month = _rollup_sum(total_unmapped, month_buckets)
+    delta_demand_weekly = _series_subtract(total_demand, baseline_total)
+    delta_demand_month = _rollup_sum(delta_demand_weekly, month_buckets)
+    confidence_expected_month = _rollup_sum(confidence_expected, month_buckets)
+    confidence_low_month = _rollup_sum(confidence_low, month_buckets)
+    confidence_high_month = _rollup_sum(confidence_high, month_buckets)
+
+    department_ids = sorted(set(baseline_eval.department_included.keys()) | set(baseline_eval.department_excluded.keys()))
+    department_name_by_id = {int(d.id): d.name for d in Department.objects.filter(id__in=department_ids).only("id", "name")}
+    department_weekly: list[dict[str, Any]] = []
+    department_monthly: list[dict[str, Any]] = []
+    for dept_id in department_ids:
+        included_series = baseline_eval.department_included.get(dept_id) or [0.0] * scope.weeks
+        excluded_series = baseline_eval.department_excluded.get(dept_id) or [0.0] * scope.weeks
+        total_series = _series_add(included_series, excluded_series)
+        department_weekly.append(
+            {
+                "departmentId": int(dept_id),
+                "departmentName": department_name_by_id.get(int(dept_id), f"Department {dept_id}"),
+                "included": _round_series(included_series),
+                "excluded": _round_series(excluded_series),
+                "total": _round_series(total_series),
+            }
+        )
+        department_monthly.append(
+            {
+                "departmentId": int(dept_id),
+                "departmentName": department_name_by_id.get(int(dept_id), f"Department {dept_id}"),
+                "included": _round_series(_rollup_sum(included_series, month_buckets)),
+                "excluded": _round_series(_rollup_sum(excluded_series, month_buckets)),
+                "total": _round_series(_rollup_sum(total_series, month_buckets)),
+            }
+        )
+
+    role_rows_monthly: list[dict[str, Any]] = []
+    for row in role_raw_rows:
+        capacity_month = _rollup_sum(row["capacity"], month_buckets)
+        baseline_month = _rollup_sum(row["baselineDemand"], month_buckets)
+        proposed_month_role = _rollup_sum(row["proposedDemand"], month_buckets)
+        total_month_role = _rollup_sum(row["totalDemand"], month_buckets)
+        util_month = _series_ratio_pct(total_month_role, capacity_month)
+        role_rows_monthly.append(
+            {
+                "roleId": row["roleId"],
+                "roleName": row["roleName"],
+                "capacity": _round_series(capacity_month),
+                "baselineDemand": _round_series(baseline_month),
+                "proposedDemand": _round_series(proposed_month_role),
+                "totalDemand": _round_series(total_month_role),
+                "utilization": _round_series(util_month),
+            }
+        )
+
+    top_bottleneck_role_ids = [
+        int(row["roleId"])
+        for row in sorted(
+            role_rows,
+            key=lambda r: max((float(v or 0.0) for v in (r.get("utilization") or [])), default=0.0),
+            reverse=True,
+        )[:6]
+    ]
 
     return {
         "weekKeys": scope.week_keys,
@@ -767,8 +1019,106 @@ def evaluate_forecast_planner(
                 "projectCount": int(value.get("projectCount") or 0),
                 "hours": round(float(value.get("hours") or 0.0), 2),
             }
-            for key, value in status_stats.items()
+            for key, value in sorted(status_stats.items(), key=lambda item: item[0])
         },
         "startOptions": start_options,
+        "chartData": {
+            "timeline": {
+                "weekKeys": scope.week_keys,
+                "monthKeys": month_keys,
+            },
+            "teamSeries": {
+                "weekly": {
+                    "capacity": _round_series(team_capacity),
+                    "scheduledIncluded": _round_series(scheduled_included),
+                    "scheduledExcluded": _round_series(scheduled_excluded),
+                    "proposed": _round_series(proposed_total),
+                    "totalDemand": _round_series(chart_total_demand),
+                    "teamUtilizationPct": _round_series(chart_team_utilization),
+                    "teamUtilizationThresholdPct": float(thresholds["teamUtilizationPct"]),
+                },
+                "monthly": {
+                    "capacity": _round_series(team_capacity_month),
+                    "scheduledIncluded": _round_series(scheduled_included_month),
+                    "scheduledExcluded": _round_series(scheduled_excluded_month),
+                    "proposed": _round_series(proposed_month),
+                    "totalDemand": _round_series(chart_total_demand_month),
+                    "teamUtilizationPct": _round_series(chart_team_utilization_month),
+                    "teamUtilizationThresholdPct": float(thresholds["teamUtilizationPct"]),
+                },
+            },
+            "statusSeries": {
+                "weekly": {
+                    "scheduledIncludedByWeek": _round_series(scheduled_included),
+                    "scheduledExcludedByWeek": _round_series(scheduled_excluded),
+                    "includedByStatusKey": {
+                        key: _round_series(values)
+                        for key, values in sorted(baseline_eval.included_by_status.items(), key=lambda item: item[0])
+                    },
+                    "excludedByStatusKey": {
+                        key: _round_series(values)
+                        for key, values in sorted(baseline_eval.excluded_by_status.items(), key=lambda item: item[0])
+                    },
+                },
+                "monthly": {
+                    "scheduledIncludedByWeek": _round_series(scheduled_included_month),
+                    "scheduledExcludedByWeek": _round_series(scheduled_excluded_month),
+                    "includedByStatusKey": _rollup_series_map(
+                        dict(sorted(baseline_eval.included_by_status.items(), key=lambda item: item[0])),
+                        month_buckets,
+                    ),
+                    "excludedByStatusKey": _rollup_series_map(
+                        dict(sorted(baseline_eval.excluded_by_status.items(), key=lambda item: item[0])),
+                        month_buckets,
+                    ),
+                },
+            },
+            "roleSeries": {
+                "topBottleneckRoleIds": top_bottleneck_role_ids,
+                "weekly": role_rows,
+                "monthly": role_rows_monthly,
+            },
+            "departmentSeries": {
+                "weekly": department_weekly,
+                "monthly": department_monthly,
+            },
+            "unmappedSeries": {
+                "thresholdPerWeek": float(thresholds["unmappedHoursPerWeek"]),
+                "thresholdPerMonth": [round(float(thresholds["unmappedHoursPerWeek"]) * float(len(bucket)), 2) for bucket in month_buckets],
+                "weekly": {
+                    "baselineUnmapped": _round_series(baseline_unmapped),
+                    "proposedUnmapped": _round_series(proposed_unmapped),
+                    "totalUnmapped": _round_series(total_unmapped),
+                },
+                "monthly": {
+                    "baselineUnmapped": _round_series(baseline_unmapped_month),
+                    "proposedUnmapped": _round_series(proposed_unmapped_month),
+                    "totalUnmapped": _round_series(total_unmapped_month),
+                },
+            },
+            "impactSeries": {
+                "weekly": {
+                    "deltaDemand": _round_series(delta_demand_weekly),
+                },
+                "monthly": {
+                    "deltaDemand": _round_series(delta_demand_month),
+                },
+            },
+            "feasibleStarts": {
+                "rows": feasible_start_rows,
+            },
+            "confidenceSeries": {
+                "enabled": bool(use_probability_weighting),
+                "weekly": {
+                    "expectedDemandByWeek": _round_series(confidence_expected),
+                    "lowDemandByWeek": _round_series(confidence_low),
+                    "highDemandByWeek": _round_series(confidence_high),
+                },
+                "monthly": {
+                    "expectedDemandByWeek": _round_series(confidence_expected_month),
+                    "lowDemandByWeek": _round_series(confidence_low_month),
+                    "highDemandByWeek": _round_series(confidence_high_month),
+                },
+            },
+        },
     }
-

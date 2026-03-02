@@ -145,6 +145,54 @@ class ForecastPlannerApiTests(TestCase):
         with_on_hold_total = active_plus_on_hold.json()["result"]["totals"]["baselineDemand"][0]
         self.assertGreater(with_on_hold_total, active_total)
 
+    def test_evaluate_returns_chart_data_with_status_split(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            "/api/reports/forecast/evaluate/",
+            {"weeks": 8, "statusKeys": ["active"], "projects": []},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        result = resp.json()["result"]
+        chart_data = result.get("chartData") or {}
+        team_weekly = (((chart_data.get("teamSeries") or {}).get("weekly")) or {})
+        status_weekly = (((chart_data.get("statusSeries") or {}).get("weekly")) or {})
+        self.assertIn("timeline", chart_data)
+        self.assertIn("monthKeys", chart_data.get("timeline", {}))
+        self.assertAlmostEqual(team_weekly.get("scheduledIncluded", [0])[0], 20.0, places=2)
+        self.assertAlmostEqual(team_weekly.get("scheduledExcluded", [0])[0], 10.0, places=2)
+        self.assertAlmostEqual(status_weekly.get("scheduledIncludedByWeek", [0])[0], 20.0, places=2)
+        self.assertAlmostEqual(status_weekly.get("scheduledExcludedByWeek", [0])[0], 10.0, places=2)
+
+    def test_confidence_series_enabled_when_probability_weighting(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            "/api/reports/forecast/evaluate/",
+            {
+                "weeks": 8,
+                "statusKeys": ["active", "on_hold"],
+                "useProbabilityWeighting": True,
+                "projects": [
+                    {
+                        "templateId": self.template.id,
+                        "name": "Weighted Pursuit",
+                        "startDate": date.today().isoformat(),
+                        "probabilityPct": 50,
+                        "quantity": 1,
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        result = resp.json()["result"]
+        confidence = (((result.get("chartData") or {}).get("confidenceSeries") or {}).get("weekly")) or {}
+        expected = confidence.get("expectedDemandByWeek") or []
+        high = confidence.get("highDemandByWeek") or []
+        self.assertTrue(((result.get("chartData") or {}).get("confidenceSeries") or {}).get("enabled"))
+        self.assertEqual(len(expected), len(high))
+        self.assertTrue(all((high[idx] or 0) >= (expected[idx] or 0) for idx in range(len(expected))))
+
     def test_scenario_crud_and_shared_access(self):
         self.client.force_authenticate(self.manager)
         create = self.client.post(

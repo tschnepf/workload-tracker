@@ -2,7 +2,9 @@ import React, { useMemo, useRef, useState } from 'react';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import PageState from '@/components/ui/PageState';
+import ForecastChartsSection from '@/components/reports/ForecastChartsSection';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
+import { getFlag } from '@/lib/flags';
 import { reportsApi } from '@/services/api';
 import type {
   ForecastPlannerBootstrapResponse,
@@ -199,6 +201,7 @@ const ForecastPlannerPage: React.FC = () => {
   const statusDefinitions = bootstrap?.statusDefinitions || [];
   const statusStats = (result?.statusStats || bootstrap?.baselineEvaluation?.statusStats || {}) as Record<string, { projectCount: number; hours: number }>;
   const recommendation = result?.recommendation;
+  const showCharts = getFlag('FORECAST_PLANNER_CHARTS_V1', true);
   const peakTeamUtilization = useMemo(() => Math.max(...(result?.totals?.teamUtilization || [0])), [result?.totals?.teamUtilization]);
   const weeksPreview = useMemo(() => (result?.weekKeys || []).slice(0, 12), [result?.weekKeys]);
 
@@ -436,36 +439,40 @@ const ForecastPlannerPage: React.FC = () => {
           </div>
         </Card>
 
+        {showCharts ? <ForecastChartsSection result={result} statusDefinitions={statusDefinitions} /> : null}
+
         {weeksPreview.length ? (
           <Card className="ux-panel">
             <div className="p-4">
-              <h2 className="font-semibold mb-3">Timeline (First 12 Weeks)</h2>
-              <div className="overflow-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[var(--muted)]">
-                      <th className="pr-4 pb-2">Week</th>
-                      <th className="pr-4 pb-2">Capacity</th>
-                      <th className="pr-4 pb-2">Baseline</th>
-                      <th className="pr-4 pb-2">Proposed</th>
-                      <th className="pr-4 pb-2">Total</th>
-                      <th className="pr-4 pb-2">Utilization</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {weeksPreview.map((wk, idx) => (
-                      <tr key={wk} className="border-t border-[var(--border)]">
-                        <td className="pr-4 py-2">{wk}</td>
-                        <td className="pr-4 py-2">{Math.round(result?.totals.teamCapacity[idx] || 0)}h</td>
-                        <td className="pr-4 py-2">{Math.round(result?.totals.baselineDemand[idx] || 0)}h</td>
-                        <td className="pr-4 py-2">{Math.round(result?.totals.proposedDemand[idx] || 0)}h</td>
-                        <td className="pr-4 py-2">{Math.round(result?.totals.totalDemand[idx] || 0)}h</td>
-                        <td className="pr-4 py-2">{Math.round(result?.totals.teamUtilization[idx] || 0)}%</td>
+              <details>
+                <summary className="cursor-pointer font-semibold">Timeline Table (First 12 Weeks)</summary>
+                <div className="mt-3 overflow-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[var(--muted)]">
+                        <th className="pr-4 pb-2">Week</th>
+                        <th className="pr-4 pb-2">Capacity</th>
+                        <th className="pr-4 pb-2">Baseline</th>
+                        <th className="pr-4 pb-2">Proposed</th>
+                        <th className="pr-4 pb-2">Total</th>
+                        <th className="pr-4 pb-2">Utilization</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {weeksPreview.map((wk, idx) => (
+                        <tr key={wk} className="border-t border-[var(--border)]">
+                          <td className="pr-4 py-2">{wk}</td>
+                          <td className="pr-4 py-2">{Math.round(result?.totals.teamCapacity[idx] || 0)}h</td>
+                          <td className="pr-4 py-2">{Math.round(result?.totals.baselineDemand[idx] || 0)}h</td>
+                          <td className="pr-4 py-2">{Math.round(result?.totals.proposedDemand[idx] || 0)}h</td>
+                          <td className="pr-4 py-2">{Math.round(result?.totals.totalDemand[idx] || 0)}h</td>
+                          <td className="pr-4 py-2">{Math.round(result?.totals.teamUtilization[idx] || 0)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </div>
           </Card>
         ) : null}
@@ -505,4 +512,3 @@ const ForecastPlannerPage: React.FC = () => {
 };
 
 export default ForecastPlannerPage;
-

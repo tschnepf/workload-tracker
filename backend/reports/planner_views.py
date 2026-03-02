@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
+import math
+from time import perf_counter
 from typing import Any
 
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 from django.db.utils import OperationalError, ProgrammingError
 from rest_framework import serializers, status
@@ -27,6 +33,8 @@ from .forecast_planner import (
     parse_int,
 )
 from .models import ForecastScenario
+
+logger = logging.getLogger(__name__)
 
 
 def _is_planner_enabled() -> bool:
@@ -95,19 +103,52 @@ def _serialize_roles() -> list[dict[str, Any]]:
 
 
 def _scenario_response_payload(item: ForecastScenario) -> dict[str, Any]:
+    def _sanitize_json(value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return value if math.isfinite(value) else None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            return [_sanitize_json(v) for v in value]
+        if isinstance(value, dict):
+            return {str(k): _sanitize_json(v) for k, v in value.items()}
+        return str(value)
+
     return {
-        "id": int(item.id),
+        "id": int(item.id or 0),
         "name": item.name,
         "description": item.description or "",
-        "ownerId": int(item.owner_id),
+        "ownerId": int(item.owner_id or 0),
         "isShared": bool(item.is_shared),
         "sharedToken": item.shared_token if item.is_shared else None,
-        "scenarioConfig": item.scenario_config or {},
-        "lastResult": item.last_result or {},
+        "scenarioConfig": _sanitize_json(item.scenario_config or {}),
+        "lastResult": _sanitize_json(item.last_result or {}),
         "lastEvaluatedAt": item.last_evaluated_at,
         "createdAt": item.created_at,
         "updatedAt": item.updated_at,
     }
+
+
+def _evaluate_cache_key(payload: dict[str, Any]) -> str:
+    normalized = {
+        "weeks": payload.get("weeks"),
+        "department": payload.get("department"),
+        "includeChildren": bool(payload.get("include_children") or payload.get("includeChildren")),
+        "vertical": payload.get("vertical"),
+        "statusKeys": sorted(payload.get("statusKeys") if isinstance(payload.get("statusKeys"), list) else []),
+        "projects": payload.get("projects") if isinstance(payload.get("projects"), list) else [],
+        "thresholds": payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else {},
+        "useProbabilityWeighting": bool(payload.get("useProbabilityWeighting")),
+    }
+    raw = json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str)
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return f"forecast:planner:evaluate:{digest}"
 
 
 def _scenario_storage_error_response(exc: Exception | None = None) -> Response:
@@ -207,6 +248,7 @@ class ForecastPlannerEvaluateView(APIView):
         if feature_resp is not None:
             return feature_resp
 
+        started_at = perf_counter()
         payload = request.data if isinstance(request.data, dict) else {}
         weeks = clamp_weeks(payload.get("weeks"), 26)
         department_id = parse_int(payload.get("department"), None)
@@ -227,12 +269,44 @@ class ForecastPlannerEvaluateView(APIView):
             include_children=include_children,
             vertical_id=vertical_id,
         )
-        result = evaluate_forecast_planner(
-            scope=scope,
-            status_keys=status_keys,
-            projects_payload=[item for item in projects_payload if isinstance(item, dict)],
-            thresholds_payload=payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else None,
-            use_probability_weighting=bool(payload.get("useProbabilityWeighting")),
+        projects_clean = [item for item in projects_payload if isinstance(item, dict)]
+        use_probability_weighting = bool(payload.get("useProbabilityWeighting"))
+        thresholds_payload = payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else None
+        use_cache = bool(settings.FEATURES.get("SHORT_TTL_AGGREGATES", False))
+        cache_key = _evaluate_cache_key(
+            {
+                "weeks": weeks,
+                "department": department_id,
+                "include_children": include_children,
+                "vertical": vertical_id,
+                "statusKeys": status_keys,
+                "projects": projects_clean,
+                "thresholds": thresholds_payload or {},
+                "useProbabilityWeighting": use_probability_weighting,
+            }
+        )
+        result: dict[str, Any] | None = cache.get(cache_key) if use_cache else None
+        from_cache = result is not None
+        if result is None:
+            result = evaluate_forecast_planner(
+                scope=scope,
+                status_keys=status_keys,
+                projects_payload=projects_clean,
+                thresholds_payload=thresholds_payload,
+                use_probability_weighting=use_probability_weighting,
+            )
+            if use_cache:
+                cache.set(cache_key, result, timeout=120)
+        elapsed_ms = int((perf_counter() - started_at) * 1000)
+        payload_size = len(json.dumps(result, default=str))
+        logger.info(
+            "forecast_planner.evaluate duration_ms=%s payload_bytes=%s weeks=%s status_count=%s projects=%s cached=%s",
+            elapsed_ms,
+            payload_size,
+            weeks,
+            len(status_keys),
+            len(projects_clean),
+            from_cache,
         )
         return Response({"result": result})
 
@@ -247,9 +321,18 @@ class ForecastScenarioListView(APIView):
             return feature_resp
         try:
             query = ForecastScenario.objects.filter(owner=request.user).order_by("-updated_at")
-            return Response({"results": [_scenario_response_payload(item) for item in query]})
+            rows: list[dict[str, Any]] = []
+            for item in query:
+                try:
+                    rows.append(_scenario_response_payload(item))
+                except Exception:
+                    logger.exception("forecast_planner.scenario_serialize_failed scenario_id=%s", getattr(item, "id", None))
+            return Response({"results": rows})
         except (ProgrammingError, OperationalError) as exc:
             return _scenario_storage_error_response(exc)
+        except Exception as exc:
+            logger.exception("forecast_planner.scenario_list_failed")
+            return Response({"detail": f"Failed to list forecast scenarios: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @extend_schema(
         request=inline_serializer(
@@ -284,7 +367,11 @@ class ForecastScenarioListView(APIView):
             )
         except (ProgrammingError, OperationalError) as exc:
             return _scenario_storage_error_response(exc)
-        return Response({"scenario": _scenario_response_payload(item)}, status=status.HTTP_201_CREATED)
+        try:
+            return Response({"scenario": _scenario_response_payload(item)}, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            logger.exception("forecast_planner.scenario_create_serialize_failed scenario_id=%s", getattr(item, "id", None))
+            return Response({"detail": f"Scenario created but response serialization failed: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ForecastScenarioDetailView(APIView):
@@ -307,7 +394,11 @@ class ForecastScenarioDetailView(APIView):
             return _scenario_storage_error_response(exc)
         if not item:
             return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
-        return Response({"scenario": _scenario_response_payload(item)})
+        try:
+            return Response({"scenario": _scenario_response_payload(item)})
+        except Exception as exc:
+            logger.exception("forecast_planner.scenario_detail_serialize_failed scenario_id=%s", scenario_id)
+            return Response({"detail": f"Failed to load scenario payload: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @extend_schema(
         request=inline_serializer(
@@ -351,7 +442,11 @@ class ForecastScenarioDetailView(APIView):
             item.save()
         except (ProgrammingError, OperationalError) as exc:
             return _scenario_storage_error_response(exc)
-        return Response({"scenario": _scenario_response_payload(item)})
+        try:
+            return Response({"scenario": _scenario_response_payload(item)})
+        except Exception as exc:
+            logger.exception("forecast_planner.scenario_patch_serialize_failed scenario_id=%s", scenario_id)
+            return Response({"detail": f"Scenario saved but response serialization failed: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @extend_schema(responses=inline_serializer(name="ForecastScenarioDeleteResponse", fields={"detail": serializers.CharField()}))
     def delete(self, request, scenario_id: int):
@@ -388,4 +483,8 @@ class ForecastScenarioSharedView(APIView):
             return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
         if not item.is_shared and item.owner_id != request.user.id and not is_admin_or_manager(request.user):
             return Response({"detail": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
-        return Response({"scenario": _scenario_response_payload(item)})
+        try:
+            return Response({"scenario": _scenario_response_payload(item)})
+        except Exception as exc:
+            logger.exception("forecast_planner.scenario_shared_serialize_failed token=%s", token)
+            return Response({"detail": f"Failed to load shared scenario payload: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

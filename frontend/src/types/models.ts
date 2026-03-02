@@ -518,6 +518,101 @@ export interface ForecastPlannerRoleSeries {
   utilization: number[];
 }
 
+export type ForecastPlannerTimeGrain = 'weekly' | 'monthly';
+
+export interface ForecastPlannerTeamChartSeries {
+  capacity: number[];
+  scheduledIncluded: number[];
+  scheduledExcluded: number[];
+  proposed: number[];
+  totalDemand: number[];
+  teamUtilizationPct: number[];
+  teamUtilizationThresholdPct: number;
+}
+
+export interface ForecastPlannerStatusChartSeries {
+  scheduledIncludedByWeek: number[];
+  scheduledExcludedByWeek: number[];
+  includedByStatusKey: Record<string, number[]>;
+  excludedByStatusKey: Record<string, number[]>;
+}
+
+export interface ForecastPlannerDepartmentSeries {
+  departmentId: number;
+  departmentName: string;
+  included: number[];
+  excluded: number[];
+  total: number[];
+}
+
+export interface ForecastPlannerFeasibleStartRow {
+  name: string;
+  templateId: number;
+  requestedStartDate: string;
+  earliestFeasibleStartDate: string | null;
+  delayWeeks?: number | null;
+}
+
+export interface ForecastPlannerConfidenceSeries {
+  expectedDemandByWeek: number[];
+  lowDemandByWeek: number[];
+  highDemandByWeek: number[];
+}
+
+export interface ForecastPlannerChartData {
+  timeline: {
+    weekKeys: string[];
+    monthKeys: string[];
+  };
+  teamSeries: {
+    weekly: ForecastPlannerTeamChartSeries;
+    monthly: ForecastPlannerTeamChartSeries;
+  };
+  statusSeries: {
+    weekly: ForecastPlannerStatusChartSeries;
+    monthly: ForecastPlannerStatusChartSeries;
+  };
+  roleSeries: {
+    topBottleneckRoleIds: number[];
+    weekly: ForecastPlannerRoleSeries[];
+    monthly: ForecastPlannerRoleSeries[];
+  };
+  departmentSeries: {
+    weekly: ForecastPlannerDepartmentSeries[];
+    monthly: ForecastPlannerDepartmentSeries[];
+  };
+  unmappedSeries: {
+    thresholdPerWeek: number;
+    thresholdPerMonth: number[];
+    weekly: {
+      baselineUnmapped: number[];
+      proposedUnmapped: number[];
+      totalUnmapped: number[];
+    };
+    monthly: {
+      baselineUnmapped: number[];
+      proposedUnmapped: number[];
+      totalUnmapped: number[];
+    };
+  };
+  impactSeries: {
+    weekly: {
+      deltaDemand: number[];
+    };
+    monthly: {
+      deltaDemand: number[];
+    };
+  };
+  feasibleStarts: {
+    rows: ForecastPlannerFeasibleStartRow[];
+  };
+  confidenceSeries: {
+    enabled: boolean;
+    weekly: ForecastPlannerConfidenceSeries;
+    monthly: ForecastPlannerConfidenceSeries;
+  };
+}
+
 export interface ForecastPlannerResult {
   weekKeys: string[];
   thresholds: ForecastPlannerThresholds;
@@ -547,6 +642,7 @@ export interface ForecastPlannerResult {
     requestedStartDate: string;
     earliestFeasibleStartDate: string | null;
   }>;
+  chartData?: ForecastPlannerChartData;
 }
 
 export interface ForecastPlannerScenario {
