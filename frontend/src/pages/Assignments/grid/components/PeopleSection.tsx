@@ -9,7 +9,7 @@ export interface PersonWithAssignmentsMinimal {
   weeklyCapacity?: number | null;
   assignments: Assignment[];
   isExpanded: boolean;
-  matchReason?: 'person_name' | 'assignment' | 'both';
+  matchReason?: 'person_name' | 'assignment' | 'both' | 'workload';
 }
 
 export interface PeopleSectionProps {

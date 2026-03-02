@@ -58,7 +58,15 @@ import time
 from typing import List, Dict, Tuple, Set, Optional
 import logging
 from roles.models import Role
-from core.search_tokens import parse_search_tokens, apply_token_filter, build_token_query
+from core.search_tokens import parse_search_tokens, apply_token_filter
+from core.workload_search import (
+    UtilizationBands,
+    build_person_week_totals,
+    combine_token_match_sets,
+    match_people_for_expression,
+    parse_workload_expression,
+    resolve_workload_window,
+)
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from core.cache_keys import build_aggregate_cache_key
 from core.cache_scopes import request_scope_version
@@ -381,6 +389,113 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         prev_url = _page_url(page_obj.previous_page_number() if page_obj.has_previous() else None)
 
         return page_obj, paginator, next_url, prev_url
+
+    def _get_utilization_bands(self) -> UtilizationBands:
+        try:
+            scheme = UtilizationScheme.get_active()
+            return UtilizationBands(
+                blue_min=float(getattr(scheme, 'blue_min', 1)),
+                blue_max=float(getattr(scheme, 'blue_max', 29)),
+                green_min=float(getattr(scheme, 'green_min', 30)),
+                green_max=float(getattr(scheme, 'green_max', 36)),
+                orange_min=float(getattr(scheme, 'orange_min', 37)),
+                orange_max=float(getattr(scheme, 'orange_max', 40)),
+                red_min=float(getattr(scheme, 'red_min', 41)),
+            )
+        except Exception:
+            return UtilizationBands(
+                blue_min=1.0,
+                blue_max=29.0,
+                green_min=30.0,
+                green_max=36.0,
+                orange_min=37.0,
+                orange_max=40.0,
+                red_min=41.0,
+            )
+
+    def _build_workload_matches_by_token(
+        self,
+        *,
+        tokens: List[Dict[str, str]],
+        assignments_scope,
+        week_start_raw: object | None,
+        weeks_raw: object | None,
+    ) -> Dict[int, Set[int]]:
+        if not tokens:
+            return {}
+        week_start, weeks_count = resolve_workload_window(
+            week_start_raw=week_start_raw,
+            weeks_raw=weeks_raw,
+            today=timezone.now().date(),
+        )
+        person_week_totals = build_person_week_totals(
+            assignments_qs=assignments_scope.filter(person_id__isnull=False),
+            week_start=week_start,
+            weeks=weeks_count,
+        )
+        bands = self._get_utilization_bands()
+        out: Dict[int, Set[int]] = {}
+        for index, token in enumerate(tokens):
+            expression = parse_workload_expression(str(token.get('term') or ''), bands)
+            if expression is None:
+                continue
+            out[index] = match_people_for_expression(person_week_totals, expression)
+        return out
+
+    def _filter_assignment_queryset_by_tokens(
+        self,
+        *,
+        queryset,
+        tokens: List[Dict[str, str]],
+        assignment_fields: List[str],
+        workload_matches_by_token: Dict[int, Set[int]],
+    ):
+        if not tokens:
+            return queryset
+
+        universe_ids = set(queryset.values_list('id', flat=True))
+        token_sets: List[Set[int]] = []
+        for index, token in enumerate(tokens):
+            if index in workload_matches_by_token:
+                match_ids = set(
+                    queryset.filter(person_id__in=workload_matches_by_token[index]).values_list('id', flat=True)
+                )
+            else:
+                text_token = {'term': token.get('term') or '', 'op': 'and'}
+                match_ids = set(
+                    apply_token_filter(queryset, [text_token], assignment_fields).values_list('id', flat=True)
+                )
+            token_sets.append(match_ids)
+        final_ids = combine_token_match_sets(tokens=tokens, token_sets=token_sets, universe=universe_ids)
+        if not final_ids:
+            return queryset.none()
+        return queryset.filter(id__in=final_ids)
+
+    def _filter_people_ids_by_tokens(
+        self,
+        *,
+        people_qs,
+        tokens: List[Dict[str, str]],
+        people_fields: List[str],
+        workload_matches_by_token: Dict[int, Set[int]],
+    ) -> Tuple[Set[int], Set[int], Set[int]]:
+        if not tokens:
+            return set(), set(), set()
+        universe_ids = set(people_qs.values_list('id', flat=True))
+        token_sets: List[Set[int]] = []
+        text_matches: Set[int] = set()
+        workload_matches: Set[int] = set()
+        for index, token in enumerate(tokens):
+            if index in workload_matches_by_token:
+                matches = set(workload_matches_by_token[index]).intersection(universe_ids)
+                workload_matches |= matches
+            else:
+                text_token = {'term': token.get('term') or '', 'op': 'and'}
+                matches = set(apply_token_filter(people_qs, [text_token], people_fields).values_list('id', flat=True))
+                text_matches |= matches
+            token_sets.append(matches)
+        final_matches = combine_token_match_sets(tokens=tokens, token_sets=token_sets, universe=universe_ids)
+        return final_matches, text_matches, workload_matches
     
     def list(self, request, *args, **kwargs):
         """
@@ -405,7 +520,18 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'project__description',
             'project_name',
         ]
-        queryset = apply_token_filter(queryset, tokens, assignment_fields)
+        workload_matches_by_token = self._build_workload_matches_by_token(
+            tokens=tokens,
+            assignments_scope=queryset,
+            week_start_raw=request.query_params.get('workload_week_start'),
+            weeks_raw=request.query_params.get('workload_weeks'),
+        )
+        queryset = self._filter_assignment_queryset_by_tokens(
+            queryset=queryset,
+            tokens=tokens,
+            assignment_fields=assignment_fields,
+            workload_matches_by_token=workload_matches_by_token,
+        )
 
         # Optional ordering (opt-in). Defaults remain unchanged.
         ordering_param = request.query_params.get('ordering')
@@ -547,6 +673,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'project': serializers.IntegerField(required=False),
                 'person': serializers.IntegerField(required=False),
                 'meta_only': serializers.BooleanField(required=False),
+                'workload_week_start': serializers.DateField(required=False),
+                'workload_weeks': serializers.IntegerField(required=False),
                 'search_tokens': serializers.ListField(
                     child=inline_serializer(
                         name='SearchToken',
@@ -597,7 +725,6 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'project__description',
             'project_name',
         ]
-        queryset = apply_token_filter(queryset, tokens, assignment_fields)
 
         # Status filtering with derived modes (active_with_dates / active_no_deliverables)
         status_in = data.get('status_in') if isinstance(data, dict) else None
@@ -632,6 +759,26 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         status_q |= (Q(project__status__iexact='active') & ~has_future)
                 if status_q:
                     queryset = queryset.filter(status_q)
+
+        workload_week_start = data.get('workload_week_start') if isinstance(data, dict) else None
+        if workload_week_start is None:
+            workload_week_start = request.query_params.get('workload_week_start')
+        workload_weeks = data.get('workload_weeks') if isinstance(data, dict) else None
+        if workload_weeks is None:
+            workload_weeks = request.query_params.get('workload_weeks')
+
+        workload_matches_by_token = self._build_workload_matches_by_token(
+            tokens=tokens,
+            assignments_scope=queryset,
+            week_start_raw=workload_week_start,
+            weeks_raw=workload_weeks,
+        )
+        queryset = self._filter_assignment_queryset_by_tokens(
+            queryset=queryset,
+            tokens=tokens,
+            assignment_fields=assignment_fields,
+            workload_matches_by_token=workload_matches_by_token,
+        )
 
         # Stable ordering for pagination
         try:
@@ -687,10 +834,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 pass
 
-        person_tokens_q = build_token_query(tokens, ['name', 'role__name'])
-        person_match_ids: Set[int] = set()
-        if person_tokens_q is not None:
-            person_match_ids = set(people_qs.filter(person_tokens_q).values_list('id', flat=True))
+        person_match_ids, person_text_match_ids, person_workload_match_ids = self._filter_people_ids_by_tokens(
+            people_qs=people_qs,
+            tokens=tokens,
+            people_fields=['name', 'role__name'],
+            workload_matches_by_token=workload_matches_by_token,
+        )
 
         assignment_match_ids = set(
             queryset.filter(person_id__isnull=False)
@@ -719,12 +868,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             pid = person.get('id')
             if pid is None:
                 continue
-            by_person = pid in person_match_ids
+            by_person_text = pid in person_text_match_ids
+            by_person_workload = pid in person_workload_match_ids
             by_assignment = pid in assignment_match_ids
-            if by_person and by_assignment:
+            if by_person_text and (by_assignment or by_person_workload):
                 reason = 'both'
-            elif by_person:
+            elif by_person_text:
                 reason = 'person_name'
+            elif by_person_workload:
+                reason = 'workload'
             else:
                 reason = 'assignment'
             people_match_reason[str(pid)] = reason

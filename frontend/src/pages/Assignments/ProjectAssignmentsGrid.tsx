@@ -49,6 +49,7 @@ import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
 import { buildAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
 import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
+import { classifyWorkloadTokenTerm, filterTextCompatibleTokens, hasInvalidWorkloadLikeTokens, normalizeWorkloadAliasTerm } from '@/utils/workloadSearch';
 
 interface ProjectWithAssignments extends Project {
   assignments: Assignment[];
@@ -75,6 +76,13 @@ const DEFAULT_PHASE_MAPPING: DeliverablePhaseMappingSettings = {
 };
 const DEFAULT_AUTO_HOURS_PHASES = ['sd', 'dd', 'ifp', 'ifc'] as const;
 const MOBILE_PROJECT_PAGE_SIZE = 50;
+const getCurrentSundayIso = () => {
+  const now = new Date();
+  const day = now.getDay();
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - day);
+  return sunday.toISOString().slice(0, 10);
+};
 const isDateInWeek = (dateStr: string, weekStartStr: string) => {
   try {
     const deliverableDate = new Date(dateStr);
@@ -299,6 +307,10 @@ const ProjectAssignmentsGrid: React.FC = () => {
       .map((token) => ({ ...token, term: token.term.trim().toLowerCase() }))
       .filter((token) => token.term.length > 0);
   }, [searchTokens]);
+  const workloadHintVisible = useMemo(
+    () => hasInvalidWorkloadLikeTokens(searchTokens),
+    [searchTokens]
+  );
 
   const statusFilterCsv = useMemo(() => {
     const values = Array.from(selectedStatusFilters || []).filter((s) => s !== 'Show All');
@@ -309,6 +321,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
     () => normalizedSearchTokens.map((token) => ({ term: token.term, op: token.op })),
     [normalizedSearchTokens]
   );
+  const assignmentRowTokenPayload = useMemo(
+    () => filterTextCompatibleTokens(normalizedSearchTokens).map((token) => ({ term: token.term, op: token.op })),
+    [normalizedSearchTokens]
+  );
+  const workloadWeekStart = useMemo(() => weeks[0]?.date || getCurrentSundayIso(), [weeks]);
   useEffect(() => {
     if (!isMobileLayout) return;
     setMobileAssignmentPageByProject({});
@@ -329,12 +346,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const addSearchToken = useCallback(() => {
     const term = searchInput.trim();
     if (!term) return;
-    const normalized = term.toLowerCase();
+    const aliased = normalizeWorkloadAliasTerm(term);
+    const classified = classifyWorkloadTokenTerm(aliased);
+    const storedTerm = classified.isWorkload ? classified.canonicalTerm : aliased;
+    const normalized = storedTerm.toLowerCase();
     setSearchTokens((prev) => {
       const alreadyExists = prev.some((token) => token.term.trim().toLowerCase() === normalized && token.op === searchOp);
       if (alreadyExists) return prev;
       const nextId = `search-${searchTokenSeq.current += 1}`;
-      return [...prev, { id: nextId, term, op: searchOp }];
+      return [...prev, { id: nextId, term: storedTerm, op: searchOp }];
     });
     setSearchInput('');
     setActiveTokenId(null);
@@ -389,6 +409,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
         ordering: 'client,name',
         ...(statusFilterCsv ? { status_in: statusFilterCsv } : {}),
         ...(searchTokenPayload.length ? { search_tokens: searchTokenPayload } : {}),
+        workload_week_start: workloadWeekStart,
+        workload_weeks: weeksHorizon,
         ...(dept != null ? { department: dept, include_children: inc } : {}),
         ...(deptFilters ? { department_filters: deptFilters } : {}),
         ...(verticalState.selectedVerticalId != null ? { vertical: Number(verticalState.selectedVerticalId) } : {}),
@@ -421,6 +443,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
     projectsPageSize,
     resetProjectAssignmentsState,
     searchTokenPayload,
+    workloadWeekStart,
+    weeksHorizon,
     statusFilterCsv,
     deptState.selectedDepartmentId,
     deptState.includeChildren,
@@ -1369,7 +1393,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         include_children: inc,
         department_filters: deptFilters,
         vertical: verticalState.selectedVerticalId ?? undefined,
-        search_tokens: searchTokenPayload.length ? searchTokenPayload : undefined,
+        search_tokens: assignmentRowTokenPayload.length ? assignmentRowTokenPayload : undefined,
       });
       const rows = Array.isArray((res as any)) ? (res as any) : (res?.results || []);
       all.push(...rows);
@@ -1393,7 +1417,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       include_children: inc,
       department_filters: deptFilters,
       vertical: verticalState.selectedVerticalId ?? undefined,
-      search_tokens: searchTokenPayload.length ? searchTokenPayload : undefined,
+      search_tokens: assignmentRowTokenPayload.length ? assignmentRowTokenPayload : undefined,
     });
     const rows = Array.isArray(res as any) ? (res as any) : (res?.results || []);
     const hasMore = Boolean((res as any)?.next);
@@ -1403,7 +1427,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     deptState.includeChildren,
     departmentFiltersPayload,
     verticalState.selectedVerticalId,
-    searchTokenPayload,
+    assignmentRowTokenPayload,
   ]);
 
   const loadProjectAssignmentsPage = useCallback(async (projectId: number, page: number, opts?: { append?: boolean }) => {
@@ -1481,7 +1505,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         department_filters: deptFilters,
         include_placeholders: 1,
         vertical: verticalState.selectedVerticalId ?? undefined,
-        search_tokens: searchTokenPayload.length ? searchTokenPayload : undefined,
+        search_tokens: assignmentRowTokenPayload.length ? assignmentRowTokenPayload : undefined,
       }, { noCache: true });
       const allAssignments = Array.isArray(bulk) ? bulk : [];
       setAssignmentsData(prev => {
@@ -1495,7 +1519,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } finally {
       setLoadingAssignments(new Set());
     }
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, searchTokenPayload, projectsData]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, assignmentRowTokenPayload, projectsData]);
 
   const toggleProjectExpanded = (projectId: number) => {
     const getMainScrollContainer = () => bodyScrollRef.current?.closest('main') as HTMLElement | null;
@@ -2075,6 +2099,14 @@ const ProjectAssignmentsGrid: React.FC = () => {
           />
         </div>
       </div>
+      <div className="mt-1 text-[10px] text-[var(--muted)]">
+        Supports: available, optimal, full, overallocated, &lt;30, &gt;14, &lt;30, 10-20
+      </div>
+      {workloadHintVisible ? (
+        <div className="mt-0.5 text-[10px] text-amber-500">
+          Couldn&apos;t parse workload filter; using text search.
+        </div>
+      ) : null}
     </div>
   );
 

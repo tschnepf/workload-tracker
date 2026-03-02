@@ -4,12 +4,12 @@ import type { Assignment, Person } from '@/types/models';
 export interface PersonWithAssignments extends Person {
   assignments: Assignment[];
   isExpanded: boolean;
-  matchReason?: 'person_name' | 'assignment' | 'both';
+  matchReason?: 'person_name' | 'assignment' | 'both' | 'workload';
 }
 
 export interface PersonGroupHeaderProps {
   person: PersonWithAssignments;
-  matchReason?: 'person_name' | 'assignment' | 'both';
+  matchReason?: 'person_name' | 'assignment' | 'both' | 'workload';
   onToggle: () => void;
 }
 
@@ -30,6 +30,11 @@ const PersonGroupHeader: React.FC<PersonGroupHeaderProps> = ({ person, matchReas
           {matchReason === 'person_name' && (
             <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--muted)] bg-[var(--surface)]">
               Matched by name
+            </span>
+          )}
+          {matchReason === 'workload' && (
+            <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--muted)] bg-[var(--surface)]">
+              Matched by workload
             </span>
           )}
         </div>

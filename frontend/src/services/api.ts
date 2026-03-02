@@ -801,6 +801,8 @@ export const projectsApi = {
     status_in?: string;
     include_children?: 0 | 1;
     vertical?: number;
+    workload_week_start?: string;
+    workload_weeks?: number;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
     department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
     include?: string;
@@ -1144,7 +1146,7 @@ export const departmentsApi = {
 // Assignment API
 export const assignmentsApi = {
   // Get all assignments with pagination support and optional project filtering
-  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }> }) => {
+  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>; workload_week_start?: string; workload_weeks?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
@@ -1162,6 +1164,8 @@ export const assignmentsApi = {
     if (params?.search_tokens && params.search_tokens.length) {
       queryParams.set('search_tokens', JSON.stringify(params.search_tokens));
     }
+    if (params?.workload_week_start) queryParams.set('workload_week_start', params.workload_week_start);
+    if (params?.workload_weeks != null) queryParams.set('workload_weeks', String(params.workload_weeks));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     // Avoid any intermediate caching layers returning stale data after writes
     return fetchApi<PaginatedResponse<Assignment>>(`/assignments/${queryString}`, { headers: { 'Cache-Control': 'no-cache' } });
@@ -1180,11 +1184,13 @@ export const assignmentsApi = {
     project?: number;
     person?: number;
     meta_only?: boolean;
+    workload_week_start?: string;
+    workload_weeks?: number;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
   }): Promise<PaginatedResponse<Assignment> & {
     people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null }>;
     assignmentCountsByPerson: Record<string, number>;
-    peopleMatchReason: Record<string, 'person_name' | 'assignment' | 'both'>;
+    peopleMatchReason: Record<string, 'person_name' | 'assignment' | 'both' | 'workload'>;
     filteredTotals: Record<string, Record<string, number>>;
   }> => {
     const res = await apiClient.POST('/assignments/search/' as any, { body: payload as any, headers: authHeaders() });
@@ -1242,7 +1248,7 @@ export const assignmentsApi = {
 
   // Get all assignments (bulk API - Phase 2 optimization)
   listAll: async (
-    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[]; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }> },
+    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[]; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>; workload_week_start?: string; workload_weeks?: number },
     options?: { noCache?: boolean }
   ): Promise<Assignment[]> => {
     const sp = new URLSearchParams();
@@ -1258,6 +1264,8 @@ export const assignmentsApi = {
     if (filters?.search_tokens && filters.search_tokens.length) {
       sp.set('search_tokens', JSON.stringify(filters.search_tokens));
     }
+    if (filters?.workload_week_start) sp.set('workload_week_start', filters.workload_week_start);
+    if (filters?.workload_weeks != null) sp.set('workload_weeks', String(filters.workload_weeks));
     const qs = sp.toString();
     if (options?.noCache) {
       return fetchApi<Assignment[]>(`/assignments/?${qs}`, { headers: { 'Cache-Control': 'no-cache' } });

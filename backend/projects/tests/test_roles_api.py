@@ -1,11 +1,13 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from rest_framework.test import APIClient
+from datetime import date
 from departments.models import Department
 from projects.models import ProjectRole
 from projects.models import Project
 from people.models import Person
 from assignments.models import Assignment
+from assignments.models import AssignmentWeekHour
 from roles.models import Role
 
 
@@ -218,3 +220,76 @@ class ProjectRolesApiTests(TestCase):
         self.assertIn(project_director.name, names)
         self.assertNotIn(project_engineer.name, names)
         self.assertEqual(names.count(project_director.name), 1)
+
+    def test_search_tokens_match_assigned_people_workload(self):
+        role = Role.objects.create(name='Engineer')
+        project_available = Project.objects.create(name='Available Project', status='active')
+        project_over = Project.objects.create(name='Overallocated Project', status='active')
+        available_person = Person.objects.create(name='Ava', weekly_capacity=36, department=self.dept, role=role)
+        over_person = Person.objects.create(name='Oz', weekly_capacity=36, department=self.dept, role=role)
+        asn_available = Assignment.objects.create(person=available_person, project=project_available, weekly_hours={}, is_active=True)
+        asn_over = Assignment.objects.create(person=over_person, project=project_over, weekly_hours={}, is_active=True)
+
+        start = date(2026, 3, 1)
+        AssignmentWeekHour.objects.create(
+            assignment=asn_available,
+            person=available_person,
+            project=project_available,
+            department=available_person.department,
+            week_start=start,
+            hours=18,
+        )
+        AssignmentWeekHour.objects.create(
+            assignment=asn_over,
+            person=over_person,
+            project=project_over,
+            department=over_person.department,
+            week_start=start,
+            hours=44,
+        )
+
+        self.client.force_authenticate(self.admin)
+        resp_available = self.client.post(
+            '/api/projects/search/',
+            {
+                'search_tokens': [{'term': 'available', 'op': 'and'}],
+                'workload_week_start': start.isoformat(),
+                'workload_weeks': 1,
+                'page_size': 25,
+            },
+            format='json',
+        )
+        self.assertEqual(resp_available.status_code, 200, resp_available.content)
+        names_available = [item['name'] for item in resp_available.json().get('results', [])]
+        self.assertIn(project_available.name, names_available)
+        self.assertNotIn(project_over.name, names_available)
+
+        resp_range = self.client.post(
+            '/api/projects/search/',
+            {
+                'search_tokens': [{'term': '>14, <30', 'op': 'and'}],
+                'workload_week_start': start.isoformat(),
+                'workload_weeks': 1,
+                'page_size': 25,
+            },
+            format='json',
+        )
+        self.assertEqual(resp_range.status_code, 200, resp_range.content)
+        names_range = [item['name'] for item in resp_range.json().get('results', [])]
+        self.assertIn(project_available.name, names_range)
+        self.assertNotIn(project_over.name, names_range)
+
+        resp_overloaded = self.client.post(
+            '/api/projects/search/',
+            {
+                'search_tokens': [{'term': 'overloaded', 'op': 'and'}],
+                'workload_week_start': start.isoformat(),
+                'workload_weeks': 1,
+                'page_size': 25,
+            },
+            format='json',
+        )
+        self.assertEqual(resp_overloaded.status_code, 200, resp_overloaded.content)
+        names_overloaded = [item['name'] for item in resp_overloaded.json().get('results', [])]
+        self.assertIn(project_over.name, names_overloaded)
+        self.assertNotIn(project_available.name, names_overloaded)

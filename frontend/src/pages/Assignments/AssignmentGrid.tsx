@@ -71,18 +71,26 @@ import { emitToast, showToast as showToastBus } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
 import SaveStateBadge, { type SaveState } from '@/components/ux/SaveStateBadge';
 import { usePageShortcuts } from '@/hooks/usePageShortcuts';
+import { classifyWorkloadTokenTerm, hasInvalidWorkloadLikeTokens, normalizeWorkloadAliasTerm } from '@/utils/workloadSearch';
 
 // Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
 
 // (WeekCell moved to grid/components/WeekCell)
 
 const MOBILE_FILTERED_PAGE_SIZE = 50;
+const getCurrentSundayIso = () => {
+  const now = new Date();
+  const day = now.getDay();
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - day);
+  return sunday.toISOString().slice(0, 10);
+};
 
 
 interface PersonWithAssignments extends Person {
   assignments: Assignment[];
   isExpanded: boolean;
-  matchReason?: 'person_name' | 'assignment' | 'both';
+  matchReason?: 'person_name' | 'assignment' | 'both' | 'workload';
 }
 // Removed local Monday computation - weeks come from server snapshot only.
 
@@ -226,10 +234,14 @@ const AssignmentGrid: React.FC = () => {
       .map((token) => ({ ...token, term: token.term.trim().toLowerCase() }))
       .filter((token) => token.term.length > 0);
   }, [searchTokens]);
+  const workloadHintVisible = useMemo(
+    () => hasInvalidWorkloadLikeTokens(searchTokens),
+    [searchTokens]
+  );
   const [searchMeta, setSearchMeta] = useState<{
     people: Person[];
     assignmentCountsByPerson: Record<string, number>;
-    peopleMatchReason: Record<string, 'person_name' | 'assignment' | 'both'>;
+    peopleMatchReason: Record<string, 'person_name' | 'assignment' | 'both' | 'workload'>;
     filteredTotals: Record<string, Record<string, number>>;
   } | null>(null);
   const [searchMetaLoading, setSearchMetaLoading] = useState(false);
@@ -272,6 +284,7 @@ const AssignmentGrid: React.FC = () => {
     () => normalizedSearchTokens.map(({ term, op }) => ({ term, op })),
     [normalizedSearchTokens]
   );
+  const workloadWeekStart = useMemo(() => getCurrentSundayIso(), []);
   const departmentFilters = useMemo(() => (deptState.filters ?? [])
     .map((f) => ({ departmentId: Number(f.departmentId), op: f.op }))
     .filter((f) => Number.isFinite(f.departmentId) && f.departmentId > 0), [deptState.filters]);
@@ -298,6 +311,8 @@ const AssignmentGrid: React.FC = () => {
       include_placeholders: 0 as 0,
       status_in: statusIn,
       search_tokens: searchTokensPayload,
+      workload_week_start: workloadWeekStart,
+      workload_weeks: weeksHorizon,
       vertical: verticalState.selectedVerticalId ?? undefined,
       project: overrides?.project,
       person: overrides?.person,
@@ -308,6 +323,8 @@ const AssignmentGrid: React.FC = () => {
     deptState.includeChildren,
     departmentFiltersPayload,
     searchTokensPayload,
+    workloadWeekStart,
+    weeksHorizon,
     statusIn,
     verticalState.selectedVerticalId,
   ]);
@@ -380,12 +397,15 @@ const AssignmentGrid: React.FC = () => {
   const addSearchToken = useCallback(() => {
     const term = searchInput.trim();
     if (!term) return;
-    const normalized = term.toLowerCase();
+    const aliased = normalizeWorkloadAliasTerm(term);
+    const classified = classifyWorkloadTokenTerm(aliased);
+    const storedTerm = classified.isWorkload ? classified.canonicalTerm : aliased;
+    const normalized = storedTerm.toLowerCase();
     setSearchTokens((prev) => {
       const alreadyExists = prev.some((token) => token.term.trim().toLowerCase() === normalized && token.op === searchOp);
       if (alreadyExists) return prev;
       const nextId = `search-${searchTokenSeq.current += 1}`;
-      return [...prev, { id: nextId, term, op: searchOp }];
+      return [...prev, { id: nextId, term: storedTerm, op: searchOp }];
     });
     setSearchInput('');
     setActiveTokenId(null);
@@ -2931,6 +2951,14 @@ const AssignmentGrid: React.FC = () => {
           />
         </div>
       </div>
+      <div className="mt-1 text-[10px] text-[var(--muted)]">
+        Supports: available, optimal, full, overallocated, &lt;30, &gt;14, &lt;30, 10-20
+      </div>
+      {workloadHintVisible ? (
+        <div className="mt-0.5 text-[10px] text-amber-500">
+          Couldn&apos;t parse workload filter; using text search.
+        </div>
+      ) : null}
     </div>
   );
 

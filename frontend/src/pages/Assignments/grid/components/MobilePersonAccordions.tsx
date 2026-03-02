@@ -4,7 +4,7 @@ import type { WeekHeader } from '@/pages/Assignments/grid/utils';
 import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { defaultUtilizationScheme, getUtilizationPill, type UtilizationScheme } from '@/util/utilization';
 
-type PersonWithHours = Person & { assignments?: any[]; isExpanded?: boolean; matchReason?: 'person_name' | 'assignment' | 'both' };
+type PersonWithHours = Person & { assignments?: any[]; isExpanded?: boolean; matchReason?: 'person_name' | 'assignment' | 'both' | 'workload' };
 
 type Props = {
   people: PersonWithHours[];
@@ -113,6 +113,11 @@ const MobilePersonAccordions: React.FC<Props> = ({
                   {person.matchReason === 'person_name' ? (
                     <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--muted)] bg-[var(--surface)]">
                       Matched by name
+                    </span>
+                  ) : null}
+                  {person.matchReason === 'workload' ? (
+                    <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-[var(--border)] text-[var(--muted)] bg-[var(--surface)]">
+                      Matched by workload
                     </span>
                   ) : null}
                 </div>
