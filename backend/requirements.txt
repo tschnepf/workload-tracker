@@ -16,7 +16,7 @@ sentry-sdk[django]==2.38.0
 django-silk==5.4.3
 
 # Login protection (feature-flagged)
-django-axes==8.0.0
+django-axes==8.1.0
 
 # For naming validation
 
